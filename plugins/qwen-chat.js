@@ -199,6 +199,13 @@ async function chat(messages, options = {}) {
             // No tool calls → Q's done. Capture the draft and exit the loop.
             if (!useTools || !callsRequested || callsRequested.length === 0) {
                 draftReply = message?.content || '';
+                // If Together returns empty content with no tool call, treat
+                // as a failure rather than a silent empty reply on the UI.
+                if (!draftReply.trim()) {
+                    const finishReason = choice?.finish_reason || 'unknown';
+                    console.warn('[q/chat] Empty content from Together. finish_reason=' + finishReason);
+                    draftReply = "Sorry — I drew a blank on that one. Could you rephrase or try again? (finish_reason: " + finishReason + ")";
+                }
                 break;
             }
 
