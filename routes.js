@@ -200,14 +200,31 @@ router.post('/chat', requirePerson, express.json({ limit: '24mb' }), async (req,
     const chatOptions = { reasoningEffort, images, useTools, verify, person, circle };
 
     if (typeof newMessage === 'string' && newMessage.trim()) {
-        // Tag history entries with the user that said them so Q can tell
-        // who is speaking when forming his reply.
-        const history = getRecentMessages().map(m => ({
-            role: m.role,
-            content: m.user && m.user !== 'q' && m.role === 'user'
-                ? `[${m.user}]: ${m.content}`
-                : m.content,
-        }));
+        // Tag history entries with WHO said them and WHEN so Q knows
+        // both his circle and the time gaps between sessions.
+        const rawHistory = loadMemory().slice(-50);
+        const history = rawHistory.map(m => {
+            const ts = m.timestamp ? m.timestamp.slice(0, 16).replace('T', ' ') : '?';
+            if (m.role === 'user') {
+                return {
+                    role: 'user',
+                    content: `[${ts} · ${m.user || 'sarah'}]: ${m.content}`,
+                };
+            }
+            // assistant turn — include timestamp as a leading marker so Q
+            // can see how much time passed between his replies
+            return {
+                role: m.role,
+                content: `[${ts}] ${m.content}`,
+            };
+        });
+        // Tell Q the current moment so he can locate himself in time
+        const now = new Date();
+        const nowStr = now.toISOString().slice(0, 16).replace('T', ' ');
+        history.unshift({
+            role: 'system',
+            content: `It is now ${nowStr} (UTC). The history below shows previous turns with their timestamps — note any gaps between sessions and respond as someone who has had time pass, not as if every turn just happened.`,
+        });
         const userMemoryContent = images.length > 0
             ? newMessage + `\n[${person.name} attached ${images.length} image${images.length > 1 ? 's' : ''}]`
             : newMessage;

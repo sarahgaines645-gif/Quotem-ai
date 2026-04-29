@@ -219,15 +219,15 @@
   .typing span:nth-child(3) { animation-delay: 0.3s; }
   @keyframes bounce { 0%,60%,100% { transform: translateY(0); opacity: 0.4; } 30% { transform: translateY(-5px); opacity: 1; } }
 
-  /* INPUT BAR — inset well with raised buttons */
+  /* INPUT BAR — inset well with raised buttons, anchored to viewport bottom */
   footer {
-    position: fixed; bottom: 120px; left: 0; right: 0;
-    padding: 18px 28px 18px;
+    position: fixed; bottom: 0; left: 0; right: 0;
+    padding: 18px 28px 24px;
     background: linear-gradient(to top, var(--bg) 60%, rgba(232,232,232,0.92) 85%, transparent);
     pointer-events: none;
   }
-  /* Add clear breathing room above the input bar so it doesn't crowd the card */
-  main { padding-bottom: 240px; }
+  /* Padding so the last message in the scroll never hides under the input */
+  main { padding-bottom: 180px; }
   .input-wrapper {
     max-width: 720px; margin: 0 auto;
     background: var(--bg);
