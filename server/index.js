@@ -25,6 +25,28 @@ if (!process.env.TOGETHER_API_KEY) {
     console.warn('[Q] ⚠️  TOGETHER_API_KEY is not set. Q will fail every request that needs to reason.');
 }
 
+// ── First-run bootstrap: seed Q's memory from the bundled seed file ────
+// Q's "first day" history (the conversations including Alex's first
+// presence) lives at q-memory-seed.json in the repo. On a fresh volume
+// (no q-memory.json yet), copy the seed across so Q remembers his
+// origin from the moment he comes alive on the new domain. Subsequent
+// boots see the existing file and skip — Q's accumulated memory wins.
+try {
+    const VOLUME_DIR = process.env.RAILWAY_VOLUME_MOUNT_PATH
+        || (fs.existsSync('/data') ? '/data' : null);
+    const Q_DATA_DIR = VOLUME_DIR ? path.join(VOLUME_DIR, 'q-memory') : path.join(ROOT, 'data');
+    const memFile = path.join(Q_DATA_DIR, 'q-memory.json');
+    const seedFile = path.join(ROOT, 'q-memory-seed.json');
+    if (!fs.existsSync(memFile) && fs.existsSync(seedFile)) {
+        fs.mkdirSync(Q_DATA_DIR, { recursive: true });
+        fs.copyFileSync(seedFile, memFile);
+        const stat = fs.statSync(memFile);
+        console.log(`[Q] 🌱 Memory seeded from q-memory-seed.json → ${memFile} (${stat.size} bytes)`);
+    }
+} catch (e) {
+    console.error('[Q] memory seed failed:', e.message);
+}
+
 // ── First-run bootstrap: Sarah is always in Q's circle ────────
 // On first boot of a fresh deployment, the people registry is empty
 // — Q would 401 every chat request. Auto-seed Sarah and print her
