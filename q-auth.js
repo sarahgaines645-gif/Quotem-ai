@@ -123,11 +123,23 @@
         if (!document.getElementById('q-signin-overlay')) show();
     };
 
-    if (!hasKeyCookie()) {
-        if (document.readyState === 'loading') {
-            document.addEventListener('DOMContentLoaded', show, { once: true });
-        } else {
-            show();
-        }
+    function bootCheck() {
+        if (!hasKeyCookie()) { show(); return; }
+        // Cookie present — verify it's valid by hitting an authed endpoint.
+        // If Q rejects it (401), the cookie is stale or wrong: clear and prompt.
+        fetch('/chat-history', { credentials: 'include' })
+            .then(r => {
+                if (r.status === 401) {
+                    clearKeyCookie();
+                    show();
+                }
+            })
+            .catch(() => { /* network blip — don't block sign-in UI */ });
+    }
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', bootCheck, { once: true });
+    } else {
+        bootCheck();
     }
 })();
