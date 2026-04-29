@@ -1,31 +1,31 @@
 /**
  * Q's circle — the registry of people Q knows.
  *
- * Q is not a public service. He knows specific people, by their access
- * key. Anyone Sarah adds to the circle gets a key, can talk to Q, and
- * Q remembers them as a distinct person in shared memory.
+ * Each person has an email + password (bcrypt-hashed). Sarah signs up
+ * new people via the admin endpoint with a starting password; they can
+ * change it later from the chat UI.
  *
  * On-disk shape (people.json):
  *   [
  *     {
  *       id: "sarah",
  *       name: "Sarah",
+ *       email: "sarah@example.com",
  *       intro: "Built Q. The reason he exists.",
- *       keyHash: "<sha256 of pepper + raw key>",
+ *       passwordHash: "<bcrypt hash>",
  *       addedAt: "2026-04-29T..."
  *     },
  *     ...
  *   ]
  *
- * Raw access keys are NEVER stored. Only the hash. When Sarah adds a
- * person, the raw key is shown ONCE — she sends it to them via secure
- * channel; if lost, she rotates and re-issues.
+ * Raw passwords are NEVER stored. bcrypt hash only.
  */
 'use strict';
 
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
+const bcrypt = require('bcryptjs');
 
 const VOLUME_DIR = process.env.RAILWAY_VOLUME_MOUNT_PATH
     || (fs.existsSync('/data') ? '/data' : null);
@@ -42,21 +42,7 @@ try {
     console.error('[q/people] could not create data dir:', e.message);
 }
 
-function getPepper() {
-    const p = process.env.Q_AUTH_PEPPER;
-    if (!p || p.length < 16) {
-        console.warn('[q/people] ⚠️  Q_AUTH_PEPPER unset or too short — auth is degraded.');
-        return 'unset-pepper-quotem-ai-do-not-use-in-prod';
-    }
-    return p;
-}
-
-function hashKey(rawKey) {
-    return crypto
-        .createHash('sha256')
-        .update(getPepper() + ':' + rawKey)
-        .digest('hex');
-}
+const BCRYPT_ROUNDS = 12;
 
 function loadPeople() {
     try {
@@ -80,66 +66,99 @@ function savePeople(people) {
     }
 }
 
+function normaliseEmail(e) {
+    return String(e || '').trim().toLowerCase();
+}
+
 /**
- * Add a person to Q's circle. Returns { person, accessKey } where
- * accessKey is the RAW key — show it to Sarah ONCE, never again.
+ * Add a person to Q's circle.
+ * Returns { person, password } where `password` is the raw initial
+ * password — show Sarah ONCE, send to recipient via secure channel.
+ *
+ * @param {object} args
+ * @param {string} args.id            - stable id like 'sarah', 'alex'
+ * @param {string} args.name          - display name
+ * @param {string} args.email         - login identity
+ * @param {string} [args.intro]       - one-line intro Q sees in his system context
+ * @param {string} [args.password]    - if omitted, a strong random one is generated
  */
-function addPerson({ id, name, intro }) {
-    if (!id || !name) throw new Error('id and name required');
+async function addPerson({ id, name, email, intro, password }) {
+    if (!id || !name || !email) throw new Error('id, name, email required');
     const people = loadPeople();
-    if (people.find(p => p.id === id)) {
-        throw new Error(`person id "${id}" already exists`);
-    }
-    const accessKey = crypto.randomBytes(24).toString('base64url');
-    const keyHash = hashKey(accessKey);
+    const cleanEmail = normaliseEmail(email);
+    if (people.find(p => p.id === id)) throw new Error(`person id "${id}" already exists`);
+    if (people.find(p => normaliseEmail(p.email) === cleanEmail)) throw new Error(`email "${cleanEmail}" already in use`);
+
+    const rawPassword = password && password.length >= 8
+        ? password
+        : crypto.randomBytes(12).toString('base64url'); // 16-char URL-safe random
+
+    const passwordHash = await bcrypt.hash(rawPassword, BCRYPT_ROUNDS);
+
     const person = {
         id,
         name,
+        email: cleanEmail,
         intro: intro || '',
-        keyHash,
+        passwordHash,
         addedAt: new Date().toISOString(),
     };
     people.push(person);
     savePeople(people);
-    return { person: { id, name, intro: person.intro, addedAt: person.addedAt }, accessKey };
+    const { passwordHash: _ph, ...safe } = person;
+    return { person: safe, password: rawPassword };
 }
 
-/** Find a person by their RAW access key. Returns null if no match. */
-function getPersonByKey(rawKey) {
-    if (!rawKey) return null;
-    const target = hashKey(rawKey);
+/**
+ * Verify email + password. Returns the safe (no passwordHash) person on
+ * success, null on any failure.
+ */
+async function verifyLogin(email, password) {
+    if (!email || !password) return null;
+    const cleanEmail = normaliseEmail(email);
     const people = loadPeople();
-    const found = people.find(p => p.keyHash === target);
-    if (!found) return null;
-    const { keyHash, ...safe } = found;
+    const found = people.find(p => normaliseEmail(p.email) === cleanEmail);
+    if (!found || !found.passwordHash) return null;
+    const ok = await bcrypt.compare(password, found.passwordHash);
+    if (!ok) return null;
+    const { passwordHash, ...safe } = found;
     return safe;
 }
 
 function getPerson(id) {
-    const people = loadPeople();
-    const found = people.find(p => p.id === id);
+    const found = loadPeople().find(p => p.id === id);
     if (!found) return null;
-    const { keyHash, ...safe } = found;
+    const { passwordHash, ...safe } = found;
+    return safe;
+}
+
+function getPersonByEmail(email) {
+    const cleanEmail = normaliseEmail(email);
+    const found = loadPeople().find(p => normaliseEmail(p.email) === cleanEmail);
+    if (!found) return null;
+    const { passwordHash, ...safe } = found;
     return safe;
 }
 
 function listPeople() {
-    return loadPeople().map(({ keyHash, ...safe }) => safe);
+    return loadPeople().map(({ passwordHash, ...safe }) => safe);
 }
 
-/**
- * Rotate a person's access key. Returns the new RAW key. Old one
- * invalidates immediately.
- */
-function rotateKey(id) {
+async function changePassword(id, newPassword) {
+    if (!newPassword || newPassword.length < 8) throw new Error('password must be at least 8 characters');
     const people = loadPeople();
     const person = people.find(p => p.id === id);
     if (!person) throw new Error(`person "${id}" not found`);
-    const accessKey = crypto.randomBytes(24).toString('base64url');
-    person.keyHash = hashKey(accessKey);
-    person.rotatedAt = new Date().toISOString();
+    person.passwordHash = await bcrypt.hash(newPassword, BCRYPT_ROUNDS);
+    person.passwordChangedAt = new Date().toISOString();
     savePeople(people);
-    return accessKey;
+    return true;
+}
+
+async function rotatePassword(id) {
+    const newPassword = crypto.randomBytes(12).toString('base64url');
+    await changePassword(id, newPassword);
+    return newPassword;
 }
 
 function removePerson(id) {
@@ -150,11 +169,29 @@ function removePerson(id) {
     return true;
 }
 
+/**
+ * If people.json contains entries from the old access-key schema (no
+ * passwordHash), they're useless — wipe and let bootstrap reseed Sarah.
+ * Returns true if a wipe happened.
+ */
+function migrateIfLegacy() {
+    const people = loadPeople();
+    if (people.length === 0) return false;
+    const allHavePassword = people.every(p => p.passwordHash);
+    if (allHavePassword) return false;
+    console.log('[q/people] 🔄 Detected legacy access-key entries — wiping for re-bootstrap');
+    savePeople([]);
+    return true;
+}
+
 module.exports = {
     addPerson,
-    getPersonByKey,
+    verifyLogin,
     getPerson,
+    getPersonByEmail,
     listPeople,
-    rotateKey,
+    changePassword,
+    rotatePassword,
     removePerson,
+    migrateIfLegacy,
 };

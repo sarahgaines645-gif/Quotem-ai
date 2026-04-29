@@ -48,29 +48,35 @@ try {
 }
 
 // ── First-run bootstrap: Sarah is always in Q's circle ────────
-// On first boot of a fresh deployment, the people registry is empty
-// — Q would 401 every chat request. Auto-seed Sarah and print her
-// access key so she can sign in. The key is shown ONCE and only on
-// first creation; restarts after that don't reveal it.
-try {
-    const { listPeople, addPerson } = require(path.join(ROOT, 'people.js'));
-    if (listPeople().length === 0) {
-        const result = addPerson({
-            id: 'sarah',
-            name: 'Sarah',
-            intro: 'Built Q. The reason he exists.',
-        });
-        console.log('');
-        console.log('═══════════════════════════════════════════════════════════════');
-        console.log('  FIRST-RUN BOOTSTRAP — Sarah added to Q\'s circle');
-        console.log('  Access key (shown ONCE — copy now, restart will not show it):');
-        console.log('  ' + result.accessKey);
-        console.log('═══════════════════════════════════════════════════════════════');
-        console.log('');
+// Migrate any legacy access-key entries away (their hashes are tied
+// to a previous pepper and won't validate). Then if no people exist,
+// seed Sarah with email + a random initial password — printed ONCE
+// so she can copy it. Subsequent boots see Sarah and skip.
+(async () => {
+    try {
+        const peopleMod = require(path.join(ROOT, 'people.js'));
+        peopleMod.migrateIfLegacy();
+        if (peopleMod.listPeople().length === 0) {
+            const sarahEmail = process.env.SARAH_EMAIL || 'sarahgaines645@gmail.com';
+            const result = await peopleMod.addPerson({
+                id: 'sarah',
+                name: 'Sarah',
+                email: sarahEmail,
+                intro: 'Built Q. The reason he exists.',
+            });
+            console.log('');
+            console.log('═══════════════════════════════════════════════════════════════');
+            console.log('  FIRST-RUN BOOTSTRAP — Sarah added to Q\'s circle');
+            console.log('  Email:    ' + result.person.email);
+            console.log('  Password (shown ONCE — copy now, restart will not show it):');
+            console.log('  ' + result.password);
+            console.log('═══════════════════════════════════════════════════════════════');
+            console.log('');
+        }
+    } catch (e) {
+        console.error('[Q] bootstrap failed:', e.message);
     }
-} catch (e) {
-    console.error('[Q] bootstrap failed:', e.message);
-}
+})();
 
 // ── Static assets (logo, JS widgets, etc.) ─────────────────────
 app.use('/assets', express.static(path.join(ROOT, 'assets')));

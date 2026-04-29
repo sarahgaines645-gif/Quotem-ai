@@ -1,28 +1,13 @@
 /**
- * Q's sign-in widget.
+ * Q's sign-in widget — email + password.
  *
- * On first visit (no qkey cookie), injects a full-screen sign-in overlay
- * asking for the access key Sarah issued. Stores the key as a cookie on
- * submit. All /chat, /code, /agent fetches inherit the cookie.
- *
- * The earlier window.prompt() approach was getting blocked by browsers
- * on initial page load (no user interaction yet). A proper DOM overlay
- * always renders.
+ * On any page that loads /q-auth.js: if the qsess cookie is missing
+ * or rejected by the server, a full-screen sign-in overlay appears.
+ * Submitting valid credentials sets the cookie and reloads the page.
  */
 (function () {
-    function hasKeyCookie() {
-        return document.cookie.split(/;\s*/).some(c => c.startsWith('qkey='));
-    }
-    function setKeyCookie(key) {
-        document.cookie = 'qkey=' + encodeURIComponent(key) + '; path=/; max-age=31536000; SameSite=Lax';
-    }
-    function clearKeyCookie() {
-        document.cookie = 'qkey=; path=/; max-age=0';
-    }
-
-    window.qSignOut = function () { clearKeyCookie(); location.reload(); };
-
-    function buildOverlay() {
+    function show() {
+        if (document.getElementById('q-signin-overlay')) return;
         const overlay = document.createElement('div');
         overlay.id = 'q-signin-overlay';
         overlay.innerHTML = `
@@ -50,14 +35,20 @@
                     color: rgba(0,0,0,0.55); margin: 0 0 24px;
                     font-size: 14px;
                 }
+                #q-signin-card label {
+                    display: block; text-align: left;
+                    font-size: 12px; font-weight: 500;
+                    color: rgba(0,0,0,0.5);
+                    text-transform: uppercase; letter-spacing: 0.5px;
+                    margin-bottom: 6px; margin-top: 12px;
+                }
                 #q-signin-card input {
                     width: 100%; padding: 14px 18px;
                     border: none; outline: none;
                     background: #e8e8e8;
                     box-shadow: inset 5px 5px 14px #ababab, inset -4px -4px 10px #ffffff;
                     border-radius: 14px; font-size: 15px;
-                    font-family: monospace; color: #1a1a1a;
-                    margin-bottom: 16px;
+                    color: #1a1a1a; font-family: inherit;
                 }
                 #q-signin-card button {
                     width: 100%; padding: 14px;
@@ -66,10 +57,15 @@
                     box-shadow: 6px 6px 16px #ababab, -5px -5px 12px #ffffff;
                     border-radius: 14px; font-size: 15px;
                     font-weight: 600; font-family: inherit;
+                    margin-top: 24px;
                     transition: box-shadow 0.1s;
                 }
                 #q-signin-card button:hover { box-shadow: 4px 4px 10px #ababab, -3px -3px 8px #ffffff; }
-                #q-signin-card button:active { box-shadow: inset 3px 3px 8px #ababab, inset -2px -2px 6px #ffffff; }
+                #q-signin-card button:active,
+                #q-signin-card button:disabled {
+                    box-shadow: inset 3px 3px 8px #ababab, inset -2px -2px 6px #ffffff;
+                }
+                #q-signin-card button:disabled { cursor: wait; opacity: 0.7; }
                 #q-signin-card .err {
                     color: #e91e63; font-size: 13px; margin-top: 12px;
                     min-height: 18px;
@@ -77,64 +73,69 @@
             </style>
             <div id="q-signin-card">
                 <h1>Q<span class="dot">.</span></h1>
-                <p>Enter the access key Sarah issued you</p>
-                <input id="q-key-input" type="password" placeholder="Access key" autocomplete="off" autofocus />
-                <button id="q-key-submit">Sign in</button>
-                <div class="err" id="q-key-err"></div>
+                <p>Sign in</p>
+                <label for="q-email">Email</label>
+                <input id="q-email" type="email" autocomplete="email" autofocus />
+                <label for="q-pwd">Password</label>
+                <input id="q-pwd" type="password" autocomplete="current-password" />
+                <button id="q-submit">Sign in</button>
+                <div class="err" id="q-err"></div>
             </div>
         `;
-        return overlay;
-    }
-
-    function show() {
-        const overlay = buildOverlay();
         document.body.appendChild(overlay);
-        const input = overlay.querySelector('#q-key-input');
-        const submit = overlay.querySelector('#q-key-submit');
-        const err = overlay.querySelector('#q-key-err');
-        const handle = () => {
-            const k = (input.value || '').trim();
-            if (!k) { err.textContent = 'Paste the key, then Sign in.'; return; }
-            setKeyCookie(k);
-            // Verify by hitting an authed endpoint before reloading
-            fetch('/chat-history', { credentials: 'include' })
-                .then(r => {
-                    if (r.status === 401) {
-                        clearKeyCookie();
-                        err.textContent = 'Q does not recognise that key.';
-                        input.value = '';
-                        input.focus();
-                    } else {
-                        location.reload();
-                    }
-                })
-                .catch(() => {
-                    err.textContent = 'Network error — try again.';
+
+        const email = overlay.querySelector('#q-email');
+        const pwd = overlay.querySelector('#q-pwd');
+        const submit = overlay.querySelector('#q-submit');
+        const err = overlay.querySelector('#q-err');
+
+        async function handle() {
+            err.textContent = '';
+            const e = (email.value || '').trim();
+            const p = pwd.value || '';
+            if (!e || !p) { err.textContent = 'Email and password required.'; return; }
+            submit.disabled = true; submit.textContent = 'Signing in...';
+            try {
+                const r = await fetch('/login', {
+                    method: 'POST',
+                    credentials: 'include',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email: e, password: p }),
                 });
-        };
+                if (r.ok) {
+                    location.reload();
+                    return;
+                }
+                const data = await r.json().catch(() => ({}));
+                err.textContent = data.error || 'Sign in failed.';
+            } catch (_) {
+                err.textContent = 'Network error — try again.';
+            } finally {
+                submit.disabled = false; submit.textContent = 'Sign in';
+                pwd.focus();
+            }
+        }
+
         submit.addEventListener('click', handle);
-        input.addEventListener('keydown', e => { if (e.key === 'Enter') handle(); });
-        // Make sure the input gets focus even if autofocus is ignored
-        setTimeout(() => input.focus(), 100);
+        [email, pwd].forEach(input => {
+            input.addEventListener('keydown', ev => { if (ev.key === 'Enter') handle(); });
+        });
+        setTimeout(() => email.focus(), 50);
     }
 
-    window.qSignIn = function () {
-        // Manual sign-in trigger (call from console)
-        if (!document.getElementById('q-signin-overlay')) show();
+    window.qSignIn = show;
+    window.qSignOut = function () {
+        fetch('/logout', { method: 'POST', credentials: 'include' })
+            .finally(() => location.reload());
     };
 
     function bootCheck() {
-        if (!hasKeyCookie()) { show(); return; }
-        // Cookie present — verify it's valid by hitting an authed endpoint.
-        // If Q rejects it (401), the cookie is stale or wrong: clear and prompt.
-        fetch('/chat-history', { credentials: 'include' })
-            .then(r => {
-                if (r.status === 401) {
-                    clearKeyCookie();
-                    show();
-                }
-            })
-            .catch(() => { /* network blip — don't block sign-in UI */ });
+        // Hit a cheap authed endpoint. If 401, show sign-in. Otherwise,
+        // the cookie is valid — let the page render normally.
+        fetch('/whoami', { credentials: 'include' })
+            .then(r => r.json())
+            .then(d => { if (!d.person) show(); })
+            .catch(() => { /* network blip — leave page alone */ });
     }
 
     if (document.readyState === 'loading') {

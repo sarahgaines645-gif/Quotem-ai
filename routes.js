@@ -40,9 +40,71 @@ const {
 // Idempotent — calling more than once is safe.
 startScheduler();
 const { loadMemory, clearMemory, appendMessage, getRecentMessages, getCircleSummary, getMemoryPath } = require('./memory');
-const { requirePerson, tryAttachPerson } = require('./auth');
-const { listPeople, addPerson, rotateKey, removePerson } = require('./people');
+const { requirePerson, tryAttachPerson, setSessionCookie, clearSessionCookie } = require('./auth');
+const { listPeople, addPerson, getPerson, removePerson, verifyLogin, changePassword, rotatePassword } = require('./people');
 const { summarise: summariseCosts, getLogPath: costLogPath } = require('./cost-tracker');
+
+// ── Auth: login + logout ────────────────────────────────────────────────────
+
+router.post('/login', express.json({ limit: '4kb' }), async (req, res) => {
+    const { email, password } = req.body || {};
+    const person = await verifyLogin(email, password);
+    if (!person) {
+        // Constant-time-ish: still wait roughly as long as a real bcrypt compare
+        return res.status(401).json({ error: 'Email or password incorrect.' });
+    }
+    setSessionCookie(res, person.email);
+    res.json({ ok: true, person });
+});
+
+router.post('/logout', (req, res) => {
+    clearSessionCookie(res);
+    res.json({ ok: true });
+});
+
+router.get('/whoami', (req, res) => {
+    if (!req.person) {
+        const { verifySessionCookie } = require('./auth');
+        const p = verifySessionCookie(req);
+        if (p) req.person = p;
+    }
+    res.json({ person: req.person || null });
+});
+
+router.post('/change-password', requirePerson, express.json({ limit: '4kb' }), async (req, res) => {
+    const { newPassword } = req.body || {};
+    if (!newPassword || newPassword.length < 8) {
+        return res.status(400).json({ error: 'Password must be at least 8 characters.' });
+    }
+    try {
+        await changePassword(req.person.id, newPassword);
+        res.json({ ok: true });
+    } catch (e) {
+        res.status(400).json({ error: e.message });
+    }
+});
+
+// Admin: add someone to the Circle (Sarah only)
+router.post('/circle/add', requirePerson, express.json({ limit: '4kb' }), async (req, res) => {
+    if (req.person.id !== 'sarah') return res.status(403).json({ error: 'Forbidden' });
+    try {
+        const { id, name, email, intro, password } = req.body || {};
+        const result = await addPerson({ id, name, email, intro, password });
+        res.json(result); // returns { person, password } — copy the raw password ONCE
+    } catch (e) {
+        res.status(400).json({ error: e.message });
+    }
+});
+
+router.post('/circle/people/:id/rotate', requirePerson, async (req, res) => {
+    if (req.person.id !== 'sarah') return res.status(403).json({ error: 'Forbidden' });
+    try {
+        const newPassword = await rotatePassword(req.params.id);
+        res.json({ id: req.params.id, password: newPassword });
+    } catch (e) {
+        res.status(400).json({ error: e.message });
+    }
+});
 
 // Q's front door — his customer-facing chat page.
 // (The old lab tester at ui.html lives inside Quotem admin only.)
@@ -204,28 +266,6 @@ router.delete('/chat-history', requirePerson, (req, res) => {
 router.get('/circle/people', requirePerson, (req, res) => {
     if (req.person.id !== 'sarah') return res.status(403).json({ error: 'Forbidden' });
     res.json({ people: listPeople() });
-});
-
-router.post('/circle/people', requirePerson, express.json(), (req, res) => {
-    if (req.person.id !== 'sarah') return res.status(403).json({ error: 'Forbidden' });
-    try {
-        const { id, name, intro } = req.body || {};
-        const result = addPerson({ id, name, intro });
-        // accessKey returned ONCE — Sarah copies and shares it via secure channel
-        res.json(result);
-    } catch (e) {
-        res.status(400).json({ error: e.message });
-    }
-});
-
-router.post('/circle/people/:id/rotate', requirePerson, (req, res) => {
-    if (req.person.id !== 'sarah') return res.status(403).json({ error: 'Forbidden' });
-    try {
-        const accessKey = rotateKey(req.params.id);
-        res.json({ id: req.params.id, accessKey });
-    } catch (e) {
-        res.status(400).json({ error: e.message });
-    }
 });
 
 router.delete('/circle/people/:id', requirePerson, (req, res) => {

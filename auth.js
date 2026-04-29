@@ -1,58 +1,112 @@
 /**
- * Q's auth middleware — Circle Mode.
+ * Q's auth — email + password login with HMAC-signed session cookie.
  *
- * Every protected request must include the caller's access key, either:
- *   - Header:  X-Q-Key: <raw access key>
- *   - Cookie:  qkey=<raw access key>     (set by Q's chat UI on sign-in)
+ * Login flow:
+ *   1. POST /login { email, password }
+ *   2. Server verifies via people.verifyLogin
+ *   3. On success: set cookie qsess=<email>:<ts>:<hmac(email+ts, pepper)>
+ *      The cookie is the proof — no server-side session storage.
+ *   4. Middleware on each request: parse cookie, verify HMAC + freshness,
+ *      look up the person by email, attach req.person.
  *
- * On match, attaches `req.person` ({ id, name, intro, addedAt }) and
- * calls next(). On mismatch, returns 401.
- *
- * Sarah is responsible for handing out access keys to people she trusts.
- * No self-signup. No public endpoints. This is Q's living room, not a
- * SaaS.
+ * Cookie lifetime: 30 days. After that, sign in again.
  */
 'use strict';
 
-const { getPersonByKey } = require('./people.js');
+const crypto = require('crypto');
+const { getPersonByEmail } = require('./people.js');
 
-function readKey(req) {
-    const headerKey = req.get('X-Q-Key') || req.get('x-q-key');
-    if (headerKey) return headerKey.trim();
-    const cookieHeader = req.get('Cookie') || '';
-    const m = cookieHeader.match(/(?:^|;\s*)qkey=([^;]+)/);
-    return m ? decodeURIComponent(m[1]).trim() : null;
+const SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
+
+function getPepper() {
+    const p = process.env.Q_AUTH_PEPPER;
+    if (!p || p.length < 16) {
+        return 'unset-pepper-quotem-ai-do-not-use-in-prod';
+    }
+    return p;
+}
+
+function sign(email, ts) {
+    return crypto
+        .createHmac('sha256', getPepper())
+        .update(`${email}:${ts}`)
+        .digest('base64url');
 }
 
 /**
- * Express middleware. 401s the request unless a valid access key is
- * present and the person it belongs to is in Q's circle.
+ * Build the cookie value. Returns "email:ts:sig".
+ */
+function buildSessionCookie(email) {
+    const ts = String(Date.now());
+    const sig = sign(email, ts);
+    return `${encodeURIComponent(email)}:${ts}:${sig}`;
+}
+
+/**
+ * Set the qsess cookie on the response.
+ */
+function setSessionCookie(res, email) {
+    const value = buildSessionCookie(email);
+    const maxAge = Math.round(SESSION_TTL_MS / 1000);
+    res.setHeader('Set-Cookie',
+        `qsess=${value}; Path=/; Max-Age=${maxAge}; HttpOnly; SameSite=Lax; Secure`);
+}
+
+function clearSessionCookie(res) {
+    res.setHeader('Set-Cookie', 'qsess=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax');
+}
+
+function readCookie(req, name) {
+    const header = req.get('Cookie') || '';
+    const m = header.match(new RegExp('(?:^|;\\s*)' + name + '=([^;]+)'));
+    return m ? m[1] : null;
+}
+
+/**
+ * Verify the qsess cookie and return the person on success, null on
+ * failure (missing, malformed, bad sig, expired).
+ */
+function verifySessionCookie(req) {
+    const raw = readCookie(req, 'qsess');
+    if (!raw) return null;
+    const parts = raw.split(':');
+    if (parts.length !== 3) return null;
+    const [emailEnc, ts, sig] = parts;
+    const email = decodeURIComponent(emailEnc);
+    const expected = sign(email, ts);
+    if (sig !== expected) return null;
+    const tsNum = Number(ts);
+    if (!Number.isFinite(tsNum)) return null;
+    if (Date.now() - tsNum > SESSION_TTL_MS) return null;
+    const person = getPersonByEmail(email);
+    if (!person) return null;
+    return person;
+}
+
+/**
+ * Express middleware. 401s the request unless the qsess cookie is
+ * valid and the person it points to is in Q's circle.
  */
 function requirePerson(req, res, next) {
-    const rawKey = readKey(req);
-    if (!rawKey) {
-        return res.status(401).json({ error: 'Q does not know who you are. Send X-Q-Key.' });
-    }
-    const person = getPersonByKey(rawKey);
+    const person = verifySessionCookie(req);
     if (!person) {
-        return res.status(401).json({ error: 'Q does not recognise this key.' });
+        return res.status(401).json({ error: 'Sign in required.' });
     }
     req.person = person;
     next();
 }
 
-/**
- * Soft variant — attaches req.person if a valid key is present, but
- * does NOT 401 if missing. Used for endpoints that work without auth
- * but become more useful with it (e.g. health, public info).
- */
+/** Soft variant — attaches req.person if present, doesn't 401. */
 function tryAttachPerson(req, res, next) {
-    const rawKey = readKey(req);
-    if (rawKey) {
-        const person = getPersonByKey(rawKey);
-        if (person) req.person = person;
-    }
+    const person = verifySessionCookie(req);
+    if (person) req.person = person;
     next();
 }
 
-module.exports = { requirePerson, tryAttachPerson };
+module.exports = {
+    requirePerson,
+    tryAttachPerson,
+    setSessionCookie,
+    clearSessionCookie,
+    verifySessionCookie,
+};
