@@ -44,9 +44,10 @@ const { requirePerson, tryAttachPerson } = require('./auth');
 const { listPeople, addPerson, rotateKey, removePerson } = require('./people');
 const { summarise: summariseCosts, getLogPath: costLogPath } = require('./cost-tracker');
 
-// Q's lab UI — point-and-click tester. Visit /api/q-lab in the browser.
+// Q's front door — his customer-facing chat page.
+// (The old lab tester at ui.html lives inside Quotem admin only.)
 router.get('/', (req, res) => {
-    res.sendFile(path.join(__dirname, 'ui.html'));
+    res.sendFile(path.join(__dirname, 'chat.html'));
 });
 
 // Health check — is Q wired up at all?
