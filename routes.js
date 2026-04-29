@@ -196,8 +196,11 @@ router.post('/chat', requirePerson, express.json({ limit: '24mb' }), async (req,
         : [];
     const useTools = req.body?.useTools !== false;
     const verify = req.body?.verify === true;
+    // Optional persona overlay: 'aps' for A-Problem-Shared mode. Anything else
+    // (including undefined) leaves Q in default mode.
+    const mode = (req.body?.mode === 'aps') ? 'aps' : undefined;
     const circle = getCircleSummary();
-    const chatOptions = { reasoningEffort, images, useTools, verify, person, circle };
+    const chatOptions = { reasoningEffort, images, useTools, verify, mode, person, circle };
 
     if (typeof newMessage === 'string' && newMessage.trim()) {
         // Tag history entries with WHO said them and WHEN so Q knows

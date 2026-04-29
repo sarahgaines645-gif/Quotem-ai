@@ -47,9 +47,25 @@
                     border: none; outline: none;
                     background: #e8e8e8;
                     box-shadow: inset 5px 5px 14px #ababab, inset -4px -4px 10px #ffffff;
-                    border-radius: 14px; font-size: 15px;
+                    border-radius: 14px; font-size: 16px;
                     color: #1a1a1a; font-family: inherit;
                 }
+                /* Eye toggle for password — sit on the right edge of the field */
+                #q-pwd-wrap { position: relative; }
+                #q-pwd-eye {
+                    position: absolute; right: 12px; top: 50%;
+                    transform: translateY(-50%);
+                    width: 32px; height: 32px;
+                    border: none; cursor: pointer;
+                    background: transparent;
+                    color: rgba(0,0,0,0.45);
+                    display: inline-flex; align-items: center; justify-content: center;
+                    border-radius: 8px;
+                    padding: 0;
+                }
+                #q-pwd-eye:hover { color: #1a1a1a; }
+                #q-pwd-eye svg { width: 18px; height: 18px; }
+                #q-pwd { padding-right: 48px; }
                 #q-signin-card button {
                     width: 100%; padding: 14px;
                     border: none; cursor: pointer;
@@ -75,9 +91,17 @@
                 <h1>Q<span class="dot">.</span></h1>
                 <p>Sign in</p>
                 <label for="q-email">Email</label>
-                <input id="q-email" type="email" autocomplete="email" autofocus />
+                <input id="q-email" type="email" autocomplete="email"
+                    autocapitalize="off" autocorrect="off" spellcheck="false"
+                    inputmode="email" autofocus />
                 <label for="q-pwd">Password</label>
-                <input id="q-pwd" type="password" autocomplete="current-password" />
+                <div id="q-pwd-wrap">
+                    <input id="q-pwd" type="password" autocomplete="current-password"
+                        autocapitalize="off" autocorrect="off" spellcheck="false" />
+                    <button type="button" id="q-pwd-eye" aria-label="Show password" title="Show / hide password">
+                        <svg id="q-pwd-eye-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                    </button>
+                </div>
                 <button id="q-submit">Sign in</button>
                 <div class="err" id="q-err"></div>
             </div>
@@ -88,11 +112,16 @@
         const pwd = overlay.querySelector('#q-pwd');
         const submit = overlay.querySelector('#q-submit');
         const err = overlay.querySelector('#q-err');
+        const eye = overlay.querySelector('#q-pwd-eye');
 
         async function handle() {
             err.textContent = '';
+            // Trim BOTH email and password — iOS autofill / autocomplete on
+            // mobile commonly inserts a trailing space, which broke sign-in
+            // on phone (server bcrypt compare fails). Real passwords with
+            // intentional whitespace are vanishingly rare.
             const e = (email.value || '').trim();
-            const p = pwd.value || '';
+            const p = (pwd.value || '').trim();
             if (!e || !p) { err.textContent = 'Email and password required.'; return; }
             submit.disabled = true; submit.textContent = 'Signing in...';
             try {
@@ -114,6 +143,16 @@
                 submit.disabled = false; submit.textContent = 'Sign in';
                 pwd.focus();
             }
+        }
+
+        // Show / hide password — lets the user verify what was actually typed
+        // or autofilled. Important on mobile where typos are easy and invisible.
+        if (eye) {
+            eye.addEventListener('click', () => {
+                const showing = pwd.type === 'text';
+                pwd.type = showing ? 'password' : 'text';
+                eye.setAttribute('aria-label', showing ? 'Show password' : 'Hide password');
+            });
         }
 
         submit.addEventListener('click', handle);

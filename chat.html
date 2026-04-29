@@ -8,6 +8,9 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+<!-- Markdown renderer for Q's replies (so #, **, lists, > etc. render properly
+     instead of showing as raw text). marked v12 is ~30KB; loaded once, cached. -->
+<script src="https://cdn.jsdelivr.net/npm/marked@12.0.0/marked.min.js"></script>
 <style>
   :root {
     /* Matched to Quotem's WHITE/Office theme (Pink Office palette).
@@ -109,6 +112,33 @@
     background: var(--bg);
     box-shadow: var(--neu-raised-sm);
   }
+  /* APS — circular toggle. Off: raised neumorphic with muted ink. On: inset
+     well with accent ink, signalling Q is in A-Problem-Shared mode. */
+  .aps-btn {
+    width: 42px; height: 42px;
+    margin-left: 6px;
+    border: none;
+    border-radius: 50%;
+    background: var(--bg);
+    color: var(--text-muted);
+    font-family: inherit;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    cursor: pointer;
+    box-shadow: var(--neu-raised-sm);
+    transition: all 0.15s ease;
+    display: inline-flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+  }
+  .aps-btn:hover { color: var(--text); }
+  .aps-btn:active { box-shadow: var(--neu-inset-xs); }
+  .aps-btn.on {
+    color: var(--accent);
+    box-shadow: var(--neu-inset-xs);
+    background: var(--bg);
+  }
+
   .status { display: inline-flex; align-items: center; gap: 8px; font-size: 12px; color: var(--text-muted); font-weight: 500; padding: 0 14px; }
   .status-dot { width: 7px; height: 7px; background: #10b981; border-radius: 50%; box-shadow: 0 0 0 3px rgba(16,185,129,0.18); animation: pulse 2s infinite; }
   @keyframes pulse { 0%,100% { box-shadow: 0 0 0 3px rgba(16,185,129,0.18); } 50% { box-shadow: 0 0 0 5px rgba(16,185,129,0.08); } }
@@ -116,8 +146,19 @@
   main {
     flex: 1;
     overflow-y: auto;
-    padding: 24px 28px 200px;
+    padding: 64px 28px 200px;
     scroll-behavior: smooth;
+    position: relative;
+  }
+  /* Top fade — fixed overlay just under the header so messages dissolve
+     instead of slamming into it. Mirrors the footer fade. */
+  .top-fade {
+    position: fixed;
+    top: 72px; left: 0; right: 0;
+    height: 48px;
+    background: linear-gradient(to bottom, var(--bg) 30%, rgba(232,232,232,0.85) 70%, transparent);
+    pointer-events: none;
+    z-index: 9;
   }
   main::-webkit-scrollbar { width: 8px; }
   main::-webkit-scrollbar-track { background: transparent; }
@@ -200,18 +241,102 @@
   .message-body {
     font-size: 15px; line-height: 1.65;
     color: var(--text);
-    white-space: pre-wrap; word-wrap: break-word;
+    word-wrap: break-word; overflow-wrap: anywhere;
     background: var(--bg);
     padding: 16px 20px;
     border-radius: 16px;
     box-shadow: var(--neu-inset-sm);
   }
+  /* User messages stay plain text — preserve newlines, no markdown. */
   .message.user .message-body {
     border-top-right-radius: 4px;
+    white-space: pre-wrap;
   }
   .message.q .message-body {
     border-top-left-radius: 4px;
   }
+
+  /* Q's rendered markdown — accent-coloured headings, neat lists, code wells. */
+  .message.q .message-body > p { margin: 0 0 12px; }
+  .message.q .message-body > p:last-child { margin-bottom: 0; }
+  .message.q .message-body h1,
+  .message.q .message-body h2,
+  .message.q .message-body h3,
+  .message.q .message-body h4 {
+    color: var(--accent);
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    margin: 16px 0 8px;
+    line-height: 1.25;
+  }
+  .message.q .message-body h1:first-child,
+  .message.q .message-body h2:first-child,
+  .message.q .message-body h3:first-child,
+  .message.q .message-body h4:first-child { margin-top: 0; }
+  .message.q .message-body h1 { font-size: 20px; }
+  .message.q .message-body h2 { font-size: 17px; }
+  .message.q .message-body h3 { font-size: 14px; text-transform: uppercase; letter-spacing: 0.06em; }
+  .message.q .message-body h4 { font-size: 13px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.06em; }
+  .message.q .message-body strong { font-weight: 700; color: var(--text); }
+  .message.q .message-body em { font-style: italic; }
+  .message.q .message-body ul,
+  .message.q .message-body ol { padding-left: 22px; margin: 8px 0 12px; }
+  .message.q .message-body li { margin-bottom: 4px; }
+  .message.q .message-body li > p { margin: 0 0 6px; }
+  .message.q .message-body code {
+    font-family: ui-monospace, 'SF Mono', monospace;
+    font-size: 13px;
+    background: var(--bg);
+    padding: 2px 6px;
+    border-radius: 6px;
+    box-shadow: var(--neu-inset-xs);
+  }
+  .message.q .message-body pre {
+    background: var(--bg);
+    padding: 12px 14px;
+    border-radius: 12px;
+    box-shadow: var(--neu-inset-sm);
+    overflow-x: auto;
+    margin: 10px 0;
+  }
+  .message.q .message-body pre code {
+    background: transparent;
+    padding: 0;
+    box-shadow: none;
+    font-size: 13px;
+    line-height: 1.55;
+  }
+  .message.q .message-body blockquote {
+    border-left: 3px solid var(--accent);
+    padding: 2px 0 2px 14px;
+    margin: 10px 0;
+    color: var(--text-muted);
+  }
+  .message.q .message-body blockquote p { margin: 0; }
+  .message.q .message-body a {
+    color: var(--accent);
+    text-decoration: underline;
+    text-underline-offset: 2px;
+  }
+  .message.q .message-body hr {
+    border: none;
+    height: 1px;
+    background: var(--shadow-dark);
+    opacity: 0.4;
+    margin: 16px 0;
+  }
+  .message.q .message-body table {
+    border-collapse: collapse;
+    margin: 8px 0;
+    font-size: 13px;
+  }
+  .message.q .message-body th,
+  .message.q .message-body td {
+    border: 1px solid var(--shadow-dark);
+    padding: 6px 10px;
+    text-align: left;
+  }
+  .message.q .message-body th { background: rgba(0,0,0,0.03); font-weight: 600; }
 
   .typing { display: inline-flex; gap: 5px; padding: 4px 0; }
   .typing span { width: 7px; height: 7px; background: var(--text-faint); border-radius: 50%; animation: bounce 1.3s infinite ease-in-out; }
@@ -219,15 +344,16 @@
   .typing span:nth-child(3) { animation-delay: 0.3s; }
   @keyframes bounce { 0%,60%,100% { transform: translateY(0); opacity: 0.4; } 30% { transform: translateY(-5px); opacity: 1; } }
 
-  /* INPUT BAR — inset well with raised buttons, anchored to viewport bottom */
+  /* INPUT BAR — inset well with raised buttons, lifted off the viewport bottom */
   footer {
-    position: fixed; bottom: 0; left: 0; right: 0;
-    padding: 18px 28px 24px;
+    position: fixed; bottom: 280px; left: 0; right: 0;
+    padding: 18px 28px 18px;
     background: linear-gradient(to top, var(--bg) 60%, rgba(232,232,232,0.92) 85%, transparent);
     pointer-events: none;
+    z-index: 8;
   }
   /* Padding so the last message in the scroll never hides under the input */
-  main { padding-bottom: 180px; }
+  main { padding-bottom: 400px; }
   .input-wrapper {
     max-width: 720px; margin: 0 auto;
     background: var(--bg);
@@ -564,6 +690,8 @@
     <div class="thinking-picker" role="group" aria-label="Verifier" style="margin-left:6px">
       <button class="think-btn" id="check-btn" title="Check — Q reviews his own reply before sending (slower, catches mistakes)">Check</button>
     </div>
+    <button class="aps-btn" id="aps-btn" type="button" aria-pressed="false"
+      title="APS — A Problem Shared. Q switches into loophole-finder mode for fines, bills, disputes, letters that feel unfair.">APS</button>
     <span class="status"><span class="status-dot"></span>Online</span>
     <div class="voice-wrap">
       <button class="icon-btn" id="voice-toggle" aria-label="Voice settings" title="Voice settings — pick how Q sounds">
@@ -594,6 +722,8 @@
   </div>
 </header>
 
+<div class="top-fade"></div>
+
 <main>
   <div class="conversation" id="conversation">
     <div class="empty-state" id="empty">
@@ -608,9 +738,9 @@
 
 <footer>
   <div class="image-attachments" id="image-attachments"></div>
-  <input type="file" id="attach-file-input" multiple style="display:none">
+  <input type="file" id="attach-file-input" accept="image/*,application/pdf,.doc,.docx,.txt,.md,.csv" multiple style="display:none">
   <div class="input-wrapper">
-    <textarea id="input" rows="1" placeholder="Message Q, paste or drop an image, or click the mic..." autofocus></textarea>
+    <textarea id="input" rows="1" placeholder="Message Q, drop an image / .txt / .md, or click the mic..." autofocus></textarea>
     <span class="voice-status" id="voice-status"><span class="dot"></span><span id="voice-status-text"></span></span>
     <button class="input-btn" id="attach" aria-label="Attach image" title="Attach image (or paste / drag-drop)">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"></path></svg>
@@ -623,15 +753,15 @@
     </button>
   </div>
   <div class="input-hint">
-    <b>Q</b> runs on DeepSeek V4 Pro via Together
+    <b>Q</b> is Quotem's own AI
     <span class="sep">·</span>
-    Voice runs in your browser (Kokoro + Whisper)
+    Voice and listening run in your browser
     <span class="sep">·</span>
-    Conversation stays in your browser
+    Your conversation stays private
   </div>
 </footer>
 
-<div class="drop-overlay" id="drop-overlay">Drop image to attach</div>
+<div class="drop-overlay" id="drop-overlay">Drop a file to attach (image · .txt · .md)</div>
 
 <script>
 const $conversation = document.getElementById('conversation');
@@ -759,6 +889,21 @@ function setVerify(on) {
 }
 $checkBtn.addEventListener('click', () => setVerify(!verifyOn));
 setVerify(verifyOn);
+
+// APS toggle — A Problem Shared. Switches Q's system prompt to loophole-finder
+// mode for fines / bills / disputes / unfair letters. Persona, memory, tools
+// all stay the same; only Q's focus changes for the session.
+const APS_KEY = 'q-aps-mode-v1';
+const $apsBtn = document.getElementById('aps-btn');
+let apsOn = localStorage.getItem(APS_KEY) === 'true';
+function setAps(on) {
+  apsOn = !!on;
+  localStorage.setItem(APS_KEY, apsOn ? 'true' : 'false');
+  $apsBtn.classList.toggle('on', apsOn);
+  $apsBtn.setAttribute('aria-pressed', apsOn ? 'true' : 'false');
+}
+$apsBtn.addEventListener('click', () => setAps(!apsOn));
+setAps(apsOn);
 
 // Load conversation history from server memory (persists across devices)
 (async function loadHistory() {
@@ -1080,7 +1225,7 @@ async function speakWithChatterbox(text, voice) {
       console.warn('[q/voice] Chatterbox failed:', err);
       hideVoiceStatus();
       if (err.error && err.error.includes('CHATTERBOX_SPACE_URL')) {
-        renderMessage('q', '(Voice cloning needs setup — see q-lab/voice-cloning-space/README.md, then set CHATTERBOX_SPACE_URL.)');
+        renderMessage('q', "(Voice cloning isn't set up yet — Sarah needs to configure the cloning service.)");
       }
       return;
     }
@@ -1241,16 +1386,74 @@ function fileToDataUrl(file) {
   });
 }
 
+// Read a text-like file (.txt, .md, .csv) and return its decoded contents.
+function fileToText(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onloadend = () => resolve(String(reader.result || ''));
+    reader.onerror = () => reject(reader.error);
+    reader.readAsText(file);
+  });
+}
+
+// Holds plain-text content from .txt / .md / .csv files dropped between sends.
+// Forwarded as part of the message body so Q sees it in his prompt.
+let attachedTexts = [];  // [{ name, content }]
+
+function classifyFile(f) {
+  const type = (f.type || '').toLowerCase();
+  const name = (f.name || '').toLowerCase();
+  if (type.startsWith('image/')) return 'image';
+  if (type === 'application/pdf' || name.endsWith('.pdf')) return 'pdf';
+  if (
+    type === 'application/msword'
+    || type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+    || name.endsWith('.doc')
+    || name.endsWith('.docx')
+  ) return 'word';
+  if (
+    type.startsWith('text/')
+    || name.endsWith('.txt')
+    || name.endsWith('.md')
+    || name.endsWith('.csv')
+  ) return 'text';
+  return 'unknown';
+}
+
 async function addImageFiles(files) {
+  const unsupported = [];
   for (const f of files) {
-    if (!f.type || !f.type.startsWith('image/')) continue;
-    if (f.size > MAX_IMAGE_BYTES) {
-      console.warn('[q/vision] image is large (' + Math.round(f.size / 1024 / 1024) + 'MB) — sending anyway');
+    const kind = classifyFile(f);
+    if (kind === 'image') {
+      if (f.size > MAX_IMAGE_BYTES) {
+        console.warn('[q/vision] image is large (' + Math.round(f.size / 1024 / 1024) + 'MB) — sending anyway');
+      }
+      const dataUrl = await fileToDataUrl(f);
+      attachedImages.push({ dataUrl, mimeType: f.type, name: f.name || 'image' });
+    } else if (kind === 'text') {
+      try {
+        const content = await fileToText(f);
+        attachedTexts.push({ name: f.name || 'note.txt', content });
+      } catch (e) {
+        unsupported.push({ name: f.name || 'file', kind: 'text', reason: e.message });
+      }
+    } else {
+      unsupported.push({ name: f.name || 'file', kind });
     }
-    const dataUrl = await fileToDataUrl(f);
-    attachedImages.push({ dataUrl, mimeType: f.type, name: f.name || 'image' });
   }
   renderAttachments();
+
+  if (unsupported.length > 0) {
+    if ($empty && $empty.parentNode) $empty.remove();
+    const list = unsupported.map(u => '**' + u.name + '** (' + u.kind + ')').join(', ');
+    const msg =
+      "I can't read those file types yet — " + list + ".\n\n" +
+      "Right now I can read:\n" +
+      "- 📷 Images (PNG, JPG) — drop a screenshot of the page if you want me to look at a PDF\n" +
+      "- 📝 Plain text (.txt, .md, .csv)\n\n" +
+      "PDFs and Word docs are on the upgrade list.";
+    renderMessage('q', msg);
+  }
 }
 
 // Paperclip → file picker.
@@ -1302,17 +1505,39 @@ window.addEventListener('drop', async (e) => {
 });
 
 async function send() {
-  const text = $input.value.trim();
+  const userText = $input.value.trim();
   const imagesNow = attachedImages.slice();  // snapshot — clear after send
-  if (!text && imagesNow.length === 0) return;
+  const textsNow = attachedTexts.slice();
+  if (!userText && imagesNow.length === 0 && textsNow.length === 0) return;
   if ($send.disabled) return;
   if ($empty && $empty.parentNode) $empty.remove();
 
-  renderMessage('user', text || '(image)', undefined, imagesNow);
+  // Build the actual message we send to Q. Text attachments get prepended as
+  // labelled blocks so Q can read their contents naturally.
+  let messageForQ = userText;
+  if (textsNow.length > 0) {
+    const blocks = textsNow.map(t =>
+      '--- file: ' + t.name + ' ---\n' + t.content + '\n--- end of file ---'
+    ).join('\n\n');
+    messageForQ = blocks + (userText ? ('\n\n' + userText) : '');
+  }
+
+  // What the user SEES in their own bubble — shorter than the full payload.
+  let displayText = userText;
+  if (textsNow.length > 0) {
+    const fileLine = '📎 attached: ' + textsNow.map(t => t.name).join(', ');
+    displayText = userText ? (fileLine + '\n\n' + userText) : fileLine;
+  }
+  if (!displayText && imagesNow.length > 0) displayText = '(image)';
+
+  renderMessage('user', displayText, undefined, imagesNow);
   $input.value = '';
   $input.style.height = 'auto';
   attachedImages = [];
+  attachedTexts = [];
   renderAttachments();
+  // Local alias for the rest of the function (rest of code expects `text`).
+  const text = messageForQ;
 
   const typingEl = renderTyping();
   $send.disabled = true;
@@ -1328,6 +1553,9 @@ async function send() {
     }
     if (verifyOn) {
       body.verify = true;
+    }
+    if (apsOn) {
+      body.mode = 'aps';
     }
     const response = await fetch('/chat', {
       method: 'POST',
@@ -1359,6 +1587,23 @@ async function send() {
   }
 }
 
+// Render Q's replies through marked so #, **, lists, > etc. become real
+// formatting. We pre-escape the input so any `<script>` Q hands back is shown
+// as literal text, never executed. User messages stay as plain escaped text.
+function renderQContent(text) {
+  const safe = escapeHtml(String(text == null ? '' : text));
+  if (typeof marked === 'undefined' || !marked.parse) {
+    // CDN failed — fall back to escaped plain text so Q still gets a reply.
+    return safe.replace(/\n/g, '<br>');
+  }
+  try {
+    return marked.parse(safe, { breaks: true, gfm: true });
+  } catch (e) {
+    console.warn('[q/chat] markdown render failed, falling back to plain:', e);
+    return safe.replace(/\n/g, '<br>');
+  }
+}
+
 function renderMessage(role, content, animate, images) {
   const isUser = role === 'user';
   const messageEl = document.createElement('div');
@@ -1367,7 +1612,8 @@ function renderMessage(role, content, animate, images) {
   const imagesHtml = (Array.isArray(images) && images.length > 0)
     ? '<div class="message-images">' + images.map(img => '<img src="' + img.dataUrl + '" alt="">').join('') + '</div>'
     : '';
-  const bodyHtml = '<div class="message-body">' + imagesHtml + escapeHtml(content) + '</div>';
+  const renderedContent = isUser ? escapeHtml(content) : renderQContent(content);
+  const bodyHtml = '<div class="message-body">' + imagesHtml + renderedContent + '</div>';
   const inner = isUser
     ? '<div class="message-content"><div class="message-meta">You</div>' + bodyHtml + '</div><div class="avatar you">YOU</div>'
     : '<div class="avatar q">Q</div><div class="message-content"><div class="message-meta">Q</div>' + bodyHtml + '</div>';

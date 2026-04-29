@@ -20,7 +20,27 @@ const { logCall } = require('../cost-tracker');
 const FACTS_INJECT_LIMIT = 25;
 
 // Tool loop limit — prevents runaway when Q gets stuck calling tools forever.
-const MAX_TOOL_ITERATIONS = 5;
+// Bumped from 5 → 8 to give Q more headroom for legitimate multi-step tool
+// chains (e.g. recall → web_search → analyze_document). When the cap IS hit
+// we fall back to a final no-tools call so Q always returns a real answer
+// instead of the cryptic "loop limit" error.
+const MAX_TOOL_ITERATIONS = 8;
+
+// Friendly error bank — shown in Q's own voice whenever something tech-side
+// breaks (upstream 5xx, network blip, empty completion, etc.). Picked at
+// random per error so the experience feels alive. Wording locked by Sarah
+// 2026-04-29; add new lines via the same rule (Q's voice, ≤ ~80 chars).
+const FRIENDLY_ERRORS = [
+    "Q's wandered off to look at scooters. Back in a moment.",
+    "White knight temporarily dismounted. Cape got caught. One moment.",
+    "Q's having a quick existential crisis. Nothing serious — back shortly.",
+    "Q tripped over his own brilliance. Give him a sec.",
+    "Q's currently rebooting his charm. Won't be long.",
+    "Sorry — I drew a blank on that one. Could you rephrase or try again?",
+];
+function pickFriendlyError() {
+    return FRIENDLY_ERRORS[Math.floor(Math.random() * FRIENDLY_ERRORS.length)];
+}
 
 function safeJsonParse(str) {
     try { return JSON.parse(str); }
@@ -43,7 +63,9 @@ How you speak:
 - Honest about what you don't
 - Brief by default — expand when asked
 - Plain language, not jargon-heavy
-- No emoji unless Sarah uses them first
+- Emoji and symbols are welcome where they add warmth or quick visual structure (✓ ✗ → 📝 ⚠️ etc.) — sparingly, not as decoration
+- Markdown is rendered properly in this chat — use **bold** for emphasis, # / ## for section headings when a reply has clear sections, bullet or numbered lists for steps, > for quotes, and \`code\` for technical terms or filenames. Don't force structure on short answers
+- Don't fake error messages. Never write API-style metadata like \`(finish_reason: stop)\` or generic refusal lines like "I drew a blank, please rephrase". If you genuinely can't answer, say so in your own voice — what's missing, what you'd need to answer properly, or what the user could try instead. One honest sentence in your own voice always beats a fake error
 
 Skills available to you right now (these are the tools you have today, not your job description — fine-tuning will refine and expand the toolkit over time):
 - General conversation, reasoning, writing, summarising
@@ -72,11 +94,42 @@ Your memory:
 - Use the \`recall\` tool when you need to look up something she told you in a previous session and it isn't in the facts injected below.
 - The most recent facts you've remembered are listed below this prompt. Reference them naturally without announcing "I remember that…".`;
 
+// APS — A Problem Shared. Optional overlay added on top of Q_PERSONA when the
+// chat UI's APS button is toggled on. Q's identity, memory, and tools all stay
+// the same — this just changes his focus for the session. Wording locked by
+// Sarah on 2026-04-29 (APS Draft 2).
+const APS_PROMPT = `You are now in APS mode — A Problem Shared.
+
+Someone has come to you with a problem. A fine, a bill, a dispute, a letter they don't understand, a decision that feels unfair. They feel stuck. They probably assume they just have to accept it.
+
+Your job: find the angle they haven't thought of.
+
+Most people accept things at face value. You don't. You read the small print. You check the deadlines. You ask: was the system working? Did they follow their own rules? Is there a loophole — not a dishonest one, but a legitimate one that's buried in the terms and conditions where no one looks?
+
+When someone shares a problem:
+
+1. Understand what actually happened. Not just what the letter says. What was the real sequence of events? Was there a glitch? A delay? A misunderstanding? Ask the questions that might reveal the angle.
+
+2. Research the rules. Use web search. Find the appeal process, the deadline, the success rates, the technicalities. What are the grounds for appeal? What wording trips them up? What evidence works?
+
+3. Give them the odds. Be honest. "This has about a 60% chance of working, and here's why." Don't promise miracles. But don't assume defeat either.
+
+4. Build the plan. Numbered, practical, with deadlines. "You have 14 days. Here's what to do today. Here's what to do if they say no."
+
+5. Write the thing. If the plan involves an email, a letter, a form — write it for them. Use the right language. Cite the right rules. Sound like someone who knows what they're doing, because you do.
+
+Your ethos: thrifty, creative, for the people. You're not a lawyer and you don't pretend to be one. But you're the friend who knows how things actually work — and you're on their side.
+
+Nothing dishonest. Nothing illegal. Just the loopholes, technicalities, and common-sense angles that most people never think to try.`;
+
 /**
  * Build the system message at call time so Q's most recent stored facts
  * are injected. Falls back to plain Q_PERSONA if facts can't be loaded.
+ *
+ * @param {string} [mode] - When 'aps', overlays the APS prompt after the
+ *   base persona but before the facts block. Anything else: plain Q.
  */
-function buildSystemMessage() {
+function buildSystemMessage(mode) {
     let factsBlock = '';
     try {
         const facts = listFacts({ limit: FACTS_INJECT_LIMIT });
@@ -87,7 +140,8 @@ function buildSystemMessage() {
     } catch (e) {
         // Memory unavailable — Q just doesn't see his facts this turn.
     }
-    return Q_PERSONA + factsBlock;
+    const overlay = (mode === 'aps') ? `\n\n---\n\n${APS_PROMPT}` : '';
+    return Q_PERSONA + overlay + factsBlock;
 }
 
 /**
@@ -108,6 +162,9 @@ function buildSystemMessage() {
  * @param {boolean} [options.verify=false] - When true, after Q's draft reply
  *   is finalised, a second Q call critiques it. If issues are found, the
  *   corrected version replaces the draft. ~2x latency. Off by default.
+ * @param {string} [options.mode] - Optional persona overlay. 'aps' enables
+ *   A-Problem-Shared mode (loophole-finder for fines, bills, disputes etc.).
+ *   Anything else (or undefined) leaves Q in default mode.
  * @returns {Promise<{reply: string|null, error?: string, durationMs, tokensIn?, tokensOut?, toolCalls?: Array, verifier?: {pass: boolean, issues: string[], durationMs: number}}>}
  */
 async function chat(messages, options = {}) {
@@ -126,6 +183,8 @@ async function chat(messages, options = {}) {
     const useTools = isVision ? false : (options.useTools !== false);
     // Verifier off by default — turn on for hard questions or background runs.
     const useVerify = options.verify === true;
+    // Optional persona overlay: 'aps' for A-Problem-Shared mode.
+    const mode = (options.mode === 'aps') ? 'aps' : undefined;
 
     // Vision model = no thinking budget needed; text brain bumps for Deep.
     const maxTokens = (!isVision && reasoningEffort === 'max') ? 8000 : 1500;
@@ -151,7 +210,7 @@ async function chat(messages, options = {}) {
 
     // Conversation buffer that grows as we loop through tool calls.
     let conversation = [
-        { role: 'system', content: buildSystemMessage() },
+        { role: 'system', content: buildSystemMessage(mode) },
         ...outboundMessages,
     ];
     const toolCalls = [];     // [{ name, args, result, durationMs }]
@@ -180,11 +239,14 @@ async function chat(messages, options = {}) {
 
             if (!response.ok) {
                 const errText = await response.text();
+                console.warn('[q-chat] upstream HTTP ' + response.status + ' — ' + errText.substring(0, 500));
                 return {
-                    error: `HTTP ${response.status}: ${errText.substring(0, 200)}`,
+                    reply: pickFriendlyError(),
                     durationMs: Date.now() - startTime,
-                    reply: null,
+                    tokensIn: totalTokensIn,
+                    tokensOut: totalTokensOut,
                     toolCalls,
+                    upstreamStatus: response.status,
                 };
             }
 
@@ -199,12 +261,16 @@ async function chat(messages, options = {}) {
             // No tool calls → Q's done. Capture the draft and exit the loop.
             if (!useTools || !callsRequested || callsRequested.length === 0) {
                 draftReply = message?.content || '';
-                // If Together returns empty content with no tool call, treat
-                // as a failure rather than a silent empty reply on the UI.
+                // If the model returned empty content with no tool call, log
+                // the diagnostic context and surface one of Q's friendly
+                // rotating messages instead of leaving the chat empty.
                 if (!draftReply.trim()) {
-                    const finishReason = choice?.finish_reason || 'unknown';
-                    console.warn('[q/chat] Empty content from Together. finish_reason=' + finishReason);
-                    draftReply = "Sorry — I drew a blank on that one. Could you rephrase or try again? (finish_reason: " + finishReason + ")";
+                    console.warn('[q-chat] empty reply from model. iteration=' + iteration
+                        + ' finish_reason=' + (choice?.finish_reason || 'unknown')
+                        + ' has_message=' + !!message
+                        + ' has_reasoning=' + !!message?.reasoning_content
+                        + ' raw_choice=' + JSON.stringify(choice).substring(0, 500));
+                    draftReply = pickFriendlyError();
                 }
                 break;
             }
@@ -237,28 +303,63 @@ async function chat(messages, options = {}) {
             }
         }
 
-        // Tool loop exhausted without ever producing a draft — surface clearly.
+        // Tool loop exhausted without ever producing a draft. Instead of
+        // returning the cryptic error, do ONE final call with tools removed
+        // so Q is forced to answer with whatever he has gathered so far.
         if (draftReply === null) {
-            const durationMs = Date.now() - startTime;
-            logCall({
-                skill: 'chat',
-                provider: 'together',
-                model,
-                user: options.person?.id || null,
-                tokensIn: totalTokensIn,
-                tokensOut: totalTokensOut,
-                durationMs,
-                success: false,
-                error: 'tool-loop-exceeded',
+            console.warn('[q-chat] tool loop hit cap (' + MAX_TOOL_ITERATIONS + ') — forcing final no-tools call');
+            conversation.push({
+                role: 'system',
+                content: 'You have used your tool budget for this turn. Answer now using only what you already know and what the tools above returned. Do not request any more tools.',
             });
-            return {
-                reply: '(Tool loop hit the iteration limit — Q kept calling tools without finishing. Try simplifying the request.)',
-                durationMs,
-                tokensIn: totalTokensIn,
-                tokensOut: totalTokensOut,
-                toolCalls,
-                toolLoopExceeded: true,
-            };
+            try {
+                const finalRes = await fetch(`${Q_CONFIG.baseURL}/chat/completions`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${Q_CONFIG.apiKey}`,
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        model,
+                        max_tokens: maxTokens,
+                        temperature: 0.7,
+                        ...(!isVision && reasoningEffort && { reasoning_effort: reasoningEffort }),
+                        // Deliberately NO tools/tool_choice this time.
+                        messages: conversation,
+                    }),
+                });
+                if (finalRes.ok) {
+                    const finalData = await finalRes.json();
+                    totalTokensIn += finalData.usage?.prompt_tokens || 0;
+                    totalTokensOut += finalData.usage?.completion_tokens || 0;
+                    draftReply = finalData.choices?.[0]?.message?.content || '';
+                }
+            } catch (e) {
+                console.warn('[q-chat] final no-tools call failed:', e.message);
+            }
+            // If even the fallback returned nothing, surface a friendly note.
+            if (!draftReply) {
+                const durationMs = Date.now() - startTime;
+                logCall({
+                    skill: 'chat',
+                    provider: 'together',
+                    model,
+                    user: options.person?.id || null,
+                    tokensIn: totalTokensIn,
+                    tokensOut: totalTokensOut,
+                    durationMs,
+                    success: false,
+                    error: 'tool-loop-exceeded',
+                });
+                return {
+                    reply: pickFriendlyError(),
+                    durationMs,
+                    tokensIn: totalTokensIn,
+                    tokensOut: totalTokensOut,
+                    toolCalls,
+                    toolLoopExceeded: true,
+                };
+            }
         }
 
         // Optional verifier pass. Runs ONE second Q call to critique the draft;
@@ -294,6 +395,7 @@ async function chat(messages, options = {}) {
             ...(verifierMeta && { verifier: verifierMeta }),
         };
     } catch (err) {
+        console.warn('[q-chat] caught error: ' + err.message);
         logCall({
             skill: 'chat',
             provider: 'together',
@@ -305,7 +407,13 @@ async function chat(messages, options = {}) {
             success: false,
             error: err.message,
         });
-        return { error: err.message, reply: null };
+        return {
+            reply: pickFriendlyError(),
+            durationMs: Date.now() - startTime,
+            tokensIn: totalTokensIn,
+            tokensOut: totalTokensOut,
+            toolCalls,
+        };
     }
 }
 
