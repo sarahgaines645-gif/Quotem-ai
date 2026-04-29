@@ -49,7 +49,15 @@ function loadMemory() {
         const data = fs.readFileSync(MEMORY_FILE, 'utf8');
         const parsed = JSON.parse(data);
         if (!Array.isArray(parsed)) return [];
-        return parsed.map(m => ({ user: m.user || 'sarah', ...m }));
+        // Backward-compat tagging: pre-Circle-Mode entries had no `user`
+        // field. Tag based on role — role:user → 'sarah' (the only person
+        // Q knew at the time), role:assistant → 'q' (Q himself).
+        return parsed.map(m => ({
+            user: m.user || (m.role === 'assistant' ? 'q' : 'sarah'),
+            role: m.role,
+            content: m.content,
+            timestamp: m.timestamp,
+        }));
     } catch (e) {
         console.error('[q/memory] load error:', e.message);
         return [];
