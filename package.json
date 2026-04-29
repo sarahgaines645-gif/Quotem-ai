@@ -1,0 +1,19 @@
+{
+  "name": "quotem-ai",
+  "version": "0.1.0",
+  "description": "Q — a general AI you can trust. Open-weights, frozen at a pinned version, fine-tunable on your own data, no single-vendor dependency.",
+  "main": "server/index.js",
+  "scripts": {
+    "start": "node server/index.js",
+    "dev": "node --watch server/index.js"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "dotenv": "^17.2.3",
+    "express": "^4.21.0"
+  },
+  "private": true,
+  "license": "UNLICENSED"
+}

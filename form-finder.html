@@ -1,0 +1,408 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <script src="/q-auth.js"></script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Q Form Finder — bounding boxes for form fields</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #e8e8e8;
+    --text: #1a1a1a;
+    --text-muted: rgba(0,0,0,0.42);
+    --text-faint: rgba(0,0,0,0.26);
+    --shadow-light: #ffffff;
+    --shadow-dark: #ababab;
+    --accent: #e91e63;
+    --neu-raised:    10px 10px 28px #ababab, -8px -8px 20px #ffffff, inset 0 1px 0 rgba(255,255,255,0.5);
+    --neu-raised-sm: 6px 6px 16px #ababab, -5px -5px 12px #ffffff;
+    --neu-inset:     inset 5px 5px 14px #ababab, inset -4px -4px 10px #ffffff;
+    --neu-inset-sm:  inset 3px 3px 8px #ababab, inset -2px -2px 6px #ffffff;
+    --neu-inset-xs:  inset 3px 3px 8px #ababab, inset -2px -2px 6px #ffffff;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: 'Space Grotesk', -apple-system, BlinkMacSystemFont, sans-serif;
+    background: var(--bg); color: var(--text);
+    font-size: 15px; line-height: 1.55;
+    min-height: 100vh; padding: 32px 24px 80px;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 1100px; margin: 0 auto; }
+  header { display: flex; align-items: baseline; gap: 14px; margin-bottom: 24px; flex-wrap: wrap; }
+  .logo-mark { display: inline-flex; align-items: baseline; }
+  .logo-mark .q { font-size: 28px; font-weight: 700; line-height: 1; letter-spacing: -0.05em; }
+  .logo-mark .dot { width: 8px; height: 8px; background: var(--accent); border-radius: 50%; display: inline-block; margin-left: 4px; align-self: flex-end; margin-bottom: 4px; box-shadow: 0 1px 2px rgba(233,30,99,0.3); }
+  h1 { font-size: 22px; font-weight: 600; letter-spacing: -0.02em; }
+  .tagline { font-size: 13px; color: var(--text-muted); margin-left: auto; }
+
+  .card { background: var(--bg); border-radius: 18px; padding: 18px; box-shadow: var(--neu-raised); margin-bottom: 18px; }
+
+  .drop-zone {
+    border: 2px dashed var(--shadow-dark);
+    border-radius: 16px;
+    padding: 48px 24px;
+    text-align: center;
+    color: var(--text-muted);
+    cursor: pointer;
+    transition: all 0.15s ease;
+    background: var(--bg);
+    box-shadow: var(--neu-inset-xs);
+  }
+  .drop-zone:hover, .drop-zone.dragover {
+    color: var(--accent);
+    border-color: var(--accent);
+    background: var(--bg);
+  }
+  .drop-zone .icon { font-size: 32px; display: block; margin-bottom: 8px; }
+  .drop-zone .hint { font-size: 12px; color: var(--text-faint); margin-top: 6px; }
+
+  .stage {
+    display: none;
+    position: relative;
+    background: var(--bg);
+    border-radius: 12px;
+    box-shadow: var(--neu-inset-sm);
+    overflow: hidden;
+  }
+  .stage.show { display: block; }
+  .stage img { display: block; width: 100%; height: auto; user-select: none; pointer-events: none; }
+  .stage svg { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; }
+
+  .controls {
+    display: flex; gap: 10px; align-items: center; margin-top: 14px; flex-wrap: wrap;
+  }
+  button {
+    border: none; cursor: pointer;
+    background: var(--bg); color: var(--text);
+    font-family: inherit; font-size: 13px; font-weight: 600;
+    padding: 8px 16px; border-radius: 10px;
+    box-shadow: var(--neu-raised-sm);
+  }
+  button:hover:not(:disabled) { color: var(--accent); }
+  button:active:not(:disabled) { box-shadow: var(--neu-inset-xs); }
+  button:disabled { opacity: 0.5; cursor: not-allowed; }
+  .status { font-size: 12px; color: var(--text-muted); margin-left: 6px; }
+  .status .dot { display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: var(--accent); margin-right: 6px; animation: pulse 1.2s infinite; vertical-align: middle; }
+  @keyframes pulse { 0%,100% { opacity: 0.4; } 50% { opacity: 1; } }
+
+  .results { display: none; }
+  .results.show { display: block; }
+  .results h2 {
+    font-size: 13px; font-weight: 600;
+    color: var(--text-muted);
+    text-transform: uppercase; letter-spacing: 0.08em;
+    margin-bottom: 12px;
+  }
+  .summary {
+    background: var(--bg);
+    padding: 12px 14px;
+    border-radius: 10px;
+    box-shadow: var(--neu-inset-xs);
+    font-size: 13px;
+    color: var(--text);
+    margin-bottom: 12px;
+    white-space: pre-wrap;
+  }
+  .field-list {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap: 8px;
+  }
+  .field {
+    background: var(--bg);
+    padding: 10px 12px;
+    border-radius: 10px;
+    box-shadow: var(--neu-inset-xs);
+    font-size: 12px;
+    cursor: pointer;
+    transition: all 0.12s ease;
+  }
+  .field:hover { color: var(--accent); }
+  .field.highlighted { color: var(--accent); box-shadow: var(--neu-raised-sm); }
+  .field .label { font-weight: 600; margin-bottom: 2px; }
+  .field .type { font-family: ui-monospace, monospace; font-size: 10px; color: var(--text-faint); text-transform: uppercase; letter-spacing: 0.05em; }
+  .field .coords { font-family: ui-monospace, monospace; font-size: 10px; color: var(--text-faint); margin-top: 2px; }
+
+  .json-export {
+    margin-top: 12px;
+    padding: 10px 12px;
+    background: var(--bg);
+    border-radius: 10px;
+    box-shadow: var(--neu-inset-xs);
+    font-family: ui-monospace, monospace;
+    font-size: 11px;
+    color: var(--text-muted);
+    max-height: 200px; overflow-y: auto;
+    white-space: pre-wrap;
+    word-break: break-all;
+    display: none;
+  }
+  .json-export.show { display: block; }
+
+  .back-link { display: inline-block; margin-top: 32px; font-size: 12px; color: var(--text-muted); text-decoration: none; }
+  .back-link:hover { color: var(--text); }
+
+  .box { fill: rgba(233,30,99,0.08); stroke: rgba(233,30,99,0.7); stroke-width: 1.5; }
+  .box.text_field { fill: rgba(233,30,99,0.08); stroke: rgba(233,30,99,0.7); }
+  .box.checkbox { fill: rgba(16,185,129,0.10); stroke: rgba(16,185,129,0.7); }
+  .box.signature { fill: rgba(245,158,11,0.10); stroke: rgba(245,158,11,0.7); }
+  .box.date { fill: rgba(99,102,241,0.10); stroke: rgba(99,102,241,0.7); }
+  .box.number { fill: rgba(168,85,247,0.10); stroke: rgba(168,85,247,0.7); }
+  .box.highlighted { fill: rgba(233,30,99,0.25); stroke: var(--accent); stroke-width: 2.5; }
+  .box-label {
+    font-family: 'Space Grotesk', sans-serif; font-size: 10px; font-weight: 600;
+    fill: var(--accent);
+    paint-order: stroke;
+    stroke: white; stroke-width: 3;
+  }
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <header>
+    <span class="logo-mark"><span class="q">Q</span><span class="dot"></span></span>
+    <h1>Form Finder</h1>
+    <span class="tagline">Drop a form. Q finds the boxes.</span>
+  </header>
+
+  <div class="card">
+    <input type="file" id="file-input" accept="image/*" style="display:none">
+    <div class="drop-zone" id="drop-zone">
+      <span class="icon">⬆</span>
+      <div>Click, drag-drop, or paste a form image here</div>
+      <div class="hint">PNG, JPG, or screenshot of a PDF page. Q will identify the fillable fields.</div>
+    </div>
+
+    <div class="stage" id="stage">
+      <img id="image" alt="Uploaded form">
+      <svg id="overlay" preserveAspectRatio="none"></svg>
+    </div>
+
+    <div class="controls">
+      <button id="detect" disabled>Detect fields</button>
+      <button id="reset" disabled>Reset</button>
+      <button id="copy-json" disabled>Copy JSON</button>
+      <span class="status" id="status"></span>
+    </div>
+  </div>
+
+  <div class="card results" id="results">
+    <h2>Q's read</h2>
+    <div class="summary" id="summary"></div>
+    <h2 style="margin-top:16px">Fields detected</h2>
+    <div class="field-list" id="field-list"></div>
+    <pre class="json-export" id="json-export"></pre>
+  </div>
+
+  <a href="/chat" class="back-link">← back to Q's chat</a>
+</div>
+
+<script>
+const $fileInput = document.getElementById('file-input');
+const $dropZone = document.getElementById('drop-zone');
+const $stage = document.getElementById('stage');
+const $image = document.getElementById('image');
+const $overlay = document.getElementById('overlay');
+const $detect = document.getElementById('detect');
+const $reset = document.getElementById('reset');
+const $copyJson = document.getElementById('copy-json');
+const $status = document.getElementById('status');
+const $results = document.getElementById('results');
+const $summary = document.getElementById('summary');
+const $fieldList = document.getElementById('field-list');
+const $jsonExport = document.getElementById('json-export');
+
+let imageDataUrl = null;
+let imageNaturalWidth = 0;
+let imageNaturalHeight = 0;
+let lastResult = null;
+let elapsedTimer = null;
+
+$dropZone.addEventListener('click', () => $fileInput.click());
+$fileInput.addEventListener('change', () => {
+  if ($fileInput.files && $fileInput.files[0]) loadFile($fileInput.files[0]);
+});
+
+['dragenter', 'dragover'].forEach(ev => {
+  $dropZone.addEventListener(ev, e => { e.preventDefault(); $dropZone.classList.add('dragover'); });
+});
+['dragleave', 'drop'].forEach(ev => {
+  $dropZone.addEventListener(ev, e => { e.preventDefault(); $dropZone.classList.remove('dragover'); });
+});
+$dropZone.addEventListener('drop', e => {
+  const f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+  if (f) loadFile(f);
+});
+
+window.addEventListener('paste', e => {
+  if (!e.clipboardData) return;
+  for (const item of e.clipboardData.items) {
+    if (item.kind === 'file') {
+      const f = item.getAsFile();
+      if (f && f.type && f.type.startsWith('image/')) { loadFile(f); break; }
+    }
+  }
+});
+
+async function loadFile(file) {
+  if (!file.type || !file.type.startsWith('image/')) {
+    alert('Need an image file (PNG, JPG, etc.)');
+    return;
+  }
+  const reader = new FileReader();
+  reader.onload = () => {
+    imageDataUrl = String(reader.result || '');
+    $image.onload = () => {
+      imageNaturalWidth = $image.naturalWidth;
+      imageNaturalHeight = $image.naturalHeight;
+      $overlay.setAttribute('viewBox', '0 0 ' + imageNaturalWidth + ' ' + imageNaturalHeight);
+      $stage.classList.add('show');
+      $dropZone.style.display = 'none';
+      $detect.disabled = false;
+      $reset.disabled = false;
+    };
+    $image.src = imageDataUrl;
+  };
+  reader.readAsDataURL(file);
+}
+
+$detect.addEventListener('click', async () => {
+  if (!imageDataUrl) return;
+  $detect.disabled = true;
+  const start = Date.now();
+  elapsedTimer = setInterval(() => {
+    const sec = ((Date.now() - start) / 1000).toFixed(1);
+    $status.innerHTML = '<span class="dot"></span>Q is reading the form… ' + sec + 's';
+  }, 100);
+
+  try {
+    const res = await fetch('/form-finder/detect', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ imageDataUrl }),
+    });
+    const data = await res.json();
+    clearInterval(elapsedTimer); elapsedTimer = null;
+    $status.textContent = '';
+    if (data.error) {
+      $summary.textContent = 'Error: ' + data.error;
+      $results.classList.add('show');
+      $detect.disabled = false;
+      return;
+    }
+    lastResult = data;
+    renderResult(data);
+    $detect.disabled = false;
+    $copyJson.disabled = false;
+  } catch (e) {
+    clearInterval(elapsedTimer); elapsedTimer = null;
+    $status.textContent = 'Network error: ' + e.message;
+    $detect.disabled = false;
+  }
+});
+
+function renderResult(data) {
+  $results.classList.add('show');
+  $summary.textContent = data.summary || data.answer || data.raw_response || '(no summary)';
+  $fieldList.innerHTML = '';
+  $overlay.innerHTML = '';
+
+  const fields = Array.isArray(data.fields) ? data.fields : [];
+  if (fields.length === 0) {
+    $fieldList.innerHTML = '<div class="field">No fields detected.</div>';
+    return;
+  }
+
+  fields.forEach((f, i) => {
+    const x = Number(f.x) || 0;
+    const y = Number(f.y) || 0;
+    const w = Number(f.width) || 0;
+    const h = Number(f.height) || 0;
+    // Coords are normalised 0-1000; SVG viewBox is in image pixels — convert.
+    const px = (x / 1000) * imageNaturalWidth;
+    const py = (y / 1000) * imageNaturalHeight;
+    const pw = (w / 1000) * imageNaturalWidth;
+    const ph = (h / 1000) * imageNaturalHeight;
+
+    const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+    rect.setAttribute('x', px); rect.setAttribute('y', py);
+    rect.setAttribute('width', pw); rect.setAttribute('height', ph);
+    rect.setAttribute('rx', '4');
+    rect.classList.add('box');
+    if (f.type) rect.classList.add(String(f.type).replace(/[^a-z_]/gi, ''));
+    rect.dataset.idx = String(i);
+    $overlay.appendChild(rect);
+
+    const labelEl = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+    labelEl.setAttribute('x', px + 4);
+    labelEl.setAttribute('y', Math.max(py - 4, 14));
+    labelEl.setAttribute('class', 'box-label');
+    labelEl.textContent = f.label || ('field ' + (i + 1));
+    $overlay.appendChild(labelEl);
+
+    const card = document.createElement('div');
+    card.className = 'field';
+    card.dataset.idx = String(i);
+    card.innerHTML =
+      '<div class="label">' + escapeHtml(f.label || ('field ' + (i + 1))) + '</div>' +
+      '<div class="type">' + escapeHtml(f.type || 'unknown') + '</div>' +
+      '<div class="coords">x:' + Math.round(x) + ' y:' + Math.round(y) + ' w:' + Math.round(w) + ' h:' + Math.round(h) + ' (0-1000)</div>';
+    card.addEventListener('mouseenter', () => highlightField(i, true));
+    card.addEventListener('mouseleave', () => highlightField(i, false));
+    $fieldList.appendChild(card);
+  });
+
+  $jsonExport.textContent = JSON.stringify({ summary: data.summary || '', fields }, null, 2);
+}
+
+function highlightField(idx, on) {
+  const rect = $overlay.querySelector('[data-idx="' + idx + '"]');
+  const card = $fieldList.querySelector('[data-idx="' + idx + '"]');
+  if (rect) rect.classList.toggle('highlighted', on);
+  if (card) card.classList.toggle('highlighted', on);
+}
+
+$reset.addEventListener('click', () => {
+  imageDataUrl = null;
+  lastResult = null;
+  $image.removeAttribute('src');
+  $stage.classList.remove('show');
+  $dropZone.style.display = '';
+  $results.classList.remove('show');
+  $jsonExport.classList.remove('show');
+  $detect.disabled = true;
+  $reset.disabled = true;
+  $copyJson.disabled = true;
+  $fileInput.value = '';
+});
+
+$copyJson.addEventListener('click', async () => {
+  if (!lastResult) return;
+  const text = JSON.stringify({ summary: lastResult.summary || '', fields: lastResult.fields || [] }, null, 2);
+  try {
+    await navigator.clipboard.writeText(text);
+    $jsonExport.textContent = text;
+    $jsonExport.classList.add('show');
+    $copyJson.textContent = 'Copied ✓';
+    setTimeout(() => { $copyJson.textContent = 'Copy JSON'; }, 2000);
+  } catch {
+    // clipboard blocked — show inline so the user can copy manually
+    $jsonExport.textContent = text;
+    $jsonExport.classList.add('show');
+  }
+});
+
+function escapeHtml(str) {
+  return String(str == null ? '' : str)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+</script>
+
+<script src="/trace-widget.js"></script>
+</body>
+</html>

@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <script src="/q-auth.js"></script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Q Graphics — image to SVG</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #e8e8e8; --text: #1a1a1a;
+    --text-muted: rgba(0,0,0,0.42); --text-faint: rgba(0,0,0,0.26);
+    --shadow-light: #ffffff; --shadow-dark: #ababab;
+    --accent: #e91e63;
+    --neu-raised: 10px 10px 28px #ababab, -8px -8px 20px #ffffff, inset 0 1px 0 rgba(255,255,255,0.5);
+    --neu-raised-sm: 6px 6px 16px #ababab, -5px -5px 12px #ffffff;
+    --neu-inset: inset 5px 5px 14px #ababab, inset -4px -4px 10px #ffffff;
+    --neu-inset-sm: inset 3px 3px 8px #ababab, inset -2px -2px 6px #ffffff;
+    --neu-inset-xs: inset 3px 3px 8px #ababab, inset -2px -2px 6px #ffffff;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Space Grotesk', -apple-system, sans-serif; background: var(--bg); color: var(--text); font-size: 15px; line-height: 1.55; min-height: 100vh; padding: 32px 24px 80px; -webkit-font-smoothing: antialiased; }
+  .wrap { max-width: 1100px; margin: 0 auto; }
+  header { display: flex; align-items: baseline; gap: 14px; margin-bottom: 24px; flex-wrap: wrap; }
+  .logo-mark { display: inline-flex; align-items: baseline; }
+  .logo-mark .q { font-size: 28px; font-weight: 700; line-height: 1; letter-spacing: -0.05em; }
+  .logo-mark .dot { width: 8px; height: 8px; background: var(--accent); border-radius: 50%; display: inline-block; margin-left: 4px; align-self: flex-end; margin-bottom: 4px; box-shadow: 0 1px 2px rgba(233,30,99,0.3); }
+  h1 { font-size: 22px; font-weight: 600; letter-spacing: -0.02em; }
+  .tagline { font-size: 13px; color: var(--text-muted); margin-left: auto; }
+  .card { background: var(--bg); border-radius: 18px; padding: 18px; box-shadow: var(--neu-raised); margin-bottom: 18px; }
+  label { display: block; font-size: 11px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 6px; }
+  .columns { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+  @media (max-width: 800px) { .columns { grid-template-columns: 1fr; } }
+  .drop-zone { border: 2px dashed var(--shadow-dark); border-radius: 12px; padding: 36px 20px; text-align: center; color: var(--text-muted); cursor: pointer; background: var(--bg); box-shadow: var(--neu-inset-xs); transition: all 0.15s ease; }
+  .drop-zone:hover, .drop-zone.dragover { color: var(--accent); border-color: var(--accent); }
+  .drop-zone .icon { font-size: 28px; display: block; margin-bottom: 6px; }
+  .drop-zone .hint { font-size: 11px; color: var(--text-faint); margin-top: 6px; }
+  .panel-img { display: none; width: 100%; height: auto; max-height: 480px; object-fit: contain; background: #fff; border-radius: 12px; box-shadow: var(--neu-inset-sm); }
+  .panel-img.show { display: block; }
+  .svg-preview { display: none; width: 100%; min-height: 320px; max-height: 480px; background: #fff; border-radius: 12px; box-shadow: var(--neu-inset-sm); padding: 14px; }
+  .svg-preview.show { display: flex; align-items: center; justify-content: center; }
+  .svg-preview svg { max-width: 100%; max-height: 100%; }
+  textarea { width: 100%; min-height: 180px; border: none; outline: none; resize: vertical; font-family: ui-monospace, monospace; font-size: 11px; line-height: 1.5; color: var(--text); background: var(--bg); padding: 12px 14px; border-radius: 10px; box-shadow: var(--neu-inset-sm); margin-top: 10px; }
+  .controls { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-top: 14px; }
+  button { border: none; cursor: pointer; background: var(--bg); color: var(--text); font-family: inherit; font-size: 13px; font-weight: 600; padding: 8px 16px; border-radius: 10px; box-shadow: var(--neu-raised-sm); }
+  button:hover:not(:disabled) { color: var(--accent); }
+  button:active:not(:disabled) { box-shadow: var(--neu-inset-xs); }
+  button:disabled { opacity: 0.5; cursor: not-allowed; }
+  .status { font-size: 12px; color: var(--text-muted); }
+  .status .dot { display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: var(--accent); margin-right: 6px; animation: pulse 1.2s infinite; vertical-align: middle; }
+  @keyframes pulse { 0%,100% { opacity: 0.4; } 50% { opacity: 1; } }
+  .back-link { display: inline-block; margin-top: 32px; font-size: 12px; color: var(--text-muted); text-decoration: none; }
+  .back-link:hover { color: var(--text); }
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <header>
+    <span class="logo-mark"><span class="q">Q</span><span class="dot"></span></span>
+    <h1>Graphics</h1>
+    <span class="tagline">Image to SVG. Best on logos, icons, clean line art.</span>
+  </header>
+
+  <div class="card">
+    <input type="file" id="file-input" accept="image/*" style="display:none">
+    <div class="columns">
+      <div>
+        <label>Source image</label>
+        <div class="drop-zone" id="drop-zone">
+          <span class="icon">⬆</span>
+          <div>Click, drag-drop, or paste</div>
+          <div class="hint">PNG / JPG of a logo, icon, or simple shape.</div>
+        </div>
+        <img class="panel-img" id="input-img" alt="Source">
+      </div>
+      <div>
+        <label>SVG output</label>
+        <div class="svg-preview" id="svg-preview"></div>
+      </div>
+    </div>
+
+    <div class="controls">
+      <button id="run" disabled>Vectorise</button>
+      <button id="reset" disabled>Reset</button>
+      <button id="copy" disabled>Copy SVG</button>
+      <button id="download" disabled>Download .svg</button>
+      <span class="status" id="status"></span>
+    </div>
+
+    <textarea id="svg-text" placeholder="SVG code will appear here." readonly></textarea>
+  </div>
+
+  <a href="/chat" class="back-link">← back to Q's chat</a>
+</div>
+
+<script>
+const $fileInput = document.getElementById('file-input');
+const $dropZone = document.getElementById('drop-zone');
+const $inputImg = document.getElementById('input-img');
+const $svgPreview = document.getElementById('svg-preview');
+const $svgText = document.getElementById('svg-text');
+const $run = document.getElementById('run');
+const $reset = document.getElementById('reset');
+const $copy = document.getElementById('copy');
+const $download = document.getElementById('download');
+const $status = document.getElementById('status');
+
+let inputDataUrl = null;
+let svgString = '';
+let elapsedTimer = null;
+
+$dropZone.addEventListener('click', () => $fileInput.click());
+$fileInput.addEventListener('change', () => { if ($fileInput.files && $fileInput.files[0]) loadFile($fileInput.files[0]); });
+['dragenter','dragover'].forEach(e => $dropZone.addEventListener(e, ev => { ev.preventDefault(); $dropZone.classList.add('dragover'); }));
+['dragleave','drop'].forEach(e => $dropZone.addEventListener(e, ev => { ev.preventDefault(); $dropZone.classList.remove('dragover'); }));
+$dropZone.addEventListener('drop', e => { const f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0]; if (f) loadFile(f); });
+window.addEventListener('paste', e => {
+  if (!e.clipboardData) return;
+  for (const item of e.clipboardData.items) {
+    if (item.kind === 'file') { const f = item.getAsFile(); if (f && f.type && f.type.startsWith('image/')) { loadFile(f); break; } }
+  }
+});
+
+function loadFile(file) {
+  if (!file.type || !file.type.startsWith('image/')) { alert('Need an image.'); return; }
+  const reader = new FileReader();
+  reader.onload = () => {
+    inputDataUrl = String(reader.result || '');
+    $inputImg.src = inputDataUrl;
+    $inputImg.classList.add('show');
+    $dropZone.style.display = 'none';
+    $run.disabled = false;
+    $reset.disabled = false;
+  };
+  reader.readAsDataURL(file);
+}
+
+$run.addEventListener('click', async () => {
+  if (!inputDataUrl) return;
+  $run.disabled = true;
+  const start = Date.now();
+  elapsedTimer = setInterval(() => {
+    $status.innerHTML = '<span class="dot"></span>Vectorising… ' + ((Date.now()-start)/1000).toFixed(1) + 's';
+  }, 100);
+  try {
+    const res = await fetch('/graphics/vectorise', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ imageDataUrl: inputDataUrl }),
+    });
+    const data = await res.json();
+    clearInterval(elapsedTimer); elapsedTimer = null;
+    if (!res.ok || !data.svg) {
+      $status.textContent = 'Error: ' + (data.error || ('HTTP ' + res.status));
+      $run.disabled = false;
+      return;
+    }
+    svgString = data.svg;
+    $svgPreview.innerHTML = svgString;
+    $svgPreview.classList.add('show');
+    $svgText.value = svgString;
+    $copy.disabled = false;
+    $download.disabled = false;
+    $status.textContent = 'Done in ' + ((Date.now()-start)/1000).toFixed(1) + 's';
+  } catch (e) {
+    clearInterval(elapsedTimer); elapsedTimer = null;
+    $status.textContent = 'Network error: ' + e.message;
+  } finally { $run.disabled = false; }
+});
+
+$reset.addEventListener('click', () => {
+  inputDataUrl = null; svgString = '';
+  $inputImg.removeAttribute('src'); $inputImg.classList.remove('show');
+  $svgPreview.innerHTML = ''; $svgPreview.classList.remove('show');
+  $svgText.value = '';
+  $dropZone.style.display = '';
+  $run.disabled = true; $reset.disabled = true; $copy.disabled = true; $download.disabled = true;
+  $status.textContent = ''; $fileInput.value = '';
+});
+
+$copy.addEventListener('click', async () => {
+  if (!svgString) return;
+  try { await navigator.clipboard.writeText(svgString); $copy.textContent = 'Copied ✓'; setTimeout(()=>{ $copy.textContent = 'Copy SVG'; }, 2000); } catch (e) { alert('Could not copy: ' + e.message); }
+});
+
+$download.addEventListener('click', () => {
+  if (!svgString) return;
+  const blob = new Blob([svgString], { type: 'image/svg+xml' });
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'vectorised.svg';
+  document.body.appendChild(a); a.click();
+  setTimeout(() => { document.body.removeChild(a); URL.revokeObjectURL(a.href); }, 100);
+});
+</script>
+<script src="/trace-widget.js"></script>
+</body>
+</html>

@@ -1,0 +1,363 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Q Quote Builder — lab</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #e8e8e8;
+    --text: #1a1a1a;
+    --text-muted: rgba(0,0,0,0.42);
+    --text-faint: rgba(0,0,0,0.26);
+    --accent: #e91e63;
+    --neu-raised:    10px 10px 28px #ababab, -8px -8px 20px #ffffff, inset 0 1px 0 rgba(255,255,255,0.5);
+    --neu-raised-sm: 6px 6px 16px #ababab, -5px -5px 12px #ffffff;
+    --neu-inset:     inset 5px 5px 14px #ababab, inset -4px -4px 10px #ffffff;
+    --neu-inset-sm:  inset 3px 3px 8px #ababab, inset -2px -2px 6px #ffffff;
+    --neu-inset-xs:  inset 3px 3px 8px #ababab, inset -2px -2px 6px #ffffff;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: 'Space Grotesk', -apple-system, BlinkMacSystemFont, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    font-size: 15px;
+    line-height: 1.55;
+    min-height: 100vh;
+    padding: 32px 24px 80px;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 880px; margin: 0 auto; }
+  header { display: flex; align-items: baseline; gap: 14px; margin-bottom: 24px; }
+  .logo-mark { display: inline-flex; align-items: baseline; }
+  .logo-mark .q { font-size: 28px; font-weight: 700; line-height: 1; letter-spacing: -0.05em; color: var(--text); }
+  .logo-mark .dot { width: 8px; height: 8px; background: var(--accent); border-radius: 50%; display: inline-block; margin-left: 4px; align-self: flex-end; margin-bottom: 4px; box-shadow: 0 1px 2px rgba(233,30,99,0.3); }
+  h1 { font-size: 22px; font-weight: 600; letter-spacing: -0.02em; color: var(--text); }
+  .tagline { font-size: 13px; color: var(--text-muted); margin-left: auto; }
+  .card {
+    background: var(--bg);
+    border-radius: 18px;
+    padding: 18px;
+    box-shadow: var(--neu-raised);
+    margin-bottom: 18px;
+  }
+  .card-label {
+    display: block;
+    font-size: 11px; font-weight: 600;
+    color: var(--text-muted);
+    text-transform: uppercase; letter-spacing: 0.08em;
+    margin-bottom: 10px;
+  }
+  textarea {
+    width: 100%;
+    min-height: 160px;
+    border: none; outline: none; resize: vertical;
+    font-family: inherit; font-size: 14px;
+    color: var(--text);
+    background: var(--bg);
+    padding: 14px 16px;
+    border-radius: 12px;
+    box-shadow: var(--neu-inset-sm);
+    line-height: 1.5;
+  }
+  .controls { display: flex; align-items: center; gap: 12px; margin-top: 14px; flex-wrap: wrap; }
+  .controls .grow { flex: 1; }
+  .run-btn {
+    border: none;
+    background: var(--bg);
+    color: var(--text);
+    font-family: inherit; font-size: 14px; font-weight: 600;
+    padding: 10px 22px;
+    border-radius: 12px;
+    cursor: pointer;
+    box-shadow: var(--neu-raised-sm);
+  }
+  .run-btn:hover { color: var(--accent); }
+  .run-btn:active { box-shadow: var(--neu-inset-xs); }
+  .run-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+  .status { margin-top: 14px; font-size: 12px; color: var(--text-faint); min-height: 16px; }
+  .samples { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 10px; }
+  .sample {
+    border: none;
+    background: var(--bg);
+    color: var(--text-muted);
+    font-family: inherit; font-size: 11px;
+    padding: 5px 10px;
+    border-radius: 8px;
+    cursor: pointer;
+    box-shadow: var(--neu-raised-sm);
+  }
+  .sample:hover { color: var(--accent); }
+  .sample:active { box-shadow: var(--neu-inset-xs); }
+  .final-table { width: 100%; border-collapse: collapse; font-size: 13px; margin-top: 8px; }
+  .final-table th, .final-table td {
+    text-align: left; padding: 6px 8px;
+    border-bottom: 1px solid rgba(0,0,0,0.06);
+    font-weight: 400;
+  }
+  .final-table th {
+    font-size: 11px; font-weight: 700;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    letter-spacing: 0.04em;
+  }
+  .back-link { display: inline-block; margin-top: 24px; font-size: 12px; color: var(--text-muted); text-decoration: none; }
+  .back-link:hover { color: var(--accent); }
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <span class="logo-mark"><span class="q">q</span><span class="dot"></span></span>
+      <h1>Quote Builder — lab</h1>
+      <span class="tagline">Q's pipeline · click 📋 floating button to open trace</span>
+    </header>
+
+    <div class="card">
+      <label class="card-label" for="input">Test brief — paste anything you'd send to Quote Builder</label>
+      <textarea id="input" placeholder="e.g. Replace toilet, fix leaky tap, paint external walls"></textarea>
+      <div class="controls">
+        <span class="grow"></span>
+        <button class="run-btn" id="run-btn">Run pipeline</button>
+      </div>
+      <div class="status" id="status"></div>
+      <div class="samples">
+        <button class="sample" data-sample="Replace toilet">Replace toilet</button>
+        <button class="sample" data-sample="New front door">New front door</button>
+        <button class="sample" data-sample="Standard radiator">Standard radiator</button>
+        <button class="sample" data-sample="Bathroom basin">Bathroom basin</button>
+        <button class="sample" data-sample="Replace toilet, fix leaky tap, paint external walls">3-item compound</button>
+        <button class="sample" data-sample="New trampoline">Off-catalogue</button>
+      </div>
+    </div>
+
+    <div class="card" id="final-card" style="display:none;">
+      <span class="card-label">Final priced quote</span>
+      <div id="final-content"></div>
+    </div>
+
+    <a href="/" class="back-link">← back to q-lab</a>
+  </div>
+
+<script>
+// ── Pipeline trace widget ───────────────────────────────────────────────────
+(function () {
+  if (window.qLabTrace) return;
+  const STORAGE_KEY = 'qLabTrace.lastResult';
+  const css = `
+.qlt-launcher {
+  position: fixed; bottom: 24px; right: 24px;
+  width: 56px; height: 56px; border-radius: 50%;
+  background: #e91e63;
+  box-shadow: 0 4px 16px rgba(233,30,99,0.45), 0 2px 6px rgba(0,0,0,0.2);
+  border: none; cursor: pointer; z-index: 9999;
+  display: flex; align-items: center; justify-content: center;
+  transition: transform 0.18s ease;
+}
+.qlt-launcher:hover { transform: translateY(-2px); }
+.qlt-launcher svg { width: 24px; height: 24px; color: #fff; }
+.qlt-launcher .qlt-badge {
+  position: absolute; top: -4px; right: -4px;
+  background: #1a1a1a; color: #fff;
+  font-size: 10px; font-weight: 700; border-radius: 10px; padding: 2px 6px; min-width: 18px; text-align: center;
+}
+.qlt-panel {
+  position: fixed; top: 0; right: 0; bottom: 0; width: 520px; max-width: 92vw;
+  background: #e8e8e8; box-shadow: -16px 0 40px rgba(0,0,0,0.18);
+  z-index: 10000; transform: translateX(100%);
+  transition: transform 0.28s cubic-bezier(0.2,0,0.2,1);
+  display: flex; flex-direction: column;
+  font-family: 'Space Grotesk', -apple-system, sans-serif; color: #1a1a1a;
+}
+.qlt-panel.qlt-open { transform: translateX(0); }
+.qlt-header { display: flex; align-items: center; gap: 10px; padding: 18px 20px; border-bottom: 1px solid rgba(0,0,0,0.08); flex-shrink: 0; }
+.qlt-header h2 { font-size: 14px; font-weight: 700; margin: 0; }
+.qlt-header .qlt-sub { font-size: 11px; color: rgba(0,0,0,0.42); margin-left: auto; }
+.qlt-close { border: none; background: #e8e8e8; width: 30px; height: 30px; border-radius: 50%; cursor: pointer; box-shadow: 6px 6px 16px #ababab, -5px -5px 12px #fff; display: inline-flex; align-items: center; justify-content: center; color: rgba(0,0,0,0.42); font-size: 16px; }
+.qlt-close:hover { color: #e91e63; }
+.qlt-summary { display: flex; gap: 8px; flex-wrap: wrap; padding: 12px 20px 0; font-size: 12px; color: rgba(0,0,0,0.42); }
+.qlt-summary .qlt-pill { padding: 4px 10px; border-radius: 8px; box-shadow: inset 3px 3px 8px #ababab, inset -2px -2px 6px #fff; background: #e8e8e8; }
+.qlt-body { flex: 1; overflow-y: auto; padding: 14px 20px 20px; display: flex; flex-direction: column; gap: 12px; }
+.qlt-stage { background: #e8e8e8; border-radius: 14px; box-shadow: 6px 6px 16px #ababab, -5px -5px 12px #fff; overflow: hidden; }
+.qlt-stage-head { display: flex; align-items: center; gap: 10px; padding: 12px 14px; cursor: pointer; user-select: none; }
+.qlt-stage-num { width: 22px; height: 22px; border-radius: 50%; background: #e8e8e8; box-shadow: inset 3px 3px 8px #ababab, inset -2px -2px 6px #fff; display: inline-flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700; color: rgba(0,0,0,0.42); flex-shrink: 0; }
+.qlt-stage-name { font-weight: 600; font-size: 13px; flex-shrink: 0; }
+.qlt-stage-engine { font-size: 10px; color: rgba(0,0,0,0.42); margin-left: 4px; }
+.qlt-stage-meta { font-size: 10px; color: rgba(0,0,0,0.26); margin-left: auto; flex-shrink: 0; }
+.qlt-error-pill { margin-left: 6px; font-size: 9px; font-weight: 700; padding: 2px 6px; border-radius: 4px; background: rgba(198,40,40,0.12); color: #c62828; text-transform: uppercase; letter-spacing: 0.05em; }
+.qlt-stage-body { padding: 0 14px 14px; border-top: 1px solid rgba(0,0,0,0.06); display: none; }
+.qlt-stage.qlt-open .qlt-stage-body { display: block; }
+.qlt-section { margin-top: 10px; }
+.qlt-section-label { font-size: 10px; font-weight: 700; color: rgba(0,0,0,0.42); text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 6px; }
+.qlt-code { font-family: 'JetBrains Mono', Consolas, monospace; font-size: 11px; line-height: 1.5; background: #e8e8e8; box-shadow: inset 3px 3px 8px #ababab, inset -2px -2px 6px #fff; border-radius: 8px; padding: 10px 12px; overflow: auto; max-height: 240px; color: #1a1a1a; white-space: pre-wrap; word-break: break-word; margin: 0; }
+.qlt-empty { padding: 30px 14px; text-align: center; color: rgba(0,0,0,0.26); font-size: 13px; }
+.qlt-running { padding: 30px 14px; text-align: center; color: rgba(0,0,0,0.42); font-size: 13px; }
+`;
+  const styleEl = document.createElement('style');
+  styleEl.textContent = css;
+  document.head.appendChild(styleEl);
+
+  const launcher = document.createElement('button');
+  launcher.className = 'qlt-launcher';
+  launcher.title = 'Open pipeline trace';
+  launcher.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"></rect><line x1="7" y1="9" x2="17" y2="9"></line><line x1="7" y1="13" x2="14" y2="13"></line><line x1="7" y1="17" x2="11" y2="17"></line></svg><span class="qlt-badge" style="display:none">0</span>`;
+  document.body.appendChild(launcher);
+
+  const panel = document.createElement('aside');
+  panel.className = 'qlt-panel';
+  panel.innerHTML = `<div class="qlt-header"><h2>Pipeline trace</h2><span class="qlt-sub" id="qlt-feature">No run yet</span><button class="qlt-close" title="Close">×</button></div><div class="qlt-summary" id="qlt-summary"></div><div class="qlt-body" id="qlt-body"><div class="qlt-empty">Run the pipeline — every stage appears here.</div></div>`;
+  document.body.appendChild(panel);
+
+  const badge = launcher.querySelector('.qlt-badge');
+  const featureEl = panel.querySelector('#qlt-feature');
+  const summaryEl = panel.querySelector('#qlt-summary');
+  const bodyEl = panel.querySelector('#qlt-body');
+
+  launcher.addEventListener('click', () => { panel.classList.add('qlt-open'); badge.style.display = 'none'; });
+  panel.querySelector('.qlt-close').addEventListener('click', () => panel.classList.remove('qlt-open'));
+
+  function esc(s) { return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+  function fmt(o) { if(o==null)return'(null)'; try{return JSON.stringify(o,null,2);}catch(e){return String(o);} }
+
+  function render(result) {
+    if (!result) { bodyEl.innerHTML='<div class="qlt-empty">Run the pipeline — every stage appears here.</div>'; summaryEl.innerHTML=''; featureEl.textContent='No run yet'; return; }
+    featureEl.textContent = (result.feature||'Last run') + (result.timestamp ? ' · '+new Date(result.timestamp).toLocaleTimeString() : '');
+    const bits = [`<span class="qlt-pill">${result.stages?.length||0} stages</span>`,`<span class="qlt-pill">${result.totalMs??'?'}ms</span>`];
+    if (Array.isArray(result.final)) bits.push(`<span class="qlt-pill">${result.final.length} items</span>`);
+    if (result.fatal) bits.push(`<span class="qlt-pill" style="color:#c62828">FATAL: ${esc(result.fatal)}</span>`);
+    if (result.note) bits.push(`<span class="qlt-pill" style="color:#c77700">${esc(result.note)}</span>`);
+    summaryEl.innerHTML = bits.join('');
+    bodyEl.innerHTML = '';
+    const stages = result.stages || [];
+    if (!stages.length) { bodyEl.innerHTML='<div class="qlt-empty">No stages emitted.</div>'; return; }
+    if (result.input != null) {
+      const d = document.createElement('div'); d.className='qlt-stage qlt-open';
+      d.innerHTML=`<div class="qlt-stage-head"><span class="qlt-stage-num">0</span><span class="qlt-stage-name">Input</span><span class="qlt-stage-engine">· user-supplied</span></div><div class="qlt-stage-body"><div class="qlt-section"><div class="qlt-section-label">Original brief</div><pre class="qlt-code">${esc(typeof result.input==='string'?result.input:fmt(result.input))}</pre></div></div>`;
+      d.querySelector('.qlt-stage-head').addEventListener('click',()=>d.classList.toggle('qlt-open'));
+      bodyEl.appendChild(d);
+    }
+    stages.forEach((s,i) => {
+      const d = document.createElement('div'); d.className='qlt-stage';
+      const ep = s.error?`<span class="qlt-error-pill">error</span>`:'';
+      d.innerHTML=`<div class="qlt-stage-head"><span class="qlt-stage-num">${i+1}</span><span class="qlt-stage-name">${esc(s.name)}</span><span class="qlt-stage-engine">· ${esc(s.engine)}</span>${ep}<span class="qlt-stage-meta">${s.durationMs??'?'}ms</span></div><div class="qlt-stage-body"><div class="qlt-section"><div class="qlt-section-label">Input</div><pre class="qlt-code">${esc(fmt(s.input))}</pre></div><div class="qlt-section"><div class="qlt-section-label">Output</div><pre class="qlt-code">${esc(fmt(s.output))}</pre></div>${s.error?`<div class="qlt-section"><div class="qlt-section-label">Error</div><pre class="qlt-code" style="color:#c62828">${esc(s.error)}</pre></div>`:''}</div>`;
+      d.querySelector('.qlt-stage-head').addEventListener('click',()=>d.classList.toggle('qlt-open'));
+      bodyEl.appendChild(d);
+    });
+    const first = bodyEl.querySelector('.qlt-stage:not(.qlt-open)');
+    if (first) first.classList.add('qlt-open');
+    if (!panel.classList.contains('qlt-open')) { badge.textContent=stages.length; badge.style.display=''; }
+  }
+
+  try { const s=localStorage.getItem(STORAGE_KEY); if(s) render(JSON.parse(s)); } catch(e){}
+  window.addEventListener('storage', e => { if(e.key===STORAGE_KEY&&e.newValue) try{render(JSON.parse(e.newValue));}catch(e){} });
+
+  window.qLabTrace = {
+    show(result) { const e={...result,timestamp:Date.now()}; try{localStorage.setItem(STORAGE_KEY,JSON.stringify(e));}catch(e){} render(e); },
+    running(name) { featureEl.textContent=(name||'Running')+'…'; bodyEl.innerHTML='<div class="qlt-running">Pipeline running…</div>'; summaryEl.innerHTML=''; },
+    open() { panel.classList.add('qlt-open'); badge.style.display='none'; },
+    close() { panel.classList.remove('qlt-open'); },
+    clear() { try{localStorage.removeItem(STORAGE_KEY);}catch(e){} render(null); },
+  };
+})();
+// ───────────────────────────────────────────────────────────────────────────
+</script>
+
+<script>
+  const inputEl = document.getElementById('input');
+  const runBtn = document.getElementById('run-btn');
+  const statusEl = document.getElementById('status');
+  const finalCard = document.getElementById('final-card');
+  const finalContent = document.getElementById('final-content');
+
+  document.querySelectorAll('.sample').forEach(b => {
+    b.addEventListener('click', () => { inputEl.value = b.dataset.sample; inputEl.focus(); });
+  });
+
+  function escape(s) {
+    return String(s == null ? '' : s)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  }
+
+  function renderFinal(result) {
+    if (!result.final || result.final.length === 0) {
+      finalCard.style.display = 'none';
+      return;
+    }
+    finalCard.style.display = '';
+    let total = 0;
+    let html = `<table class="final-table"><thead><tr>
+      <th>Work</th><th>Intent</th><th>Qty</th><th>SOR</th><th>Description</th><th>Price</th>
+    </tr></thead><tbody>`;
+    for (const it of result.final) {
+      const lineTotal = (it.qty || 1) * (it.price || 0);
+      total += lineTotal;
+      html += `<tr>
+        <td>${escape(it.work)}</td>
+        <td>${escape(it.intent)}</td>
+        <td>${escape(it.qty)}</td>
+        <td>${escape(it.sorCode)}</td>
+        <td>${escape(it.description)}</td>
+        <td>£${(it.price || 0).toFixed(2)}/${escape(it.unit)}</td>
+      </tr>`;
+    }
+    html += `</tbody></table>`;
+    html += `<div style="margin-top:8px; font-size:12px; color:var(--text-muted);">Subtotal: £${total.toFixed(2)} (excl. qty multipliers shown above)</div>`;
+    finalContent.innerHTML = html;
+  }
+
+  async function run() {
+    const text = inputEl.value.trim();
+    if (!text) return;
+    runBtn.disabled = true;
+    statusEl.textContent = 'Running…';
+    finalCard.style.display = 'none';
+
+    // Tell the trace widget a run has started
+    if (window.qLabTrace) window.qLabTrace.running('Quote Builder');
+
+    try {
+      const start = Date.now();
+      const res = await fetch('/quote-builder/run', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        statusEl.textContent = `Error: ${data.error || res.status}`;
+        return;
+      }
+      const dur = ((Date.now() - start) / 1000).toFixed(1);
+      statusEl.textContent = `Completed in ${dur}s — click 📋 to see the trace`;
+      renderFinal(data);
+
+      // Publish the full trace to the widget
+      if (window.qLabTrace) {
+        window.qLabTrace.show({
+          feature: 'Quote Builder',
+          input: data.input,
+          stages: data.stages,
+          final: data.final,
+          totalMs: data.totalMs,
+          fatal: data.fatal,
+          note: data.note,
+        });
+      }
+    } catch (err) {
+      statusEl.textContent = `Network error: ${err.message}`;
+    } finally {
+      runBtn.disabled = false;
+    }
+  }
+
+  runBtn.addEventListener('click', run);
+  inputEl.addEventListener('keydown', e => {
+    if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') run();
+  });
+</script>
+</body>
+</html>

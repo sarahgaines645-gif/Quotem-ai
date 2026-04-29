@@ -1,0 +1,11 @@
+torch>=2.4.0
+diffusers>=0.31.0
+transformers>=4.46.0
+accelerate>=1.0.0
+sentencepiece
+gradio>=5.0.0
+spaces>=0.30.0
+imageio
+imageio-ffmpeg
+opencv-python-headless
+audioop-lts; python_version >= "3.13"

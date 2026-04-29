@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <script src="/q-auth.js"></script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Q Code — Python in the browser</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #e8e8e8; --text: #1a1a1a;
+    --text-muted: rgba(0,0,0,0.42); --text-faint: rgba(0,0,0,0.26);
+    --shadow-light: #ffffff; --shadow-dark: #ababab;
+    --accent: #e91e63;
+    --neu-raised:    10px 10px 28px #ababab, -8px -8px 20px #ffffff, inset 0 1px 0 rgba(255,255,255,0.5);
+    --neu-raised-sm: 6px 6px 16px #ababab, -5px -5px 12px #ffffff;
+    --neu-inset:     inset 5px 5px 14px #ababab, inset -4px -4px 10px #ffffff;
+    --neu-inset-sm:  inset 3px 3px 8px #ababab, inset -2px -2px 6px #ffffff;
+    --neu-inset-xs:  inset 3px 3px 8px #ababab, inset -2px -2px 6px #ffffff;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: 'Space Grotesk', -apple-system, sans-serif;
+    background: var(--bg); color: var(--text);
+    font-size: 15px; line-height: 1.55;
+    min-height: 100vh; padding: 32px 24px 80px;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 1100px; margin: 0 auto; }
+  header { display: flex; align-items: baseline; gap: 14px; margin-bottom: 24px; flex-wrap: wrap; }
+  .logo-mark { display: inline-flex; align-items: baseline; }
+  .logo-mark .q { font-size: 28px; font-weight: 700; line-height: 1; letter-spacing: -0.05em; }
+  .logo-mark .dot { width: 8px; height: 8px; background: var(--accent); border-radius: 50%; display: inline-block; margin-left: 4px; align-self: flex-end; margin-bottom: 4px; box-shadow: 0 1px 2px rgba(233,30,99,0.3); }
+  h1 { font-size: 22px; font-weight: 600; letter-spacing: -0.02em; }
+  .tagline { font-size: 13px; color: var(--text-muted); margin-left: auto; }
+
+  .card { background: var(--bg); border-radius: 18px; padding: 18px; box-shadow: var(--neu-raised); margin-bottom: 18px; }
+
+  label { display: block; font-size: 11px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 8px; }
+
+  textarea {
+    width: 100%; min-height: 280px;
+    border: none; outline: none; resize: vertical;
+    font-family: 'JetBrains Mono', ui-monospace, monospace;
+    font-size: 13px; line-height: 1.55;
+    color: var(--text); background: var(--bg);
+    padding: 14px 16px; border-radius: 12px;
+    box-shadow: var(--neu-inset-sm);
+    tab-size: 4; -moz-tab-size: 4;
+  }
+
+  .examples {
+    display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 12px;
+  }
+  .ex-btn {
+    border: none; cursor: pointer;
+    background: var(--bg); color: var(--text-muted);
+    font-family: inherit; font-size: 11px; font-weight: 500;
+    padding: 4px 10px; border-radius: 999px;
+    box-shadow: var(--neu-raised-sm);
+  }
+  .ex-btn:hover { color: var(--accent); }
+
+  .controls { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-top: 12px; }
+  button {
+    border: none; cursor: pointer;
+    background: var(--bg); color: var(--text);
+    font-family: inherit; font-size: 14px; font-weight: 600;
+    padding: 10px 22px; border-radius: 12px;
+    box-shadow: var(--neu-raised-sm);
+  }
+  button:hover:not(:disabled) { color: var(--accent); }
+  button:active:not(:disabled) { box-shadow: var(--neu-inset-xs); }
+  button:disabled { opacity: 0.5; cursor: not-allowed; }
+  .status { font-size: 12px; color: var(--text-muted); }
+  .status .dot { display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: var(--accent); margin-right: 6px; animation: pulse 1.2s infinite; vertical-align: middle; }
+  @keyframes pulse { 0%,100% { opacity: 0.4; } 50% { opacity: 1; } }
+
+  .output {
+    background: var(--bg);
+    border-radius: 12px;
+    box-shadow: var(--neu-inset-sm);
+    padding: 14px 16px;
+    font-family: 'JetBrains Mono', ui-monospace, monospace;
+    font-size: 12px; line-height: 1.55;
+    color: var(--text);
+    white-space: pre-wrap; word-wrap: break-word;
+    min-height: 100px; max-height: 400px; overflow-y: auto;
+  }
+  .output.empty { color: var(--text-faint); font-style: italic; }
+  .output .err { color: #ef4444; }
+  .output img { max-width: 100%; border-radius: 8px; margin: 6px 0; }
+
+  .hint-row { font-size: 11px; color: var(--text-faint); margin-top: 8px; line-height: 1.5; }
+
+  .back-link { display: inline-block; margin-top: 32px; font-size: 12px; color: var(--text-muted); text-decoration: none; }
+  .back-link:hover { color: var(--text); }
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <header>
+    <span class="logo-mark"><span class="q">Q</span><span class="dot"></span></span>
+    <h1>Code</h1>
+    <span class="tagline">Python in your browser via Pyodide. numpy / pandas / matplotlib pre-loaded.</span>
+  </header>
+
+  <div class="card">
+    <label>Examples — click to load</label>
+    <div class="examples" id="examples"></div>
+
+    <label for="code-input">Python</label>
+    <textarea id="code-input" spellcheck="false">print("Hello from Q's browser Python.")
+1 + 2 + 3</textarea>
+
+    <div class="controls">
+      <button id="run">Run (Ctrl+Enter)</button>
+      <button id="clear">Clear output</button>
+      <span class="status" id="status">Pyodide will load on first Run.</span>
+    </div>
+    <div class="hint-row">
+      First Run downloads Pyodide (~10MB) and the requested packages. Cached after that. <code>print()</code> output and the last expression's value both show below. Use <code>plt.show()</code> for matplotlib charts.
+    </div>
+  </div>
+
+  <div class="card">
+    <label>Output</label>
+    <div class="output empty" id="output">Output will appear here.</div>
+  </div>
+
+  <a href="/chat" class="back-link">← back to Q's chat</a>
+</div>
+
+<script>
+const $codeInput = document.getElementById('code-input');
+const $run = document.getElementById('run');
+const $clear = document.getElementById('clear');
+const $status = document.getElementById('status');
+const $output = document.getElementById('output');
+const $examples = document.getElementById('examples');
+
+const EXAMPLES = [
+  {
+    name: 'Maths',
+    code: `import math
+math.sqrt(123456789)`,
+  },
+  {
+    name: 'Pandas',
+    code: `import pandas as pd
+df = pd.DataFrame({
+    'item': ['Front door', 'Toilet', 'Window', 'Sink'],
+    'qty':  [2, 3, 5, 1],
+    'price':[450, 220, 180, 95],
+})
+df['total'] = df['qty'] * df['price']
+print(df)
+print('Grand total:', df['total'].sum())`,
+  },
+  {
+    name: 'Matplotlib',
+    code: `import matplotlib.pyplot as plt
+import numpy as np
+
+t = np.linspace(0, 2*np.pi, 200)
+plt.figure(figsize=(6, 3))
+plt.plot(t, np.sin(t), label='sin')
+plt.plot(t, np.cos(t), label='cos')
+plt.legend()
+plt.title("Trig from the browser")
+plt.show()`,
+  },
+  {
+    name: 'JSON',
+    code: `import json
+data = {"q": "Q", "tools": ["search", "calc", "memory"]}
+print(json.dumps(data, indent=2))`,
+  },
+];
+
+EXAMPLES.forEach(ex => {
+  const b = document.createElement('button');
+  b.className = 'ex-btn';
+  b.textContent = ex.name;
+  b.addEventListener('click', () => { $codeInput.value = ex.code; $codeInput.focus(); });
+  $examples.appendChild(b);
+});
+
+let pyodidePromise = null;
+function loadPyodideOnce() {
+  if (pyodidePromise) return pyodidePromise;
+  pyodidePromise = (async () => {
+    $status.innerHTML = '<span class="dot"></span>Loading Pyodide…';
+    if (!window.loadPyodide) {
+      await new Promise((res, rej) => {
+        const s = document.createElement('script');
+        s.src = 'https://cdn.jsdelivr.net/pyodide/v0.26.4/full/pyodide.js';
+        s.onload = res; s.onerror = rej;
+        document.head.appendChild(s);
+      });
+    }
+    const py = await window.loadPyodide({
+      indexURL: 'https://cdn.jsdelivr.net/pyodide/v0.26.4/full/',
+      stdout: txt => appendOutput(txt + '\n'),
+      stderr: txt => appendOutput(txt + '\n', 'err'),
+    });
+    return py;
+  })();
+  return pyodidePromise;
+}
+
+function clearOutput() {
+  $output.innerHTML = '';
+  $output.classList.remove('empty');
+}
+
+function appendOutput(text, cls) {
+  if ($output.classList.contains('empty')) clearOutput();
+  const node = document.createElement('span');
+  if (cls) node.className = cls;
+  node.textContent = text;
+  $output.appendChild(node);
+  $output.scrollTop = $output.scrollHeight;
+}
+
+function appendImage(dataUrl) {
+  if ($output.classList.contains('empty')) clearOutput();
+  const img = document.createElement('img');
+  img.src = dataUrl;
+  $output.appendChild(img);
+  $output.scrollTop = $output.scrollHeight;
+}
+
+async function run() {
+  const code = $codeInput.value;
+  if (!code.trim()) return;
+  $run.disabled = true;
+  clearOutput();
+  const start = Date.now();
+  try {
+    const py = await loadPyodideOnce();
+
+    // Auto-load any packages mentioned by import statements (numpy/pandas/etc).
+    await py.loadPackagesFromImports(code);
+
+    // Capture matplotlib figures inline as base64 PNGs.
+    const wrapped = `
+import sys
+__q_result = None
+try:
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+    plt.show = lambda *a, **k: None  # we'll save manually
+except Exception:
+    plt = None
+
+${code}
+
+# Capture any open matplotlib figures
+__q_figs = []
+if plt is not None:
+    import io, base64
+    for num in plt.get_fignums():
+        fig = plt.figure(num)
+        buf = io.BytesIO()
+        fig.savefig(buf, format='png', dpi=110, bbox_inches='tight')
+        buf.seek(0)
+        __q_figs.append(base64.b64encode(buf.read()).decode('ascii'))
+        plt.close(fig)
+__q_figs
+`;
+    const figs = await py.runPythonAsync(wrapped);
+    if (figs && figs.length) {
+      for (const b64 of figs) appendImage('data:image/png;base64,' + b64);
+    }
+    const ms = Date.now() - start;
+    $status.textContent = 'Done in ' + (ms / 1000).toFixed(2) + 's';
+  } catch (e) {
+    appendOutput('\n' + (e.message || String(e)), 'err');
+    $status.textContent = 'Failed';
+  } finally {
+    $run.disabled = false;
+  }
+}
+
+$run.addEventListener('click', run);
+$clear.addEventListener('click', () => {
+  $output.innerHTML = 'Output will appear here.';
+  $output.classList.add('empty');
+  $status.textContent = 'Ready.';
+});
+$codeInput.addEventListener('keydown', e => {
+  if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') { e.preventDefault(); run(); }
+});
+
+$status.textContent = 'Pyodide will load on first Run.';
+</script>
+
+<script src="/trace-widget.js"></script>
+</body>
+</html>

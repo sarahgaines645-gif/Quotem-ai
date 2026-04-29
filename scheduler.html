@@ -1,0 +1,415 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <script src="/q-auth.js"></script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Q Scheduler — recurring + webhook jobs</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #e8e8e8;
+    --text: #1a1a1a;
+    --text-muted: rgba(0,0,0,0.42);
+    --text-faint: rgba(0,0,0,0.26);
+    --shadow-light: #ffffff;
+    --shadow-dark: #ababab;
+    --accent: #e91e63;
+    --neu-raised:    10px 10px 28px #ababab, -8px -8px 20px #ffffff, inset 0 1px 0 rgba(255,255,255,0.5);
+    --neu-raised-sm: 6px 6px 16px #ababab, -5px -5px 12px #ffffff;
+    --neu-inset:     inset 5px 5px 14px #ababab, inset -4px -4px 10px #ffffff;
+    --neu-inset-sm:  inset 3px 3px 8px #ababab, inset -2px -2px 6px #ffffff;
+    --neu-inset-xs:  inset 3px 3px 8px #ababab, inset -2px -2px 6px #ffffff;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: 'Space Grotesk', -apple-system, BlinkMacSystemFont, sans-serif;
+    background: var(--bg); color: var(--text);
+    font-size: 15px; line-height: 1.55;
+    min-height: 100vh; padding: 32px 24px 80px;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 880px; margin: 0 auto; }
+  header { display: flex; align-items: baseline; gap: 14px; margin-bottom: 24px; flex-wrap: wrap; }
+  .logo-mark { display: inline-flex; align-items: baseline; }
+  .logo-mark .q { font-size: 28px; font-weight: 700; line-height: 1; letter-spacing: -0.05em; color: var(--text); }
+  .logo-mark .dot { width: 8px; height: 8px; background: var(--accent); border-radius: 50%; display: inline-block; margin-left: 4px; align-self: flex-end; margin-bottom: 4px; box-shadow: 0 1px 2px rgba(233,30,99,0.3); }
+  h1 { font-size: 22px; font-weight: 600; letter-spacing: -0.02em; }
+  .tagline { font-size: 13px; color: var(--text-muted); margin-left: auto; }
+
+  .card { background: var(--bg); border-radius: 18px; padding: 18px; box-shadow: var(--neu-raised); margin-bottom: 18px; }
+  .card h2 {
+    font-size: 13px; font-weight: 600;
+    color: var(--text-muted);
+    text-transform: uppercase; letter-spacing: 0.08em;
+    margin-bottom: 12px;
+  }
+  label { display: block; font-size: 11px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 6px; }
+
+  input, textarea, select {
+    width: 100%;
+    border: none; outline: none;
+    font-family: inherit; font-size: 14px;
+    color: var(--text); background: var(--bg);
+    padding: 10px 14px;
+    border-radius: 10px;
+    box-shadow: var(--neu-inset-sm);
+    margin-bottom: 12px;
+  }
+  textarea { min-height: 80px; resize: vertical; line-height: 1.5; }
+
+  .row { display: flex; gap: 10px; flex-wrap: wrap; }
+  .row > * { flex: 1; min-width: 120px; }
+
+  .actions { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-top: 6px; }
+  button {
+    border: none; cursor: pointer;
+    background: var(--bg); color: var(--text);
+    font-family: inherit; font-size: 13px; font-weight: 600;
+    padding: 8px 16px;
+    border-radius: 10px;
+    box-shadow: var(--neu-raised-sm);
+  }
+  button:hover:not(:disabled) { color: var(--accent); }
+  button:active:not(:disabled) { box-shadow: var(--neu-inset-xs); }
+  button:disabled { opacity: 0.5; cursor: not-allowed; }
+  button.primary { background: var(--bg); color: var(--text); }
+  button.danger:hover:not(:disabled) { color: #ef4444; }
+  button.small { padding: 5px 10px; font-size: 11px; font-weight: 500; }
+
+  .job {
+    background: var(--bg);
+    border-radius: 12px;
+    padding: 14px 16px;
+    box-shadow: var(--neu-inset-xs);
+    margin-bottom: 10px;
+  }
+  .job .top { display: flex; gap: 10px; align-items: baseline; flex-wrap: wrap; margin-bottom: 6px; }
+  .job .name { font-size: 15px; font-weight: 600; }
+  .job .pill {
+    background: var(--bg); box-shadow: var(--neu-raised-sm);
+    color: var(--text-muted);
+    padding: 2px 8px; border-radius: 999px;
+    font-size: 10px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase;
+  }
+  .job .pill.disabled { color: #ef4444; }
+  .job .pill.enabled { color: #10b981; }
+  .job .goal {
+    font-size: 13px; color: var(--text-muted);
+    margin-bottom: 8px;
+    white-space: pre-wrap; word-wrap: break-word;
+    max-height: 60px; overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .job .meta {
+    font-size: 11px; color: var(--text-faint);
+    display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 8px;
+  }
+  .job .row-actions { display: flex; gap: 6px; flex-wrap: wrap; }
+  .webhook-url {
+    margin-top: 8px;
+    padding: 8px 10px;
+    background: var(--bg);
+    border-radius: 8px;
+    box-shadow: var(--neu-inset-xs);
+    font-family: ui-monospace, monospace; font-size: 11px;
+    color: var(--text-muted);
+    word-break: break-all;
+  }
+  .last-run {
+    margin-top: 10px;
+    padding: 10px;
+    background: var(--bg); border-radius: 8px;
+    box-shadow: var(--neu-inset-xs);
+    font-size: 12px;
+    display: none;
+  }
+  .last-run.show { display: block; }
+  .last-run .head { font-weight: 600; margin-bottom: 4px; }
+  .last-run .summary { color: var(--text); white-space: pre-wrap; word-wrap: break-word; max-height: 200px; overflow-y: auto; }
+
+  .toolbar { display: flex; gap: 10px; margin-bottom: 14px; align-items: center; }
+  .toolbar .grow { flex: 1; }
+
+  .empty { color: var(--text-faint); font-size: 13px; padding: 12px; text-align: center; }
+
+  .back-link { display: inline-block; margin-top: 32px; font-size: 12px; color: var(--text-muted); text-decoration: none; }
+  .back-link:hover { color: var(--text); }
+
+  /* Trigger-specific field groups — show/hide by selected type */
+  .trigger-fields { display: none; gap: 10px; flex-wrap: wrap; margin-bottom: 12px; }
+  .trigger-fields.show { display: flex; }
+  .trigger-fields > label { flex: 1; min-width: 100px; }
+  .trigger-fields input, .trigger-fields select { margin-bottom: 0; }
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <header>
+    <span class="logo-mark"><span class="q">Q</span><span class="dot"></span></span>
+    <h1>Scheduler</h1>
+    <span class="tagline">Recurring + webhook jobs Q runs on his own.</span>
+  </header>
+
+  <!-- New job form -->
+  <div class="card">
+    <h2>New job</h2>
+    <label for="job-name">Name</label>
+    <input id="job-name" placeholder="e.g. Daily news on UK property">
+
+    <label for="job-goal">Goal</label>
+    <textarea id="job-goal" placeholder="What should Q do? Plain English. He'll use his tools (web_search, calculator, time, document analysis, memory)."></textarea>
+
+    <label for="trigger-type">Trigger</label>
+    <select id="trigger-type">
+      <option value="every">Every N minutes</option>
+      <option value="daily">Daily at HH:MM</option>
+      <option value="weekly">Weekly on day at HH:MM</option>
+      <option value="once">Once at ISO time</option>
+      <option value="webhook">Webhook (URL trigger)</option>
+    </select>
+
+    <div class="trigger-fields show" id="fields-every">
+      <label>Minutes<input type="number" id="every-minutes" value="60" min="1"></label>
+    </div>
+    <div class="trigger-fields" id="fields-daily">
+      <label>Hour<input type="number" id="daily-hour" value="9" min="0" max="23"></label>
+      <label>Minute<input type="number" id="daily-minute" value="0" min="0" max="59"></label>
+    </div>
+    <div class="trigger-fields" id="fields-weekly">
+      <label>Day<select id="weekly-day"><option>mon</option><option>tue</option><option>wed</option><option>thu</option><option>fri</option><option>sat</option><option>sun</option></select></label>
+      <label>Hour<input type="number" id="weekly-hour" value="9" min="0" max="23"></label>
+      <label>Minute<input type="number" id="weekly-minute" value="0" min="0" max="59"></label>
+    </div>
+    <div class="trigger-fields" id="fields-once">
+      <label>Run at (ISO)<input type="text" id="once-runAt" placeholder="2026-05-01T09:00:00Z"></label>
+    </div>
+
+    <label>Agent options</label>
+    <div class="row">
+      <label style="flex:0 0 auto; display: inline-flex; align-items:center; gap:6px; text-transform:none; letter-spacing:0; font-weight:500; font-size:13px;">
+        <input type="checkbox" id="opt-verify" style="width:auto; margin:0; box-shadow:none; padding:0;">
+        Verify final summary
+      </label>
+      <label style="flex:0 0 auto; display: inline-flex; align-items:center; gap:6px; text-transform:none; letter-spacing:0; font-weight:500; font-size:13px;">
+        Reasoning
+        <select id="opt-effort" style="width:auto; margin:0; padding:6px 10px;">
+          <option value="off">Quick</option>
+          <option value="high">Think</option>
+          <option value="max">Deep</option>
+        </select>
+      </label>
+      <label style="flex:0 0 auto; display: inline-flex; align-items:center; gap:6px; text-transform:none; letter-spacing:0; font-weight:500; font-size:13px;">
+        Max steps
+        <input type="number" id="opt-max-steps" value="25" min="1" max="100" style="width:80px; margin:0; padding:6px 10px;">
+      </label>
+    </div>
+
+    <div class="actions">
+      <button class="primary" id="create">Create job</button>
+      <span id="create-status" style="font-size:12px; color: var(--text-muted);"></span>
+    </div>
+  </div>
+
+  <!-- Existing jobs -->
+  <div class="card">
+    <h2>Jobs</h2>
+    <div class="toolbar">
+      <button class="small" id="refresh">Refresh</button>
+      <span class="grow"></span>
+    </div>
+    <div id="jobs-list"><div class="empty">Loading…</div></div>
+  </div>
+
+  <a href="/agent" class="back-link">← back to agent runner</a>
+</div>
+
+<script>
+const $jobsList = document.getElementById('jobs-list');
+const $triggerType = document.getElementById('trigger-type');
+const $createStatus = document.getElementById('create-status');
+
+function showTriggerFields(type) {
+  document.querySelectorAll('.trigger-fields').forEach(el => el.classList.remove('show'));
+  const target = document.getElementById('fields-' + type);
+  if (target) target.classList.add('show');
+}
+$triggerType.addEventListener('change', () => showTriggerFields($triggerType.value));
+
+document.getElementById('refresh').addEventListener('click', loadJobs);
+
+document.getElementById('create').addEventListener('click', async () => {
+  const name = document.getElementById('job-name').value.trim();
+  const goal = document.getElementById('job-goal').value.trim();
+  if (!name || !goal) { $createStatus.textContent = 'Name and goal are required.'; return; }
+
+  const type = $triggerType.value;
+  let trigger;
+  switch (type) {
+    case 'every':   trigger = { type: 'every', minutes: parseInt(document.getElementById('every-minutes').value) }; break;
+    case 'daily':   trigger = { type: 'daily', hour: parseInt(document.getElementById('daily-hour').value), minute: parseInt(document.getElementById('daily-minute').value) }; break;
+    case 'weekly':  trigger = { type: 'weekly', day: document.getElementById('weekly-day').value, hour: parseInt(document.getElementById('weekly-hour').value), minute: parseInt(document.getElementById('weekly-minute').value) }; break;
+    case 'once':    trigger = { type: 'once', runAt: document.getElementById('once-runAt').value }; break;
+    case 'webhook': trigger = { type: 'webhook' }; break;
+  }
+  const agentOptions = {
+    verify: document.getElementById('opt-verify').checked,
+    reasoningEffort: document.getElementById('opt-effort').value,
+    maxSteps: parseInt(document.getElementById('opt-max-steps').value),
+  };
+
+  $createStatus.textContent = 'Creating…';
+  try {
+    const res = await fetch('/scheduler/jobs', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name, goal, trigger, agentOptions }),
+    });
+    const data = await res.json();
+    if (data.error) {
+      $createStatus.textContent = 'Error: ' + data.error;
+      return;
+    }
+    $createStatus.textContent = 'Created.';
+    document.getElementById('job-name').value = '';
+    document.getElementById('job-goal').value = '';
+    setTimeout(() => { $createStatus.textContent = ''; }, 2000);
+    loadJobs();
+  } catch (e) {
+    $createStatus.textContent = 'Network error: ' + e.message;
+  }
+});
+
+async function loadJobs() {
+  try {
+    const res = await fetch('/scheduler/jobs');
+    const data = await res.json();
+    const jobs = data.jobs || [];
+    if (jobs.length === 0) {
+      $jobsList.innerHTML = '<div class="empty">No jobs yet.</div>';
+      return;
+    }
+    $jobsList.innerHTML = jobs.map(renderJob).join('');
+    wireJobActions();
+  } catch (e) {
+    $jobsList.innerHTML = '<div class="empty">Could not load jobs: ' + escapeHtml(e.message) + '</div>';
+  }
+}
+
+function renderJob(job) {
+  const trig = describeTrigger(job.trigger);
+  const lastRun = job.lastRunAt ? new Date(job.lastRunAt).toLocaleString('en-GB') : 'never';
+  const enabledPill = job.enabled
+    ? '<span class="pill enabled">enabled</span>'
+    : '<span class="pill disabled">disabled</span>';
+  const webhookHtml = (job.trigger && job.trigger.type === 'webhook')
+    ? '<div class="webhook-url">POST ' + window.location.origin + '/scheduler/trigger/' + escapeHtml(job.trigger.token) + '</div>'
+    : '';
+  return '<div class="job" data-id="' + escapeHtml(job.id) + '">' +
+    '<div class="top">' +
+      '<span class="name">' + escapeHtml(job.name) + '</span>' +
+      enabledPill +
+      '<span class="pill">' + escapeHtml(trig) + '</span>' +
+    '</div>' +
+    '<div class="goal">' + escapeHtml(job.goal) + '</div>' +
+    '<div class="meta">' +
+      '<span>runs: ' + (job.runCount || 0) + '</span>' +
+      '<span>last: ' + escapeHtml(lastRun) + '</span>' +
+      (job.agentOptions && job.agentOptions.verify ? '<span>verify ✓</span>' : '') +
+      (job.agentOptions && job.agentOptions.reasoningEffort ? '<span>' + escapeHtml(job.agentOptions.reasoningEffort) + '</span>' : '') +
+    '</div>' +
+    '<div class="row-actions">' +
+      '<button class="small" data-act="run">Run now</button>' +
+      '<button class="small" data-act="toggle">' + (job.enabled ? 'Disable' : 'Enable') + '</button>' +
+      '<button class="small" data-act="history">Last run</button>' +
+      '<button class="small danger" data-act="delete">Delete</button>' +
+    '</div>' +
+    webhookHtml +
+    '<div class="last-run" data-role="last-run"></div>' +
+  '</div>';
+}
+
+function describeTrigger(t) {
+  if (!t) return '?';
+  switch (t.type) {
+    case 'every':   return 'every ' + t.minutes + 'm';
+    case 'daily':   return 'daily ' + pad2(t.hour) + ':' + pad2(t.minute);
+    case 'weekly':  return t.day + ' ' + pad2(t.hour) + ':' + pad2(t.minute);
+    case 'once':    return 'once @ ' + t.runAt;
+    case 'webhook': return 'webhook';
+    default:        return t.type;
+  }
+}
+function pad2(n) { return String(n).padStart(2, '0'); }
+
+function wireJobActions() {
+  $jobsList.querySelectorAll('.job').forEach(card => {
+    const id = card.dataset.id;
+    card.querySelectorAll('[data-act]').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const act = btn.dataset.act;
+        if (act === 'delete') {
+          if (!confirm('Delete this job? Cannot be undone.')) return;
+          await fetch('/scheduler/jobs/' + id, { method: 'DELETE' });
+          loadJobs(); return;
+        }
+        if (act === 'toggle') {
+          const job = await fetch('/scheduler/jobs/' + id).then(r => r.json());
+          await fetch('/scheduler/jobs/' + id, {
+            method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ enabled: !job.enabled }),
+          });
+          loadJobs(); return;
+        }
+        if (act === 'run') {
+          btn.disabled = true; btn.textContent = 'Running…';
+          const r = await fetch('/scheduler/jobs/' + id + '/run', { method: 'POST' });
+          const data = await r.json();
+          showLastRun(card, data);
+          btn.disabled = false; btn.textContent = 'Run now';
+          loadJobs();
+          return;
+        }
+        if (act === 'history') {
+          const job = await fetch('/scheduler/jobs/' + id).then(r => r.json());
+          const last = (job.history && job.history[0]) || null;
+          if (!last) { showLastRun(card, { summary: '(no runs yet)' }); return; }
+          showLastRun(card, {
+            summary: last.summary || last.error || '(no summary)',
+            steps: last.steps,
+            durationMs: last.durationMs,
+          });
+          return;
+        }
+      });
+    });
+  });
+}
+
+function showLastRun(card, data) {
+  const slot = card.querySelector('[data-role="last-run"]');
+  if (!slot) return;
+  const meta = [];
+  if (typeof data.steps === 'number') meta.push(data.steps + ' step' + (data.steps === 1 ? '' : 's'));
+  if (typeof data.durationMs === 'number') meta.push((data.durationMs / 1000).toFixed(1) + 's');
+  if (data.error) meta.push('error');
+  slot.innerHTML =
+    '<div class="head">Last run' + (meta.length ? ' · ' + escapeHtml(meta.join(' · ')) : '') + '</div>' +
+    '<div class="summary">' + escapeHtml(data.summary || data.error || '(no summary)') + '</div>';
+  slot.classList.add('show');
+}
+
+function escapeHtml(str) {
+  return String(str == null ? '' : str)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+
+loadJobs();
+</script>
+
+<script src="/trace-widget.js"></script>
+</body>
+</html>

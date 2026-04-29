@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <script src="/q-auth.js"></script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Q Music — text to music</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #e8e8e8; --text: #1a1a1a;
+    --text-muted: rgba(0,0,0,0.42); --text-faint: rgba(0,0,0,0.26);
+    --shadow-light: #ffffff; --shadow-dark: #ababab;
+    --accent: #e91e63;
+    --neu-raised: 10px 10px 28px #ababab, -8px -8px 20px #ffffff, inset 0 1px 0 rgba(255,255,255,0.5);
+    --neu-raised-sm: 6px 6px 16px #ababab, -5px -5px 12px #ffffff;
+    --neu-inset: inset 5px 5px 14px #ababab, inset -4px -4px 10px #ffffff;
+    --neu-inset-sm: inset 3px 3px 8px #ababab, inset -2px -2px 6px #ffffff;
+    --neu-inset-xs: inset 3px 3px 8px #ababab, inset -2px -2px 6px #ffffff;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Space Grotesk', -apple-system, sans-serif; background: var(--bg); color: var(--text); font-size: 15px; line-height: 1.55; min-height: 100vh; padding: 32px 24px 80px; -webkit-font-smoothing: antialiased; }
+  .wrap { max-width: 880px; margin: 0 auto; }
+  header { display: flex; align-items: baseline; gap: 14px; margin-bottom: 24px; flex-wrap: wrap; }
+  .logo-mark { display: inline-flex; align-items: baseline; }
+  .logo-mark .q { font-size: 28px; font-weight: 700; line-height: 1; letter-spacing: -0.05em; }
+  .logo-mark .dot { width: 8px; height: 8px; background: var(--accent); border-radius: 50%; display: inline-block; margin-left: 4px; align-self: flex-end; margin-bottom: 4px; box-shadow: 0 1px 2px rgba(233,30,99,0.3); }
+  h1 { font-size: 22px; font-weight: 600; letter-spacing: -0.02em; }
+  .tagline { font-size: 13px; color: var(--text-muted); margin-left: auto; }
+  .card { background: var(--bg); border-radius: 18px; padding: 18px; box-shadow: var(--neu-raised); margin-bottom: 18px; }
+  label { display: block; font-size: 11px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 6px; }
+  textarea, input[type="number"] { width: 100%; border: none; outline: none; resize: vertical; font-family: inherit; font-size: 14px; color: var(--text); background: var(--bg); padding: 10px 14px; border-radius: 10px; box-shadow: var(--neu-inset-sm); margin-bottom: 12px; line-height: 1.5; }
+  textarea { min-height: 70px; }
+  .row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+  .row label { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 500; text-transform: none; letter-spacing: 0; color: var(--text); margin-bottom: 0; }
+  .row input { width: 80px; margin-bottom: 0; padding: 6px 10px; }
+  .controls { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-top: 14px; }
+  button { border: none; cursor: pointer; background: var(--bg); color: var(--text); font-family: inherit; font-size: 14px; font-weight: 600; padding: 10px 22px; border-radius: 12px; box-shadow: var(--neu-raised-sm); }
+  button:hover:not(:disabled) { color: var(--accent); }
+  button:active:not(:disabled) { box-shadow: var(--neu-inset-xs); }
+  button:disabled { opacity: 0.5; cursor: not-allowed; }
+  .status { font-size: 12px; color: var(--text-muted); }
+  .status .dot { display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: var(--accent); margin-right: 6px; animation: pulse 1.2s infinite; vertical-align: middle; }
+  @keyframes pulse { 0%,100% { opacity: 0.4; } 50% { opacity: 1; } }
+  .result { display: none; }
+  .result.show { display: block; }
+  .result audio { width: 100%; margin-top: 8px; }
+  .back-link { display: inline-block; margin-top: 32px; font-size: 12px; color: var(--text-muted); text-decoration: none; }
+  .back-link:hover { color: var(--text); }
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <header>
+    <span class="logo-mark"><span class="q">Q</span><span class="dot"></span></span>
+    <h1>Music</h1>
+    <span class="tagline">ACE-Step text-to-music. Apache 2.0.</span>
+  </header>
+
+  <div class="card">
+    <label for="prompt">Style / genre prompt</label>
+    <textarea id="prompt" placeholder="warm acoustic folk, fingerpicked guitar, gentle female vocals, hopeful and quiet"></textarea>
+
+    <label for="lyrics">Lyrics (optional)</label>
+    <textarea id="lyrics" placeholder="(blank for instrumental)&#10;Verse 1...&#10;Chorus..."></textarea>
+
+    <div class="row" style="margin-bottom: 6px;">
+      <label>Duration (sec)<input type="number" id="duration" value="30" min="10" max="120" step="5"></label>
+      <label>Seed<input type="number" id="seed" value="-1" placeholder="-1 random"></label>
+    </div>
+
+    <div class="controls">
+      <button id="generate">Generate</button>
+      <span class="status" id="status"></span>
+    </div>
+  </div>
+
+  <div class="card result" id="result">
+    <label>Track</label>
+    <audio id="player" controls></audio>
+    <div class="controls">
+      <button id="download">Download .wav</button>
+    </div>
+  </div>
+
+  <a href="/chat" class="back-link">← back to Q's chat</a>
+</div>
+
+<script>
+const $prompt = document.getElementById('prompt');
+const $lyrics = document.getElementById('lyrics');
+const $duration = document.getElementById('duration');
+const $seed = document.getElementById('seed');
+const $generate = document.getElementById('generate');
+const $status = document.getElementById('status');
+const $result = document.getElementById('result');
+const $player = document.getElementById('player');
+const $download = document.getElementById('download');
+
+let lastBlob = null;
+let elapsedTimer = null;
+
+$generate.addEventListener('click', async () => {
+  const prompt = $prompt.value.trim();
+  if (!prompt) { $prompt.focus(); return; }
+  $generate.disabled = true;
+  $result.classList.remove('show');
+
+  const start = Date.now();
+  elapsedTimer = setInterval(() => { $status.innerHTML = '<span class="dot"></span>Composing… ' + ((Date.now()-start)/1000).toFixed(1) + 's'; }, 100);
+
+  try {
+    const res = await fetch('/music/generate', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        prompt,
+        lyrics: $lyrics.value || undefined,
+        duration: parseFloat($duration.value),
+        seed: parseInt($seed.value),
+      }),
+    });
+    clearInterval(elapsedTimer); elapsedTimer = null;
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ error: 'HTTP ' + res.status }));
+      $status.textContent = 'Error: ' + (err.error || 'unknown');
+      $generate.disabled = false;
+      return;
+    }
+    lastBlob = await res.blob();
+    $player.src = URL.createObjectURL(lastBlob);
+    $result.classList.add('show');
+    const dur = res.headers.get('X-Generation-Ms');
+    $status.textContent = dur ? 'Done in ' + (parseInt(dur) / 1000).toFixed(1) + 's' : 'Done';
+  } catch (e) {
+    clearInterval(elapsedTimer); elapsedTimer = null;
+    $status.textContent = 'Network error: ' + e.message;
+  } finally { $generate.disabled = false; }
+});
+
+$download.addEventListener('click', () => {
+  if (!lastBlob) return;
+  const a = document.createElement('a'); a.href = URL.createObjectURL(lastBlob); a.download = 'q-track.wav';
+  document.body.appendChild(a); a.click();
+  setTimeout(() => { document.body.removeChild(a); URL.revokeObjectURL(a.href); }, 100);
+});
+</script>
+<script src="/trace-widget.js"></script>
+</body>
+</html>

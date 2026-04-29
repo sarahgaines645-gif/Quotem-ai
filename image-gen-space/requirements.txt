@@ -1,0 +1,10 @@
+diffusers>=0.31.0
+transformers>=4.46.0
+torch>=2.4.0
+accelerate>=1.0.0
+sentencepiece
+gradio>=5.0.0
+spaces>=0.30.0
+Pillow
+# audioop was removed from Python 3.13 stdlib but pydub (transitive dep) still imports it
+audioop-lts; python_version >= "3.13"

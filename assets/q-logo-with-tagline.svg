@@ -1,0 +1,12 @@
+<!-- Q — Quotem's own AI (with tagline)
+     Secondary lock-up. Logo + "Quotem's own AI" tagline below.
+     Used when Q needs to introduce himself rather than just appear as a mark. -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 260 160" role="img" aria-label="Q — Quotem's own AI">
+  <style>
+    .q-mark { font-family: 'Space Grotesk', 'Inter', system-ui, sans-serif; font-weight: 700; font-size: 96px; fill: #2a2f36; letter-spacing: -0.04em; }
+    .q-tagline { font-family: 'Space Grotesk', 'Inter', system-ui, sans-serif; font-weight: 400; font-size: 22px; fill: #6b7280; letter-spacing: 0; }
+  </style>
+  <text x="8" y="82" class="q-mark">Q</text>
+  <circle cx="108" cy="78" r="9" fill="#e91e63" />
+  <text x="8" y="132" class="q-tagline">Quotem's own AI</text>
+</svg>

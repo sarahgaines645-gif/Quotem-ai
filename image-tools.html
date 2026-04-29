@@ -1,0 +1,401 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <script src="/q-auth.js"></script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Q Image Tools — bg removal + upscale</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #e8e8e8; --text: #1a1a1a;
+    --text-muted: rgba(0,0,0,0.42); --text-faint: rgba(0,0,0,0.26);
+    --shadow-light: #ffffff; --shadow-dark: #ababab;
+    --accent: #e91e63;
+    --neu-raised:    10px 10px 28px #ababab, -8px -8px 20px #ffffff, inset 0 1px 0 rgba(255,255,255,0.5);
+    --neu-raised-sm: 6px 6px 16px #ababab, -5px -5px 12px #ffffff;
+    --neu-inset:     inset 5px 5px 14px #ababab, inset -4px -4px 10px #ffffff;
+    --neu-inset-sm:  inset 3px 3px 8px #ababab, inset -2px -2px 6px #ffffff;
+    --neu-inset-xs:  inset 3px 3px 8px #ababab, inset -2px -2px 6px #ffffff;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: 'Space Grotesk', -apple-system, sans-serif;
+    background: var(--bg); color: var(--text);
+    font-size: 15px; line-height: 1.55;
+    min-height: 100vh; padding: 32px 24px 80px;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 1100px; margin: 0 auto; }
+  header { display: flex; align-items: baseline; gap: 14px; margin-bottom: 24px; flex-wrap: wrap; }
+  .logo-mark { display: inline-flex; align-items: baseline; }
+  .logo-mark .q { font-size: 28px; font-weight: 700; line-height: 1; letter-spacing: -0.05em; }
+  .logo-mark .dot { width: 8px; height: 8px; background: var(--accent); border-radius: 50%; display: inline-block; margin-left: 4px; align-self: flex-end; margin-bottom: 4px; box-shadow: 0 1px 2px rgba(233,30,99,0.3); }
+  h1 { font-size: 22px; font-weight: 600; letter-spacing: -0.02em; }
+  .tagline { font-size: 13px; color: var(--text-muted); margin-left: auto; }
+
+  .card { background: var(--bg); border-radius: 18px; padding: 18px; box-shadow: var(--neu-raised); margin-bottom: 18px; }
+
+  .tools { display: flex; gap: 8px; margin-bottom: 18px; }
+  .tool-btn {
+    border: none; cursor: pointer;
+    background: var(--bg); color: var(--text-muted);
+    font-family: inherit; font-size: 12px; font-weight: 600;
+    text-transform: uppercase; letter-spacing: 0.04em;
+    padding: 10px 18px; border-radius: 12px;
+    box-shadow: var(--neu-raised-sm);
+  }
+  .tool-btn:hover { color: var(--text); }
+  .tool-btn.on { color: var(--accent); box-shadow: var(--neu-inset-xs); }
+
+  .columns { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+  @media (max-width: 800px) { .columns { grid-template-columns: 1fr; } }
+
+  .drop-zone {
+    border: 2px dashed var(--shadow-dark);
+    border-radius: 12px; padding: 36px 20px; text-align: center;
+    color: var(--text-muted); cursor: pointer;
+    background: var(--bg); box-shadow: var(--neu-inset-xs);
+    transition: all 0.15s ease;
+  }
+  .drop-zone:hover, .drop-zone.dragover { color: var(--accent); border-color: var(--accent); }
+  .drop-zone .icon { font-size: 28px; display: block; margin-bottom: 6px; }
+  .drop-zone .hint { font-size: 11px; color: var(--text-faint); margin-top: 6px; }
+
+  .panel-img {
+    display: none;
+    width: 100%; height: auto; max-height: 480px;
+    object-fit: contain; background:
+      linear-gradient(45deg, #ddd 25%, transparent 25%),
+      linear-gradient(-45deg, #ddd 25%, transparent 25%),
+      linear-gradient(45deg, transparent 75%, #ddd 75%),
+      linear-gradient(-45deg, transparent 75%, #ddd 75%);
+    background-size: 20px 20px;
+    background-position: 0 0, 0 10px, 10px -10px, -10px 0px;
+    border-radius: 12px;
+    box-shadow: var(--neu-inset-sm);
+  }
+  .panel-img.show { display: block; }
+
+  label { display: block; font-size: 11px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 6px; }
+
+  .controls { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-top: 14px; }
+  button {
+    border: none; cursor: pointer;
+    background: var(--bg); color: var(--text);
+    font-family: inherit; font-size: 13px; font-weight: 600;
+    padding: 8px 16px; border-radius: 10px;
+    box-shadow: var(--neu-raised-sm);
+  }
+  button:hover:not(:disabled) { color: var(--accent); }
+  button:active:not(:disabled) { box-shadow: var(--neu-inset-xs); }
+  button:disabled { opacity: 0.5; cursor: not-allowed; }
+  .status { font-size: 12px; color: var(--text-muted); }
+  .status .dot { display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: var(--accent); margin-right: 6px; animation: pulse 1.2s infinite; vertical-align: middle; }
+  @keyframes pulse { 0%,100% { opacity: 0.4; } 50% { opacity: 1; } }
+
+  .hint-row { font-size: 11px; color: var(--text-faint); margin-top: 8px; line-height: 1.5; }
+
+  .back-link { display: inline-block; margin-top: 32px; font-size: 12px; color: var(--text-muted); text-decoration: none; }
+  .back-link:hover { color: var(--text); }
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <header>
+    <span class="logo-mark"><span class="q">Q</span><span class="dot"></span></span>
+    <h1>Image Tools</h1>
+    <span class="tagline">Bg removal + upscale, runs on your machine, free forever.</span>
+  </header>
+
+  <div class="tools">
+    <button class="tool-btn on" data-tool="bg">Remove background</button>
+    <button class="tool-btn" data-tool="upscale">Upscale 2×</button>
+  </div>
+
+  <div class="card">
+    <input type="file" id="file-input" accept="image/*" style="display:none">
+    <div class="columns">
+      <div>
+        <label>Input</label>
+        <div class="drop-zone" id="drop-zone">
+          <span class="icon">⬆</span>
+          <div>Click, drag-drop, or paste an image</div>
+          <div class="hint">PNG, JPG. Best on subjects with a clear background.</div>
+        </div>
+        <img class="panel-img" id="input-img" alt="Input">
+      </div>
+      <div>
+        <label>Output</label>
+        <img class="panel-img" id="output-img" alt="Output">
+        <div class="drop-zone" id="output-placeholder" style="cursor:default; pointer-events:none;">
+          <div style="color: var(--text-faint);">Result appears here.</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="controls">
+      <button id="run" disabled>Run</button>
+      <button id="reset" disabled>Reset</button>
+      <button id="download" disabled>Download PNG</button>
+      <span class="status" id="status"></span>
+    </div>
+    <div class="hint-row" id="model-hint">
+      First run downloads ~80–150 MB of model weights (one-off, cached forever after). Uses WebGPU when available, WASM otherwise.
+    </div>
+  </div>
+
+  <a href="/chat" class="back-link">← back to Q's chat</a>
+</div>
+
+<script type="module">
+const $fileInput = document.getElementById('file-input');
+const $dropZone = document.getElementById('drop-zone');
+const $inputImg = document.getElementById('input-img');
+const $outputImg = document.getElementById('output-img');
+const $outputPlaceholder = document.getElementById('output-placeholder');
+const $run = document.getElementById('run');
+const $reset = document.getElementById('reset');
+const $download = document.getElementById('download');
+const $status = document.getElementById('status');
+const $toolBtns = document.querySelectorAll('.tool-btn');
+const $modelHint = document.getElementById('model-hint');
+
+let currentTool = 'bg';
+let inputBlob = null;
+let outputBlob = null;
+let outputObjectUrl = null;
+
+$toolBtns.forEach(b => b.addEventListener('click', () => {
+  currentTool = b.dataset.tool;
+  $toolBtns.forEach(x => x.classList.toggle('on', x === b));
+  // Reset output but keep input
+  if (outputObjectUrl) { URL.revokeObjectURL(outputObjectUrl); outputObjectUrl = null; }
+  outputBlob = null;
+  $outputImg.removeAttribute('src');
+  $outputImg.classList.remove('show');
+  $outputPlaceholder.style.display = '';
+  $download.disabled = true;
+  $status.textContent = '';
+}));
+
+$dropZone.addEventListener('click', () => $fileInput.click());
+$fileInput.addEventListener('change', () => {
+  if ($fileInput.files && $fileInput.files[0]) loadFile($fileInput.files[0]);
+});
+
+['dragenter', 'dragover'].forEach(ev => {
+  $dropZone.addEventListener(ev, e => { e.preventDefault(); $dropZone.classList.add('dragover'); });
+});
+['dragleave', 'drop'].forEach(ev => {
+  $dropZone.addEventListener(ev, e => { e.preventDefault(); $dropZone.classList.remove('dragover'); });
+});
+$dropZone.addEventListener('drop', e => {
+  const f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+  if (f) loadFile(f);
+});
+
+window.addEventListener('paste', e => {
+  if (!e.clipboardData) return;
+  for (const item of e.clipboardData.items) {
+    if (item.kind === 'file') {
+      const f = item.getAsFile();
+      if (f && f.type && f.type.startsWith('image/')) { loadFile(f); break; }
+    }
+  }
+});
+
+function loadFile(file) {
+  if (!file.type || !file.type.startsWith('image/')) {
+    alert('Need an image file.');
+    return;
+  }
+  inputBlob = file;
+  const url = URL.createObjectURL(file);
+  $inputImg.src = url;
+  $inputImg.classList.add('show');
+  $dropZone.style.display = 'none';
+  $run.disabled = false;
+  $reset.disabled = false;
+}
+
+// ─── Lazy-load transformers.js + each pipeline on first use ─────────────
+let transformersModule = null;
+async function loadTransformers() {
+  if (!transformersModule) {
+    transformersModule = await import('https://cdn.jsdelivr.net/npm/@huggingface/transformers@4.2.0');
+  }
+  return transformersModule;
+}
+
+let bgRemoverPromise = null;
+function loadBgRemover() {
+  if (bgRemoverPromise) return bgRemoverPromise;
+  bgRemoverPromise = (async () => {
+    $status.innerHTML = '<span class="dot"></span>Loading bg remover…';
+    const { pipeline } = await loadTransformers();
+    const useGPU = !!navigator.gpu;
+    const segmenter = await pipeline(
+      'image-segmentation',
+      'briaai/RMBG-1.4',
+      { device: useGPU ? 'webgpu' : 'wasm' }
+    );
+    return segmenter;
+  })();
+  return bgRemoverPromise;
+}
+
+let upscalerPromise = null;
+function loadUpscaler() {
+  if (upscalerPromise) return upscalerPromise;
+  upscalerPromise = (async () => {
+    $status.innerHTML = '<span class="dot"></span>Loading upscaler…';
+    const { pipeline } = await loadTransformers();
+    const useGPU = !!navigator.gpu;
+    const upscaler = await pipeline(
+      'image-to-image',
+      'Xenova/swin2SR-classical-sr-x2-64',
+      { device: useGPU ? 'webgpu' : 'wasm' }
+    );
+    return upscaler;
+  })();
+  return upscalerPromise;
+}
+
+$run.addEventListener('click', async () => {
+  if (!inputBlob) return;
+  $run.disabled = true;
+  const start = Date.now();
+  const tick = setInterval(() => {
+    const sec = ((Date.now() - start) / 1000).toFixed(1);
+    if (!$status.textContent.includes('Loading')) {
+      $status.innerHTML = '<span class="dot"></span>Working… ' + sec + 's';
+    }
+  }, 100);
+
+  try {
+    const inputUrl = URL.createObjectURL(inputBlob);
+    let result;
+    if (currentTool === 'bg') {
+      const segmenter = await loadBgRemover();
+      $status.innerHTML = '<span class="dot"></span>Removing background…';
+      const segments = await segmenter(inputUrl);
+      // RMBG returns a mask. Apply it to the original to remove bg.
+      result = await applyMask(inputBlob, segments);
+    } else {
+      const upscaler = await loadUpscaler();
+      $status.innerHTML = '<span class="dot"></span>Upscaling…';
+      const out = await upscaler(inputUrl);
+      result = await rawImageToBlob(out);
+    }
+    URL.revokeObjectURL(inputUrl);
+    outputBlob = result;
+    if (outputObjectUrl) URL.revokeObjectURL(outputObjectUrl);
+    outputObjectUrl = URL.createObjectURL(outputBlob);
+    $outputImg.src = outputObjectUrl;
+    $outputImg.classList.add('show');
+    $outputPlaceholder.style.display = 'none';
+    $download.disabled = false;
+    const dur = ((Date.now() - start) / 1000).toFixed(1);
+    $status.textContent = 'Done in ' + dur + 's';
+  } catch (e) {
+    console.error(e);
+    $status.textContent = 'Failed: ' + e.message;
+  } finally {
+    clearInterval(tick);
+    $run.disabled = false;
+  }
+});
+
+// Apply RMBG-1.4 mask to original image, returning RGBA PNG with bg removed.
+async function applyMask(originalBlob, segments) {
+  const mask = Array.isArray(segments) ? (segments[0]?.mask) : segments?.mask;
+  if (!mask || !mask.data) throw new Error('No mask returned by segmenter');
+
+  // Original image into a canvas at native resolution.
+  const img = await blobToImage(originalBlob);
+  const canvas = document.createElement('canvas');
+  canvas.width = img.naturalWidth; canvas.height = img.naturalHeight;
+  const ctx = canvas.getContext('2d');
+  ctx.drawImage(img, 0, 0);
+  const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+
+  // RawImage mask is single-channel; resize to canvas if needed.
+  const maskData = mask.data;
+  const mw = mask.width, mh = mask.height;
+  for (let y = 0; y < canvas.height; y++) {
+    for (let x = 0; x < canvas.width; x++) {
+      const mx = Math.floor(x * mw / canvas.width);
+      const my = Math.floor(y * mh / canvas.height);
+      const alpha = maskData[my * mw + mx];
+      const idx = (y * canvas.width + x) * 4 + 3;
+      imageData.data[idx] = alpha;
+    }
+  }
+  ctx.putImageData(imageData, 0, 0);
+  return await canvasToBlob(canvas);
+}
+
+function blobToImage(blob) {
+  return new Promise((res, rej) => {
+    const img = new Image();
+    img.onload = () => res(img);
+    img.onerror = rej;
+    img.src = URL.createObjectURL(blob);
+  });
+}
+
+function canvasToBlob(canvas) {
+  return new Promise((res, rej) => canvas.toBlob(b => b ? res(b) : rej(new Error('toBlob failed')), 'image/png'));
+}
+
+async function rawImageToBlob(rawImage) {
+  // RawImage from transformers.js — has .data (Uint8) + .width + .height + .channels
+  const canvas = document.createElement('canvas');
+  canvas.width = rawImage.width; canvas.height = rawImage.height;
+  const ctx = canvas.getContext('2d');
+  const imageData = ctx.createImageData(rawImage.width, rawImage.height);
+  const ch = rawImage.channels;
+  for (let i = 0, j = 0; i < rawImage.data.length; i += ch, j += 4) {
+    imageData.data[j]     = rawImage.data[i];
+    imageData.data[j + 1] = ch > 1 ? rawImage.data[i + 1] : rawImage.data[i];
+    imageData.data[j + 2] = ch > 2 ? rawImage.data[i + 2] : rawImage.data[i];
+    imageData.data[j + 3] = ch > 3 ? rawImage.data[i + 3] : 255;
+  }
+  ctx.putImageData(imageData, 0, 0);
+  return await canvasToBlob(canvas);
+}
+
+$reset.addEventListener('click', () => {
+  inputBlob = null;
+  outputBlob = null;
+  if (outputObjectUrl) { URL.revokeObjectURL(outputObjectUrl); outputObjectUrl = null; }
+  $inputImg.removeAttribute('src');
+  $inputImg.classList.remove('show');
+  $outputImg.removeAttribute('src');
+  $outputImg.classList.remove('show');
+  $outputPlaceholder.style.display = '';
+  $dropZone.style.display = '';
+  $run.disabled = true;
+  $reset.disabled = true;
+  $download.disabled = true;
+  $status.textContent = '';
+  $fileInput.value = '';
+});
+
+$download.addEventListener('click', () => {
+  if (!outputBlob) return;
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(outputBlob);
+  a.download = (currentTool === 'bg' ? 'bg-removed' : 'upscaled') + '.png';
+  document.body.appendChild(a); a.click();
+  setTimeout(() => { document.body.removeChild(a); URL.revokeObjectURL(a.href); }, 100);
+});
+</script>
+
+<script src="/trace-widget.js"></script>
+</body>
+</html>

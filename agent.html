@@ -1,0 +1,407 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <script src="/q-auth.js"></script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Q Agent — autonomous task runner</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #e8e8e8;
+    --text: #1a1a1a;
+    --text-muted: rgba(0,0,0,0.42);
+    --text-faint: rgba(0,0,0,0.26);
+    --shadow-light: #ffffff;
+    --shadow-dark: #ababab;
+    --accent: #e91e63;
+    --neu-raised:    10px 10px 28px #ababab, -8px -8px 20px #ffffff, inset 0 1px 0 rgba(255,255,255,0.5);
+    --neu-raised-sm: 6px 6px 16px #ababab, -5px -5px 12px #ffffff;
+    --neu-inset:     inset 5px 5px 14px #ababab, inset -4px -4px 10px #ffffff;
+    --neu-inset-sm:  inset 3px 3px 8px #ababab, inset -2px -2px 6px #ffffff;
+    --neu-inset-xs:  inset 3px 3px 8px #ababab, inset -2px -2px 6px #ffffff;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: 'Space Grotesk', -apple-system, BlinkMacSystemFont, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    font-size: 15px;
+    line-height: 1.55;
+    min-height: 100vh;
+    padding: 32px 24px 80px;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 880px; margin: 0 auto; }
+
+  header { display: flex; align-items: baseline; gap: 14px; margin-bottom: 24px; }
+  .logo-mark { display: inline-flex; align-items: baseline; }
+  .logo-mark .q { font-size: 28px; font-weight: 700; line-height: 1; letter-spacing: -0.05em; color: var(--text); }
+  .logo-mark .dot { width: 8px; height: 8px; background: var(--accent); border-radius: 50%; display: inline-block; margin-left: 4px; align-self: flex-end; margin-bottom: 4px; box-shadow: 0 1px 2px rgba(233,30,99,0.3); }
+  h1 { font-size: 22px; font-weight: 600; letter-spacing: -0.02em; color: var(--text); }
+  .tagline { font-size: 13px; color: var(--text-muted); margin-left: auto; }
+
+  .goal-card {
+    background: var(--bg);
+    border-radius: 18px;
+    padding: 18px;
+    box-shadow: var(--neu-raised);
+    margin-bottom: 24px;
+  }
+  .goal-card label {
+    display: block;
+    font-size: 11px; font-weight: 600;
+    color: var(--text-muted);
+    text-transform: uppercase; letter-spacing: 0.08em;
+    margin-bottom: 8px;
+  }
+  textarea {
+    width: 100%;
+    min-height: 90px;
+    border: none; outline: none; resize: vertical;
+    font-family: inherit; font-size: 14px;
+    color: var(--text);
+    background: var(--bg);
+    padding: 14px 16px;
+    border-radius: 12px;
+    box-shadow: var(--neu-inset-sm);
+    line-height: 1.5;
+  }
+  .controls {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-top: 14px;
+    flex-wrap: wrap;
+  }
+  .pill-group {
+    display: inline-flex;
+    background: var(--bg);
+    border-radius: 12px;
+    padding: 4px;
+    box-shadow: var(--neu-inset-xs);
+    gap: 2px;
+  }
+  .pill {
+    border: none;
+    background: transparent;
+    color: var(--text-muted);
+    font-family: inherit;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    padding: 6px 10px;
+    border-radius: 8px;
+    cursor: pointer;
+  }
+  .pill:hover { color: var(--text); }
+  .pill.on { color: var(--accent); background: var(--bg); box-shadow: var(--neu-raised-sm); }
+  .controls .grow { flex: 1; }
+  .run-btn {
+    border: none;
+    background: var(--bg);
+    color: var(--text);
+    font-family: inherit; font-size: 14px; font-weight: 600;
+    padding: 10px 22px;
+    border-radius: 12px;
+    cursor: pointer;
+    box-shadow: var(--neu-raised-sm);
+  }
+  .run-btn:hover { color: var(--accent); }
+  .run-btn:active { box-shadow: var(--neu-inset-xs); }
+  .run-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+  .status {
+    margin-top: 14px;
+    font-size: 12px;
+    color: var(--text-faint);
+    min-height: 16px;
+  }
+  .status .dot { display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: var(--accent); margin-right: 6px; animation: pulse 1.2s infinite; vertical-align: middle; }
+  @keyframes pulse { 0%,100% { opacity: 0.4; } 50% { opacity: 1; } }
+
+  .summary-card {
+    background: var(--bg);
+    border-radius: 18px;
+    padding: 22px;
+    box-shadow: var(--neu-raised);
+    margin-bottom: 18px;
+    display: none;
+  }
+  .summary-card.show { display: block; }
+  .summary-card h2 {
+    font-size: 13px; font-weight: 600;
+    color: var(--text-muted);
+    text-transform: uppercase; letter-spacing: 0.08em;
+    margin-bottom: 12px;
+  }
+  .summary-card .summary-text {
+    font-size: 15px; color: var(--text); line-height: 1.65;
+    white-space: pre-wrap; word-wrap: break-word;
+    background: var(--bg);
+    padding: 16px 18px;
+    border-radius: 12px;
+    box-shadow: var(--neu-inset-sm);
+  }
+  .summary-meta {
+    margin-top: 12px;
+    display: flex; flex-wrap: wrap; gap: 8px;
+    font-size: 11px;
+  }
+  .summary-meta .badge {
+    background: var(--bg);
+    box-shadow: var(--neu-raised-sm);
+    color: var(--text-muted);
+    padding: 4px 10px;
+    border-radius: 999px;
+  }
+  .summary-meta .badge.pass { color: #10b981; }
+  .summary-meta .badge.fixed { color: var(--accent); }
+  .summary-meta .badge.error { color: #ef4444; }
+
+  .transcript-card {
+    background: var(--bg);
+    border-radius: 18px;
+    padding: 18px;
+    box-shadow: var(--neu-raised);
+    display: none;
+  }
+  .transcript-card.show { display: block; }
+  .transcript-card h2 {
+    font-size: 13px; font-weight: 600;
+    color: var(--text-muted);
+    text-transform: uppercase; letter-spacing: 0.08em;
+    margin-bottom: 12px;
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .transcript-toggle {
+    border: none; background: transparent;
+    color: var(--text-faint); cursor: pointer;
+    font-family: inherit; font-size: 11px;
+  }
+  .transcript-toggle:hover { color: var(--text); }
+  .transcript-list { display: none; }
+  .transcript-list.show { display: block; }
+
+  .step {
+    padding: 10px 12px;
+    border-radius: 10px;
+    background: var(--bg);
+    box-shadow: var(--neu-inset-xs);
+    margin-bottom: 8px;
+    font-family: ui-monospace, 'SF Mono', monospace;
+    font-size: 11px;
+    line-height: 1.5;
+  }
+  .step .head { color: var(--accent); font-weight: 600; margin-bottom: 4px; }
+  .step .body { color: var(--text-muted); white-space: pre-wrap; word-break: break-word; max-height: 200px; overflow-y: auto; }
+  .step.tool-result .head { color: #10b981; }
+  .step.error .head { color: #ef4444; }
+  .step.finish .head { color: var(--accent); }
+  .step.verifier_corrected .head { color: var(--accent); }
+
+  .back-link {
+    display: inline-block;
+    margin-top: 32px;
+    font-size: 12px;
+    color: var(--text-muted);
+    text-decoration: none;
+  }
+  .back-link:hover { color: var(--text); }
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <header>
+    <span class="logo-mark"><span class="q">Q</span><span class="dot"></span></span>
+    <h1>Agent</h1>
+    <span class="tagline">Give him a goal. He works it.</span>
+  </header>
+
+  <div class="goal-card">
+    <label for="goal">Goal</label>
+    <textarea id="goal" placeholder="e.g. Find out the current price of red diesel in the UK and tell me where to get the cheapest in the southwest. Cite your sources."></textarea>
+    <div class="controls">
+      <div class="pill-group" role="group" aria-label="Reasoning depth">
+        <button class="pill on" data-effort="off">Quick</button>
+        <button class="pill" data-effort="high">Think</button>
+        <button class="pill" data-effort="max">Deep</button>
+      </div>
+      <div class="pill-group" role="group" aria-label="Verifier">
+        <button class="pill" id="check-pill">Check</button>
+      </div>
+      <div class="grow"></div>
+      <button class="run-btn" id="run">Run Q</button>
+    </div>
+    <div class="status" id="status"></div>
+  </div>
+
+  <div class="summary-card" id="summary-card">
+    <h2>Final summary</h2>
+    <div class="summary-text" id="summary-text"></div>
+    <div class="summary-meta" id="summary-meta"></div>
+  </div>
+
+  <div class="transcript-card" id="transcript-card">
+    <h2>
+      Transcript
+      <button class="transcript-toggle" id="transcript-toggle">show steps</button>
+    </h2>
+    <div class="transcript-list" id="transcript-list"></div>
+  </div>
+
+  <a href="/chat" class="back-link">← back to Q's chat</a>
+</div>
+
+<script>
+const $goal = document.getElementById('goal');
+const $run = document.getElementById('run');
+const $status = document.getElementById('status');
+const $summaryCard = document.getElementById('summary-card');
+const $summaryText = document.getElementById('summary-text');
+const $summaryMeta = document.getElementById('summary-meta');
+const $transcriptCard = document.getElementById('transcript-card');
+const $transcriptList = document.getElementById('transcript-list');
+const $transcriptToggle = document.getElementById('transcript-toggle');
+const $checkPill = document.getElementById('check-pill');
+const $effortPills = document.querySelectorAll('[data-effort]');
+
+let effort = 'off';
+let verifyOn = false;
+
+$effortPills.forEach(b => b.addEventListener('click', () => {
+  effort = b.dataset.effort;
+  $effortPills.forEach(x => x.classList.toggle('on', x.dataset.effort === effort));
+}));
+
+$checkPill.addEventListener('click', () => {
+  verifyOn = !verifyOn;
+  $checkPill.classList.toggle('on', verifyOn);
+});
+
+$transcriptToggle.addEventListener('click', () => {
+  const showing = $transcriptList.classList.toggle('show');
+  $transcriptToggle.textContent = showing ? 'hide steps' : 'show steps';
+});
+
+let elapsedTimer = null;
+
+$run.addEventListener('click', async () => {
+  const goal = $goal.value.trim();
+  if (!goal) { $goal.focus(); return; }
+  $run.disabled = true;
+  $summaryCard.classList.remove('show');
+  $transcriptCard.classList.remove('show');
+  $transcriptList.innerHTML = '';
+  $summaryMeta.innerHTML = '';
+
+  const start = Date.now();
+  const tick = () => {
+    const ms = Date.now() - start;
+    const sec = (ms / 1000).toFixed(1);
+    $status.innerHTML = '<span class="dot"></span>Q is working… ' + sec + 's';
+  };
+  tick();
+  elapsedTimer = setInterval(tick, 100);
+
+  try {
+    const body = { goal };
+    if (effort === 'high' || effort === 'max') body.reasoningEffort = effort;
+    if (verifyOn) body.verify = true;
+
+    const res = await fetch('/agent/run', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    const data = await res.json();
+    clearInterval(elapsedTimer);
+    elapsedTimer = null;
+    renderResult(data);
+    $status.textContent = '';
+  } catch (e) {
+    clearInterval(elapsedTimer);
+    elapsedTimer = null;
+    $status.textContent = 'Network error: ' + e.message;
+  } finally {
+    $run.disabled = false;
+  }
+});
+
+function renderResult(data) {
+  if (data.error && !data.summary) {
+    $summaryCard.classList.add('show');
+    $summaryText.textContent = data.error;
+    $summaryMeta.innerHTML = badgeHtml('error', 'error');
+  } else {
+    $summaryCard.classList.add('show');
+    $summaryText.textContent = data.summary || '(no summary)';
+    const parts = [];
+    if (typeof data.steps === 'number') parts.push(badgeHtml('default', data.steps + ' step' + (data.steps === 1 ? '' : 's')));
+    if (typeof data.durationMs === 'number') parts.push(badgeHtml('default', (data.durationMs / 1000).toFixed(1) + 's'));
+    if (typeof data.tokensIn === 'number') parts.push(badgeHtml('default', data.tokensIn + ' in · ' + (data.tokensOut || 0) + ' out'));
+    if (data.verifier) {
+      const cls = data.verifier.pass ? 'pass' : 'fixed';
+      const label = data.verifier.pass
+        ? '✓ verified'
+        : '✓ corrected · ' + (data.verifier.issues || []).length + ' issue' + ((data.verifier.issues || []).length === 1 ? '' : 's');
+      parts.push(badgeHtml(cls, label));
+    }
+    $summaryMeta.innerHTML = parts.join('');
+  }
+
+  if (Array.isArray(data.transcript) && data.transcript.length > 0) {
+    $transcriptCard.classList.add('show');
+    $transcriptList.innerHTML = data.transcript.map(renderStep).join('');
+  }
+}
+
+function badgeHtml(cls, text) {
+  return '<span class="badge ' + escapeHtml(cls) + '">' + escapeHtml(text) + '</span>';
+}
+
+function renderStep(e) {
+  const cls = 'step ' + escapeHtml(e.type);
+  let head = e.type;
+  let body = '';
+  if (e.type === 'step_start') {
+    head = 'step ' + e.step;
+    body = '';
+  } else if (e.type === 'tool_call') {
+    head = 'tool_call: ' + e.name;
+    body = JSON.stringify(e.args || {}, null, 2);
+  } else if (e.type === 'tool_result') {
+    head = 'tool_result: ' + e.name + (typeof e.durationMs === 'number' ? ' · ' + e.durationMs + 'ms' : '');
+    body = typeof e.result === 'string' ? e.result : JSON.stringify(e.result, null, 2);
+  } else if (e.type === 'finish') {
+    head = 'finish';
+    body = e.summary || '';
+  } else if (e.type === 'verifier_corrected') {
+    head = 'verifier_corrected';
+    body = (Array.isArray(e.issues) ? e.issues.join('\n• ') : '');
+    if (body) body = '• ' + body;
+  } else if (e.type === 'error') {
+    head = 'error';
+    body = e.error || '';
+  }
+  if (body && body.length > 1500) body = body.substring(0, 1500) + '\n…(truncated)';
+  return '<div class="' + cls + '">' +
+    '<div class="head">' + escapeHtml(head) + '</div>' +
+    (body ? '<div class="body">' + escapeHtml(body) + '</div>' : '') +
+    '</div>';
+}
+
+function escapeHtml(str) {
+  return String(str == null ? '' : str)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+</script>
+
+<script src="/trace-widget.js"></script>
+</body>
+</html>

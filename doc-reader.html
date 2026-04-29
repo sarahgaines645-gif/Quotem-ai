@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <script src="/q-auth.js"></script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Q Doc Reader — extract content from a document</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #e8e8e8; --text: #1a1a1a;
+    --text-muted: rgba(0,0,0,0.42); --text-faint: rgba(0,0,0,0.26);
+    --shadow-light: #ffffff; --shadow-dark: #ababab;
+    --accent: #e91e63;
+    --neu-raised:    10px 10px 28px #ababab, -8px -8px 20px #ffffff, inset 0 1px 0 rgba(255,255,255,0.5);
+    --neu-raised-sm: 6px 6px 16px #ababab, -5px -5px 12px #ffffff;
+    --neu-inset:     inset 5px 5px 14px #ababab, inset -4px -4px 10px #ffffff;
+    --neu-inset-sm:  inset 3px 3px 8px #ababab, inset -2px -2px 6px #ffffff;
+    --neu-inset-xs:  inset 3px 3px 8px #ababab, inset -2px -2px 6px #ffffff;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: 'Space Grotesk', -apple-system, sans-serif;
+    background: var(--bg); color: var(--text);
+    font-size: 15px; line-height: 1.55;
+    min-height: 100vh; padding: 32px 24px 80px;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 1100px; margin: 0 auto; }
+  header { display: flex; align-items: baseline; gap: 14px; margin-bottom: 24px; flex-wrap: wrap; }
+  .logo-mark { display: inline-flex; align-items: baseline; }
+  .logo-mark .q { font-size: 28px; font-weight: 700; line-height: 1; letter-spacing: -0.05em; }
+  .logo-mark .dot { width: 8px; height: 8px; background: var(--accent); border-radius: 50%; display: inline-block; margin-left: 4px; align-self: flex-end; margin-bottom: 4px; box-shadow: 0 1px 2px rgba(233,30,99,0.3); }
+  h1 { font-size: 22px; font-weight: 600; letter-spacing: -0.02em; }
+  .tagline { font-size: 13px; color: var(--text-muted); margin-left: auto; }
+
+  .card { background: var(--bg); border-radius: 18px; padding: 18px; box-shadow: var(--neu-raised); margin-bottom: 18px; }
+
+  .columns { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+  @media (max-width: 800px) { .columns { grid-template-columns: 1fr; } }
+
+  .drop-zone {
+    border: 2px dashed var(--shadow-dark);
+    border-radius: 16px; padding: 48px 24px; text-align: center;
+    color: var(--text-muted); cursor: pointer;
+    transition: all 0.15s ease;
+    background: var(--bg); box-shadow: var(--neu-inset-xs);
+  }
+  .drop-zone:hover, .drop-zone.dragover {
+    color: var(--accent); border-color: var(--accent);
+  }
+  .drop-zone .icon { font-size: 32px; display: block; margin-bottom: 8px; }
+  .drop-zone .hint { font-size: 12px; color: var(--text-faint); margin-top: 6px; }
+
+  .preview { display: none; }
+  .preview.show { display: block; }
+  .preview img {
+    display: block; width: 100%; height: auto;
+    border-radius: 12px; box-shadow: var(--neu-inset-sm);
+    max-height: 600px; object-fit: contain; background: white;
+  }
+
+  label { display: block; font-size: 11px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 6px; }
+  textarea {
+    width: 100%; min-height: 60px;
+    border: none; outline: none; resize: vertical;
+    font-family: inherit; font-size: 13px;
+    color: var(--text); background: var(--bg);
+    padding: 10px 14px; border-radius: 10px;
+    box-shadow: var(--neu-inset-sm); margin-bottom: 12px;
+    line-height: 1.5;
+  }
+
+  .controls { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+  button {
+    border: none; cursor: pointer;
+    background: var(--bg); color: var(--text);
+    font-family: inherit; font-size: 13px; font-weight: 600;
+    padding: 8px 16px; border-radius: 10px;
+    box-shadow: var(--neu-raised-sm);
+  }
+  button:hover:not(:disabled) { color: var(--accent); }
+  button:active:not(:disabled) { box-shadow: var(--neu-inset-xs); }
+  button:disabled { opacity: 0.5; cursor: not-allowed; }
+  .status { font-size: 12px; color: var(--text-muted); margin-left: 6px; }
+  .status .dot { display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: var(--accent); margin-right: 6px; animation: pulse 1.2s infinite; vertical-align: middle; }
+  @keyframes pulse { 0%,100% { opacity: 0.4; } 50% { opacity: 1; } }
+
+  .extracted {
+    background: var(--bg);
+    border-radius: 12px;
+    box-shadow: var(--neu-inset-sm);
+    padding: 16px;
+    font-size: 14px;
+    color: var(--text);
+    white-space: pre-wrap; word-wrap: break-word;
+    min-height: 300px; max-height: 600px;
+    overflow-y: auto;
+    line-height: 1.6;
+  }
+  .extracted.empty { color: var(--text-faint); font-style: italic; }
+
+  .back-link { display: inline-block; margin-top: 32px; font-size: 12px; color: var(--text-muted); text-decoration: none; }
+  .back-link:hover { color: var(--text); }
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <header>
+    <span class="logo-mark"><span class="q">Q</span><span class="dot"></span></span>
+    <h1>Doc Reader</h1>
+    <span class="tagline">Drop a document. Q reads everything off it.</span>
+  </header>
+
+  <div class="columns">
+
+    <!-- Left: input -->
+    <div class="card">
+      <input type="file" id="file-input" accept="image/*" style="display:none">
+      <div class="drop-zone" id="drop-zone">
+        <span class="icon">⬆</span>
+        <div>Click, drag-drop, or paste a document image</div>
+        <div class="hint">PNG, JPG, screenshot of a PDF page. One page at a time for now.</div>
+      </div>
+
+      <div class="preview" id="preview">
+        <img id="image" alt="Uploaded document">
+      </div>
+
+      <label for="custom-question" style="margin-top: 14px;">Optional — ask Q something specific instead of a full extract</label>
+      <textarea id="custom-question" placeholder="Leave blank for full text extraction. Or ask: &quot;What's the gas cert serial number?&quot; / &quot;Who signed it and when?&quot;"></textarea>
+
+      <div class="controls">
+        <button id="extract" disabled>Read it</button>
+        <button id="reset" disabled>Reset</button>
+        <span class="status" id="status"></span>
+      </div>
+    </div>
+
+    <!-- Right: extracted content -->
+    <div class="card">
+      <label>Extracted</label>
+      <div class="extracted empty" id="extracted">Q's reading will appear here.</div>
+      <div class="controls" style="margin-top: 12px;">
+        <button id="copy" disabled>Copy text</button>
+        <button id="download" disabled>Download .txt</button>
+      </div>
+    </div>
+
+  </div>
+
+  <a href="/chat" class="back-link">← back to Q's chat</a>
+</div>
+
+<script>
+const $fileInput = document.getElementById('file-input');
+const $dropZone = document.getElementById('drop-zone');
+const $preview = document.getElementById('preview');
+const $image = document.getElementById('image');
+const $customQuestion = document.getElementById('custom-question');
+const $extract = document.getElementById('extract');
+const $reset = document.getElementById('reset');
+const $status = document.getElementById('status');
+const $extracted = document.getElementById('extracted');
+const $copy = document.getElementById('copy');
+const $download = document.getElementById('download');
+
+let imageDataUrl = null;
+let extractedText = '';
+let originalFileName = 'document';
+let elapsedTimer = null;
+
+$dropZone.addEventListener('click', () => $fileInput.click());
+$fileInput.addEventListener('change', () => {
+  if ($fileInput.files && $fileInput.files[0]) loadFile($fileInput.files[0]);
+});
+
+['dragenter', 'dragover'].forEach(ev => {
+  $dropZone.addEventListener(ev, e => { e.preventDefault(); $dropZone.classList.add('dragover'); });
+});
+['dragleave', 'drop'].forEach(ev => {
+  $dropZone.addEventListener(ev, e => { e.preventDefault(); $dropZone.classList.remove('dragover'); });
+});
+$dropZone.addEventListener('drop', e => {
+  const f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+  if (f) loadFile(f);
+});
+
+window.addEventListener('paste', e => {
+  if (!e.clipboardData) return;
+  for (const item of e.clipboardData.items) {
+    if (item.kind === 'file') {
+      const f = item.getAsFile();
+      if (f && f.type && f.type.startsWith('image/')) { loadFile(f); break; }
+    }
+  }
+});
+
+function loadFile(file) {
+  if (!file.type || !file.type.startsWith('image/')) {
+    alert('Need an image file (PNG, JPG, etc.). PDFs need to be screenshotted for now.');
+    return;
+  }
+  originalFileName = (file.name || 'document').replace(/\.[^.]+$/, '');
+  const reader = new FileReader();
+  reader.onload = () => {
+    imageDataUrl = String(reader.result || '');
+    $image.src = imageDataUrl;
+    $preview.classList.add('show');
+    $dropZone.style.display = 'none';
+    $extract.disabled = false;
+    $reset.disabled = false;
+  };
+  reader.readAsDataURL(file);
+}
+
+$extract.addEventListener('click', async () => {
+  if (!imageDataUrl) return;
+  $extract.disabled = true;
+  $extracted.classList.add('empty');
+  $extracted.textContent = '…';
+  const start = Date.now();
+  elapsedTimer = setInterval(() => {
+    const sec = ((Date.now() - start) / 1000).toFixed(1);
+    $status.innerHTML = '<span class="dot"></span>Q is reading… ' + sec + 's';
+  }, 100);
+
+  try {
+    const body = { imageDataUrl };
+    const q = $customQuestion.value.trim();
+    if (q) body.question = q;
+    const res = await fetch('/doc-reader/extract', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    const data = await res.json();
+    clearInterval(elapsedTimer); elapsedTimer = null;
+    $status.textContent = '';
+    if (data.error) {
+      $extracted.textContent = 'Error: ' + data.error;
+      $extracted.classList.add('empty');
+    } else {
+      extractedText = data.answer || data.summary || data.raw_response || '(Q returned nothing)';
+      $extracted.textContent = extractedText;
+      $extracted.classList.remove('empty');
+      $copy.disabled = false;
+      $download.disabled = false;
+    }
+  } catch (e) {
+    clearInterval(elapsedTimer); elapsedTimer = null;
+    $status.textContent = 'Network error: ' + e.message;
+    $extracted.textContent = 'Network error: ' + e.message;
+  } finally {
+    $extract.disabled = false;
+  }
+});
+
+$reset.addEventListener('click', () => {
+  imageDataUrl = null;
+  extractedText = '';
+  $image.removeAttribute('src');
+  $preview.classList.remove('show');
+  $dropZone.style.display = '';
+  $extracted.textContent = "Q's reading will appear here.";
+  $extracted.classList.add('empty');
+  $extract.disabled = true;
+  $reset.disabled = true;
+  $copy.disabled = true;
+  $download.disabled = true;
+  $customQuestion.value = '';
+  $fileInput.value = '';
+});
+
+$copy.addEventListener('click', async () => {
+  if (!extractedText) return;
+  try {
+    await navigator.clipboard.writeText(extractedText);
+    $copy.textContent = 'Copied ✓';
+    setTimeout(() => { $copy.textContent = 'Copy text'; }, 2000);
+  } catch (e) {
+    alert('Could not copy: ' + e.message);
+  }
+});
+
+$download.addEventListener('click', () => {
+  if (!extractedText) return;
+  const blob = new Blob([extractedText], { type: 'text/plain' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = originalFileName + '.txt';
+  document.body.appendChild(a); a.click();
+  setTimeout(() => { document.body.removeChild(a); URL.revokeObjectURL(url); }, 100);
+});
+</script>
+
+<script src="/trace-widget.js"></script>
+</body>
+</html>

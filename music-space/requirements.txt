@@ -1,0 +1,12 @@
+torch>=2.4.0
+torchaudio>=2.4.0
+transformers>=4.46.0
+accelerate>=1.0.0
+diffusers>=0.31.0
+# ACE-Step isn't on PyPI yet — install from the official GitHub repo.
+git+https://github.com/ace-step/ACE-Step.git
+gradio>=5.0.0
+spaces>=0.30.0
+scipy
+numpy
+audioop-lts; python_version >= "3.13"

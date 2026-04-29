@@ -1,0 +1,1457 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <script src="/q-auth.js"></script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Q — Quotem's own AI</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    /* Matched to Quotem's WHITE/Office theme (Pink Office palette).
+       BG=#e8e8e8 | text=#1a1a1a | dark shadow=#ababab | light shadow=#ffffff */
+    --bg: #e8e8e8;
+    --text: #1a1a1a;
+    --text-muted: rgba(0,0,0,0.42);
+    --text-faint: rgba(0,0,0,0.26);
+    --shadow-light: #ffffff;
+    --shadow-dark: #ababab;
+    --accent: #e91e63;
+    --accent-soft: rgba(233, 30, 99, 0.15);
+    /* Office-exact neumorphic shadows */
+    --neu-raised:    10px 10px 28px #ababab, -8px -8px 20px #ffffff, inset 0 1px 0 rgba(255,255,255,0.5);
+    --neu-raised-sm: 6px 6px 16px #ababab, -5px -5px 12px #ffffff;
+    --neu-inset:     inset 5px 5px 14px #ababab, inset -4px -4px 10px #ffffff;
+    --neu-inset-sm:  inset 3px 3px 8px #ababab, inset -2px -2px 6px #ffffff;
+    --neu-inset-xs:  inset 3px 3px 8px #ababab, inset -2px -2px 6px #ffffff;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; overflow: hidden; }
+  body {
+    font-family: 'Space Grotesk', -apple-system, BlinkMacSystemFont, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    font-size: 16px;
+    line-height: 1.6;
+    font-feature-settings: 'kern' on, 'liga' on, 'ss01' on;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+  }
+
+  header {
+    padding: 18px 28px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: var(--bg);
+    z-index: 10;
+    flex-shrink: 0;
+  }
+  .logo { display: flex; align-items: center; gap: 14px; }
+  .logo-mark { display: inline-flex; align-items: baseline; }
+  .logo-mark .q {
+    font-size: 28px; font-weight: 700; line-height: 1; letter-spacing: -0.05em;
+    color: var(--text);
+    text-shadow: 1px 1px 1px var(--shadow-light), -1px -1px 1px rgba(0,0,0,0.04);
+  }
+  .logo-mark .dot { width: 8px; height: 8px; background: var(--accent); border-radius: 50%; display: inline-block; margin-left: 4px; align-self: flex-end; margin-bottom: 4px; box-shadow: 0 1px 2px rgba(233,30,99,0.3); }
+  .logo-tagline { font-size: 13px; color: var(--text-muted); font-weight: 400; padding-left: 14px; border-left: 1px solid var(--shadow-dark); margin-left: 2px; }
+
+  .header-right { display: flex; align-items: center; gap: 8px; }
+  .icon-btn {
+    width: 38px; height: 38px;
+    background: var(--bg);
+    border: none;
+    border-radius: 12px;
+    cursor: pointer;
+    color: var(--text-muted);
+    display: inline-flex; align-items: center; justify-content: center;
+    transition: all 0.15s ease;
+    font-family: inherit;
+    box-shadow: var(--neu-raised-sm);
+  }
+  .icon-btn:hover { color: var(--text); }
+  .icon-btn:active { box-shadow: var(--neu-inset-xs); }
+  .icon-btn.on { color: var(--accent); box-shadow: var(--neu-inset-xs); }
+  .icon-btn svg { width: 16px; height: 16px; }
+
+  /* Thinking-level segmented picker — Quick / Think / Deep */
+  .thinking-picker {
+    display: inline-flex;
+    background: var(--bg);
+    border-radius: 12px;
+    padding: 4px;
+    box-shadow: var(--neu-inset-xs);
+    gap: 2px;
+  }
+  .think-btn {
+    border: none;
+    background: transparent;
+    color: var(--text-muted);
+    font-family: inherit;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    padding: 6px 10px;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+  }
+  .think-btn:hover { color: var(--text); }
+  .think-btn.on {
+    color: var(--accent);
+    background: var(--bg);
+    box-shadow: var(--neu-raised-sm);
+  }
+  .status { display: inline-flex; align-items: center; gap: 8px; font-size: 12px; color: var(--text-muted); font-weight: 500; padding: 0 14px; }
+  .status-dot { width: 7px; height: 7px; background: #10b981; border-radius: 50%; box-shadow: 0 0 0 3px rgba(16,185,129,0.18); animation: pulse 2s infinite; }
+  @keyframes pulse { 0%,100% { box-shadow: 0 0 0 3px rgba(16,185,129,0.18); } 50% { box-shadow: 0 0 0 5px rgba(16,185,129,0.08); } }
+
+  main {
+    flex: 1;
+    overflow-y: auto;
+    padding: 24px 28px 200px;
+    scroll-behavior: smooth;
+  }
+  main::-webkit-scrollbar { width: 8px; }
+  main::-webkit-scrollbar-track { background: transparent; }
+  main::-webkit-scrollbar-thumb { background: var(--shadow-dark); border-radius: 8px; }
+
+  .conversation { max-width: 720px; margin: 0 auto; }
+
+  /* EMPTY STATE — standard raised card */
+  .empty-state {
+    text-align: center;
+    padding: 48px 32px 40px;
+    background: var(--bg);
+    border-radius: 28px;
+    box-shadow: var(--neu-raised);
+    margin: 24px auto;
+    max-width: 640px;
+    animation: fadeIn 0.4s ease;
+  }
+  /* Logo — no plate, just the bold Q. floating */
+  .logo-plate {
+    display: inline-flex;
+    align-items: baseline;
+    margin-bottom: 28px;
+  }
+  .logo-plate .q-letter {
+    font-size: 96px;
+    font-weight: 700;
+    line-height: 1;
+    letter-spacing: -0.06em;
+    color: var(--text);
+  }
+  .logo-plate .dot {
+    width: 18px; height: 18px;
+    background: var(--accent);
+    border-radius: 50%;
+    margin-left: 10px;
+    align-self: flex-end;
+    margin-bottom: 14px;
+    box-shadow:
+      0 2px 4px rgba(233,30,99,0.35),
+      inset 1px 1px 2px rgba(255,255,255,0.4);
+  }
+  .empty-state h2 { font-size: 28px; font-weight: 600; letter-spacing: -0.02em; margin-bottom: 10px; color: var(--text); }
+  .empty-state .intro { font-size: 15px; color: var(--text-muted); max-width: 440px; margin: 0 auto; line-height: 1.55; }
+
+  /* MESSAGES — engraved into surface */
+  .message { display: flex; gap: 14px; margin-bottom: 24px; animation: messageIn 0.3s ease; }
+  @keyframes messageIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+  @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+  .message.user { justify-content: flex-end; }
+
+  .avatar {
+    width: 38px; height: 38px;
+    border-radius: 12px;
+    background: var(--bg);
+    display: inline-flex; align-items: center; justify-content: center;
+    flex-shrink: 0; position: relative;
+    font-weight: 700; font-size: 16px; letter-spacing: -0.04em;
+    color: var(--text);
+    box-shadow: var(--neu-inset-sm);
+  }
+  .avatar.q::after {
+    content: ''; position: absolute;
+    bottom: 7px; right: 6px;
+    width: 5px; height: 5px;
+    background: var(--accent); border-radius: 50%;
+    box-shadow: 0 1px 2px rgba(233,30,99,0.3);
+  }
+  .avatar.you {
+    font-size: 11px; font-weight: 600; letter-spacing: 0.03em;
+    color: var(--text-muted);
+  }
+
+  .message-content { flex: 1; min-width: 0; max-width: calc(100% - 52px); }
+  .message.user .message-content { max-width: 78%; }
+
+  .message-meta { font-size: 11px; color: var(--text-faint); margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.08em; font-weight: 600; }
+  .message.user .message-meta { text-align: right; }
+
+  .message-body {
+    font-size: 15px; line-height: 1.65;
+    color: var(--text);
+    white-space: pre-wrap; word-wrap: break-word;
+    background: var(--bg);
+    padding: 16px 20px;
+    border-radius: 16px;
+    box-shadow: var(--neu-inset-sm);
+  }
+  .message.user .message-body {
+    border-top-right-radius: 4px;
+  }
+  .message.q .message-body {
+    border-top-left-radius: 4px;
+  }
+
+  .typing { display: inline-flex; gap: 5px; padding: 4px 0; }
+  .typing span { width: 7px; height: 7px; background: var(--text-faint); border-radius: 50%; animation: bounce 1.3s infinite ease-in-out; }
+  .typing span:nth-child(2) { animation-delay: 0.15s; }
+  .typing span:nth-child(3) { animation-delay: 0.3s; }
+  @keyframes bounce { 0%,60%,100% { transform: translateY(0); opacity: 0.4; } 30% { transform: translateY(-5px); opacity: 1; } }
+
+  /* INPUT BAR — inset well with raised buttons */
+  footer {
+    position: fixed; bottom: 120px; left: 0; right: 0;
+    padding: 18px 28px 18px;
+    background: linear-gradient(to top, var(--bg) 60%, rgba(232,232,232,0.92) 85%, transparent);
+    pointer-events: none;
+  }
+  /* Add clear breathing room above the input bar so it doesn't crowd the card */
+  main { padding-bottom: 240px; }
+  .input-wrapper {
+    max-width: 720px; margin: 0 auto;
+    background: var(--bg);
+    border-radius: 20px;
+    padding: 14px 14px 14px 22px;
+    display: flex; gap: 10px; align-items: flex-end;
+    box-shadow: var(--neu-inset);
+    pointer-events: auto;
+  }
+  textarea {
+    flex: 1;
+    border: none; outline: none; resize: none;
+    font-family: inherit; font-size: 15px;
+    color: var(--text); background: transparent;
+    line-height: 1.5;
+    max-height: 200px; min-height: 24px;
+    padding: 7px 0;
+  }
+  textarea::placeholder { color: var(--text-faint); }
+
+  .input-btn {
+    width: 38px; height: 38px;
+    border: none;
+    background: var(--bg);
+    color: var(--text);
+    border-radius: 12px;
+    cursor: pointer;
+    display: inline-flex; align-items: center; justify-content: center;
+    transition: all 0.15s ease;
+    flex-shrink: 0;
+    font-family: inherit;
+    box-shadow: var(--neu-raised-sm);
+  }
+  .input-btn svg { width: 16px; height: 16px; }
+  .input-btn:hover:not(:disabled) { color: var(--accent); }
+  .input-btn:active:not(:disabled) { box-shadow: var(--neu-inset-xs); }
+  .input-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+  .mic-btn.listening {
+    color: white; background: var(--accent);
+    animation: micPulse 1.4s infinite;
+  }
+  .mic-btn.processing {
+    color: white; background: #f59e0b;
+    animation: processPulse 1.0s infinite;
+  }
+  @keyframes micPulse { 0%,100% { box-shadow: var(--neu-raised-sm), 0 0 0 0 rgba(233,30,99,0.5); } 50% { box-shadow: var(--neu-raised-sm), 0 0 0 8px rgba(233,30,99,0); } }
+  @keyframes processPulse { 0%,100% { box-shadow: var(--neu-raised-sm), 0 0 0 0 rgba(245,158,11,0.5); } 50% { box-shadow: var(--neu-raised-sm), 0 0 0 8px rgba(245,158,11,0); } }
+
+  .voice-status {
+    display: inline-flex; align-items: center; gap: 6px;
+    font-size: 11px; color: var(--text-faint);
+    padding: 0 12px; opacity: 0; transition: opacity 0.2s ease;
+    pointer-events: none;
+  }
+  .voice-status.show { opacity: 1; }
+  .voice-status .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); animation: voicePulse 1.2s infinite; }
+  @keyframes voicePulse { 0%,100% { opacity: 0.4; } 50% { opacity: 1; } }
+
+  /* Voices manager popover — opens from the speaker button. */
+  .voice-wrap { position: relative; display: inline-block; }
+  .voice-toggle-dot {
+    position: absolute; top: 6px; right: 6px;
+    width: 6px; height: 6px; border-radius: 50%;
+    background: var(--accent);
+    box-shadow: 0 1px 2px rgba(233,30,99,0.4);
+    display: none;
+  }
+  .voice-toggle-dot.show { display: block; }
+
+  .voices-panel {
+    position: absolute; top: calc(100% + 8px); right: 0;
+    width: 260px;
+    background: var(--bg);
+    border-radius: 16px;
+    box-shadow: var(--neu-raised);
+    padding: 12px;
+    z-index: 100;
+    display: none;
+    animation: panelIn 0.18s ease;
+  }
+  .voices-panel.show { display: block; }
+  @keyframes panelIn { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: translateY(0); } }
+
+  .voices-panel h3 {
+    font-size: 11px; font-weight: 600;
+    color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.08em;
+    padding: 4px 8px 8px;
+  }
+  .voice-row {
+    display: flex; align-items: center; gap: 8px;
+    padding: 8px 10px;
+    background: var(--bg);
+    border-radius: 10px;
+    cursor: pointer;
+    margin-bottom: 4px;
+    font-size: 13px;
+    color: var(--text);
+    transition: all 0.12s ease;
+  }
+  .voice-row:hover { box-shadow: var(--neu-inset-xs); }
+  .voice-row.selected { box-shadow: var(--neu-inset-xs); color: var(--accent); }
+  .voice-row .voice-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .voice-row .voice-del {
+    width: 22px; height: 22px;
+    border: none; background: transparent;
+    color: var(--text-faint); cursor: pointer;
+    border-radius: 6px;
+    display: inline-flex; align-items: center; justify-content: center;
+    font-size: 14px; line-height: 1;
+    opacity: 0; transition: opacity 0.12s ease, color 0.12s ease;
+  }
+  .voice-row:hover .voice-del { opacity: 1; }
+  .voice-row .voice-del:hover { color: #ef4444; }
+
+  .voices-divider { height: 1px; background: var(--shadow-dark); opacity: 0.4; margin: 8px 0; }
+
+  .add-voice-row {
+    display: flex; align-items: center; gap: 8px;
+    padding: 8px 10px; cursor: pointer;
+    color: var(--accent);
+    font-size: 12px; font-weight: 600;
+    border-radius: 10px;
+  }
+  .add-voice-row:hover { box-shadow: var(--neu-inset-xs); }
+
+  .add-voice-form {
+    display: none;
+    padding: 8px;
+    background: var(--bg);
+    border-radius: 10px;
+    box-shadow: var(--neu-inset-xs);
+  }
+  .add-voice-form.show { display: block; }
+  .add-voice-form input[type="text"] {
+    width: 100%;
+    border: none; outline: none;
+    background: var(--bg);
+    color: var(--text);
+    font-family: inherit; font-size: 13px;
+    padding: 8px 10px;
+    border-radius: 8px;
+    box-shadow: var(--neu-inset-xs);
+    margin-bottom: 8px;
+  }
+  .add-voice-actions { display: flex; gap: 6px; align-items: center; }
+  .add-voice-actions button {
+    flex: 1;
+    padding: 8px 10px;
+    border: none; cursor: pointer;
+    background: var(--bg); color: var(--text);
+    border-radius: 8px;
+    font-family: inherit; font-size: 12px; font-weight: 600;
+    box-shadow: var(--neu-raised-sm);
+    transition: all 0.12s ease;
+  }
+  .add-voice-actions button:active { box-shadow: var(--neu-inset-xs); }
+  .add-voice-actions button.recording { color: white; background: var(--accent); animation: micPulse 1.4s infinite; }
+  .add-voice-actions button:disabled { opacity: 0.45; cursor: not-allowed; }
+  .add-voice-hint { font-size: 10px; color: var(--text-faint); margin-top: 6px; text-align: center; }
+
+  /* Image attachments — paste, drag-drop, or click attach. */
+  .attach-btn { /* same shape as input-btn but in the input wrapper */ }
+  .image-attachments {
+    display: none;
+    flex-wrap: wrap; gap: 8px;
+    max-width: 720px;
+    margin: 0 auto 8px;
+    padding: 8px 12px;
+    background: var(--bg);
+    border-radius: 12px;
+    box-shadow: var(--neu-inset-xs);
+  }
+  .image-attachments.show { display: flex; }
+  .image-attachment {
+    position: relative;
+    width: 64px; height: 64px;
+    border-radius: 8px;
+    background: var(--bg);
+    box-shadow: var(--neu-raised-sm);
+    overflow: hidden;
+  }
+  .image-attachment img {
+    width: 100%; height: 100%;
+    object-fit: cover;
+    display: block;
+  }
+  .image-attachment .remove {
+    position: absolute; top: 2px; right: 2px;
+    width: 18px; height: 18px;
+    border: none;
+    background: rgba(0,0,0,0.6); color: white;
+    border-radius: 50%; cursor: pointer;
+    font-size: 11px; line-height: 1;
+    display: inline-flex; align-items: center; justify-content: center;
+  }
+  .image-attachment .remove:hover { background: #ef4444; }
+
+  /* Inline images inside message bubbles. */
+  .message-images {
+    display: flex; flex-wrap: wrap; gap: 6px;
+    margin-bottom: 8px;
+  }
+  .message-images img {
+    max-width: 240px; max-height: 240px;
+    border-radius: 12px;
+    box-shadow: var(--neu-raised-sm);
+    display: block;
+  }
+
+  /* Verifier badge under Q's messages. */
+  .verifier-badge {
+    display: inline-flex; align-items: center; gap: 6px;
+    margin-top: 8px; margin-right: 6px;
+    padding: 4px 10px;
+    border-radius: 999px;
+    background: var(--bg);
+    box-shadow: var(--neu-raised-sm);
+    font-size: 11px; font-weight: 500; letter-spacing: 0.02em;
+    font-family: inherit;
+    color: var(--text-muted);
+    border: none;
+    cursor: pointer;
+  }
+  .verifier-badge.pass { color: #10b981; }
+  .verifier-badge.fixed { color: var(--accent); }
+  .verifier-badge:hover { color: var(--text); }
+  .verifier-badge:active { box-shadow: var(--neu-inset-xs); }
+  .verifier-issues {
+    margin-top: 8px;
+    padding: 10px 12px;
+    background: var(--bg);
+    border-radius: 10px;
+    box-shadow: var(--neu-inset-xs);
+    font-size: 11px;
+    color: var(--text-muted);
+    display: none;
+  }
+  .verifier-issues.show { display: block; }
+  .verifier-issues ul { margin: 0; padding-left: 18px; }
+  .verifier-issues li { margin-bottom: 4px; }
+
+  /* Tool-call transcript under Q's messages. */
+  .tool-calls {
+    margin-top: 8px;
+    font-size: 11px;
+  }
+  .tool-calls-toggle {
+    background: var(--bg);
+    border: none;
+    box-shadow: var(--neu-raised-sm);
+    color: var(--text-muted);
+    padding: 4px 10px;
+    border-radius: 999px;
+    cursor: pointer;
+    font-family: inherit;
+    font-size: 11px;
+    font-weight: 500;
+    letter-spacing: 0.02em;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .tool-calls-toggle:hover { color: var(--text); }
+  .tool-calls-toggle:active { box-shadow: var(--neu-inset-xs); }
+  .tool-calls-detail {
+    margin-top: 8px;
+    padding: 10px 12px;
+    background: var(--bg);
+    border-radius: 10px;
+    box-shadow: var(--neu-inset-xs);
+    display: none;
+  }
+  .tool-calls-detail.show { display: block; }
+  .tool-call {
+    padding: 6px 0;
+    border-bottom: 1px solid var(--shadow-dark);
+  }
+  .tool-call:last-child { border-bottom: none; }
+  .tool-call .tc-head {
+    font-family: ui-monospace, 'SF Mono', monospace;
+    font-size: 11px;
+    color: var(--accent);
+    margin-bottom: 4px;
+    word-break: break-all;
+  }
+  .tool-call .tc-result {
+    font-family: ui-monospace, 'SF Mono', monospace;
+    font-size: 11px;
+    color: var(--text-muted);
+    white-space: pre-wrap;
+    word-break: break-all;
+    max-height: 120px;
+    overflow-y: auto;
+  }
+
+  /* Drop overlay — appears on drag-over. */
+  .drop-overlay {
+    position: fixed; inset: 0;
+    background: rgba(232,232,232,0.85);
+    backdrop-filter: blur(4px);
+    z-index: 200;
+    display: none;
+    align-items: center; justify-content: center;
+    pointer-events: none;
+    color: var(--text);
+    font-size: 18px; font-weight: 600;
+    border: 4px dashed var(--accent);
+  }
+  .drop-overlay.show { display: flex; }
+
+  .input-hint {
+    max-width: 720px; margin: 12px auto 0;
+    font-size: 11px; color: var(--text-faint);
+    text-align: center; letter-spacing: 0.01em;
+  }
+  .input-hint b { color: var(--text-muted); font-weight: 600; }
+  .input-hint .sep { margin: 0 8px; color: var(--shadow-dark); }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">
+    <span class="logo-mark"><span class="q">Q</span><span class="dot"></span></span>
+    <span class="logo-tagline">Quotem's own AI</span>
+  </div>
+  <div class="header-right">
+    <div class="thinking-picker" role="group" aria-label="Thinking depth">
+      <button class="think-btn" data-effort="off" title="Quick — no thinking step (fastest)">Quick</button>
+      <button class="think-btn" data-effort="high" title="Think — Q reasons before answering">Think</button>
+      <button class="think-btn" data-effort="max" title="Deep — Q's heaviest reasoning mode (slower)">Deep</button>
+    </div>
+    <div class="thinking-picker" role="group" aria-label="Verifier" style="margin-left:6px">
+      <button class="think-btn" id="check-btn" title="Check — Q reviews his own reply before sending (slower, catches mistakes)">Check</button>
+    </div>
+    <span class="status"><span class="status-dot"></span>Online</span>
+    <div class="voice-wrap">
+      <button class="icon-btn" id="voice-toggle" aria-label="Voice settings" title="Voice settings — pick how Q sounds">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><path d="M15.54 8.46a5 5 0 0 1 0 7.07"></path><path d="M19.07 4.93a10 10 0 0 1 0 14.14"></path></svg>
+        <span class="voice-toggle-dot" id="voice-toggle-dot" title="A cloned voice is selected"></span>
+      </button>
+      <div class="voices-panel" id="voices-panel" role="menu" aria-label="Voices">
+        <h3>Voice</h3>
+        <div class="voice-row" data-voice="off"><span class="voice-name">Off</span></div>
+        <div class="voice-row" data-voice="default"><span class="voice-name">Q's default voice</span></div>
+        <div id="voices-list"></div>
+        <div class="voices-divider"></div>
+        <div class="add-voice-row" id="add-voice-show">+ Add a voice</div>
+        <div class="add-voice-form" id="add-voice-form">
+          <input type="text" id="add-voice-name" placeholder="Name (e.g. Nan, Adam)" maxlength="30">
+          <div class="add-voice-actions">
+            <button id="add-voice-record">● Record</button>
+            <button id="add-voice-save" disabled>Save</button>
+            <button id="add-voice-cancel">Cancel</button>
+          </div>
+          <div class="add-voice-hint">Record 5–15 seconds of clear speech.</div>
+        </div>
+      </div>
+    </div>
+    <button class="icon-btn" id="clear" aria-label="Clear conversation" title="Clear conversation">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6l-2 14a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2L5 6"></path><path d="M10 11v6"></path><path d="M14 11v6"></path></svg>
+    </button>
+  </div>
+</header>
+
+<main>
+  <div class="conversation" id="conversation">
+    <div class="empty-state" id="empty">
+      <div class="logo-plate">
+        <span class="q-letter">Q</span><span class="dot"></span>
+      </div>
+      <h2>Hi Sarah.</h2>
+      <p class="intro">I'm Q. Type or hit the mic to speak.</p>
+    </div>
+  </div>
+</main>
+
+<footer>
+  <div class="image-attachments" id="image-attachments"></div>
+  <input type="file" id="attach-file-input" accept="image/*" multiple style="display:none">
+  <div class="input-wrapper">
+    <textarea id="input" rows="1" placeholder="Message Q, paste or drop an image, or click the mic..." autofocus></textarea>
+    <span class="voice-status" id="voice-status"><span class="dot"></span><span id="voice-status-text"></span></span>
+    <button class="input-btn" id="attach" aria-label="Attach image" title="Attach image (or paste / drag-drop)">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"></path></svg>
+    </button>
+    <button class="input-btn mic-btn" id="mic" aria-label="Speak to Q" title="Click to record. Click again to send.">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path><path d="M19 10v2a7 7 0 0 1-14 0v-2"></path><line x1="12" y1="19" x2="12" y2="23"></line><line x1="8" y1="23" x2="16" y2="23"></line></svg>
+    </button>
+    <button class="input-btn send-btn" id="send" aria-label="Send">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
+    </button>
+  </div>
+  <div class="input-hint">
+    <b>Q</b> runs on DeepSeek V4 Pro via Together
+    <span class="sep">·</span>
+    Voice runs in your browser (Kokoro + Whisper)
+    <span class="sep">·</span>
+    Conversation stays in your browser
+  </div>
+</footer>
+
+<div class="drop-overlay" id="drop-overlay">Drop image to attach</div>
+
+<script>
+const $conversation = document.getElementById('conversation');
+const $input = document.getElementById('input');
+const $send = document.getElementById('send');
+const $mic = document.getElementById('mic');
+const $voiceToggle = document.getElementById('voice-toggle');
+const $empty = document.getElementById('empty');
+const $clear = document.getElementById('clear');
+const VOICE_KEY = 'q-voice-out-v1';        // legacy boolean (migrated below)
+const VOICE_MODE_KEY = 'q-voice-mode-v1';  // 'off' | 'default' | 'cloned:{id}'
+const THINK_KEY = 'q-thinking-level-v1';
+
+// Migrate legacy boolean → new mode string on first load.
+let voiceMode = localStorage.getItem(VOICE_MODE_KEY);
+if (!voiceMode) {
+  voiceMode = (localStorage.getItem(VOICE_KEY) === 'true') ? 'default' : 'off';
+  localStorage.setItem(VOICE_MODE_KEY, voiceMode);
+}
+const isVoiceOn = () => voiceMode !== 'off';
+const $voiceDot = document.getElementById('voice-toggle-dot');
+function refreshVoiceToggleVisual() {
+  $voiceToggle.classList.toggle('on', voiceMode !== 'off');
+  $voiceDot.classList.toggle('show', voiceMode.startsWith('cloned:'));
+}
+refreshVoiceToggleVisual();
+
+// ─── IndexedDB store for cloned-voice reference clips ─────────────────────
+// Voices are stored locally in the browser. Audio blobs never leave Sarah's
+// machine except as part of a /speak-as-voice call.
+const VOICES_DB_NAME = 'q-voices-db';
+const VOICES_STORE = 'voices';
+
+function openVoicesDB() {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open(VOICES_DB_NAME, 1);
+    req.addEventListener('upgradeneeded', () => {
+      const db = req.result;
+      if (!db.objectStoreNames.contains(VOICES_STORE)) {
+        db.createObjectStore(VOICES_STORE, { keyPath: 'id' });
+      }
+    });
+    req.addEventListener('success', () => resolve(req.result));
+    req.addEventListener('error', () => reject(req.error));
+  });
+}
+
+async function listVoices() {
+  const db = await openVoicesDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(VOICES_STORE, 'readonly');
+    const store = tx.objectStore(VOICES_STORE);
+    const req = store.getAll();
+    req.addEventListener('success', () => resolve(req.result || []));
+    req.addEventListener('error', () => reject(req.error));
+  });
+}
+
+async function getVoice(id) {
+  const db = await openVoicesDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(VOICES_STORE, 'readonly');
+    const store = tx.objectStore(VOICES_STORE);
+    const req = store.get(id);
+    req.addEventListener('success', () => resolve(req.result || null));
+    req.addEventListener('error', () => reject(req.error));
+  });
+}
+
+async function saveVoice(voice) {
+  const db = await openVoicesDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(VOICES_STORE, 'readwrite');
+    const store = tx.objectStore(VOICES_STORE);
+    const req = store.put(voice);
+    req.addEventListener('success', () => resolve());
+    req.addEventListener('error', () => reject(req.error));
+  });
+}
+
+async function deleteVoice(id) {
+  const db = await openVoicesDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(VOICES_STORE, 'readwrite');
+    const store = tx.objectStore(VOICES_STORE);
+    const req = store.delete(id);
+    req.addEventListener('success', () => resolve());
+    req.addEventListener('error', () => reject(req.error));
+  });
+}
+
+function blobToBase64(blob) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      // strip "data:.../...;base64," prefix
+      const result = String(reader.result || '');
+      const comma = result.indexOf(',');
+      resolve(comma >= 0 ? result.substring(comma + 1) : result);
+    };
+    reader.onerror = () => reject(reader.error);
+    reader.readAsDataURL(blob);
+  });
+}
+
+// Thinking-level picker — Quick / Think / Deep maps to undefined / 'high' / 'max'
+const $thinkBtns = document.querySelectorAll('.think-btn');
+let thinkingLevel = localStorage.getItem(THINK_KEY) || 'off';
+function setThinkingLevel(level) {
+  thinkingLevel = (level === 'high' || level === 'max') ? level : 'off';
+  localStorage.setItem(THINK_KEY, thinkingLevel);
+  $thinkBtns.forEach(b => b.classList.toggle('on', b.dataset.effort === thinkingLevel));
+}
+$thinkBtns.forEach(b => b.addEventListener('click', () => setThinkingLevel(b.dataset.effort)));
+setThinkingLevel(thinkingLevel);
+
+// Verifier toggle (Check) — independent of Quick/Think/Deep
+const VERIFY_KEY = 'q-verify-v1';
+const $checkBtn = document.getElementById('check-btn');
+let verifyOn = localStorage.getItem(VERIFY_KEY) === 'true';
+function setVerify(on) {
+  verifyOn = !!on;
+  localStorage.setItem(VERIFY_KEY, verifyOn ? 'true' : 'false');
+  $checkBtn.classList.toggle('on', verifyOn);
+}
+$checkBtn.addEventListener('click', () => setVerify(!verifyOn));
+setVerify(verifyOn);
+
+// Load conversation history from server memory (persists across devices)
+(async function loadHistory() {
+  try {
+    const res = await fetch('/chat-history');
+    const data = await res.json();
+    const history = Array.isArray(data.messages) ? data.messages : [];
+    if (history.length > 0) {
+      $empty.remove();
+      history.forEach(m => renderMessage(m.role === 'assistant' ? 'q' : 'user', m.content, false));
+      setTimeout(scrollToBottom, 0);
+    }
+  } catch (e) {
+    console.warn('[q/chat] could not load server history:', e.message);
+  }
+})();
+
+$input.addEventListener('input', () => {
+  $input.style.height = 'auto';
+  $input.style.height = Math.min($input.scrollHeight, 200) + 'px';
+});
+
+$input.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); }
+});
+
+$send.addEventListener('click', send);
+
+$clear.addEventListener('click', async () => {
+  if (!confirm('Clear this conversation? It cannot be undone — Q will forget everything you have discussed.')) return;
+  try {
+    await fetch('/chat-history', { method: 'DELETE' });
+  } catch (e) {}
+  if ('speechSynthesis' in window) speechSynthesis.cancel();
+  location.reload();
+});
+
+// ─── VOICES PANEL ─────────────────────────────────────────────────────────
+const $voicesPanel = document.getElementById('voices-panel');
+const $voicesList = document.getElementById('voices-list');
+const $addVoiceShow = document.getElementById('add-voice-show');
+const $addVoiceForm = document.getElementById('add-voice-form');
+const $addVoiceName = document.getElementById('add-voice-name');
+const $addVoiceRecord = document.getElementById('add-voice-record');
+const $addVoiceSave = document.getElementById('add-voice-save');
+const $addVoiceCancel = document.getElementById('add-voice-cancel');
+
+function selectVoice(mode) {
+  voiceMode = mode;
+  localStorage.setItem(VOICE_MODE_KEY, mode);
+  refreshVoiceToggleVisual();
+  // Stop any in-flight playback when switching.
+  if (currentAudio) { try { currentAudio.pause(); } catch (e) {} currentAudio = null; }
+  if ('speechSynthesis' in window) speechSynthesis.cancel();
+  refreshVoicesPanel();
+}
+
+async function refreshVoicesPanel() {
+  // Mark the current selection on the static rows.
+  $voicesPanel.querySelectorAll('.voice-row[data-voice]').forEach(row => {
+    row.classList.toggle('selected', row.dataset.voice === voiceMode);
+  });
+  // Render saved cloned voices.
+  const voices = await listVoices().catch(() => []);
+  $voicesList.innerHTML = '';
+  voices.forEach(v => {
+    const row = document.createElement('div');
+    row.className = 'voice-row' + (voiceMode === 'cloned:' + v.id ? ' selected' : '');
+    row.dataset.voice = 'cloned:' + v.id;
+    row.innerHTML =
+      '<span class="voice-name">' + escapeHtml(v.name) + '</span>' +
+      '<button class="voice-del" data-del="' + v.id + '" title="Delete this voice">×</button>';
+    $voicesList.appendChild(row);
+  });
+}
+
+function openVoicesPanel() { $voicesPanel.classList.add('show'); refreshVoicesPanel(); }
+function closeVoicesPanel() {
+  $voicesPanel.classList.remove('show');
+  hideAddVoiceForm();
+}
+
+$voiceToggle.addEventListener('click', (e) => {
+  e.stopPropagation();
+  if ($voicesPanel.classList.contains('show')) closeVoicesPanel();
+  else openVoicesPanel();
+});
+
+document.addEventListener('click', (e) => {
+  if (!$voicesPanel.contains(e.target) && e.target !== $voiceToggle && !$voiceToggle.contains(e.target)) {
+    closeVoicesPanel();
+  }
+});
+
+// Voice row clicks (Off / Default / saved cloned voices) + delete buttons.
+$voicesPanel.addEventListener('click', async (e) => {
+  const delBtn = e.target.closest('[data-del]');
+  if (delBtn) {
+    e.stopPropagation();
+    const id = delBtn.dataset.del;
+    if (!confirm('Delete this voice? This cannot be undone.')) return;
+    await deleteVoice(id);
+    if (voiceMode === 'cloned:' + id) selectVoice('default');
+    else refreshVoicesPanel();
+    return;
+  }
+  const row = e.target.closest('.voice-row[data-voice]');
+  if (row) selectVoice(row.dataset.voice);
+});
+
+// ─── ADD-VOICE FLOW ───────────────────────────────────────────────────────
+let addRecorder = null;
+let addRecordedChunks = [];
+let addRecordedBlob = null;
+let addRecordedMime = '';
+let addStream = null;
+
+function showAddVoiceForm() {
+  $addVoiceForm.classList.add('show');
+  $addVoiceName.value = '';
+  $addVoiceName.focus();
+  addRecordedBlob = null;
+  addRecordedMime = '';
+  $addVoiceSave.disabled = true;
+  $addVoiceRecord.classList.remove('recording');
+  $addVoiceRecord.textContent = '● Record';
+}
+function hideAddVoiceForm() {
+  $addVoiceForm.classList.remove('show');
+  if (addRecorder && addRecorder.state !== 'inactive') {
+    try { addRecorder.stop(); } catch (e) {}
+  }
+  if (addStream) {
+    addStream.getTracks().forEach(t => t.stop());
+    addStream = null;
+  }
+  addRecordedBlob = null;
+}
+
+$addVoiceShow.addEventListener('click', showAddVoiceForm);
+$addVoiceCancel.addEventListener('click', hideAddVoiceForm);
+
+$addVoiceRecord.addEventListener('click', async () => {
+  if ($addVoiceRecord.classList.contains('recording')) {
+    if (addRecorder && addRecorder.state !== 'inactive') {
+      try { addRecorder.stop(); } catch (e) {}
+    }
+    if (addStream) { addStream.getTracks().forEach(t => t.stop()); addStream = null; }
+    return;
+  }
+  if (!navigator.mediaDevices || !window.MediaRecorder) {
+    alert('Your browser does not support microphone recording.');
+    return;
+  }
+  try {
+    addStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    addRecordedChunks = [];
+    addRecorder = new MediaRecorder(addStream);
+    addRecordedMime = addRecorder.mimeType || 'audio/webm';
+    addRecorder.addEventListener('dataavailable', e => { if (e.data && e.data.size) addRecordedChunks.push(e.data); });
+    addRecorder.addEventListener('stop', () => {
+      $addVoiceRecord.classList.remove('recording');
+      $addVoiceRecord.textContent = '● Record';
+      if (addRecordedChunks.length === 0) return;
+      addRecordedBlob = new Blob(addRecordedChunks, { type: addRecordedMime });
+      $addVoiceSave.disabled = !($addVoiceName.value.trim() && addRecordedBlob);
+    });
+    addRecorder.start();
+    $addVoiceRecord.classList.add('recording');
+    $addVoiceRecord.textContent = '■ Stop';
+  } catch (e) {
+    alert('Microphone unavailable: ' + e.message);
+  }
+});
+
+$addVoiceName.addEventListener('input', () => {
+  $addVoiceSave.disabled = !($addVoiceName.value.trim() && addRecordedBlob);
+});
+
+$addVoiceSave.addEventListener('click', async () => {
+  const name = $addVoiceName.value.trim();
+  if (!name || !addRecordedBlob) return;
+  $addVoiceSave.disabled = true;
+  const id = 'v' + Date.now() + Math.random().toString(36).slice(2, 6);
+  try {
+    await saveVoice({
+      id,
+      name,
+      audioBlob: addRecordedBlob,
+      mimeType: addRecordedMime,
+      createdAt: new Date().toISOString(),
+    });
+    hideAddVoiceForm();
+    selectVoice('cloned:' + id);
+  } catch (e) {
+    alert('Could not save voice: ' + e.message);
+    $addVoiceSave.disabled = false;
+  }
+});
+
+// ─── BROWSER-SIDE VOICE ──────────────────────────────────────────────────
+// Q's voice and ear run locally — Kokoro (TTS) + Whisper (ASR) loaded from
+// CDN as ONNX models. Zero per-call cost, no vendor. First load downloads
+// ~150MB combined; cached in IndexedDB after that. Falls back to native
+// browser speech APIs if loading fails.
+
+const $voiceStatus = document.getElementById('voice-status');
+const $voiceStatusText = document.getElementById('voice-status-text');
+function showVoiceStatus(text) {
+  $voiceStatusText.textContent = text;
+  $voiceStatus.classList.add('show');
+}
+function hideVoiceStatus() {
+  $voiceStatus.classList.remove('show');
+}
+
+// Lazy-load Kokoro TTS the first time we try to speak.
+let kokoroPromise = null;
+function loadKokoro() {
+  if (kokoroPromise) return kokoroPromise;
+  kokoroPromise = (async () => {
+    showVoiceStatus('Loading voice…');
+    try {
+      const { KokoroTTS } = await import('https://cdn.jsdelivr.net/npm/kokoro-js@1.2.1/dist/kokoro.web.js');
+      const useGPU = !!navigator.gpu;
+      const tts = await KokoroTTS.from_pretrained('onnx-community/Kokoro-82M-v1.0-ONNX', {
+        dtype: useGPU ? 'fp32' : 'q8',
+        device: useGPU ? 'webgpu' : 'wasm',
+      });
+      hideVoiceStatus();
+      return tts;
+    } catch (e) {
+      console.warn('[q/voice] Kokoro load failed — falling back to browser TTS:', e);
+      hideVoiceStatus();
+      kokoroPromise = null;
+      return null;
+    }
+  })();
+  return kokoroPromise;
+}
+
+// Native-TTS fallback so voice still works if Kokoro fails to load.
+let cachedNativeVoice = null;
+function pickNativeVoice() {
+  if (!('speechSynthesis' in window)) return null;
+  if (cachedNativeVoice) return cachedNativeVoice;
+  const voices = speechSynthesis.getVoices();
+  if (!voices.length) return null;
+  cachedNativeVoice = voices.find(v => v.lang === 'en-GB' && /male|daniel|george|oliver|arthur/i.test(v.name))
+                  || voices.find(v => v.lang === 'en-GB')
+                  || voices.find(v => v.lang.startsWith('en'))
+                  || voices[0];
+  return cachedNativeVoice;
+}
+if ('speechSynthesis' in window) {
+  speechSynthesis.addEventListener('voiceschanged', () => { cachedNativeVoice = null; pickNativeVoice(); });
+}
+
+let currentAudio = null;
+async function speakReply(text) {
+  if (!isVoiceOn() || !text) return;
+  // Stop anything still playing.
+  if (currentAudio) { try { currentAudio.pause(); } catch (e) {} currentAudio = null; }
+  if ('speechSynthesis' in window) speechSynthesis.cancel();
+
+  if (voiceMode.startsWith('cloned:')) {
+    const voiceId = voiceMode.substring('cloned:'.length);
+    const voice = await getVoice(voiceId).catch(() => null);
+    if (voice) { await speakWithChatterbox(text, voice); return; }
+    console.warn('[q/voice] cloned voice missing — falling back to default');
+  }
+
+  await speakWithKokoro(text);
+}
+
+async function speakWithKokoro(text) {
+  const tts = await loadKokoro();
+  if (!tts) {
+    // Fallback path — browser SpeechSynthesis.
+    if (!('speechSynthesis' in window)) return;
+    const u = new SpeechSynthesisUtterance(text);
+    u.lang = 'en-GB';
+    const v = pickNativeVoice();
+    if (v) u.voice = v;
+    speechSynthesis.speak(u);
+    return;
+  }
+  try {
+    showVoiceStatus('Speaking…');
+    const audio = await tts.generate(text, { voice: 'bm_george' });
+    const blob = audio.toBlob();
+    const url = URL.createObjectURL(blob);
+    currentAudio = new Audio(url);
+    currentAudio.addEventListener('ended', () => { URL.revokeObjectURL(url); currentAudio = null; hideVoiceStatus(); });
+    currentAudio.addEventListener('error', () => { URL.revokeObjectURL(url); currentAudio = null; hideVoiceStatus(); });
+    await currentAudio.play();
+  } catch (e) {
+    console.warn('[q/voice] Kokoro generate failed:', e);
+    hideVoiceStatus();
+    currentAudio = null;
+  }
+}
+
+async function speakWithChatterbox(text, voice) {
+  try {
+    showVoiceStatus('Cloning voice…');
+    const refB64 = await blobToBase64(voice.audioBlob);
+    const res = await fetch('/speak-as-voice', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        text,
+        referenceAudioBase64: refB64,
+        referenceMimeType: voice.mimeType || 'audio/webm',
+      }),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ error: 'HTTP ' + res.status }));
+      console.warn('[q/voice] Chatterbox failed:', err);
+      hideVoiceStatus();
+      if (err.error && err.error.includes('CHATTERBOX_SPACE_URL')) {
+        renderMessage('q', '(Voice cloning needs setup — see q-lab/voice-cloning-space/README.md, then set CHATTERBOX_SPACE_URL.)');
+      }
+      return;
+    }
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    currentAudio = new Audio(url);
+    currentAudio.addEventListener('ended', () => { URL.revokeObjectURL(url); currentAudio = null; hideVoiceStatus(); });
+    currentAudio.addEventListener('error', () => { URL.revokeObjectURL(url); currentAudio = null; hideVoiceStatus(); });
+    await currentAudio.play();
+  } catch (e) {
+    console.warn('[q/voice] Chatterbox generate failed:', e);
+    hideVoiceStatus();
+    currentAudio = null;
+  }
+}
+
+// Lazy-load Whisper the first time we record.
+let whisperPromise = null;
+function loadWhisper() {
+  if (whisperPromise) return whisperPromise;
+  whisperPromise = (async () => {
+    showVoiceStatus('Loading ear…');
+    try {
+      const { pipeline } = await import('https://cdn.jsdelivr.net/npm/@huggingface/transformers@4.2.0');
+      const useGPU = !!navigator.gpu;
+      const transcriber = await pipeline(
+        'automatic-speech-recognition',
+        'onnx-community/whisper-base',
+        { device: useGPU ? 'webgpu' : 'wasm', dtype: useGPU ? 'fp32' : 'q8' }
+      );
+      hideVoiceStatus();
+      return transcriber;
+    } catch (e) {
+      console.warn('[q/voice] Whisper load failed:', e);
+      hideVoiceStatus();
+      whisperPromise = null;
+      return null;
+    }
+  })();
+  return whisperPromise;
+}
+
+// MediaRecorder-based mic — replaces webkitSpeechRecognition.
+let mediaRecorder = null;
+let recordedChunks = [];
+let mediaStream = null;
+
+async function startRecording() {
+  if (!navigator.mediaDevices || !window.MediaRecorder) {
+    alert('This browser does not support microphone recording.');
+    return;
+  }
+  try {
+    mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    recordedChunks = [];
+    mediaRecorder = new MediaRecorder(mediaStream);
+    mediaRecorder.addEventListener('dataavailable', e => { if (e.data && e.data.size) recordedChunks.push(e.data); });
+    mediaRecorder.addEventListener('stop', onRecordingStop);
+    mediaRecorder.start();
+    $mic.classList.add('listening');
+  } catch (e) {
+    alert('Microphone unavailable: ' + e.message);
+    $mic.classList.remove('listening');
+  }
+}
+
+function stopRecording() {
+  if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+    try { mediaRecorder.stop(); } catch (e) {}
+  }
+  if (mediaStream) {
+    mediaStream.getTracks().forEach(t => t.stop());
+    mediaStream = null;
+  }
+  $mic.classList.remove('listening');
+}
+
+async function onRecordingStop() {
+  if (recordedChunks.length === 0) return;
+  const blob = new Blob(recordedChunks, { type: mediaRecorder?.mimeType || 'audio/webm' });
+  recordedChunks = [];
+  $mic.classList.add('processing');
+  showVoiceStatus('Transcribing…');
+  try {
+    const transcriber = await loadWhisper();
+    if (!transcriber) return;
+    const url = URL.createObjectURL(blob);
+    const out = await transcriber(url, { language: 'en', task: 'transcribe' });
+    URL.revokeObjectURL(url);
+    const text = (out && out.text || '').trim();
+    if (text) {
+      $input.value = text;
+      $input.dispatchEvent(new Event('input'));
+      send();
+    }
+  } catch (e) {
+    console.warn('[q/voice] transcription failed:', e);
+  } finally {
+    $mic.classList.remove('processing');
+    hideVoiceStatus();
+  }
+}
+
+$mic.addEventListener('click', () => {
+  if ($mic.classList.contains('processing')) return;
+  if ($mic.classList.contains('listening')) {
+    stopRecording();
+  } else {
+    startRecording();
+  }
+});
+
+// ─── IMAGE ATTACHMENTS ────────────────────────────────────────────────────
+// Paste from clipboard, drag-drop onto the page, or click the paperclip.
+// When images are present, the chat call routes to Q's vision model
+// (Q_CONFIG.visionModel — currently Qwen3.5-9B on Together) instead of
+// the text brain. Attachments live only until next send, then clear.
+
+const $attach = document.getElementById('attach');
+const $attachFileInput = document.getElementById('attach-file-input');
+const $imageAttachments = document.getElementById('image-attachments');
+const $dropOverlay = document.getElementById('drop-overlay');
+const MAX_IMAGE_BYTES = 10 * 1024 * 1024; // 10MB per image (warn-only above this)
+
+let attachedImages = [];  // [{ dataUrl, mimeType, name }]
+
+function renderAttachments() {
+  $imageAttachments.innerHTML = '';
+  if (attachedImages.length === 0) {
+    $imageAttachments.classList.remove('show');
+    return;
+  }
+  attachedImages.forEach((img, i) => {
+    const el = document.createElement('div');
+    el.className = 'image-attachment';
+    el.innerHTML =
+      '<img src="' + img.dataUrl + '" alt="">' +
+      '<button class="remove" data-idx="' + i + '" title="Remove">×</button>';
+    $imageAttachments.appendChild(el);
+  });
+  $imageAttachments.classList.add('show');
+}
+
+$imageAttachments.addEventListener('click', (e) => {
+  const btn = e.target.closest('[data-idx]');
+  if (!btn) return;
+  const idx = parseInt(btn.dataset.idx, 10);
+  attachedImages.splice(idx, 1);
+  renderAttachments();
+});
+
+function fileToDataUrl(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onloadend = () => resolve(String(reader.result || ''));
+    reader.onerror = () => reject(reader.error);
+    reader.readAsDataURL(file);
+  });
+}
+
+async function addImageFiles(files) {
+  for (const f of files) {
+    if (!f.type || !f.type.startsWith('image/')) continue;
+    if (f.size > MAX_IMAGE_BYTES) {
+      console.warn('[q/vision] image is large (' + Math.round(f.size / 1024 / 1024) + 'MB) — sending anyway');
+    }
+    const dataUrl = await fileToDataUrl(f);
+    attachedImages.push({ dataUrl, mimeType: f.type, name: f.name || 'image' });
+  }
+  renderAttachments();
+}
+
+// Paperclip → file picker.
+$attach.addEventListener('click', () => $attachFileInput.click());
+$attachFileInput.addEventListener('change', async () => {
+  await addImageFiles(Array.from($attachFileInput.files || []));
+  $attachFileInput.value = '';
+});
+
+// Paste from clipboard — if it's an image, attach it instead of pasting text.
+$input.addEventListener('paste', async (e) => {
+  const items = (e.clipboardData && e.clipboardData.items) ? e.clipboardData.items : [];
+  const files = [];
+  for (const it of items) {
+    if (it.kind === 'file') {
+      const f = it.getAsFile();
+      if (f && f.type && f.type.startsWith('image/')) files.push(f);
+    }
+  }
+  if (files.length > 0) {
+    e.preventDefault();
+    await addImageFiles(files);
+  }
+});
+
+// Drag-drop onto anywhere in the window.
+let dragDepth = 0;
+window.addEventListener('dragenter', (e) => {
+  if (e.dataTransfer && Array.from(e.dataTransfer.types || []).includes('Files')) {
+    dragDepth++;
+    $dropOverlay.classList.add('show');
+  }
+});
+window.addEventListener('dragleave', () => {
+  dragDepth = Math.max(0, dragDepth - 1);
+  if (dragDepth === 0) $dropOverlay.classList.remove('show');
+});
+window.addEventListener('dragover', (e) => {
+  if (e.dataTransfer && Array.from(e.dataTransfer.types || []).includes('Files')) {
+    e.preventDefault();
+  }
+});
+window.addEventListener('drop', async (e) => {
+  e.preventDefault();
+  dragDepth = 0;
+  $dropOverlay.classList.remove('show');
+  const files = e.dataTransfer && e.dataTransfer.files ? Array.from(e.dataTransfer.files) : [];
+  if (files.length > 0) await addImageFiles(files);
+});
+
+async function send() {
+  const text = $input.value.trim();
+  const imagesNow = attachedImages.slice();  // snapshot — clear after send
+  if (!text && imagesNow.length === 0) return;
+  if ($send.disabled) return;
+  if ($empty && $empty.parentNode) $empty.remove();
+
+  renderMessage('user', text || '(image)', undefined, imagesNow);
+  $input.value = '';
+  $input.style.height = 'auto';
+  attachedImages = [];
+  renderAttachments();
+
+  const typingEl = renderTyping();
+  $send.disabled = true;
+
+  try {
+    // Server now manages memory — we only send the new message
+    const body = { message: text };
+    if (thinkingLevel === 'high' || thinkingLevel === 'max') {
+      body.reasoningEffort = thinkingLevel;
+    }
+    if (imagesNow.length > 0) {
+      body.images = imagesNow.map(img => ({ dataUrl: img.dataUrl }));
+    }
+    if (verifyOn) {
+      body.verify = true;
+    }
+    const response = await fetch('/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    const data = await response.json();
+    typingEl.remove();
+    if (data.error) {
+      renderMessage('q', '(Q hit an error: ' + data.error + ')');
+    } else if (data.reply) {
+      const msgEl = renderMessage('q', data.reply);
+      if (Array.isArray(data.toolCalls) && data.toolCalls.length > 0) {
+        renderToolCalls(msgEl, data.toolCalls);
+      }
+      if (data.verifier) {
+        renderVerifier(msgEl, data.verifier);
+      }
+      speakReply(data.reply);
+    } else {
+      renderMessage('q', '(Q returned no reply)');
+    }
+  } catch (err) {
+    typingEl.remove();
+    renderMessage('q', '(Network error: ' + err.message + ')');
+  } finally {
+    $send.disabled = false;
+    $input.focus();
+  }
+}
+
+function renderMessage(role, content, animate, images) {
+  const isUser = role === 'user';
+  const messageEl = document.createElement('div');
+  messageEl.className = 'message ' + (isUser ? 'user' : 'q');
+  if (animate === false) messageEl.style.animation = 'none';
+  const imagesHtml = (Array.isArray(images) && images.length > 0)
+    ? '<div class="message-images">' + images.map(img => '<img src="' + img.dataUrl + '" alt="">').join('') + '</div>'
+    : '';
+  const bodyHtml = '<div class="message-body">' + imagesHtml + escapeHtml(content) + '</div>';
+  const inner = isUser
+    ? '<div class="message-content"><div class="message-meta">You</div>' + bodyHtml + '</div><div class="avatar you">YOU</div>'
+    : '<div class="avatar q">Q</div><div class="message-content"><div class="message-meta">Q</div>' + bodyHtml + '</div>';
+  messageEl.innerHTML = inner;
+  $conversation.appendChild(messageEl);
+  scrollToBottom();
+  return messageEl;
+}
+
+function renderVerifier(messageEl, verifier) {
+  const content = messageEl.querySelector('.message-content');
+  if (!content) return;
+  const passed = verifier.pass === true;
+  const issues = Array.isArray(verifier.issues) ? verifier.issues : [];
+  const badge = document.createElement('button');
+  badge.className = 'verifier-badge ' + (passed ? 'pass' : 'fixed');
+  badge.textContent = passed
+    ? '✓ verified'
+    : '✓ corrected · ' + issues.length + ' issue' + (issues.length === 1 ? '' : 's');
+  let detail = null;
+  if (issues.length > 0) {
+    detail = document.createElement('div');
+    detail.className = 'verifier-issues';
+    detail.innerHTML = '<strong>What the verifier flagged:</strong><ul>'
+      + issues.map(i => '<li>' + escapeHtml(i) + '</li>').join('')
+      + '</ul>';
+    badge.addEventListener('click', () => detail.classList.toggle('show'));
+  } else {
+    badge.style.cursor = 'default';
+  }
+  content.appendChild(badge);
+  if (detail) content.appendChild(detail);
+  scrollToBottom();
+}
+
+function renderToolCalls(messageEl, toolCalls) {
+  const wrap = document.createElement('div');
+  wrap.className = 'tool-calls';
+  const summary = toolCalls.length === 1
+    ? '🔧 used ' + toolCalls[0].name
+    : '🔧 used ' + toolCalls.length + ' tools (' + toolCalls.map(c => c.name).join(', ') + ')';
+  const toggle = document.createElement('button');
+  toggle.className = 'tool-calls-toggle';
+  toggle.textContent = summary;
+  const detail = document.createElement('div');
+  detail.className = 'tool-calls-detail';
+  toolCalls.forEach(call => {
+    const row = document.createElement('div');
+    row.className = 'tool-call';
+    const argsStr = call.args ? JSON.stringify(call.args) : '{}';
+    const resultStr = typeof call.result === 'string' ? call.result : JSON.stringify(call.result, null, 2);
+    row.innerHTML =
+      '<div class="tc-head">' + escapeHtml(call.name) + '(' + escapeHtml(argsStr) + ')</div>' +
+      '<div class="tc-result">' + escapeHtml(resultStr) + '</div>';
+    detail.appendChild(row);
+  });
+  toggle.addEventListener('click', () => detail.classList.toggle('show'));
+  wrap.appendChild(toggle);
+  wrap.appendChild(detail);
+  // Append inside the message-content (sibling of message-body).
+  const content = messageEl.querySelector('.message-content');
+  if (content) content.appendChild(wrap);
+  scrollToBottom();
+}
+
+function renderTyping() {
+  const el = document.createElement('div');
+  el.className = 'message q';
+  el.innerHTML = '<div class="avatar q">Q</div><div class="message-content"><div class="message-meta">Q</div><div class="message-body"><div class="typing"><span></span><span></span><span></span></div></div></div>';
+  $conversation.appendChild(el);
+  scrollToBottom();
+  return el;
+}
+
+function escapeHtml(str) {
+  return String(str == null ? '' : str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+function scrollToBottom() {
+  const m = document.querySelector('main');
+  m.scrollTop = m.scrollHeight;
+}
+</script>
+
+<script src="/trace-widget.js"></script>
+</body>
+</html>
