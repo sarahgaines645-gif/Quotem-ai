@@ -220,18 +220,15 @@
                 submit.textContent = 'Sign up';
                 pwd.setAttribute('autocomplete', 'new-password');
                 signupPrompt.style.display = '';
-                setTimeout(() => name.focus(), 200);
             } else if (next === 'forgot') {
                 modeLabel.textContent = 'Reset password';
                 submit.textContent = 'Send reset link';
                 forgotPrompt.style.display = '';
-                setTimeout(() => email.focus(), 200);
             } else {
                 modeLabel.textContent = 'Sign in';
                 submit.textContent = 'Sign in';
                 pwd.setAttribute('autocomplete', 'current-password');
                 signinPrompt.style.display = '';
-                setTimeout(() => email.focus(), 200);
             }
         }
         setMode('signin');
@@ -357,7 +354,6 @@
             if (!input) return;
             input.addEventListener('keydown', ev => { if (ev.key === 'Enter') handle(); });
         });
-        setTimeout(() => email.focus(), 200);
     }
 
     window.qSignIn = show;
