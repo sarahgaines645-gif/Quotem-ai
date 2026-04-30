@@ -282,6 +282,61 @@ router.delete('/chat-history', requirePerson, (req, res) => {
     res.json({ ok });
 });
 
+// ── Extract text from an uploaded document ────────────────────────────────
+// Receives a base64 data URL, decodes it, runs the appropriate parser, and
+// returns the extracted plain text. The chat front-end calls this when the
+// user drops a PDF or Word doc, then prepends the text into Q's message.
+//
+// Body: { dataUrl: 'data:application/pdf;base64,...', name?: 'whatever.pdf' }
+// Returns: { text, pages?, name }
+router.post('/extract-text', requirePerson, express.json({ limit: '24mb' }), async (req, res) => {
+    const dataUrl = req.body?.dataUrl;
+    const name = req.body?.name || 'document';
+    if (!dataUrl || typeof dataUrl !== 'string') {
+        return res.status(400).json({ error: 'dataUrl required' });
+    }
+    const match = dataUrl.match(/^data:([^;]+);base64,(.+)$/);
+    if (!match) {
+        return res.status(400).json({ error: 'Expected base64 data URL' });
+    }
+    const mimeType = match[1];
+    const buffer = Buffer.from(match[2], 'base64');
+    const lowerName = String(name).toLowerCase();
+
+    try {
+        // PDF
+        if (mimeType === 'application/pdf' || lowerName.endsWith('.pdf')) {
+            const pdfParse = require('pdf-parse');
+            const data = await pdfParse(buffer);
+            return res.json({
+                text: (data.text || '').trim(),
+                pages: data.numpages || 0,
+                name,
+                kind: 'pdf',
+            });
+        }
+        // Word .docx (modern Office Open XML)
+        if (
+            mimeType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+            || lowerName.endsWith('.docx')
+        ) {
+            const mammoth = require('mammoth');
+            const result = await mammoth.extractRawText({ buffer });
+            return res.json({
+                text: (result.value || '').trim(),
+                name,
+                kind: 'docx',
+            });
+        }
+        return res.status(400).json({ error: 'Unsupported file type for extraction.' });
+    } catch (e) {
+        console.warn('[extract-text] failed for ' + name + ': ' + e.message);
+        return res.status(500).json({
+            error: 'Could not read that file. It might be encrypted, scanned (image-only), or corrupted.',
+        });
+    }
+});
+
 // ── Q's circle — admin endpoints (Sarah only) ──────────────────────────────
 router.get('/circle/people', requirePerson, (req, res) => {
     if (req.person.id !== 'sarah') return res.status(403).json({ error: 'Forbidden' });
