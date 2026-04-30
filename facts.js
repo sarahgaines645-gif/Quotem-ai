@@ -1,14 +1,9 @@
 /**
- * q-lab/facts.js — Q's persistent fact store
+ * Q's persistent fact store — per-person files.
  *
- * Distinct from memory.js (which holds chronological chat history).
- * facts.js is the discrete things Q has chosen to remember about the user
- * across sessions: preferences, names, ongoing projects, important dates.
- *
- * Same path resolution as memory.js — Railway volume in production,
- * q-lab/data/ locally.
- *
- * Single-user mode for now. Multi-user split later (key by user_id).
+ * Each person has their own q-facts-{personId}.json so memories never
+ * bleed between users. Sarah's legacy q-facts.json is kept as-is for
+ * backward compatibility (her existing memories are preserved).
  */
 'use strict';
 
@@ -22,21 +17,32 @@ const Q_DATA_DIR = VOLUME_DIR
     ? path.join(VOLUME_DIR, 'q-memory')
     : path.join(__dirname, 'data');
 
-const FACTS_FILE = path.join(Q_DATA_DIR, 'q-facts.json');
-
 try {
     fs.mkdirSync(Q_DATA_DIR, { recursive: true });
 } catch (e) {
     console.error('[q/facts] could not create data dir:', e.message);
 }
 
-const MAX_FACTS = 500;            // soft cap — guard against runaway growth
-const MAX_FACT_LENGTH = 1000;     // characters per fact
+const MAX_FACTS = 500;
+const MAX_FACT_LENGTH = 1000;
 
-function loadFacts() {
+function safeId(personId) {
+    return String(personId || 'sarah').toLowerCase().replace(/[^a-z0-9-]/g, '-');
+}
+
+// Sarah keeps her legacy file so her existing memories are not lost.
+// Everyone else gets q-facts-{id}.json.
+function factsPath(personId) {
+    const id = safeId(personId);
+    if (id === 'sarah') return path.join(Q_DATA_DIR, 'q-facts.json');
+    return path.join(Q_DATA_DIR, `q-facts-${id}.json`);
+}
+
+function loadFacts(personId) {
+    const file = factsPath(personId);
     try {
-        if (!fs.existsSync(FACTS_FILE)) return [];
-        const data = fs.readFileSync(FACTS_FILE, 'utf8');
+        if (!fs.existsSync(file)) return [];
+        const data = fs.readFileSync(file, 'utf8');
         const parsed = JSON.parse(data);
         return Array.isArray(parsed) ? parsed : [];
     } catch (e) {
@@ -45,9 +51,10 @@ function loadFacts() {
     }
 }
 
-function saveFacts(facts) {
+function saveFacts(facts, personId) {
+    const file = factsPath(personId);
     try {
-        fs.writeFileSync(FACTS_FILE, JSON.stringify(facts, null, 2), 'utf8');
+        fs.writeFileSync(file, JSON.stringify(facts, null, 2), 'utf8');
         return true;
     } catch (e) {
         console.error('[q/facts] save error:', e.message);
@@ -59,19 +66,13 @@ function newFactId() {
     return 'f' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
 }
 
-/**
- * Add a fact. Idempotent on exact-content match — duplicates of the same
- * string are silently ignored so Q doesn't accidentally fill the store
- * by re-remembering the same thing on every turn.
- */
-function addFact({ content, tags = [], source = 'chat' } = {}) {
+function addFact({ content, tags = [], source = 'chat' } = {}, personId) {
     if (!content || typeof content !== 'string' || !content.trim()) {
         return { error: 'Fact content required' };
     }
     const trimmed = content.trim().substring(0, MAX_FACT_LENGTH);
-    const facts = loadFacts();
+    const facts = loadFacts(personId);
 
-    // Deduplicate on exact content (case-insensitive).
     const lower = trimmed.toLowerCase();
     const existing = facts.find(f => f.content.toLowerCase() === lower);
     if (existing) {
@@ -87,33 +88,25 @@ function addFact({ content, tags = [], source = 'chat' } = {}) {
     };
     facts.push(fact);
 
-    // Soft cap — drop oldest when exceeded so the store can't grow forever.
     if (facts.length > MAX_FACTS) {
         facts.splice(0, facts.length - MAX_FACTS);
     }
-    saveFacts(facts);
+    saveFacts(facts, personId);
     return { ok: true, id: fact.id, content: fact.content };
 }
 
-/**
- * List all facts, most recent first.
- */
-function listFacts({ limit = 100 } = {}) {
-    const facts = loadFacts();
+function listFacts({ limit = 100 } = {}, personId) {
+    const facts = loadFacts(personId);
     const sorted = facts.slice().reverse();
     return sorted.slice(0, Math.min(limit, MAX_FACTS));
 }
 
-/**
- * Substring search across content + tags. Case-insensitive.
- * Returns most-recent matches first.
- */
-function searchFacts(query, { limit = 20 } = {}) {
+function searchFacts(query, { limit = 20 } = {}, personId) {
     if (!query || typeof query !== 'string' || !query.trim()) {
-        return listFacts({ limit });
+        return listFacts({ limit }, personId);
     }
     const q = query.trim().toLowerCase();
-    const facts = loadFacts();
+    const facts = loadFacts(personId);
     const matches = facts.filter(f =>
         (f.content || '').toLowerCase().includes(q)
         || (Array.isArray(f.tags) && f.tags.some(t => String(t).toLowerCase().includes(q)))
@@ -121,30 +114,21 @@ function searchFacts(query, { limit = 20 } = {}) {
     return matches.reverse().slice(0, Math.min(limit, MAX_FACTS));
 }
 
-/**
- * Delete one fact by id.
- */
-function deleteFact(id) {
-    const facts = loadFacts();
+function deleteFact(id, personId) {
+    const facts = loadFacts(personId);
     const idx = facts.findIndex(f => f.id === id);
     if (idx === -1) return { ok: false, error: 'Fact not found' };
     const removed = facts.splice(idx, 1)[0];
-    saveFacts(facts);
+    saveFacts(facts, personId);
     return { ok: true, removed };
 }
 
-/**
- * Wipe all facts. Use with care.
- */
-function clearFacts() {
-    return saveFacts([]);
+function clearFacts(personId) {
+    return saveFacts([], personId);
 }
 
-/**
- * Where the file actually lives. For debugging.
- */
-function getFactsPath() {
-    return FACTS_FILE;
+function getFactsPath(personId) {
+    return factsPath(personId);
 }
 
 module.exports = {

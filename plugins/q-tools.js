@@ -376,7 +376,7 @@ async function analyzeDocument({ image_url, question }) {
  * Execute a tool by name with its arguments. Always returns an object —
  * never throws. Errors are returned as { error: '...' } so Q sees them.
  */
-async function executeTool(name, argsRaw) {
+async function executeTool(name, argsRaw, personId) {
     let args = argsRaw;
     if (typeof argsRaw === 'string') {
         try { args = JSON.parse(argsRaw); }
@@ -394,8 +394,8 @@ async function executeTool(name, argsRaw) {
         case 'current_datetime': return currentDatetime(args);
         case 'analyze_document': return await analyzeDocument(args);
         case 'create_document':  return await createDocument(args);
-        case 'remember':         return remember(args);
-        case 'recall':           return recall(args);
+        case 'remember':         return remember(args, personId);
+        case 'recall':           return recall(args, personId);
         default:                 return { error: `Unknown tool: "${name}"` };
     }
 }
@@ -424,21 +424,21 @@ async function createDocument({ title, content } = {}) {
 /**
  * remember — write a fact to Q's persistent memory.
  */
-function remember({ content, tags = [] } = {}) {
+function remember({ content, tags = [] } = {}, personId) {
     if (!content || typeof content !== 'string') {
         return { error: 'content (string) is required' };
     }
-    return addFact({ content, tags, source: 'chat' });
+    return addFact({ content, tags, source: 'chat' }, personId);
 }
 
 /**
  * recall — search Q's persistent memory.
  */
-function recall({ query = '', limit = 10 } = {}) {
+function recall({ query = '', limit = 10 } = {}, personId) {
     const safeLimit = Math.min(Math.max(parseInt(limit) || 10, 1), 50);
     const facts = (query && query.trim())
-        ? searchFacts(query, { limit: safeLimit })
-        : listFacts({ limit: safeLimit });
+        ? searchFacts(query, { limit: safeLimit }, personId)
+        : listFacts({ limit: safeLimit }, personId);
     return {
         query: query || null,
         count: facts.length,

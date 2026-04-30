@@ -129,12 +129,12 @@ Nothing dishonest. Nothing illegal. Just the loopholes, technicalities, and comm
  * @param {string} [mode] - When 'aps', overlays the APS prompt after the
  *   base persona but before the facts block. Anything else: plain Q.
  */
-function buildSystemMessage(mode) {
+function buildSystemMessage(mode, personId) {
     const now = new Date();
     const dateTimeBlock = `\n\nCurrent date and time: ${now.toLocaleDateString('en-GB', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}, ${now.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', timeZoneName: 'short' })}.`;
     let factsBlock = '';
     try {
-        const facts = listFacts({ limit: FACTS_INJECT_LIMIT });
+        const facts = listFacts({ limit: FACTS_INJECT_LIMIT }, personId);
         if (facts.length > 0) {
             const lines = facts.map(f => '- ' + f.content).join('\n');
             factsBlock = `\n\nThings you remember (most recent first):\n${lines}`;
@@ -212,7 +212,7 @@ async function chat(messages, options = {}) {
 
     // Conversation buffer that grows as we loop through tool calls.
     let conversation = [
-        { role: 'system', content: buildSystemMessage(mode) },
+        { role: 'system', content: buildSystemMessage(mode, options.person?.id) },
         ...outboundMessages,
     ];
     const toolCalls = [];     // [{ name, args, result, durationMs }]
@@ -289,7 +289,7 @@ async function chat(messages, options = {}) {
                 const name = call.function?.name || 'unknown';
                 const argsRaw = call.function?.arguments || '{}';
                 const callStart = Date.now();
-                const result = await executeTool(name, argsRaw);
+                const result = await executeTool(name, argsRaw, options.person?.id);
                 const callMs = Date.now() - callStart;
                 toolCalls.push({
                     name,
