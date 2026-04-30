@@ -1753,6 +1753,7 @@ async function addImageFiles(files) {
     } else if (kind === 'pdf' || kind === 'word') {
       // Server-side extraction via pdf-parse / mammoth.
       showVoiceStatus('Reading ' + (f.name || (kind === 'pdf' ? 'PDF' : 'document')) + '…');
+      let extractedOK = false;
       try {
         const out = await extractTextFromFile(f);
         if (out.text) {
@@ -1763,9 +1764,19 @@ async function addImageFiles(files) {
             name: (f.name || (kind === 'pdf' ? 'document.pdf' : 'document.docx')) + pageNote,
             content: out.text,
           });
-        } else if (kind === 'pdf') {
-          // Scanned PDF — pdf-parse couldn't read it. Render each page to an
-          // image client-side via PDF.js and let Q's vision model OCR them.
+          extractedOK = true;
+        }
+      } catch (e) {
+        // pdf-parse / mammoth threw — most common cause for PDFs is that the
+        // file is scanned and the parser can't see any text. Don't surface the
+        // error yet; we may still be able to OCR it below.
+        console.warn('[q/upload] text extraction failed for ' + (f.name || 'file') + ': ' + e.message);
+      }
+      // OCR fallback: if a PDF couldn't be read as text (server returned empty
+      // OR threw), render its pages to images client-side and let the vision
+      // model read them.
+      if (!extractedOK) {
+        if (kind === 'pdf') {
           showVoiceStatus('Scanned PDF — rendering pages for Q to read…');
           try {
             const images = await renderPdfPagesToImages(f);
@@ -1778,13 +1789,10 @@ async function addImageFiles(files) {
             unsupported.push({ name: f.name || 'file', kind, reason: 'OCR failed: ' + renderErr.message });
           }
         } else {
-          unsupported.push({ name: f.name || 'file', kind, reason: 'no readable text — possibly a scanned image' });
+          unsupported.push({ name: f.name || 'file', kind, reason: 'no readable text — Word docs need to contain real text, not just images' });
         }
-      } catch (e) {
-        unsupported.push({ name: f.name || 'file', kind, reason: e.message });
-      } finally {
-        hideVoiceStatus();
       }
+      hideVoiceStatus();
     } else {
       unsupported.push({ name: f.name || 'file', kind });
     }

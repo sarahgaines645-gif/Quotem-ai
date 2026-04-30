@@ -284,7 +284,17 @@ router.post('/chat', requirePerson, express.json({ limit: '24mb' }), async (req,
     const circle = getCircleSummary();
     const chatOptions = { reasoningEffort, images, useTools, verify, mode, person, circle };
 
-    if (typeof newMessage === 'string' && newMessage.trim()) {
+    // Image-only sends arrive with message === "" but a non-empty images array
+    // (paste of a screenshot, OCR fallback for scanned PDFs, etc.). Treat them
+    // as a valid turn and prompt Q implicitly so the vision model has a question
+    // to answer. Without this fallback the server rejected with "Body must
+    // include either { message: ... } or { messages: [...] }".
+    let effectiveMessage = (typeof newMessage === 'string') ? newMessage : '';
+    if (!effectiveMessage.trim() && images.length > 0) {
+        effectiveMessage = 'What can you tell me about this?';
+    }
+
+    if (typeof effectiveMessage === 'string' && effectiveMessage.trim()) {
         // Per-person memory: load only THIS person's history. Friends'
         // conversations never bleed into Q's context for this turn.
         const rawHistory = loadMemory(person.id).slice(-50);
