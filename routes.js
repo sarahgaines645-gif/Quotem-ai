@@ -263,6 +263,54 @@ router.get('/tools', (req, res) => {
     res.sendFile(path.join(__dirname, 'tools.html'));
 });
 
+// Q's adaptive writing coach. The user writes the document — Q asks
+// questions and assembles. See plugins/q-writer.js.
+router.get('/writer', (req, res) => {
+    res.sendFile(path.join(__dirname, 'writer.html'));
+});
+
+const qWriter = require('./plugins/q-writer');
+
+router.post('/writer/analyse', requirePerson, express.json({ limit: '512kb' }), async (req, res) => {
+    try {
+        const taskText = (req.body?.taskText || '').toString().trim();
+        if (!taskText) return res.status(400).json({ error: 'taskText required' });
+        const analysis = await qWriter.analyseTask(taskText);
+        res.json({ ok: true, analysis });
+    } catch (e) {
+        console.error('[writer/analyse]', e.message);
+        res.status(500).json({ error: e.message });
+    }
+});
+
+router.post('/writer/next-question', requirePerson, express.json({ limit: '512kb' }), async (req, res) => {
+    try {
+        const analysis = req.body?.analysis;
+        const history = Array.isArray(req.body?.history) ? req.body.history : [];
+        if (!analysis) return res.status(400).json({ error: 'analysis required' });
+        const next = await qWriter.nextQuestion(analysis, history);
+        res.json({ ok: true, ...next });
+    } catch (e) {
+        console.error('[writer/next-question]', e.message);
+        res.status(500).json({ error: e.message });
+    }
+});
+
+router.post('/writer/assemble', requirePerson, express.json({ limit: '512kb' }), async (req, res) => {
+    try {
+        const analysis = req.body?.analysis;
+        const history = Array.isArray(req.body?.history) ? req.body.history : [];
+        if (!analysis || history.length === 0) {
+            return res.status(400).json({ error: 'analysis and history required' });
+        }
+        const result = await qWriter.assembleDocument(analysis, history);
+        res.json({ ok: true, ...result });
+    } catch (e) {
+        console.error('[writer/assemble]', e.message);
+        res.status(500).json({ error: e.message });
+    }
+});
+
 // Q's chat API — uses server-side memory by default
 // Body: { message: "..." } (preferred — uses server memory)
 //   OR: { messages: [...] } (legacy — full history sent each time)
