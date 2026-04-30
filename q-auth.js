@@ -138,7 +138,7 @@
                     autocapitalize="off" autocorrect="off" spellcheck="false"
                     inputmode="email" autofocus />
 
-                <div class="q-signin-only q-signup-only">
+                <div class="q-signin-only">
                     <label for="q-pwd">Password</label>
                     <div id="q-pwd-wrap">
                         <input id="q-pwd" type="password"
