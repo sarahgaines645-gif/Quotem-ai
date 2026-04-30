@@ -769,20 +769,21 @@ router.post('/scheduler/trigger/:token', (req, res) => {
 // GET  /facts            → list (?q=substring search, ?limit=N)
 // DELETE /facts          → wipe all (CAUTION)
 // DELETE /facts/:id      → remove one
-router.get('/facts', (req, res) => {
+router.get('/facts', requirePerson, (req, res) => {
+    const personId = req.person.id;
     const q = req.query.q;
     const limit = Math.min(Math.max(parseInt(req.query.limit) || 50, 1), 500);
-    const facts = (q && q.trim()) ? searchFacts(q, { limit }) : listFacts({ limit });
-    res.json({ count: facts.length, facts, storedAt: getFactsPath() });
+    const facts = (q && q.trim()) ? searchFacts(q, { limit }, personId) : listFacts({ limit }, personId);
+    res.json({ count: facts.length, facts, storedAt: getFactsPath(personId) });
 });
 
-router.delete('/facts', (req, res) => {
-    const ok = clearFacts();
+router.delete('/facts', requirePerson, (req, res) => {
+    const ok = clearFacts(req.person.id);
     res.json({ ok });
 });
 
-router.delete('/facts/:id', (req, res) => {
-    const result = deleteFact(req.params.id);
+router.delete('/facts/:id', requirePerson, (req, res) => {
+    const result = deleteFact(req.params.id, req.person.id);
     res.status(result.ok ? 200 : 404).json(result);
 });
 
