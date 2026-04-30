@@ -130,6 +130,8 @@ Nothing dishonest. Nothing illegal. Just the loopholes, technicalities, and comm
  *   base persona but before the facts block. Anything else: plain Q.
  */
 function buildSystemMessage(mode) {
+    const now = new Date();
+    const dateTimeBlock = `\n\nCurrent date and time: ${now.toLocaleDateString('en-GB', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}, ${now.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', timeZoneName: 'short' })}.`;
     let factsBlock = '';
     try {
         const facts = listFacts({ limit: FACTS_INJECT_LIMIT });
@@ -141,7 +143,7 @@ function buildSystemMessage(mode) {
         // Memory unavailable — Q just doesn't see his facts this turn.
     }
     const overlay = (mode === 'aps') ? `\n\n---\n\n${APS_PROMPT}` : '';
-    return Q_PERSONA + overlay + factsBlock;
+    return Q_PERSONA + dateTimeBlock + overlay + factsBlock;
 }
 
 /**
