@@ -53,6 +53,8 @@
                     box-shadow: inset 5px 5px 14px #ababab, inset -4px -4px 10px #ffffff;
                     border-radius: 14px; font-size: 16px;
                     color: #1a1a1a; font-family: inherit;
+                    touch-action: manipulation;
+                    -webkit-tap-highlight-color: transparent;
                 }
                 /* Eye toggle for password — sit on the right edge of the field */
                 #q-pwd-wrap { position: relative; }
@@ -140,7 +142,7 @@
                 <label for="q-email">Email</label>
                 <input id="q-email" type="email" autocomplete="email"
                     autocapitalize="off" autocorrect="off" spellcheck="false"
-                    inputmode="email" autofocus />
+                    inputmode="email" />
 
                 <label for="q-pwd" class="q-pwd-block">Password</label>
                 <div id="q-pwd-wrap" class="q-pwd-block">
