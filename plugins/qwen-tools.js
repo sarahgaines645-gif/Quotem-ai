@@ -22,6 +22,7 @@
 
 const { Q_CONFIG } = require('../config');
 const { addFact, searchFacts, listFacts } = require('../facts');
+const { createDocx } = require('./doc-creator');
 
 // ─────────────────────────────────────────────────────────────
 //  TOOL DEFINITIONS — OpenAI function-calling schema
@@ -125,6 +126,27 @@ const TOOL_DEFINITIONS = [
                         maximum: 50,
                     },
                 },
+            },
+        },
+    },
+    {
+        type: 'function',
+        function: {
+            name: 'create_document',
+            description: 'Write a Word (.docx) document on the user\'s behalf and return a download link. Use this whenever the user asks for a letter, complaint, formal email, contract, brief, or any other writing they\'ll want to save or send. Compose the full body yourself in the `content` field — the user will see it as a real Word file. Don\'t use this for short replies or notes; just write those in chat.',
+            parameters: {
+                type: 'object',
+                properties: {
+                    title: {
+                        type: 'string',
+                        description: 'Title shown at the top of the document and used to name the file. Plain text, e.g. "Cover letter for the council".',
+                    },
+                    content: {
+                        type: 'string',
+                        description: 'Full body of the document in plain text. Use blank lines between paragraphs. Single newlines become line breaks within a paragraph.',
+                    },
+                },
+                required: ['title', 'content'],
             },
         },
     },
@@ -371,9 +393,31 @@ async function executeTool(name, argsRaw) {
         case 'calculator':       return calculator(args);
         case 'current_datetime': return currentDatetime(args);
         case 'analyze_document': return await analyzeDocument(args);
+        case 'create_document':  return await createDocument(args);
         case 'remember':         return remember(args);
         case 'recall':           return recall(args);
         default:                 return { error: `Unknown tool: "${name}"` };
+    }
+}
+
+/**
+ * create_document — generate a .docx file and return a download link.
+ * Q embeds the link in his reply so the user can click and save the file.
+ */
+async function createDocument({ title, content } = {}) {
+    if (!title || typeof title !== 'string') return { error: 'title (string) is required' };
+    if (!content || typeof content !== 'string') return { error: 'content (string) is required' };
+    try {
+        const result = await createDocx({ title, content });
+        return {
+            ok: true,
+            filename: result.filename,
+            sizeBytes: result.sizeBytes,
+            downloadUrl: '/download/' + result.token,
+            instruction_for_q: 'Tell the user the document is ready and give them this exact markdown link to download it: [Download ' + result.filename + '](' + '/download/' + result.token + '). Mention briefly what you put in the document, but do NOT paste the full body — they\'ll get it in the file.',
+        };
+    } catch (e) {
+        return { error: e.message || 'Could not create document.' };
     }
 }
 

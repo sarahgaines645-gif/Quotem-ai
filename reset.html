@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Reset your Q password</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet" />
+<style>
+    * { box-sizing: border-box; }
+    html, body {
+        margin: 0; padding: 0;
+        background: #e8e8e8;
+        font-family: 'Space Grotesk', system-ui, sans-serif;
+        color: #1a1a1a;
+        min-height: 100vh;
+    }
+    .wrap {
+        min-height: 100vh;
+        display: flex; align-items: center; justify-content: center;
+        padding: 20px;
+    }
+    .card {
+        background: #e8e8e8;
+        box-shadow: 10px 10px 28px #ababab, -8px -8px 20px #ffffff;
+        border-radius: 24px;
+        padding: 40px 36px;
+        width: min(420px, 92vw);
+        text-align: center;
+    }
+    h1 { font-size: 32px; margin: 0 0 6px; font-weight: 700; }
+    .dot { color: #e91e63; }
+    .lead { color: rgba(0,0,0,0.55); margin: 0 0 24px; font-size: 14px; }
+    label {
+        display: block; text-align: left;
+        font-size: 12px; font-weight: 500;
+        color: rgba(0,0,0,0.5);
+        text-transform: uppercase; letter-spacing: 0.5px;
+        margin-bottom: 6px; margin-top: 12px;
+    }
+    .pwd-wrap { position: relative; }
+    input[type="password"], input[type="text"] {
+        width: 100%; padding: 14px 18px;
+        border: none; outline: none;
+        background: #e8e8e8;
+        box-shadow: inset 5px 5px 14px #ababab, inset -4px -4px 10px #ffffff;
+        border-radius: 14px; font-size: 16px;
+        color: #1a1a1a; font-family: inherit;
+    }
+    input.with-eye { padding-right: 48px; }
+    .eye-btn {
+        position: absolute; right: 12px; top: 50%;
+        transform: translateY(-50%);
+        width: 32px; height: 32px;
+        border: none; cursor: pointer;
+        background: transparent; color: rgba(0,0,0,0.45);
+        display: inline-flex; align-items: center; justify-content: center;
+        border-radius: 8px; padding: 0;
+    }
+    .eye-btn:hover { color: #1a1a1a; }
+    .eye-btn svg { width: 18px; height: 18px; }
+    button.submit {
+        width: 100%; padding: 14px;
+        border: none; cursor: pointer;
+        background: #e8e8e8; color: #1a1a1a;
+        box-shadow: 6px 6px 16px #ababab, -5px -5px 12px #ffffff;
+        border-radius: 14px; font-size: 15px;
+        font-weight: 600; font-family: inherit;
+        margin-top: 24px;
+        transition: box-shadow 0.1s;
+    }
+    button.submit:hover { box-shadow: 4px 4px 10px #ababab, -3px -3px 8px #ffffff; }
+    button.submit:active,
+    button.submit:disabled {
+        box-shadow: inset 3px 3px 8px #ababab, inset -2px -2px 6px #ffffff;
+    }
+    button.submit:disabled { cursor: wait; opacity: 0.7; }
+    .err { color: #e91e63; font-size: 13px; margin-top: 12px; min-height: 18px; }
+    .ok { color: #2e7d32; font-size: 14px; margin-top: 16px; }
+    a { color: #e91e63; text-decoration: none; font-weight: 600; }
+    a:hover { text-decoration: underline; }
+</style>
+</head>
+<body>
+<div class="wrap">
+    <div class="card">
+        <h1>Q<span class="dot">.</span></h1>
+        <p class="lead">Set a new password</p>
+
+        <div id="form-area">
+            <label for="pwd">New password</label>
+            <div class="pwd-wrap">
+                <input id="pwd" class="with-eye" type="password" autocomplete="new-password"
+                    autocapitalize="off" autocorrect="off" spellcheck="false" />
+                <button type="button" class="eye-btn" id="pwd-eye" aria-label="Show password">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                </button>
+            </div>
+
+            <label for="pwd2">Confirm new password</label>
+            <input id="pwd2" type="password" autocomplete="new-password"
+                autocapitalize="off" autocorrect="off" spellcheck="false" />
+
+            <button class="submit" id="submit">Set password &amp; sign in</button>
+            <div class="err" id="err"></div>
+        </div>
+
+        <div id="done-area" style="display: none;">
+            <p class="ok">Password updated. Taking you to Q…</p>
+        </div>
+    </div>
+</div>
+
+<script>
+(function () {
+    const params = new URLSearchParams(location.search);
+    const token = params.get('token');
+    const pwd = document.getElementById('pwd');
+    const pwd2 = document.getElementById('pwd2');
+    const submit = document.getElementById('submit');
+    const err = document.getElementById('err');
+    const eye = document.getElementById('pwd-eye');
+    const formArea = document.getElementById('form-area');
+    const doneArea = document.getElementById('done-area');
+
+    if (!token) {
+        err.textContent = 'No reset token in this link. Ask for a new reset email.';
+        submit.disabled = true;
+    }
+
+    if (eye) {
+        eye.addEventListener('click', () => {
+            const showing = pwd.type === 'text';
+            pwd.type = showing ? 'password' : 'text';
+            eye.setAttribute('aria-label', showing ? 'Show password' : 'Hide password');
+        });
+    }
+
+    async function handle() {
+        err.textContent = '';
+        const p1 = (pwd.value || '').trim();
+        const p2 = (pwd2.value || '').trim();
+        if (p1.length < 8) { err.textContent = 'Password must be at least 8 characters.'; return; }
+        if (p1 !== p2) { err.textContent = 'Passwords don’t match.'; return; }
+        submit.disabled = true; submit.textContent = 'Saving...';
+        try {
+            const r = await fetch('/reset-password', {
+                method: 'POST',
+                credentials: 'include',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ token, newPassword: p1 }),
+            });
+            if (r.ok) {
+                formArea.style.display = 'none';
+                doneArea.style.display = '';
+                setTimeout(() => { location.href = '/chat'; }, 1200);
+                return;
+            }
+            const data = await r.json().catch(() => ({}));
+            err.textContent = data.error || 'Could not reset password.';
+        } catch (_) {
+            err.textContent = 'Network error — try again.';
+        } finally {
+            submit.disabled = false; submit.textContent = 'Set password & sign in';
+        }
+    }
+
+    submit.addEventListener('click', handle);
+    [pwd, pwd2].forEach(i => i.addEventListener('keydown', e => { if (e.key === 'Enter') handle(); }));
+    setTimeout(() => pwd.focus(), 50);
+})();
+</script>
+</body>
+</html>

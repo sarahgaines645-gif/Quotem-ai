@@ -11,6 +11,15 @@
 <!-- Markdown renderer for Q's replies (so #, **, lists, > etc. render properly
      instead of showing as raw text). marked v12 is ~30KB; loaded once, cached. -->
 <script src="https://cdn.jsdelivr.net/npm/marked@12.0.0/marked.min.js"></script>
+<!-- PDF.js — used as a fallback when pdf-parse can't extract text from a
+     scanned PDF. We render each page to an image client-side and hand the
+     images to Q's vision model so he can OCR them. Only loaded when
+     actually needed (see renderPdfPagesToImages). -->
+<script>
+  // Worker URL kept as a string and configured at first use to avoid
+  // running PDF.js's main script unless a scanned PDF arrives.
+  window.__PDFJS_CDN_BASE = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/';
+</script>
 <style>
   :root {
     /* Matched to Quotem's WHITE/Office theme (Pink Office palette).
@@ -152,13 +161,21 @@
     min-height: 0;
   }
   /* Top fade — fixed overlay just under the header so messages dissolve
-     instead of slamming into it. Mostly solid so text behind it doesn't
-     bleed through; just a short feather at the bottom edge. */
+     instead of slamming into it. Solid plateau on top, long feathered fade
+     at the bottom so bubbles dissolve smoothly rather than clipping at a
+     hard edge. */
   .top-fade {
     position: fixed;
     top: 72px; left: 0; right: 0;
-    height: 80px;
-    background: linear-gradient(to bottom, var(--bg) 70%, transparent);
+    height: 110px;
+    background: linear-gradient(
+      to bottom,
+      var(--bg) 0%,
+      var(--bg) 30%,
+      rgba(232, 232, 232, 0.85) 55%,
+      rgba(232, 232, 232, 0.5) 75%,
+      transparent 100%
+    );
     pointer-events: none;
     z-index: 9;
   }
@@ -234,8 +251,10 @@
     color: var(--text-muted);
   }
 
-  .message-content { flex: 1; min-width: 0; max-width: calc(100% - 52px); }
-  .message.user .message-content { max-width: 78%; }
+  /* Both Q and user bubbles cap at 78% so each sits centred with matching
+     empty gutter on the outer side. The avatar slot (52px) lives in the
+     INNER gutter; the outer gutter stays empty for visual balance. */
+  .message-content { flex: 1; min-width: 0; max-width: 78%; }
 
   .message-meta { font-size: 11px; color: var(--text-faint); margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.08em; font-weight: 600; }
   .message.user .message-meta { text-align: right; }
@@ -298,8 +317,15 @@
     padding: 12px 14px;
     border-radius: 12px;
     box-shadow: var(--neu-inset-sm);
-    overflow-x: auto;
     margin: 10px 0;
+    max-width: 100%;
+    /* Wrap long content instead of forcing a horizontal scrollbar inside the
+       bubble — Q sometimes uses code blocks for prose-y instructions, and
+       horizontal scroll on those reads as broken. Genuine code still
+       displays fine. */
+    white-space: pre-wrap;
+    word-wrap: break-word;
+    overflow-wrap: anywhere;
   }
   .message.q .message-body pre code {
     background: transparent;
@@ -307,6 +333,9 @@
     box-shadow: none;
     font-size: 13px;
     line-height: 1.55;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+    overflow-wrap: anywhere;
   }
   .message.q .message-body blockquote {
     border-left: 3px solid var(--accent);
@@ -805,6 +834,9 @@
         </div>
       </div>
     </div>
+    <a href="/tools" class="icon-btn" id="tools-link" aria-label="What can Q do?" title="What can Q do?">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+    </a>
     <button class="icon-btn" id="change-pwd-btn" aria-label="Change password" title="Change password">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="15" r="4"/><path d="M10.85 12.15 19 4"/><path d="m18 5 3 3"/><path d="m15 8 3 3"/></svg>
     </button>
@@ -1652,6 +1684,55 @@ async function extractTextFromFile(file) {
   return res.json();
 }
 
+// Lazy-loads PDF.js (only when a scanned PDF actually shows up), then renders
+// every page of the file to a JPEG data URL. The vision model receives these
+// as images and reads the text from them — that's our OCR path.
+let __pdfjsPromise = null;
+function loadPdfJs() {
+  if (window.pdfjsLib) return Promise.resolve(window.pdfjsLib);
+  if (__pdfjsPromise) return __pdfjsPromise;
+  const base = window.__PDFJS_CDN_BASE || 'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/';
+  __pdfjsPromise = new Promise((resolve, reject) => {
+    const s = document.createElement('script');
+    s.src = base + 'pdf.min.js';
+    s.onload = () => {
+      if (!window.pdfjsLib) { reject(new Error('PDF reader failed to initialise')); return; }
+      window.pdfjsLib.GlobalWorkerOptions.workerSrc = base + 'pdf.worker.min.js';
+      resolve(window.pdfjsLib);
+    };
+    s.onerror = () => reject(new Error('Could not load PDF reader'));
+    document.head.appendChild(s);
+  });
+  return __pdfjsPromise;
+}
+
+const MAX_OCR_PAGES = 6;          // cap page count to keep payloads sane
+const OCR_RENDER_SCALE = 1.6;     // ~150 DPI — readable for vision OCR
+
+async function renderPdfPagesToImages(file) {
+  const pdfjs = await loadPdfJs();
+  const buf = await file.arrayBuffer();
+  const doc = await pdfjs.getDocument({ data: buf }).promise;
+  const pageCount = Math.min(doc.numPages, MAX_OCR_PAGES);
+  const out = [];
+  for (let i = 1; i <= pageCount; i++) {
+    const page = await doc.getPage(i);
+    const viewport = page.getViewport({ scale: OCR_RENDER_SCALE });
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.ceil(viewport.width);
+    canvas.height = Math.ceil(viewport.height);
+    const ctx = canvas.getContext('2d');
+    await page.render({ canvasContext: ctx, viewport }).promise;
+    const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
+    out.push({
+      dataUrl,
+      mimeType: 'image/jpeg',
+      name: (file.name || 'document.pdf') + ' — page ' + i,
+    });
+  }
+  return out;
+}
+
 async function addImageFiles(files) {
   const unsupported = [];
   for (const f of files) {
@@ -1682,6 +1763,20 @@ async function addImageFiles(files) {
             name: (f.name || (kind === 'pdf' ? 'document.pdf' : 'document.docx')) + pageNote,
             content: out.text,
           });
+        } else if (kind === 'pdf') {
+          // Scanned PDF — pdf-parse couldn't read it. Render each page to an
+          // image client-side via PDF.js and let Q's vision model OCR them.
+          showVoiceStatus('Scanned PDF — rendering pages for Q to read…');
+          try {
+            const images = await renderPdfPagesToImages(f);
+            if (images.length === 0) {
+              unsupported.push({ name: f.name || 'file', kind, reason: 'could not render this PDF for OCR' });
+            } else {
+              for (const img of images) attachedImages.push(img);
+            }
+          } catch (renderErr) {
+            unsupported.push({ name: f.name || 'file', kind, reason: 'OCR failed: ' + renderErr.message });
+          }
         } else {
           unsupported.push({ name: f.name || 'file', kind, reason: 'no readable text — possibly a scanned image' });
         }

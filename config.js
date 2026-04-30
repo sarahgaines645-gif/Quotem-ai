@@ -16,9 +16,9 @@ const Q_CONFIG = {
   model: 'deepseek-ai/DeepSeek-V4-Pro',
   // V4 Pro is text-only. When the chat carries an image attachment we
   // switch the call to a vision-capable model on the same Together key.
-  // Qwen3.5-9B is the cheap starter; bump to moonshotai/Kimi-K2.6 if a
-  // particular image needs heavier reasoning.
-  visionModel: 'Qwen/Qwen3.5-9B',
+  // Qwen2.5-VL 72B is the strongest open-weights vision model on Together
+  // and reads text inside images (letters, screenshots, forms) cleanly.
+  visionModel: 'Qwen/Qwen2.5-VL-72B-Instruct',
   temperature: 0.0,
   maxTokens: 4000,
   // Voice cloning — set after deploying q-lab/voice-cloning-space/ to a HF Space.

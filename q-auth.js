@@ -101,8 +101,27 @@
                     cursor: pointer;
                 }
                 #q-signin-card .q-mode-toggle a:hover { text-decoration: underline; }
-                /* Hide the name field in sign-in mode */
+                /* Forgot-password link sits just below the password field */
+                #q-forgot-link {
+                    text-align: right; font-size: 12px;
+                    margin-top: 6px; margin-bottom: 4px;
+                }
+                #q-forgot-link a {
+                    color: rgba(0,0,0,0.55);
+                    cursor: pointer; text-decoration: none;
+                }
+                #q-forgot-link a:hover { color: #e91e63; text-decoration: underline; }
+                /* Mode-specific show/hide */
                 #q-signin-overlay[data-mode="signin"] .q-signup-only { display: none; }
+                #q-signin-overlay[data-mode="signup"] .q-signin-only { display: none; }
+                #q-signin-overlay[data-mode="signup"] #q-forgot-link { display: none; }
+                #q-signin-overlay[data-mode="forgot"] .q-signup-only,
+                #q-signin-overlay[data-mode="forgot"] .q-signin-only { display: none; }
+                #q-signin-overlay[data-mode="forgot"] #q-forgot-link { display: none; }
+                .q-info {
+                    color: rgba(0,0,0,0.6); font-size: 13px;
+                    margin-top: 14px; line-height: 1.5;
+                }
             </style>
             <div id="q-signin-card">
                 <h1>Q<span class="dot">.</span></h1>
@@ -119,15 +138,22 @@
                     autocapitalize="off" autocorrect="off" spellcheck="false"
                     inputmode="email" autofocus />
 
-                <label for="q-pwd">Password</label>
-                <div id="q-pwd-wrap">
-                    <input id="q-pwd" type="password"
-                        autocomplete="current-password"
-                        autocapitalize="off" autocorrect="off" spellcheck="false" />
-                    <button type="button" id="q-pwd-eye" aria-label="Show password" title="Show / hide password">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
-                    </button>
+                <div class="q-signin-only q-signup-only">
+                    <label for="q-pwd">Password</label>
+                    <div id="q-pwd-wrap">
+                        <input id="q-pwd" type="password"
+                            autocomplete="current-password"
+                            autocapitalize="off" autocorrect="off" spellcheck="false" />
+                        <button type="button" id="q-pwd-eye" aria-label="Show password" title="Show / hide password">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                        </button>
+                    </div>
+                    <div id="q-forgot-link"><a data-mode="forgot">Forgot password?</a></div>
                 </div>
+
+                <p class="q-info q-forgot-only" style="display: none;">
+                    Enter the email you signed up with. If we have an account for it, we'll send a reset link that's valid for one hour.
+                </p>
 
                 <button class="q-submit" id="q-submit">Sign in</button>
                 <div class="err" id="q-err"></div>
@@ -135,6 +161,7 @@
                 <div class="q-mode-toggle" id="q-mode-toggle">
                     <span class="signin-prompt">New to Q? <a data-mode="signup">Create an account</a></span>
                     <span class="signup-prompt">Already have an account? <a data-mode="signin">Sign in</a></span>
+                    <span class="forgot-prompt" style="display: none;"><a data-mode="signin">Back to sign in</a></span>
                 </div>
             </div>
         `;
@@ -153,30 +180,42 @@
         const modeToggle = overlay.querySelector('#q-mode-toggle');
         const signinPrompt = modeToggle.querySelector('.signin-prompt');
         const signupPrompt = modeToggle.querySelector('.signup-prompt');
+        const forgotPrompt = modeToggle.querySelector('.forgot-prompt');
+        const forgotInfo = overlay.querySelector('.q-forgot-only');
 
         function setMode(m) {
-            const next = (m === 'signup') ? 'signup' : 'signin';
+            const next = (m === 'signup' || m === 'forgot') ? m : 'signin';
             overlay.dataset.mode = next;
             err.textContent = '';
+            // Show all-mode-toggle prompts off by default; we set the right one below.
+            signinPrompt.style.display = 'none';
+            signupPrompt.style.display = 'none';
+            forgotPrompt.style.display = 'none';
+            if (forgotInfo) forgotInfo.style.display = (next === 'forgot') ? '' : 'none';
             if (next === 'signup') {
                 modeLabel.textContent = 'Create an account';
                 submit.textContent = 'Sign up';
                 pwd.setAttribute('autocomplete', 'new-password');
-                signinPrompt.style.display = 'none';
                 signupPrompt.style.display = '';
                 setTimeout(() => name.focus(), 0);
+            } else if (next === 'forgot') {
+                modeLabel.textContent = 'Reset password';
+                submit.textContent = 'Send reset link';
+                forgotPrompt.style.display = '';
+                setTimeout(() => email.focus(), 0);
             } else {
                 modeLabel.textContent = 'Sign in';
                 submit.textContent = 'Sign in';
                 pwd.setAttribute('autocomplete', 'current-password');
                 signinPrompt.style.display = '';
-                signupPrompt.style.display = 'none';
                 setTimeout(() => email.focus(), 0);
             }
         }
         setMode('signin');
 
-        modeToggle.addEventListener('click', (ev) => {
+        // Delegated mode-switching: catches both the bottom toggle links AND
+        // the "Forgot password?" link sitting under the password field.
+        card.addEventListener('click', (ev) => {
             const link = ev.target.closest('[data-mode]');
             if (!link) return;
             ev.preventDefault();
@@ -184,6 +223,7 @@
         });
 
         async function handle() {
+            err.style.color = '';
             err.textContent = '';
             const mode = overlay.dataset.mode;
             // Trim BOTH email and password — iOS autofill / autocomplete on
@@ -192,6 +232,27 @@
             // intentional whitespace are vanishingly rare.
             const e = (email.value || '').trim();
             const p = (pwd.value || '').trim();
+
+            if (mode === 'forgot') {
+                if (!e) { err.textContent = 'Enter the email you signed up with.'; return; }
+                submit.disabled = true; submit.textContent = 'Sending...';
+                try {
+                    await fetch('/forgot-password', {
+                        method: 'POST',
+                        credentials: 'include',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ email: e }),
+                    });
+                    // Always show the same confirmation — don't leak which emails exist.
+                    err.style.color = '#2e7d32';
+                    err.textContent = 'If that email is registered, a reset link is on its way. Check your inbox.';
+                } catch (_) {
+                    err.textContent = 'Network error — try again.';
+                } finally {
+                    submit.disabled = false; submit.textContent = 'Send reset link';
+                }
+                return;
+            }
 
             if (mode === 'signup') {
                 const n = (name.value || '').trim();

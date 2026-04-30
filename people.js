@@ -161,6 +161,60 @@ async function rotatePassword(id) {
     return newPassword;
 }
 
+const RESET_TOKEN_TTL_MS = 60 * 60 * 1000; // 1 hour
+
+function hashResetToken(raw) {
+    return crypto.createHash('sha256').update(String(raw)).digest('hex');
+}
+
+/**
+ * Create a one-hour password reset token for the person with this email.
+ * Returns the raw token (to embed in the reset link) on success, or null
+ * if no account matches. The token's SHA-256 hash is stored on disk —
+ * the raw token only exists in the email link.
+ */
+function createResetToken(email) {
+    const cleanEmail = normaliseEmail(email);
+    const people = loadPeople();
+    const person = people.find(p => normaliseEmail(p.email) === cleanEmail);
+    if (!person) return null;
+    const raw = crypto.randomBytes(32).toString('hex');
+    person.resetTokenHash = hashResetToken(raw);
+    person.resetTokenExpires = new Date(Date.now() + RESET_TOKEN_TTL_MS).toISOString();
+    savePeople(people);
+    return raw;
+}
+
+/**
+ * Validate a reset token and set the new password. On success the token
+ * is cleared and the person is returned (safe — no passwordHash). Returns
+ * null on any failure (unknown token, expired token, weak password).
+ */
+async function consumeResetToken(token, newPassword) {
+    if (!token || typeof token !== 'string') return null;
+    if (!newPassword || newPassword.length < 8) {
+        throw new Error('Password must be at least 8 characters.');
+    }
+    const tokenHash = hashResetToken(token);
+    const people = loadPeople();
+    const person = people.find(p => p.resetTokenHash === tokenHash);
+    if (!person) return null;
+    if (!person.resetTokenExpires || new Date(person.resetTokenExpires).getTime() < Date.now()) {
+        // Expired — clear the dead token so future replays do nothing
+        delete person.resetTokenHash;
+        delete person.resetTokenExpires;
+        savePeople(people);
+        return null;
+    }
+    person.passwordHash = await bcrypt.hash(newPassword, BCRYPT_ROUNDS);
+    person.passwordChangedAt = new Date().toISOString();
+    delete person.resetTokenHash;
+    delete person.resetTokenExpires;
+    savePeople(people);
+    const { passwordHash, resetTokenHash, resetTokenExpires, ...safe } = person;
+    return safe;
+}
+
 function removePerson(id) {
     const people = loadPeople();
     const filtered = people.filter(p => p.id !== id);
@@ -240,4 +294,6 @@ module.exports = {
     rotatePassword,
     removePerson,
     migrateIfLegacy,
+    createResetToken,
+    consumeResetToken,
 };

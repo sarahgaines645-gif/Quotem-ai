@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>What can Q do?</title>
+<script src="/q-auth.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet" />
+<style>
+    * { box-sizing: border-box; }
+    html, body {
+        margin: 0; padding: 0;
+        background: #e8e8e8;
+        font-family: 'Space Grotesk', system-ui, sans-serif;
+        color: #1a1a1a;
+        min-height: 100vh;
+    }
+    .wrap {
+        max-width: 880px; margin: 0 auto;
+        padding: 40px 20px 80px;
+    }
+    header.page {
+        display: flex; align-items: center; justify-content: space-between;
+        margin-bottom: 32px;
+    }
+    .logo { font-size: 32px; font-weight: 700; }
+    .dot { color: #e91e63; }
+    a.back {
+        font-size: 14px; color: rgba(0,0,0,0.55);
+        text-decoration: none; padding: 10px 16px;
+        background: #e8e8e8; border-radius: 12px;
+        box-shadow: 4px 4px 10px #ababab, -3px -3px 8px #ffffff;
+    }
+    a.back:hover { color: #1a1a1a; }
+    h1.heading { font-size: 28px; margin: 0 0 4px; }
+    p.lead { color: rgba(0,0,0,0.6); margin: 0 0 28px; line-height: 1.5; }
+    .grid {
+        display: grid; gap: 16px;
+        grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+    }
+    .card {
+        background: #e8e8e8;
+        box-shadow: 8px 8px 20px #ababab, -6px -6px 16px #ffffff;
+        border-radius: 18px;
+        padding: 22px 22px 20px;
+    }
+    .card h3 {
+        margin: 0 0 6px; font-size: 17px; font-weight: 600;
+        display: flex; align-items: center; gap: 10px;
+    }
+    .card .icon-well {
+        width: 32px; height: 32px;
+        border-radius: 8px;
+        background: #e8e8e8;
+        box-shadow: inset 3px 3px 8px #ababab, inset -2px -2px 6px #ffffff;
+        display: inline-flex; align-items: center; justify-content: center;
+        color: #e91e63; flex-shrink: 0;
+    }
+    .card .icon-well svg { width: 18px; height: 18px; }
+    .card p {
+        margin: 0; color: rgba(0,0,0,0.7);
+        font-size: 14px; line-height: 1.5;
+    }
+    .card .hint {
+        margin-top: 12px; padding: 10px 14px;
+        background: #e8e8e8;
+        box-shadow: inset 3px 3px 8px #ababab, inset -2px -2px 6px #ffffff;
+        border-radius: 10px;
+        font-size: 13px; color: rgba(0,0,0,0.65);
+        font-style: italic;
+    }
+    section.group { margin-top: 36px; }
+    section.group > h2 {
+        font-size: 18px; font-weight: 600;
+        margin: 0 0 14px;
+        color: rgba(0,0,0,0.7);
+    }
+    .footnote {
+        margin-top: 40px;
+        font-size: 13px; color: rgba(0,0,0,0.5);
+        line-height: 1.6;
+    }
+    .footnote a { color: #e91e63; text-decoration: none; font-weight: 600; }
+    .footnote a:hover { text-decoration: underline; }
+</style>
+</head>
+<body>
+<div class="wrap">
+    <header class="page">
+        <div class="logo">Q<span class="dot">.</span></div>
+        <a href="/chat" class="back">&larr; Back to chat</a>
+    </header>
+
+    <h1 class="heading">What can Q do?</h1>
+    <p class="lead">Q is a general AI you can trust — open-weights, frozen at a pinned version, and yours. Below is what he can do today. The list grows as he's trained.</p>
+
+    <section class="group">
+        <h2>In chat — just ask</h2>
+        <div class="grid">
+
+            <div class="card">
+                <h3><span class="icon-well"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0z"/><line x1="3.6" y1="9" x2="20.4" y2="9"/><line x1="3.6" y1="15" x2="20.4" y2="15"/><path d="M11.5 3a17 17 0 0 0 0 18M12.5 3a17 17 0 0 1 0 18"/></svg></span>Web search</h3>
+                <p>Live, current results. Q searches when he doesn't already know — news, prices, dates, anything that may have changed.</p>
+                <div class="hint">"What's the current Bank of England base rate?"</div>
+            </div>
+
+            <div class="card">
+                <h3><span class="icon-well"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="2" width="16" height="20" rx="2"/><line x1="8" y1="6" x2="16" y2="6"/><line x1="8" y1="10" x2="10" y2="10"/><line x1="14" y1="10" x2="16" y2="10"/><line x1="8" y1="14" x2="10" y2="14"/><line x1="14" y1="14" x2="16" y2="14"/><line x1="8" y1="18" x2="10" y2="18"/><line x1="14" y1="18" x2="16" y2="18"/></svg></span>Calculator</h3>
+                <p>Real arithmetic, not LLM-flavoured guessing. Percentages, totals, VAT, currency conversions.</p>
+                <div class="hint">"What's 17.5% of 4283.50?"</div>
+            </div>
+
+            <div class="card">
+                <h3><span class="icon-well"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></span>Time &amp; dates</h3>
+                <p>Q knows the current time in any timezone — useful for scheduling, deadlines, and not getting "today" wrong.</p>
+                <div class="hint">"What time is it in Tokyo right now?"</div>
+            </div>
+
+            <div class="card">
+                <h3><span class="icon-well"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="9" y1="13" x2="15" y2="13"/><line x1="9" y1="17" x2="15" y2="17"/></svg></span>Read documents</h3>
+                <p>Drop a PDF, Word doc, image, or screenshot into the chat. Q reads it and answers questions about it. Scanned PDFs work too.</p>
+                <div class="hint">Drag a parking ticket in and ask "is this fair?"</div>
+            </div>
+
+            <div class="card">
+                <h3><span class="icon-well"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg></span>Write a Word document</h3>
+                <p>Letters, complaints, contracts, briefs. Ask Q for it and he'll hand back a real <code>.docx</code> you can download, save, or send.</p>
+                <div class="hint">"Write a complaint letter to the council about the bin collection."</div>
+            </div>
+
+            <div class="card">
+                <h3><span class="icon-well"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg></span>Long-term memory</h3>
+                <p>Tell Q something worth keeping and he remembers it across sessions. Names, preferences, projects, decisions.</p>
+                <div class="hint">"Remember my dad's birthday is March 15th."</div>
+            </div>
+
+            <div class="card">
+                <h3><span class="icon-well"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg></span>APS — A Problem Shared</h3>
+                <p>Toggle the <strong>APS</strong> button on. Hand Q a fine, bill, dispute, or letter you don't understand. He'll find the angle, write the appeal, and tell you the odds.</p>
+                <div class="hint">"I got a parking fine but the meter wasn't working."</div>
+            </div>
+
+            <div class="card">
+                <h3><span class="icon-well"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg></span>Code &amp; technical help</h3>
+                <p>Write code, debug it, explain it. Q's good at most languages and frameworks; he'll be honest when he isn't sure.</p>
+                <div class="hint">"Why is this Python loop slow?"</div>
+            </div>
+
+        </div>
+    </section>
+
+    <section class="group">
+        <h2>Bigger jobs — separate pages</h2>
+        <div class="grid">
+
+            <div class="card">
+                <h3><span class="icon-well"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg></span>Image generation &amp; editing</h3>
+                <p>Generate images from a prompt, or edit ones you already have.</p>
+                <div class="hint"><a href="/image-gen" style="color:#e91e63;">Open image gen</a> · <a href="/image-tools" style="color:#e91e63;">image tools</a></div>
+            </div>
+
+            <div class="card">
+                <h3><span class="icon-well"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg></span>Music generation</h3>
+                <p>Describe a track. Q makes it.</p>
+                <div class="hint"><a href="/music" style="color:#e91e63;">Open music studio</a></div>
+            </div>
+
+            <div class="card">
+                <h3><span class="icon-well"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg></span>Video generation</h3>
+                <p>Short videos from a prompt.</p>
+                <div class="hint"><a href="/video" style="color:#e91e63;">Open video studio</a></div>
+            </div>
+
+            <div class="card">
+                <h3><span class="icon-well"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg></span>Graphics &amp; SVG</h3>
+                <p>Convert images to clean editable SVG vectors.</p>
+                <div class="hint"><a href="/graphics" style="color:#e91e63;">Open graphics</a></div>
+            </div>
+
+            <div class="card">
+                <h3><span class="icon-well"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg></span>Voice cloning</h3>
+                <p>Clone a voice from a short sample.</p>
+                <div class="hint"><a href="/code" style="color:#e91e63;">Voice cloning is in the studio</a></div>
+            </div>
+
+            <div class="card">
+                <h3><span class="icon-well"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg></span>Scheduler</h3>
+                <p>Run jobs on a schedule. Useful for repeating tasks, polling, and triggering agents at set times.</p>
+                <div class="hint"><a href="/scheduler" style="color:#e91e63;">Open scheduler</a></div>
+            </div>
+
+            <div class="card">
+                <h3><span class="icon-well"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></span>Agent runner</h3>
+                <p>Hand Q a goal and a budget; he chains tools to get there.</p>
+                <div class="hint"><a href="/agent" style="color:#e91e63;">Open agent runner</a></div>
+            </div>
+
+        </div>
+    </section>
+
+    <p class="footnote">
+        Don't see what you need? Tell Q. He's growing — your asks shape what he learns next.
+        <br /><a href="/chat">&larr; Back to chat</a>
+    </p>
+</div>
+</body>
+</html>
