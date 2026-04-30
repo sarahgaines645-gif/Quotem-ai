@@ -9,20 +9,20 @@
 const path = require('path');
 const express = require('express');
 const router = express.Router();
-const { readText } = require('./plugins/qwen-text-reader');
-const { translateToSOR } = require('./plugins/qwen-translator');
-const { checkResults } = require('./plugins/qwen-checker');
-const { expandItem } = require('./plugins/qwen-expander');
-const { priceItem, priceItems } = require('./plugins/qwen-pricer');
-const { chat } = require('./plugins/qwen-chat');
-const { stats: ragStats } = require('./plugins/qwen-rag');
-const { speakAsVoice } = require('./plugins/qwen-voice-clone');
-const { runAgent } = require('./plugins/qwen-agent');
-const { analyzeDocument } = require('./plugins/qwen-tools');
-const { generateImage } = require('./plugins/qwen-image-gen');
-const { vectoriseImage } = require('./plugins/qwen-graphics');
-const { generateMusic } = require('./plugins/qwen-music');
-const { generateVideo } = require('./plugins/qwen-video');
+const { readText } = require('./plugins/q-text-reader');
+const { translateToSOR } = require('./plugins/q-translator');
+const { checkResults } = require('./plugins/q-checker');
+const { expandItem } = require('./plugins/q-expander');
+const { priceItem, priceItems } = require('./plugins/q-pricer');
+const { chat } = require('./plugins/q-chat');
+const { stats: ragStats } = require('./plugins/q-rag');
+const { speakAsVoice } = require('./plugins/q-voice-clone');
+const { runAgent } = require('./plugins/q-agent');
+const { analyzeDocument } = require('./plugins/q-tools');
+const { generateImage } = require('./plugins/q-image-gen');
+const { vectoriseImage } = require('./plugins/q-graphics');
+const { generateMusic } = require('./plugins/q-music');
+const { generateVideo } = require('./plugins/q-video');
 const { listFacts, searchFacts, deleteFact, clearFacts, getFactsPath } = require('./facts');
 const {
     createJob,
@@ -813,7 +813,7 @@ router.post('/agent/run', express.json({ limit: '256kb' }), async (req, res) => 
 
 // Voice cloning — POST text + reference audio (base64), get back WAV audio
 // of Q speaking that text in the reference voice. Calls the Chatterbox HF
-// Space (Q_CONFIG.chatterboxSpaceUrl). See q-lab/plugins/qwen-voice-clone.js.
+// Space (Q_CONFIG.chatterboxSpaceUrl). See q-lab/plugins/q-voice-clone.js.
 //
 // Body: { text, referenceAudioBase64, referenceMimeType, exaggeration?, cfgWeight? }
 // Returns: audio/wav binary stream (or JSON error)

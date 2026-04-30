@@ -16,7 +16,7 @@
  *   node q-lab/plugins/qwen-ingest.js --wipe           → wipe library before re-ingest
  *
  * Usage as module:
- *   const { ingestFolder, ingestFile } = require('./qwen-ingest');
+ *   const { ingestFolder, ingestFile } = require('./q-ingest');
  *   await ingestFolder('/path/to/docs');
  */
 'use strict';
@@ -45,7 +45,7 @@ if (!process.env.TOGETHER_API_KEY) {
     }
 }
 
-const { addDocument, stats, wipe } = require('./qwen-rag.js');
+const { addDocument, stats, wipe } = require('./q-rag.js');
 
 const DEFAULT_FOLDER = path.join(__dirname, '..', 'knowledge-source');
 const SUPPORTED_EXTS = ['.md', '.txt', '.json', '.csv'];

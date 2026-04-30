@@ -20,7 +20,7 @@
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
-const { runAgent } = require('./plugins/qwen-agent');
+const { runAgent } = require('./plugins/q-agent');
 
 const VOLUME_DIR = process.env.RAILWAY_VOLUME_MOUNT_PATH
     || (fs.existsSync('/data') ? '/data' : null);

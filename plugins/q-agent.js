@@ -23,8 +23,8 @@
 'use strict';
 
 const { Q_CONFIG } = require('../config');
-const { TOOL_DEFINITIONS, executeTool } = require('./qwen-tools');
-const { verify } = require('./qwen-verifier');
+const { TOOL_DEFINITIONS, executeTool } = require('./q-tools');
+const { verify } = require('./q-verifier');
 
 const DEFAULT_MAX_STEPS = 25;
 

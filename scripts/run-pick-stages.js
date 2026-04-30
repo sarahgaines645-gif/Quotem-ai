@@ -25,7 +25,7 @@
 
 const { lookupPricing } = require('../../server/templates/pricing-lookup.js');
 const { lookupSOR } = require('../../server/templates/sor-engine.js');
-const { pickSOR: pickWithQ } = require('../plugins/qwen-sor-picker.js');
+const { pickSOR: pickWithQ } = require('../plugins/q-sor-picker.js');
 const { readText: readWithClaude } = require('../../server/templates/claude-text-reader.js');
 const { translateToSOR } = require('../../server/templates/claude-translator.js');
 

@@ -22,10 +22,10 @@
  */
 'use strict';
 
-const { readText } = require('./plugins/qwen-text-reader');
-const { translateToSOR } = require('./plugins/qwen-translator');
-const { pickSOR } = require('./plugins/qwen-sor-picker');
-const { checkResults } = require('./plugins/qwen-checker');
+const { readText } = require('./plugins/q-text-reader');
+const { translateToSOR } = require('./plugins/q-translator');
+const { pickSOR } = require('./plugins/q-sor-picker');
+const { checkResults } = require('./plugins/q-checker');
 // pricing-lookup is data, not engine — q-lab is allowed to call it
 const { lookupPricing } = require('../server/templates/pricing-lookup');
 
