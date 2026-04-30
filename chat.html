@@ -146,9 +146,10 @@
   main {
     flex: 1;
     overflow-y: auto;
-    padding: 80px 28px 200px;
+    padding: 80px 28px 24px;
     scroll-behavior: smooth;
     position: relative;
+    min-height: 0;
   }
   /* Top fade — fixed overlay just under the header so messages dissolve
      instead of slamming into it. Mostly solid so text behind it doesn't
@@ -345,19 +346,17 @@
   .typing span:nth-child(3) { animation-delay: 0.3s; }
   @keyframes bounce { 0%,60%,100% { transform: translateY(0); opacity: 0.4; } 30% { transform: translateY(-5px); opacity: 1; } }
 
-  /* INPUT BAR — inset well with raised buttons, lifted off the viewport bottom.
-     Background is mostly solid (only a short feather at the very top) so
-     messages scrolling behind it are cleanly hidden, not faded through. */
+  /* INPUT BAR — sits in the flex column below main, NOT fixed positioning.
+     This means main is physically bounded (header above, footer below), so
+     messages can never scroll behind or under the input bar.
+     The bottom padding inside the footer block lifts the input wrapper off
+     the very bottom of the viewport without overlapping main. */
   footer {
-    position: fixed; bottom: 280px; left: 0; right: 0;
-    padding: 18px 28px 18px;
-    background: linear-gradient(to top, var(--bg) 90%, transparent);
-    pointer-events: none;
+    flex-shrink: 0;
+    padding: 18px 28px 100px;
+    background: var(--bg);
     z-index: 8;
   }
-  /* Padding so the last message in the scroll has clear space above the input
-     bar — must exceed (footer bottom-offset + footer height) to avoid overlap. */
-  main { padding-bottom: 480px; }
   .input-wrapper {
     max-width: 720px; margin: 0 auto;
     background: var(--bg);
@@ -1741,6 +1740,5 @@ function scrollToBottom() {
 }
 </script>
 
-<script src="/trace-widget.js"></script>
 </body>
 </html>
