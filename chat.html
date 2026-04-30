@@ -584,6 +584,28 @@
   }
   .image-attachment .remove:hover { background: #ef4444; }
 
+  /* Text-doc chips — shown when a Word/PDF/txt is attached (no thumbnail) */
+  .doc-chip {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 6px 10px 6px 8px;
+    border-radius: 8px;
+    background: var(--bg);
+    box-shadow: var(--neu-raised-sm);
+    font-size: 12px; font-weight: 500; color: var(--text-muted);
+    max-width: 180px;
+  }
+  .doc-chip .doc-icon { font-size: 15px; flex-shrink: 0; }
+  .doc-chip .doc-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .doc-chip .remove {
+    flex-shrink: 0; margin-left: 2px;
+    width: 16px; height: 16px;
+    border: none; background: transparent; cursor: pointer;
+    color: var(--text-muted); font-size: 13px; line-height: 1;
+    display: inline-flex; align-items: center; justify-content: center;
+    border-radius: 4px; padding: 0;
+  }
+  .doc-chip .remove:hover { color: #ef4444; }
+
   /* Inline images inside message bubbles. */
   .message-images {
     display: flex; flex-wrap: wrap; gap: 6px;
@@ -1600,7 +1622,8 @@ let attachedImages = [];  // [{ dataUrl, mimeType, name }]
 
 function renderAttachments() {
   $imageAttachments.innerHTML = '';
-  if (attachedImages.length === 0) {
+  const hasAnything = attachedImages.length > 0 || attachedTexts.length > 0;
+  if (!hasAnything) {
     $imageAttachments.classList.remove('show');
   } else {
     attachedImages.forEach((img, i) => {
@@ -1608,23 +1631,36 @@ function renderAttachments() {
       el.className = 'image-attachment';
       el.innerHTML =
         '<img src="' + img.dataUrl + '" alt="">' +
-        '<button class="remove" data-idx="' + i + '" title="Remove">×</button>';
+        '<button class="remove" data-img="' + i + '" title="Remove">×</button>';
+      $imageAttachments.appendChild(el);
+    });
+    attachedTexts.forEach((doc, i) => {
+      const icon = doc.name.endsWith('.pdf') ? '📄' : doc.name.match(/\.docx?$/) ? '📝' : '📃';
+      const el = document.createElement('div');
+      el.className = 'doc-chip';
+      el.innerHTML =
+        '<span class="doc-icon">' + icon + '</span>' +
+        '<span class="doc-name" title="' + escapeHtml(doc.name) + '">' + escapeHtml(doc.name) + '</span>' +
+        '<button class="remove" data-doc="' + i + '" title="Remove">×</button>';
       $imageAttachments.appendChild(el);
     });
     $imageAttachments.classList.add('show');
   }
   // The attachment row sits above the input, so showing/hiding it changes the
   // footer height — main shrinks/grows and the scroll position desyncs from
-  // the visual bottom. Re-anchor to bottom so the user always sees the latest
-  // message + their attachment together. Wait one frame so layout has settled.
-  requestAnimationFrame(scrollToBottom);
+  // the visual bottom. Double-RAF: first frame triggers layout recalc,
+  // second frame measures the settled scrollHeight and snaps to bottom.
+  requestAnimationFrame(() => requestAnimationFrame(scrollToBottom));
 }
 
 $imageAttachments.addEventListener('click', (e) => {
-  const btn = e.target.closest('[data-idx]');
+  const btn = e.target.closest('[data-img],[data-doc]');
   if (!btn) return;
-  const idx = parseInt(btn.dataset.idx, 10);
-  attachedImages.splice(idx, 1);
+  if (btn.dataset.img !== undefined) {
+    attachedImages.splice(parseInt(btn.dataset.img, 10), 1);
+  } else if (btn.dataset.doc !== undefined) {
+    attachedTexts.splice(parseInt(btn.dataset.doc, 10), 1);
+  }
   renderAttachments();
 });
 
@@ -2053,7 +2089,9 @@ function escapeHtml(str) {
 
 function scrollToBottom() {
   const m = document.querySelector('main');
-  m.scrollTop = m.scrollHeight;
+  // Use instant to bypass CSS scroll-behavior: smooth which can race
+  // with layout changes (footer growing/shrinking after file attach).
+  m.scrollTo({ top: m.scrollHeight, behavior: 'instant' });
 }
 </script>
 
