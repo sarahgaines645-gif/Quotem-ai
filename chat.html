@@ -668,6 +668,92 @@
   }
   .drop-overlay.show { display: flex; }
 
+  /* Change-password modal — fullscreen overlay + centred neumorphic card. */
+  .pwd-overlay {
+    position: fixed; inset: 0;
+    background: rgba(232,232,232,0.96);
+    z-index: 300;
+    display: none;
+    align-items: center; justify-content: center;
+    padding: 20px;
+  }
+  .pwd-overlay.show { display: flex; }
+  .pwd-card {
+    background: var(--bg);
+    box-shadow: var(--neu-raised);
+    border-radius: 24px;
+    padding: 36px 32px;
+    width: min(420px, 100%);
+    text-align: left;
+  }
+  .pwd-card h2 {
+    font-size: 22px; font-weight: 600;
+    color: var(--text); margin: 0 0 6px;
+    letter-spacing: -0.01em;
+  }
+  .pwd-card .pwd-hint {
+    font-size: 13px; color: var(--text-muted);
+    margin: 0 0 18px;
+  }
+  .pwd-card label {
+    display: block;
+    font-size: 11px; font-weight: 600;
+    color: var(--text-muted);
+    text-transform: uppercase; letter-spacing: 0.06em;
+    margin: 14px 0 6px;
+  }
+  .pwd-card input[type="password"],
+  .pwd-card input[type="text"] {
+    width: 100%; padding: 14px 18px;
+    border: none; outline: none;
+    background: var(--bg); color: var(--text);
+    box-shadow: var(--neu-inset);
+    border-radius: 14px;
+    font-size: 16px; font-family: inherit;
+  }
+  .pwd-input-wrap { position: relative; }
+  .pwd-input-wrap input { padding-right: 48px; }
+  .pwd-eye {
+    position: absolute; right: 12px; top: 50%;
+    transform: translateY(-50%);
+    width: 32px; height: 32px;
+    border: none; cursor: pointer;
+    background: transparent; color: var(--text-muted);
+    display: inline-flex; align-items: center; justify-content: center;
+    border-radius: 8px; padding: 0;
+  }
+  .pwd-eye:hover { color: var(--text); }
+  .pwd-eye svg { width: 18px; height: 18px; }
+  .pwd-err {
+    color: var(--accent);
+    font-size: 13px; margin-top: 12px; min-height: 18px;
+  }
+  .pwd-actions {
+    display: flex; gap: 10px; margin-top: 18px;
+  }
+  .pwd-actions button {
+    flex: 1; padding: 12px;
+    border: none; cursor: pointer;
+    background: var(--bg); color: var(--text);
+    border-radius: 12px;
+    font-family: inherit; font-size: 14px; font-weight: 600;
+    box-shadow: var(--neu-raised-sm);
+    transition: box-shadow 0.12s;
+  }
+  .pwd-actions button:active,
+  .pwd-actions button:disabled {
+    box-shadow: var(--neu-inset-xs);
+  }
+  .pwd-actions button:disabled { cursor: wait; opacity: 0.6; }
+  .pwd-actions .pwd-save { color: var(--accent); }
+  .pwd-toast {
+    margin-top: 12px;
+    font-size: 13px;
+    color: #10b981;
+    text-align: center;
+    min-height: 16px;
+  }
+
   .input-hint {
     max-width: 720px; margin: 12px auto 0;
     font-size: 11px; color: var(--text-faint);
@@ -719,6 +805,12 @@
         </div>
       </div>
     </div>
+    <button class="icon-btn" id="change-pwd-btn" aria-label="Change password" title="Change password">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="15" r="4"/><path d="M10.85 12.15 19 4"/><path d="m18 5 3 3"/><path d="m15 8 3 3"/></svg>
+    </button>
+    <button class="icon-btn" id="signout-btn" aria-label="Sign out" title="Sign out">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+    </button>
     <button class="icon-btn" id="clear" aria-label="Clear conversation" title="Clear conversation">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6l-2 14a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2L5 6"></path><path d="M10 11v6"></path><path d="M14 11v6"></path></svg>
     </button>
@@ -767,6 +859,31 @@
 </footer>
 
 <div class="drop-overlay" id="drop-overlay">Drop a file to attach (image · PDF · Word · .txt)</div>
+
+<!-- Change-password modal — hidden until the key icon in the header is clicked. -->
+<div class="pwd-overlay" id="pwd-overlay" aria-hidden="true">
+  <div class="pwd-card" role="dialog" aria-modal="true" aria-labelledby="pwd-title">
+    <h2 id="pwd-title">Change password</h2>
+    <p class="pwd-hint">Pick something you'll remember. 8 characters minimum.</p>
+    <label for="pwd-new">New password</label>
+    <div class="pwd-input-wrap">
+      <input id="pwd-new" type="password" autocomplete="new-password"
+        autocapitalize="off" autocorrect="off" spellcheck="false" />
+      <button type="button" class="pwd-eye" id="pwd-new-eye" aria-label="Show password" title="Show / hide password">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+      </button>
+    </div>
+    <label for="pwd-confirm">Confirm new password</label>
+    <input id="pwd-confirm" type="password" autocomplete="new-password"
+      autocapitalize="off" autocorrect="off" spellcheck="false" />
+    <div class="pwd-err" id="pwd-err"></div>
+    <div class="pwd-actions">
+      <button type="button" class="pwd-cancel" id="pwd-cancel">Cancel</button>
+      <button type="button" class="pwd-save" id="pwd-save">Save</button>
+    </div>
+    <div class="pwd-toast" id="pwd-toast" aria-live="polite"></div>
+  </div>
+</div>
 
 <script>
 const $conversation = document.getElementById('conversation');
@@ -944,6 +1061,98 @@ $clear.addEventListener('click', async () => {
   } catch (e) {}
   if ('speechSynthesis' in window) speechSynthesis.cancel();
   location.reload();
+});
+
+// Sign out — clears the session cookie server-side, reloads the page
+// (which will then drop into the sign-in overlay).
+const $signoutBtn = document.getElementById('signout-btn');
+if ($signoutBtn) {
+  $signoutBtn.addEventListener('click', () => {
+    if (typeof window.qSignOut === 'function') return window.qSignOut();
+    fetch('/logout', { method: 'POST', credentials: 'include' })
+      .finally(() => location.reload());
+  });
+}
+
+// ─── CHANGE PASSWORD ──────────────────────────────────────────────────────
+const $pwdBtn = document.getElementById('change-pwd-btn');
+const $pwdOverlay = document.getElementById('pwd-overlay');
+const $pwdNew = document.getElementById('pwd-new');
+const $pwdConfirm = document.getElementById('pwd-confirm');
+const $pwdNewEye = document.getElementById('pwd-new-eye');
+const $pwdSave = document.getElementById('pwd-save');
+const $pwdCancel = document.getElementById('pwd-cancel');
+const $pwdErr = document.getElementById('pwd-err');
+const $pwdToast = document.getElementById('pwd-toast');
+
+function openPwdModal() {
+  $pwdNew.value = '';
+  $pwdConfirm.value = '';
+  $pwdErr.textContent = '';
+  $pwdToast.textContent = '';
+  $pwdSave.disabled = false;
+  $pwdSave.textContent = 'Save';
+  $pwdNew.type = 'password';
+  $pwdOverlay.classList.add('show');
+  $pwdOverlay.setAttribute('aria-hidden', 'false');
+  setTimeout(() => $pwdNew.focus(), 30);
+}
+function closePwdModal() {
+  $pwdOverlay.classList.remove('show');
+  $pwdOverlay.setAttribute('aria-hidden', 'true');
+}
+
+if ($pwdBtn) $pwdBtn.addEventListener('click', openPwdModal);
+if ($pwdCancel) $pwdCancel.addEventListener('click', closePwdModal);
+$pwdOverlay.addEventListener('click', (e) => {
+  // Click outside the card closes the modal.
+  if (e.target === $pwdOverlay) closePwdModal();
+});
+
+// Eye toggle on the new-password field — confirm field stays masked.
+if ($pwdNewEye) {
+  $pwdNewEye.addEventListener('click', () => {
+    const showing = $pwdNew.type === 'text';
+    $pwdNew.type = showing ? 'password' : 'text';
+    $pwdNewEye.setAttribute('aria-label', showing ? 'Show password' : 'Hide password');
+  });
+}
+
+async function handleChangePassword() {
+  $pwdErr.textContent = '';
+  $pwdToast.textContent = '';
+  const a = ($pwdNew.value || '').trim();
+  const b = ($pwdConfirm.value || '').trim();
+  if (a.length < 8) { $pwdErr.textContent = 'Password must be at least 8 characters.'; return; }
+  if (a !== b) { $pwdErr.textContent = "Passwords don't match."; return; }
+  $pwdSave.disabled = true;
+  $pwdSave.textContent = 'Saving...';
+  try {
+    const r = await fetch('/change-password', {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ newPassword: a }),
+    });
+    if (r.ok) {
+      $pwdToast.textContent = '✓ Password changed.';
+      setTimeout(closePwdModal, 1200);
+      return;
+    }
+    const data = await r.json().catch(() => ({}));
+    $pwdErr.textContent = data.error || 'Could not change password.';
+  } catch (_) {
+    $pwdErr.textContent = 'Network error — try again.';
+  } finally {
+    $pwdSave.disabled = false;
+    $pwdSave.textContent = 'Save';
+  }
+}
+
+if ($pwdSave) $pwdSave.addEventListener('click', handleChangePassword);
+[$pwdNew, $pwdConfirm].forEach(input => {
+  if (!input) return;
+  input.addEventListener('keydown', (ev) => { if (ev.key === 'Enter') handleChangePassword(); });
 });
 
 // ─── VOICES PANEL ─────────────────────────────────────────────────────────
