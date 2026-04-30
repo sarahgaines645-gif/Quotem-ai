@@ -41,7 +41,7 @@ const {
 startScheduler();
 const { loadMemory, clearMemory, appendMessage, getRecentMessages, getCircleSummary, getMemoryPath } = require('./memory');
 const { requirePerson, tryAttachPerson, setSessionCookie, clearSessionCookie } = require('./auth');
-const { listPeople, addPerson, getPerson, removePerson, verifyLogin, changePassword, rotatePassword } = require('./people');
+const { listPeople, addPerson, signupPerson, getPerson, getPersonByEmail, removePerson, verifyLogin, changePassword, rotatePassword } = require('./people');
 const { summarise: summariseCosts, getLogPath: costLogPath } = require('./cost-tracker');
 
 // ── Auth: login + logout ────────────────────────────────────────────────────
@@ -55,6 +55,21 @@ router.post('/login', express.json({ limit: '4kb' }), async (req, res) => {
     }
     setSessionCookie(res, person.email);
     res.json({ ok: true, person });
+});
+
+// Public self-signup. No invite code, no approval — anyone can create an
+// account by giving a name, email, and 8+ char password. Auto-logs in on
+// success by setting the session cookie. Tighten this if the URL gets
+// shared in places it shouldn't.
+router.post('/signup', express.json({ limit: '4kb' }), async (req, res) => {
+    const { name, email, password } = req.body || {};
+    try {
+        const person = await signupPerson({ name, email, password });
+        setSessionCookie(res, person.email);
+        return res.json({ ok: true, person });
+    } catch (e) {
+        return res.status(400).json({ error: e.message || 'Sign-up failed.' });
+    }
 });
 
 router.post('/logout', (req, res) => {
@@ -203,19 +218,14 @@ router.post('/chat', requirePerson, express.json({ limit: '24mb' }), async (req,
     const chatOptions = { reasoningEffort, images, useTools, verify, mode, person, circle };
 
     if (typeof newMessage === 'string' && newMessage.trim()) {
-        // Tag history entries with WHO said them and WHEN so Q knows
-        // both his circle and the time gaps between sessions.
-        const rawHistory = loadMemory().slice(-50);
+        // Per-person memory: load only THIS person's history. Friends'
+        // conversations never bleed into Q's context for this turn.
+        const rawHistory = loadMemory(person.id).slice(-50);
         const history = rawHistory.map(m => {
             const ts = m.timestamp ? m.timestamp.slice(0, 16).replace('T', ' ') : '?';
-            if (m.role === 'user') {
-                return {
-                    role: 'user',
-                    content: `[${ts} · ${m.user || 'sarah'}]: ${m.content}`,
-                };
-            }
-            // assistant turn — include timestamp as a leading marker so Q
-            // can see how much time passed between his replies
+            // Each file only contains turns between this person and Q, so
+            // the role alone is unambiguous; just keep timestamps so Q can
+            // sense gaps between sessions.
             return {
                 role: m.role,
                 content: `[${ts}] ${m.content}`,
@@ -226,18 +236,18 @@ router.post('/chat', requirePerson, express.json({ limit: '24mb' }), async (req,
         const nowStr = now.toISOString().slice(0, 16).replace('T', ' ');
         history.unshift({
             role: 'system',
-            content: `It is now ${nowStr} (UTC). The history below shows previous turns with their timestamps — note any gaps between sessions and respond as someone who has had time pass, not as if every turn just happened.`,
+            content: `It is now ${nowStr} (UTC). You're talking to ${person.name}. The history below shows previous turns between you two with their timestamps — note any gaps between sessions and respond as someone who has had time pass, not as if every turn just happened.`,
         });
         const userMemoryContent = images.length > 0
             ? newMessage + `\n[${person.name} attached ${images.length} image${images.length > 1 ? 's' : ''}]`
             : newMessage;
         const messagesForQ = [
             ...history,
-            { role: 'user', content: `[${person.id}]: ${userMemoryContent}` },
+            { role: 'user', content: userMemoryContent },
         ];
         appendMessage(person.id, 'user', userMemoryContent);
         const result = await chat(messagesForQ, chatOptions);
-        if (result.reply) appendMessage('q', 'assistant', result.reply);
+        if (result.reply) appendMessage(person.id, 'assistant', result.reply);
         return res.json(result);
     }
 
@@ -252,33 +262,18 @@ router.post('/chat', requirePerson, express.json({ limit: '24mb' }), async (req,
     });
 });
 
-// GET Q's full memory. Sarah sees everything; other people see only
-// turns that are theirs or Q's reply to them.
+// GET Q's memory for the calling person. Each person has their own file —
+// no filtering or cross-person bleed. Sarah's wipe doesn't touch anyone
+// else; nobody else's wipe touches Sarah.
 router.get('/chat-history', requirePerson, (req, res) => {
-    const messages = loadMemory();
-    if (req.person.id === 'sarah') {
-        return res.json({ messages, storedAt: getMemoryPath() });
-    }
-    // For other people: include their own turns, and Q's replies that
-    // immediately follow one of their turns.
-    const filtered = [];
-    for (let i = 0; i < messages.length; i++) {
-        const m = messages[i];
-        if (m.user === req.person.id) {
-            filtered.push(m);
-        } else if (m.user === 'q' && messages[i - 1]?.user === req.person.id) {
-            filtered.push(m);
-        }
-    }
-    res.json({ messages: filtered });
+    const messages = loadMemory(req.person.id);
+    return res.json({ messages, storedAt: getMemoryPath(req.person.id) });
 });
 
-// Wipe Q's memory — Sarah only. Destructive, so locked down.
+// Wipe THIS person's memory only. Sarah's clear doesn't touch anyone else's;
+// a friend's clear doesn't touch Sarah's. Each person owns their own thread.
 router.delete('/chat-history', requirePerson, (req, res) => {
-    if (req.person.id !== 'sarah') {
-        return res.status(403).json({ error: 'Only Sarah can clear Q\'s memory.' });
-    }
-    const ok = clearMemory();
+    const ok = clearMemory(req.person.id);
     res.json({ ok });
 });
 

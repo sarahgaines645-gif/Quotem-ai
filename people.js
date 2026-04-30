@@ -170,6 +170,50 @@ function removePerson(id) {
 }
 
 /**
+ * Pick a unique, filename-safe id for a new person. Derived from the local
+ * part of their email; if that's already taken, append -2, -3, etc. The id
+ * is what we use for memory file names so it MUST stay stable for that
+ * person's lifetime.
+ */
+function generateUniqueId(email) {
+    const local = normaliseEmail(email).split('@')[0] || 'user';
+    const baseId = local.replace(/[^a-z0-9]/g, '-').replace(/^-+|-+$/g, '') || 'user';
+    const people = loadPeople();
+    if (!people.find(p => p.id === baseId)) return baseId;
+    let n = 2;
+    while (people.find(p => p.id === baseId + '-' + n)) n++;
+    return baseId + '-' + n;
+}
+
+/**
+ * Public-facing self-signup. Validates input, generates a stable id from
+ * the email, and creates the person. Returns the safe person record on
+ * success. Throws on validation failure or duplicate email.
+ *
+ * No invite code, no admin approval — Sarah set this up for friends to
+ * try Q without her in the loop. Tighten later if the URL gets shared
+ * around in places it shouldn't.
+ */
+async function signupPerson({ name, email, password }) {
+    const cleanName = String(name || '').trim();
+    const cleanEmail = normaliseEmail(email);
+    if (!cleanName) throw new Error('Please enter your name.');
+    if (!cleanEmail || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(cleanEmail)) {
+        throw new Error('Please enter a valid email address.');
+    }
+    if (!password || password.length < 8) {
+        throw new Error('Password must be at least 8 characters.');
+    }
+    const people = loadPeople();
+    if (people.find(p => normaliseEmail(p.email) === cleanEmail)) {
+        throw new Error('An account with this email already exists. Try signing in instead.');
+    }
+    const id = generateUniqueId(cleanEmail);
+    const result = await addPerson({ id, name: cleanName, email: cleanEmail, password });
+    return result.person;
+}
+
+/**
  * If people.json contains entries from the old access-key schema (no
  * passwordHash), they're useless — wipe and let bootstrap reseed Sarah.
  * Returns true if a wipe happened.
@@ -186,6 +230,8 @@ function migrateIfLegacy() {
 
 module.exports = {
     addPerson,
+    signupPerson,
+    generateUniqueId,
     verifyLogin,
     getPerson,
     getPersonByEmail,

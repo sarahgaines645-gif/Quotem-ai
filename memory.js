@@ -1,17 +1,27 @@
 /**
- * Q's persistent memory — Circle Mode.
+ * Q's persistent memory — per-person files.
  *
- * One memory file. Every message is tagged with the person who said it
- * so Q can know multiple people in his circle without confusing them.
+ * Each person Q knows has their own memory file. Q only sees the calling
+ * person's history when generating a reply, so two people chatting with Q
+ * get isolated experiences and one person's conversation never bleeds into
+ * another's context.
  *
- * Q sees the full cross-circle history but always knows who's in front
- * of him. To Sarah he can reference what Emma said yesterday; to Emma
- * he can reference what Sarah said. Same Q, multiple known people.
- *
- * Path priority:
+ * Path priority for the data directory:
  *   1. ${RAILWAY_VOLUME_MOUNT_PATH}/q-memory/    (production)
  *   2. /data/q-memory/                           (Railway volume default)
  *   3. ./data/                                   (local dev fallback)
+ *
+ * On disk:
+ *   q-memory-sarah.json     ← Sarah's full thread with Q (preserves the
+ *                              first-day memories from before per-person split)
+ *   q-memory-{personId}.json
+ *   q-memory.json.legacy    ← original shared file, kept as a safety backup
+ *                              (untouched after migration; never read)
+ *
+ * Migration runs once on boot: if a legacy `q-memory.json` exists and the
+ * per-person files don't, the legacy file is split — Sarah's pre-Circle-Mode
+ * untagged turns go to her file, every other turn is routed to whoever spoke,
+ * and Q's replies follow the most recent user (whoever Q was replying to).
  */
 'use strict';
 
@@ -25,8 +35,6 @@ const Q_DATA_DIR = VOLUME_DIR
     ? path.join(VOLUME_DIR, 'q-memory')
     : path.join(__dirname, 'data');
 
-const MEMORY_FILE = path.join(Q_DATA_DIR, 'q-memory.json');
-
 try {
     fs.mkdirSync(Q_DATA_DIR, { recursive: true });
 } catch (e) {
@@ -35,99 +43,175 @@ try {
 
 const MAX_HISTORY_TO_SEND = 50;
 
-/**
- * Load Q's full memory from disk.
- *
- * Backward-compat: pre-Circle-Mode entries had no `user` field. They
- * are treated as belonging to 'sarah' — she was the only person Q knew
- * at that point. The on-disk file is left alone; the tag is applied at
- * read time so Q's first-day memories stay byte-for-byte intact.
- */
-function loadMemory() {
+// Sanitise a person id for safe use as a filename component. Mirrors the
+// id-generation rule in people.generateUniqueId so files always line up.
+function safeId(personId) {
+    return String(personId || 'unknown').toLowerCase().replace(/[^a-z0-9-]/g, '-');
+}
+
+function getMemoryPath(personId) {
+    return path.join(Q_DATA_DIR, `q-memory-${safeId(personId)}.json`);
+}
+
+function legacyPath() {
+    return path.join(Q_DATA_DIR, 'q-memory.json');
+}
+
+function loadFile(file) {
     try {
-        if (!fs.existsSync(MEMORY_FILE)) return [];
-        const data = fs.readFileSync(MEMORY_FILE, 'utf8');
+        if (!fs.existsSync(file)) return [];
+        const data = fs.readFileSync(file, 'utf8');
         const parsed = JSON.parse(data);
-        if (!Array.isArray(parsed)) return [];
-        // Backward-compat tagging: pre-Circle-Mode entries had no `user`
-        // field. Tag based on role — role:user → 'sarah' (the only person
-        // Q knew at the time), role:assistant → 'q' (Q himself).
-        return parsed.map(m => ({
-            user: m.user || (m.role === 'assistant' ? 'q' : 'sarah'),
-            role: m.role,
-            content: m.content,
-            timestamp: m.timestamp,
-        }));
+        return Array.isArray(parsed) ? parsed : [];
     } catch (e) {
-        console.error('[q/memory] load error:', e.message);
+        console.error('[q/memory] load error for ' + file + ':', e.message);
         return [];
     }
 }
 
-function saveMemory(messages) {
+/**
+ * One-time migration. Splits a legacy shared `q-memory.json` into per-person
+ * files. Idempotent — silently no-ops if the legacy file is missing or any
+ * per-person file already exists. The legacy file is renamed to .legacy
+ * after a successful split so it's preserved but never re-read.
+ */
+function migrateLegacyMemory() {
+    const legacyFile = legacyPath();
+    if (!fs.existsSync(legacyFile)) return;
+
+    const messages = loadFile(legacyFile);
+    if (messages.length === 0) {
+        // empty legacy file — just rename it out of the way
+        try { fs.renameSync(legacyFile, legacyFile + '.legacy'); } catch (e) {}
+        return;
+    }
+
+    // Tag pre-Circle-Mode entries (no `user` field) — these all belong to
+    // Sarah, the only person Q knew at that point.
+    const tagged = messages.map(m => ({
+        ...m,
+        user: m.user || (m.role === 'assistant' ? 'q' : 'sarah'),
+    }));
+
+    // Group: each user turn goes to that user's file. Q's replies go to the
+    // file of whoever Q was replying to (the most recent user before the reply).
+    const perPerson = {};   // { personId: [{ role, content, timestamp }] }
+    let lastSpeaker = 'sarah';
+    for (const m of tagged) {
+        const entry = { role: m.role, content: m.content, timestamp: m.timestamp };
+        if (m.role === 'user') {
+            lastSpeaker = m.user;
+            (perPerson[m.user] = perPerson[m.user] || []).push(entry);
+        } else if (m.role === 'assistant') {
+            (perPerson[lastSpeaker] = perPerson[lastSpeaker] || []).push(entry);
+        }
+    }
+
+    // Write each person's file. Skip if a per-person file already exists
+    // (don't clobber anything that's been written since the legacy file).
+    let wroteAny = false;
+    for (const [personId, msgs] of Object.entries(perPerson)) {
+        const file = getMemoryPath(personId);
+        if (fs.existsSync(file)) continue;
+        try {
+            fs.writeFileSync(file, JSON.stringify(msgs, null, 2), 'utf8');
+            wroteAny = true;
+            console.log('[q/memory] migrated ' + msgs.length + ' messages → ' + file);
+        } catch (e) {
+            console.error('[q/memory] could not write ' + file + ':', e.message);
+        }
+    }
+
+    if (wroteAny) {
+        try {
+            fs.renameSync(legacyFile, legacyFile + '.legacy');
+            console.log('[q/memory] legacy file backed up to ' + legacyFile + '.legacy');
+        } catch (e) {
+            console.error('[q/memory] could not rename legacy file:', e.message);
+        }
+    }
+}
+
+// Run the migration at module load. Safe to call repeatedly — the function
+// is idempotent (no-op when no legacy file is present).
+migrateLegacyMemory();
+
+/**
+ * Load the full memory for a single person, in chronological order.
+ * Returns an empty array for new people who haven't chatted with Q yet.
+ */
+function loadMemory(personId) {
+    return loadFile(getMemoryPath(personId));
+}
+
+function saveMemory(personId, messages) {
     try {
-        fs.writeFileSync(MEMORY_FILE, JSON.stringify(messages, null, 2), 'utf8');
+        fs.writeFileSync(getMemoryPath(personId), JSON.stringify(messages, null, 2), 'utf8');
         return true;
     } catch (e) {
-        console.error('[q/memory] save error:', e.message);
+        console.error('[q/memory] save error for ' + personId + ':', e.message);
         return false;
     }
 }
 
 /**
- * Append a single message to memory.
+ * Append a single message to a specific person's memory file.
  *
- * @param {string} user - id of the speaker (or 'q' for Q's own replies)
+ * @param {string} personId - whose file to write to (the calling person)
  * @param {'user'|'assistant'} role
  * @param {string} content
  */
-function appendMessage(user, role, content) {
-    const messages = loadMemory();
+function appendMessage(personId, role, content) {
+    const messages = loadMemory(personId);
     messages.push({
-        user,
         role,
         content,
         timestamp: new Date().toISOString(),
     });
-    saveMemory(messages);
+    saveMemory(personId, messages);
     return messages;
 }
 
-function clearMemory() {
-    return saveMemory([]);
+/** Wipe one person's memory. Sarah's wipe doesn't touch anyone else's. */
+function clearMemory(personId) {
+    return saveMemory(personId, []);
 }
 
 /**
- * Get the most recent N messages from across the whole circle, in
- * chronological order. Each entry includes the `user` so Q knows who
- * said what when forming his reply.
+ * Get the most recent N messages for a single person, in chronological
+ * order. Used to build Q's prompt context — Q only ever sees the calling
+ * person's history.
  */
-function getRecentMessages(limit = MAX_HISTORY_TO_SEND) {
-    return loadMemory()
+function getRecentMessages(personId, limit = MAX_HISTORY_TO_SEND) {
+    return loadMemory(personId)
         .slice(-limit)
-        .map(m => ({ user: m.user, role: m.role, content: m.content }));
+        .map(m => ({ role: m.role, content: m.content }));
 }
 
 /**
- * Build a small directory of who Q has spoken with recently and the
- * last time each person was active. Q's system prompt includes this so
- * he knows the boundaries of his circle when replying.
+ * Build a small directory of who Q has spoken with recently. Reads every
+ * per-person file in the data dir and reports the last activity for each.
+ * Used by admin views — NOT included in Q's chat context (privacy).
  */
-function getCircleSummary(limit = 500) {
-    const messages = loadMemory();
-    const seen = new Map();
-    for (const m of messages.slice(-limit)) {
-        if (m.user && m.user !== 'q' && m.role === 'user') {
-            seen.set(m.user, m.timestamp);
+function getCircleSummary() {
+    try {
+        const entries = fs.readdirSync(Q_DATA_DIR);
+        const summary = [];
+        for (const name of entries) {
+            const m = name.match(/^q-memory-(.+)\.json$/);
+            if (!m) continue;
+            const personId = m[1];
+            const msgs = loadFile(path.join(Q_DATA_DIR, name));
+            const lastUser = [...msgs].reverse().find(x => x.role === 'user');
+            if (lastUser && lastUser.timestamp) {
+                summary.push({ user: personId, lastSpokeAt: lastUser.timestamp });
+            }
         }
+        return summary.sort((a, b) => (a.lastSpokeAt < b.lastSpokeAt ? 1 : -1));
+    } catch (e) {
+        console.error('[q/memory] circle summary error:', e.message);
+        return [];
     }
-    return Array.from(seen.entries())
-        .sort((a, b) => (a[1] < b[1] ? 1 : -1))
-        .map(([user, lastSpokeAt]) => ({ user, lastSpokeAt }));
-}
-
-function getMemoryPath() {
-    return MEMORY_FILE;
 }
 
 module.exports = {
@@ -138,4 +222,5 @@ module.exports = {
     getRecentMessages,
     getCircleSummary,
     getMemoryPath,
+    migrateLegacyMemory,
 };
