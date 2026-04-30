@@ -1602,17 +1602,22 @@ function renderAttachments() {
   $imageAttachments.innerHTML = '';
   if (attachedImages.length === 0) {
     $imageAttachments.classList.remove('show');
-    return;
+  } else {
+    attachedImages.forEach((img, i) => {
+      const el = document.createElement('div');
+      el.className = 'image-attachment';
+      el.innerHTML =
+        '<img src="' + img.dataUrl + '" alt="">' +
+        '<button class="remove" data-idx="' + i + '" title="Remove">×</button>';
+      $imageAttachments.appendChild(el);
+    });
+    $imageAttachments.classList.add('show');
   }
-  attachedImages.forEach((img, i) => {
-    const el = document.createElement('div');
-    el.className = 'image-attachment';
-    el.innerHTML =
-      '<img src="' + img.dataUrl + '" alt="">' +
-      '<button class="remove" data-idx="' + i + '" title="Remove">×</button>';
-    $imageAttachments.appendChild(el);
-  });
-  $imageAttachments.classList.add('show');
+  // The attachment row sits above the input, so showing/hiding it changes the
+  // footer height — main shrinks/grows and the scroll position desyncs from
+  // the visual bottom. Re-anchor to bottom so the user always sees the latest
+  // message + their attachment together. Wait one frame so layout has settled.
+  requestAnimationFrame(scrollToBottom);
 }
 
 $imageAttachments.addEventListener('click', (e) => {
