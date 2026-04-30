@@ -86,7 +86,10 @@ app.use('/widgets', express.static(path.join(ROOT, 'widgets')));
 // tags continue to resolve (trace-widget.js, looking-glass-widget.js).
 app.get('/trace-widget.js', (req, res) => res.sendFile(path.join(ROOT, 'trace-widget.js')));
 app.get('/looking-glass-widget.js', (req, res) => res.sendFile(path.join(ROOT, 'looking-glass-widget.js')));
-app.get('/q-auth.js', (req, res) => res.sendFile(path.join(ROOT, 'q-auth.js')));
+app.get('/q-auth.js', (req, res) => {
+    res.setHeader('Cache-Control', 'no-store, must-revalidate');
+    res.sendFile(path.join(ROOT, 'q-auth.js'));
+});
 
 // ── Health check ───────────────────────────────────────────────
 app.get('/health', (req, res) => {

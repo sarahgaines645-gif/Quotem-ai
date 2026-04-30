@@ -111,13 +111,17 @@
                     cursor: pointer; text-decoration: none;
                 }
                 #q-forgot-link a:hover { color: #e91e63; text-decoration: underline; }
-                /* Mode-specific show/hide */
+                /* Mode-specific show/hide.
+                   - .q-signup-only — name field, signup mode only
+                   - .q-signin-only — forgot-password link, signin mode only
+                   - .q-pwd-block   — password field + label, hidden ONLY in forgot mode
+                   The password is visible in BOTH signin and signup modes, so users
+                   can actually see what they're typing when creating an account. */
                 #q-signin-overlay[data-mode="signin"] .q-signup-only { display: none; }
                 #q-signin-overlay[data-mode="signup"] .q-signin-only { display: none; }
-                #q-signin-overlay[data-mode="signup"] #q-forgot-link { display: none; }
                 #q-signin-overlay[data-mode="forgot"] .q-signup-only,
-                #q-signin-overlay[data-mode="forgot"] .q-signin-only { display: none; }
-                #q-signin-overlay[data-mode="forgot"] #q-forgot-link { display: none; }
+                #q-signin-overlay[data-mode="forgot"] .q-signin-only,
+                #q-signin-overlay[data-mode="forgot"] .q-pwd-block { display: none; }
                 .q-info {
                     color: rgba(0,0,0,0.6); font-size: 13px;
                     margin-top: 14px; line-height: 1.5;
@@ -138,18 +142,16 @@
                     autocapitalize="off" autocorrect="off" spellcheck="false"
                     inputmode="email" autofocus />
 
-                <div class="q-signin-only">
-                    <label for="q-pwd">Password</label>
-                    <div id="q-pwd-wrap">
-                        <input id="q-pwd" type="password"
-                            autocomplete="current-password"
-                            autocapitalize="off" autocorrect="off" spellcheck="false" />
-                        <button type="button" id="q-pwd-eye" aria-label="Show password" title="Show / hide password">
-                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
-                        </button>
-                    </div>
-                    <div id="q-forgot-link"><a data-mode="forgot">Forgot password?</a></div>
+                <label for="q-pwd" class="q-pwd-block">Password</label>
+                <div id="q-pwd-wrap" class="q-pwd-block">
+                    <input id="q-pwd" type="password"
+                        autocomplete="current-password"
+                        autocapitalize="off" autocorrect="off" spellcheck="false" />
+                    <button type="button" id="q-pwd-eye" aria-label="Show password" title="Show / hide password">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                    </button>
                 </div>
+                <div id="q-forgot-link" class="q-signin-only"><a data-mode="forgot">Forgot password?</a></div>
 
                 <p class="q-info q-forgot-only" style="display: none;">
                     Enter the email you signed up with. If we have an account for it, we'll send a reset link that's valid for one hour.
