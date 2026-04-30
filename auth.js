@@ -53,7 +53,7 @@ function setSessionCookie(res, email) {
 }
 
 function clearSessionCookie(res) {
-    res.setHeader('Set-Cookie', 'qsess=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax');
+    res.setHeader('Set-Cookie', 'qsess=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax; Secure');
 }
 
 function readCookie(req, name) {

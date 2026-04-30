@@ -3,7 +3,7 @@
 <head>
   <script src="/q-auth.js"></script>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Q — Quotem's own AI</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -382,7 +382,8 @@
      the very bottom of the viewport without overlapping main. */
   footer {
     flex-shrink: 0;
-    padding: 18px 28px 100px;
+    padding: 18px 28px 20px;
+    padding-bottom: max(20px, env(safe-area-inset-bottom, 20px));
     background: var(--bg);
     z-index: 8;
   }
@@ -1954,6 +1955,7 @@ async function send() {
     }
     const response = await fetch('/chat', {
       method: 'POST',
+      credentials: 'include',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
     });
