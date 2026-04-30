@@ -288,7 +288,27 @@
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ email: e, password: p }),
                 });
-                if (r.ok) { location.reload(); return; }
+                if (r.ok) {
+                    // Verify the session cookie actually committed before
+                    // navigating away. iOS Safari can race the Set-Cookie /
+                    // reload and drop the cookie; "Block All Cookies" silently
+                    // does the same. If /whoami still says null, the login
+                    // worked server-side but the browser refused to keep the
+                    // session — surface that as a real error rather than
+                    // looping the user back to the sign-in screen.
+                    let sessionLanded = false;
+                    try {
+                        const check = await fetch('/whoami', { credentials: 'include', cache: 'no-store' });
+                        const data = await check.json();
+                        sessionLanded = !!(data && data.person);
+                    } catch (_) { /* network blip — handled below */ }
+                    if (sessionLanded) {
+                        location.reload();
+                        return;
+                    }
+                    err.textContent = "Signed in, but your browser didn't keep the session cookie. On iPhone: Settings → Safari → turn OFF \"Block All Cookies\", then try again.";
+                    return;
+                }
                 const data = await r.json().catch(() => ({}));
                 err.textContent = data.error || 'Sign in failed.';
             } catch (_) {
