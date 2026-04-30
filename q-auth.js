@@ -19,8 +19,10 @@
                 #q-signin-overlay {
                     position: fixed; inset: 0; z-index: 99999;
                     background: rgba(232, 232, 232, 0.96);
-                    display: flex; align-items: center; justify-content: center;
+                    display: flex; align-items: flex-start; justify-content: center;
                     font-family: 'Space Grotesk', system-ui, sans-serif;
+                    overflow-y: auto; -webkit-overflow-scrolling: touch;
+                    padding: clamp(16px, 8vh, 80px) 16px clamp(120px, 35vh, 320px);
                 }
                 #q-signin-card {
                     background: #e8e8e8;
@@ -174,6 +176,23 @@
         document.body.appendChild(overlay);
 
         const card = overlay.querySelector('#q-signin-card');
+
+        // iOS Safari keyboard fix — when the keyboard opens the visual viewport
+        // shrinks but the layout viewport doesn't change, so position:fixed
+        // elements end up with their touch targets offset from where they look.
+        // Translating the card by the keyboard height keeps visual and touch
+        // positions aligned. Also scroll the focused input into view within the
+        // overlay (the overflow-y:auto on the overlay makes this work).
+        if (window.visualViewport) {
+            const _vv = window.visualViewport;
+            function _onVP() {
+                const kbH = Math.max(0, window.innerHeight - _vv.offsetTop - _vv.height);
+                card.style.transform = kbH > 60 ? `translateY(-${Math.round(kbH * 0.3)}px)` : '';
+            }
+            _vv.addEventListener('resize', _onVP);
+            _vv.addEventListener('scroll', _onVP);
+        }
+
         const name = overlay.querySelector('#q-name');
         const email = overlay.querySelector('#q-email');
         const pwd = overlay.querySelector('#q-pwd');
@@ -201,18 +220,18 @@
                 submit.textContent = 'Sign up';
                 pwd.setAttribute('autocomplete', 'new-password');
                 signupPrompt.style.display = '';
-                setTimeout(() => name.focus(), 0);
+                setTimeout(() => name.focus(), 200);
             } else if (next === 'forgot') {
                 modeLabel.textContent = 'Reset password';
                 submit.textContent = 'Send reset link';
                 forgotPrompt.style.display = '';
-                setTimeout(() => email.focus(), 0);
+                setTimeout(() => email.focus(), 200);
             } else {
                 modeLabel.textContent = 'Sign in';
                 submit.textContent = 'Sign in';
                 pwd.setAttribute('autocomplete', 'current-password');
                 signinPrompt.style.display = '';
-                setTimeout(() => email.focus(), 0);
+                setTimeout(() => email.focus(), 200);
             }
         }
         setMode('signin');
@@ -338,7 +357,7 @@
             if (!input) return;
             input.addEventListener('keydown', ev => { if (ev.key === 'Enter') handle(); });
         });
-        setTimeout(() => email.focus(), 50);
+        setTimeout(() => email.focus(), 200);
     }
 
     window.qSignIn = show;
