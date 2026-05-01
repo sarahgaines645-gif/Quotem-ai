@@ -674,15 +674,17 @@
   }
   .tool-calls-toggle:hover { color: var(--text); }
   .tool-calls-toggle:active { box-shadow: var(--neu-inset-xs); }
-  .tool-calls-detail {
-    margin-top: 8px;
-    padding: 10px 12px;
+  /* Non-interactive plain-English pill that says what Q did — replaces the
+     old toggle + JSON-detail. Customers should never see raw tool args. */
+  .tool-calls-pill {
+    display: inline-block;
+    padding: 4px 12px;
     background: var(--bg);
-    border-radius: 10px;
     box-shadow: var(--neu-inset-xs);
-    display: none;
+    border-radius: 14px;
+    font-size: 12px;
+    color: var(--text-muted);
   }
-  .tool-calls-detail.show { display: block; }
   .tool-call {
     padding: 6px 0;
     border-bottom: 1px solid var(--shadow-dark);
@@ -1046,10 +1048,10 @@ function blobToBase64(blob) {
 
 // Thinking-level picker — Quick / Think / Deep maps to 'low' / 'high' / 'max'.
 // The chosen level lives in localStorage so it persists across reloads, but
-// it expires after 30 minutes of inactivity — so if Q hasn't been used for a
+// it expires after 2 hours of inactivity — so if Q hasn't been used for a
 // while he defaults back to Quick. That stops a forgotten 'Deep' from quietly
 // making every reply slow tomorrow.
-const THINK_TIMEOUT_MS = 30 * 60 * 1000; // 30 minutes
+const THINK_TIMEOUT_MS = 2 * 60 * 60 * 1000; // 2 hours
 const THINK_TS_KEY = THINK_KEY + '-ts';
 const $thinkBtns = document.querySelectorAll('.think-btn');
 function loadThinkingLevel() {
@@ -2064,31 +2066,35 @@ function renderVerifier(messageEl, verifier) {
   scrollToBottom();
 }
 
+// Map raw tool names to plain-English actions a customer can read.
+const TOOL_LABELS = {
+  web_search:       'searched the web',
+  calculator:       'did some maths',
+  current_datetime: 'checked the date',
+  analyze_document: 'read a document',
+  create_document:  'made a document',
+  remember:         'made a note',
+  recall:           'checked his memory',
+};
+
 function renderToolCalls(messageEl, toolCalls) {
+  // Friendly, non-interactive pill. The raw tool args / JSON results stay
+  // server-side — customers only see what Q DID in plain English, not the
+  // technical detail underneath.
   const wrap = document.createElement('div');
   wrap.className = 'tool-calls';
-  const summary = toolCalls.length === 1
-    ? '🔧 used ' + toolCalls[0].name
-    : '🔧 used ' + toolCalls.length + ' tools (' + toolCalls.map(c => c.name).join(', ') + ')';
-  const toggle = document.createElement('button');
-  toggle.className = 'tool-calls-toggle';
-  toggle.textContent = summary;
-  const detail = document.createElement('div');
-  detail.className = 'tool-calls-detail';
-  toolCalls.forEach(call => {
-    const row = document.createElement('div');
-    row.className = 'tool-call';
-    const argsStr = call.args ? JSON.stringify(call.args) : '{}';
-    const resultStr = typeof call.result === 'string' ? call.result : JSON.stringify(call.result, null, 2);
-    row.innerHTML =
-      '<div class="tc-head">' + escapeHtml(call.name) + '(' + escapeHtml(argsStr) + ')</div>' +
-      '<div class="tc-result">' + escapeHtml(resultStr) + '</div>';
-    detail.appendChild(row);
-  });
-  toggle.addEventListener('click', () => detail.classList.toggle('show'));
-  wrap.appendChild(toggle);
-  wrap.appendChild(detail);
-  // Append inside the message-content (sibling of message-body).
+  const labels = toolCalls.map(c => TOOL_LABELS[c.name] || c.name);
+  const unique = [...new Set(labels)];
+  let summary;
+  if (unique.length === 1) {
+    summary = '🔧 ' + unique[0];
+  } else {
+    summary = '🔧 ' + unique.slice(0, -1).join(', ') + ' and ' + unique[unique.length - 1];
+  }
+  const pill = document.createElement('div');
+  pill.className = 'tool-calls-pill';
+  pill.textContent = summary;
+  wrap.appendChild(pill);
   const content = messageEl.querySelector('.message-content');
   if (content) content.appendChild(wrap);
   scrollToBottom();
