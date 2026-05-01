@@ -7,382 +7,213 @@
   <title>Q — Writing Coach</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Lora:ital,wght@0,400;0,500;0,600;1,400&display=swap" rel="stylesheet">
   <style>
     :root {
       --bg: #e8e8e8;
       --text: #1a1a1a;
       --text-muted: rgba(0,0,0,0.55);
       --text-faint: rgba(0,0,0,0.35);
-      --shadow-light: #ffffff;
-      --shadow-dark: #ababab;
       --accent: #e91e63;
-      --neu-raised:    10px 10px 28px #ababab, -8px -8px 20px #ffffff;
+      --paper:        #fbf9f3;          /* warm off-white — the front of the paper */
+      --paper-back:   #ece8da;          /* slightly darker — the underside that shows on the curl */
+      --paper-shadow: rgba(80,70,40,0.18);
+      --paper-edge:   rgba(0,0,0,0.07);
       --neu-raised-sm: 6px 6px 16px #ababab, -5px -5px 12px #ffffff;
-      --neu-inset:     inset 5px 5px 14px #ababab, inset -4px -4px 10px #ffffff;
       --neu-inset-sm:  inset 3px 3px 8px #ababab, inset -2px -2px 6px #ffffff;
     }
     * { box-sizing: border-box; margin: 0; padding: 0; }
-    html, body { background: var(--bg); color: var(--text); font-family: 'Space Grotesk', system-ui, sans-serif; min-height: 100%; }
-    body { padding: 32px 16px 80px; }
-    .wrap { max-width: 760px; margin: 0 auto; }
-    header { text-align: center; margin-bottom: 32px; }
-    header h1 { font-size: 36px; font-weight: 700; margin-bottom: 6px; }
-    header h1 .dot { color: var(--accent); }
-    header p { color: var(--text-muted); font-size: 15px; }
-    header a.back { display: inline-block; margin-top: 14px; color: var(--text-muted); text-decoration: none; font-size: 13px; }
+    html, body {
+      background: var(--bg); color: var(--text);
+      font-family: 'Space Grotesk', system-ui, sans-serif;
+      min-height: 100%;
+    }
+    body { padding: 28px 16px 100px; }
+
+    header {
+      max-width: 760px; margin: 0 auto 28px;
+      display: flex; align-items: center; justify-content: space-between;
+    }
+    header .brand { font-size: 26px; font-weight: 700; }
+    header .brand .dot { color: var(--accent); }
+    header .crumbs { color: var(--text-muted); font-size: 13px; }
+    header a.back { color: var(--text-muted); text-decoration: none; font-size: 13px; }
     header a.back:hover { color: var(--accent); }
 
-    .card {
+    /* The desk: a centred area where the paper sits.
+       The paper itself is a card with a curled top-right corner. */
+    .desk { max-width: 760px; margin: 0 auto; position: relative; }
+
+    .paper {
+      position: relative;
+      background: var(--paper);
+      border-radius: 4px 0 4px 4px;       /* sharp top-right where the curl bites in */
+      padding: 64px 72px 80px;
+      min-height: 920px;
+      box-shadow:
+        0 1px 0 rgba(255,255,255,0.6) inset,            /* tiny top highlight */
+        0 24px 50px -10px var(--paper-shadow),          /* lift off the page */
+        0 6px 14px -4px rgba(0,0,0,0.08);
+      /* Faint horizontal rule lines (notebook feel, very subtle).
+         Set spacing to 32px to match the editor line-height. */
+      background-image:
+        linear-gradient(to bottom,
+          transparent 0,
+          transparent 95px,
+          rgba(0,0,0,0.04) 95px,
+          rgba(0,0,0,0.04) 96px,
+          transparent 96px),
+        repeating-linear-gradient(
+          to bottom,
+          transparent 0,
+          transparent 31px,
+          rgba(0,0,0,0.025) 31px,
+          rgba(0,0,0,0.025) 32px);
+      background-attachment: local;
+    }
+
+    /* Margin line down the left side, like a notebook */
+    .paper::after {
+      content: '';
+      position: absolute; top: 0; bottom: 0;
+      left: 56px; width: 1px;
+      background: rgba(233,30,99,0.18);
+    }
+
+    /* The curl. Triangular flap in the top-right corner showing the
+       underside of the paper, with a soft drop shadow underneath. */
+    .paper .curl {
+      position: absolute; top: 0; right: 0;
+      width: 56px; height: 56px;
+      pointer-events: none;
+    }
+    .paper .curl::before {
+      /* The shadow that the curling corner casts on the page */
+      content: '';
+      position: absolute; top: 6px; right: 6px;
+      width: 44px; height: 44px;
+      background: rgba(40,30,10,0.18);
+      filter: blur(6px);
+      border-radius: 0 0 0 100%;
+    }
+    .paper .curl::after {
+      /* The folded triangle itself — gradient from back-paper colour
+         to a slightly darker edge gives it depth. */
+      content: '';
+      position: absolute; top: 0; right: 0;
+      width: 56px; height: 56px;
+      background:
+        linear-gradient(225deg,
+          var(--paper-back) 0%,
+          var(--paper-back) 48%,
+          rgba(0,0,0,0.08) 49%,
+          var(--paper) 50%,
+          var(--paper) 100%);
+      clip-path: polygon(100% 0, 100% 100%, 0 0);
+      box-shadow: -1px 1px 2px rgba(0,0,0,0.05) inset;
+    }
+
+    /* Document content */
+    .doc-title {
+      font-family: 'Lora', Georgia, serif;
+      font-size: 28px; font-weight: 600;
+      color: var(--text);
+      border: none; outline: none;
+      width: 100%; background: transparent;
+      margin-bottom: 8px;
+      padding: 0;
+    }
+    .doc-title::placeholder { color: rgba(0,0,0,0.25); font-style: italic; }
+
+    .doc-meta {
+      font-size: 12px; color: var(--text-muted);
+      margin-bottom: 36px;
+      display: flex; gap: 14px; flex-wrap: wrap;
+    }
+
+    .doc-body {
+      font-family: 'Lora', Georgia, serif;
+      font-size: 16px; line-height: 32px;     /* matches the rule lines */
+      color: var(--text);
+      width: 100%; min-height: 700px;
+      border: none; outline: none;
+      background: transparent;
+      resize: none;
+    }
+    .doc-body::placeholder { color: rgba(0,0,0,0.25); font-style: italic; }
+
+    /* Floating Q-coach button (placeholder for Phase 1 coaching panel).
+       Sits to the right of the paper on wide screens, below on mobile. */
+    .coach {
+      position: fixed; right: 24px; top: 50%; transform: translateY(-50%);
+      width: 56px; height: 56px; border-radius: 50%;
       background: var(--bg);
-      box-shadow: var(--neu-raised);
-      border-radius: 24px;
-      padding: 32px 28px;
-      margin-bottom: 24px;
+      box-shadow: var(--neu-raised-sm);
+      border: none; cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      font-family: 'Space Grotesk', sans-serif; font-weight: 700;
+      font-size: 22px; color: var(--text);
     }
-    .card h2 { font-size: 18px; margin-bottom: 14px; font-weight: 600; }
-    .card p.lead { color: var(--text-muted); font-size: 14px; margin-bottom: 18px; line-height: 1.5; }
+    .coach .dot { color: var(--accent); }
+    .coach:active { box-shadow: var(--neu-inset-sm); }
 
-    label { display: block; font-size: 12px; font-weight: 500; text-transform: uppercase;
-            letter-spacing: 0.5px; color: var(--text-muted); margin-bottom: 8px; }
-    textarea, input[type="text"] {
-      width: 100%; border: none; outline: none; resize: vertical;
-      background: var(--bg); box-shadow: var(--neu-inset);
-      border-radius: 14px; padding: 14px 16px; font-size: 15px;
-      color: var(--text); font-family: inherit; line-height: 1.5;
-      touch-action: manipulation;
+    /* Mobile tweaks */
+    @media (max-width: 600px) {
+      .paper { padding: 48px 28px 64px; min-height: 700px; }
+      .paper::after { left: 22px; }
+      .doc-title { font-size: 22px; }
+      .doc-body { font-size: 15px; line-height: 28px; }
+      .coach { right: 14px; bottom: 14px; top: auto; transform: none; }
     }
-    textarea { min-height: 120px; }
-    textarea.large { min-height: 180px; }
-
-    button.q-btn {
-      border: none; cursor: pointer; background: var(--bg); color: var(--text);
-      box-shadow: var(--neu-raised-sm); border-radius: 14px;
-      padding: 13px 24px; font-size: 14px; font-weight: 600;
-      font-family: inherit; transition: box-shadow 0.1s;
-    }
-    button.q-btn:hover { box-shadow: 4px 4px 10px #ababab, -3px -3px 8px #ffffff; }
-    button.q-btn:active, button.q-btn:disabled { box-shadow: var(--neu-inset-sm); }
-    button.q-btn:disabled { cursor: wait; opacity: 0.7; }
-    button.q-btn.primary { color: var(--accent); }
-    .row { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; margin-top: 18px; }
-    .row.right { justify-content: flex-end; }
-
-    .pill { display: inline-block; padding: 4px 12px; background: var(--bg);
-            box-shadow: var(--neu-inset-sm); border-radius: 20px;
-            font-size: 12px; color: var(--text-muted); margin: 4px 6px 4px 0; }
-
-    .grade {
-      display: grid; grid-template-columns: 60px 1fr; gap: 12px;
-      padding: 12px 14px; background: var(--bg); box-shadow: var(--neu-inset-sm);
-      border-radius: 12px; margin-bottom: 8px; font-size: 14px;
-    }
-    .grade .band { font-weight: 700; color: var(--accent); }
-
-    .qbox { background: var(--bg); box-shadow: var(--neu-inset);
-            border-radius: 16px; padding: 20px; margin-bottom: 18px; }
-    .qbox .qlabel { font-size: 11px; text-transform: uppercase; letter-spacing: 0.7px;
-                    color: var(--text-faint); margin-bottom: 8px; }
-    .qbox .qtext { font-size: 17px; font-weight: 600; line-height: 1.4; margin-bottom: 4px; }
-    .qbox .qhint { font-size: 13px; color: var(--text-muted); margin-top: 8px; font-style: italic; }
-
-    .turn { padding: 14px 16px; margin-bottom: 10px; background: var(--bg);
-            box-shadow: var(--neu-raised-sm); border-radius: 12px; font-size: 14px; }
-    .turn .q { color: var(--text-muted); font-size: 12px; margin-bottom: 4px; text-transform: uppercase; letter-spacing: 0.5px; }
-    .turn .a { color: var(--text); line-height: 1.5; }
-
-    .doc {
-      background: var(--bg); box-shadow: var(--neu-inset);
-      border-radius: 16px; padding: 24px; font-size: 15px; line-height: 1.7;
-      color: var(--text); white-space: pre-wrap;
-    }
-    .word-count { color: var(--text-faint); font-size: 12px; margin-top: 12px; text-align: right; }
-
-    .err { color: var(--accent); font-size: 13px; margin-top: 10px; min-height: 18px; }
-    .hidden { display: none !important; }
-
-    .progress { display: flex; gap: 6px; justify-content: center; margin-bottom: 18px; }
-    .progress .step { height: 4px; flex: 1; max-width: 80px; background: var(--bg); box-shadow: var(--neu-inset-sm); border-radius: 2px; }
-    .progress .step.active { background: var(--accent); box-shadow: none; }
   </style>
 </head>
 <body>
-  <div class="wrap">
-    <header>
-      <h1>Q<span class="dot">.</span></h1>
-      <p>Writing coach — your words, his structure</p>
-      <a href="/chat" class="back">← Back to chat</a>
-    </header>
+  <header>
+    <div class="brand">Q<span class="dot">.</span></div>
+    <div class="crumbs">Writing Coach</div>
+    <a href="/chat" class="back">← Back to chat</a>
+  </header>
 
-    <div class="progress">
-      <div class="step" id="step-1"></div>
-      <div class="step" id="step-2"></div>
-      <div class="step" id="step-3"></div>
-      <div class="step" id="step-4"></div>
+  <div class="desk">
+    <div class="paper">
+      <div class="curl"></div>
+
+      <input type="text" class="doc-title" placeholder="Untitled document" />
+      <div class="doc-meta">
+        <span id="meta-words">0 words</span>
+        <span id="meta-saved">Not yet saved</span>
+      </div>
+
+      <textarea class="doc-body" id="doc-body"
+        placeholder="Start writing — Q joins in once you do."
+        autocomplete="off" spellcheck="true"></textarea>
     </div>
-
-    <!-- STAGE 1: paste task -->
-    <section id="stage-task" class="card">
-      <h2>What are you writing?</h2>
-      <p class="lead">Paste the question, the brief, the homework, the email subject — whatever you've been asked to write about. Q reads it and works out the shape of the document.</p>
-      <label for="task">The task</label>
-      <textarea id="task" class="large" placeholder="e.g. Discuss whether Pride and Prejudice presents marriage as a transaction. (1500 words, AS-level English Literature)"></textarea>
-      <div class="row right">
-        <button class="q-btn primary" id="analyse-btn">Analyse the task →</button>
-      </div>
-      <div class="err" id="task-err"></div>
-    </section>
-
-    <!-- STAGE 2: review analysis -->
-    <section id="stage-analysis" class="card hidden">
-      <h2>Here's what Q sees in this task</h2>
-      <p class="lead" id="task-summary"></p>
-
-      <label>Document type</label>
-      <div id="doc-type" class="pill"></div>
-
-      <div style="margin-top: 16px;">
-        <label>Key things to cover</label>
-        <div id="key-concepts"></div>
-      </div>
-
-      <div style="margin-top: 18px;">
-        <label>What different grade-bands of answer look like</label>
-        <div id="grade-bands"></div>
-      </div>
-
-      <div class="row right">
-        <button class="q-btn" id="reset-btn">Start over</button>
-        <button class="q-btn primary" id="start-btn">Start writing →</button>
-      </div>
-    </section>
-
-    <!-- STAGE 3: question flow -->
-    <section id="stage-questions" class="card hidden">
-      <h2 id="qheader">Question 1</h2>
-
-      <div class="qbox">
-        <div class="qlabel">Q asks</div>
-        <div class="qtext" id="qtext"></div>
-        <div class="qhint" id="qhint"></div>
-      </div>
-
-      <label for="answer">Your answer (your words — Q won't rewrite your voice)</label>
-      <textarea id="answer" class="large" placeholder="Just write what you actually think. Plain words are fine."></textarea>
-
-      <div class="row right">
-        <button class="q-btn" id="finish-btn">I'm done — assemble the document</button>
-        <button class="q-btn primary" id="next-btn">Next question →</button>
-      </div>
-      <div class="err" id="q-err"></div>
-
-      <div id="history" style="margin-top: 28px;"></div>
-    </section>
-
-    <!-- STAGE 4: document -->
-    <section id="stage-doc" class="card hidden">
-      <h2>Your document</h2>
-      <p class="lead">This is built from your answers, in your voice. Q has tidied grammar and arranged the order — nothing more.</p>
-      <div class="doc" id="doc-text"></div>
-      <div class="word-count" id="word-count"></div>
-      <div class="row right">
-        <button class="q-btn" id="copy-btn">Copy to clipboard</button>
-        <button class="q-btn primary" id="restart-btn">Start a new document</button>
-      </div>
-    </section>
   </div>
 
+  <button class="coach" id="coach-btn" title="Q is here when you need him">
+    Q<span class="dot">.</span>
+  </button>
+
   <script>
-    const $ = (id) => document.getElementById(id);
-    const stages = ['stage-task', 'stage-analysis', 'stage-questions', 'stage-doc'];
-    const stepEls = [$('step-1'), $('step-2'), $('step-3'), $('step-4')];
-
-    const state = {
-      analysis: null,
-      history: [], // [{ question, hint, answer, isFinal }]
-      current: null, // { question, hint, isFinal }
-    };
-
-    function showStage(id) {
-      stages.forEach(s => $(s).classList.toggle('hidden', s !== id));
-      const idx = stages.indexOf(id);
-      stepEls.forEach((el, i) => el.classList.toggle('active', i <= idx));
-      window.scrollTo({ top: 0, behavior: 'smooth' });
+    // Live word count in the doc-meta strip.
+    const body = document.getElementById('doc-body');
+    const wordEl = document.getElementById('meta-words');
+    function countWords(s) {
+      const t = (s || '').trim();
+      if (!t) return 0;
+      return t.split(/\s+/).length;
     }
-
-    async function postJSON(url, body) {
-      const r = await fetch(url, {
-        method: 'POST',
-        credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-      });
-      const data = await r.json().catch(() => ({}));
-      if (!r.ok) throw new Error(data.error || ('HTTP ' + r.status));
-      return data;
-    }
-
-    // Stage 1 → Stage 2
-    $('analyse-btn').addEventListener('click', async () => {
-      const taskText = $('task').value.trim();
-      $('task-err').textContent = '';
-      if (!taskText) { $('task-err').textContent = 'Paste the task first.'; return; }
-      const btn = $('analyse-btn');
-      btn.disabled = true; btn.textContent = 'Analysing…';
-      try {
-        const data = await postJSON('/writer/analyse', { taskText });
-        state.analysis = data.analysis;
-        renderAnalysis(state.analysis);
-        showStage('stage-analysis');
-      } catch (e) {
-        $('task-err').textContent = e.message;
-      } finally {
-        btn.disabled = false; btn.textContent = 'Analyse the task →';
-      }
+    body.addEventListener('input', () => {
+      wordEl.textContent = countWords(body.value) + ' words';
     });
 
-    function renderAnalysis(a) {
-      $('task-summary').textContent = a.task || '';
-      $('doc-type').textContent = (a.docType || 'document') + (a.subject ? ' — ' + a.subject : '');
-      const kc = $('key-concepts'); kc.innerHTML = '';
-      (a.keyConcepts || []).forEach(c => {
-        const p = document.createElement('span'); p.className = 'pill'; p.textContent = c;
-        kc.appendChild(p);
-      });
-      const gb = $('grade-bands'); gb.innerHTML = '';
-      const bands = a.gradeBands || {};
-      const order = [['top', 'Top'], ['mid', 'Mid'], ['low', 'Low']];
-      order.forEach(([k, label]) => {
-        if (!bands[k]) return;
-        const row = document.createElement('div'); row.className = 'grade';
-        row.innerHTML = '<div class="band">' + label + '</div><div>' + escapeHtml(bands[k]) + '</div>';
-        gb.appendChild(row);
-      });
+    // Auto-grow the textarea so the paper grows with the writing.
+    function autosize() {
+      body.style.height = 'auto';
+      body.style.height = (body.scrollHeight) + 'px';
     }
-
-    function escapeHtml(s) {
-      return String(s).replace(/[&<>"']/g, c => ({
-        '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
-      }[c]));
-    }
-
-    $('reset-btn').addEventListener('click', () => {
-      state.analysis = null; state.history = []; state.current = null;
-      $('task').value = '';
-      showStage('stage-task');
-    });
-
-    // Stage 2 → Stage 3
-    $('start-btn').addEventListener('click', async () => {
-      await loadNextQuestion();
-      showStage('stage-questions');
-    });
-
-    async function loadNextQuestion() {
-      $('q-err').textContent = '';
-      try {
-        const data = await postJSON('/writer/next-question', {
-          analysis: state.analysis,
-          history: state.history.map(h => ({ question: h.question, answer: h.answer })),
-        });
-        state.current = { question: data.question, hint: data.hint, isFinal: !!data.isFinal };
-        $('qheader').textContent = 'Question ' + (state.history.length + 1);
-        $('qtext').textContent = data.question;
-        $('qhint').textContent = data.hint || '';
-        $('answer').value = '';
-        $('answer').focus();
-        $('next-btn').textContent = state.current.isFinal ? 'Finish & assemble →' : 'Next question →';
-      } catch (e) {
-        $('q-err').textContent = e.message;
-      }
-    }
-
-    $('next-btn').addEventListener('click', async () => {
-      const ans = $('answer').value.trim();
-      $('q-err').textContent = '';
-      if (!ans) { $('q-err').textContent = 'Write your answer first — even a short one.'; return; }
-      state.history.push({
-        question: state.current.question,
-        hint: state.current.hint,
-        answer: ans,
-        isFinal: state.current.isFinal,
-      });
-      renderHistory();
-      const btn = $('next-btn'); btn.disabled = true; btn.textContent = 'Thinking…';
-      try {
-        if (state.current.isFinal) {
-          await assembleAndShow();
-        } else {
-          await loadNextQuestion();
-        }
-      } catch (e) {
-        $('q-err').textContent = e.message;
-      } finally {
-        btn.disabled = false;
-      }
-    });
-
-    $('finish-btn').addEventListener('click', async () => {
-      const ans = $('answer').value.trim();
-      if (ans) {
-        state.history.push({
-          question: state.current.question,
-          hint: state.current.hint,
-          answer: ans,
-          isFinal: true,
-        });
-      }
-      if (state.history.length === 0) {
-        $('q-err').textContent = 'Answer at least one question first.';
-        return;
-      }
-      await assembleAndShow();
-    });
-
-    function renderHistory() {
-      const h = $('history'); h.innerHTML = '';
-      if (state.history.length === 0) return;
-      const heading = document.createElement('label');
-      heading.textContent = 'Your answers so far';
-      h.appendChild(heading);
-      state.history.forEach((t, i) => {
-        const div = document.createElement('div'); div.className = 'turn';
-        div.innerHTML = '<div class="q">Q' + (i + 1) + ' — ' + escapeHtml(t.question) + '</div>'
-                      + '<div class="a">' + escapeHtml(t.answer) + '</div>';
-        h.appendChild(div);
-      });
-    }
-
-    async function assembleAndShow() {
-      $('next-btn').disabled = true; $('finish-btn').disabled = true;
-      try {
-        const data = await postJSON('/writer/assemble', {
-          analysis: state.analysis,
-          history: state.history.map(h => ({ question: h.question, answer: h.answer })),
-        });
-        $('doc-text').textContent = data.document || '';
-        $('word-count').textContent = (data.wordCount || 0) + ' words';
-        showStage('stage-doc');
-      } finally {
-        $('next-btn').disabled = false; $('finish-btn').disabled = false;
-      }
-    }
-
-    $('copy-btn').addEventListener('click', async () => {
-      try {
-        await navigator.clipboard.writeText($('doc-text').textContent);
-        const btn = $('copy-btn'); const t = btn.textContent;
-        btn.textContent = 'Copied!'; setTimeout(() => btn.textContent = t, 1500);
-      } catch (_) {}
-    });
-
-    $('restart-btn').addEventListener('click', () => {
-      state.analysis = null; state.history = []; state.current = null;
-      $('task').value = ''; $('answer').value = '';
-      showStage('stage-task');
-    });
-
-    showStage('stage-task');
+    body.addEventListener('input', autosize);
+    setTimeout(autosize, 0);
   </script>
 </body>
 </html>
