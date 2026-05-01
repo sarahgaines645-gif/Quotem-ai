@@ -348,22 +348,20 @@ router.post('/chat', requirePerson, express.json({ limit: '24mb' }), async (req,
     }
 
     if (typeof effectiveMessage === 'string' && effectiveMessage.trim()) {
-        // Per-person memory: load only THIS person's history. Friends'
-        // conversations never bleed into Q's context for this turn. Main
-        // chat and writer chat both read and write the same thread — Q is
-        // one continuous brain accessible from two surfaces.
-        const rawHistory = loadMemory(person.id).slice(-50);
+        // Q sees ONE chat thread per surface — chat thread for /chat,
+        // writer thread for /writer. So when Sarah comes back to the
+        // writer in two days the conversation context is intact.
+        // The bridge between surfaces is Q's FACTS, not the chat history.
+        // Facts are one shared store per person (q-facts-{personId}.json)
+        // and Q reads them on every turn regardless of surface.
+        const allMessages = loadMemory(person.id);
+        const surfaceMessages = allMessages.filter(m => (m.surface || 'chat') === surface);
+        const rawHistory = surfaceMessages.slice(-50);
         const history = rawHistory.map(m => {
             const ts = m.timestamp ? m.timestamp.slice(0, 16).replace('T', ' ') : '?';
-            // Each file only contains turns between this person and Q, so
-            // the role alone is unambiguous; just keep timestamps so Q can
-            // sense gaps between sessions. Tag each message with the surface
-            // it came from so Q can connect 'something said in writer' with
-            // 'something said in chat'.
-            const where = m.surface && m.surface !== 'chat' ? ` in ${m.surface}` : '';
             return {
                 role: m.role,
-                content: `[${ts}${where}] ${m.content}`,
+                content: `[${ts}] ${m.content}`,
             };
         });
         // Tell Q the current moment so he can locate himself in time
