@@ -49,8 +49,20 @@ function safeId(personId) {
     return String(personId || 'unknown').toLowerCase().replace(/[^a-z0-9-]/g, '-');
 }
 
-function getMemoryPath(personId) {
-    return path.join(Q_DATA_DIR, `q-memory-${safeId(personId)}.json`);
+// Sarah, 2026-05-01: each person can have multiple chat threads sharing one
+// memory of facts but kept as separate conversation contexts. The main chat
+// stays in `q-memory-{personId}.json` for backward compat. Other contexts
+// (writer, etc.) sit alongside as `q-memory-{personId}.{context}.json`.
+function safeContext(context) {
+    return String(context || 'main').toLowerCase().replace(/[^a-z0-9-]/g, '-') || 'main';
+}
+
+function getMemoryPath(personId, context) {
+    const ctx = safeContext(context);
+    if (ctx === 'main') {
+        return path.join(Q_DATA_DIR, `q-memory-${safeId(personId)}.json`);
+    }
+    return path.join(Q_DATA_DIR, `q-memory-${safeId(personId)}.${ctx}.json`);
 }
 
 function legacyPath() {
@@ -137,16 +149,16 @@ function migrateLegacyMemory() {
 migrateLegacyMemory();
 
 /**
- * Load the full memory for a single person, in chronological order.
- * Returns an empty array for new people who haven't chatted with Q yet.
+ * Load the full memory for a single person and context, in chronological order.
+ * Returns an empty array for new people / contexts.
  */
-function loadMemory(personId) {
-    return loadFile(getMemoryPath(personId));
+function loadMemory(personId, context) {
+    return loadFile(getMemoryPath(personId, context));
 }
 
-function saveMemory(personId, messages) {
+function saveMemory(personId, messages, context) {
     try {
-        fs.writeFileSync(getMemoryPath(personId), JSON.stringify(messages, null, 2), 'utf8');
+        fs.writeFileSync(getMemoryPath(personId, context), JSON.stringify(messages, null, 2), 'utf8');
         return true;
     } catch (e) {
         console.error('[q/memory] save error for ' + personId + ':', e.message);
@@ -160,30 +172,31 @@ function saveMemory(personId, messages) {
  * @param {string} personId - whose file to write to (the calling person)
  * @param {'user'|'assistant'} role
  * @param {string} content
+ * @param {string} [context] - chat thread name. Defaults to 'main'.
  */
-function appendMessage(personId, role, content) {
-    const messages = loadMemory(personId);
+function appendMessage(personId, role, content, context) {
+    const messages = loadMemory(personId, context);
     messages.push({
         role,
         content,
         timestamp: new Date().toISOString(),
     });
-    saveMemory(personId, messages);
+    saveMemory(personId, messages, context);
     return messages;
 }
 
-/** Wipe one person's memory. Sarah's wipe doesn't touch anyone else's. */
-function clearMemory(personId) {
-    return saveMemory(personId, []);
+/** Wipe one person's memory in one context. Other contexts and other people unaffected. */
+function clearMemory(personId, context) {
+    return saveMemory(personId, [], context);
 }
 
 /**
- * Get the most recent N messages for a single person, in chronological
- * order. Used to build Q's prompt context — Q only ever sees the calling
- * person's history.
+ * Get the most recent N messages for one person and context, in chronological
+ * order. Q only ever sees the calling person's own history within the same
+ * context — main chat and writer chat stay as separate threads.
  */
-function getRecentMessages(personId, limit = MAX_HISTORY_TO_SEND) {
-    return loadMemory(personId)
+function getRecentMessages(personId, limit = MAX_HISTORY_TO_SEND, context) {
+    return loadMemory(personId, context)
         .slice(-limit)
         .map(m => ({ role: m.role, content: m.content }));
 }
@@ -198,7 +211,10 @@ function getCircleSummary() {
         const entries = fs.readdirSync(Q_DATA_DIR);
         const summary = [];
         for (const name of entries) {
-            const m = name.match(/^q-memory-(.+)\.json$/);
+            // Match only the main thread file: q-memory-{personId}.json
+            // Context-suffix files like q-memory-sarah.writer.json have an
+            // extra segment with a dot, which this stricter pattern excludes.
+            const m = name.match(/^q-memory-([a-z0-9-]+)\.json$/);
             if (!m) continue;
             const personId = m[1];
             const msgs = loadFile(path.join(Q_DATA_DIR, name));

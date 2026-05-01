@@ -318,6 +318,10 @@ router.post('/chat', requirePerson, express.json({ limit: '24mb' }), async (req,
     const person = req.person; // attached by requirePerson — { id, name, intro, addedAt }
     const newMessage = req.body?.message;
     const messagesArray = req.body?.messages;
+    // Chat thread context — defaults to 'main' (the front-page chat). Other
+    // surfaces (writer, future tools) pass their own context name so each
+    // surface gets its own conversation thread, while Q's facts stay shared.
+    const context = (req.body?.context || 'main').toString().toLowerCase();
     const rawEffort = req.body?.reasoningEffort;
     const reasoningEffort = (rawEffort === 'high' || rawEffort === 'max') ? rawEffort : undefined;
     const rawImages = req.body?.images;
@@ -343,9 +347,10 @@ router.post('/chat', requirePerson, express.json({ limit: '24mb' }), async (req,
     }
 
     if (typeof effectiveMessage === 'string' && effectiveMessage.trim()) {
-        // Per-person memory: load only THIS person's history. Friends'
-        // conversations never bleed into Q's context for this turn.
-        const rawHistory = loadMemory(person.id).slice(-50);
+        // Per-person, per-context memory: load only THIS person's history
+        // for THIS chat thread. Main chat and writer chat are separate
+        // threads sharing the same Q facts.
+        const rawHistory = loadMemory(person.id, context).slice(-50);
         const history = rawHistory.map(m => {
             const ts = m.timestamp ? m.timestamp.slice(0, 16).replace('T', ' ') : '?';
             // Each file only contains turns between this person and Q, so
@@ -370,9 +375,9 @@ router.post('/chat', requirePerson, express.json({ limit: '24mb' }), async (req,
             ...history,
             { role: 'user', content: userMemoryContent },
         ];
-        appendMessage(person.id, 'user', userMemoryContent);
+        appendMessage(person.id, 'user', userMemoryContent, context);
         const result = await chat(messagesForQ, chatOptions);
-        if (result.reply) appendMessage(person.id, 'assistant', result.reply);
+        if (result.reply) appendMessage(person.id, 'assistant', result.reply, context);
         return res.json(result);
     }
 
@@ -391,14 +396,16 @@ router.post('/chat', requirePerson, express.json({ limit: '24mb' }), async (req,
 // no filtering or cross-person bleed. Sarah's wipe doesn't touch anyone
 // else; nobody else's wipe touches Sarah.
 router.get('/chat-history', requirePerson, (req, res) => {
-    const messages = loadMemory(req.person.id);
-    return res.json({ messages, storedAt: getMemoryPath(req.person.id) });
+    const context = (req.query.context || 'main').toString().toLowerCase();
+    const messages = loadMemory(req.person.id, context);
+    return res.json({ messages, storedAt: getMemoryPath(req.person.id, context) });
 });
 
 // Wipe THIS person's memory only. Sarah's clear doesn't touch anyone else's;
 // a friend's clear doesn't touch Sarah's. Each person owns their own thread.
 router.delete('/chat-history', requirePerson, (req, res) => {
-    const ok = clearMemory(req.person.id);
+    const context = (req.query.context || 'main').toString().toLowerCase();
+    const ok = clearMemory(req.person.id, context);
     res.json({ ok });
 });
 
