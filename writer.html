@@ -127,9 +127,58 @@
 
     .doc-meta {
       font-size: 12px; color: var(--text-muted);
-      margin-bottom: 36px;
-      display: flex; gap: 14px; flex-wrap: wrap;
+      margin-bottom: 14px;
+      display: flex; gap: 14px; flex-wrap: wrap; align-items: center;
     }
+
+    /* Source slot — small paperclip button when empty, chip when filled.
+       Sits just under the title. Quiet visual weight; doesn't compete
+       with the writing surface. */
+    .source-slot { margin: 0 0 24px; }
+    .source-add {
+      display: inline-flex; align-items: center; gap: 8px;
+      padding: 7px 14px;
+      background: transparent; border: none; cursor: pointer;
+      font-family: 'Space Grotesk', sans-serif;
+      font-size: 12px; color: var(--text-faint);
+      box-shadow: 0 0 0 1px rgba(0,0,0,0.06);
+      border-radius: 14px;
+      transition: color 0.15s, box-shadow 0.15s;
+    }
+    .source-add:hover { color: var(--text-muted); box-shadow: 0 0 0 1px rgba(0,0,0,0.12); }
+    .source-chip {
+      display: inline-flex; align-items: center; gap: 8px;
+      padding: 7px 12px 7px 14px;
+      background: var(--bg);
+      box-shadow: var(--neu-inset-sm);
+      border-radius: 14px;
+      font-family: 'Space Grotesk', sans-serif;
+      font-size: 12px; color: var(--text-muted);
+      max-width: 100%;
+    }
+    .source-chip .name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 240px; }
+    .source-chip .remove {
+      width: 20px; height: 20px; border: none; background: transparent;
+      color: var(--text-faint); cursor: pointer; padding: 0; line-height: 1;
+      font-size: 16px; display: inline-flex; align-items: center; justify-content: center;
+      border-radius: 50%;
+    }
+    .source-chip .remove:hover { color: var(--accent); }
+    .source-chip.loading { opacity: 0.6; }
+
+    /* Drop overlay — appears when a file is dragged anywhere over the page */
+    .drop-overlay {
+      position: fixed; inset: 0; z-index: 1000;
+      background: rgba(232,232,232,0.85);
+      backdrop-filter: blur(2px);
+      display: none;
+      align-items: center; justify-content: center;
+      pointer-events: none;
+      font-family: 'Space Grotesk', sans-serif;
+      font-size: 18px; color: var(--text);
+      border: 4px dashed var(--accent);
+    }
+    .drop-overlay.show { display: flex; }
 
     .doc-body {
       font-family: 'Lora', Georgia, serif;
@@ -221,11 +270,27 @@
         <span id="meta-saved">Not yet saved</span>
       </div>
 
+      <div class="source-slot" id="source-slot">
+        <button type="button" class="source-add" id="source-add-btn"
+          title="Drop, paste, or click to add a task / source">
+          <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor"
+            stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/>
+          </svg>
+          <span>Drop the task / source — or paste / click</span>
+        </button>
+        <input type="file" id="source-file-input"
+          accept=".pdf,.docx,.txt,.md,image/*"
+          style="display: none" />
+      </div>
+
       <textarea class="doc-body" id="doc-body"
         placeholder="Start writing — Q joins in once you do."
         autocomplete="off" spellcheck="true"></textarea>
     </div>
   </div>
+
+  <div class="drop-overlay" id="drop-overlay">Drop the file — Q reads it</div>
 
   <div class="coach-card" id="coach-card">
     <div class="q-logo">Q<span class="dot">.</span></div>
@@ -311,26 +376,176 @@
       }
     } catch (_) {}
 
+    /* SOURCE MATERIAL ─────────────────────────────────
+       The task / brief / homework the user is writing about. Loaded via
+       file picker, drag-drop, or paste. PDFs and DOCX go through
+       /extract-text. Images keep their data URL so Q's vision can see
+       them when needed. Plain text just sits as a string. */
+    const sourceState = { name: null, text: null, imageDataUrl: null };
+    const sourceSlot = document.getElementById('source-slot');
+    const sourceAddBtn = document.getElementById('source-add-btn');
+    const sourceFileInput = document.getElementById('source-file-input');
+    const dropOverlay = document.getElementById('drop-overlay');
+
+    function renderSourceSlot() {
+      sourceSlot.innerHTML = '';
+      if (!sourceState.name) {
+        const btn = document.createElement('button');
+        btn.type = 'button'; btn.className = 'source-add'; btn.id = 'source-add-btn';
+        btn.title = 'Drop, paste, or click to add a task / source';
+        btn.innerHTML = '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg><span>Drop the task / source — or paste / click</span>';
+        btn.addEventListener('click', () => sourceFileInput.click());
+        sourceSlot.appendChild(btn);
+      } else {
+        const chip = document.createElement('div');
+        chip.className = 'source-chip';
+        const icon = sourceState.imageDataUrl ? '🖼️' : '📄';
+        chip.innerHTML = '<span>' + icon + '</span><span class="name"></span>'
+          + '<button class="remove" title="Remove">×</button>';
+        chip.querySelector('.name').textContent = sourceState.name;
+        chip.querySelector('.remove').addEventListener('click', () => {
+          sourceState.name = null; sourceState.text = null; sourceState.imageDataUrl = null;
+          renderSourceSlot();
+        });
+        sourceSlot.appendChild(chip);
+      }
+      sourceSlot.appendChild(sourceFileInput);
+    }
+    renderSourceSlot();
+
+    function fileToDataUrl(file) {
+      return new Promise((resolve, reject) => {
+        const r = new FileReader();
+        r.onload = () => resolve(r.result);
+        r.onerror = reject;
+        r.readAsDataURL(file);
+      });
+    }
+    function fileToText(file) {
+      return new Promise((resolve, reject) => {
+        const r = new FileReader();
+        r.onload = () => resolve(r.result);
+        r.onerror = reject;
+        r.readAsText(file);
+      });
+    }
+
+    async function loadSourceFile(file) {
+      if (!file) return;
+      const name = file.name || 'pasted file';
+      sourceState.name = name + ' (loading…)';
+      sourceState.text = null; sourceState.imageDataUrl = null;
+      renderSourceSlot();
+      try {
+        const lower = name.toLowerCase();
+        if (file.type.startsWith('image/')) {
+          sourceState.imageDataUrl = await fileToDataUrl(file);
+          sourceState.name = name;
+        } else if (lower.endsWith('.pdf') || lower.endsWith('.docx')
+                   || file.type === 'application/pdf'
+                   || file.type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') {
+          const dataUrl = await fileToDataUrl(file);
+          const r = await fetch('/extract-text', {
+            method: 'POST',
+            credentials: 'include',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ dataUrl, name }),
+          });
+          const data = await r.json();
+          if (!r.ok) throw new Error(data.error || 'Could not read that file');
+          sourceState.text = data.text || '';
+          sourceState.name = name;
+        } else if (lower.endsWith('.txt') || lower.endsWith('.md') || file.type.startsWith('text/')) {
+          sourceState.text = await fileToText(file);
+          sourceState.name = name;
+        } else {
+          throw new Error('Unsupported file type — try PDF, Word, image, or .txt');
+        }
+        renderSourceSlot();
+      } catch (e) {
+        sourceState.name = null; sourceState.text = null; sourceState.imageDataUrl = null;
+        renderSourceSlot();
+        alert('Could not load that file: ' + e.message);
+      }
+    }
+
+    sourceFileInput.addEventListener('change', (ev) => {
+      const f = ev.target.files && ev.target.files[0];
+      if (f) loadSourceFile(f);
+      ev.target.value = '';
+    });
+
+    // Drag-drop anywhere on the page
+    let dragDepth = 0;
+    window.addEventListener('dragenter', (e) => {
+      if (e.dataTransfer && Array.from(e.dataTransfer.types || []).includes('Files')) {
+        dragDepth++; dropOverlay.classList.add('show');
+      }
+    });
+    window.addEventListener('dragleave', () => {
+      dragDepth = Math.max(0, dragDepth - 1);
+      if (dragDepth === 0) dropOverlay.classList.remove('show');
+    });
+    window.addEventListener('dragover', (e) => {
+      if (e.dataTransfer && Array.from(e.dataTransfer.types || []).includes('Files')) e.preventDefault();
+    });
+    window.addEventListener('drop', (e) => {
+      e.preventDefault();
+      dragDepth = 0; dropOverlay.classList.remove('show');
+      const f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+      if (f) loadSourceFile(f);
+    });
+
+    // Paste — image or text
+    window.addEventListener('paste', (e) => {
+      // If user is typing in the body or title or coach input, don't intercept
+      const tag = (document.activeElement && document.activeElement.tagName) || '';
+      if (tag === 'TEXTAREA' || tag === 'INPUT') return;
+      const items = (e.clipboardData && e.clipboardData.items) || [];
+      for (const it of items) {
+        if (it.kind === 'file') {
+          const f = it.getAsFile();
+          if (f) { loadSourceFile(f); return; }
+        }
+      }
+      // Plain text paste — only fill source if it's not already set
+      const text = e.clipboardData ? e.clipboardData.getData('text') : '';
+      if (text && text.length > 50 && !sourceState.name) {
+        sourceState.text = text;
+        sourceState.name = 'Pasted text (' + text.length + ' chars)';
+        renderSourceSlot();
+      }
+    });
+
     /* CHAT TO Q ─────────────────────────────────
        Sends to the same /chat endpoint the main chat uses, so Q has all
        his memory and persona. We prepend a small context block so Q can
-       see what the user is currently writing. */
+       see what the user is currently writing AND the source/task. */
     async function askQ(userText) {
       const t = (titleEl.value || '').trim();
       const b = (body.value || '').trim();
+      const sourceBlock = sourceState.text
+        ? `[The task / source she's writing about — "${sourceState.name}"]\n${sourceState.text.slice(0, 3000)}\n[end source]\n\n`
+        : sourceState.imageDataUrl
+          ? `[She's attached an image as the task: "${sourceState.name}". Use your vision to read it if relevant.]\n\n`
+          : '';
       const docBlock = b
         ? `[Writing Coach — what I'm working on right now]\nTitle: ${t || 'untitled'}\n\n${b.slice(0, 1500)}\n[end]\n\n`
         : `[Writing Coach — the page is still blank]\n\n`;
-      const message = docBlock + userText;
+      const message = sourceBlock + docBlock + userText;
 
       msgEl.classList.add('thinking');
       msgEl.textContent = 'thinking…';
+      const fetchBody = { message, surface: 'writer' };
+      if (sourceState.imageDataUrl) {
+        fetchBody.images = [{ dataUrl: sourceState.imageDataUrl, name: sourceState.name }];
+      }
       try {
         const r = await fetch('/chat', {
           method: 'POST',
           credentials: 'include',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ message, surface: 'writer' }),
+          body: JSON.stringify(fetchBody),
         });
         const data = await r.json().catch(() => ({}));
         msgEl.classList.remove('thinking');
