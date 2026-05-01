@@ -323,8 +323,11 @@ router.post('/chat', requirePerson, express.json({ limit: '24mb' }), async (req,
     // writer card only shows messages from /writer. Q's prompt sees the
     // FULL thread regardless of surface so he has continuous memory.
     const surface = (req.body?.surface || 'chat').toString().toLowerCase();
+    // Reasoning effort: explicit 'low' for Quick mode (was undefined before
+    // — V4 Pro then fell back to its own default which is heavier than
+    // expected, so 'Quick' wasn't actually quick).
     const rawEffort = req.body?.reasoningEffort;
-    const reasoningEffort = (rawEffort === 'high' || rawEffort === 'max') ? rawEffort : undefined;
+    const reasoningEffort = (rawEffort === 'high' || rawEffort === 'max') ? rawEffort : 'low';
     const rawImages = req.body?.images;
     const images = Array.isArray(rawImages)
         ? rawImages.filter(i => i && typeof i.dataUrl === 'string' && i.dataUrl.startsWith('data:'))
@@ -865,8 +868,11 @@ router.post('/agent/run', express.json({ limit: '256kb' }), async (req, res) => 
     }
     const maxSteps = parseInt(req.body?.maxSteps);
     const verify = req.body?.verify === true;
+    // Reasoning effort: explicit 'low' for Quick mode (was undefined before
+    // — V4 Pro then fell back to its own default which is heavier than
+    // expected, so 'Quick' wasn't actually quick).
     const rawEffort = req.body?.reasoningEffort;
-    const reasoningEffort = (rawEffort === 'high' || rawEffort === 'max') ? rawEffort : undefined;
+    const reasoningEffort = (rawEffort === 'high' || rawEffort === 'max') ? rawEffort : 'low';
     const result = await runAgent(goal, {
         maxSteps: Number.isFinite(maxSteps) ? maxSteps : undefined,
         verify,
