@@ -318,6 +318,11 @@ router.post('/chat', requirePerson, express.json({ limit: '24mb' }), async (req,
     const person = req.person; // attached by requirePerson — { id, name, intro, addedAt }
     const newMessage = req.body?.message;
     const messagesArray = req.body?.messages;
+    // Which UI surface this message came from. Used for visual filtering on
+    // the front-end so the chat box only shows messages from /chat and the
+    // writer card only shows messages from /writer. Q's prompt sees the
+    // FULL thread regardless of surface so he has continuous memory.
+    const surface = (req.body?.surface || 'chat').toString().toLowerCase();
     const rawEffort = req.body?.reasoningEffort;
     const reasoningEffort = (rawEffort === 'high' || rawEffort === 'max') ? rawEffort : undefined;
     const rawImages = req.body?.images;
@@ -352,10 +357,13 @@ router.post('/chat', requirePerson, express.json({ limit: '24mb' }), async (req,
             const ts = m.timestamp ? m.timestamp.slice(0, 16).replace('T', ' ') : '?';
             // Each file only contains turns between this person and Q, so
             // the role alone is unambiguous; just keep timestamps so Q can
-            // sense gaps between sessions.
+            // sense gaps between sessions. Tag each message with the surface
+            // it came from so Q can connect 'something said in writer' with
+            // 'something said in chat'.
+            const where = m.surface && m.surface !== 'chat' ? ` in ${m.surface}` : '';
             return {
                 role: m.role,
-                content: `[${ts}] ${m.content}`,
+                content: `[${ts}${where}] ${m.content}`,
             };
         });
         // Tell Q the current moment so he can locate himself in time
@@ -372,9 +380,9 @@ router.post('/chat', requirePerson, express.json({ limit: '24mb' }), async (req,
             ...history,
             { role: 'user', content: userMemoryContent },
         ];
-        appendMessage(person.id, 'user', userMemoryContent);
+        appendMessage(person.id, 'user', userMemoryContent, surface);
         const result = await chat(messagesForQ, chatOptions);
-        if (result.reply) appendMessage(person.id, 'assistant', result.reply);
+        if (result.reply) appendMessage(person.id, 'assistant', result.reply, surface);
         return res.json(result);
     }
 
@@ -393,7 +401,14 @@ router.post('/chat', requirePerson, express.json({ limit: '24mb' }), async (req,
 // no filtering or cross-person bleed. Sarah's wipe doesn't touch anyone
 // else; nobody else's wipe touches Sarah.
 router.get('/chat-history', requirePerson, (req, res) => {
-    const messages = loadMemory(req.person.id);
+    const surface = (req.query.surface || '').toString().toLowerCase();
+    let messages = loadMemory(req.person.id);
+    // Filter by surface if requested. Messages without a surface tag are
+    // legacy from before the split — treat them as 'chat' so the main
+    // chat keeps showing the full history.
+    if (surface) {
+        messages = messages.filter(m => (m.surface || 'chat') === surface);
+    }
     return res.json({ messages, storedAt: getMemoryPath(req.person.id) });
 });
 

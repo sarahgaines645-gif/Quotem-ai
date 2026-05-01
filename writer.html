@@ -330,7 +330,7 @@
           method: 'POST',
           credentials: 'include',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ message }),
+          body: JSON.stringify({ message, surface: 'writer' }),
         });
         const data = await r.json().catch(() => ({}));
         msgEl.classList.remove('thinking');

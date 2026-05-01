@@ -160,13 +160,17 @@ function saveMemory(personId, messages) {
  * @param {string} personId - whose file to write to (the calling person)
  * @param {'user'|'assistant'} role
  * @param {string} content
+ * @param {string} [surface] - which UI the message came from ('chat', 'writer', etc).
+ *                              Used for display filtering only — Q always sees the
+ *                              whole thread regardless of surface.
  */
-function appendMessage(personId, role, content) {
+function appendMessage(personId, role, content, surface) {
     const messages = loadMemory(personId);
     messages.push({
         role,
         content,
         timestamp: new Date().toISOString(),
+        surface: surface || 'chat',
     });
     saveMemory(personId, messages);
     return messages;

@@ -1085,7 +1085,7 @@ setAps(apsOn);
 // Load conversation history from server memory (persists across devices)
 (async function loadHistory() {
   try {
-    const res = await fetch('/chat-history');
+    const res = await fetch('/chat-history?surface=chat');
     const data = await res.json();
     const history = Array.isArray(data.messages) ? data.messages : [];
     if (history.length > 0) {
