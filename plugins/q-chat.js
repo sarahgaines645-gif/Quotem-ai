@@ -128,14 +128,49 @@ Your ethos: thrifty, creative, for the people. You're not a lawyer and you don't
 
 Nothing dishonest. Nothing illegal. Just the loopholes, technicalities, and common-sense angles that most people never think to try.`;
 
+// Surface-specific instructions. Sarah's putting Q's chat box on every page,
+// and Q needs to know WHERE he is so he behaves appropriately for that
+// surface. Each entry is appended to the system prompt when the request
+// comes in tagged with that surface. Keep these short and focused on what
+// CHANGES vs the default chat — Q's identity, voice, and memory all stay
+// the same regardless of surface.
+const SURFACE_PROMPTS = {
+    writer: `You're currently in the WRITER, not the main chat. This is a writing-coach surface — a different room.
+
+The user has a document open. You can see (from the user message context they prepend):
+- The document title
+- What they've typed so far
+- Optionally, the task / source material / brief / homework prompt they're writing about
+
+Your job here is NOT to write the document for them. You are the coach. They are the author. Their words go on the page; yours stay in the chat.
+
+How to behave:
+- Help them think their way through the writing — pull their reasoning out
+- Suggest better words when they ask for one — give 2 or 3 options, don't pick for them
+- Ask probing questions that get them to write a stronger sentence themselves
+- When they say something vague, ask "what specifically do you mean?" — make them refine
+- Bridge unfamiliar concepts to things they already understand (e.g. "the character is a bit like Kim Kardashian during X relationship — does that help?")
+- Spot weak phrasing and ask them what they really meant
+- Never produce a paragraph or sentence they could paste straight into the document
+- Never say "here's how I'd write that" — say "what would you say if you weren't trying to sound clever?"
+
+If they ask you to write it for them, push back gently: "If I write it, an AI detector spots it and it stops being yours. Tell me what you want to say in normal words and I'll help you make it stronger." The whole point of this surface is that they leave with their OWN writing.
+
+When you reply: keep it short and focused. One question, one suggestion, one nudge. Long replies break the writing flow.`,
+};
+
 /**
  * Build the system message at call time so Q's most recent stored facts
  * are injected. Falls back to plain Q_PERSONA if facts can't be loaded.
  *
  * @param {string} [mode] - When 'aps', overlays the APS prompt after the
  *   base persona but before the facts block. Anything else: plain Q.
+ * @param {string} [personId] - whose facts to load
+ * @param {string} [surface] - which UI surface called Q ('chat', 'writer', etc).
+ *   When a surface has an entry in SURFACE_PROMPTS, that block is appended so
+ *   Q knows where he is and behaves appropriately.
  */
-function buildSystemMessage(mode, personId) {
+function buildSystemMessage(mode, personId, surface) {
     const now = new Date();
     const dateTimeBlock = `\n\nCurrent date and time: ${now.toLocaleDateString('en-GB', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}, ${now.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', timeZoneName: 'short' })}.`;
     let factsBlock = '';
@@ -149,7 +184,10 @@ function buildSystemMessage(mode, personId) {
         // Memory unavailable — Q just doesn't see his facts this turn.
     }
     const overlay = (mode === 'aps') ? `\n\n---\n\n${APS_PROMPT}` : '';
-    return Q_PERSONA + dateTimeBlock + overlay + factsBlock;
+    const surfaceBlock = (surface && SURFACE_PROMPTS[surface])
+        ? `\n\n---\n\n${SURFACE_PROMPTS[surface]}`
+        : '';
+    return Q_PERSONA + dateTimeBlock + surfaceBlock + overlay + factsBlock;
 }
 
 /**
@@ -218,7 +256,7 @@ async function chat(messages, options = {}) {
 
     // Conversation buffer that grows as we loop through tool calls.
     let conversation = [
-        { role: 'system', content: buildSystemMessage(mode, options.person?.id) },
+        { role: 'system', content: buildSystemMessage(mode, options.person?.id, options.surface) },
         ...outboundMessages,
     ];
     const toolCalls = [];     // [{ name, args, result, durationMs }]

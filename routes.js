@@ -338,7 +338,7 @@ router.post('/chat', requirePerson, express.json({ limit: '24mb' }), async (req,
     // (including undefined) leaves Q in default mode.
     const mode = (req.body?.mode === 'aps') ? 'aps' : undefined;
     const circle = getCircleSummary();
-    const chatOptions = { reasoningEffort, images, useTools, verify, mode, person, circle };
+    const chatOptions = { reasoningEffort, images, useTools, verify, mode, person, circle, surface };
 
     // Image-only sends arrive with message === "" but a non-empty images array
     // (paste of a screenshot, OCR fallback for scanned PDFs, etc.). Treat them
