@@ -79,12 +79,15 @@ Pop-up quotes appear at moments — short teaching moments inline with writing.
 
 A coloured bar/dot next to each section that updates as the user writes. Red = basic, amber = mid, green = top band. Live feedback as they refine.
 
+## Starting is the hardest bit (Sarah, 2026-05-01)
+
+Q helps from word one — there is no "blank vs starter prompt" question because Q is always coaching, including before the first word. Don't drop the user onto an empty page and wait. Q breaks the ice, suggests the first move, holds the door open.
+
 ## Open questions for next session
 
-- Does the document start blank, or does Q give a starter prompt?
 - TV panel: which video sources are realistic to integrate? (YouTube has API limits; Khan Academy has open content; audible needs partnership)
-- Word suggestions: trigger on every word, or only when the user pauses / selects?
-- How long does the voice sample need to be to give Q a real signature? (200 words minimum probably)
+- Word suggestions: trigger on every word, or only when the user pauses / selects? (Recommendation: idle pause ~800ms + on-select)
+- How long does the voice sample need to be to give Q a real signature? (Recommendation: 150 min, 300+ ideal)
 
 ## What's currently built (to be REPLACED)
 
