@@ -1044,12 +1044,26 @@ function blobToBase64(blob) {
   });
 }
 
-// Thinking-level picker — Quick / Think / Deep maps to undefined / 'high' / 'max'
+// Thinking-level picker — Quick / Think / Deep maps to 'low' / 'high' / 'max'.
+// The chosen level lives in localStorage so it persists across reloads, but
+// it expires after 30 minutes of inactivity — so if Q hasn't been used for a
+// while he defaults back to Quick. That stops a forgotten 'Deep' from quietly
+// making every reply slow tomorrow.
+const THINK_TIMEOUT_MS = 30 * 60 * 1000; // 30 minutes
+const THINK_TS_KEY = THINK_KEY + '-ts';
 const $thinkBtns = document.querySelectorAll('.think-btn');
-let thinkingLevel = localStorage.getItem(THINK_KEY) || 'off';
+function loadThinkingLevel() {
+  const saved = localStorage.getItem(THINK_KEY) || 'off';
+  const tsRaw = localStorage.getItem(THINK_TS_KEY);
+  const ts = tsRaw ? parseInt(tsRaw, 10) : 0;
+  if (!ts || Date.now() - ts > THINK_TIMEOUT_MS) return 'off';
+  return saved;
+}
+let thinkingLevel = loadThinkingLevel();
 function setThinkingLevel(level) {
   thinkingLevel = (level === 'high' || level === 'max') ? level : 'off';
   localStorage.setItem(THINK_KEY, thinkingLevel);
+  localStorage.setItem(THINK_TS_KEY, String(Date.now()));
   $thinkBtns.forEach(b => b.classList.toggle('on', b.dataset.effort === thinkingLevel));
 }
 $thinkBtns.forEach(b => b.addEventListener('click', () => setThinkingLevel(b.dataset.effort)));
@@ -1907,6 +1921,10 @@ async function send() {
   if (!userText && imagesNow.length === 0 && textsNow.length === 0) return;
   if ($send.disabled) return;
   if ($empty && $empty.parentNode) $empty.remove();
+  // Active chatting keeps the chosen Think/Deep level alive — without this,
+  // a 35-minute conversation on Think would revert to Quick on reload even
+  // though Q was actively used.
+  localStorage.setItem(THINK_TS_KEY, String(Date.now()));
 
   // Build the actual message we send to Q. Text attachments get prepended as
   // labelled blocks so Q can read their contents naturally.
