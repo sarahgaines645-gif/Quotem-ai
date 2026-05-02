@@ -1072,7 +1072,25 @@
         });
         const data = await r.json().catch(() => ({}));
         $coachMsg.classList.remove('thinking');
-        $coachMsg.textContent = (data.reply || data.error || 'Q went quiet — try again.').toString();
+
+        let reply = (data.reply || data.error || 'Q went quiet — try again.').toString();
+
+        // Pull any form-update fenced JSON block out, apply it, and remove it
+        // from the displayed reply.
+        const updateMatch = reply.match(/```form-update\s*([\s\S]*?)```/i);
+        if (updateMatch) {
+          try {
+            const updates = JSON.parse(updateMatch[1].trim());
+            applyValues(updates);
+            await renderPage(currentPage);
+            flashFilledInputs(updates);
+          } catch (parseErr) {
+            console.warn('[forms] Could not parse Q form-update block:', parseErr.message);
+          }
+          reply = reply.replace(/```form-update[\s\S]*?```/i, '').trim();
+        }
+
+        $coachMsg.textContent = reply || '(form updated)';
       } catch {
         $coachMsg.classList.remove('thinking');
         $coachMsg.textContent = 'Network blip — try again.';
