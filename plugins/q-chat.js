@@ -10,7 +10,7 @@
 'use strict';
 
 const { Q_CONFIG } = require('../config');
-const { TOOL_DEFINITIONS, executeTool } = require('./q-tools');
+const { TOOL_DEFINITIONS, executeTool, selectActiveTools } = require('./q-tools');
 const { verify } = require('./q-verifier');
 const { listFacts } = require('../facts');
 const { logCall } = require('../cost-tracker');
@@ -242,6 +242,18 @@ async function chat(messages, options = {}) {
         }
     }
 
+    // Pick the tools Q is allowed to use this turn based on what the user
+    // actually asked for. Default = remember + recall only. Heavy tools like
+    // web_search are gated behind explicit triggers in the user message.
+    // This is the structural fix for runaway costs from silent web searches.
+    const lastUserMsg = [...outboundMessages].reverse().find(m => m.role === 'user');
+    const lastUserText = typeof lastUserMsg?.content === 'string'
+        ? lastUserMsg.content
+        : Array.isArray(lastUserMsg?.content)
+            ? lastUserMsg.content.map(c => c.text || '').join(' ')
+            : '';
+    const activeTools = selectActiveTools(lastUserText);
+
     // Conversation buffer that grows as we loop through tool calls.
     let conversation = [
         { role: 'system', content: buildSystemMessage(mode, options.person?.id, options.surface) },
@@ -266,7 +278,7 @@ async function chat(messages, options = {}) {
                     max_tokens: maxTokens,
                     temperature: 0.7,
                     ...(!isVision && reasoningEffort && { reasoning_effort: reasoningEffort }),
-                    ...(useTools && { tools: TOOL_DEFINITIONS, tool_choice: 'auto' }),
+                    ...(useTools && activeTools.length > 0 && { tools: activeTools, tool_choice: 'auto' }),
                     messages: conversation,
                 }),
             });

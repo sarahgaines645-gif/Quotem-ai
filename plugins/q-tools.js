@@ -451,4 +451,56 @@ function recall({ query = '', limit = 10 } = {}, personId) {
     };
 }
 
-module.exports = { TOOL_DEFINITIONS, executeTool, analyzeDocument };
+// Pick the tools Q is allowed to call THIS turn. Persona alone wasn't enough
+// to stop Q from running web_search uninvited (250 calls in two days from
+// silent searches). The structural fix: only put web_search (and other
+// expensive tools) into the tool list when the user message clearly asks.
+//
+// Default = remember + recall (cheap, useful for memory). Everything else is
+// gated behind explicit triggers in the user's message.
+const ALWAYS_ON = new Set(['remember', 'recall']);
+
+const TRIGGERS = {
+    web_search: [
+        /\blook( it)? up\b/i,
+        /\bsearch( for| the web| online)?\b/i,
+        /\bgoogle (it|that|this|for)\b/i,
+        /\bfind (me |online|on the web)\b/i,
+        /\bwhat'?s (the latest|new on)\b/i,
+        /\bup-?to-?date\b/i,
+        /\bonline\b/i,
+    ],
+    calculator: [
+        /\bcalculate\b/i,
+        /\bwork out\b/i,
+        /\bmaths?\b/i,
+        // Three or more digits next to an arithmetic operator
+        /\d+\s*[+\-*/x×÷]\s*\d+/,
+    ],
+    current_datetime: [
+        /\bwhat time\b/i,
+        /\bwhat'?s the time\b/i,
+        /\btime( zone| now)\b/i,
+    ],
+    analyze_document: [
+        /\b(read|analy[sz]e|extract|summari[sz]e) (this|the|that|my|the file|the document|the pdf|attached)\b/i,
+    ],
+    create_document: [
+        /\b(create|make|write|generate|draft|build) (a|me a|me)? ?(document|doc|file|pdf|word|letter)\b/i,
+        /\bsave (this|that|it) (as a|to a)? ?(document|doc|file|pdf|word)\b/i,
+    ],
+};
+
+function selectActiveTools(userMessage) {
+    const msg = String(userMessage || '');
+    return TOOL_DEFINITIONS.filter(t => {
+        const name = t.function?.name;
+        if (!name) return false;
+        if (ALWAYS_ON.has(name)) return true;
+        const triggers = TRIGGERS[name];
+        if (!triggers) return false;
+        return triggers.some(rx => rx.test(msg));
+    });
+}
+
+module.exports = { TOOL_DEFINITIONS, executeTool, analyzeDocument, selectActiveTools };
