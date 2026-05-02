@@ -22,9 +22,12 @@ const Q_CONFIG = {
   visionModel: 'Qwen/Qwen3.6-Plus',
   // Fast model for utility tasks where top-tier reasoning isn't needed —
   // form-field extraction, simple JSON shaping, lightweight transforms.
-  // Llama 3.3 70B Turbo on Together AI: ~5-10x faster than V4 Pro and
-  // strong at structured-output JSON tasks. Q's main brain stays on V4 Pro.
-  fastModel: 'meta-llama/Llama-3.3-70B-Instruct-Turbo',
+  // DeepSeek V3 on Together AI: V4 Pro's predecessor, sharper at sentence-
+  // level reasoning than 70B-class models while still much faster than V4 Pro.
+  // Q's main brain stays on V4 Pro.
+  // Previous: 'meta-llama/Llama-3.3-70B-Instruct-Turbo' (too shallow on form
+  // fill — kept dropping values in wrong fields).
+  fastModel: 'deepseek-ai/DeepSeek-V3',
   temperature: 0.0,
   maxTokens: 4000,
   // Voice cloning — set after deploying q-lab/voice-cloning-space/ to a HF Space.
