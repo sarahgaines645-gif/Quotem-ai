@@ -93,6 +93,42 @@
       pointer-events: none;
     }
 
+    /* Input layer — overlays editable inputs on top of each field */
+    .input-layer {
+      position: absolute; top: 0; left: 0;
+      width: 100%; height: 100%;
+      pointer-events: none;
+    }
+    .pdf-input {
+      position: absolute;
+      pointer-events: auto;
+      border: none; outline: none; background: rgba(233,30,99,0.07);
+      padding: 0 3px; margin: 0;
+      font-family: 'Space Grotesk', system-ui, sans-serif;
+      color: #0a0a0a;
+      box-sizing: border-box;
+      cursor: text;
+      transition: background 0.15s, box-shadow 0.15s;
+      line-height: 1;
+    }
+    .pdf-input:hover { background: rgba(233,30,99,0.14); }
+    .pdf-input:focus { background: rgba(255,255,255,0.85); box-shadow: 0 0 0 1.5px var(--accent); }
+    .pdf-input.q-filled { background: rgba(233,30,99,0.25); }
+    .pdf-input.checkbox {
+      appearance: none; -webkit-appearance: none;
+      cursor: pointer;
+      border: 1.5px solid rgba(0,0,0,0.5);
+      border-radius: 2px;
+      background: rgba(255,255,255,0.5);
+    }
+    .pdf-input.checkbox:checked { background: var(--accent); border-color: var(--accent); }
+    .pdf-input.checkbox:checked::after {
+      content: '✓'; color: white; font-size: 70%;
+      display: flex; align-items: center; justify-content: center;
+      width: 100%; height: 100%; line-height: 1;
+    }
+    textarea.pdf-input { resize: none; line-height: 1.15; }
+
     /* Legend */
     .legend {
       display: none; gap: 16px; flex-wrap: wrap; margin-bottom: 14px;
@@ -308,6 +344,7 @@
       <div class="holder">
         <canvas id="page-canvas"></canvas>
         <svg id="field-overlay" xmlns="http://www.w3.org/2000/svg"></svg>
+        <div id="input-layer" class="input-layer"></div>
       </div>
     </div>
 
@@ -336,18 +373,8 @@
 
       <div class="intake-actions">
         <button class="q-btn accent" id="fill-btn" type="button">Q, fill it</button>
-        <span class="fill-status" id="fill-status"></span>
-      </div>
-    </div>
-
-    <!-- Review & edit panel — always visible once a PDF is loaded -->
-    <div class="review" id="review" style="display:none">
-      <div class="review-title">Review & edit before download</div>
-      <div class="review-hint">Q's auto-fill lands here. Edit any field directly, or type from scratch if you'd rather skip auto-fill. Ask Q on the right for help with anything.</div>
-      <div class="field-form" id="field-form"></div>
-      <div class="review-actions">
         <button class="q-btn accent" id="download-btn" type="button">Download filled PDF</button>
-        <span class="download-status" id="download-status"></span>
+        <span class="fill-status" id="fill-status"></span>
       </div>
     </div>
   </div>
@@ -378,6 +405,7 @@
     const $stage   = document.getElementById('stage');
     const $canvas  = document.getElementById('page-canvas');
     const $svg     = document.getElementById('field-overlay');
+    const $inputs  = document.getElementById('input-layer');
     const $prev    = document.getElementById('prev-btn');
     const $next    = document.getElementById('next-btn');
     const $pageNav = document.getElementById('page-nav');
@@ -393,6 +421,7 @@
     let currentPage = 1;
     let totalPages  = 1;
     let activeIdx   = -1;
+    const fieldValues = {}; // { fieldName: string|boolean } — single source of truth
 
     // ── Drop / file handling ─────────────────────────────────────────────────
     $drop.addEventListener('click', () => $file.click());
@@ -454,11 +483,10 @@
         $stage.classList.add('show');
         $legend.classList.add('show');
         $intake.style.display = '';
-        $review.style.display = '';
+        Object.keys(fieldValues).forEach(k => delete fieldValues[k]);
         updateNav();
         await renderPage(currentPage);
         renderFieldGrid();
-        buildFieldForm();
       } catch (e) {
         $err.textContent = 'Could not read PDF: ' + e.message;
       }
@@ -521,6 +549,47 @@
         const shortened = f.name.length > 24 ? f.name.slice(0, 24) + '…' : f.name;
         lbl.textContent = shortened;
         $svg.appendChild(lbl);
+      }
+
+      // Editable inputs sitting ON the page, one per field, scaled with the canvas
+      $inputs.innerHTML = '';
+      for (const f of pageFields) {
+        if (f.fieldType === 'Sig') continue;
+        const [vx1, vy1] = viewport.convertToViewportPoint(f.rect[0], f.rect[3]);
+        const [vx2, vy2] = viewport.convertToViewportPoint(f.rect[2], f.rect[1]);
+        const x = Math.min(vx1, vx2), y = Math.min(vy1, vy2);
+        const w = Math.abs(vx2 - vx1), h = Math.abs(vy2 - vy1);
+
+        const el = (f.fieldType === 'Btn')
+          ? document.createElement('input')
+          : (h > 38 ? document.createElement('textarea') : document.createElement('input'));
+
+        el.className = 'pdf-input' + (f.fieldType === 'Btn' ? ' checkbox' : '');
+        el.dataset.fieldName = f.name;
+        el.title = f.name;
+
+        if (f.fieldType === 'Btn') {
+          el.type = 'checkbox';
+          el.checked = !!fieldValues[f.name];
+          el.addEventListener('change', () => { fieldValues[f.name] = el.checked; });
+        } else {
+          if (el.tagName === 'INPUT') el.type = 'text';
+          el.value = fieldValues[f.name] || '';
+          el.addEventListener('input', () => { fieldValues[f.name] = el.value; });
+        }
+
+        // Position as % of viewport so it scales with the canvas display size
+        const lpct = (x / viewport.width)  * 100;
+        const tpct = (y / viewport.height) * 100;
+        const wpct = (w / viewport.width)  * 100;
+        const hpct = (h / viewport.height) * 100;
+        el.style.left   = lpct + '%';
+        el.style.top    = tpct + '%';
+        el.style.width  = wpct + '%';
+        el.style.height = hpct + '%';
+        // Font size scales with the field height — looks right at any zoom
+        el.style.fontSize = Math.max(10, h * 0.55) + 'px';
+        $inputs.appendChild(el);
       }
 
       if (allFields.length === 0) {
@@ -644,11 +713,10 @@
       $svg.innerHTML = '';
       $err.textContent = '';
       $intake.style.display = 'none';
-      $review.style.display = 'none';
-      $fieldForm.innerHTML = '';
+      $inputs.innerHTML = '';
+      Object.keys(fieldValues).forEach(k => delete fieldValues[k]);
       $infoText.value = '';
       $fillStatus.textContent = '';
-      $downloadStat.textContent = '';
       intakeImages = []; renderImageThumbs();
       const ctx = $canvas.getContext('2d');
       ctx.clearRect(0, 0, $canvas.width, $canvas.height);
@@ -660,107 +728,44 @@
         .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
     }
 
-    // ── Intake + review ───────────────────────────────────────────────────────
+    // ── Intake card ──────────────────────────────────────────────────────────
     let pdfBase64 = null;
     let intakeImages = []; // [{ dataUrl, name }]
 
-    const $intake       = document.getElementById('intake');
-    const $intakeBox    = document.getElementById('intake-box');
-    const $infoText     = document.getElementById('info-text');
-    const $fillBtn      = document.getElementById('fill-btn');
-    const $fillStatus   = document.getElementById('fill-status');
-    const $micBtn       = document.getElementById('mic-btn');
-    const $imgBtn       = document.getElementById('img-btn');
-    const $imgFile      = document.getElementById('img-file');
-    const $imgsRow      = document.getElementById('intake-images');
-    const $review       = document.getElementById('review');
-    const $fieldForm    = document.getElementById('field-form');
-    const $downloadBtn  = document.getElementById('download-btn');
-    const $downloadStat = document.getElementById('download-status');
+    const $intake     = document.getElementById('intake');
+    const $intakeBox  = document.getElementById('intake-box');
+    const $infoText   = document.getElementById('info-text');
+    const $fillBtn    = document.getElementById('fill-btn');
+    const $fillStatus = document.getElementById('fill-status');
+    const $micBtn     = document.getElementById('mic-btn');
+    const $imgBtn     = document.getElementById('img-btn');
+    const $imgFile    = document.getElementById('img-file');
+    const $imgsRow    = document.getElementById('intake-images');
+    const $downloadBtn = document.getElementById('download-btn');
 
-    // Clean a raw PDF field name into a readable label
-    function cleanLabel(name) {
-      return String(name || '')
-        .replace(/\.\.\.$/, '')
-        .replace(/([a-z])([A-Z])/g, '$1 $2')
-        .replace(/_/g, ' ')
-        .replace(/\s+/g, ' ')
-        .trim();
-    }
-
-    // Build per-field review form from allFields
-    function buildFieldForm() {
-      $fieldForm.innerHTML = '';
-      if (!allFields.length) return;
-      let lastPage = 0;
-      allFields.forEach((f, i) => {
-        if (f.page !== lastPage) {
-          lastPage = f.page;
-          if (i > 0) {
-            const pd = document.createElement('div');
-            pd.className = 'page-divider';
-            pd.textContent = 'Page ' + lastPage;
-            $fieldForm.appendChild(pd);
-          }
-        }
-        const meta = TYPE_META[f.fieldType] || TYPE_META['Tx'];
-        const row = document.createElement('div');
-        row.className = 'field-row' + (f.fieldType === 'Sig' ? ' sig-row' : '');
-        const lbl = document.createElement('label');
-        lbl.htmlFor = 'ff-' + i;
-        lbl.innerHTML = escapeHtml(cleanLabel(f.name)) +
-          '<span class="field-type-badge">' + escapeHtml(meta.label) + '</span>';
-
-        let ctrl;
-        if (f.fieldType === 'Sig') {
-          ctrl = document.createElement('div');
-          ctrl.className = 'sig-note';
-          ctrl.textContent = 'Signature — sign by hand after printing';
-        } else if (f.fieldType === 'Btn') {
-          ctrl = document.createElement('input');
-          ctrl.type = 'checkbox';
-          ctrl.id = 'ff-' + i;
-          ctrl.dataset.fieldName = f.name;
+    // Apply Q-extracted values into fieldValues, then re-render so they
+    // show up in the inputs sitting on the PDF.
+    function applyValues(values) {
+      for (const [name, v] of Object.entries(values)) {
+        const f = allFields.find(x => x.name === name);
+        if (!f) continue;
+        if (f.fieldType === 'Btn') {
+          fieldValues[name] = (v === true || String(v).toLowerCase() === 'true' ||
+                               String(v).toLowerCase() === 'yes' || String(v) === '1');
         } else {
-          const isMulti = /address|detail|description|notes|info|about|between|tenant|landlord/i.test(f.name) ||
-                          (f.rect[3] - f.rect[1]) > 40;
-          if (isMulti) { ctrl = document.createElement('textarea'); ctrl.rows = 2; }
-          else { ctrl = document.createElement('input'); ctrl.type = 'text'; }
-          ctrl.id = 'ff-' + i;
-          ctrl.dataset.fieldName = f.name;
-          ctrl.placeholder = cleanLabel(f.name);
+          fieldValues[name] = String(v ?? '');
         }
-        row.appendChild(lbl);
-        row.appendChild(ctrl);
-        $fieldForm.appendChild(row);
-      });
+      }
     }
 
-    // Apply Q-extracted values to the review form
-    function applyValuesToForm(values) {
-      $fieldForm.querySelectorAll('[data-field-name]').forEach(el => {
-        const name = el.dataset.fieldName;
-        if (!(name in values)) return;
-        const v = values[name];
-        if (el.type === 'checkbox') {
-          el.checked = (v === true || String(v).toLowerCase() === 'true' ||
-                        String(v).toLowerCase() === 'yes' || String(v) === '1');
-        } else {
-          el.value = String(v ?? '');
+    // Highlight the just-filled inputs briefly
+    function flashFilledInputs(values) {
+      $inputs.querySelectorAll('[data-field-name]').forEach(el => {
+        if (el.dataset.fieldName in values) {
+          el.classList.add('q-filled');
+          setTimeout(() => el.classList.remove('q-filled'), 2400);
         }
-        el.classList.add('q-filled');
-        setTimeout(() => el.classList.remove('q-filled'), 2400);
       });
-    }
-
-    function collectFieldValues() {
-      const values = {};
-      $fieldForm.querySelectorAll('[data-field-name]').forEach(el => {
-        const name = el.dataset.fieldName;
-        if (el.type === 'checkbox') values[name] = el.checked;
-        else if ((el.value || '').trim()) values[name] = el.value.trim();
-      });
-      return values;
     }
 
     // Screenshots — paperclip + drag-drop into the box + paste image
@@ -844,7 +849,8 @@
       $micBtn.style.opacity = '0.4';
     }
 
-    // "Q, fill it" — extracts values from intake box, populates the review form
+    // "Q, fill it" — extracts values from intake box, drops them into the
+    // fieldValues map, then re-renders so they appear in the inputs ON the PDF
     $fillBtn.addEventListener('click', async () => {
       if (!allFields.length) { $fillStatus.textContent = 'No fields in this PDF.'; $fillStatus.className = 'fill-status err'; return; }
       const infoText = $infoText.value.trim();
@@ -873,9 +879,11 @@
         const data = await r.json();
         if (!r.ok) throw new Error(data.error || 'HTTP ' + r.status);
 
-        applyValuesToForm(data.values || {});
+        applyValues(data.values || {});
+        await renderPage(currentPage);
+        flashFilledInputs(data.values || {});
         const n = Object.keys(data.values || {}).length;
-        $fillStatus.textContent = '✓ Q filled ' + n + ' field' + (n === 1 ? '' : 's') + ' — review below, then download.';
+        $fillStatus.textContent = '✓ Q filled ' + n + ' field' + (n === 1 ? '' : 's') + ' — edit any of them by clicking, then Download.';
         $fillStatus.className = 'fill-status ok';
       } catch (e) {
         $fillStatus.textContent = 'Q hit a snag: ' + e.message;
@@ -885,18 +893,23 @@
       }
     });
 
-    // Download button — writes review-form values into the PDF
+    // Download button — writes fieldValues into the PDF and downloads it
     $downloadBtn.addEventListener('click', async () => {
-      if (!pdfBase64) { $downloadStat.textContent = 'Load a PDF first.'; $downloadStat.className = 'download-status err'; return; }
-      const values = collectFieldValues();
+      if (!pdfBase64) { $fillStatus.textContent = 'Load a PDF first.'; $fillStatus.className = 'fill-status err'; return; }
+      // Filter out empty values
+      const values = {};
+      for (const [k, v] of Object.entries(fieldValues)) {
+        if (typeof v === 'boolean') values[k] = v;
+        else if (v && String(v).trim()) values[k] = String(v).trim();
+      }
       if (!Object.keys(values).length) {
-        $downloadStat.textContent = 'No values to write — fill some fields first.';
-        $downloadStat.className = 'download-status err';
+        $fillStatus.textContent = 'Nothing filled in yet — type into the form first.';
+        $fillStatus.className = 'fill-status err';
         return;
       }
       $downloadBtn.disabled = true;
-      $downloadStat.textContent = 'Writing PDF…';
-      $downloadStat.className = 'download-status';
+      $fillStatus.textContent = 'Writing PDF…';
+      $fillStatus.className = 'fill-status';
       try {
         const r = await fetch('/forms/fill', {
           method: 'POST', credentials: 'include',
@@ -912,11 +925,11 @@
         document.body.appendChild(a); a.click();
         document.body.removeChild(a);
         URL.revokeObjectURL(url);
-        $downloadStat.textContent = '✓ Downloaded — ' + filled + ' field' + (filled === '1' ? '' : 's') + ' filled';
-        $downloadStat.className = 'download-status ok';
+        $fillStatus.textContent = '✓ Downloaded — ' + filled + ' field' + (filled === '1' ? '' : 's') + ' filled';
+        $fillStatus.className = 'fill-status ok';
       } catch (e) {
-        $downloadStat.textContent = 'Download failed: ' + e.message;
-        $downloadStat.className = 'download-status err';
+        $fillStatus.textContent = 'Download failed: ' + e.message;
+        $fillStatus.className = 'fill-status err';
       } finally {
         $downloadBtn.disabled = false;
       }
