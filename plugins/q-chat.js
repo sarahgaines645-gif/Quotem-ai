@@ -19,6 +19,51 @@ const { logCall } = require('../cost-tracker');
 // at the start of each chat. Older facts are still reachable via `recall`.
 const FACTS_INJECT_LIMIT = 25;
 
+/**
+ * Read a Together-AI SSE streaming response and collapse it back into the
+ * non-streaming { choices, usage } shape so the rest of the chat loop is
+ * unchanged. Required for vision-capable models (Qwen3.6-Plus) that
+ * Together AI exposes streaming-only — without this, vision calls return
+ * empty and Q hallucinates "I see images but can't access them".
+ *
+ * Ported from q-lab/plugins/qwen-chat.js — same parser, same shape.
+ */
+async function readStreamAsResponse(response) {
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let content = '';
+    let finishReason = null;
+    let usage = null;
+    let buffer = '';
+
+    while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || '';
+        for (const line of lines) {
+            const s = line.replace(/^data: /, '').trim();
+            if (!s || s === '[DONE]') continue;
+            try {
+                const chunk = JSON.parse(s);
+                const delta = chunk.choices?.[0]?.delta;
+                if (delta?.content) content += delta.content;
+                const fr = chunk.choices?.[0]?.finish_reason;
+                if (fr) finishReason = fr;
+                if (chunk.usage) usage = chunk.usage;
+            } catch { /* ignore malformed SSE line */ }
+        }
+    }
+    return {
+        choices: [{
+            message: { role: 'assistant', content, tool_calls: null },
+            finish_reason: finishReason || 'stop',
+        }],
+        usage: usage || {},
+    };
+}
+
 // Tool loop limit — prevents runaway when Q gets stuck calling tools forever.
 // Bumped from 5 → 8 to give Q more headroom for legitimate multi-step tool
 // chains (e.g. recall → web_search → analyze_document). When the cap IS hit
@@ -265,6 +310,13 @@ async function chat(messages, options = {}) {
                     model,
                     max_tokens: maxTokens,
                     temperature: 0.7,
+                    // Qwen3.6-Plus (the vision model) is exposed streaming-only on
+                    // Together AI's serverless tier. Without stream:true the call
+                    // returns empty and Q hallucinates 'I can see them but can't
+                    // access them'. Force streaming for vision turns; non-vision
+                    // calls stay non-streaming so the existing tool loop is
+                    // unchanged.
+                    ...(isVision && { stream: true }),
                     ...(!isVision && reasoningEffort && { reasoning_effort: reasoningEffort }),
                     ...(useTools && { tools: TOOL_DEFINITIONS, tool_choice: 'auto' }),
                     messages: conversation,
@@ -284,7 +336,12 @@ async function chat(messages, options = {}) {
                 };
             }
 
-            const data = await response.json();
+            // Vision turns stream — collapse the SSE chunks back to the same
+            // shape as the non-streaming response so the rest of the loop is
+            // unchanged.
+            const data = isVision
+                ? await readStreamAsResponse(response)
+                : await response.json();
             totalTokensIn += data.usage?.prompt_tokens || 0;
             totalTokensOut += data.usage?.completion_tokens || 0;
 
