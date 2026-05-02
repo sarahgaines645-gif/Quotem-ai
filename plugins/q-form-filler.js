@@ -251,35 +251,9 @@ async function intakeAndFill({ pdfBytes, fields, infoText, imageDataUrl }) {
  * @returns {Promise<Object>} — { fieldName: humanLabel }
  */
 async function labelFields(fields, documentText) {
-    const fieldList = fields.map(f => `- "${f.name}" (${f.type}, page ${f.page || '?'})`).join('\n');
+    const system = `Read the form below. Each blank is marked with [FIELD: name]. For every field, give a short label (2–6 words) describing what should go in that blank. Return a JSON object: { "exact field name": "label", ... }`;
 
-    const system = `You are helping someone fill in a form. Below is the entire form text in reading order, with [FIELD: <name>] markers showing exactly where each blank space appears. The form could be anything — a tenancy agreement, a competition entry, a job application, a medical intake, a club membership — you do not know in advance.
-
-YOUR JOB:
-Read the whole form carefully — every heading, every section, every sentence. Then for each [FIELD: ...] marker, work out what kind of information should go in that blank. Output a short label (2-6 words) describing what the user should write there.
-
-HOW TO READ:
-- Read the form like a person reads any document: top to bottom, headings first, then the body, paying attention to how sentences and sections relate.
-- Understand each blank from the surrounding sentences and the section it sits in.
-- Don't pattern-match on the closest few words alone — a single symbol or short phrase can mean different things in different forms. The surrounding text decides what each blank means.
-- If two fields appear in the same sentence, work out the role each one plays in that sentence.
-- If you genuinely cannot tell what a field is asking for after reading the document, label it "Unclear — review manually" rather than guessing.
-
-OUTPUT:
-A single JSON object mapping each EXACT field name (verbatim — copy character-for-character including spaces, punctuation, and odd casing) to its label. No prose, no markdown, no commentary. Start with { and end with }.
-
-Example shape (the actual labels depend on the actual form):
-{
-  "field_name_1": "Short clear label",
-  "field_name_2": "Another short clear label"
-}`;
-
-    const userMessage = `FIELDS TO LABEL (you must produce a label for every one of these):
-${fieldList}
-
-THE FULL DOCUMENT (read all of it before labelling):
-
-${documentText || '(no document text provided)'}`;
+    const userMessage = documentText;
 
     const response = await fetch(`${Q_CONFIG.baseURL}/chat/completions`, {
         method: 'POST',
