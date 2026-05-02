@@ -295,6 +295,22 @@ router.post('/plotter/analyze', requirePerson, express.json({ limit: '24mb' }), 
 
 const qFormFiller = require('./plugins/q-form-filler');
 
+// POST /forms/extract
+// Body: { fields: [{name, type}], infoText, imageDataUrl? }
+// Returns: { values: { fieldName: value } }  — for the UI to populate the review form
+router.post('/forms/extract', requirePerson, express.json({ limit: '24mb' }), async (req, res) => {
+    try {
+        const { fields, infoText, imageDataUrl } = req.body || {};
+        if (!fields || !fields.length) return res.status(400).json({ error: 'fields required' });
+        if (!infoText && !imageDataUrl) return res.status(400).json({ error: 'infoText or imageDataUrl required' });
+        const values = await qFormFiller.extractFieldValues(fields, infoText || '', imageDataUrl || null);
+        res.json({ ok: true, values });
+    } catch (e) {
+        console.error('[forms/extract]', e.message);
+        res.status(500).json({ error: e.message });
+    }
+});
+
 // POST /forms/fill
 // Body: { pdfBase64, fields: [{name, type}], infoText, imageDataUrl? }
 // Returns: filled PDF as application/pdf download

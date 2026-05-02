@@ -136,26 +136,18 @@
 
     .err { color: var(--accent); font-size: 13px; margin-bottom: 14px; }
 
-    /* Intake panel */
-    .intake {
+    /* Per-field review form — below the intake card */
+    .review {
       background: var(--bg); box-shadow: var(--neu-raised-sm);
-      border-radius: 18px; padding: 22px 20px; margin-bottom: 24px;
+      border-radius: 18px; padding: 24px 22px; margin-bottom: 24px;
     }
-    .intake-head { margin-bottom: 16px; display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; }
-    .intake-title { font-size: 16px; font-weight: 600; }
-    .intake-tabs { display: flex; gap: 6px; margin-left: auto; }
-    .intake-tab {
-      border: none; cursor: pointer; background: var(--bg); color: var(--text-muted);
-      box-shadow: var(--neu-raised-sm); border-radius: 8px;
-      padding: 5px 12px; font-size: 12px; font-weight: 600; font-family: inherit;
-    }
-    .intake-tab.active { box-shadow: var(--neu-inset-sm); color: var(--text); }
-
-    /* Per-field form */
+    .review-title { font-size: 16px; font-weight: 600; margin-bottom: 4px; }
+    .review-hint { font-size: 12px; color: var(--text-muted); margin-bottom: 16px; }
     .field-form { display: flex; flex-direction: column; gap: 12px; }
-    .field-row { display: grid; grid-template-columns: 180px 1fr; gap: 10px; align-items: center; }
+    .field-row { display: grid; grid-template-columns: 200px 1fr; gap: 10px; align-items: start; }
     .field-row label {
       font-size: 12px; font-weight: 600; color: var(--text-muted);
+      padding-top: 9px;
       white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
     }
     .field-row .field-type-badge {
@@ -169,43 +161,76 @@
       font-family: 'Space Grotesk', sans-serif; font-size: 13px; color: var(--text);
       width: 100%;
     }
-    .field-row input[type=text]:focus, .field-row textarea:focus { box-shadow: var(--neu-inset-sm), 0 0 0 2px rgba(233,30,99,0.15); }
-    .field-row input[type=checkbox] { width: 18px; height: 18px; cursor: pointer; }
+    .field-row input[type=text].q-filled, .field-row textarea.q-filled {
+      box-shadow: var(--neu-inset-sm), 0 0 0 2px rgba(233,30,99,0.20);
+    }
+    .field-row input[type=checkbox] { width: 18px; height: 18px; cursor: pointer; margin-top: 11px; }
     .field-row.sig-row .sig-note {
-      font-size: 12px; color: var(--text-faint); font-style: italic; padding: 8px 0;
+      font-size: 12px; color: var(--text-faint); font-style: italic; padding: 9px 0;
     }
     .page-divider {
       font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em;
-      color: var(--text-faint); padding: 4px 0 0; border-top: 1px solid rgba(0,0,0,0.07);
+      color: var(--text-faint); padding: 8px 0 0; border-top: 1px solid rgba(0,0,0,0.07);
       margin-top: 4px;
     }
+    .review-actions { display: flex; align-items: center; gap: 14px; margin-top: 18px; }
+    .download-status { font-size: 12px; color: var(--text-muted); }
+    .download-status.ok { color: #10b981; }
+    .download-status.err { color: var(--accent); }
 
-    /* Paste-all panel */
-    .paste-panel { display: none; }
-    .paste-panel.show { display: block; }
-    .paste-panel textarea {
-      width: 100%; border: none; outline: none; resize: vertical;
+    /* Intake card — one box, everything goes in */
+    .intake {
+      background: var(--bg); box-shadow: var(--neu-raised-sm);
+      border-radius: 18px; padding: 24px 22px; margin-bottom: 24px;
+    }
+    .intake-title { font-size: 16px; font-weight: 600; margin-bottom: 4px; }
+    .intake-hint { font-size: 12px; color: var(--text-muted); margin-bottom: 14px; }
+    .intake-box {
+      position: relative;
       background: var(--bg); box-shadow: var(--neu-inset-sm);
-      border-radius: 10px; padding: 12px 14px;
-      font-family: 'Space Grotesk', sans-serif; font-size: 13px;
-      color: var(--text); line-height: 1.55; min-height: 100px;
+      border-radius: 12px;
+      transition: box-shadow 0.15s;
     }
-    .paste-panel textarea::placeholder { color: var(--text-faint); }
-    .paste-voice { display: flex; align-items: center; gap: 10px; margin-top: 10px; }
-    .mic-btn {
-      border: none; cursor: pointer; background: var(--bg); color: var(--text);
+    .intake-box.dragover { box-shadow: var(--neu-inset-sm), 0 0 0 2px var(--accent); }
+    .intake-box textarea {
+      width: 100%; border: none; outline: none; resize: vertical;
+      background: transparent;
+      padding: 14px 16px 50px;
+      font-family: 'Space Grotesk', sans-serif; font-size: 14px;
+      color: var(--text); line-height: 1.55; min-height: 140px;
+    }
+    .intake-box textarea::placeholder { color: var(--text-faint); }
+    .intake-tools {
+      position: absolute; left: 10px; bottom: 10px;
+      display: flex; gap: 6px; align-items: center;
+    }
+    .tool-btn {
+      border: none; cursor: pointer; background: var(--bg);
       box-shadow: var(--neu-raised-sm); border-radius: 50%;
-      width: 44px; height: 44px; font-size: 20px; flex-shrink: 0;
+      width: 32px; height: 32px; font-size: 14px;
       display: inline-flex; align-items: center; justify-content: center;
+      color: var(--text-muted);
     }
-    .mic-btn.recording { box-shadow: var(--neu-inset-sm); color: var(--accent); }
-    .voice-transcript {
-      font-size: 12px; color: var(--text-muted); flex: 1;
-      padding: 8px 12px; background: var(--bg);
-      box-shadow: var(--neu-inset-sm); border-radius: 8px; min-height: 36px;
+    .tool-btn:hover { color: var(--text); }
+    .tool-btn.recording { box-shadow: var(--neu-inset-sm); color: var(--accent); }
+    .intake-images {
+      display: flex; gap: 8px; flex-wrap: wrap; margin: 0 10px 8px;
     }
-
-    .intake-actions { display: flex; align-items: center; gap: 14px; margin-top: 18px; }
+    .intake-images:empty { display: none; }
+    .intake-thumb {
+      position: relative; width: 60px; height: 60px;
+      border-radius: 8px; overflow: hidden;
+      box-shadow: var(--neu-raised-sm);
+    }
+    .intake-thumb img { width: 100%; height: 100%; object-fit: cover; }
+    .intake-thumb .remove {
+      position: absolute; top: 2px; right: 2px;
+      width: 18px; height: 18px; border-radius: 50%;
+      border: none; background: rgba(0,0,0,0.6); color: white;
+      font-size: 12px; line-height: 1; cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .intake-actions { display: flex; align-items: center; gap: 14px; margin-top: 14px; }
     .fill-status { font-size: 12px; color: var(--text-muted); }
     .fill-status.ok { color: #10b981; }
     .fill-status.err { color: var(--accent); }
@@ -294,31 +319,35 @@
 
     <div class="field-grid" id="field-grid"></div>
 
-    <!-- Intake panel — appears after PDF loads -->
+    <!-- Intake card — appears after PDF loads -->
     <div class="intake" id="intake" style="display:none">
-      <div class="intake-head">
-        <span class="intake-title">Fill in your details</span>
-        <div class="intake-tabs">
-          <button class="intake-tab active" id="tab-fields" type="button">Field by field</button>
-          <button class="intake-tab" id="tab-paste" type="button">Paste / speak</button>
-        </div>
-      </div>
+      <div class="intake-title">Drop your info here</div>
+      <div class="intake-hint">Type, paste, drop a screenshot, or speak. Q reads it and fills the form for you.</div>
 
-      <!-- Per-field form — built dynamically from allFields -->
-      <div class="field-form" id="field-form"></div>
-
-      <!-- Paste-all panel -->
-      <div class="paste-panel" id="paste-panel">
-        <textarea id="info-text" placeholder="Paste anything — names, addresses, dates, tenancy details. Q will work out what goes where."></textarea>
-        <div class="paste-voice">
-          <button class="mic-btn" id="mic-btn" type="button">🎙️</button>
-          <div class="voice-transcript" id="voice-transcript">Tap the mic and speak — your words land here, then Q fills the form.</div>
+      <div class="intake-box" id="intake-box">
+        <div class="intake-images" id="intake-images"></div>
+        <textarea id="info-text" placeholder="Paste names, addresses, dates, tenancy details — anything relevant. Or drop a screenshot. Or use the mic."></textarea>
+        <div class="intake-tools">
+          <button class="tool-btn" id="mic-btn" type="button" title="Voice">🎙️</button>
+          <button class="tool-btn" id="img-btn" type="button" title="Add screenshot">📎</button>
+          <input type="file" id="img-file" accept="image/*" style="display:none" multiple>
         </div>
       </div>
 
       <div class="intake-actions">
-        <button class="q-btn accent" id="fill-btn" type="button">Fill & Download</button>
+        <button class="q-btn accent" id="fill-btn" type="button">Q, fill it</button>
         <span class="fill-status" id="fill-status"></span>
+      </div>
+    </div>
+
+    <!-- Review & edit panel — always visible once a PDF is loaded -->
+    <div class="review" id="review" style="display:none">
+      <div class="review-title">Review & edit before download</div>
+      <div class="review-hint">Q's auto-fill lands here. Edit any field directly, or type from scratch if you'd rather skip auto-fill. Ask Q on the right for help with anything.</div>
+      <div class="field-form" id="field-form"></div>
+      <div class="review-actions">
+        <button class="q-btn accent" id="download-btn" type="button">Download filled PDF</button>
+        <span class="download-status" id="download-status"></span>
       </div>
     </div>
   </div>
@@ -425,6 +454,7 @@
         $stage.classList.add('show');
         $legend.classList.add('show');
         $intake.style.display = '';
+        $review.style.display = '';
         updateNav();
         await renderPage(currentPage);
         renderFieldGrid();
@@ -614,9 +644,12 @@
       $svg.innerHTML = '';
       $err.textContent = '';
       $intake.style.display = 'none';
+      $review.style.display = 'none';
       $fieldForm.innerHTML = '';
       $infoText.value = '';
       $fillStatus.textContent = '';
+      $downloadStat.textContent = '';
+      intakeImages = []; renderImageThumbs();
       const ctx = $canvas.getContext('2d');
       ctx.clearRect(0, 0, $canvas.width, $canvas.height);
     });
@@ -627,60 +660,52 @@
         .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
     }
 
-    // ── Intake panel ──────────────────────────────────────────────────────────
+    // ── Intake + review ───────────────────────────────────────────────────────
     let pdfBase64 = null;
+    let intakeImages = []; // [{ dataUrl, name }]
 
-    const $intake     = document.getElementById('intake');
-    const $fieldForm  = document.getElementById('field-form');
-    const $infoText   = document.getElementById('info-text');
-    const $fillBtn    = document.getElementById('fill-btn');
-    const $fillStatus = document.getElementById('fill-status');
-    const $micBtn     = document.getElementById('mic-btn');
-    const $voiceTx    = document.getElementById('voice-transcript');
-
-    // Tabs: field-by-field vs paste-all
-    document.getElementById('tab-fields').addEventListener('click', () => {
-      document.getElementById('tab-fields').classList.add('active');
-      document.getElementById('tab-paste').classList.remove('active');
-      $fieldForm.style.display = '';
-      document.getElementById('paste-panel').classList.remove('show');
-    });
-    document.getElementById('tab-paste').addEventListener('click', () => {
-      document.getElementById('tab-paste').classList.add('active');
-      document.getElementById('tab-fields').classList.remove('active');
-      $fieldForm.style.display = 'none';
-      document.getElementById('paste-panel').classList.add('show');
-    });
+    const $intake       = document.getElementById('intake');
+    const $intakeBox    = document.getElementById('intake-box');
+    const $infoText     = document.getElementById('info-text');
+    const $fillBtn      = document.getElementById('fill-btn');
+    const $fillStatus   = document.getElementById('fill-status');
+    const $micBtn       = document.getElementById('mic-btn');
+    const $imgBtn       = document.getElementById('img-btn');
+    const $imgFile      = document.getElementById('img-file');
+    const $imgsRow      = document.getElementById('intake-images');
+    const $review       = document.getElementById('review');
+    const $fieldForm    = document.getElementById('field-form');
+    const $downloadBtn  = document.getElementById('download-btn');
+    const $downloadStat = document.getElementById('download-status');
 
     // Clean a raw PDF field name into a readable label
     function cleanLabel(name) {
-      return name
-        .replace(/\.\.\.$/, '')         // trailing ellipsis
-        .replace(/([a-z])([A-Z])/g, '$1 $2') // camelCase
+      return String(name || '')
+        .replace(/\.\.\.$/, '')
+        .replace(/([a-z])([A-Z])/g, '$1 $2')
         .replace(/_/g, ' ')
         .replace(/\s+/g, ' ')
         .trim();
     }
 
-    // Build the per-field form from allFields
+    // Build per-field review form from allFields
     function buildFieldForm() {
       $fieldForm.innerHTML = '';
       if (!allFields.length) return;
-      let currentPage = 0;
+      let lastPage = 0;
       allFields.forEach((f, i) => {
-        if (f.page !== currentPage) {
-          currentPage = f.page;
+        if (f.page !== lastPage) {
+          lastPage = f.page;
           if (i > 0) {
-            const div = document.createElement('div');
-            div.className = 'page-divider';
-            div.textContent = 'Page ' + currentPage;
-            $fieldForm.appendChild(div);
+            const pd = document.createElement('div');
+            pd.className = 'page-divider';
+            pd.textContent = 'Page ' + lastPage;
+            $fieldForm.appendChild(pd);
           }
         }
         const meta = TYPE_META[f.fieldType] || TYPE_META['Tx'];
         const row = document.createElement('div');
         row.className = 'field-row' + (f.fieldType === 'Sig' ? ' sig-row' : '');
-
         const lbl = document.createElement('label');
         lbl.htmlFor = 'ff-' + i;
         lbl.innerHTML = escapeHtml(cleanLabel(f.name)) +
@@ -697,68 +722,37 @@
           ctrl.id = 'ff-' + i;
           ctrl.dataset.fieldName = f.name;
         } else {
-          // Multi-line if name suggests address/details (heuristic)
-          const isMulti = /address|detail|description|notes|info|about/i.test(f.name) ||
+          const isMulti = /address|detail|description|notes|info|about|between|tenant|landlord/i.test(f.name) ||
                           (f.rect[3] - f.rect[1]) > 40;
-          if (isMulti) {
-            ctrl = document.createElement('textarea');
-            ctrl.rows = 3;
-          } else {
-            ctrl = document.createElement('input');
-            ctrl.type = 'text';
-          }
+          if (isMulti) { ctrl = document.createElement('textarea'); ctrl.rows = 2; }
+          else { ctrl = document.createElement('input'); ctrl.type = 'text'; }
           ctrl.id = 'ff-' + i;
           ctrl.dataset.fieldName = f.name;
           ctrl.placeholder = cleanLabel(f.name);
         }
-
         row.appendChild(lbl);
         row.appendChild(ctrl);
         $fieldForm.appendChild(row);
       });
     }
 
-    // Voice — Web Speech API
-    let recognition = null;
-    let isRecording = false;
-    if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
-      const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-      recognition = new SR();
-      recognition.continuous = true;
-      recognition.interimResults = true;
-      recognition.lang = 'en-GB';
-      let finalText = '';
-      recognition.onresult = ev => {
-        let interim = '';
-        for (let i = ev.resultIndex; i < ev.results.length; i++) {
-          if (ev.results[i].isFinal) finalText += ev.results[i][0].transcript + ' ';
-          else interim += ev.results[i][0].transcript;
+    // Apply Q-extracted values to the review form
+    function applyValuesToForm(values) {
+      $fieldForm.querySelectorAll('[data-field-name]').forEach(el => {
+        const name = el.dataset.fieldName;
+        if (!(name in values)) return;
+        const v = values[name];
+        if (el.type === 'checkbox') {
+          el.checked = (v === true || String(v).toLowerCase() === 'true' ||
+                        String(v).toLowerCase() === 'yes' || String(v) === '1');
+        } else {
+          el.value = String(v ?? '');
         }
-        $voiceTx.textContent = (finalText + interim).trim() || 'Listening…';
-      };
-      recognition.onend = () => {
-        isRecording = false;
-        $micBtn.classList.remove('recording');
-        $micBtn.textContent = '🎙️';
-        if (finalText.trim()) $infoText.value = (($infoText.value || '') + ' ' + finalText).trim();
-      };
-      $micBtn.addEventListener('click', () => {
-        if (isRecording) { recognition.stop(); }
-        else {
-          finalText = '';
-          $voiceTx.textContent = 'Listening…';
-          recognition.start();
-          isRecording = true;
-          $micBtn.classList.add('recording');
-          $micBtn.textContent = '⏹️';
-        }
+        el.classList.add('q-filled');
+        setTimeout(() => el.classList.remove('q-filled'), 2400);
       });
-    } else {
-      $micBtn.title = 'Voice not supported in this browser — try Chrome';
-      $micBtn.style.opacity = '0.4';
     }
 
-    // Collect values from the per-field form
     function collectFieldValues() {
       const values = {};
       $fieldForm.querySelectorAll('[data-field-name]').forEach(el => {
@@ -769,41 +763,147 @@
       return values;
     }
 
-    // Fill & Download
-    $fillBtn.addEventListener('click', async () => {
-      if (!pdfBase64) { $fillStatus.textContent = 'Load a PDF first.'; $fillStatus.className = 'fill-status err'; return; }
-      if (!allFields.length) { $fillStatus.textContent = 'No fields found.'; $fillStatus.className = 'fill-status err'; return; }
+    // Screenshots — paperclip + drag-drop into the box + paste image
+    function renderImageThumbs() {
+      $imgsRow.innerHTML = '';
+      intakeImages.forEach((im, i) => {
+        const t = document.createElement('div');
+        t.className = 'intake-thumb';
+        t.innerHTML = '<img alt="" src="' + im.dataUrl + '"><button class="remove" type="button" aria-label="Remove">×</button>';
+        t.querySelector('.remove').addEventListener('click', () => {
+          intakeImages.splice(i, 1);
+          renderImageThumbs();
+        });
+        $imgsRow.appendChild(t);
+      });
+    }
+    function addImageFile(file) {
+      const r = new FileReader();
+      r.onload = () => {
+        intakeImages.push({ dataUrl: r.result, name: file.name || 'screenshot' });
+        renderImageThumbs();
+      };
+      r.readAsDataURL(file);
+    }
+    $imgBtn.addEventListener('click', () => $imgFile.click());
+    $imgFile.addEventListener('change', () => {
+      Array.from($imgFile.files || []).forEach(f => f.type.startsWith('image/') && addImageFile(f));
+      $imgFile.value = '';
+    });
+    ['dragenter','dragover'].forEach(ev =>
+      $intakeBox.addEventListener(ev, e => { e.preventDefault(); $intakeBox.classList.add('dragover'); }));
+    ['dragleave','drop'].forEach(ev =>
+      $intakeBox.addEventListener(ev, e => { e.preventDefault(); $intakeBox.classList.remove('dragover'); }));
+    $intakeBox.addEventListener('drop', e => {
+      Array.from(e.dataTransfer?.files || []).forEach(f => f.type.startsWith('image/') && addImageFile(f));
+    });
+    $infoText.addEventListener('paste', e => {
+      const items = e.clipboardData?.items || [];
+      for (const it of items) {
+        if (it.kind === 'file') {
+          const f = it.getAsFile();
+          if (f && f.type.startsWith('image/')) addImageFile(f);
+        }
+      }
+    });
 
-      const isPasteMode = document.getElementById('tab-paste').classList.contains('active');
+    // Voice — Web Speech API, appends to textarea
+    let recognition = null;
+    let isRecording = false;
+    if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
+      const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+      recognition = new SR();
+      recognition.continuous = true;
+      recognition.interimResults = true;
+      recognition.lang = 'en-GB';
+      let finalText = '';
+      recognition.onresult = ev => {
+        for (let i = ev.resultIndex; i < ev.results.length; i++) {
+          if (ev.results[i].isFinal) finalText += ev.results[i][0].transcript + ' ';
+        }
+      };
+      recognition.onend = () => {
+        isRecording = false;
+        $micBtn.classList.remove('recording');
+        if (finalText.trim()) {
+          const sep = $infoText.value && !$infoText.value.endsWith(' ') ? ' ' : '';
+          $infoText.value = ($infoText.value + sep + finalText).trim();
+        }
+      };
+      $micBtn.addEventListener('click', () => {
+        if (isRecording) { recognition.stop(); }
+        else {
+          finalText = '';
+          recognition.start();
+          isRecording = true;
+          $micBtn.classList.add('recording');
+        }
+      });
+    } else {
+      $micBtn.title = 'Voice not supported — try Chrome';
+      $micBtn.style.opacity = '0.4';
+    }
+
+    // "Q, fill it" — extracts values from intake box, populates the review form
+    $fillBtn.addEventListener('click', async () => {
+      if (!allFields.length) { $fillStatus.textContent = 'No fields in this PDF.'; $fillStatus.className = 'fill-status err'; return; }
+      const infoText = $infoText.value.trim();
+      if (!infoText && !intakeImages.length) {
+        $fillStatus.textContent = 'Drop some info in the box first.';
+        $fillStatus.className = 'fill-status err';
+        return;
+      }
+
       $fillBtn.disabled = true;
+      $fillStatus.textContent = 'Q is reading your info…';
+      $fillStatus.className = 'fill-status';
 
       try {
-        let body;
-        if (isPasteMode) {
-          const infoText = $infoText.value.trim();
-          if (!infoText) { throw new Error('Add some information first.'); }
-          $fillStatus.textContent = 'Q is reading your info…';
-          $fillStatus.className = 'fill-status';
-          body = {
-            pdfBase64,
-            fields: allFields.map(f => ({ name: f.name, type: (TYPE_META[f.fieldType] || TYPE_META['Tx']).label })),
-            infoText,
-          };
-        } else {
-          const values = collectFieldValues();
-          if (!Object.keys(values).length) { throw new Error('Fill in at least one field first.'); }
-          $fillStatus.textContent = 'Writing to PDF…';
-          $fillStatus.className = 'fill-status';
-          body = { pdfBase64, values };
-        }
+        const body = {
+          fields: allFields.map(f => ({ name: f.name, type: (TYPE_META[f.fieldType] || TYPE_META['Tx']).label })),
+          infoText,
+        };
+        if (intakeImages.length) body.imageDataUrl = intakeImages[0].dataUrl;
 
-        const r = await fetch('/forms/fill', {
+        const r = await fetch('/forms/extract', {
           method: 'POST', credentials: 'include',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(body),
         });
-        if (!r.ok) { const e = await r.json().catch(() => ({})); throw new Error(e.error || 'HTTP ' + r.status); }
+        const data = await r.json();
+        if (!r.ok) throw new Error(data.error || 'HTTP ' + r.status);
 
+        applyValuesToForm(data.values || {});
+        const n = Object.keys(data.values || {}).length;
+        $fillStatus.textContent = '✓ Q filled ' + n + ' field' + (n === 1 ? '' : 's') + ' — review below, then download.';
+        $fillStatus.className = 'fill-status ok';
+      } catch (e) {
+        $fillStatus.textContent = 'Q hit a snag: ' + e.message;
+        $fillStatus.className = 'fill-status err';
+      } finally {
+        $fillBtn.disabled = false;
+      }
+    });
+
+    // Download button — writes review-form values into the PDF
+    $downloadBtn.addEventListener('click', async () => {
+      if (!pdfBase64) { $downloadStat.textContent = 'Load a PDF first.'; $downloadStat.className = 'download-status err'; return; }
+      const values = collectFieldValues();
+      if (!Object.keys(values).length) {
+        $downloadStat.textContent = 'No values to write — fill some fields first.';
+        $downloadStat.className = 'download-status err';
+        return;
+      }
+      $downloadBtn.disabled = true;
+      $downloadStat.textContent = 'Writing PDF…';
+      $downloadStat.className = 'download-status';
+      try {
+        const r = await fetch('/forms/fill', {
+          method: 'POST', credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ pdfBase64, values }),
+        });
+        if (!r.ok) { const e = await r.json().catch(() => ({})); throw new Error(e.error || 'HTTP ' + r.status); }
         const filled = r.headers.get('X-Fields-Filled') || '?';
         const blob = await r.blob();
         const url = URL.createObjectURL(blob);
@@ -812,14 +912,13 @@
         document.body.appendChild(a); a.click();
         document.body.removeChild(a);
         URL.revokeObjectURL(url);
-
-        $fillStatus.textContent = '✓ Downloaded — ' + filled + ' field' + (filled === '1' ? '' : 's') + ' filled';
-        $fillStatus.className = 'fill-status ok';
+        $downloadStat.textContent = '✓ Downloaded — ' + filled + ' field' + (filled === '1' ? '' : 's') + ' filled';
+        $downloadStat.className = 'download-status ok';
       } catch (e) {
-        $fillStatus.textContent = e.message.startsWith('Fill') ? e.message : 'Fill failed: ' + e.message;
-        $fillStatus.className = 'fill-status err';
+        $downloadStat.textContent = 'Download failed: ' + e.message;
+        $downloadStat.className = 'download-status err';
       } finally {
-        $fillBtn.disabled = false;
+        $downloadBtn.disabled = false;
       }
     });
 
