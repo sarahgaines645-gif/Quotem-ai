@@ -483,27 +483,41 @@
             const fieldCY = (fy1 + fy2) / 2;
             const fieldH  = Math.max(fy2 - fy1, 8);
 
-            // Items on the same line as the field
-            const sameLine = items.filter(it => {
+            // Build a multi-line PASSAGE: ~6 lines above the field, the field's
+            // own line with [BLANK] marker, ~3 lines below. This gives Q the
+            // section heading, preceding sentences, and continuation — enough to
+            // understand the grammatical and semantic role of the blank.
+            const verticalBand = items.filter(it => {
               const cy = it.y + it.h / 2;
-              return Math.abs(cy - fieldCY) < fieldH;
-            }).sort((a, b) => a.x - b.x);
+              // PDF coords are bottom-left origin → above field = larger y
+              return cy < fieldCY + fieldH * 18 && cy > fieldCY - fieldH * 6;
+            });
 
-            const before = sameLine.filter(it => it.x + it.w <= fx1).slice(-6).map(it => it.str).join(' ').trim();
-            const after  = sameLine.filter(it => it.x >= fx2).slice(0, 6).map(it => it.str).join(' ').trim();
-
-            // Also grab one line above for label context
-            const aboveLine = items.filter(it => {
+            // Group items into lines by Y centre
+            const lineMap = new Map();
+            for (const it of verticalBand) {
               const cy = it.y + it.h / 2;
-              return cy > fy2 && cy - fy2 < fieldH * 2.5
-                   && it.x < fx2 + 20 && it.x + it.w > fx1 - 20;
-            }).sort((a, b) => a.x - b.x).map(it => it.str).join(' ').trim();
+              const bucketKey = Math.round(cy / Math.max(fieldH * 0.6, 5));
+              if (!lineMap.has(bucketKey)) lineMap.set(bucketKey, { cy, items: [] });
+              lineMap.get(bucketKey).items.push(it);
+              if (cy > lineMap.get(bucketKey).cy) lineMap.get(bucketKey).cy = cy;
+            }
 
-            const context = [
-              aboveLine ? 'above: ' + aboveLine : '',
-              before    ? 'before: ' + before   : '',
-              after     ? 'after: '  + after    : '',
-            ].filter(Boolean).join(' | ');
+            // Sort lines top-to-bottom in display order (PDF y descending)
+            const lines = Array.from(lineMap.values()).sort((a, b) => b.cy - a.cy);
+
+            const passage = lines.map(line => {
+              line.items.sort((a, b) => a.x - b.x);
+              const isFieldLine = Math.abs(line.cy - fieldCY) < fieldH * 0.9;
+              if (isFieldLine) {
+                const beforeStr = line.items.filter(it => it.x + it.w <= fx1).map(i => i.str).join(' ').trim();
+                const afterStr  = line.items.filter(it => it.x >= fx2).map(i => i.str).join(' ').trim();
+                return `${beforeStr} [BLANK] ${afterStr}`.replace(/\s+/g, ' ').trim();
+              }
+              return line.items.map(i => i.str).join(' ').replace(/\s+/g, ' ').trim();
+            }).filter(s => s).join('\n');
+
+            const context = passage;
 
             allFields.push({
               name: ann.fieldName || ('field_' + (allFields.length + 1)),

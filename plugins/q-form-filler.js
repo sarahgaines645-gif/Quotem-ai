@@ -249,20 +249,84 @@ async function intakeAndFill({ pdfBytes, fields, infoText, imageDataUrl }) {
  * @returns {Promise<Object>} — { fieldName: humanLabel }
  */
 async function labelFields(fields) {
-    const fieldLines = fields.map(f => {
-        const ctx = f.context ? `\n   context: ${f.context}` : '';
-        return `- "${f.name}" (${f.type})${ctx}`;
-    }).join('\n');
+    const fieldLines = fields.map((f, i) => {
+        const ctx = f.context ? `\n   PASSAGE:\n${f.context.split('\n').map(l => '     ' + l).join('\n')}` : '';
+        return `[${i+1}] name: "${f.name}"  type: ${f.type}${ctx}`;
+    }).join('\n\n');
 
-    const system = `You are labeling form fields. For each field you receive a NAME (often just a sentence fragment from the form) and CONTEXT (the actual text above, before, and after the blank space). Produce a SHORT human label (2-5 words) describing what each field is asking for. Use the context to understand — never just rephrase the field name.
+    const system = `You are labeling form fields. For each field you receive:
+  - a NAME (often a meaningless sentence fragment from the form layout)
+  - a TYPE (text, checkbox, etc.)
+  - a PASSAGE: several lines of the actual form text, with [BLANK] marking exactly where the field appears.
 
-Examples:
-- name "between us the landlord" + context "above: This agreement is between us the landlord" → label: "Landlord name & address"
-- name "as a fixed term for" + context "before: 'a single tenancy that begins on' | after: 'months and the rent is'" → label: "Term length (months)"
-- name "and then continues on from" + context "before: 'the end of the fixed term' | after: 'as a contractual'" → label: "Continuation type"
-- name "DateRow1.0" + context "above: Tenant signature and date" → label: "Tenant date"
+Your job: READ THE WHOLE PASSAGE. Understand what role the [BLANK] plays in the sentence. Produce a SHORT human label (2-5 words) describing what the user should write into that blank.
 
-Output a single JSON object mapping each EXACT field name (verbatim — copy it character-for-character) to its human label. No prose, no markdown, no explanation. Start with { and end with }.`;
+CRITICAL RULES:
+1. You must read the words IMMEDIATELY before AND after [BLANK] to understand its role. Then read further out for the section/topic.
+2. Never just rephrase the field name. The name is often misleading.
+3. Markers are decisive:
+   - "£[BLANK]" → it's a money AMOUNT
+   - "begins on [BLANK]" / "starting [BLANK]" / "dated [BLANK]" → it's a DATE
+   - "for [BLANK] months" / "for [BLANK] weeks" → it's a NUMBER (term length)
+   - "every [BLANK]" → frequency word ("month", "week")
+   - "by [BLANK]" after "paid" → a PAYMENT DATE
+   - "to [BLANK]" after "paid" → a RECIPIENT (name or account)
+   - "in cleared funds to [BLANK]" → bank/recipient details
+4. Use the section heading from the passage. If the passage starts with "Rent" the field relates to rent.
+
+WORKED EXAMPLES:
+
+Field name: "as a fixed term for"
+PASSAGE:
+  Term
+  This agreement creates a single tenancy that begins on [DATE] [BLANK] months and the rent is
+LABEL: "Term length (months)"
+(reasoning: "for [BLANK] months" — the blank is the NUMBER of months, not a date)
+
+Field name: "and then continues on from"
+PASSAGE:
+  as a fixed term for [N] months [BLANK] as a contractual
+  periodic tenancy
+LABEL: "Fixed term end date"
+(reasoning: "continues on from [BLANK] as a contractual periodic tenancy" — the blank is the date the periodic part starts)
+
+Field name: "must be paid in advance by"
+PASSAGE:
+  Rent
+  The first payment of £[AMOUNT] must be paid in advance by [BLANK].
+LABEL: "First payment date"
+(reasoning: "paid in advance by [BLANK]" — date, not amount)
+
+Field name: "First payment due"
+PASSAGE:
+  Rent
+  The first payment of £[BLANK] must be paid in advance by [DATE].
+LABEL: "First payment amount"
+(reasoning: "£[BLANK] must be paid" — the £ marker decides this is an amount)
+
+Field name: "every"
+PASSAGE:
+  Subsequent rent payments of £[N] must be paid in advance by [DATE] every [BLANK]
+  while the tenancy lasts.
+LABEL: "Payment frequency"
+(reasoning: "every [BLANK] while the tenancy lasts" — frequency word like "month")
+
+Field name: "We will let out the room"
+PASSAGE:
+  We will let out the room [BLANK] at [ADDRESS]
+  to you as well as any furniture, fixtures and household belongings
+LABEL: "Room name or number"
+(reasoning: "the room [BLANK] at [address]" — the blank is what identifies the room, not the address)
+
+Field name: "at"
+PASSAGE:
+  We will let out the room [ROOM-NAME] at [BLANK]
+  to you as well as any furniture, fixtures and household belongings
+LABEL: "Property address"
+(reasoning: "the room ... at [BLANK]" — the blank is the address of the property)
+
+OUTPUT:
+A single JSON object mapping each EXACT field name (verbatim — copy character-for-character) to its label. No prose, no markdown, no explanation. Start with { and end with }.`;
 
     const response = await fetch(`${Q_CONFIG.baseURL}/chat/completions`, {
         method: 'POST',
@@ -271,7 +335,10 @@ Output a single JSON object mapping each EXACT field name (verbatim — copy it 
             'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-            model: Q_CONFIG.fastModel || Q_CONFIG.model,
+            // Use the proper brain — V4 Pro reasons through sentence roles, the
+            // fast model just word-shuffles. Labelling is one-time per PDF so the
+            // extra latency is fine.
+            model: Q_CONFIG.model,
             max_tokens: 4096,
             temperature: 0.0,
             response_format: { type: 'json_object' },
