@@ -16,19 +16,23 @@
 const { PDFDocument } = require('pdf-lib');
 const { Q_CONFIG } = require('../config');
 
-const EXTRACT_SYSTEM = `You are a form-filling assistant. You receive:
-1. A list of PDF form fields (name and type)
-2. Information the user has provided (could be from a screenshot, pasted text, or spoken)
+const EXTRACT_SYSTEM = `You are a form-filling assistant. Your output is ALWAYS a single JSON object — never prose, never markdown, never an explanation.
 
-Your job: extract the value for every field you can confidently fill from the information given.
+You receive:
+1. A list of PDF form fields (name and type)
+2. Information the user has provided (text, screenshot, or speech)
+
+Extract the value for every field you can confidently fill. Return a JSON object whose KEYS are the EXACT field names from the list (copy them verbatim, including spaces, ellipses, and odd casing) and whose VALUES are the strings to write into each field.
 
 RULES:
-- Match information to fields by meaning, not exact wording. "Tenant" matches a field called "and you the tenant if th...".
-- For dates, format as DD/MM/YYYY unless the field name suggests otherwise.
-- For checkboxes, return true if the info confirms the box should be checked, false otherwise.
-- If you genuinely can't find a value for a field, omit that field — do NOT guess or invent.
-- Return ONLY a JSON object: { "field_name": "value", ... }
-- No explanation, no markdown, no wrapper — pure JSON only.`;
+- Match by meaning, not exact wording. "tenant" in the user's info matches a field named "and you the tenant if th...".
+- Dates: format as DD/MM/YYYY unless the field name suggests otherwise.
+- Checkboxes (type "checkbox"): value is the string "true" or "false".
+- Skip fields you don't have info for — omit them entirely. Never guess or invent.
+- Output a single JSON object. No prose. No markdown fences. Start with { and end with }.
+
+Example output shape:
+{ "TenantName": "Eleanor Hartley", "StartDate": "01/06/2026", "PetsAllowed": "false" }`;
 
 async function readStreamText(response) {
     const reader = response.body.getReader();
@@ -88,19 +92,23 @@ async function extractFieldValues(fields, infoText, imageDataUrl = null) {
         ];
     }
 
+    const body = {
+        model,
+        stream: isVision,
+        max_tokens: 4096,
+        temperature: 0.0,
+        messages,
+    };
+    // Force JSON output for the text path (vision streams it; we keep the prompt strict instead)
+    if (!isVision) body.response_format = { type: 'json_object' };
+
     const response = await fetch(`${Q_CONFIG.baseURL}/chat/completions`, {
         method: 'POST',
         headers: {
             'Authorization': `Bearer ${Q_CONFIG.apiKey}`,
             'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-            model,
-            stream: isVision,
-            max_tokens: 4096,
-            temperature: 0.0,
-            messages,
-        }),
+        body: JSON.stringify(body),
     });
 
     if (!response.ok) {
@@ -116,15 +124,28 @@ async function extractFieldValues(fields, infoText, imageDataUrl = null) {
         raw = data.choices?.[0]?.message?.content || '';
     }
 
+    if (!raw || !raw.trim()) {
+        console.error('[q-form-filler] Q returned empty content. Model:', model);
+        throw new Error('Q returned an empty response — try again.');
+    }
+
     // Strip markdown fences if present
     const cleaned = raw.replace(/```json\s*/gi, '').replace(/```\s*/g, '').trim();
 
     // Find the JSON object
     const start = cleaned.indexOf('{');
     const end = cleaned.lastIndexOf('}');
-    if (start === -1 || end === -1) throw new Error('Q returned no field values');
+    if (start === -1 || end === -1) {
+        console.error('[q-form-filler] Q returned non-JSON. Raw response:', raw.slice(0, 500));
+        throw new Error(`Q returned text instead of JSON: "${raw.slice(0, 120)}…"`);
+    }
 
-    return JSON.parse(cleaned.slice(start, end + 1));
+    try {
+        return JSON.parse(cleaned.slice(start, end + 1));
+    } catch (parseErr) {
+        console.error('[q-form-filler] JSON parse failed. Raw:', raw.slice(0, 500));
+        throw new Error('Q returned malformed JSON — try again.');
+    }
 }
 
 /**
