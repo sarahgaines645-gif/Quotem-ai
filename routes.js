@@ -296,13 +296,16 @@ router.post('/plotter/analyze', requirePerson, express.json({ limit: '24mb' }), 
 const qFormFiller = require('./plugins/q-form-filler');
 
 // POST /forms/label
-// Body: { fields: [{name, type, page, context}] }
+// Body: { fields: [{name, type, page}], documentText }
 // Returns: { labels: { fieldName: humanLabel } }
-router.post('/forms/label', requirePerson, express.json({ limit: '4mb' }), async (req, res) => {
+// Q reads the whole documentText (with [FIELD: name] markers in reading order)
+// and labels each field based on full document comprehension — no patterns.
+router.post('/forms/label', requirePerson, express.json({ limit: '8mb' }), async (req, res) => {
     try {
-        const { fields } = req.body || {};
+        const { fields, documentText } = req.body || {};
         if (!fields || !fields.length) return res.status(400).json({ error: 'fields required' });
-        const labels = await qFormFiller.labelFields(fields);
+        if (!documentText) return res.status(400).json({ error: 'documentText required' });
+        const labels = await qFormFiller.labelFields(fields, documentText);
         res.json({ ok: true, labels });
     } catch (e) {
         console.error('[forms/label]', e.message);

@@ -460,10 +460,12 @@
         totalPages  = pdfDoc.numPages;
         currentPage = 1;
 
-        // Extract all fields from all pages, plus the surrounding form text
-        // for each field — gives Q the actual sentence each field sits in,
-        // not just a cryptic label. Massively improves auto-fill accuracy.
+        // Extract all fields from all pages AND build a full document text
+        // in reading order with [FIELD: name] markers showing where each blank
+        // sits. We send this to Q so he can read the whole legal document and
+        // understand each field in full context — not match on adjacent words.
         allFields = [];
+        const documentPages = [];
         for (let p = 1; p <= totalPages; p++) {
           const page = await pdfDoc.getPage(p);
           const anns = await page.getAnnotations({ intent: 'display' });
@@ -474,62 +476,58 @@
             y: it.transform[5],
             w: it.width || 0,
             h: it.height || 12,
+            isField: false,
           }));
           const [,, pageW, pageH] = page.view;
 
+          // Field "items" — go into the same flow as text so we can sort the
+          // page into reading order with [FIELD: name] markers in place.
+          const fieldItems = [];
           for (const ann of anns) {
             if (ann.subtype !== 'Widget' || !ann.fieldType) continue;
-            const [fx1, fy1, fx2, fy2] = ann.rect;
-            const fieldCY = (fy1 + fy2) / 2;
-            const fieldH  = Math.max(fy2 - fy1, 8);
-
-            // Build a multi-line PASSAGE: ~6 lines above the field, the field's
-            // own line with [BLANK] marker, ~3 lines below. This gives Q the
-            // section heading, preceding sentences, and continuation — enough to
-            // understand the grammatical and semantic role of the blank.
-            const verticalBand = items.filter(it => {
-              const cy = it.y + it.h / 2;
-              // PDF coords are bottom-left origin → above field = larger y
-              return cy < fieldCY + fieldH * 18 && cy > fieldCY - fieldH * 6;
-            });
-
-            // Group items into lines by Y centre
-            const lineMap = new Map();
-            for (const it of verticalBand) {
-              const cy = it.y + it.h / 2;
-              const bucketKey = Math.round(cy / Math.max(fieldH * 0.6, 5));
-              if (!lineMap.has(bucketKey)) lineMap.set(bucketKey, { cy, items: [] });
-              lineMap.get(bucketKey).items.push(it);
-              if (cy > lineMap.get(bucketKey).cy) lineMap.get(bucketKey).cy = cy;
-            }
-
-            // Sort lines top-to-bottom in display order (PDF y descending)
-            const lines = Array.from(lineMap.values()).sort((a, b) => b.cy - a.cy);
-
-            const passage = lines.map(line => {
-              line.items.sort((a, b) => a.x - b.x);
-              const isFieldLine = Math.abs(line.cy - fieldCY) < fieldH * 0.9;
-              if (isFieldLine) {
-                const beforeStr = line.items.filter(it => it.x + it.w <= fx1).map(i => i.str).join(' ').trim();
-                const afterStr  = line.items.filter(it => it.x >= fx2).map(i => i.str).join(' ').trim();
-                return `${beforeStr} [BLANK] ${afterStr}`.replace(/\s+/g, ' ').trim();
-              }
-              return line.items.map(i => i.str).join(' ').replace(/\s+/g, ' ').trim();
-            }).filter(s => s).join('\n');
-
-            const context = passage;
-
+            const fieldName = ann.fieldName || ('field_' + (allFields.length + 1));
             allFields.push({
-              name: ann.fieldName || ('field_' + (allFields.length + 1)),
+              name: fieldName,
               fieldType: ann.fieldType,
               page: p,
               rect: ann.rect,
               pageW, pageH,
-              context,
+            });
+            fieldItems.push({
+              str: `[FIELD: ${fieldName}]`,
+              x: ann.rect[0],
+              y: ann.rect[1],
+              w: ann.rect[2] - ann.rect[0],
+              h: ann.rect[3] - ann.rect[1],
+              isField: true,
             });
           }
+
+          // Combine text + field markers, group into lines, sort reading order
+          const allItems = [...items, ...fieldItems];
+          const lineBucket = new Map();
+          for (const it of allItems) {
+            const cy = it.y + it.h / 2;
+            const bucketKey = Math.round(cy / 6); // ~6pt line tolerance
+            if (!lineBucket.has(bucketKey)) lineBucket.set(bucketKey, { cy, items: [] });
+            lineBucket.get(bucketKey).items.push(it);
+          }
+          const pageLines = Array.from(lineBucket.values())
+            .sort((a, b) => b.cy - a.cy) // top-to-bottom
+            .map(line => {
+              line.items.sort((a, b) => a.x - b.x);
+              return line.items.map(it => it.str).join(' ').replace(/\s+/g, ' ').trim();
+            })
+            .filter(Boolean);
+
+          documentPages.push({ page: p, text: pageLines.join('\n') });
           page.cleanup();
         }
+
+        // Final document — concatenated pages. Sent to Q for labelling/filling.
+        window.__docText = documentPages
+          .map(p => `--- PAGE ${p.page} ---\n${p.text}`)
+          .join('\n\n');
 
         $drop.style.display = 'none';
         $toolbar.classList.add('show');
@@ -542,16 +540,18 @@
         await renderPage(currentPage);
         renderFieldGrid();
 
-        // Background: ask Q to generate clean human labels for every field.
-        // Doesn't block the UI — labels appear when ready.
+        // Background: ask Q to read the WHOLE document and label every field
+        // based on full context — no patterns, no shortcuts.
         if (allFields.length) {
           fetch('/forms/label', {
             method: 'POST', credentials: 'include',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
+              documentText: window.__docText || '',
               fields: allFields.map(f => ({
-                name: f.name, type: (TYPE_META[f.fieldType] || TYPE_META['Tx']).label,
-                page: f.page, context: f.context || '',
+                name: f.name,
+                type: (TYPE_META[f.fieldType] || TYPE_META['Tx']).label,
+                page: f.page,
               })),
             }),
           })

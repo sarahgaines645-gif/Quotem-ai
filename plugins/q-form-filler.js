@@ -238,95 +238,52 @@ async function intakeAndFill({ pdfBytes, fields, infoText, imageDataUrl }) {
 }
 
 /**
- * Generate clean human labels for every field by reading the surrounding
- * form text. AcroForm field names are usually a sentence fragment from the
- * end of the line ("as a contractual", "and then continues on from"); they
- * tell you nothing about what the field actually wants. This function reads
- * the context and produces short human labels like "Tenancy type" or
- * "Continuation start".
+ * Generate clean human labels for every field by reading the WHOLE document.
  *
- * @param {Array<{name, type, page, context}>} fields
+ * Q is given the full form text in reading order, with [FIELD: name] markers
+ * showing exactly where each blank sits in context. He reads it like a lawyer
+ * would read a contract, then labels each field based on what the surrounding
+ * paragraphs and clauses are actually asking for. No pattern-matching, no
+ * shortcuts, no shortcuts on adjacent words — full document comprehension.
+ *
+ * @param {Array<{name, type, page}>} fields
+ * @param {string} documentText — full PDF text with [FIELD: name] markers in place
  * @returns {Promise<Object>} — { fieldName: humanLabel }
  */
-async function labelFields(fields) {
-    const fieldLines = fields.map((f, i) => {
-        const ctx = f.context ? `\n   PASSAGE:\n${f.context.split('\n').map(l => '     ' + l).join('\n')}` : '';
-        return `[${i+1}] name: "${f.name}"  type: ${f.type}${ctx}`;
-    }).join('\n\n');
+async function labelFields(fields, documentText) {
+    const fieldList = fields.map(f => `- "${f.name}" (${f.type}, page ${f.page || '?'})`).join('\n');
 
-    const system = `You are labeling form fields. For each field you receive:
-  - a NAME (often a meaningless sentence fragment from the form layout)
-  - a TYPE (text, checkbox, etc.)
-  - a PASSAGE: several lines of the actual form text, with [BLANK] marking exactly where the field appears.
+    const system = `You are reading a complete legal/business form on behalf of someone who needs to fill it in correctly. The text below is the ENTIRE FORM in reading order, with [FIELD: <name>] markers showing exactly where each blank space appears in context.
 
-Your job: READ THE WHOLE PASSAGE. Understand what role the [BLANK] plays in the sentence. Produce a SHORT human label (2-5 words) describing what the user should write into that blank.
+YOUR JOB:
+Read the WHOLE document carefully — every section, every paragraph, every clause. Then for each field marker, decide what the user should write into that blank, based on the FULL CONTEXT of the document. Output a short human label (2-6 words) for each field.
 
-CRITICAL RULES:
-1. You must read the words IMMEDIATELY before AND after [BLANK] to understand its role. Then read further out for the section/topic.
-2. Never just rephrase the field name. The name is often misleading.
-3. Markers are decisive:
-   - "£[BLANK]" → it's a money AMOUNT
-   - "begins on [BLANK]" / "starting [BLANK]" / "dated [BLANK]" → it's a DATE
-   - "for [BLANK] months" / "for [BLANK] weeks" → it's a NUMBER (term length)
-   - "every [BLANK]" → frequency word ("month", "week")
-   - "by [BLANK]" after "paid" → a PAYMENT DATE
-   - "to [BLANK]" after "paid" → a RECIPIENT (name or account)
-   - "in cleared funds to [BLANK]" → bank/recipient details
-4. Use the section heading from the passage. If the passage starts with "Rent" the field relates to rent.
+THIS IS A LEGAL DOCUMENT. People can be held to whatever ends up in these blanks — wrong values can cost real money, real homes, real legal trouble. Read it the way a lawyer reads a contract: trace what each clause is saying, what each blank is referring to, what the surrounding sentences mean. Never pattern-match on adjacent words alone — a £ symbol could mean rent owed, rent paid, deposit, deduction, or something else entirely; only the surrounding sentences tell you which.
 
-WORKED EXAMPLES:
-
-Field name: "as a fixed term for"
-PASSAGE:
-  Term
-  This agreement creates a single tenancy that begins on [DATE] [BLANK] months and the rent is
-LABEL: "Term length (months)"
-(reasoning: "for [BLANK] months" — the blank is the NUMBER of months, not a date)
-
-Field name: "and then continues on from"
-PASSAGE:
-  as a fixed term for [N] months [BLANK] as a contractual
-  periodic tenancy
-LABEL: "Fixed term end date"
-(reasoning: "continues on from [BLANK] as a contractual periodic tenancy" — the blank is the date the periodic part starts)
-
-Field name: "must be paid in advance by"
-PASSAGE:
-  Rent
-  The first payment of £[AMOUNT] must be paid in advance by [BLANK].
-LABEL: "First payment date"
-(reasoning: "paid in advance by [BLANK]" — date, not amount)
-
-Field name: "First payment due"
-PASSAGE:
-  Rent
-  The first payment of £[BLANK] must be paid in advance by [DATE].
-LABEL: "First payment amount"
-(reasoning: "£[BLANK] must be paid" — the £ marker decides this is an amount)
-
-Field name: "every"
-PASSAGE:
-  Subsequent rent payments of £[N] must be paid in advance by [DATE] every [BLANK]
-  while the tenancy lasts.
-LABEL: "Payment frequency"
-(reasoning: "every [BLANK] while the tenancy lasts" — frequency word like "month")
-
-Field name: "We will let out the room"
-PASSAGE:
-  We will let out the room [BLANK] at [ADDRESS]
-  to you as well as any furniture, fixtures and household belongings
-LABEL: "Room name or number"
-(reasoning: "the room [BLANK] at [address]" — the blank is what identifies the room, not the address)
-
-Field name: "at"
-PASSAGE:
-  We will let out the room [ROOM-NAME] at [BLANK]
-  to you as well as any furniture, fixtures and household belongings
-LABEL: "Property address"
-(reasoning: "the room ... at [BLANK]" — the blank is the address of the property)
+GUIDELINES:
+- Look at the section heading (Rent, Term, Tenant details, etc.) above each field
+- Read the full paragraph the field is in — sometimes the meaning is established 2-3 sentences before the blank
+- Look at what comes AFTER the blank too — it often disambiguates
+- A field that looks similar to another in a different section may have a completely different meaning
+- If two fields appear in the same sentence, look at how they relate to each other
+- If you genuinely cannot tell what a field is for from the document, label it "Unclear — review manually" rather than guessing
 
 OUTPUT:
-A single JSON object mapping each EXACT field name (verbatim — copy character-for-character) to its label. No prose, no markdown, no explanation. Start with { and end with }.`;
+A single JSON object mapping each EXACT field name (verbatim — copy character-for-character including spaces, ellipses, and odd casing) to its label. No prose, no markdown, no commentary. Start with { and end with }.
+
+Example shape:
+{
+  "and you the tenant if there is more than one they": "Tenant name(s) and address",
+  "as a fixed term for": "Term length (months)",
+  "must be paid in advance by": "First payment date"
+}`;
+
+    const userMessage = `FIELDS TO LABEL (you must produce a label for every one of these):
+${fieldList}
+
+THE FULL DOCUMENT (read all of it before labelling):
+
+${documentText || '(no document text provided)'}`;
 
     const response = await fetch(`${Q_CONFIG.baseURL}/chat/completions`, {
         method: 'POST',
@@ -335,16 +292,15 @@ A single JSON object mapping each EXACT field name (verbatim — copy character-
             'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-            // Use the proper brain — V4 Pro reasons through sentence roles, the
-            // fast model just word-shuffles. Labelling is one-time per PDF so the
-            // extra latency is fine.
+            // Q's proper brain — labelling is one-time per PDF and demands real
+            // reading comprehension across the whole document.
             model: Q_CONFIG.model,
-            max_tokens: 4096,
+            max_tokens: 6000,
             temperature: 0.0,
             response_format: { type: 'json_object' },
             messages: [
                 { role: 'system', content: system },
-                { role: 'user', content: `FIELDS:\n${fieldLines}` },
+                { role: 'user', content: userMessage },
             ],
         }),
     });
