@@ -269,9 +269,9 @@ router.get('/writer', (req, res) => {
     res.sendFile(path.join(__dirname, 'writer.html'));
 });
 
-// Q's plotter — vision-based form-corner plotter. Step 1 of the form
-// filler chain: just identifies and pinpoints fillable spaces. The actual
-// fill comes in a future plugin.
+// Q's plotter — PDF AcroForm field parser. Reads the real field structure from
+// a PDF (no vision needed). Client-side PDF.js does the parsing and rendering;
+// this route just serves the page.
 router.get('/plotter', (req, res) => {
     res.sendFile(path.join(__dirname, 'plotter.html'));
 });

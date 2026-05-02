@@ -8,6 +8,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
   <style>
     :root {
       --bg: #e8e8e8;
@@ -34,219 +35,437 @@
                     text-decoration: none; font-size: 13px; }
     header a.back:hover { color: var(--accent); }
 
-    .toolbar {
-      display: flex; gap: 12px; align-items: center; flex-wrap: wrap;
-      background: var(--bg); box-shadow: var(--neu-raised-sm);
-      padding: 14px 18px; border-radius: 14px;
+    /* Drop zone */
+    .drop-zone {
+      border: 2px dashed #b0b0b0;
+      border-radius: 16px;
+      padding: 56px 24px;
+      text-align: center;
+      color: var(--text-muted);
+      cursor: pointer;
+      background: var(--bg);
+      box-shadow: var(--neu-inset-sm);
       margin-bottom: 20px;
+      transition: border-color 0.15s, color 0.15s;
     }
+    .drop-zone.dragover, .drop-zone:hover { border-color: var(--accent); color: var(--accent); }
+    .drop-zone .icon { font-size: 36px; margin-bottom: 10px; }
+    .drop-zone .hint { font-size: 12px; color: var(--text-faint); margin-top: 6px; }
+
+    /* Toolbar */
+    .toolbar {
+      display: flex; gap: 10px; align-items: center; flex-wrap: wrap;
+      background: var(--bg); box-shadow: var(--neu-raised-sm);
+      padding: 12px 16px; border-radius: 14px; margin-bottom: 18px;
+    }
+    .toolbar { display: none; }
+    .toolbar.show { display: flex; }
     button.q-btn {
       border: none; cursor: pointer; background: var(--bg); color: var(--text);
-      box-shadow: var(--neu-raised-sm); border-radius: 12px;
-      padding: 10px 18px; font-size: 13px; font-weight: 600;
-      font-family: inherit;
+      box-shadow: var(--neu-raised-sm); border-radius: 10px;
+      padding: 8px 16px; font-size: 13px; font-weight: 600; font-family: inherit;
     }
-    button.q-btn:hover { box-shadow: 4px 4px 10px #ababab, -3px -3px 8px #ffffff; }
+    button.q-btn:hover:not(:disabled) { box-shadow: 4px 4px 10px #ababab, -3px -3px 8px #ffffff; }
     button.q-btn:active, button.q-btn:disabled { box-shadow: var(--neu-inset-sm); }
-    button.q-btn:disabled { cursor: wait; opacity: 0.7; }
-    button.q-btn.primary { color: var(--accent); }
+    button.q-btn:disabled { cursor: not-allowed; opacity: 0.5; }
+    button.q-btn.accent { color: var(--accent); }
+    .page-nav { font-size: 13px; color: var(--text-muted); padding: 0 4px; }
+    .field-count { font-size: 12px; color: var(--text-faint); margin-left: auto; }
 
-    .status { font-size: 13px; color: var(--text-muted); margin-left: auto; }
-
-    /* The page where image + dots get composited.
-       Image fills width; canvas absolutely overlays it. */
+    /* Stage */
     .stage {
-      position: relative;
+      display: none;
       background: var(--bg); box-shadow: var(--neu-inset);
-      border-radius: 14px; padding: 18px;
-      min-height: 200px;
-      display: flex; align-items: center; justify-content: center;
+      border-radius: 14px; padding: 16px;
+      margin-bottom: 20px; overflow-x: auto;
     }
-    .stage .empty {
-      color: var(--text-faint); font-size: 14px; padding: 60px 20px; text-align: center;
-    }
-    .stage .holder {
-      position: relative; line-height: 0;
+    .stage.show { display: block; }
+    .holder {
+      position: relative;
+      display: inline-block;
+      line-height: 0;
       max-width: 100%;
     }
-    .stage img.page {
-      display: block; max-width: 100%; height: auto;
-    }
-    .stage canvas.dots {
+    canvas#page-canvas { display: block; max-width: 100%; height: auto; }
+    svg#field-overlay {
       position: absolute; top: 0; left: 0;
+      width: 100%; height: 100%;
       pointer-events: none;
     }
 
-    .summary {
-      margin-top: 14px; font-size: 13px; color: var(--text-muted);
-      padding: 10px 14px; background: var(--bg);
-      box-shadow: var(--neu-inset-sm); border-radius: 10px;
+    /* Legend */
+    .legend {
+      display: none; gap: 16px; flex-wrap: wrap; margin-bottom: 14px;
+      font-size: 12px; color: var(--text-muted);
     }
-    .summary strong { color: var(--text); }
-    .err { color: var(--accent); font-size: 13px; margin-top: 10px; }
+    .legend.show { display: flex; }
+    .legend-item { display: flex; align-items: center; gap: 5px; }
+    .legend-dot { width: 10px; height: 10px; border-radius: 2px; }
+
+    /* Field list */
+    .field-grid {
+      display: none;
+      grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+      gap: 8px; margin-bottom: 20px;
+    }
+    .field-grid.show { display: grid; }
+    .field-card {
+      background: var(--bg); box-shadow: var(--neu-inset-sm);
+      border-radius: 10px; padding: 10px 12px;
+      font-size: 12px; cursor: pointer;
+      transition: box-shadow 0.12s;
+    }
+    .field-card:hover { box-shadow: var(--neu-raised-sm); }
+    .field-card.active { box-shadow: var(--neu-raised-sm); }
+    .field-card .fname { font-weight: 600; color: var(--text); margin-bottom: 2px;
+                         white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .field-card .ftype { font-size: 10px; text-transform: uppercase;
+                         letter-spacing: 0.05em; color: var(--text-faint); }
+    .field-card .fpage { font-size: 10px; color: var(--text-faint); }
+
+    /* No-fields message */
+    .no-fields {
+      display: none; text-align: center; padding: 32px;
+      background: var(--bg); box-shadow: var(--neu-inset-sm);
+      border-radius: 14px; margin-bottom: 20px;
+    }
+    .no-fields.show { display: block; }
+    .no-fields p { color: var(--text-muted); font-size: 14px; line-height: 1.55; }
+    .no-fields a { color: var(--accent); text-decoration: none; }
+    .no-fields a:hover { text-decoration: underline; }
+
+    .err { color: var(--accent); font-size: 13px; margin-bottom: 14px; }
   </style>
 </head>
 <body>
   <div class="wrap">
     <header>
       <h1>Q<span class="dot">.</span> Plotter</h1>
-      <p>Drop a form image — Q plots the corners of every fillable space</p>
+      <p>Drop a PDF — Q finds every fillable field</p>
       <a href="/admin" class="back">← Back to admin</a>
     </header>
 
-    <div class="toolbar">
-      <button type="button" class="q-btn primary" id="upload-btn">Upload form image</button>
-      <input type="file" id="file-input" accept="image/*" style="display: none" />
-      <button type="button" class="q-btn" id="plot-btn" disabled>Plot dots</button>
-      <button type="button" class="q-btn" id="clear-btn" disabled>Clear</button>
-      <span class="status" id="status">No image yet.</span>
+    <input type="file" id="file-input" style="display:none">
+    <div class="drop-zone" id="drop-zone">
+      <div class="icon">📄</div>
+      <div>Drop a PDF here, or click to choose</div>
+      <div class="hint">Reads the real field structure — works on any PDF with fillable form fields</div>
+    </div>
+
+    <div class="err" id="err"></div>
+
+    <div class="toolbar" id="toolbar">
+      <button class="q-btn" id="prev-btn" disabled>← Prev</button>
+      <span class="page-nav" id="page-nav">Page 1 of 1</span>
+      <button class="q-btn" id="next-btn" disabled>Next →</button>
+      <button class="q-btn accent" id="export-btn">Export JSON</button>
+      <button class="q-btn" id="reset-btn">Reset</button>
+      <span class="field-count" id="field-count"></span>
+    </div>
+
+    <div class="legend" id="legend">
+      <span class="legend-item"><span class="legend-dot" style="background:rgba(233,30,99,0.6)"></span>Text field</span>
+      <span class="legend-item"><span class="legend-dot" style="background:rgba(16,185,129,0.6)"></span>Checkbox / radio</span>
+      <span class="legend-item"><span class="legend-dot" style="background:rgba(245,158,11,0.6)"></span>Signature</span>
+      <span class="legend-item"><span class="legend-dot" style="background:rgba(99,102,241,0.6)"></span>Dropdown / choice</span>
     </div>
 
     <div class="stage" id="stage">
-      <div class="empty">Upload a form image to begin.</div>
+      <div class="holder">
+        <canvas id="page-canvas"></canvas>
+        <svg id="field-overlay" xmlns="http://www.w3.org/2000/svg"></svg>
+      </div>
     </div>
 
-    <div class="summary" id="summary" style="display: none;"></div>
-    <div class="err" id="err"></div>
+    <div class="no-fields" id="no-fields">
+      <p>No interactive form fields found in this PDF.<br>
+      This is likely a scanned or printed form with no embedded field data.<br>
+      Try <a href="/form-finder">Form Finder</a> — Q can detect fields from a screenshot instead.</p>
+    </div>
+
+    <div class="field-grid" id="field-grid"></div>
   </div>
 
   <script>
-    const $stage = document.getElementById('stage');
-    const $upload = document.getElementById('upload-btn');
-    const $file = document.getElementById('file-input');
-    const $plot = document.getElementById('plot-btn');
-    const $clear = document.getElementById('clear-btn');
-    const $status = document.getElementById('status');
-    const $summary = document.getElementById('summary');
-    const $err = document.getElementById('err');
+    pdfjsLib.GlobalWorkerOptions.workerSrc =
+      'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
 
-    let imageDataUrl = null;
-    let imageDims = null; // { w, h }
-    let segments = [];
+    const RENDER_SCALE = 1.5;
 
-    function fileToDataUrl(file) {
-      return new Promise((resolve, reject) => {
-        const r = new FileReader();
-        r.onload = () => resolve(r.result);
-        r.onerror = reject;
-        r.readAsDataURL(file);
-      });
-    }
-    function loadImageDims(dataUrl) {
-      return new Promise((resolve, reject) => {
-        const img = new Image();
-        img.onload = () => resolve({ w: img.naturalWidth, h: img.naturalHeight });
-        img.onerror = reject;
-        img.src = dataUrl;
-      });
-    }
+    const TYPE_META = {
+      Tx:  { label: 'text',      fill: 'rgba(233,30,99,0.12)',   stroke: 'rgba(233,30,99,0.75)' },
+      Btn: { label: 'checkbox',  fill: 'rgba(16,185,129,0.12)',  stroke: 'rgba(16,185,129,0.75)' },
+      Sig: { label: 'signature', fill: 'rgba(245,158,11,0.12)',  stroke: 'rgba(245,158,11,0.75)' },
+      Ch:  { label: 'choice',    fill: 'rgba(99,102,241,0.12)',  stroke: 'rgba(99,102,241,0.75)' },
+    };
 
-    function renderStage() {
-      $stage.innerHTML = '';
-      if (!imageDataUrl) {
-        const empty = document.createElement('div'); empty.className = 'empty';
-        empty.textContent = 'Upload a form image to begin.';
-        $stage.appendChild(empty);
+    const $drop    = document.getElementById('drop-zone');
+    const $file    = document.getElementById('file-input');
+    const $err     = document.getElementById('err');
+    const $toolbar = document.getElementById('toolbar');
+    const $stage   = document.getElementById('stage');
+    const $canvas  = document.getElementById('page-canvas');
+    const $svg     = document.getElementById('field-overlay');
+    const $prev    = document.getElementById('prev-btn');
+    const $next    = document.getElementById('next-btn');
+    const $pageNav = document.getElementById('page-nav');
+    const $count   = document.getElementById('field-count');
+    const $legend  = document.getElementById('legend');
+    const $noFields= document.getElementById('no-fields');
+    const $grid    = document.getElementById('field-grid');
+    const $export  = document.getElementById('export-btn');
+    const $reset   = document.getElementById('reset-btn');
+
+    let pdfDoc   = null;
+    let allFields = []; // { name, fieldType, page, rect, pageW, pageH }
+    let currentPage = 1;
+    let totalPages  = 1;
+    let activeIdx   = -1;
+
+    // ── Drop / file handling ─────────────────────────────────────────────────
+    $drop.addEventListener('click', () => $file.click());
+    $file.addEventListener('change', () => {
+      if ($file.files && $file.files[0]) loadFile($file.files[0]);
+    });
+    ['dragenter','dragover'].forEach(ev =>
+      $drop.addEventListener(ev, e => { e.preventDefault(); $drop.classList.add('dragover'); }));
+    ['dragleave','drop'].forEach(ev =>
+      $drop.addEventListener(ev, e => { e.preventDefault(); $drop.classList.remove('dragover'); }));
+    $drop.addEventListener('drop', e => {
+      const f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+      if (f) loadFile(f);
+    });
+
+    async function loadFile(file) {
+      $err.textContent = '';
+      if (!file.name.toLowerCase().endsWith('.pdf') && file.type !== 'application/pdf') {
+        $err.textContent = 'Please drop a PDF file.';
         return;
       }
-      const holder = document.createElement('div'); holder.className = 'holder';
-      const img = document.createElement('img'); img.className = 'page'; img.src = imageDataUrl;
-      const canvas = document.createElement('canvas'); canvas.className = 'dots';
-      img.onload = () => {
-        // Match canvas pixel size to natural image size; CSS sizes both
-        // identically via max-width: 100% on the img and absolute positioning.
-        canvas.width = img.naturalWidth;
-        canvas.height = img.naturalHeight;
-        canvas.style.width = img.clientWidth + 'px';
-        canvas.style.height = img.clientHeight + 'px';
-        drawSegments(canvas);
-      };
-      window.addEventListener('resize', () => {
-        canvas.style.width = img.clientWidth + 'px';
-        canvas.style.height = img.clientHeight + 'px';
-      });
-      holder.appendChild(img);
-      holder.appendChild(canvas);
-      $stage.appendChild(holder);
-    }
+      try {
+        const buf = await file.arrayBuffer();
+        pdfDoc = await pdfjsLib.getDocument({ data: buf }).promise;
+        totalPages  = pdfDoc.numPages;
+        currentPage = 1;
 
-    function drawSegments(canvas) {
-      const ctx = canvas.getContext('2d');
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-      if (!segments.length) return;
-      ctx.lineWidth = 3;
-      ctx.strokeStyle = '#e91e63';
-      ctx.fillStyle = '#e91e63';
-      for (const seg of segments) {
-        const [ax, ay] = seg.a; const [bx, by] = seg.b;
-        if (ax === bx && ay === by) {
-          // Checkbox — single dot
-          ctx.beginPath();
-          ctx.arc(ax, ay, 6, 0, Math.PI * 2);
-          ctx.fill();
-        } else {
-          // Line — A→B
-          ctx.beginPath();
-          ctx.moveTo(ax, ay);
-          ctx.lineTo(bx, by);
-          ctx.stroke();
-          // Dots at each end
-          ctx.beginPath(); ctx.arc(ax, ay, 4, 0, Math.PI * 2); ctx.fill();
-          ctx.beginPath(); ctx.arc(bx, by, 4, 0, Math.PI * 2); ctx.fill();
+        // Extract all fields from all pages
+        allFields = [];
+        for (let p = 1; p <= totalPages; p++) {
+          const page = await pdfDoc.getPage(p);
+          const anns = await page.getAnnotations({ intent: 'display' });
+          const [,, pageW, pageH] = page.view;
+          for (const ann of anns) {
+            if (ann.subtype !== 'Widget' || !ann.fieldType) continue;
+            allFields.push({
+              name: ann.fieldName || ('field_' + (allFields.length + 1)),
+              fieldType: ann.fieldType,
+              page: p,
+              rect: ann.rect,
+              pageW, pageH,
+            });
+          }
+          page.cleanup();
         }
+
+        $drop.style.display = 'none';
+        $toolbar.classList.add('show');
+        $stage.classList.add('show');
+        $legend.classList.add('show');
+        updateNav();
+        await renderPage(currentPage);
+        renderFieldGrid();
+      } catch (e) {
+        $err.textContent = 'Could not read PDF: ' + e.message;
       }
+      $file.value = '';
     }
 
-    $upload.addEventListener('click', () => $file.click());
-    $file.addEventListener('change', async (ev) => {
-      $err.textContent = '';
-      const f = ev.target.files && ev.target.files[0];
+    // ── Render a page and its field overlays ─────────────────────────────────
+    async function renderPage(pageNum) {
+      const page     = await pdfDoc.getPage(pageNum);
+      const viewport = page.getViewport({ scale: RENDER_SCALE });
+
+      $canvas.width  = viewport.width;
+      $canvas.height = viewport.height;
+      $canvas.style.maxWidth = '100%';
+      $canvas.style.height   = 'auto';
+      $svg.setAttribute('viewBox', `0 0 ${viewport.width} ${viewport.height}`);
+
+      const ctx = $canvas.getContext('2d');
+      ctx.clearRect(0, 0, $canvas.width, $canvas.height);
+      await page.render({ canvasContext: ctx, viewport }).promise;
+      page.cleanup();
+
+      // Draw field overlays for this page
+      $svg.innerHTML = '';
+      const pageFields = allFields.filter(f => f.page === pageNum);
+      for (let i = 0; i < pageFields.length; i++) {
+        const f    = pageFields[i];
+        const meta = TYPE_META[f.fieldType] || TYPE_META['Tx'];
+
+        // Convert PDF rect [x1, y1, x2, y2] (bottom-left origin) to viewport
+        const [vx1, vy1] = viewport.convertToViewportPoint(f.rect[0], f.rect[3]); // top-left
+        const [vx2, vy2] = viewport.convertToViewportPoint(f.rect[2], f.rect[1]); // bottom-right
+        const rx = Math.min(vx1, vx2);
+        const ry = Math.min(vy1, vy2);
+        const rw = Math.abs(vx2 - vx1);
+        const rh = Math.abs(vy2 - vy1);
+
+        // Global field index for cross-ref with grid
+        const globalIdx = allFields.indexOf(f);
+
+        const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+        rect.setAttribute('x', rx); rect.setAttribute('y', ry);
+        rect.setAttribute('width', rw); rect.setAttribute('height', rh);
+        rect.setAttribute('rx', '2');
+        rect.setAttribute('fill', meta.fill);
+        rect.setAttribute('stroke', meta.stroke);
+        rect.setAttribute('stroke-width', '1.5');
+        rect.dataset.idx = String(globalIdx);
+        rect.classList.add('f-rect');
+        $svg.appendChild(rect);
+
+        // Short label above the box
+        const lbl = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+        lbl.setAttribute('x', rx + 2);
+        lbl.setAttribute('y', Math.max(ry - 3, 10));
+        lbl.setAttribute('font-size', '8');
+        lbl.setAttribute('fill', meta.stroke);
+        lbl.setAttribute('font-family', 'Space Grotesk, sans-serif');
+        lbl.setAttribute('font-weight', '600');
+        const shortened = f.name.length > 24 ? f.name.slice(0, 24) + '…' : f.name;
+        lbl.textContent = shortened;
+        $svg.appendChild(lbl);
+      }
+
+      if (allFields.length === 0) {
+        $noFields.classList.add('show');
+        $grid.classList.remove('show');
+      } else {
+        $noFields.classList.remove('show');
+      }
+      updateFieldCount(pageFields.length);
+    }
+
+    // ── Field grid ────────────────────────────────────────────────────────────
+    function renderFieldGrid() {
+      $grid.innerHTML = '';
+      if (allFields.length === 0) {
+        $grid.classList.remove('show');
+        $noFields.classList.add('show');
+        return;
+      }
+      $grid.classList.add('show');
+      allFields.forEach((f, i) => {
+        const meta = TYPE_META[f.fieldType] || TYPE_META['Tx'];
+        const card = document.createElement('div');
+        card.className = 'field-card';
+        card.dataset.idx = String(i);
+        card.innerHTML =
+          '<div class="fname">' + escapeHtml(f.name) + '</div>' +
+          '<div class="ftype">' + escapeHtml(meta.label) + '</div>' +
+          '<div class="fpage">Page ' + f.page + '</div>';
+        card.addEventListener('click', () => goToField(i));
+        $grid.appendChild(card);
+      });
+    }
+
+    async function goToField(idx) {
+      const f = allFields[idx];
       if (!f) return;
-      try {
-        imageDataUrl = await fileToDataUrl(f);
-        imageDims = await loadImageDims(imageDataUrl);
-        segments = [];
-        $summary.style.display = 'none';
-        $status.textContent = 'Loaded ' + f.name + ' (' + imageDims.w + '×' + imageDims.h + ')';
-        $plot.disabled = false; $clear.disabled = false;
-        renderStage();
-      } catch (e) {
-        $err.textContent = 'Could not load image: ' + e.message;
+      if (f.page !== currentPage) {
+        currentPage = f.page;
+        updateNav();
+        await renderPage(currentPage);
       }
-      ev.target.value = '';
+      // Highlight in SVG
+      activeIdx = idx;
+      highlightRect(idx);
+      // Highlight card
+      $grid.querySelectorAll('.field-card').forEach(c => c.classList.remove('active'));
+      const card = $grid.querySelector('[data-idx="' + idx + '"]');
+      if (card) { card.classList.add('active'); card.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); }
+    }
+
+    function highlightRect(idx) {
+      $svg.querySelectorAll('.f-rect').forEach(r => {
+        const isActive = r.dataset.idx === String(idx);
+        r.setAttribute('stroke-width', isActive ? '3' : '1.5');
+        r.style.filter = isActive ? 'drop-shadow(0 0 4px rgba(0,0,0,0.4))' : '';
+      });
+    }
+
+    // ── Navigation ────────────────────────────────────────────────────────────
+    function updateNav() {
+      $pageNav.textContent = 'Page ' + currentPage + ' of ' + totalPages;
+      $prev.disabled = currentPage <= 1;
+      $next.disabled = currentPage >= totalPages;
+    }
+    function updateFieldCount(pageCount) {
+      const total = allFields.length;
+      $count.textContent = pageCount + ' field' + (pageCount !== 1 ? 's' : '') +
+        ' on page' + (total !== pageCount ? ' · ' + total + ' total' : '');
+    }
+
+    $prev.addEventListener('click', async () => {
+      if (currentPage <= 1) return;
+      currentPage--;
+      updateNav();
+      await renderPage(currentPage);
+    });
+    $next.addEventListener('click', async () => {
+      if (currentPage >= totalPages) return;
+      currentPage++;
+      updateNav();
+      await renderPage(currentPage);
     });
 
-    $plot.addEventListener('click', async () => {
-      if (!imageDataUrl) return;
+    // ── Export ─────────────────────────────────────────────────────────────────
+    $export.addEventListener('click', async () => {
+      if (!allFields.length) return;
+      const out = allFields.map(f => ({
+        name:      f.name,
+        type:      (TYPE_META[f.fieldType] || TYPE_META['Tx']).label,
+        page:      f.page,
+        pdf_rect:  f.rect,       // [x1, y1, x2, y2] in PDF points, bottom-left origin
+        norm: {
+          x: f.rect[0] / f.pageW,
+          y: 1 - f.rect[3] / f.pageH,
+          w: (f.rect[2] - f.rect[0]) / f.pageW,
+          h: (f.rect[3] - f.rect[1]) / f.pageH,
+        },
+      }));
+      const text = JSON.stringify({ fields: out }, null, 2);
+      try {
+        await navigator.clipboard.writeText(text);
+        $export.textContent = 'Copied ✓';
+        setTimeout(() => { $export.textContent = 'Export JSON'; }, 2000);
+      } catch {
+        $export.textContent = 'Export JSON';
+      }
+    });
+
+    // ── Reset ──────────────────────────────────────────────────────────────────
+    $reset.addEventListener('click', () => {
+      pdfDoc = null; allFields = []; currentPage = 1; totalPages = 1;
+      $drop.style.display = '';
+      $toolbar.classList.remove('show');
+      $stage.classList.remove('show');
+      $legend.classList.remove('show');
+      $noFields.classList.remove('show');
+      $grid.classList.remove('show');
+      $grid.innerHTML = '';
+      $svg.innerHTML = '';
       $err.textContent = '';
-      $plot.disabled = true; $plot.textContent = 'Q is plotting…';
-      $status.textContent = 'Asking Q to look at the page…';
-      try {
-        const r = await fetch('/plotter/analyze', {
-          method: 'POST', credentials: 'include',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ imageDataUrl, dimensions: imageDims }),
-        });
-        const data = await r.json();
-        if (!r.ok) throw new Error(data.error || ('HTTP ' + r.status));
-        segments = Array.isArray(data.segments) ? data.segments : [];
-        $status.textContent = 'Plotted ' + segments.length + ' fillable space' + (segments.length === 1 ? '' : 's');
-        $summary.style.display = '';
-        $summary.innerHTML = '<strong>' + segments.length + '</strong> segments drawn — pink dots mark each end (or centre, for checkboxes)';
-        renderStage();
-      } catch (e) {
-        $err.textContent = 'Plot failed: ' + e.message;
-      } finally {
-        $plot.disabled = false; $plot.textContent = 'Plot dots';
-      }
+      const ctx = $canvas.getContext('2d');
+      ctx.clearRect(0, 0, $canvas.width, $canvas.height);
     });
 
-    $clear.addEventListener('click', () => {
-      segments = [];
-      $summary.style.display = 'none';
-      $status.textContent = imageDataUrl ? 'Cleared — image ready' : 'No image yet.';
-      renderStage();
-    });
+    function escapeHtml(s) {
+      return String(s == null ? '' : s)
+        .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+        .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+    }
   </script>
 </body>
 </html>
