@@ -39,6 +39,7 @@
     header .crumbs { color: var(--text-muted); font-size: 13px; }
     header a.back { color: var(--text-muted); text-decoration: none; font-size: 13px; }
     header a.back:hover { color: var(--accent); }
+    header .nav-links { display: flex; gap: 16px; align-items: center; }
 
     /* The desk: a centred area where the paper sits.
        The paper itself is a card with a curled top-right corner. */
@@ -257,7 +258,10 @@
   <header>
     <div class="brand">Q<span class="dot">.</span></div>
     <div class="crumbs">Writing Coach</div>
-    <a href="/chat" class="back">← Back to chat</a>
+    <div class="nav-links">
+      <a href="/plotter" class="back">Plotter</a>
+      <a href="/chat" class="back">← Chat</a>
+    </div>
   </header>
 
   <div class="desk">
