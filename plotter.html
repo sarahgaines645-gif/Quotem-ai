@@ -589,8 +589,16 @@
         el.style.top    = tpct + '%';
         el.style.width  = wpct + '%';
         el.style.height = hpct + '%';
-        // Font size matches the field height in DISPLAY pixels (not canvas pixels)
-        el.style.fontSize = Math.max(8, h * 0.55 * displayRatio) + 'px';
+        // Body text on most printed PDFs is ~11pt = ~14 canvas px at 1.5x render scale.
+        // Use that as the constant. For single-line inputs that are unusually short,
+        // cap the font so text doesn't overflow the box.
+        const BODY_FONT_CANVAS_PX = 14;
+        let fontPx = BODY_FONT_CANVAS_PX * displayRatio;
+        if (el.tagName === 'INPUT' && f.fieldType !== 'Btn') {
+          const fieldFitsPx = h * 0.75 * displayRatio;
+          if (fieldFitsPx < fontPx) fontPx = Math.max(8, fieldFitsPx);
+        }
+        el.style.fontSize = fontPx + 'px';
         $inputs.appendChild(el);
       }
 
@@ -752,11 +760,16 @@
       resizeTimer = setTimeout(() => {
         if (!$canvas.width) return;
         const ratio = $canvas.clientWidth / $canvas.width;
+        const BODY_FONT_CANVAS_PX = 14;
         $inputs.querySelectorAll('.pdf-input').forEach(el => {
+          if (el.classList.contains('checkbox')) return;
           const h = parseFloat(el.dataset.canvasH || '0');
-          if (h && el.classList.contains('pdf-input') && !el.classList.contains('checkbox')) {
-            el.style.fontSize = Math.max(8, h * 0.55 * ratio) + 'px';
+          let fontPx = BODY_FONT_CANVAS_PX * ratio;
+          if (el.tagName === 'INPUT' && h) {
+            const fieldFitsPx = h * 0.75 * ratio;
+            if (fieldFitsPx < fontPx) fontPx = Math.max(8, fieldFitsPx);
           }
+          el.style.fontSize = fontPx + 'px';
         });
       }, 100);
     });
