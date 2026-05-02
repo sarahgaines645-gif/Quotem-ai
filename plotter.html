@@ -1133,20 +1133,27 @@
     } catch (_) {}
 
     async function askQ(userText) {
-      // Build a snapshot of the form so Q can see what's in it
-      let formSnapshot = 'No PDF loaded yet.';
+      // Lean snapshot: document once at top, each field as a single line with
+      // name, human label (if generated) and current value. No per-field
+      // multi-line passage — that was 30k+ tokens per chat turn on a 53-field
+      // form and was timing Q out.
+      let context = '[Q Forms — PDF form assistant]\n';
+      if (window.__docText) {
+        context += 'FORM TEXT:\n' + window.__docText + '\n\n';
+      }
       if (allFields.length) {
         const lines = allFields.map(f => {
           const v = fieldValues[f.name];
           const valueStr = (v === true) ? 'CHECKED'
             : (v === false || v === undefined || v === '') ? '(empty)'
             : String(v);
-          const ctx = f.context ? ` — ${f.context}` : '';
-          return `[p${f.page}] "${f.name}" = ${valueStr}${ctx}`;
+          const lbl = fieldLabels[f.name] ? ` [${fieldLabels[f.name]}]` : '';
+          return `[p${f.page}] "${f.name}"${lbl} = ${valueStr}`;
         });
-        formSnapshot = `FORM ON SCREEN — page ${currentPage}/${totalPages}, ${allFields.length} fields:\n` + lines.join('\n');
+        context += `FIELDS — page ${currentPage}/${totalPages}, ${allFields.length} total:\n` + lines.join('\n') + '\n\n';
+      } else {
+        context += 'No PDF loaded yet.\n\n';
       }
-      const context = '[Q Forms — PDF form assistant]\n' + formSnapshot + '\n\n';
       $coachMsg.classList.add('thinking');
       $coachMsg.textContent = 'thinking…';
       try {
