@@ -19,20 +19,24 @@ const { Q_CONFIG } = require('../config');
 const EXTRACT_SYSTEM = `You are a form-filling assistant. Your output is ALWAYS a single JSON object — never prose, never markdown, never an explanation.
 
 You receive:
-1. A list of PDF form fields (name and type)
-2. Information the user has provided (text, screenshot, or speech)
+1. A list of PDF form fields. Each has a NAME, a TYPE, and CONTEXT — the actual surrounding form text (what comes above/before/after the blank space on the page). The context shows you what the form is really asking for.
+2. Information the user has provided (text, screenshot, or speech).
 
 Extract the value for every field you can confidently fill. Return a JSON object whose KEYS are the EXACT field names from the list (copy them verbatim, including spaces, ellipses, and odd casing) and whose VALUES are the strings to write into each field.
 
-RULES:
-- Match by meaning, not exact wording. "tenant" in the user's info matches a field named "and you the tenant if th...".
-- Dates: format as DD/MM/YYYY unless the field name suggests otherwise.
-- Checkboxes (type "checkbox"): value is the string "true" or "false".
-- Skip fields you don't have info for — omit them entirely. Never guess or invent.
+RULES — READ CAREFULLY:
+- USE THE CONTEXT, not just the name. A field named "as a contractual" with context "before: 'and then continues on from' | after: 'monthly tenancy'" is asking for the type of periodic tenancy (e.g. "periodic"), NOT the entire phrase.
+- A field name that looks like a sentence fragment is usually the LABEL just before the blank — read the after-context to see what kind of value goes there.
+- Match user info to fields by MEANING. "Tenant: Eleanor Hartley" maps to a field whose context shows it's asking for the tenant's name.
+- Dates: format as DD/MM/YYYY unless the context suggests otherwise.
+- Checkboxes (type "checkbox"): value is "true" or "false".
+- If a field's context isn't clear and you don't have an obvious match, OMIT it. Never guess or fabricate. Half-filled correctly beats fully-filled with wrong values.
 - Output a single JSON object. No prose. No markdown fences. Start with { and end with }.
 
-Example output shape:
-{ "TenantName": "Eleanor Hartley", "StartDate": "01/06/2026", "PetsAllowed": "false" }`;
+Example:
+Field: { name: "as a fixed term for", context: "before: 'a single tenancy that begins on [date]' | after: 'months and the rent is'" }
+User info: "Term: 12 months, starting 1st June 2026"
+→ output: { "as a fixed term for": "12" }   (NOT "12 months" — the word "months" is already in the form)`;
 
 async function readStreamText(response) {
     const reader = response.body.getReader();
@@ -67,7 +71,11 @@ async function readStreamText(response) {
  * @returns {Promise<Object>} — { fieldName: value }
  */
 async function extractFieldValues(fields, infoText, imageDataUrl = null) {
-    const fieldList = fields.map(f => `- "${f.name}" (${f.type})`).join('\n');
+    const fieldList = fields.map(f => {
+        const ctx = f.context ? `\n   context: ${f.context}` : '';
+        const pg  = f.page ? ` [page ${f.page}]` : '';
+        return `- "${f.name}" (${f.type})${pg}${ctx}`;
+    }).join('\n');
     const userContent = `FORM FIELDS:\n${fieldList}\n\nINFORMATION PROVIDED:\n${infoText || '(none)'}`;
 
     const isVision = !!imageDataUrl;
@@ -189,15 +197,24 @@ async function fillPdf(pdfBytes, values) {
         }
     }
 
-    // CRITICAL: regenerate appearance streams so the values are visible in
-    // every PDF viewer (Preview, browsers, Acrobat). Without this, values
-    // are stored in the field dict but the page shows them as empty until
-    // the user clicks each box.
+    // CRITICAL: regenerate appearance streams so the values render. NRLA-
+    // style PDFs have pre-baked empty appearance dictionaries that override
+    // setText() — without this step, values are stored but display blank.
     try {
         const helvetica = await pdfDoc.embedFont(StandardFonts.Helvetica);
         form.updateFieldAppearances(helvetica);
     } catch (e) {
         console.warn('[q-form-filler] updateFieldAppearances failed:', e.message);
+    }
+
+    // Flatten the form: convert every field's value into static page content.
+    // After this the PDF can no longer be edited interactively, but the values
+    // are guaranteed to display in any viewer (Preview, browsers, Acrobat).
+    // This is the right tradeoff for "filled and ready to send/print" output.
+    try {
+        form.flatten();
+    } catch (e) {
+        console.warn('[q-form-filler] flatten failed:', e.message);
     }
 
     const filledBytes = await pdfDoc.save();

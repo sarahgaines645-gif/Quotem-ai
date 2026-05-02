@@ -459,20 +459,58 @@
         totalPages  = pdfDoc.numPages;
         currentPage = 1;
 
-        // Extract all fields from all pages
+        // Extract all fields from all pages, plus the surrounding form text
+        // for each field — gives Q the actual sentence each field sits in,
+        // not just a cryptic label. Massively improves auto-fill accuracy.
         allFields = [];
         for (let p = 1; p <= totalPages; p++) {
           const page = await pdfDoc.getPage(p);
           const anns = await page.getAnnotations({ intent: 'display' });
+          const textContent = await page.getTextContent();
+          const items = textContent.items.map(it => ({
+            str: it.str,
+            x: it.transform[4],
+            y: it.transform[5],
+            w: it.width || 0,
+            h: it.height || 12,
+          }));
           const [,, pageW, pageH] = page.view;
+
           for (const ann of anns) {
             if (ann.subtype !== 'Widget' || !ann.fieldType) continue;
+            const [fx1, fy1, fx2, fy2] = ann.rect;
+            const fieldCY = (fy1 + fy2) / 2;
+            const fieldH  = Math.max(fy2 - fy1, 8);
+
+            // Items on the same line as the field
+            const sameLine = items.filter(it => {
+              const cy = it.y + it.h / 2;
+              return Math.abs(cy - fieldCY) < fieldH;
+            }).sort((a, b) => a.x - b.x);
+
+            const before = sameLine.filter(it => it.x + it.w <= fx1).slice(-6).map(it => it.str).join(' ').trim();
+            const after  = sameLine.filter(it => it.x >= fx2).slice(0, 6).map(it => it.str).join(' ').trim();
+
+            // Also grab one line above for label context
+            const aboveLine = items.filter(it => {
+              const cy = it.y + it.h / 2;
+              return cy > fy2 && cy - fy2 < fieldH * 2.5
+                   && it.x < fx2 + 20 && it.x + it.w > fx1 - 20;
+            }).sort((a, b) => a.x - b.x).map(it => it.str).join(' ').trim();
+
+            const context = [
+              aboveLine ? 'above: ' + aboveLine : '',
+              before    ? 'before: ' + before   : '',
+              after     ? 'after: '  + after    : '',
+            ].filter(Boolean).join(' | ');
+
             allFields.push({
               name: ann.fieldName || ('field_' + (allFields.length + 1)),
               fieldType: ann.fieldType,
               page: p,
               rect: ann.rect,
               pageW, pageH,
+              context,
             });
           }
           page.cleanup();
@@ -897,7 +935,12 @@
 
       try {
         const body = {
-          fields: allFields.map(f => ({ name: f.name, type: (TYPE_META[f.fieldType] || TYPE_META['Tx']).label })),
+          fields: allFields.map(f => ({
+            name:    f.name,
+            type:    (TYPE_META[f.fieldType] || TYPE_META['Tx']).label,
+            page:    f.page,
+            context: f.context || '',
+          })),
           infoText,
         };
         if (intakeImages.length) body.imageDataUrl = intakeImages[0].dataUrl;
@@ -1005,10 +1048,20 @@
     } catch (_) {}
 
     async function askQ(userText) {
-      const fieldSummary = allFields.length
-        ? 'Fields found (' + allFields.length + ' total): ' + allFields.slice(0, 20).map(f => f.name + ' (' + (TYPE_META[f.fieldType] || TYPE_META['Tx']).label + ')').join(', ') + (allFields.length > 20 ? '…' : '')
-        : 'No PDF loaded yet.';
-      const context = '[Q Forms — PDF form assistant]\n' + fieldSummary + '\nPage ' + currentPage + ' of ' + totalPages + '\n\n';
+      // Build a snapshot of the form so Q can see what's in it
+      let formSnapshot = 'No PDF loaded yet.';
+      if (allFields.length) {
+        const lines = allFields.map(f => {
+          const v = fieldValues[f.name];
+          const valueStr = (v === true) ? 'CHECKED'
+            : (v === false || v === undefined || v === '') ? '(empty)'
+            : String(v);
+          const ctx = f.context ? ` — ${f.context}` : '';
+          return `[p${f.page}] "${f.name}" = ${valueStr}${ctx}`;
+        });
+        formSnapshot = `FORM ON SCREEN — page ${currentPage}/${totalPages}, ${allFields.length} fields:\n` + lines.join('\n');
+      }
+      const context = '[Q Forms — PDF form assistant]\n' + formSnapshot + '\n\n';
       $coachMsg.classList.add('thinking');
       $coachMsg.textContent = 'thinking…';
       try {
