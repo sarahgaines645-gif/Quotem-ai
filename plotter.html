@@ -585,6 +585,7 @@
                 body: JSON.stringify({
                   pageImages,
                   totalTags: allFields.length,
+                  documentText: window.__docText || '',
                 }),
               });
               const data = await r.json();

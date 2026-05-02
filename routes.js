@@ -302,11 +302,11 @@ const qFormFiller = require('./plugins/q-form-filler');
 // each field, labels every tag based on what it sees on the page.
 router.post('/forms/label', requirePerson, express.json({ limit: '32mb' }), async (req, res) => {
     try {
-        const { pageImages, totalTags } = req.body || {};
+        const { pageImages, totalTags, documentText } = req.body || {};
         if (!Array.isArray(pageImages) || !pageImages.length) {
             return res.status(400).json({ error: 'pageImages required' });
         }
-        const labels = await qFormFiller.labelFields(pageImages, totalTags || 0);
+        const labels = await qFormFiller.labelFields(pageImages, totalTags || 0, documentText || '');
         res.json({ ok: true, labels });
     } catch (e) {
         console.error('[forms/label]', e.message);

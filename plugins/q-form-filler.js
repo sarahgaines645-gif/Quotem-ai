@@ -238,21 +238,29 @@ async function intakeAndFill({ pdfBytes, fields, infoText, imageDataUrl }) {
 }
 
 /**
- * Generate clean human labels for every field by SEEING the form.
+ * Generate clean human labels for every field using BOTH inputs:
+ *   - Rendered page images with numbered pink tags on each field
+ *   - The extracted document text in reading order
  *
- * Each page is rendered as an image with numbered pink tags drawn on every
- * field. The vision model looks at the actual rendered form — layout,
- * headings, the blank, what's around the blank — and labels each numbered
- * tag based on what it sees. No text-extraction layer in between.
+ * The numbered tags bridge the two inputs: Q can see tag 5 sits in a box
+ * on the page, AND read "first payment of £" in the text right next to it,
+ * and correlate them. Each input compensates for the other's weakness —
+ * vision handles layout/structure, text gives reliable word access.
  *
  * @param {Array<string>} pageImages — data URLs (JPEG) for each page with tags drawn on
- * @param {number} totalTags — number of fields tagged (so Q knows how many labels to return)
+ * @param {number} totalTags — number of fields tagged
+ * @param {string} documentText — extracted form text in reading order (no markers)
  * @returns {Promise<Object>} — { tagNumberAsString: humanLabel }
  */
-async function labelFields(pageImages, totalTags) {
-    const userText = `Each fillable field on these form pages is marked with a numbered pink tag (1, 2, 3 …). For every numbered tag, work out what the user should write in that blank, based on what the form is asking for around it.
+async function labelFields(pageImages, totalTags, documentText = '') {
+    const userText = `Each fillable field on these form pages is marked with a numbered pink tag (1, 2, 3 …) drawn on the rendered image. You also have the extracted form text below for reference.
 
-Return a JSON object whose keys are the tag numbers (as strings: "1", "2", …) and values are short labels (2–6 words). There are ${totalTags} tags total — return a label for every one.`;
+Use BOTH inputs together: look at the page image to see which numbered tag sits where, then use the text to read the surrounding sentences accurately. Cross-reference them — the tag in the image and the words around it in the text describe the same blank.
+
+For every numbered tag, work out what the user should write in that blank. Return a JSON object whose keys are the tag numbers (as strings: "1", "2", …) and values are short labels (2–6 words). There are ${totalTags} tags total — return a label for every one.
+
+EXTRACTED TEXT (for reference alongside the images):
+${documentText || '(no text extracted)'}`;
 
     const content = [
         { type: 'text', text: userText },
