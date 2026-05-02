@@ -295,6 +295,21 @@ router.post('/plotter/analyze', requirePerson, express.json({ limit: '24mb' }), 
 
 const qFormFiller = require('./plugins/q-form-filler');
 
+// POST /forms/label
+// Body: { fields: [{name, type, page, context}] }
+// Returns: { labels: { fieldName: humanLabel } }
+router.post('/forms/label', requirePerson, express.json({ limit: '4mb' }), async (req, res) => {
+    try {
+        const { fields } = req.body || {};
+        if (!fields || !fields.length) return res.status(400).json({ error: 'fields required' });
+        const labels = await qFormFiller.labelFields(fields);
+        res.json({ ok: true, labels });
+    } catch (e) {
+        console.error('[forms/label]', e.message);
+        res.status(500).json({ error: e.message });
+    }
+});
+
 // POST /forms/extract
 // Body: { fields: [{name, type}], infoText, imageDataUrl? }
 // Returns: { values: { fieldName: value } }  — for the UI to populate the review form

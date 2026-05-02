@@ -237,4 +237,62 @@ async function intakeAndFill({ pdfBytes, fields, infoText, imageDataUrl }) {
     return { filledBytes, values, results };
 }
 
-module.exports = { intakeAndFill, extractFieldValues, fillPdf };
+/**
+ * Generate clean human labels for every field by reading the surrounding
+ * form text. AcroForm field names are usually a sentence fragment from the
+ * end of the line ("as a contractual", "and then continues on from"); they
+ * tell you nothing about what the field actually wants. This function reads
+ * the context and produces short human labels like "Tenancy type" or
+ * "Continuation start".
+ *
+ * @param {Array<{name, type, page, context}>} fields
+ * @returns {Promise<Object>} — { fieldName: humanLabel }
+ */
+async function labelFields(fields) {
+    const fieldLines = fields.map(f => {
+        const ctx = f.context ? `\n   context: ${f.context}` : '';
+        return `- "${f.name}" (${f.type})${ctx}`;
+    }).join('\n');
+
+    const system = `You are labeling form fields. For each field you receive a NAME (often just a sentence fragment from the form) and CONTEXT (the actual text above, before, and after the blank space). Produce a SHORT human label (2-5 words) describing what each field is asking for. Use the context to understand — never just rephrase the field name.
+
+Examples:
+- name "between us the landlord" + context "above: This agreement is between us the landlord" → label: "Landlord name & address"
+- name "as a fixed term for" + context "before: 'a single tenancy that begins on' | after: 'months and the rent is'" → label: "Term length (months)"
+- name "and then continues on from" + context "before: 'the end of the fixed term' | after: 'as a contractual'" → label: "Continuation type"
+- name "DateRow1.0" + context "above: Tenant signature and date" → label: "Tenant date"
+
+Output a single JSON object mapping each EXACT field name (verbatim — copy it character-for-character) to its human label. No prose, no markdown, no explanation. Start with { and end with }.`;
+
+    const response = await fetch(`${Q_CONFIG.baseURL}/chat/completions`, {
+        method: 'POST',
+        headers: {
+            'Authorization': `Bearer ${Q_CONFIG.apiKey}`,
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+            model: Q_CONFIG.fastModel || Q_CONFIG.model,
+            max_tokens: 4096,
+            temperature: 0.0,
+            response_format: { type: 'json_object' },
+            messages: [
+                { role: 'system', content: system },
+                { role: 'user', content: `FIELDS:\n${fieldLines}` },
+            ],
+        }),
+    });
+
+    if (!response.ok) {
+        const err = await response.text();
+        throw new Error(`Label upstream ${response.status}: ${err.slice(0, 200)}`);
+    }
+    const data = await response.json();
+    const raw = data.choices?.[0]?.message?.content || '';
+    const cleaned = raw.replace(/```json\s*/gi, '').replace(/```\s*/g, '').trim();
+    const start = cleaned.indexOf('{');
+    const end = cleaned.lastIndexOf('}');
+    if (start === -1 || end === -1) throw new Error('Q returned no labels');
+    return JSON.parse(cleaned.slice(start, end + 1));
+}
+
+module.exports = { intakeAndFill, extractFieldValues, fillPdf, labelFields };
