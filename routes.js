@@ -269,6 +269,30 @@ router.get('/writer', (req, res) => {
     res.sendFile(path.join(__dirname, 'writer.html'));
 });
 
+// Q's plotter — vision-based form-corner plotter. Step 1 of the form
+// filler chain: just identifies and pinpoints fillable spaces. The actual
+// fill comes in a future plugin.
+router.get('/plotter', (req, res) => {
+    res.sendFile(path.join(__dirname, 'plotter.html'));
+});
+
+const qPlotter = require('./plugins/q-dot-plotter');
+
+router.post('/plotter/analyze', requirePerson, express.json({ limit: '24mb' }), async (req, res) => {
+    try {
+        const { imageDataUrl, dimensions } = req.body || {};
+        if (!imageDataUrl) return res.status(400).json({ error: 'imageDataUrl required' });
+        if (!dimensions || !dimensions.w || !dimensions.h) {
+            return res.status(400).json({ error: 'dimensions { w, h } required' });
+        }
+        const result = await qPlotter.plotDots(imageDataUrl, dimensions);
+        res.json({ ok: true, segments: result.segments });
+    } catch (e) {
+        console.error('[plotter/analyze]', e.message);
+        res.status(500).json({ error: e.message });
+    }
+});
+
 const qWriter = require('./plugins/q-writer');
 
 router.post('/writer/analyse', requirePerson, express.json({ limit: '512kb' }), async (req, res) => {

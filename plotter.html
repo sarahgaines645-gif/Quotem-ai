@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <script src="/q-auth.js?v=4"></script>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>Q — Plotter</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #e8e8e8;
+      --text: #1a1a1a;
+      --text-muted: rgba(0,0,0,0.55);
+      --text-faint: rgba(0,0,0,0.35);
+      --accent: #e91e63;
+      --neu-raised:    10px 10px 28px #ababab, -8px -8px 20px #ffffff;
+      --neu-raised-sm: 6px 6px 16px #ababab, -5px -5px 12px #ffffff;
+      --neu-inset:     inset 5px 5px 14px #ababab, inset -4px -4px 10px #ffffff;
+      --neu-inset-sm:  inset 3px 3px 8px #ababab, inset -2px -2px 6px #ffffff;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { background: var(--bg); color: var(--text);
+                 font-family: 'Space Grotesk', system-ui, sans-serif; min-height: 100%; }
+    body { padding: 28px 16px 100px; }
+    .wrap { max-width: 1100px; margin: 0 auto; }
+
+    header { text-align: center; margin-bottom: 28px; }
+    header h1 { font-size: 30px; font-weight: 700; }
+    header h1 .dot { color: var(--accent); }
+    header p { color: var(--text-muted); font-size: 14px; margin-top: 4px; }
+    header a.back { display: inline-block; margin-top: 12px; color: var(--text-muted);
+                    text-decoration: none; font-size: 13px; }
+    header a.back:hover { color: var(--accent); }
+
+    .toolbar {
+      display: flex; gap: 12px; align-items: center; flex-wrap: wrap;
+      background: var(--bg); box-shadow: var(--neu-raised-sm);
+      padding: 14px 18px; border-radius: 14px;
+      margin-bottom: 20px;
+    }
+    button.q-btn {
+      border: none; cursor: pointer; background: var(--bg); color: var(--text);
+      box-shadow: var(--neu-raised-sm); border-radius: 12px;
+      padding: 10px 18px; font-size: 13px; font-weight: 600;
+      font-family: inherit;
+    }
+    button.q-btn:hover { box-shadow: 4px 4px 10px #ababab, -3px -3px 8px #ffffff; }
+    button.q-btn:active, button.q-btn:disabled { box-shadow: var(--neu-inset-sm); }
+    button.q-btn:disabled { cursor: wait; opacity: 0.7; }
+    button.q-btn.primary { color: var(--accent); }
+
+    .status { font-size: 13px; color: var(--text-muted); margin-left: auto; }
+
+    /* The page where image + dots get composited.
+       Image fills width; canvas absolutely overlays it. */
+    .stage {
+      position: relative;
+      background: var(--bg); box-shadow: var(--neu-inset);
+      border-radius: 14px; padding: 18px;
+      min-height: 200px;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .stage .empty {
+      color: var(--text-faint); font-size: 14px; padding: 60px 20px; text-align: center;
+    }
+    .stage .holder {
+      position: relative; line-height: 0;
+      max-width: 100%;
+    }
+    .stage img.page {
+      display: block; max-width: 100%; height: auto;
+    }
+    .stage canvas.dots {
+      position: absolute; top: 0; left: 0;
+      pointer-events: none;
+    }
+
+    .summary {
+      margin-top: 14px; font-size: 13px; color: var(--text-muted);
+      padding: 10px 14px; background: var(--bg);
+      box-shadow: var(--neu-inset-sm); border-radius: 10px;
+    }
+    .summary strong { color: var(--text); }
+    .err { color: var(--accent); font-size: 13px; margin-top: 10px; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <h1>Q<span class="dot">.</span> Plotter</h1>
+      <p>Drop a form image — Q plots the corners of every fillable space</p>
+      <a href="/admin" class="back">← Back to admin</a>
+    </header>
+
+    <div class="toolbar">
+      <button type="button" class="q-btn primary" id="upload-btn">Upload form image</button>
+      <input type="file" id="file-input" accept="image/*" style="display: none" />
+      <button type="button" class="q-btn" id="plot-btn" disabled>Plot dots</button>
+      <button type="button" class="q-btn" id="clear-btn" disabled>Clear</button>
+      <span class="status" id="status">No image yet.</span>
+    </div>
+
+    <div class="stage" id="stage">
+      <div class="empty">Upload a form image to begin.</div>
+    </div>
+
+    <div class="summary" id="summary" style="display: none;"></div>
+    <div class="err" id="err"></div>
+  </div>
+
+  <script>
+    const $stage = document.getElementById('stage');
+    const $upload = document.getElementById('upload-btn');
+    const $file = document.getElementById('file-input');
+    const $plot = document.getElementById('plot-btn');
+    const $clear = document.getElementById('clear-btn');
+    const $status = document.getElementById('status');
+    const $summary = document.getElementById('summary');
+    const $err = document.getElementById('err');
+
+    let imageDataUrl = null;
+    let imageDims = null; // { w, h }
+    let segments = [];
+
+    function fileToDataUrl(file) {
+      return new Promise((resolve, reject) => {
+        const r = new FileReader();
+        r.onload = () => resolve(r.result);
+        r.onerror = reject;
+        r.readAsDataURL(file);
+      });
+    }
+    function loadImageDims(dataUrl) {
+      return new Promise((resolve, reject) => {
+        const img = new Image();
+        img.onload = () => resolve({ w: img.naturalWidth, h: img.naturalHeight });
+        img.onerror = reject;
+        img.src = dataUrl;
+      });
+    }
+
+    function renderStage() {
+      $stage.innerHTML = '';
+      if (!imageDataUrl) {
+        const empty = document.createElement('div'); empty.className = 'empty';
+        empty.textContent = 'Upload a form image to begin.';
+        $stage.appendChild(empty);
+        return;
+      }
+      const holder = document.createElement('div'); holder.className = 'holder';
+      const img = document.createElement('img'); img.className = 'page'; img.src = imageDataUrl;
+      const canvas = document.createElement('canvas'); canvas.className = 'dots';
+      img.onload = () => {
+        // Match canvas pixel size to natural image size; CSS sizes both
+        // identically via max-width: 100% on the img and absolute positioning.
+        canvas.width = img.naturalWidth;
+        canvas.height = img.naturalHeight;
+        canvas.style.width = img.clientWidth + 'px';
+        canvas.style.height = img.clientHeight + 'px';
+        drawSegments(canvas);
+      };
+      window.addEventListener('resize', () => {
+        canvas.style.width = img.clientWidth + 'px';
+        canvas.style.height = img.clientHeight + 'px';
+      });
+      holder.appendChild(img);
+      holder.appendChild(canvas);
+      $stage.appendChild(holder);
+    }
+
+    function drawSegments(canvas) {
+      const ctx = canvas.getContext('2d');
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      if (!segments.length) return;
+      ctx.lineWidth = 3;
+      ctx.strokeStyle = '#e91e63';
+      ctx.fillStyle = '#e91e63';
+      for (const seg of segments) {
+        const [ax, ay] = seg.a; const [bx, by] = seg.b;
+        if (ax === bx && ay === by) {
+          // Checkbox — single dot
+          ctx.beginPath();
+          ctx.arc(ax, ay, 6, 0, Math.PI * 2);
+          ctx.fill();
+        } else {
+          // Line — A→B
+          ctx.beginPath();
+          ctx.moveTo(ax, ay);
+          ctx.lineTo(bx, by);
+          ctx.stroke();
+          // Dots at each end
+          ctx.beginPath(); ctx.arc(ax, ay, 4, 0, Math.PI * 2); ctx.fill();
+          ctx.beginPath(); ctx.arc(bx, by, 4, 0, Math.PI * 2); ctx.fill();
+        }
+      }
+    }
+
+    $upload.addEventListener('click', () => $file.click());
+    $file.addEventListener('change', async (ev) => {
+      $err.textContent = '';
+      const f = ev.target.files && ev.target.files[0];
+      if (!f) return;
+      try {
+        imageDataUrl = await fileToDataUrl(f);
+        imageDims = await loadImageDims(imageDataUrl);
+        segments = [];
+        $summary.style.display = 'none';
+        $status.textContent = 'Loaded ' + f.name + ' (' + imageDims.w + '×' + imageDims.h + ')';
+        $plot.disabled = false; $clear.disabled = false;
+        renderStage();
+      } catch (e) {
+        $err.textContent = 'Could not load image: ' + e.message;
+      }
+      ev.target.value = '';
+    });
+
+    $plot.addEventListener('click', async () => {
+      if (!imageDataUrl) return;
+      $err.textContent = '';
+      $plot.disabled = true; $plot.textContent = 'Q is plotting…';
+      $status.textContent = 'Asking Q to look at the page…';
+      try {
+        const r = await fetch('/plotter/analyze', {
+          method: 'POST', credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ imageDataUrl, dimensions: imageDims }),
+        });
+        const data = await r.json();
+        if (!r.ok) throw new Error(data.error || ('HTTP ' + r.status));
+        segments = Array.isArray(data.segments) ? data.segments : [];
+        $status.textContent = 'Plotted ' + segments.length + ' fillable space' + (segments.length === 1 ? '' : 's');
+        $summary.style.display = '';
+        $summary.innerHTML = '<strong>' + segments.length + '</strong> segments drawn — pink dots mark each end (or centre, for checkboxes)';
+        renderStage();
+      } catch (e) {
+        $err.textContent = 'Plot failed: ' + e.message;
+      } finally {
+        $plot.disabled = false; $plot.textContent = 'Plot dots';
+      }
+    });
+
+    $clear.addEventListener('click', () => {
+      segments = [];
+      $summary.style.display = 'none';
+      $status.textContent = imageDataUrl ? 'Cleared — image ready' : 'No image yet.';
+      renderStage();
+    });
+  </script>
+</body>
+</html>
