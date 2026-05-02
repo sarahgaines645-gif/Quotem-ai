@@ -293,6 +293,37 @@ router.post('/plotter/analyze', requirePerson, express.json({ limit: '24mb' }), 
     }
 });
 
+const qFormFiller = require('./plugins/q-form-filler');
+
+// POST /forms/fill
+// Body: { pdfBase64, fields: [{name, type}], infoText, imageDataUrl? }
+// Returns: filled PDF as application/pdf download
+router.post('/forms/fill', requirePerson, express.json({ limit: '24mb' }), async (req, res) => {
+    try {
+        const { pdfBase64, fields, infoText, imageDataUrl } = req.body || {};
+        if (!pdfBase64) return res.status(400).json({ error: 'pdfBase64 required' });
+        if (!fields || !fields.length) return res.status(400).json({ error: 'fields required' });
+        if (!infoText && !imageDataUrl) return res.status(400).json({ error: 'infoText or imageDataUrl required' });
+
+        const pdfBytes = Buffer.from(pdfBase64, 'base64');
+        const { filledBytes, values, results } = await qFormFiller.intakeAndFill({
+            pdfBytes, fields, infoText: infoText || '', imageDataUrl: imageDataUrl || null,
+        });
+
+        console.log(`[forms/fill] filled ${results.filled.length}, skipped ${results.skipped.length}, not found ${results.notFound.length}`);
+        res.set({
+            'Content-Type': 'application/pdf',
+            'Content-Disposition': 'attachment; filename="filled-form.pdf"',
+            'X-Fields-Filled': String(results.filled.length),
+            'X-Fields-Skipped': String(results.skipped.length),
+        });
+        res.send(Buffer.from(filledBytes));
+    } catch (e) {
+        console.error('[forms/fill]', e.message);
+        res.status(500).json({ error: e.message });
+    }
+});
+
 const qWriter = require('./plugins/q-writer');
 
 router.post('/writer/analyse', requirePerson, express.json({ limit: '512kb' }), async (req, res) => {

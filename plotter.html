@@ -136,6 +136,64 @@
 
     .err { color: var(--accent); font-size: 13px; margin-bottom: 14px; }
 
+    /* Intake panel */
+    .intake {
+      background: var(--bg); box-shadow: var(--neu-raised-sm);
+      border-radius: 18px; padding: 22px 20px; margin-bottom: 24px;
+    }
+    .intake-head { margin-bottom: 14px; }
+    .intake-title { font-size: 16px; font-weight: 600; display: block; margin-bottom: 3px; }
+    .intake-hint { font-size: 12px; color: var(--text-muted); }
+    .intake-modes { display: flex; gap: 8px; margin-bottom: 14px; flex-wrap: wrap; }
+    .mode-btn {
+      border: none; cursor: pointer; background: var(--bg); color: var(--text-muted);
+      box-shadow: var(--neu-raised-sm); border-radius: 10px;
+      padding: 7px 14px; font-size: 12px; font-weight: 600; font-family: inherit;
+    }
+    .mode-btn.active { box-shadow: var(--neu-inset-sm); color: var(--text); }
+    .intake-panel textarea {
+      width: 100%; border: none; outline: none; resize: vertical;
+      background: var(--bg); box-shadow: var(--neu-inset-sm);
+      border-radius: 10px; padding: 12px 14px;
+      font-family: 'Space Grotesk', sans-serif; font-size: 13px;
+      color: var(--text); line-height: 1.55;
+    }
+    .intake-panel textarea::placeholder { color: var(--text-faint); }
+    .img-drop {
+      border: 2px dashed #b0b0b0; border-radius: 12px;
+      padding: 32px 20px; text-align: center; cursor: pointer;
+      color: var(--text-muted); font-size: 13px;
+      box-shadow: var(--neu-inset-sm);
+      transition: border-color 0.15s, color 0.15s;
+    }
+    .img-drop:hover, .img-drop.dragover { border-color: var(--accent); color: var(--accent); }
+    .img-drop-hint { font-size: 11px; color: var(--text-faint); margin-top: 4px; }
+    .img-preview { display: flex; align-items: flex-start; gap: 10px; }
+    .img-preview img { max-width: 200px; max-height: 140px; border-radius: 8px;
+                       box-shadow: var(--neu-raised-sm); }
+    .img-clear { border: none; cursor: pointer; background: transparent;
+                 color: var(--text-muted); font-size: 13px; padding: 4px; }
+    .img-clear:hover { color: var(--accent); }
+    .voice-area { text-align: center; padding: 16px 0; }
+    .mic-btn {
+      border: none; cursor: pointer; background: var(--bg); color: var(--text);
+      box-shadow: var(--neu-raised-sm); border-radius: 50%;
+      width: 64px; height: 64px; font-size: 26px; margin-bottom: 12px;
+      display: inline-flex; align-items: center; justify-content: center;
+      transition: box-shadow 0.15s;
+    }
+    .mic-btn.recording { box-shadow: var(--neu-inset-sm); color: var(--accent); }
+    .voice-transcript {
+      font-size: 13px; color: var(--text-muted); min-height: 40px;
+      padding: 10px 14px; background: var(--bg);
+      box-shadow: var(--neu-inset-sm); border-radius: 10px;
+      line-height: 1.5;
+    }
+    .intake-actions { display: flex; align-items: center; gap: 14px; margin-top: 14px; }
+    .fill-status { font-size: 12px; color: var(--text-muted); }
+    .fill-status.ok { color: #10b981; }
+    .fill-status.err { color: var(--accent); }
+
     /* Q coach card — same pattern as writer.html */
     .coach-card {
       position: fixed; right: 24px; top: 50%; transform: translateY(-50%);
@@ -219,6 +277,50 @@
     </div>
 
     <div class="field-grid" id="field-grid"></div>
+
+    <!-- Intake panel — appears after PDF loads -->
+    <div class="intake" id="intake" style="display:none">
+      <div class="intake-head">
+        <span class="intake-title">Fill this form</span>
+        <span class="intake-hint">Paste info, drop a screenshot, or speak — Q finds the right fields</span>
+      </div>
+      <div class="intake-modes">
+        <button class="mode-btn active" id="mode-text" type="button">✏️ Text</button>
+        <button class="mode-btn" id="mode-image" type="button">🖼️ Screenshot</button>
+        <button class="mode-btn" id="mode-voice" type="button">🎙️ Voice</button>
+      </div>
+
+      <!-- Text mode -->
+      <div class="intake-panel" id="panel-text">
+        <textarea id="info-text" placeholder="Paste anything — name, address, dates, tenancy details. Q will work out what goes where." rows="5"></textarea>
+      </div>
+
+      <!-- Image mode -->
+      <div class="intake-panel" id="panel-image" style="display:none">
+        <div class="img-drop" id="img-drop">
+          <div>Drop a screenshot here, or click to choose</div>
+          <div class="img-drop-hint">Q reads it and extracts the info</div>
+        </div>
+        <input type="file" id="img-file" style="display:none">
+        <div class="img-preview" id="img-preview" style="display:none">
+          <img id="img-thumb" alt="screenshot">
+          <button class="img-clear" id="img-clear" type="button">× Remove</button>
+        </div>
+      </div>
+
+      <!-- Voice mode -->
+      <div class="intake-panel" id="panel-voice" style="display:none">
+        <div class="voice-area">
+          <button class="mic-btn" id="mic-btn" type="button">🎙️ Hold to speak</button>
+          <div class="voice-transcript" id="voice-transcript">Press and speak — your words appear here, then Q fills the form.</div>
+        </div>
+      </div>
+
+      <div class="intake-actions">
+        <button class="q-btn accent" id="fill-btn" type="button">Fill & Download</button>
+        <span class="fill-status" id="fill-status"></span>
+      </div>
+    </div>
   </div>
 
   <div class="coach-card" id="coach-card">
@@ -308,10 +410,20 @@
           page.cleanup();
         }
 
+        // Save base64 for the fill endpoint
+        const b64arr = new Uint8Array(buf);
+        let b64 = '';
+        const chunk = 8192;
+        for (let i = 0; i < b64arr.length; i += chunk) {
+          b64 += String.fromCharCode(...b64arr.subarray(i, i + chunk));
+        }
+        pdfBase64 = btoa(b64);
+
         $drop.style.display = 'none';
         $toolbar.classList.add('show');
         $stage.classList.add('show');
         $legend.classList.add('show');
+        $intake.style.display = '';
         updateNav();
         await renderPage(currentPage);
         renderFieldGrid();
@@ -489,6 +601,7 @@
     // ── Reset ──────────────────────────────────────────────────────────────────
     $reset.addEventListener('click', () => {
       pdfDoc = null; allFields = []; currentPage = 1; totalPages = 1;
+      pdfBase64 = null; intakeImage = null;
       $drop.style.display = '';
       $toolbar.classList.remove('show');
       $stage.classList.remove('show');
@@ -498,6 +611,9 @@
       $grid.innerHTML = '';
       $svg.innerHTML = '';
       $err.textContent = '';
+      $intake.style.display = 'none';
+      $infoText.value = '';
+      $fillStatus.textContent = '';
       const ctx = $canvas.getContext('2d');
       ctx.clearRect(0, 0, $canvas.width, $canvas.height);
     });
@@ -507,6 +623,164 @@
         .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
         .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
     }
+
+    // ── Intake panel ──────────────────────────────────────────────────────────
+    let pdfBase64 = null;   // saved when PDF loaded so we can send to /forms/fill
+    let intakeImage = null; // { dataUrl }
+
+    const $intake       = document.getElementById('intake');
+    const $infoText     = document.getElementById('info-text');
+    const $fillBtn      = document.getElementById('fill-btn');
+    const $fillStatus   = document.getElementById('fill-status');
+    const $imgDrop      = document.getElementById('img-drop');
+    const $imgFile      = document.getElementById('img-file');
+    const $imgPreview   = document.getElementById('img-preview');
+    const $imgThumb     = document.getElementById('img-thumb');
+    const $imgClear     = document.getElementById('img-clear');
+    const $micBtn       = document.getElementById('mic-btn');
+    const $voiceTx      = document.getElementById('voice-transcript');
+
+    // Mode tabs
+    ['text','image','voice'].forEach(m => {
+      document.getElementById('mode-' + m).addEventListener('click', () => {
+        ['text','image','voice'].forEach(n => {
+          document.getElementById('mode-' + n).classList.toggle('active', n === m);
+          document.getElementById('panel-' + n).style.display = n === m ? '' : 'none';
+        });
+      });
+    });
+
+    // Screenshot drop
+    $imgDrop.addEventListener('click', () => $imgFile.click());
+    $imgFile.addEventListener('change', () => {
+      const f = $imgFile.files && $imgFile.files[0];
+      if (f) loadIntakeImage(f);
+      $imgFile.value = '';
+    });
+    ['dragenter','dragover'].forEach(ev =>
+      $imgDrop.addEventListener(ev, e => { e.preventDefault(); $imgDrop.classList.add('dragover'); }));
+    ['dragleave','drop'].forEach(ev =>
+      $imgDrop.addEventListener(ev, e => { e.preventDefault(); $imgDrop.classList.remove('dragover'); }));
+    $imgDrop.addEventListener('drop', e => {
+      const f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+      if (f) loadIntakeImage(f);
+    });
+    function loadIntakeImage(file) {
+      const reader = new FileReader();
+      reader.onload = () => {
+        intakeImage = { dataUrl: reader.result };
+        $imgThumb.src = reader.result;
+        $imgDrop.style.display = 'none';
+        $imgPreview.style.display = '';
+      };
+      reader.readAsDataURL(file);
+    }
+    $imgClear.addEventListener('click', () => {
+      intakeImage = null;
+      $imgThumb.src = '';
+      $imgDrop.style.display = '';
+      $imgPreview.style.display = 'none';
+    });
+
+    // Voice — Web Speech API
+    let recognition = null;
+    let isRecording = false;
+    if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
+      const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+      recognition = new SR();
+      recognition.continuous = true;
+      recognition.interimResults = true;
+      recognition.lang = 'en-GB';
+      let finalText = '';
+      recognition.onresult = ev => {
+        let interim = '';
+        for (let i = ev.resultIndex; i < ev.results.length; i++) {
+          if (ev.results[i].isFinal) finalText += ev.results[i][0].transcript + ' ';
+          else interim += ev.results[i][0].transcript;
+        }
+        $voiceTx.textContent = (finalText + interim).trim() || 'Listening…';
+      };
+      recognition.onend = () => {
+        isRecording = false;
+        $micBtn.classList.remove('recording');
+        $micBtn.textContent = '🎙️';
+        if (finalText.trim()) $infoText.value = finalText.trim();
+      };
+      $micBtn.addEventListener('click', () => {
+        if (isRecording) {
+          recognition.stop();
+        } else {
+          finalText = '';
+          $voiceTx.textContent = 'Listening…';
+          recognition.start();
+          isRecording = true;
+          $micBtn.classList.add('recording');
+          $micBtn.textContent = '⏹️';
+        }
+      });
+    } else {
+      $micBtn.title = 'Voice not supported in this browser — try Chrome';
+      $micBtn.style.opacity = '0.4';
+    }
+
+    // Fill & Download
+    $fillBtn.addEventListener('click', async () => {
+      if (!pdfBase64) { $fillStatus.textContent = 'Load a PDF first.'; $fillStatus.className = 'fill-status err'; return; }
+      if (!allFields.length) { $fillStatus.textContent = 'No fields found in this PDF.'; $fillStatus.className = 'fill-status err'; return; }
+
+      // Prefer voice transcript if it's the active mode and has text
+      const activeMode = document.querySelector('.mode-btn.active')?.id?.replace('mode-','');
+      const infoText = (activeMode === 'voice' ? $voiceTx.textContent : $infoText.value).trim();
+      const imageDataUrl = (activeMode === 'image' && intakeImage) ? intakeImage.dataUrl : null;
+
+      if (!infoText && !imageDataUrl) {
+        $fillStatus.textContent = 'Give Q some information first.';
+        $fillStatus.className = 'fill-status err';
+        return;
+      }
+
+      $fillBtn.disabled = true;
+      $fillStatus.textContent = 'Q is reading your info…';
+      $fillStatus.className = 'fill-status';
+
+      try {
+        const fieldList = allFields.map(f => ({
+          name: f.name,
+          type: (TYPE_META[f.fieldType] || TYPE_META['Tx']).label,
+        }));
+
+        const body = { pdfBase64, fields: fieldList, infoText };
+        if (imageDataUrl) body.imageDataUrl = imageDataUrl;
+
+        const r = await fetch('/forms/fill', {
+          method: 'POST', credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        });
+
+        if (!r.ok) {
+          const err = await r.json().catch(() => ({}));
+          throw new Error(err.error || 'HTTP ' + r.status);
+        }
+
+        const filled = r.headers.get('X-Fields-Filled') || '?';
+        const blob = await r.blob();
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url; a.download = 'filled-form.pdf';
+        document.body.appendChild(a); a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+
+        $fillStatus.textContent = '✓ Downloaded — ' + filled + ' fields filled';
+        $fillStatus.className = 'fill-status ok';
+      } catch (e) {
+        $fillStatus.textContent = 'Fill failed: ' + e.message;
+        $fillStatus.className = 'fill-status err';
+      } finally {
+        $fillBtn.disabled = false;
+      }
+    });
 
     // ── Q coach card ───────────────────────────────────────────────────────────
     const $card     = document.getElementById('coach-card');
