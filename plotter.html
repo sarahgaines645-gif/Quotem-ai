@@ -540,30 +540,71 @@
         await renderPage(currentPage);
         renderFieldGrid();
 
-        // Background: ask Q to read the WHOLE document and label every field
-        // based on full context — no patterns, no shortcuts.
+        // Background: render each page as an image with numbered tags on every
+        // field, send to the vision model so he can SEE the form (V4 Pro can't
+        // — it's text-only). Vision returns labels keyed by tag number;
+        // we map those back to field names.
         if (allFields.length) {
-          fetch('/forms/label', {
-            method: 'POST', credentials: 'include',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              documentText: window.__docText || '',
-              fields: allFields.map(f => ({
-                name: f.name,
-                type: (TYPE_META[f.fieldType] || TYPE_META['Tx']).label,
-                page: f.page,
-              })),
-            }),
-          })
-          .then(r => r.json())
-          .then(data => {
-            if (data.labels) {
-              Object.assign(fieldLabels, data.labels);
-              renderPage(currentPage);
-              renderFieldGrid();
+          (async () => {
+            try {
+              const pageImages = [];
+              for (let p = 1; p <= totalPages; p++) {
+                const page = await pdfDoc.getPage(p);
+                const vp = page.getViewport({ scale: 1.5 });
+                const c = document.createElement('canvas');
+                c.width = vp.width; c.height = vp.height;
+                const ctx = c.getContext('2d');
+                await page.render({ canvasContext: ctx, viewport: vp }).promise;
+
+                // Tag every field on this page
+                const pageFields = allFields.filter(f => f.page === p);
+                ctx.font = 'bold 14px sans-serif';
+                ctx.textBaseline = 'top';
+                for (const f of pageFields) {
+                  const tagNum = allFields.indexOf(f) + 1;
+                  const [vx1, vy1] = vp.convertToViewportPoint(f.rect[0], f.rect[3]);
+                  const [vx2, vy2] = vp.convertToViewportPoint(f.rect[2], f.rect[1]);
+                  // Outline the field box
+                  ctx.strokeStyle = 'rgba(233,30,99,0.85)';
+                  ctx.lineWidth = 2;
+                  ctx.strokeRect(vx1, vy1, vx2 - vx1, vy2 - vy1);
+                  // Numbered tag at top-left of the field
+                  const tagW = 8 + String(tagNum).length * 9;
+                  ctx.fillStyle = 'rgba(233,30,99,0.95)';
+                  ctx.fillRect(vx1, Math.max(0, vy1 - 18), tagW, 18);
+                  ctx.fillStyle = 'white';
+                  ctx.fillText(String(tagNum), vx1 + 4, Math.max(2, vy1 - 16));
+                }
+                pageImages.push(c.toDataURL('image/jpeg', 0.85));
+                page.cleanup();
+              }
+
+              const r = await fetch('/forms/label', {
+                method: 'POST', credentials: 'include',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  pageImages,
+                  totalTags: allFields.length,
+                }),
+              });
+              const data = await r.json();
+              if (data.labels) {
+                // Map tag numbers (1-indexed) back to field names
+                for (const [tagStr, label] of Object.entries(data.labels)) {
+                  const idx = parseInt(tagStr, 10) - 1;
+                  if (idx >= 0 && idx < allFields.length) {
+                    fieldLabels[allFields[idx].name] = label;
+                  }
+                }
+                renderPage(currentPage);
+                renderFieldGrid();
+              } else if (data.error) {
+                console.warn('[forms] label error:', data.error);
+              }
+            } catch (err) {
+              console.warn('[forms] vision label failed:', err.message);
             }
-          })
-          .catch(err => console.warn('[forms] label generation failed:', err.message));
+          })();
         }
       } catch (e) {
         $err.textContent = 'Could not read PDF: ' + e.message;

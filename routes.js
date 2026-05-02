@@ -296,16 +296,17 @@ router.post('/plotter/analyze', requirePerson, express.json({ limit: '24mb' }), 
 const qFormFiller = require('./plugins/q-form-filler');
 
 // POST /forms/label
-// Body: { fields: [{name, type, page}], documentText }
-// Returns: { labels: { fieldName: humanLabel } }
-// Q reads the whole documentText (with [FIELD: name] markers in reading order)
-// and labels each field based on full document comprehension — no patterns.
-router.post('/forms/label', requirePerson, express.json({ limit: '8mb' }), async (req, res) => {
+// Body: { pageImages: [dataUrl, ...], totalTags: number }
+// Returns: { labels: { tagNumberAsString: humanLabel } }
+// Vision model looks at the rendered form pages with numbered tags drawn on
+// each field, labels every tag based on what it sees on the page.
+router.post('/forms/label', requirePerson, express.json({ limit: '32mb' }), async (req, res) => {
     try {
-        const { fields, documentText } = req.body || {};
-        if (!fields || !fields.length) return res.status(400).json({ error: 'fields required' });
-        if (!documentText) return res.status(400).json({ error: 'documentText required' });
-        const labels = await qFormFiller.labelFields(fields, documentText);
+        const { pageImages, totalTags } = req.body || {};
+        if (!Array.isArray(pageImages) || !pageImages.length) {
+            return res.status(400).json({ error: 'pageImages required' });
+        }
+        const labels = await qFormFiller.labelFields(pageImages, totalTags || 0);
         res.json({ ok: true, labels });
     } catch (e) {
         console.error('[forms/label]', e.message);

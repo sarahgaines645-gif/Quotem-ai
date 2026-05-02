@@ -238,22 +238,26 @@ async function intakeAndFill({ pdfBytes, fields, infoText, imageDataUrl }) {
 }
 
 /**
- * Generate clean human labels for every field by reading the WHOLE document.
+ * Generate clean human labels for every field by SEEING the form.
  *
- * Q is given the full form text in reading order, with [FIELD: name] markers
- * showing exactly where each blank sits in context. He reads it like a lawyer
- * would read a contract, then labels each field based on what the surrounding
- * paragraphs and clauses are actually asking for. No pattern-matching, no
- * shortcuts, no shortcuts on adjacent words — full document comprehension.
+ * Each page is rendered as an image with numbered pink tags drawn on every
+ * field. The vision model looks at the actual rendered form — layout,
+ * headings, the blank, what's around the blank — and labels each numbered
+ * tag based on what it sees. No text-extraction layer in between.
  *
- * @param {Array<{name, type, page}>} fields
- * @param {string} documentText — full PDF text with [FIELD: name] markers in place
- * @returns {Promise<Object>} — { fieldName: humanLabel }
+ * @param {Array<string>} pageImages — data URLs (JPEG) for each page with tags drawn on
+ * @param {number} totalTags — number of fields tagged (so Q knows how many labels to return)
+ * @returns {Promise<Object>} — { tagNumberAsString: humanLabel }
  */
-async function labelFields(fields, documentText) {
-    const system = `Read the form below. Each blank is marked with [FIELD: name]. For every field, give a short label (2–6 words) describing what should go in that blank. Return a JSON object: { "exact field name": "label", ... }`;
+async function labelFields(pageImages, totalTags) {
+    const userText = `Each fillable field on these form pages is marked with a numbered pink tag (1, 2, 3 …). For every numbered tag, work out what the user should write in that blank, based on what the form is asking for around it.
 
-    const userMessage = documentText;
+Return a JSON object whose keys are the tag numbers (as strings: "1", "2", …) and values are short labels (2–6 words). There are ${totalTags} tags total — return a label for every one.`;
+
+    const content = [
+        { type: 'text', text: userText },
+        ...pageImages.map(url => ({ type: 'image_url', image_url: { url } })),
+    ];
 
     const response = await fetch(`${Q_CONFIG.baseURL}/chat/completions`, {
         method: 'POST',
@@ -262,16 +266,12 @@ async function labelFields(fields, documentText) {
             'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-            // Q's proper brain — labelling is one-time per PDF and demands real
-            // reading comprehension across the whole document.
-            model: Q_CONFIG.model,
+            // Vision model — Qwen3.6-Plus on Together. Streaming-only.
+            model: Q_CONFIG.visionModel,
+            stream: true,
             max_tokens: 6000,
             temperature: 0.0,
-            response_format: { type: 'json_object' },
-            messages: [
-                { role: 'system', content: system },
-                { role: 'user', content: userMessage },
-            ],
+            messages: [{ role: 'user', content }],
         }),
     });
 
@@ -279,12 +279,14 @@ async function labelFields(fields, documentText) {
         const err = await response.text();
         throw new Error(`Label upstream ${response.status}: ${err.slice(0, 200)}`);
     }
-    const data = await response.json();
-    const raw = data.choices?.[0]?.message?.content || '';
+    const raw = await readStreamText(response);
     const cleaned = raw.replace(/```json\s*/gi, '').replace(/```\s*/g, '').trim();
     const start = cleaned.indexOf('{');
     const end = cleaned.lastIndexOf('}');
-    if (start === -1 || end === -1) throw new Error('Q returned no labels');
+    if (start === -1 || end === -1) {
+        console.error('[q-form-filler] Vision label returned non-JSON:', raw.slice(0, 500));
+        throw new Error('Vision label returned no JSON');
+    }
     return JSON.parse(cleaned.slice(start, end + 1));
 }
 
