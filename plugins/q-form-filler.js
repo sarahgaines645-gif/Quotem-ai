@@ -72,11 +72,17 @@ async function readStreamText(response) {
  */
 async function extractFieldValues(fields, infoText, imageDataUrl = null) {
     const fieldList = fields.map(f => {
-        const ctx = f.context ? `\n   context: ${f.context}` : '';
+        const lbl = f.label ? `\n   LABEL: ${f.label}` : '';
+        const ctx = f.context ? `\n   CONTEXT: ${f.context}` : '';
         const pg  = f.page ? ` [page ${f.page}]` : '';
-        return `- "${f.name}" (${f.type})${pg}${ctx}`;
+        return `- name: "${f.name}" (${f.type})${pg}${lbl}${ctx}`;
     }).join('\n');
-    const userContent = `FORM FIELDS:\n${fieldList}\n\nINFORMATION PROVIDED:\n${infoText || '(none)'}`;
+    const userContent = `FORM FIELDS — match user info to fields by their LABEL first (a clear human description of what each blank wants). The CONTEXT shows where the blank sits in the form's actual sentence — use it to disambiguate when the label isn't enough. The "name" is just the raw PDF identifier and is often misleading; do not match against it.
+
+${fieldList}
+
+INFORMATION PROVIDED BY THE USER:
+${infoText || '(none)'}`;
 
     const isVision = !!imageDataUrl;
     // Text path: use the fast model — extraction is structural, doesn't need
