@@ -13,7 +13,7 @@
  *   4. Return filled PDF bytes as Buffer
  */
 
-const { PDFDocument } = require('pdf-lib');
+const { PDFDocument, StandardFonts } = require('pdf-lib');
 const { Q_CONFIG } = require('../config');
 
 const EXTRACT_SYSTEM = `You are a form-filling assistant. Your output is ALWAYS a single JSON object — never prose, never markdown, never an explanation.
@@ -158,7 +158,6 @@ async function extractFieldValues(fields, infoText, imageDataUrl = null) {
 async function fillPdf(pdfBytes, values) {
     const pdfDoc = await PDFDocument.load(pdfBytes, { ignoreEncryption: true });
     const form = pdfDoc.getForm();
-    const fields = form.getFields();
     const results = { filled: [], skipped: [], notFound: [] };
 
     for (const [name, value] of Object.entries(values)) {
@@ -184,6 +183,17 @@ async function fillPdf(pdfBytes, values) {
         } catch {
             results.notFound.push(name);
         }
+    }
+
+    // CRITICAL: regenerate appearance streams so the values are visible in
+    // every PDF viewer (Preview, browsers, Acrobat). Without this, values
+    // are stored in the field dict but the page shows them as empty until
+    // the user clicks each box.
+    try {
+        const helvetica = await pdfDoc.embedFont(StandardFonts.Helvetica);
+        form.updateFieldAppearances(helvetica);
+    } catch (e) {
+        console.warn('[q-form-filler] updateFieldAppearances failed:', e.message);
     }
 
     const filledBytes = await pdfDoc.save();
