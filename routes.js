@@ -300,15 +300,23 @@ const qFormFiller = require('./plugins/q-form-filler');
 // Returns: filled PDF as application/pdf download
 router.post('/forms/fill', requirePerson, express.json({ limit: '24mb' }), async (req, res) => {
     try {
-        const { pdfBase64, fields, infoText, imageDataUrl } = req.body || {};
+        const { pdfBase64, fields, infoText, imageDataUrl, values: directValues } = req.body || {};
         if (!pdfBase64) return res.status(400).json({ error: 'pdfBase64 required' });
-        if (!fields || !fields.length) return res.status(400).json({ error: 'fields required' });
-        if (!infoText && !imageDataUrl) return res.status(400).json({ error: 'infoText or imageDataUrl required' });
 
         const pdfBytes = Buffer.from(pdfBase64, 'base64');
-        const { filledBytes, values, results } = await qFormFiller.intakeAndFill({
-            pdfBytes, fields, infoText: infoText || '', imageDataUrl: imageDataUrl || null,
-        });
+        let filledBytes, results;
+
+        if (directValues && typeof directValues === 'object' && Object.keys(directValues).length) {
+            // Field-by-field mode: values already extracted by the UI, skip Q
+            ({ filledBytes, results } = await qFormFiller.fillPdf(pdfBytes, directValues));
+        } else {
+            // Paste/voice mode: Q extracts values from infoText or image
+            if (!fields || !fields.length) return res.status(400).json({ error: 'fields required' });
+            if (!infoText && !imageDataUrl) return res.status(400).json({ error: 'infoText or imageDataUrl required' });
+            ({ filledBytes, results } = await qFormFiller.intakeAndFill({
+                pdfBytes, fields, infoText: infoText || '', imageDataUrl: imageDataUrl || null,
+            }));
+        }
 
         console.log(`[forms/fill] filled ${results.filled.length}, skipped ${results.skipped.length}, not found ${results.notFound.length}`);
         res.set({

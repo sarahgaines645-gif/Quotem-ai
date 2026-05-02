@@ -141,55 +141,71 @@
       background: var(--bg); box-shadow: var(--neu-raised-sm);
       border-radius: 18px; padding: 22px 20px; margin-bottom: 24px;
     }
-    .intake-head { margin-bottom: 14px; }
-    .intake-title { font-size: 16px; font-weight: 600; display: block; margin-bottom: 3px; }
-    .intake-hint { font-size: 12px; color: var(--text-muted); }
-    .intake-modes { display: flex; gap: 8px; margin-bottom: 14px; flex-wrap: wrap; }
-    .mode-btn {
+    .intake-head { margin-bottom: 16px; display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+    .intake-title { font-size: 16px; font-weight: 600; }
+    .intake-tabs { display: flex; gap: 6px; margin-left: auto; }
+    .intake-tab {
       border: none; cursor: pointer; background: var(--bg); color: var(--text-muted);
-      box-shadow: var(--neu-raised-sm); border-radius: 10px;
-      padding: 7px 14px; font-size: 12px; font-weight: 600; font-family: inherit;
+      box-shadow: var(--neu-raised-sm); border-radius: 8px;
+      padding: 5px 12px; font-size: 12px; font-weight: 600; font-family: inherit;
     }
-    .mode-btn.active { box-shadow: var(--neu-inset-sm); color: var(--text); }
-    .intake-panel textarea {
+    .intake-tab.active { box-shadow: var(--neu-inset-sm); color: var(--text); }
+
+    /* Per-field form */
+    .field-form { display: flex; flex-direction: column; gap: 12px; }
+    .field-row { display: grid; grid-template-columns: 180px 1fr; gap: 10px; align-items: center; }
+    .field-row label {
+      font-size: 12px; font-weight: 600; color: var(--text-muted);
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .field-row .field-type-badge {
+      font-size: 9px; text-transform: uppercase; letter-spacing: 0.05em;
+      color: var(--text-faint); display: block; font-weight: 400; margin-top: 1px;
+    }
+    .field-row input[type=text], .field-row textarea {
+      border: none; outline: none; resize: none;
+      background: var(--bg); box-shadow: var(--neu-inset-sm);
+      border-radius: 8px; padding: 9px 12px;
+      font-family: 'Space Grotesk', sans-serif; font-size: 13px; color: var(--text);
+      width: 100%;
+    }
+    .field-row input[type=text]:focus, .field-row textarea:focus { box-shadow: var(--neu-inset-sm), 0 0 0 2px rgba(233,30,99,0.15); }
+    .field-row input[type=checkbox] { width: 18px; height: 18px; cursor: pointer; }
+    .field-row.sig-row .sig-note {
+      font-size: 12px; color: var(--text-faint); font-style: italic; padding: 8px 0;
+    }
+    .page-divider {
+      font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em;
+      color: var(--text-faint); padding: 4px 0 0; border-top: 1px solid rgba(0,0,0,0.07);
+      margin-top: 4px;
+    }
+
+    /* Paste-all panel */
+    .paste-panel { display: none; }
+    .paste-panel.show { display: block; }
+    .paste-panel textarea {
       width: 100%; border: none; outline: none; resize: vertical;
       background: var(--bg); box-shadow: var(--neu-inset-sm);
       border-radius: 10px; padding: 12px 14px;
       font-family: 'Space Grotesk', sans-serif; font-size: 13px;
-      color: var(--text); line-height: 1.55;
+      color: var(--text); line-height: 1.55; min-height: 100px;
     }
-    .intake-panel textarea::placeholder { color: var(--text-faint); }
-    .img-drop {
-      border: 2px dashed #b0b0b0; border-radius: 12px;
-      padding: 32px 20px; text-align: center; cursor: pointer;
-      color: var(--text-muted); font-size: 13px;
-      box-shadow: var(--neu-inset-sm);
-      transition: border-color 0.15s, color 0.15s;
-    }
-    .img-drop:hover, .img-drop.dragover { border-color: var(--accent); color: var(--accent); }
-    .img-drop-hint { font-size: 11px; color: var(--text-faint); margin-top: 4px; }
-    .img-preview { display: flex; align-items: flex-start; gap: 10px; }
-    .img-preview img { max-width: 200px; max-height: 140px; border-radius: 8px;
-                       box-shadow: var(--neu-raised-sm); }
-    .img-clear { border: none; cursor: pointer; background: transparent;
-                 color: var(--text-muted); font-size: 13px; padding: 4px; }
-    .img-clear:hover { color: var(--accent); }
-    .voice-area { text-align: center; padding: 16px 0; }
+    .paste-panel textarea::placeholder { color: var(--text-faint); }
+    .paste-voice { display: flex; align-items: center; gap: 10px; margin-top: 10px; }
     .mic-btn {
       border: none; cursor: pointer; background: var(--bg); color: var(--text);
       box-shadow: var(--neu-raised-sm); border-radius: 50%;
-      width: 64px; height: 64px; font-size: 26px; margin-bottom: 12px;
+      width: 44px; height: 44px; font-size: 20px; flex-shrink: 0;
       display: inline-flex; align-items: center; justify-content: center;
-      transition: box-shadow 0.15s;
     }
     .mic-btn.recording { box-shadow: var(--neu-inset-sm); color: var(--accent); }
     .voice-transcript {
-      font-size: 13px; color: var(--text-muted); min-height: 40px;
-      padding: 10px 14px; background: var(--bg);
-      box-shadow: var(--neu-inset-sm); border-radius: 10px;
-      line-height: 1.5;
+      font-size: 12px; color: var(--text-muted); flex: 1;
+      padding: 8px 12px; background: var(--bg);
+      box-shadow: var(--neu-inset-sm); border-radius: 8px; min-height: 36px;
     }
-    .intake-actions { display: flex; align-items: center; gap: 14px; margin-top: 14px; }
+
+    .intake-actions { display: flex; align-items: center; gap: 14px; margin-top: 18px; }
     .fill-status { font-size: 12px; color: var(--text-muted); }
     .fill-status.ok { color: #10b981; }
     .fill-status.err { color: var(--accent); }
@@ -281,38 +297,22 @@
     <!-- Intake panel — appears after PDF loads -->
     <div class="intake" id="intake" style="display:none">
       <div class="intake-head">
-        <span class="intake-title">Fill this form</span>
-        <span class="intake-hint">Paste info, drop a screenshot, or speak — Q finds the right fields</span>
-      </div>
-      <div class="intake-modes">
-        <button class="mode-btn active" id="mode-text" type="button">✏️ Text</button>
-        <button class="mode-btn" id="mode-image" type="button">🖼️ Screenshot</button>
-        <button class="mode-btn" id="mode-voice" type="button">🎙️ Voice</button>
-      </div>
-
-      <!-- Text mode -->
-      <div class="intake-panel" id="panel-text">
-        <textarea id="info-text" placeholder="Paste anything — name, address, dates, tenancy details. Q will work out what goes where." rows="5"></textarea>
-      </div>
-
-      <!-- Image mode -->
-      <div class="intake-panel" id="panel-image" style="display:none">
-        <div class="img-drop" id="img-drop">
-          <div>Drop a screenshot here, or click to choose</div>
-          <div class="img-drop-hint">Q reads it and extracts the info</div>
-        </div>
-        <input type="file" id="img-file" style="display:none">
-        <div class="img-preview" id="img-preview" style="display:none">
-          <img id="img-thumb" alt="screenshot">
-          <button class="img-clear" id="img-clear" type="button">× Remove</button>
+        <span class="intake-title">Fill in your details</span>
+        <div class="intake-tabs">
+          <button class="intake-tab active" id="tab-fields" type="button">Field by field</button>
+          <button class="intake-tab" id="tab-paste" type="button">Paste / speak</button>
         </div>
       </div>
 
-      <!-- Voice mode -->
-      <div class="intake-panel" id="panel-voice" style="display:none">
-        <div class="voice-area">
-          <button class="mic-btn" id="mic-btn" type="button">🎙️ Hold to speak</button>
-          <div class="voice-transcript" id="voice-transcript">Press and speak — your words appear here, then Q fills the form.</div>
+      <!-- Per-field form — built dynamically from allFields -->
+      <div class="field-form" id="field-form"></div>
+
+      <!-- Paste-all panel -->
+      <div class="paste-panel" id="paste-panel">
+        <textarea id="info-text" placeholder="Paste anything — names, addresses, dates, tenancy details. Q will work out what goes where."></textarea>
+        <div class="paste-voice">
+          <button class="mic-btn" id="mic-btn" type="button">🎙️</button>
+          <div class="voice-transcript" id="voice-transcript">Tap the mic and speak — your words land here, then Q fills the form.</div>
         </div>
       </div>
 
@@ -428,6 +428,7 @@
         updateNav();
         await renderPage(currentPage);
         renderFieldGrid();
+        buildFieldForm();
       } catch (e) {
         $err.textContent = 'Could not read PDF: ' + e.message;
       }
@@ -613,6 +614,7 @@
       $svg.innerHTML = '';
       $err.textContent = '';
       $intake.style.display = 'none';
+      $fieldForm.innerHTML = '';
       $infoText.value = '';
       $fillStatus.textContent = '';
       const ctx = $canvas.getContext('2d');
@@ -626,62 +628,95 @@
     }
 
     // ── Intake panel ──────────────────────────────────────────────────────────
-    let pdfBase64 = null;   // saved when PDF loaded so we can send to /forms/fill
-    let intakeImage = null; // { dataUrl }
+    let pdfBase64 = null;
 
-    const $intake       = document.getElementById('intake');
-    const $infoText     = document.getElementById('info-text');
-    const $fillBtn      = document.getElementById('fill-btn');
-    const $fillStatus   = document.getElementById('fill-status');
-    const $imgDrop      = document.getElementById('img-drop');
-    const $imgFile      = document.getElementById('img-file');
-    const $imgPreview   = document.getElementById('img-preview');
-    const $imgThumb     = document.getElementById('img-thumb');
-    const $imgClear     = document.getElementById('img-clear');
-    const $micBtn       = document.getElementById('mic-btn');
-    const $voiceTx      = document.getElementById('voice-transcript');
+    const $intake     = document.getElementById('intake');
+    const $fieldForm  = document.getElementById('field-form');
+    const $infoText   = document.getElementById('info-text');
+    const $fillBtn    = document.getElementById('fill-btn');
+    const $fillStatus = document.getElementById('fill-status');
+    const $micBtn     = document.getElementById('mic-btn');
+    const $voiceTx    = document.getElementById('voice-transcript');
 
-    // Mode tabs
-    ['text','image','voice'].forEach(m => {
-      document.getElementById('mode-' + m).addEventListener('click', () => {
-        ['text','image','voice'].forEach(n => {
-          document.getElementById('mode-' + n).classList.toggle('active', n === m);
-          document.getElementById('panel-' + n).style.display = n === m ? '' : 'none';
-        });
-      });
+    // Tabs: field-by-field vs paste-all
+    document.getElementById('tab-fields').addEventListener('click', () => {
+      document.getElementById('tab-fields').classList.add('active');
+      document.getElementById('tab-paste').classList.remove('active');
+      $fieldForm.style.display = '';
+      document.getElementById('paste-panel').classList.remove('show');
+    });
+    document.getElementById('tab-paste').addEventListener('click', () => {
+      document.getElementById('tab-paste').classList.add('active');
+      document.getElementById('tab-fields').classList.remove('active');
+      $fieldForm.style.display = 'none';
+      document.getElementById('paste-panel').classList.add('show');
     });
 
-    // Screenshot drop
-    $imgDrop.addEventListener('click', () => $imgFile.click());
-    $imgFile.addEventListener('change', () => {
-      const f = $imgFile.files && $imgFile.files[0];
-      if (f) loadIntakeImage(f);
-      $imgFile.value = '';
-    });
-    ['dragenter','dragover'].forEach(ev =>
-      $imgDrop.addEventListener(ev, e => { e.preventDefault(); $imgDrop.classList.add('dragover'); }));
-    ['dragleave','drop'].forEach(ev =>
-      $imgDrop.addEventListener(ev, e => { e.preventDefault(); $imgDrop.classList.remove('dragover'); }));
-    $imgDrop.addEventListener('drop', e => {
-      const f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
-      if (f) loadIntakeImage(f);
-    });
-    function loadIntakeImage(file) {
-      const reader = new FileReader();
-      reader.onload = () => {
-        intakeImage = { dataUrl: reader.result };
-        $imgThumb.src = reader.result;
-        $imgDrop.style.display = 'none';
-        $imgPreview.style.display = '';
-      };
-      reader.readAsDataURL(file);
+    // Clean a raw PDF field name into a readable label
+    function cleanLabel(name) {
+      return name
+        .replace(/\.\.\.$/, '')         // trailing ellipsis
+        .replace(/([a-z])([A-Z])/g, '$1 $2') // camelCase
+        .replace(/_/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
     }
-    $imgClear.addEventListener('click', () => {
-      intakeImage = null;
-      $imgThumb.src = '';
-      $imgDrop.style.display = '';
-      $imgPreview.style.display = 'none';
-    });
+
+    // Build the per-field form from allFields
+    function buildFieldForm() {
+      $fieldForm.innerHTML = '';
+      if (!allFields.length) return;
+      let currentPage = 0;
+      allFields.forEach((f, i) => {
+        if (f.page !== currentPage) {
+          currentPage = f.page;
+          if (i > 0) {
+            const div = document.createElement('div');
+            div.className = 'page-divider';
+            div.textContent = 'Page ' + currentPage;
+            $fieldForm.appendChild(div);
+          }
+        }
+        const meta = TYPE_META[f.fieldType] || TYPE_META['Tx'];
+        const row = document.createElement('div');
+        row.className = 'field-row' + (f.fieldType === 'Sig' ? ' sig-row' : '');
+
+        const lbl = document.createElement('label');
+        lbl.htmlFor = 'ff-' + i;
+        lbl.innerHTML = escapeHtml(cleanLabel(f.name)) +
+          '<span class="field-type-badge">' + escapeHtml(meta.label) + '</span>';
+
+        let ctrl;
+        if (f.fieldType === 'Sig') {
+          ctrl = document.createElement('div');
+          ctrl.className = 'sig-note';
+          ctrl.textContent = 'Signature — sign by hand after printing';
+        } else if (f.fieldType === 'Btn') {
+          ctrl = document.createElement('input');
+          ctrl.type = 'checkbox';
+          ctrl.id = 'ff-' + i;
+          ctrl.dataset.fieldName = f.name;
+        } else {
+          // Multi-line if name suggests address/details (heuristic)
+          const isMulti = /address|detail|description|notes|info|about/i.test(f.name) ||
+                          (f.rect[3] - f.rect[1]) > 40;
+          if (isMulti) {
+            ctrl = document.createElement('textarea');
+            ctrl.rows = 3;
+          } else {
+            ctrl = document.createElement('input');
+            ctrl.type = 'text';
+          }
+          ctrl.id = 'ff-' + i;
+          ctrl.dataset.fieldName = f.name;
+          ctrl.placeholder = cleanLabel(f.name);
+        }
+
+        row.appendChild(lbl);
+        row.appendChild(ctrl);
+        $fieldForm.appendChild(row);
+      });
+    }
 
     // Voice — Web Speech API
     let recognition = null;
@@ -705,12 +740,11 @@
         isRecording = false;
         $micBtn.classList.remove('recording');
         $micBtn.textContent = '🎙️';
-        if (finalText.trim()) $infoText.value = finalText.trim();
+        if (finalText.trim()) $infoText.value = (($infoText.value || '') + ' ' + finalText).trim();
       };
       $micBtn.addEventListener('click', () => {
-        if (isRecording) {
-          recognition.stop();
-        } else {
+        if (isRecording) { recognition.stop(); }
+        else {
           finalText = '';
           $voiceTx.textContent = 'Listening…';
           recognition.start();
@@ -724,45 +758,51 @@
       $micBtn.style.opacity = '0.4';
     }
 
+    // Collect values from the per-field form
+    function collectFieldValues() {
+      const values = {};
+      $fieldForm.querySelectorAll('[data-field-name]').forEach(el => {
+        const name = el.dataset.fieldName;
+        if (el.type === 'checkbox') values[name] = el.checked;
+        else if ((el.value || '').trim()) values[name] = el.value.trim();
+      });
+      return values;
+    }
+
     // Fill & Download
     $fillBtn.addEventListener('click', async () => {
       if (!pdfBase64) { $fillStatus.textContent = 'Load a PDF first.'; $fillStatus.className = 'fill-status err'; return; }
-      if (!allFields.length) { $fillStatus.textContent = 'No fields found in this PDF.'; $fillStatus.className = 'fill-status err'; return; }
+      if (!allFields.length) { $fillStatus.textContent = 'No fields found.'; $fillStatus.className = 'fill-status err'; return; }
 
-      // Prefer voice transcript if it's the active mode and has text
-      const activeMode = document.querySelector('.mode-btn.active')?.id?.replace('mode-','');
-      const infoText = (activeMode === 'voice' ? $voiceTx.textContent : $infoText.value).trim();
-      const imageDataUrl = (activeMode === 'image' && intakeImage) ? intakeImage.dataUrl : null;
-
-      if (!infoText && !imageDataUrl) {
-        $fillStatus.textContent = 'Give Q some information first.';
-        $fillStatus.className = 'fill-status err';
-        return;
-      }
-
+      const isPasteMode = document.getElementById('tab-paste').classList.contains('active');
       $fillBtn.disabled = true;
-      $fillStatus.textContent = 'Q is reading your info…';
-      $fillStatus.className = 'fill-status';
 
       try {
-        const fieldList = allFields.map(f => ({
-          name: f.name,
-          type: (TYPE_META[f.fieldType] || TYPE_META['Tx']).label,
-        }));
-
-        const body = { pdfBase64, fields: fieldList, infoText };
-        if (imageDataUrl) body.imageDataUrl = imageDataUrl;
+        let body;
+        if (isPasteMode) {
+          const infoText = $infoText.value.trim();
+          if (!infoText) { throw new Error('Add some information first.'); }
+          $fillStatus.textContent = 'Q is reading your info…';
+          $fillStatus.className = 'fill-status';
+          body = {
+            pdfBase64,
+            fields: allFields.map(f => ({ name: f.name, type: (TYPE_META[f.fieldType] || TYPE_META['Tx']).label })),
+            infoText,
+          };
+        } else {
+          const values = collectFieldValues();
+          if (!Object.keys(values).length) { throw new Error('Fill in at least one field first.'); }
+          $fillStatus.textContent = 'Writing to PDF…';
+          $fillStatus.className = 'fill-status';
+          body = { pdfBase64, values };
+        }
 
         const r = await fetch('/forms/fill', {
           method: 'POST', credentials: 'include',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(body),
         });
-
-        if (!r.ok) {
-          const err = await r.json().catch(() => ({}));
-          throw new Error(err.error || 'HTTP ' + r.status);
-        }
+        if (!r.ok) { const e = await r.json().catch(() => ({})); throw new Error(e.error || 'HTTP ' + r.status); }
 
         const filled = r.headers.get('X-Fields-Filled') || '?';
         const blob = await r.blob();
@@ -773,10 +813,10 @@
         document.body.removeChild(a);
         URL.revokeObjectURL(url);
 
-        $fillStatus.textContent = '✓ Downloaded — ' + filled + ' fields filled';
+        $fillStatus.textContent = '✓ Downloaded — ' + filled + ' field' + (filled === '1' ? '' : 's') + ' filled';
         $fillStatus.className = 'fill-status ok';
       } catch (e) {
-        $fillStatus.textContent = 'Fill failed: ' + e.message;
+        $fillStatus.textContent = e.message.startsWith('Fill') ? e.message : 'Fill failed: ' + e.message;
         $fillStatus.className = 'fill-status err';
       } finally {
         $fillBtn.disabled = false;
