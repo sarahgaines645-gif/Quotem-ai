@@ -4,7 +4,7 @@
   <script src="/q-auth.js?v=4"></script>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-  <title>Q — Plotter</title>
+  <title>Q — Forms</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -135,13 +135,48 @@
     .no-fields a:hover { text-decoration: underline; }
 
     .err { color: var(--accent); font-size: 13px; margin-bottom: 14px; }
+
+    /* Q coach card — same pattern as writer.html */
+    .coach-card {
+      position: fixed; right: 24px; top: 50%; transform: translateY(-50%);
+      width: 190px; min-height: 95px;
+      background: var(--bg);
+      border-radius: 18px;
+      box-shadow: var(--neu-raised);
+      padding: 14px 16px;
+      display: flex; flex-direction: column;
+      cursor: default; z-index: 200;
+    }
+    .coach-card .q-logo { font-weight: 700; font-size: 20px; line-height: 1; margin-bottom: 6px; }
+    .coach-card .q-logo .dot { color: var(--accent); }
+    .coach-card .q-msg {
+      font-size: 12px; color: var(--text-muted); line-height: 1.4;
+      max-height: 200px; overflow-y: auto; margin-bottom: 10px; flex: 1;
+      scrollbar-width: none; -ms-overflow-style: none;
+    }
+    .coach-card .q-msg::-webkit-scrollbar { display: none; }
+    .coach-card .q-msg.thinking { font-style: italic; color: var(--text-faint); }
+    .coach-card input.coach-input {
+      width: 100%; border: none; outline: none;
+      background: transparent;
+      border-bottom: 1px solid rgba(0,0,0,0.10);
+      padding: 4px 0 5px;
+      font-family: 'Space Grotesk', sans-serif;
+      font-size: 12px; color: var(--text);
+      transition: border-color 0.2s;
+    }
+    .coach-card input.coach-input:focus { border-bottom-color: var(--accent); }
+    .coach-card input.coach-input::placeholder { color: var(--text-faint); font-style: italic; }
+    @media (max-width: 600px) {
+      .coach-card { right: 10px; bottom: 10px; top: auto; transform: none; width: 170px; }
+    }
   </style>
 </head>
 <body>
   <div class="wrap">
     <header>
-      <h1>Q<span class="dot">.</span> Plotter</h1>
-      <p>Drop a PDF — Q finds every fillable field</p>
+      <h1>Q<span class="dot">.</span> Forms</h1>
+      <p>Drop a PDF — Q finds every fillable field and helps you fill it</p>
       <a href="/admin" class="back">← Back to admin</a>
     </header>
 
@@ -184,6 +219,12 @@
     </div>
 
     <div class="field-grid" id="field-grid"></div>
+  </div>
+
+  <div class="coach-card" id="coach-card">
+    <div class="q-logo">Q<span class="dot">.</span></div>
+    <div class="q-msg" id="coach-msg">Drop a PDF and I'll help you work through it.</div>
+    <input class="coach-input" id="coach-input" type="text" placeholder="Ask Q…" autocomplete="off">
   </div>
 
   <script>
@@ -466,6 +507,73 @@
         .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
         .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
     }
+
+    // ── Q coach card ───────────────────────────────────────────────────────────
+    const $card     = document.getElementById('coach-card');
+    const $coachMsg = document.getElementById('coach-msg');
+    const $coachIn  = document.getElementById('coach-input');
+
+    // Draggable
+    let drag = null;
+    function startDrag(ev) {
+      if (ev.target === $coachIn) return;
+      const pt = ev.touches ? ev.touches[0] : ev;
+      const r  = $card.getBoundingClientRect();
+      $card.style.right = 'auto'; $card.style.transform = 'none';
+      $card.style.left = r.left + 'px'; $card.style.top = r.top + 'px';
+      drag = { startX: pt.clientX, startY: pt.clientY, baseLeft: r.left, baseTop: r.top };
+      ev.preventDefault();
+    }
+    function moveDrag(ev) {
+      if (!drag) return;
+      const pt = ev.touches ? ev.touches[0] : ev;
+      const nl = Math.max(8, Math.min(window.innerWidth  - $card.offsetWidth  - 8, drag.baseLeft + pt.clientX - drag.startX));
+      const nt = Math.max(8, Math.min(window.innerHeight - $card.offsetHeight - 8, drag.baseTop  + pt.clientY - drag.startY));
+      $card.style.left = nl + 'px'; $card.style.top = nt + 'px';
+    }
+    function endDrag() {
+      if (!drag) return; drag = null;
+      try { localStorage.setItem('q-forms-pos', JSON.stringify({ left: $card.style.left, top: $card.style.top })); } catch (_) {}
+    }
+    $card.addEventListener('mousedown', startDrag);
+    $card.addEventListener('touchstart', startDrag, { passive: false });
+    window.addEventListener('mousemove', moveDrag);
+    window.addEventListener('touchmove', moveDrag, { passive: false });
+    window.addEventListener('mouseup', endDrag);
+    window.addEventListener('touchend', endDrag);
+    try {
+      const s = JSON.parse(localStorage.getItem('q-forms-pos') || 'null');
+      if (s && s.left && s.top) { $card.style.right = 'auto'; $card.style.transform = 'none'; $card.style.left = s.left; $card.style.top = s.top; }
+    } catch (_) {}
+
+    async function askQ(userText) {
+      const fieldSummary = allFields.length
+        ? 'Fields found (' + allFields.length + ' total): ' + allFields.slice(0, 20).map(f => f.name + ' (' + (TYPE_META[f.fieldType] || TYPE_META['Tx']).label + ')').join(', ') + (allFields.length > 20 ? '…' : '')
+        : 'No PDF loaded yet.';
+      const context = '[Q Forms — PDF form assistant]\n' + fieldSummary + '\nPage ' + currentPage + ' of ' + totalPages + '\n\n';
+      $coachMsg.classList.add('thinking');
+      $coachMsg.textContent = 'thinking…';
+      try {
+        const r = await fetch('/chat', {
+          method: 'POST', credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ message: context + userText, surface: 'forms' }),
+        });
+        const data = await r.json().catch(() => ({}));
+        $coachMsg.classList.remove('thinking');
+        $coachMsg.textContent = (data.reply || data.error || 'Q went quiet — try again.').toString();
+      } catch {
+        $coachMsg.classList.remove('thinking');
+        $coachMsg.textContent = 'Network blip — try again.';
+      }
+    }
+    $coachIn.addEventListener('keydown', ev => {
+      if (ev.key !== 'Enter') return;
+      const t = $coachIn.value.trim();
+      if (!t) return;
+      $coachIn.value = '';
+      askQ(t);
+    });
   </script>
 </body>
 </html>

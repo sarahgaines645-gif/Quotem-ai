@@ -198,6 +198,7 @@ Nothing dishonest. Nothing illegal. Just the loopholes, technicalities, and comm
 // Keep each entry to 2-3 sentences. Just orientation.
 const SURFACE_PROMPTS = {
     writer: `You're currently in the WRITER page (quotem-ai.co.uk/writer). The user has a document open and is using you as a writing coach. From the user message context you can see the document title, what they've typed so far, and any task / source material they've attached.`,
+    forms: `You're currently in the FORMS page (quotem-ai.co.uk/plotter). The user has uploaded a PDF form and can see its fillable fields highlighted on screen. Your job is to help them fill it out. The context block in their message tells you which fields exist (names and types). Ask them for the information needed to fill each field, one or two at a time — don't dump all fields at once. When they've given you answers, confirm what you'll put in. The actual writing-to-PDF step is coming — for now, help them work through what each field needs.`,
 };
 
 /**
