@@ -20,6 +20,11 @@ const Q_CONFIG = {
   // supports images and reads text inside them (screenshots, forms, docs).
   // Previous: Qwen2.5-VL-72B-Instruct (retired from Together, Apr 2026)
   visionModel: 'Qwen/Qwen3.6-Plus',
+  // Fast model for utility tasks where top-tier reasoning isn't needed —
+  // form-field extraction, simple JSON shaping, lightweight transforms.
+  // Llama 3.3 70B Turbo on Together AI: ~5-10x faster than V4 Pro and
+  // strong at structured-output JSON tasks. Q's main brain stays on V4 Pro.
+  fastModel: 'meta-llama/Llama-3.3-70B-Instruct-Turbo',
   temperature: 0.0,
   maxTokens: 4000,
   // Voice cloning — set after deploying q-lab/voice-cloning-space/ to a HF Space.

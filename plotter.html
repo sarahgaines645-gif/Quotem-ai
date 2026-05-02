@@ -553,6 +553,7 @@
 
       // Editable inputs sitting ON the page, one per field, scaled with the canvas
       $inputs.innerHTML = '';
+      const displayRatio = $canvas.clientWidth ? ($canvas.clientWidth / $canvas.width) : 1;
       for (const f of pageFields) {
         if (f.fieldType === 'Sig') continue;
         const [vx1, vy1] = viewport.convertToViewportPoint(f.rect[0], f.rect[3]);
@@ -566,6 +567,7 @@
 
         el.className = 'pdf-input' + (f.fieldType === 'Btn' ? ' checkbox' : '');
         el.dataset.fieldName = f.name;
+        el.dataset.canvasH = String(h);
         el.title = f.name;
 
         if (f.fieldType === 'Btn') {
@@ -587,8 +589,8 @@
         el.style.top    = tpct + '%';
         el.style.width  = wpct + '%';
         el.style.height = hpct + '%';
-        // Font size scales with the field height — looks right at any zoom
-        el.style.fontSize = Math.max(10, h * 0.55) + 'px';
+        // Font size matches the field height in DISPLAY pixels (not canvas pixels)
+        el.style.fontSize = Math.max(8, h * 0.55 * displayRatio) + 'px';
         $inputs.appendChild(el);
       }
 
@@ -742,6 +744,22 @@
     const $imgFile    = document.getElementById('img-file');
     const $imgsRow    = document.getElementById('intake-images');
     const $downloadBtn = document.getElementById('download-btn');
+
+    // Re-scale the font-size on input overlays when the window resizes
+    let resizeTimer;
+    window.addEventListener('resize', () => {
+      clearTimeout(resizeTimer);
+      resizeTimer = setTimeout(() => {
+        if (!$canvas.width) return;
+        const ratio = $canvas.clientWidth / $canvas.width;
+        $inputs.querySelectorAll('.pdf-input').forEach(el => {
+          const h = parseFloat(el.dataset.canvasH || '0');
+          if (h && el.classList.contains('pdf-input') && !el.classList.contains('checkbox')) {
+            el.style.fontSize = Math.max(8, h * 0.55 * ratio) + 'px';
+          }
+        });
+      }, 100);
+    });
 
     // Apply Q-extracted values into fieldValues, then re-render so they
     // show up in the inputs sitting on the PDF.

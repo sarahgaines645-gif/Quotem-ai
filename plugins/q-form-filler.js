@@ -71,7 +71,11 @@ async function extractFieldValues(fields, infoText, imageDataUrl = null) {
     const userContent = `FORM FIELDS:\n${fieldList}\n\nINFORMATION PROVIDED:\n${infoText || '(none)'}`;
 
     const isVision = !!imageDataUrl;
-    const model = isVision ? Q_CONFIG.visionModel : Q_CONFIG.model;
+    // Text path: use the fast model — extraction is structural, doesn't need
+    // V4 Pro's deep reasoning. Vision path keeps the multimodal model.
+    const model = isVision
+        ? Q_CONFIG.visionModel
+        : (Q_CONFIG.fastModel || Q_CONFIG.model);
 
     let messages;
     if (isVision) {
