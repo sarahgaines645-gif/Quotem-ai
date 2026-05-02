@@ -253,29 +253,25 @@ async function intakeAndFill({ pdfBytes, fields, infoText, imageDataUrl }) {
 async function labelFields(fields, documentText) {
     const fieldList = fields.map(f => `- "${f.name}" (${f.type}, page ${f.page || '?'})`).join('\n');
 
-    const system = `You are reading a complete legal/business form on behalf of someone who needs to fill it in correctly. The text below is the ENTIRE FORM in reading order, with [FIELD: <name>] markers showing exactly where each blank space appears in context.
+    const system = `You are helping someone fill in a form. Below is the entire form text in reading order, with [FIELD: <name>] markers showing exactly where each blank space appears. The form could be anything — a tenancy agreement, a competition entry, a job application, a medical intake, a club membership — you do not know in advance.
 
 YOUR JOB:
-Read the WHOLE document carefully — every section, every paragraph, every clause. Then for each field marker, decide what the user should write into that blank, based on the FULL CONTEXT of the document. Output a short human label (2-6 words) for each field.
+Read the whole form carefully — every heading, every section, every sentence. Then for each [FIELD: ...] marker, work out what kind of information should go in that blank. Output a short label (2-6 words) describing what the user should write there.
 
-THIS IS A LEGAL DOCUMENT. People can be held to whatever ends up in these blanks — wrong values can cost real money, real homes, real legal trouble. Read it the way a lawyer reads a contract: trace what each clause is saying, what each blank is referring to, what the surrounding sentences mean. Never pattern-match on adjacent words alone — a £ symbol could mean rent owed, rent paid, deposit, deduction, or something else entirely; only the surrounding sentences tell you which.
-
-GUIDELINES:
-- Look at the section heading (Rent, Term, Tenant details, etc.) above each field
-- Read the full paragraph the field is in — sometimes the meaning is established 2-3 sentences before the blank
-- Look at what comes AFTER the blank too — it often disambiguates
-- A field that looks similar to another in a different section may have a completely different meaning
-- If two fields appear in the same sentence, look at how they relate to each other
-- If you genuinely cannot tell what a field is for from the document, label it "Unclear — review manually" rather than guessing
+HOW TO READ:
+- Read the form like a person reads any document: top to bottom, headings first, then the body, paying attention to how sentences and sections relate.
+- Understand each blank from the surrounding sentences and the section it sits in.
+- Don't pattern-match on the closest few words alone — a single symbol or short phrase can mean different things in different forms. The surrounding text decides what each blank means.
+- If two fields appear in the same sentence, work out the role each one plays in that sentence.
+- If you genuinely cannot tell what a field is asking for after reading the document, label it "Unclear — review manually" rather than guessing.
 
 OUTPUT:
-A single JSON object mapping each EXACT field name (verbatim — copy character-for-character including spaces, ellipses, and odd casing) to its label. No prose, no markdown, no commentary. Start with { and end with }.
+A single JSON object mapping each EXACT field name (verbatim — copy character-for-character including spaces, punctuation, and odd casing) to its label. No prose, no markdown, no commentary. Start with { and end with }.
 
-Example shape:
+Example shape (the actual labels depend on the actual form):
 {
-  "and you the tenant if there is more than one they": "Tenant name(s) and address",
-  "as a fixed term for": "Term length (months)",
-  "must be paid in advance by": "First payment date"
+  "field_name_1": "Short clear label",
+  "field_name_2": "Another short clear label"
 }`;
 
     const userMessage = `FIELDS TO LABEL (you must produce a label for every one of these):
