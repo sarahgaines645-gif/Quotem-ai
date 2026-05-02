@@ -387,6 +387,16 @@
       }
       try {
         const buf = await file.arrayBuffer();
+
+        // Convert to base64 BEFORE passing to PDF.js — getDocument() detaches the ArrayBuffer
+        const bytes = new Uint8Array(buf);
+        let b64 = '';
+        const chunk = 8192;
+        for (let i = 0; i < bytes.length; i += chunk) {
+          b64 += String.fromCharCode(...bytes.subarray(i, i + chunk));
+        }
+        pdfBase64 = btoa(b64);
+
         pdfDoc = await pdfjsLib.getDocument({ data: buf }).promise;
         totalPages  = pdfDoc.numPages;
         currentPage = 1;
@@ -409,15 +419,6 @@
           }
           page.cleanup();
         }
-
-        // Save base64 for the fill endpoint
-        const b64arr = new Uint8Array(buf);
-        let b64 = '';
-        const chunk = 8192;
-        for (let i = 0; i < b64arr.length; i += chunk) {
-          b64 += String.fromCharCode(...b64arr.subarray(i, i + chunk));
-        }
-        pdfBase64 = btoa(b64);
 
         $drop.style.display = 'none';
         $toolbar.classList.add('show');
