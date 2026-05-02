@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <script src="/q-auth.js?v=4"></script>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>Q — Admin</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #e8e8e8;
+      --text: #1a1a1a;
+      --text-muted: rgba(0,0,0,0.55);
+      --text-faint: rgba(0,0,0,0.35);
+      --accent: #e91e63;
+      --neu-raised:    10px 10px 28px #ababab, -8px -8px 20px #ffffff;
+      --neu-raised-sm: 6px 6px 16px #ababab, -5px -5px 12px #ffffff;
+      --neu-inset:     inset 5px 5px 14px #ababab, inset -4px -4px 10px #ffffff;
+      --neu-inset-sm:  inset 3px 3px 8px #ababab, inset -2px -2px 6px #ffffff;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { background: var(--bg); color: var(--text);
+                 font-family: 'Space Grotesk', system-ui, sans-serif; min-height: 100%; }
+    body { padding: 32px 16px 80px; }
+    .wrap { max-width: 960px; margin: 0 auto; }
+    header { text-align: center; margin-bottom: 36px; }
+    header h1 { font-size: 36px; font-weight: 700; margin-bottom: 6px; }
+    header h1 .dot { color: var(--accent); }
+    header p { color: var(--text-muted); font-size: 15px; }
+    header a.back { display: inline-block; margin-top: 14px; color: var(--text-muted);
+                    text-decoration: none; font-size: 13px; }
+    header a.back:hover { color: var(--accent); }
+
+    .grid {
+      display: grid; gap: 20px;
+      grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    }
+    .tile {
+      background: var(--bg); box-shadow: var(--neu-raised-sm);
+      border-radius: 18px; padding: 24px 22px;
+      text-decoration: none; color: var(--text);
+      display: flex; flex-direction: column; gap: 8px;
+      transition: box-shadow 0.15s;
+      min-height: 130px;
+    }
+    .tile:hover { box-shadow: 4px 4px 10px #ababab, -3px -3px 8px #ffffff; }
+    .tile.disabled { opacity: 0.5; cursor: not-allowed; pointer-events: none; }
+    .tile .icon {
+      width: 44px; height: 44px; border-radius: 12px;
+      background: var(--bg); box-shadow: var(--neu-inset-sm);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 22px; margin-bottom: 4px;
+    }
+    .tile .title { font-size: 15px; font-weight: 600; }
+    .tile .blurb { font-size: 12px; color: var(--text-muted); line-height: 1.45; }
+    .tile .stat { font-size: 11px; color: var(--text-faint); margin-top: 2px;
+                  text-transform: uppercase; letter-spacing: 0.5px; }
+
+    .deny {
+      max-width: 480px; margin: 80px auto; text-align: center;
+      background: var(--bg); box-shadow: var(--neu-raised);
+      border-radius: 24px; padding: 40px 32px;
+    }
+    .deny h2 { font-size: 22px; margin-bottom: 8px; }
+    .deny p { color: var(--text-muted); font-size: 14px; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <h1>Q<span class="dot">.</span></h1>
+      <p>Admin</p>
+      <a href="/chat" class="back">← Back to chat</a>
+    </header>
+
+    <div id="content"><div class="deny" id="loading"><h2>Loading…</h2></div></div>
+  </div>
+
+  <script>
+    const TILES = [
+      { href: '/admin/tools', icon: '🛠️', title: 'Tools', blurb: "Q's tools, what each one costs, where they're used.", stat: 'live' },
+      { href: '/admin/costs?groupBy=skill', icon: '💰', title: 'Costs', blurb: 'Spend by skill, model, person. JSON for now — UI coming.', stat: 'json only' },
+      { href: '/circle/people', icon: '👥', title: 'People', blurb: "Everyone in Q's circle. Add, remove, rotate passwords.", stat: 'json only' },
+      { href: '#', icon: '🧠', title: 'Facts', blurb: "Q's long-term memory — what he's remembered.", stat: 'coming soon', disabled: true },
+      { href: '#', icon: '💬', title: 'Chat threads', blurb: 'Per-person, per-surface conversation history.', stat: 'coming soon', disabled: true },
+      { href: '#', icon: '⚡', title: 'Live activity', blurb: 'Who Q is talking to right now.', stat: 'coming soon', disabled: true },
+    ];
+
+    function escapeHtml(s) {
+      return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+    }
+
+    function renderTiles() {
+      const grid = document.createElement('div'); grid.className = 'grid';
+      TILES.forEach(t => {
+        const a = document.createElement('a');
+        a.className = 'tile' + (t.disabled ? ' disabled' : '');
+        a.href = t.disabled ? '#' : t.href;
+        a.innerHTML =
+          '<div class="icon">' + t.icon + '</div>' +
+          '<div class="title">' + escapeHtml(t.title) + '</div>' +
+          '<div class="blurb">' + escapeHtml(t.blurb) + '</div>' +
+          (t.stat ? '<div class="stat">' + escapeHtml(t.stat) + '</div>' : '');
+        grid.appendChild(a);
+      });
+      const content = document.getElementById('content');
+      content.innerHTML = '';
+      content.appendChild(grid);
+    }
+
+    // Sarah-only check via /whoami
+    fetch('/whoami', { credentials: 'include' })
+      .then(r => r.json())
+      .then(d => {
+        if (!d.person) return; // q-auth.js will show the sign-in overlay
+        if (d.person.id !== 'sarah') {
+          document.getElementById('content').innerHTML =
+            '<div class="deny"><h2>Forbidden</h2><p>The admin area is for Sarah only.</p></div>';
+          return;
+        }
+        renderTiles();
+      })
+      .catch(() => {});
+  </script>
+</body>
+</html>

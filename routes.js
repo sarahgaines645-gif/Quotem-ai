@@ -501,6 +501,74 @@ router.get('/admin/costs', requirePerson, (req, res) => {
     });
 });
 
+// Admin landing — tile grid linking to each admin sub-page. Sarah-only
+// check is enforced client-side via /whoami; the static HTML is open.
+router.get('/admin', (req, res) => {
+    res.sendFile(path.join(__dirname, 'admin.html'));
+});
+
+// Admin · tools page (HTML). Data comes from /admin/tools-data below.
+router.get('/admin/tools', (req, res) => {
+    res.sendFile(path.join(__dirname, 'admin-tools.html'));
+});
+
+// Admin · tools metadata. Sarah-only. Lists every tool Q can call, its
+// provider, and what it costs per call. Pricing pulled from cost-tracker
+// where available; static descriptions kept inline so the admin page
+// stays self-contained.
+router.get('/admin/tools-data', requirePerson, (req, res) => {
+    if (req.person.id !== 'sarah') return res.status(403).json({ error: 'Forbidden' });
+    res.json({
+        tools: [
+            {
+                name: 'web_search', label: 'Web search', icon: '🔎',
+                desc: 'Live web results via Brave Search. Q calls this only when you ask him to look something up.',
+                cost: '~£0.0002 / call', provider: 'Brave Search API', gated: true,
+            },
+            {
+                name: 'calculator', label: 'Calculator', icon: '🧮',
+                desc: 'Accurate maths — Q is bad at arithmetic without it.',
+                cost: 'free', provider: 'local', gated: false,
+            },
+            {
+                name: 'current_datetime', label: 'Current date/time', icon: '🕒',
+                desc: 'Timezone-aware time lookup. Q already knows the date from his system prompt; this tool covers timezone-specific cases.',
+                cost: 'free', provider: 'local', gated: false,
+            },
+            {
+                name: 'analyze_document', label: 'Read a document', icon: '📄',
+                desc: "Q's eyes for a document — vision model reads PDF / image / scan and pulls out the text.",
+                cost: '~£0.0008 / call', provider: 'Qwen3.6-Plus on Together AI', gated: false,
+            },
+            {
+                name: 'create_document', label: 'Make a document', icon: '📝',
+                desc: 'Generates a downloadable .docx file from text Q has produced. The brain call to write the contents is billed as normal chat.',
+                cost: 'free (local) + chat tokens', provider: 'local docx + Together AI', gated: false,
+            },
+            {
+                name: 'remember', label: 'Remember', icon: '🧠',
+                desc: 'Stores a fact in long-term memory. Q uses this proactively whenever something matters across sessions.',
+                cost: 'free', provider: 'local file', gated: false,
+            },
+            {
+                name: 'recall', label: 'Recall', icon: '🔁',
+                desc: 'Searches stored facts. Free, local, no API hit.',
+                cost: 'free', provider: 'local file', gated: false,
+            },
+            {
+                name: '__main_brain__', label: "Q's main brain (chat)", icon: '🤖',
+                desc: 'DeepSeek V4 Pro on Together AI. The model that powers every reply. Not a tool — listed here so you can see the cost.',
+                cost: '£0.78 / M in · £2.34 / M out', provider: 'Together AI', gated: false,
+            },
+            {
+                name: '__vision__', label: "Q's eyes (vision)", icon: '👁️',
+                desc: "Qwen3.6-Plus on Together AI — used when Q sees an image. Streaming-only, costlier than the main brain per token.",
+                cost: '£0.39 / M in · £1.83 / M out', provider: 'Together AI', gated: false,
+            },
+        ],
+    });
+});
+
 // Q's translator — converts work items to SOR search terms
 // POST body: { items: [{ work, intent, detail }] }
 router.post('/translator', express.json({ limit: '256kb' }), async (req, res) => {

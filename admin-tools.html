@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <script src="/q-auth.js?v=4"></script>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>Q — Admin · Tools</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #e8e8e8;
+      --text: #1a1a1a;
+      --text-muted: rgba(0,0,0,0.55);
+      --text-faint: rgba(0,0,0,0.35);
+      --accent: #e91e63;
+      --neu-raised:    10px 10px 28px #ababab, -8px -8px 20px #ffffff;
+      --neu-raised-sm: 6px 6px 16px #ababab, -5px -5px 12px #ffffff;
+      --neu-inset:     inset 5px 5px 14px #ababab, inset -4px -4px 10px #ffffff;
+      --neu-inset-sm:  inset 3px 3px 8px #ababab, inset -2px -2px 6px #ffffff;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { background: var(--bg); color: var(--text);
+                 font-family: 'Space Grotesk', system-ui, sans-serif; min-height: 100%; }
+    body { padding: 32px 16px 80px; }
+    .wrap { max-width: 960px; margin: 0 auto; }
+    header { text-align: center; margin-bottom: 36px; }
+    header h1 { font-size: 30px; font-weight: 700; margin-bottom: 6px; }
+    header h1 .dot { color: var(--accent); }
+    header p { color: var(--text-muted); font-size: 14px; }
+    header a.back { display: inline-block; margin-top: 14px; color: var(--text-muted);
+                    text-decoration: none; font-size: 13px; }
+    header a.back:hover { color: var(--accent); }
+
+    .tools-list {
+      display: grid; gap: 14px;
+    }
+    .tool-card {
+      background: var(--bg); box-shadow: var(--neu-raised-sm);
+      border-radius: 16px; padding: 20px 24px;
+    }
+    .tool-card .row {
+      display: flex; align-items: flex-start; gap: 16px; flex-wrap: wrap;
+    }
+    .tool-card .icon {
+      width: 40px; height: 40px; border-radius: 10px; flex-shrink: 0;
+      background: var(--bg); box-shadow: var(--neu-inset-sm);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 18px;
+    }
+    .tool-card .body { flex: 1; min-width: 220px; }
+    .tool-card .name { font-size: 15px; font-weight: 600; }
+    .tool-card .name code {
+      font-size: 12px; color: var(--text-muted); font-family: 'SF Mono', Consolas, monospace;
+      margin-left: 8px; font-weight: 400;
+    }
+    .tool-card .desc { font-size: 13px; color: var(--text-muted); margin-top: 4px; line-height: 1.5; }
+    .tool-card .meta {
+      display: flex; gap: 16px; margin-top: 12px; flex-wrap: wrap;
+    }
+    .meta-item {
+      font-size: 11px; color: var(--text-faint);
+      text-transform: uppercase; letter-spacing: 0.5px;
+    }
+    .meta-item .v { color: var(--text-muted); text-transform: none; letter-spacing: 0; font-weight: 600; }
+    .pill {
+      display: inline-block; padding: 3px 10px; border-radius: 12px;
+      box-shadow: var(--neu-inset-sm); background: var(--bg);
+      font-size: 11px; color: var(--text-muted);
+    }
+    .pill.free { color: #2e7d32; }
+    .pill.paid { color: var(--accent); }
+
+    .deny {
+      max-width: 480px; margin: 80px auto; text-align: center;
+      background: var(--bg); box-shadow: var(--neu-raised);
+      border-radius: 24px; padding: 40px 32px;
+    }
+    .deny h2 { font-size: 22px; margin-bottom: 8px; }
+    .deny p { color: var(--text-muted); font-size: 14px; }
+
+    .summary {
+      background: var(--bg); box-shadow: var(--neu-inset);
+      border-radius: 14px; padding: 14px 18px; margin-bottom: 22px;
+      font-size: 13px; color: var(--text-muted); line-height: 1.6;
+    }
+    .summary strong { color: var(--text); }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <h1>Q<span class="dot">.</span> Tools</h1>
+      <p>Every tool Q can use, what it does, and what it costs per call</p>
+      <a href="/admin" class="back">← Back to admin</a>
+    </header>
+
+    <div id="content"><div class="deny"><h2>Loading…</h2></div></div>
+  </div>
+
+  <script>
+    function escapeHtml(s) {
+      return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+    }
+
+    fetch('/whoami', { credentials: 'include' })
+      .then(r => r.json())
+      .then(d => {
+        if (!d.person) return;
+        if (d.person.id !== 'sarah') {
+          document.getElementById('content').innerHTML =
+            '<div class="deny"><h2>Forbidden</h2><p>The admin area is for Sarah only.</p></div>';
+          return;
+        }
+        return fetch('/admin/tools-data', { credentials: 'include' }).then(r => r.json());
+      })
+      .then(data => {
+        if (!data) return;
+        renderTools(data.tools || []);
+      })
+      .catch(() => {
+        document.getElementById('content').innerHTML =
+          '<div class="deny"><h2>Could not load tools</h2><p>Network error — try again.</p></div>';
+      });
+
+    function renderTools(tools) {
+      const summary = document.createElement('div'); summary.className = 'summary';
+      const free = tools.filter(t => t.cost === 'free').length;
+      const paid = tools.length - free;
+      summary.innerHTML = '<strong>' + tools.length + '</strong> tools · '
+        + '<strong>' + free + '</strong> free · <strong>' + paid + '</strong> paid';
+      const list = document.createElement('div'); list.className = 'tools-list';
+      tools.forEach(t => {
+        const card = document.createElement('div'); card.className = 'tool-card';
+        const costPill = t.cost === 'free'
+          ? '<span class="pill free">Free</span>'
+          : '<span class="pill paid">' + escapeHtml(t.cost) + '</span>';
+        card.innerHTML =
+          '<div class="row">'
+          + '  <div class="icon">' + (t.icon || '🔧') + '</div>'
+          + '  <div class="body">'
+          + '    <div class="name">' + escapeHtml(t.label || t.name) + '<code>' + escapeHtml(t.name) + '</code></div>'
+          + '    <div class="desc">' + escapeHtml(t.desc || '') + '</div>'
+          + '    <div class="meta">'
+          + '      <div class="meta-item">Cost ' + costPill + '</div>'
+          + (t.provider ? '      <div class="meta-item">Provider <span class="v">' + escapeHtml(t.provider) + '</span></div>' : '')
+          + (t.gated ? '      <div class="meta-item">Triggered by <span class="v">explicit ask</span></div>' : '')
+          + '    </div>'
+          + '  </div>'
+          + '</div>';
+        list.appendChild(card);
+      });
+      const content = document.getElementById('content');
+      content.innerHTML = '';
+      content.appendChild(summary);
+      content.appendChild(list);
+    }
+  </script>
+</body>
+</html>
