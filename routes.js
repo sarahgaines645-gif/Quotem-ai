@@ -7,6 +7,10 @@
 'use strict';
 
 const path = require('path');
+const os = require('os');
+const fs = require('fs');
+const { execFile } = require('child_process');
+const { randomUUID } = require('crypto');
 const express = require('express');
 const router = express.Router();
 const { readText } = require('./plugins/q-text-reader');
@@ -364,6 +368,63 @@ router.post('/forms/fill', requirePerson, express.json({ limit: '24mb' }), async
     } catch (e) {
         console.error('[forms/fill]', e.message);
         res.status(500).json({ error: e.message });
+    }
+});
+
+// POST /forms/fill-docx
+// Same as /forms/fill but converts the filled PDF to .docx via LibreOffice
+// and returns a Word document. Works for any PDF form.
+router.post('/forms/fill-docx', requirePerson, express.json({ limit: '24mb' }), async (req, res) => {
+    const tmpId = randomUUID();
+    const tmpPdf  = path.join(os.tmpdir(), `q-form-${tmpId}.pdf`);
+    const tmpDocx = path.join(os.tmpdir(), `q-form-${tmpId}.docx`);
+    const loProfile = path.join(os.tmpdir(), `lo-${tmpId}`);
+    try {
+        const { pdfBase64, fields, infoText, imageDataUrl, values: directValues } = req.body || {};
+        if (!pdfBase64) return res.status(400).json({ error: 'pdfBase64 required' });
+
+        const pdfBytes = Buffer.from(pdfBase64, 'base64');
+        let filledBytes, results;
+
+        if (directValues && typeof directValues === 'object' && Object.keys(directValues).length) {
+            ({ filledBytes, results } = await qFormFiller.fillPdf(pdfBytes, directValues));
+        } else {
+            if (!fields || !fields.length) return res.status(400).json({ error: 'fields required' });
+            if (!infoText && !imageDataUrl) return res.status(400).json({ error: 'infoText or imageDataUrl required' });
+            ({ filledBytes, results } = await qFormFiller.intakeAndFill({
+                pdfBytes, fields, infoText: infoText || '', imageDataUrl: imageDataUrl || null,
+            }));
+        }
+
+        fs.writeFileSync(tmpPdf, Buffer.from(filledBytes));
+
+        await new Promise((resolve, reject) => {
+            execFile('soffice', [
+                '--headless',
+                `--env:UserInstallation=file://${loProfile}`,
+                '--convert-to', 'docx',
+                '--outdir', os.tmpdir(),
+                tmpPdf,
+            ], { timeout: 60000 }, (err, stdout, stderr) => {
+                if (err) return reject(new Error(`LibreOffice failed: ${stderr || err.message}`));
+                resolve();
+            });
+        });
+
+        const docxBytes = fs.readFileSync(tmpDocx);
+        console.log(`[forms/fill-docx] filled ${results.filled.length}, docx ${docxBytes.length} bytes`);
+        res.set({
+            'Content-Type': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+            'Content-Disposition': 'attachment; filename="filled-form.docx"',
+            'X-Fields-Filled': String(results.filled.length),
+        });
+        res.send(docxBytes);
+    } catch (e) {
+        console.error('[forms/fill-docx]', e.message);
+        res.status(500).json({ error: e.message });
+    } finally {
+        for (const f of [tmpPdf, tmpDocx]) try { fs.unlinkSync(f); } catch {}
+        try { fs.rmSync(loProfile, { recursive: true, force: true }); } catch {}
     }
 });
 

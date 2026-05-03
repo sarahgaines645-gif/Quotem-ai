@@ -373,7 +373,8 @@
 
       <div class="intake-actions">
         <button class="q-btn accent" id="fill-btn" type="button">Q, fill it</button>
-        <button class="q-btn accent" id="download-btn" type="button">Download filled PDF</button>
+        <button class="q-btn accent" id="download-btn" type="button">Download PDF</button>
+        <button class="q-btn" id="download-docx-btn" type="button" style="display:none">Download Word (.docx)</button>
         <span class="fill-status" id="fill-status"></span>
       </div>
     </div>
@@ -1059,8 +1060,9 @@
         await renderPage(currentPage);
         flashFilledInputs(data.values || {});
         const n = Object.keys(data.values || {}).length;
-        $fillStatus.textContent = '✓ Q filled ' + n + ' field' + (n === 1 ? '' : 's') + ' — edit any of them by clicking, then Download.';
+        $fillStatus.textContent = '✓ Q filled ' + n + ' field' + (n === 1 ? '' : 's') + ' — edit any, then download PDF or Word.';
         $fillStatus.className = 'fill-status ok';
+        $downloadDocxBtn.style.display = '';
       } catch (e) {
         $fillStatus.textContent = 'Q hit a snag: ' + e.message;
         $fillStatus.className = 'fill-status err';
@@ -1108,6 +1110,48 @@
         $fillStatus.className = 'fill-status err';
       } finally {
         $downloadBtn.disabled = false;
+      }
+    });
+
+    // Word download button — same fill, converted to .docx by LibreOffice on the server
+    const $downloadDocxBtn = document.getElementById('download-docx-btn');
+    $downloadDocxBtn.addEventListener('click', async () => {
+      if (!pdfBase64) { $fillStatus.textContent = 'Load a PDF first.'; $fillStatus.className = 'fill-status err'; return; }
+      const values = {};
+      for (const [k, v] of Object.entries(fieldValues)) {
+        if (typeof v === 'boolean') values[k] = v;
+        else if (v && String(v).trim()) values[k] = String(v).trim();
+      }
+      if (!Object.keys(values).length) {
+        $fillStatus.textContent = 'Nothing filled in yet — type into the form first.';
+        $fillStatus.className = 'fill-status err';
+        return;
+      }
+      $downloadDocxBtn.disabled = true;
+      $fillStatus.textContent = 'Converting to Word…';
+      $fillStatus.className = 'fill-status';
+      try {
+        const r = await fetch('/forms/fill-docx', {
+          method: 'POST', credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ pdfBase64, values }),
+        });
+        if (!r.ok) { const e = await r.json().catch(() => ({})); throw new Error(e.error || 'HTTP ' + r.status); }
+        const filled = r.headers.get('X-Fields-Filled') || '?';
+        const blob = await r.blob();
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url; a.download = 'filled-form.docx';
+        document.body.appendChild(a); a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        $fillStatus.textContent = '✓ Word doc ready — ' + filled + ' field' + (filled === '1' ? '' : 's') + ' filled';
+        $fillStatus.className = 'fill-status ok';
+      } catch (e) {
+        $fillStatus.textContent = 'Word export failed: ' + e.message;
+        $fillStatus.className = 'fill-status err';
+      } finally {
+        $downloadDocxBtn.disabled = false;
       }
     });
 
