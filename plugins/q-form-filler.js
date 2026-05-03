@@ -13,7 +13,7 @@
  *   4. Return filled PDF bytes as Buffer
  */
 
-const { PDFDocument, StandardFonts } = require('pdf-lib');
+const { PDFDocument, StandardFonts, PDFName, rgb } = require('pdf-lib');
 const { Q_CONFIG } = require('../config');
 
 const EXTRACT_SYSTEM = `You are a form-filling assistant. Your output is ALWAYS a single JSON object — never prose, never markdown, never an explanation.
@@ -176,25 +176,73 @@ ${infoText || '(none)'}`;
 async function fillPdf(pdfBytes, values) {
     const pdfDoc = await PDFDocument.load(pdfBytes, { ignoreEncryption: true });
     const form = pdfDoc.getForm();
+    const pages = pdfDoc.getPages();
     const results = { filled: [], skipped: [], notFound: [] };
+
+    // Build annotation-ref → page map as a fallback for PDFs whose widgets
+    // don't carry a /P (page pointer) entry.
+    const refKeyToPage = new Map();
+    for (const page of pages) {
+        let annots;
+        try { annots = page.node.lookup(PDFName.of('Annots')); } catch { continue; }
+        if (!annots || typeof annots.size !== 'function') continue;
+        for (let i = 0; i < annots.size(); i++) {
+            const ref = annots.get(i);
+            if (ref) refKeyToPage.set(ref.toString(), page);
+        }
+    }
+
+    function pageForWidget(widget) {
+        // Standard PDF: widget annotation has /P pointing to its page
+        try {
+            const pRef = widget.dict.get(PDFName.of('P'));
+            if (pRef) {
+                const pageNode = pdfDoc.context.lookup(pRef);
+                const found = pages.find(p => p.node === pageNode);
+                if (found) return found;
+            }
+        } catch { /* fall through to scan */ }
+        // Fallback: scan every page's annotation list
+        for (const [ref, obj] of pdfDoc.context.indirectObjects) {
+            if (obj === widget.dict) return refKeyToPage.get(ref.toString()) || null;
+        }
+        return null;
+    }
+
+    // Collect draw instructions BEFORE flatten — widgets disappear after it.
+    const draws = [];
 
     for (const [name, value] of Object.entries(values)) {
         try {
             const field = form.getField(name);
             const type = field.constructor.name;
+            const widgets = field.acroField.getWidgets();
             if (type === 'PDFTextField') {
-                field.setText(String(value ?? ''));
+                const text = String(value ?? '');
+                for (const w of widgets) {
+                    const page = pageForWidget(w);
+                    if (page) draws.push({ page, rect: w.getRectangle(), text, isCheck: false });
+                }
                 results.filled.push(name);
             } else if (type === 'PDFCheckBox') {
                 const v = String(value).toLowerCase();
-                if (v === 'true' || v === 'yes' || v === '1') field.check();
-                else field.uncheck();
+                if (v === 'true' || v === 'yes' || v === '1') {
+                    for (const w of widgets) {
+                        const page = pageForWidget(w);
+                        if (page) draws.push({ page, rect: w.getRectangle(), text: 'X', isCheck: true });
+                    }
+                }
                 results.filled.push(name);
             } else if (type === 'PDFDropdown' || type === 'PDFListBox') {
                 const options = field.getOptions();
                 const match = options.find(o => o.toLowerCase() === String(value).toLowerCase()) || options[0];
-                if (match) { field.select(match); results.filled.push(name); }
-                else results.skipped.push(name);
+                if (match) {
+                    for (const w of widgets) {
+                        const page = pageForWidget(w);
+                        if (page) draws.push({ page, rect: w.getRectangle(), text: match, isCheck: false });
+                    }
+                    results.filled.push(name);
+                } else results.skipped.push(name);
             } else {
                 results.skipped.push(name);
             }
@@ -203,24 +251,38 @@ async function fillPdf(pdfBytes, values) {
         }
     }
 
-    // CRITICAL: regenerate appearance streams so the values render. NRLA-
-    // style PDFs have pre-baked empty appearance dictionaries that override
-    // setText() — without this step, values are stored but display blank.
-    try {
-        const helvetica = await pdfDoc.embedFont(StandardFonts.Helvetica);
-        form.updateFieldAppearances(helvetica);
-    } catch (e) {
-        console.warn('[q-form-filler] updateFieldAppearances failed:', e.message);
-    }
+    // Flatten first — burns in any pre-baked field appearances (blank boxes on
+    // NRLA-style forms) and removes the widget annotations. We never called
+    // setText/check/select, so no values are stored — flatten just cleans up.
+    try { form.flatten(); } catch (e) { console.warn('[q-form-filler] flatten:', e.message); }
 
-    // Flatten the form: convert every field's value into static page content.
-    // After this the PDF can no longer be edited interactively, but the values
-    // are guaranteed to display in any viewer (Preview, browsers, Acrobat).
-    // This is the right tradeoff for "filled and ready to send/print" output.
-    try {
-        form.flatten();
-    } catch (e) {
-        console.warn('[q-form-filler] flatten failed:', e.message);
+    // Draw values AFTER flatten so our text is on top of everything.
+    // y = rect.y + 1 puts the baseline at the very bottom of the field rect —
+    // the same Y as surrounding body text. Word groups text into lines by Y
+    // position, so this keeps filled values on the right line when converting.
+    const helvetica = await pdfDoc.embedFont(StandardFonts.Helvetica);
+    for (const { page, rect, text, isCheck } of draws) {
+        if (isCheck) {
+            const size = Math.min(rect.height, rect.width) * 0.7;
+            page.drawText('X', {
+                x: rect.x + (rect.width - size * 0.55) / 2,
+                y: rect.y + 1,
+                size,
+                font: helvetica,
+                color: rgb(0, 0, 0),
+            });
+        } else {
+            const fontSize = Math.min(Math.max(rect.height * 0.65, 8), 11);
+            page.drawText(text, {
+                x: rect.x + 2,
+                y: rect.y + 1,
+                size: fontSize,
+                font: helvetica,
+                color: rgb(0, 0, 0),
+                maxWidth: rect.width - 4,
+                lineHeight: fontSize * 1.15,
+            });
+        }
     }
 
     const filledBytes = await pdfDoc.save();
