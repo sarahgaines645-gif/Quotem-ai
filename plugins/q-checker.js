@@ -147,7 +147,7 @@ async function checkResults(originalText, workItems, sorResults) {
             },
             body: JSON.stringify({
                 model: Q_CONFIG.model,
-                max_tokens: 4000,
+                max_tokens: 4096,
                 temperature: Q_CONFIG.temperature,
                 messages: [
                     { role: 'system', content: SYSTEM_PROMPT },
@@ -156,7 +156,6 @@ async function checkResults(originalText, workItems, sorResults) {
                         content: `ORIGINAL TEXT:\n${originalText}\n\nRESULTS TO CHECK:\n${userInput}`,
                     },
                 ],
-                response_format: { type: 'json_object' },
             }),
         });
 

@@ -326,7 +326,7 @@ async function analyzeDocument({ image_url, question }) {
                 'Content-Type': 'application/json',
             },
             body: JSON.stringify({
-                model: 'Qwen/Qwen2.5-VL-72B-Instruct',
+                model: Q_CONFIG.visionModel,
                 max_tokens: 2000,
                 temperature: 0.0,
                 messages: [

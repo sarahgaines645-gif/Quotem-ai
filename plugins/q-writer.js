@@ -15,7 +15,7 @@
 
 const { Q_CONFIG } = require('../config');
 
-async function callQ(systemPrompt, userPrompt, { maxTokens = 1500 } = {}) {
+async function callQ(systemPrompt, userPrompt, { maxTokens = 4096 } = {}) {
     const response = await fetch(`${Q_CONFIG.baseURL}/chat/completions`, {
         method: 'POST',
         headers: {
@@ -30,7 +30,6 @@ async function callQ(systemPrompt, userPrompt, { maxTokens = 1500 } = {}) {
                 { role: 'system', content: systemPrompt },
                 { role: 'user', content: userPrompt },
             ],
-            response_format: { type: 'json_object' },
         }),
     });
     if (!response.ok) {

@@ -89,9 +89,8 @@ Review the draft against the user question and return JSON.`;
             },
             body: JSON.stringify({
                 model: Q_CONFIG.model,
-                max_tokens: 2500,
+                max_tokens: 4096,
                 temperature: 0.0,
-                response_format: { type: 'json_object' },
                 messages: [
                     { role: 'system', content: VERIFIER_SYSTEM },
                     { role: 'user', content: reviewPrompt },

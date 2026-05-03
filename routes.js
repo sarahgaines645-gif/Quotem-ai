@@ -298,6 +298,7 @@ router.post('/plotter/analyze', requirePerson, express.json({ limit: '24mb' }), 
 });
 
 const qFormFiller = require('./plugins/q-form-filler');
+const { fillPdfForWord } = qFormFiller;
 
 // POST /forms/label
 // Body: { pageImages: [dataUrl, ...], totalTags: number }
@@ -387,13 +388,12 @@ router.post('/forms/fill-docx', requirePerson, express.json({ limit: '24mb' }), 
         let filledBytes, results;
 
         if (directValues && typeof directValues === 'object' && Object.keys(directValues).length) {
-            ({ filledBytes, results } = await qFormFiller.fillPdf(pdfBytes, directValues));
+            ({ filledBytes, results } = await fillPdfForWord(pdfBytes, directValues));
         } else {
             if (!fields || !fields.length) return res.status(400).json({ error: 'fields required' });
             if (!infoText && !imageDataUrl) return res.status(400).json({ error: 'infoText or imageDataUrl required' });
-            ({ filledBytes, results } = await qFormFiller.intakeAndFill({
-                pdfBytes, fields, infoText: infoText || '', imageDataUrl: imageDataUrl || null,
-            }));
+            const extracted = await qFormFiller.extractFieldValues(fields, infoText || '', imageDataUrl || null);
+            ({ filledBytes, results } = await fillPdfForWord(pdfBytes, extracted));
         }
 
         fs.writeFileSync(tmpPdf, Buffer.from(filledBytes));
@@ -1004,41 +1004,41 @@ router.get('/scheduler', (req, res) => {
 });
 
 // List all jobs.
-router.get('/scheduler/jobs', (req, res) => {
+router.get('/scheduler/jobs', requirePerson, (req, res) => {
     const jobs = listJobs();
     res.json({ count: jobs.length, jobs, storedAt: getJobsPath() });
 });
 
 // Get one job (full history).
-router.get('/scheduler/jobs/:id', (req, res) => {
+router.get('/scheduler/jobs/:id', requirePerson, (req, res) => {
     const job = getJob(req.params.id);
     if (!job) return res.status(404).json({ error: 'Job not found' });
     res.json(job);
 });
 
 // Create a job.
-router.post('/scheduler/jobs', express.json({ limit: '64kb' }), (req, res) => {
+router.post('/scheduler/jobs', requirePerson, express.json({ limit: '64kb' }), (req, res) => {
     const result = createJob(req.body || {});
     if (result.error) return res.status(400).json(result);
     res.json(result);
 });
 
 // Patch a job (enable/disable, edit name/goal/trigger).
-router.patch('/scheduler/jobs/:id', express.json({ limit: '64kb' }), (req, res) => {
+router.patch('/scheduler/jobs/:id', requirePerson, express.json({ limit: '64kb' }), (req, res) => {
     const result = patchJob(req.params.id, req.body || {});
     if (result.error) return res.status(404).json(result);
     res.json(result);
 });
 
 // Delete a job.
-router.delete('/scheduler/jobs/:id', (req, res) => {
+router.delete('/scheduler/jobs/:id', requirePerson, (req, res) => {
     const result = deleteJob(req.params.id);
     if (result.error) return res.status(404).json(result);
     res.json(result);
 });
 
 // Manual run-now button — fires the job immediately, returns result inline.
-router.post('/scheduler/jobs/:id/run', async (req, res) => {
+router.post('/scheduler/jobs/:id/run', requirePerson, async (req, res) => {
     const job = getJob(req.params.id);
     if (!job) return res.status(404).json({ error: 'Job not found' });
     const result = await runJobNow(job, { source: 'manual' });
@@ -1088,7 +1088,7 @@ router.get('/agent', (req, res) => {
 // Q's agent runner — give him a goal, he pursues it autonomously.
 // Body: { goal, maxSteps?, verify?, reasoningEffort? }
 // Returns: { summary, transcript, steps, durationMs, tokensIn, tokensOut, verifier?, error? }
-router.post('/agent/run', express.json({ limit: '256kb' }), async (req, res) => {
+router.post('/agent/run', requirePerson, express.json({ limit: '256kb' }), async (req, res) => {
     const goal = req.body?.goal;
     if (!goal || typeof goal !== 'string' || !goal.trim()) {
         return res.status(400).json({ error: 'Body must include goal:string' });

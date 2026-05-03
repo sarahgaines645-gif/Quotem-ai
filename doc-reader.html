@@ -119,7 +119,7 @@
 
     <!-- Left: input -->
     <div class="card">
-      <input type="file" id="file-input" accept="image/*" style="display:none">
+      <input type="file" id="file-input" accept="image/*,application/pdf,.pdf,.docx,.doc" style="display:none">
       <div class="drop-zone" id="drop-zone">
         <span class="icon">⬆</span>
         <div>Click, drag-drop, or paste a document image</div>
@@ -200,11 +200,52 @@ window.addEventListener('paste', e => {
 });
 
 function loadFile(file) {
-  if (!file.type || !file.type.startsWith('image/')) {
-    alert('Need an image file (PNG, JPG, etc.). PDFs need to be screenshotted for now.');
+  originalFileName = (file.name || 'document').replace(/\.[^.]+$/, '');
+  const isPdf = file.type === 'application/pdf' || (file.name || '').toLowerCase().endsWith('.pdf');
+  const isDocx = file.type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+    || (file.name || '').toLowerCase().endsWith('.docx')
+    || (file.name || '').toLowerCase().endsWith('.doc');
+
+  if (isPdf || isDocx) {
+    // Server-side text extraction — show result directly, skip the image preview
+    $preview.classList.add('show');
+    $dropZone.style.display = 'none';
+    $extract.disabled = true;
+    $reset.disabled = false;
+    $extracted.textContent = 'Reading…';
+    $extracted.classList.remove('empty');
+    $status.innerHTML = '<span class="dot"></span>Extracting text…';
+    const reader = new FileReader();
+    reader.onload = async () => {
+      try {
+        const res = await fetch('/extract-text', {
+          method: 'POST', credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ dataUrl: reader.result, name: file.name || 'document' }),
+        });
+        const data = await res.json();
+        $status.textContent = '';
+        if (data.error) {
+          $extracted.textContent = 'Could not read file: ' + data.error;
+        } else {
+          extractedText = (data.text || '').trim() || '(no text found)';
+          $extracted.textContent = extractedText;
+          $copy.disabled = false;
+          $download.disabled = false;
+        }
+      } catch (e) {
+        $status.textContent = '';
+        $extracted.textContent = 'Error: ' + e.message;
+      }
+    };
+    reader.readAsDataURL(file);
     return;
   }
-  originalFileName = (file.name || 'document').replace(/\.[^.]+$/, '');
+
+  if (!file.type || !file.type.startsWith('image/')) {
+    alert('Supported: images, PDFs, and Word documents (.docx).');
+    return;
+  }
   const reader = new FileReader();
   reader.onload = () => {
     imageDataUrl = String(reader.result || '');

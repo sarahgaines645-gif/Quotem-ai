@@ -82,13 +82,12 @@ Details: ${detail || 'none given'}`;
             },
             body: JSON.stringify({
                 model: Q_CONFIG.model,
-                max_tokens: 500,
+                max_tokens: 4096,
                 temperature: Q_CONFIG.temperature,
                 messages: [
                     { role: 'system', content: SYSTEM_PROMPT },
                     { role: 'user', content: userInput },
                 ],
-                response_format: { type: 'json_object' },
             }),
         });
 
@@ -165,13 +164,12 @@ async function priceItems(items) {
             },
             body: JSON.stringify({
                 model: Q_CONFIG.model,
-                max_tokens: 2000,
+                max_tokens: 4096,
                 temperature: Q_CONFIG.temperature,
                 messages: [
                     { role: 'system', content: SYSTEM_PROMPT + '\n\nYou are pricing MULTIPLE items. Return a JSON object with an "items" array, one object per input item, same order. Example: {"items": [{...}, {...}]}' },
                     { role: 'user', content: userInput },
                 ],
-                response_format: { type: 'json_object' },
             }),
         });
 

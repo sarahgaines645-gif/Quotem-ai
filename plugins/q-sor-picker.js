@@ -100,13 +100,12 @@ Apply QS principles. Select the ONE item that best matches. Return JSON only.`;
             },
             body: JSON.stringify({
                 model: Q_CONFIG.model,
-                max_tokens: 512,
+                max_tokens: 4096,
                 temperature: 0.0,
                 messages: [
                     { role: 'system', content: systemInstruction },
                     { role: 'user', content: userMessage },
                 ],
-                response_format: { type: 'json_object' },
             }),
         });
 

@@ -133,13 +133,12 @@ async function readText(text, options = {}) {
             },
             body: JSON.stringify({
                 model: model,
-                max_tokens: 2000,
+                max_tokens: 4096,
                 temperature: Q_CONFIG.temperature,
                 messages: [
                     { role: 'system', content: SYSTEM_PROMPT },
                     { role: 'user', content: text.trim() },
                 ],
-                response_format: { type: 'json_object' },
             }),
         });
 

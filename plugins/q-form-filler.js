@@ -117,8 +117,7 @@ ${infoText || '(none)'}`;
         temperature: 0.0,
         messages,
     };
-    // Force JSON output for the text path (vision streams it; we keep the prompt strict instead)
-    if (!isVision) body.response_format = { type: 'json_object' };
+    // Vision path streams; text path relies on the strict system prompt for JSON output.
 
     const response = await fetch(`${Q_CONFIG.baseURL}/chat/completions`, {
         method: 'POST',
@@ -366,4 +365,50 @@ ${documentText || '(no text extracted)'}`;
     return JSON.parse(cleaned.slice(start, end + 1));
 }
 
-module.exports = { intakeAndFill, extractFieldValues, fillPdf, labelFields };
+/**
+ * Fill a PDF for Word export — sets values via AcroForm API without flattening.
+ * LibreOffice reads the /V entries directly and positions text correctly when
+ * converting to .docx. Do not use for PDF download (appearance streams vary).
+ */
+async function fillPdfForWord(pdfBytes, values) {
+    const pdfDoc = await PDFDocument.load(pdfBytes, { ignoreEncryption: true });
+    const form = pdfDoc.getForm();
+    const results = { filled: [], skipped: [], notFound: [] };
+
+    for (const [name, value] of Object.entries(values)) {
+        try {
+            const field = form.getField(name);
+            const type = field.constructor.name;
+            if (type === 'PDFTextField') {
+                field.setText(String(value ?? ''));
+                results.filled.push(name);
+            } else if (type === 'PDFCheckBox') {
+                const v = String(value).toLowerCase();
+                if (v === 'true' || v === 'yes' || v === '1') field.check();
+                else field.uncheck();
+                results.filled.push(name);
+            } else if (type === 'PDFDropdown' || type === 'PDFListBox') {
+                const options = field.getOptions();
+                const match = options.find(o => o.toLowerCase() === String(value).toLowerCase()) || options[0];
+                if (match) { field.select(match); results.filled.push(name); }
+                else results.skipped.push(name);
+            } else {
+                results.skipped.push(name);
+            }
+        } catch {
+            results.notFound.push(name);
+        }
+    }
+
+    try {
+        const helvetica = await pdfDoc.embedFont(StandardFonts.Helvetica);
+        form.updateFieldAppearances(helvetica);
+    } catch (e) {
+        console.warn('[q-form-filler] updateFieldAppearances failed:', e.message);
+    }
+
+    const filledBytes = await pdfDoc.save();
+    return { filledBytes, results };
+}
+
+module.exports = { intakeAndFill, extractFieldValues, fillPdf, fillPdfForWord, labelFields };

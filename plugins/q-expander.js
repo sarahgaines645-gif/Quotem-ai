@@ -66,7 +66,7 @@ async function expandItem(description, breakdownNote = '') {
             },
             body: JSON.stringify({
                 model: Q_CONFIG.model,
-                max_tokens: 4000,
+                max_tokens: 4096,
                 temperature: Q_CONFIG.temperature,
                 messages: [
                     { role: 'system', content: SYSTEM_PROMPT },
@@ -75,7 +75,6 @@ async function expandItem(description, breakdownNote = '') {
                         content: `Break this down into individual SOR items:\n\nJOB: ${description}\n${breakdownNote ? `NOTES: ${breakdownNote}` : ''}`,
                     },
                 ],
-                response_format: { type: 'json_object' },
             }),
         });
 

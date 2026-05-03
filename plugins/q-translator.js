@@ -133,13 +133,12 @@ async function translateToSOR(items) {
             },
             body: JSON.stringify({
                 model: Q_CONFIG.model,
-                max_tokens: 1000,
+                max_tokens: 4096,
                 temperature: Q_CONFIG.temperature,
                 messages: [
                     { role: 'system', content: SYSTEM_PROMPT + learningContext },
                     { role: 'user', content: userInput },
                 ],
-                response_format: { type: 'json_object' },
             }),
         });
 
