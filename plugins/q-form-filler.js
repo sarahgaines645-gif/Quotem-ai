@@ -14,6 +14,7 @@
  */
 
 const { PDFDocument, StandardFonts, PDFName, rgb } = require('pdf-lib');
+const { pathToFileURL } = require('url');
 const { Q_CONFIG } = require('../config');
 
 const EXTRACT_SYSTEM = `You are a form-filling assistant. Your output is ALWAYS a single JSON object — never prose, never markdown, never an explanation.
@@ -166,11 +167,83 @@ ${infoText || '(none)'}`;
 }
 
 /**
+ * Extract text item positions from every page of a PDF using pdfjs-dist.
+ * Returns Map<pageIndex, Array<{x, y, text}>> in native PDF coordinates
+ * (bottom-left origin, same system as pdf-lib). Falls back to empty Map on error.
+ */
+async function extractTextPositions(pdfBytes) {
+    let pdfjs;
+    try {
+        pdfjs = await import('pdfjs-dist/legacy/build/pdf.mjs');
+    } catch (e) {
+        console.warn('[q-form-filler] pdfjs-dist not available:', e.message);
+        return new Map();
+    }
+
+    try {
+        // Point the worker at the bundled worker file so pdfjs can parse in a thread
+        const workerPath = require.resolve('pdfjs-dist/legacy/build/pdf.worker.mjs');
+        pdfjs.GlobalWorkerOptions.workerSrc = pathToFileURL(workerPath).href;
+
+        const loadingTask = pdfjs.getDocument({ data: new Uint8Array(pdfBytes) });
+        const doc = await loadingTask.promise;
+        const pageMap = new Map();
+
+        for (let pageNum = 1; pageNum <= doc.numPages; pageNum++) {
+            const page = await doc.getPage(pageNum);
+            const textContent = await page.getTextContent();
+            const items = textContent.items
+                .filter(item => item.str && item.str.trim())
+                .map(item => ({
+                    x: item.transform[4],
+                    y: item.transform[5],
+                    text: item.str,
+                }));
+            pageMap.set(pageNum - 1, items); // 0-indexed to match pdf-lib pages array
+            page.cleanup();
+        }
+
+        await doc.destroy();
+        return pageMap;
+    } catch (e) {
+        console.warn('[q-form-filler] text position extraction failed:', e.message);
+        return new Map();
+    }
+}
+
+/**
+ * Find the Y baseline of body text adjacent to a field rect.
+ * Looks for text items that share the same vertical band as the field and are
+ * within 300pts horizontally. For tall fields (NRLA height≈39), the body text
+ * baseline sits near the TOP of the rect — we take the highest Y found.
+ * Returns null if no adjacent text is found.
+ */
+function findBaselineY(textItems, rect) {
+    if (!textItems || textItems.length === 0) return null;
+
+    const yMin = rect.y - 4;
+    const yMax = rect.y + rect.height + 4;
+    const xMin = rect.x - 300;
+    const xMax = rect.x + rect.width + 300;
+
+    const candidates = textItems.filter(item =>
+        item.y >= yMin && item.y <= yMax &&
+        item.x >= xMin && item.x <= xMax
+    );
+
+    if (candidates.length === 0) return null;
+    // Highest Y = text nearest the top of the field rect (where NRLA body text sits)
+    return Math.max(...candidates.map(c => c.y));
+}
+
+/**
  * Write extracted values into a PDF and return filled bytes.
+ * Drawn text is anchored to the Y baseline of adjacent body text on each page,
+ * so when the PDF is opened in Word the filled values land on the correct line.
  *
  * @param {Buffer|Uint8Array} pdfBytes
  * @param {Object} values — { fieldName: value }
- * @returns {Promise<Uint8Array>}
+ * @returns {Promise<{ filledBytes: Uint8Array, results: object }>}
  */
 async function fillPdf(pdfBytes, values) {
     const pdfDoc = await PDFDocument.load(pdfBytes, { ignoreEncryption: true });
@@ -192,7 +265,6 @@ async function fillPdf(pdfBytes, values) {
     }
 
     function pageForWidget(widget) {
-        // Standard PDF: widget annotation has /P pointing to its page
         try {
             const pRef = widget.dict.get(PDFName.of('P'));
             if (pRef) {
@@ -201,7 +273,6 @@ async function fillPdf(pdfBytes, values) {
                 if (found) return found;
             }
         } catch { /* fall through to scan */ }
-        // Fallback: scan every page's annotation list
         for (const [ref, obj] of pdfDoc.context.indirectObjects) {
             if (obj === widget.dict) return refKeyToPage.get(ref.toString()) || null;
         }
@@ -250,22 +321,28 @@ async function fillPdf(pdfBytes, values) {
         }
     }
 
-    // Flatten first — burns in any pre-baked field appearances (blank boxes on
-    // NRLA-style forms) and removes the widget annotations. We never called
-    // setText/check/select, so no values are stored — flatten just cleans up.
+    // Flatten first — burns in any pre-baked field appearances and removes widget
+    // annotations. We never called setText/select, so only the blank boxes are burned in.
     try { form.flatten(); } catch (e) { console.warn('[q-form-filler] flatten:', e.message); }
 
-    // Draw values AFTER flatten so our text is on top of everything.
-    // y = rect.y + 1 puts the baseline at the very bottom of the field rect —
-    // the same Y as surrounding body text. Word groups text into lines by Y
-    // position, so this keeps filled values on the right line when converting.
+    // Extract text positions from the original bytes so we can anchor drawn text
+    // to the same Y baseline as adjacent body text. This keeps filled values on
+    // the correct line when the PDF is opened or converted in Word.
+    const textPositions = await extractTextPositions(pdfBytes);
+
     const helvetica = await pdfDoc.embedFont(StandardFonts.Helvetica);
     for (const { page, rect, text, isCheck } of draws) {
+        const pageIdx = pages.indexOf(page);
+        const textItems = textPositions.get(pageIdx) || [];
+
+        // Anchor Y to adjacent body text; fall back to 75% up the field rect
+        const anchoredY = findBaselineY(textItems, rect) ?? (rect.y + rect.height * 0.75);
+
         if (isCheck) {
             const size = Math.min(rect.height, rect.width) * 0.7;
             page.drawText('X', {
                 x: rect.x + (rect.width - size * 0.55) / 2,
-                y: rect.y + 1,
+                y: anchoredY,
                 size,
                 font: helvetica,
                 color: rgb(0, 0, 0),
@@ -274,7 +351,7 @@ async function fillPdf(pdfBytes, values) {
             const fontSize = Math.min(Math.max(rect.height * 0.65, 8), 11);
             page.drawText(text, {
                 x: rect.x + 2,
-                y: rect.y + 1,
+                y: anchoredY,
                 size: fontSize,
                 font: helvetica,
                 color: rgb(0, 0, 0),
