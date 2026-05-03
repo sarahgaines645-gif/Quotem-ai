@@ -178,56 +178,45 @@ const TOOL_DEFINITIONS = [
 // ─────────────────────────────────────────────────────────────
 
 /**
- * web_search — Google search via SerpAPI. Same SERP_API_KEY Quotem already
- * uses for its other web-search surfaces. Free tier: 250 searches/month.
- *
- * Returns the answer box and knowledge graph snippet alongside the organic
- * results when SerpAPI surfaces them — Q can use those directly without
- * needing to read all the result snippets.
+ * web_search — Google Custom Search API. 100 free/day, $5/1,000 after that.
+ * Requires: GOOGLE_SEARCH_KEY + GOOGLE_SEARCH_CX (search engine ID from
+ * programmablesearchengine.google.com). Q only calls this when explicitly asked.
  */
 async function webSearch({ query, count = 5 }) {
-    const apiKey = process.env.SERP_API_KEY;
-    if (!apiKey) {
-        return { error: 'SERP_API_KEY not configured' };
+    const apiKey = process.env.GOOGLE_SEARCH_KEY;
+    const cx = process.env.GOOGLE_SEARCH_CX;
+    if (!apiKey || !cx) {
+        return { error: 'GOOGLE_SEARCH_KEY or GOOGLE_SEARCH_CX not configured' };
     }
     if (!query || typeof query !== 'string') {
         return { error: 'Query string required' };
     }
     const safeCount = Math.min(Math.max(parseInt(count) || 5, 1), 10);
     const params = new URLSearchParams({
+        key: apiKey,
+        cx,
         q: query,
         num: String(safeCount),
         gl: 'uk',
         hl: 'en',
-        api_key: apiKey,
     });
-    const url = `https://serpapi.com/search.json?${params.toString()}`;
+    const url = `https://www.googleapis.com/customsearch/v1?${params.toString()}`;
     try {
         const response = await fetch(url);
         if (!response.ok) {
             const errText = await response.text();
-            return { error: `SerpAPI HTTP ${response.status}: ${errText.substring(0, 200)}` };
+            return { error: `Google Search HTTP ${response.status}: ${errText.substring(0, 200)}` };
         }
         const data = await response.json();
-        const results = (data.organic_results || []).slice(0, safeCount).map(r => ({
+        const results = (data.items || []).slice(0, safeCount).map(r => ({
             title: r.title,
             url: r.link,
             snippet: r.snippet,
         }));
-        // Direct-answer surfaces — Q can use these without parsing result snippets.
-        const answerBox = data.answer_box;
-        const directAnswer = answerBox
-            ? (answerBox.answer || answerBox.snippet || answerBox.result || null)
-            : null;
-        const knowledgeGraph = data.knowledge_graph
-            ? (data.knowledge_graph.description || data.knowledge_graph.snippet || null)
-            : null;
         return {
             query,
             results,
             count: results.length,
-            ...(directAnswer && { direct_answer: directAnswer }),
-            ...(knowledgeGraph && { knowledge_graph: knowledgeGraph }),
         };
     } catch (err) {
         return { error: err.message };
