@@ -347,10 +347,8 @@ router.post('/forms/fill', requirePerson, express.json({ limit: '24mb' }), async
         let filledBytes, results;
 
         if (directValues && typeof directValues === 'object' && Object.keys(directValues).length) {
-            // Field-by-field mode: values already extracted by the UI, skip Q.
-            // AcroForm fill — Word reads /V values at the field's own /Rect,
-            // so alignment is exact regardless of content-stream order.
-            ({ filledBytes, results } = await qFormFiller.fillPdfForWord(pdfBytes, directValues));
+            // Field-by-field mode: values already extracted by the UI, skip Q
+            ({ filledBytes, results } = await qFormFiller.fillPdf(pdfBytes, directValues));
         } else {
             // Paste/voice mode: Q extracts values from infoText or image
             if (!fields || !fields.length) return res.status(400).json({ error: 'fields required' });
