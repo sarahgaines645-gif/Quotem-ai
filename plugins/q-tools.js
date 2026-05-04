@@ -184,7 +184,12 @@ const TOOL_DEFINITIONS = [
         function: {
             name: 'read_doc',
             description: 'List every paragraph in the user\'s current Word doc with its index, text, and style. Call this BEFORE any edit so you know the current layout — indices shift after deletes and moves, so re-read whenever the doc changes.',
-            parameters: { type: 'object', properties: {} },
+            parameters: {
+                type: 'object',
+                properties: {
+                    refresh: { type: 'boolean', description: 'Always pass true. (Tool needs at least one parameter for the model to call it cleanly.)' },
+                },
+            },
         },
     },
     {

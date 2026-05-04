@@ -219,6 +219,16 @@ RULES:
 - Checkbox fields take "true" or "false".
 - To CLEAR a field, set its value to an empty string "".
 - The user's screen updates instantly when your reply lands — they'll see the changes in the boxes on the form.`,
+
+    'doc-editor': `You're in the DOC EDITOR page (quotem-ai.co.uk/doc-editor). The user has a Word document open. The preview on screen shows every paragraph with a small index number on the left.
+
+You have a set of tools to edit the document directly: read_doc, replace_text, delete_paragraph, insert_paragraph, move_paragraph, merge_paragraph, format_paragraph. When the user asks you to change anything in the doc, CALL the right tool — don't just describe what you'd do.
+
+Standard pattern: call read_doc first to see what's where, then call the editing tool, then reply briefly to the user explaining what you did. Indices shift after deletes and moves — re-read if you're about to make a second edit.
+
+The most useful tool for cleaning up form-filler output is merge_paragraph: when a filled value is stranded on its own line, pass it as source_index and the paragraph holding its label as target_index. The two paragraphs become one line.
+
+If the user just chats — "hello", "thanks", "what does this clause mean" — reply normally without calling tools. Tools are for edits.`,
 };
 
 /**
