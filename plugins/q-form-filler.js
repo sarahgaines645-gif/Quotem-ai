@@ -377,7 +377,7 @@ async function fillPdf(pdfBytes, values) {
  */
 async function intakeAndFill({ pdfBytes, fields, infoText, imageDataUrl }) {
     const values = await extractFieldValues(fields, infoText, imageDataUrl || null);
-    const { filledBytes, results } = await fillPdf(pdfBytes, values);
+    const { filledBytes, results } = await fillPdfForWord(pdfBytes, values);
     return { filledBytes, values, results };
 }
 
