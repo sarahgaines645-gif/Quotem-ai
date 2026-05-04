@@ -33,7 +33,7 @@ const TOOL_DEFINITIONS = [
         type: 'function',
         function: {
             name: 'web_search',
-            description: 'Search the live web for current information via Google. Use this for news, facts, prices, or anything that may have changed since your training. Returns organic results plus (when available) a direct answer and knowledge-graph snippet.',
+            description: 'Search the live web for current information. Use this for news, facts, prices, or anything that may have changed since your training. Returns the most relevant results from across the web.',
             parameters: {
                 type: 'object',
                 properties: {
@@ -178,46 +178,38 @@ const TOOL_DEFINITIONS = [
 // ─────────────────────────────────────────────────────────────
 
 /**
- * web_search — Google Custom Search API. 100 free/day, $5/1,000 after that.
- * Requires: GOOGLE_SEARCH_KEY + GOOGLE_SEARCH_CX (search engine ID from
- * programmablesearchengine.google.com). Q only calls this when explicitly asked.
+ * web_search — Brave Search API. 2,000 free/month, independent index.
+ * Requires: BRAVE_SEARCH_KEY from api.search.brave.com
  */
 async function webSearch({ query, count = 5 }) {
-    const apiKey = process.env.GOOGLE_SEARCH_KEY || process.env.GEMINI_API_KEY;
-    const cx = process.env.GOOGLE_SEARCH_CX;
-    if (!apiKey || !cx) {
-        return { error: 'Google Search API key or GOOGLE_SEARCH_CX not configured' };
+    const apiKey = process.env.BRAVE_SEARCH_KEY;
+    if (!apiKey) {
+        return { error: 'BRAVE_SEARCH_KEY not configured' };
     }
     if (!query || typeof query !== 'string') {
         return { error: 'Query string required' };
     }
     const safeCount = Math.min(Math.max(parseInt(count) || 5, 1), 10);
-    const params = new URLSearchParams({
-        key: apiKey,
-        cx,
-        q: query,
-        num: String(safeCount),
-        gl: 'uk',
-        hl: 'en',
-    });
-    const url = `https://www.googleapis.com/customsearch/v1?${params.toString()}`;
+    const url = `https://api.search.brave.com/res/v1/web/search?q=${encodeURIComponent(query)}&count=${safeCount}&country=gb&search_lang=en`;
     try {
-        const response = await fetch(url);
+        const response = await fetch(url, {
+            headers: {
+                'Accept': 'application/json',
+                'Accept-Encoding': 'gzip',
+                'X-Subscription-Token': apiKey,
+            },
+        });
         if (!response.ok) {
             const errText = await response.text();
-            return { error: `Google Search HTTP ${response.status}: ${errText.substring(0, 200)}` };
+            return { error: `Brave Search HTTP ${response.status}: ${errText.substring(0, 200)}` };
         }
         const data = await response.json();
-        const results = (data.items || []).slice(0, safeCount).map(r => ({
+        const results = (data.web?.results || []).slice(0, safeCount).map(r => ({
             title: r.title,
-            url: r.link,
-            snippet: r.snippet,
+            url: r.url,
+            snippet: r.description,
         }));
-        return {
-            query,
-            results,
-            count: results.length,
-        };
+        return { query, results, count: results.length };
     } catch (err) {
         return { error: err.message };
     }
