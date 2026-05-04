@@ -183,10 +183,10 @@ const TOOL_DEFINITIONS = [
  * programmablesearchengine.google.com). Q only calls this when explicitly asked.
  */
 async function webSearch({ query, count = 5 }) {
-    const apiKey = process.env.GOOGLE_SEARCH_KEY;
+    const apiKey = process.env.GOOGLE_SEARCH_KEY || process.env.GEMINI_API_KEY;
     const cx = process.env.GOOGLE_SEARCH_CX;
     if (!apiKey || !cx) {
-        return { error: 'GOOGLE_SEARCH_KEY or GOOGLE_SEARCH_CX not configured' };
+        return { error: 'Google Search API key or GOOGLE_SEARCH_CX not configured' };
     }
     if (!query || typeof query !== 'string') {
         return { error: 'Query string required' };
