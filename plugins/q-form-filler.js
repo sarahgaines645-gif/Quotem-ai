@@ -477,11 +477,24 @@ async function fillPdfForWord(pdfBytes, values) {
         }
     }
 
+    // Try to bake appearance streams ourselves first
     try {
         const helvetica = await pdfDoc.embedFont(StandardFonts.Helvetica);
         form.updateFieldAppearances(helvetica);
     } catch (e) {
         console.warn('[q-form-filler] updateFieldAppearances failed:', e.message);
+    }
+
+    // Belt-and-braces: set /NeedAppearances on the AcroForm dictionary so the
+    // PDF reader regenerates visuals on open. NRLA's pre-baked appearance
+    // streams ignore programmatic setText otherwise — fields stay blank.
+    try {
+        const acroForm = pdfDoc.catalog.lookup(PDFName.of('AcroForm'));
+        if (acroForm && typeof acroForm.set === 'function') {
+            acroForm.set(PDFName.of('NeedAppearances'), pdfDoc.context.obj(true));
+        }
+    } catch (e) {
+        console.warn('[q-form-filler] NeedAppearances set failed:', e.message);
     }
 
     const filledBytes = await pdfDoc.save();
