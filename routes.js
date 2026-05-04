@@ -299,6 +299,7 @@ router.post('/plotter/analyze', requirePerson, express.json({ limit: '24mb' }), 
 
 const qFormFiller = require('./plugins/q-form-filler');
 const { fillPdfForWord } = qFormFiller;
+const docEditor = require('./plugins/q-doc-editor');
 
 // POST /forms/label
 // Body: { pageImages: [dataUrl, ...], totalTags: number }
@@ -426,6 +427,69 @@ router.post('/forms/fill-docx', requirePerson, express.json({ limit: '24mb' }), 
         for (const f of [tmpPdf, tmpDocx]) try { fs.unlinkSync(f); } catch {}
         try { fs.rmSync(loProfile, { recursive: true, force: true }); } catch {}
     }
+});
+
+// ─── DOC EDITOR ROUTES ────────────────────────────────────────
+// Browser uploads a .docx, the server stores it in the per-user session,
+// Q's tools read and modify it, browser fetches the latest state to render.
+
+// POST /doc-editor/upload  — Body: { dataUrl, filename, fieldValues? }
+// fieldValues is the optional "receipt" from the form-filler so Q knows
+// what was originally filled where.
+router.post('/doc-editor/upload', requirePerson, express.json({ limit: '24mb' }), async (req, res) => {
+    try {
+        const { dataUrl, filename, fieldValues } = req.body || {};
+        if (!dataUrl) return res.status(400).json({ error: 'dataUrl required' });
+        const m = dataUrl.match(/^data:[^;]+;base64,(.+)$/);
+        if (!m) return res.status(400).json({ error: 'dataUrl must be base64-encoded' });
+        const bytes = Buffer.from(m[1], 'base64');
+        // Sanity check: try to read it
+        const paragraphs = docEditor.readDoc(bytes);
+        docEditor.setSession(req.person.id, {
+            bytes,
+            filename: filename || 'document.docx',
+            fieldValues: fieldValues || null,
+        });
+        res.json({ ok: true, paragraphs, filename: filename || 'document.docx' });
+    } catch (e) {
+        console.error('[doc-editor/upload]', e.message);
+        res.status(500).json({ error: e.message });
+    }
+});
+
+// GET /doc-editor/state  — current paragraphs + filename, used by the UI
+// to refresh the preview after each tool call.
+router.get('/doc-editor/state', requirePerson, (req, res) => {
+    const session = docEditor.getSession(req.person.id);
+    if (!session || !session.bytes) return res.json({ open: false });
+    try {
+        const paragraphs = docEditor.readDoc(session.bytes);
+        res.json({
+            open: true,
+            filename: session.filename,
+            paragraphs,
+            fieldValues: session.fieldValues || null,
+        });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+// GET /doc-editor/download  — return the current .docx
+router.get('/doc-editor/download', requirePerson, (req, res) => {
+    const session = docEditor.getSession(req.person.id);
+    if (!session || !session.bytes) return res.status(404).json({ error: 'No document open' });
+    res.set({
+        'Content-Type': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        'Content-Disposition': `attachment; filename="${session.filename || 'document.docx'}"`,
+    });
+    res.send(session.bytes);
+});
+
+// POST /doc-editor/close  — clear the session (user finished editing)
+router.post('/doc-editor/close', requirePerson, (req, res) => {
+    docEditor.clearSession(req.person.id);
+    res.json({ ok: true });
 });
 
 const qWriter = require('./plugins/q-writer');
@@ -960,6 +1024,11 @@ router.get('/code', (req, res) => {
 // ── Doc reader — upload a document, get its content extracted as text ────
 router.get('/doc-reader', (req, res) => {
     res.sendFile(path.join(__dirname, 'doc-reader.html'));
+});
+
+// ── Doc editor — upload a .docx, talk Q through editing it in place ──────
+router.get('/doc-editor', (req, res) => {
+    res.sendFile(path.join(__dirname, 'doc-editor.html'));
 });
 
 // Body: { imageDataUrl, question? }

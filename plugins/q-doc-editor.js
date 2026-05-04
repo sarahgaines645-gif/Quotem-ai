@@ -522,6 +522,28 @@ function countOccurrences(haystack, needle) {
     return count;
 }
 
+// ─────────────────────────────────────────────────────────────
+//  SESSION STORAGE — per-user current doc
+// ─────────────────────────────────────────────────────────────
+//  Q's tools and the upload/save routes both need access to the doc the
+//  user is currently editing. We keep one current doc per personId in
+//  memory. Simple and fast; if it grows we move to the SQLite db.
+
+const sessions = new Map();
+// personId → { bytes, filename, fieldValues, updatedAt }
+
+function setSession(personId, data) {
+    sessions.set(personId, { ...(sessions.get(personId) || {}), ...data, updatedAt: Date.now() });
+}
+
+function getSession(personId) {
+    return sessions.get(personId) || null;
+}
+
+function clearSession(personId) {
+    sessions.delete(personId);
+}
+
 module.exports = {
     loadDocx,
     saveDocx,
@@ -533,4 +555,8 @@ module.exports = {
     moveParagraph,
     mergeParagraph,
     formatParagraph,
+    // Session helpers — used by routes and Q's tool dispatcher
+    setSession,
+    getSession,
+    clearSession,
 };

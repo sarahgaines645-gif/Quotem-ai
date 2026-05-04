@@ -23,6 +23,7 @@
 const { Q_CONFIG } = require('../config');
 const { addFact, searchFacts, listFacts } = require('../facts');
 const { createDocx } = require('./doc-creator');
+const docEditor = require('./q-doc-editor');
 
 // ─────────────────────────────────────────────────────────────
 //  TOOL DEFINITIONS — OpenAI function-calling schema
@@ -168,6 +169,114 @@ const TOOL_DEFINITIONS = [
                     },
                 },
                 required: ['image_url', 'question'],
+            },
+        },
+    },
+
+    // ─── DOC EDITOR TOOLS ──────────────────────────────────────
+    // These act on the user's currently-open Word doc (uploaded via the
+    // doc-editor page). Each call modifies the doc in place; the UI
+    // re-renders the preview after every successful tool call. Always call
+    // read_doc first so you know the current paragraph indices.
+
+    {
+        type: 'function',
+        function: {
+            name: 'read_doc',
+            description: 'List every paragraph in the user\'s current Word doc with its index, text, and style. Call this BEFORE any edit so you know the current layout — indices shift after deletes and moves, so re-read whenever the doc changes.',
+            parameters: { type: 'object', properties: {} },
+        },
+    },
+    {
+        type: 'function',
+        function: {
+            name: 'replace_text',
+            description: 'Find a phrase in the doc and swap it for another. Set paragraph_index to scope the replace to one paragraph; leave it null to replace everywhere.',
+            parameters: {
+                type: 'object',
+                properties: {
+                    target: { type: 'string', description: 'The exact text to find.' },
+                    replacement: { type: 'string', description: 'The text to put in its place.' },
+                    paragraph_index: { type: ['integer', 'null'], description: 'Optional. Replace only inside this paragraph. Null/omit = replace everywhere.' },
+                },
+                required: ['target', 'replacement'],
+            },
+        },
+    },
+    {
+        type: 'function',
+        function: {
+            name: 'delete_paragraph',
+            description: 'Remove a paragraph from the doc by its index. Indices shift after — call read_doc again before the next edit.',
+            parameters: {
+                type: 'object',
+                properties: { index: { type: 'integer', description: 'Index of the paragraph to delete (0-based).' } },
+                required: ['index'],
+            },
+        },
+    },
+    {
+        type: 'function',
+        function: {
+            name: 'insert_paragraph',
+            description: 'Add a new paragraph after a given index. Use after_index = -1 to insert at the very top of the doc.',
+            parameters: {
+                type: 'object',
+                properties: {
+                    after_index: { type: 'integer', description: 'Insert AFTER this paragraph index. Use -1 for top of doc.' },
+                    text: { type: 'string', description: 'Text content of the new paragraph.' },
+                    style: { type: 'string', description: 'Optional style: Heading1, Heading2, Heading3, Title, Normal.', enum: ['Heading1', 'Heading2', 'Heading3', 'Title', 'Normal'] },
+                },
+                required: ['after_index', 'text'],
+            },
+        },
+    },
+    {
+        type: 'function',
+        function: {
+            name: 'move_paragraph',
+            description: 'Move a paragraph from one position to another. Both indices refer to the doc as it is BEFORE the move.',
+            parameters: {
+                type: 'object',
+                properties: {
+                    from_index: { type: 'integer', description: 'Current position of the paragraph.' },
+                    to_index: { type: 'integer', description: 'Target position.' },
+                },
+                required: ['from_index', 'to_index'],
+            },
+        },
+    },
+    {
+        type: 'function',
+        function: {
+            name: 'merge_paragraph',
+            description: 'CRITICAL TOOL for fixing form-filler output. Take the text from one paragraph and inline it into another paragraph. The source paragraph is removed; its text becomes part of the target. Use this when a filled value is stranded on its own line and needs to sit next to its label. Position controls where in the target the source text lands: "start", "end" (default), or a literal phrase from the target after which to slot the source in.',
+            parameters: {
+                type: 'object',
+                properties: {
+                    source_index: { type: 'integer', description: 'Paragraph whose text gets pulled.' },
+                    target_index: { type: 'integer', description: 'Paragraph that receives the text inline.' },
+                    position: { type: 'string', description: '"start", "end", or a literal phrase from the target paragraph (insert immediately after that phrase). Default "end".' },
+                },
+                required: ['source_index', 'target_index'],
+            },
+        },
+    },
+    {
+        type: 'function',
+        function: {
+            name: 'format_paragraph',
+            description: 'Apply formatting to a paragraph: heading style, alignment, or bold/italic/underline.',
+            parameters: {
+                type: 'object',
+                properties: {
+                    index: { type: 'integer', description: 'Paragraph index.' },
+                    style: {
+                        type: 'string',
+                        description: 'One of: Heading1, Heading2, Heading3, Title, Normal (paragraph style); left, center, right, justify (alignment); bold, italic, underline (run formatting on every run in the paragraph).',
+                    },
+                },
+                required: ['index', 'style'],
             },
         },
     },
@@ -377,7 +486,50 @@ async function executeTool(name, argsRaw, personId) {
         case 'create_document':  return await createDocument(args);
         case 'remember':         return remember(args, personId);
         case 'recall':           return recall(args, personId);
+        // Doc-editor tools — operate on the user's current uploaded doc
+        case 'read_doc':          return docEditTool(personId, () => docEditor.readDoc(getDoc(personId)), { keepBytes: true });
+        case 'replace_text':      return docEditTool(personId, (b) => docEditor.replaceText(b, args.target, args.replacement, args.paragraph_index ?? null));
+        case 'delete_paragraph':  return docEditTool(personId, (b) => docEditor.deleteParagraph(b, args.index));
+        case 'insert_paragraph':  return docEditTool(personId, (b) => docEditor.insertParagraph(b, args.after_index, args.text, args.style || 'Normal'));
+        case 'move_paragraph':    return docEditTool(personId, (b) => docEditor.moveParagraph(b, args.from_index, args.to_index));
+        case 'merge_paragraph':   return docEditTool(personId, (b) => docEditor.mergeParagraph(b, args.source_index, args.target_index, args.position || 'end'));
+        case 'format_paragraph':  return docEditTool(personId, (b) => docEditor.formatParagraph(b, args.index, args.style));
         default:                 return { error: `Unknown tool: "${name}"` };
+    }
+}
+
+/**
+ * Helper for doc-editor tools — fetches the current doc, runs the operation,
+ * stores the result back in the session, and returns a summary including the
+ * fresh paragraph list so Q sees the new state.
+ */
+function getDoc(personId) {
+    const session = docEditor.getSession(personId);
+    if (!session || !session.bytes) {
+        throw new Error('No document open. Ask the user to upload a .docx on the doc-editor page first.');
+    }
+    return session.bytes;
+}
+
+function docEditTool(personId, op, opts = {}) {
+    try {
+        const bytes = getDoc(personId);
+        const result = op(bytes);
+        if (opts.keepBytes) {
+            // Read-only operation — result is the data itself
+            return { ok: true, paragraphs: result };
+        }
+        // Write operation — result is { bytes, ... } from the editor
+        if (result && result.bytes) {
+            docEditor.setSession(personId, { bytes: result.bytes });
+        }
+        return {
+            ok: true,
+            paragraphs: docEditor.readDoc(result.bytes),
+            ...(result.replacements !== undefined ? { replacements: result.replacements } : {}),
+        };
+    } catch (e) {
+        return { error: e.message };
     }
 }
 
@@ -470,14 +622,33 @@ const TRIGGERS = {
         /\b(create|make|write|generate|draft|build) (a|me a|me)? ?(document|doc|file|pdf|word|letter)\b/i,
         /\bsave (this|that|it) (as a|to a)? ?(document|doc|file|pdf|word)\b/i,
     ],
+    // Doc-editor tools — fire when the user is talking about editing the
+    // document on screen. The doc-editor page also passes a flag that
+    // unconditionally enables these (see selectActiveTools below).
+    read_doc:         [/\b(read|show|list|what'?s in)\b.*\b(doc|document|paragraph)/i],
+    replace_text:     [/\b(replace|swap|change)\b.*\b(text|word|phrase|to)/i],
+    delete_paragraph: [/\b(delete|remove|drop|get rid of)\b.*\b(paragraph|line|that)/i],
+    insert_paragraph: [/\b(add|insert|put in)\b.*\b(paragraph|line|new)/i],
+    move_paragraph:   [/\b(move|relocate|shift)\b.*\b(paragraph|line|to)/i],
+    merge_paragraph:  [/\b(merge|combine|inline|join|put on (the|that) line|same line|stranded|bring (it|that) up)/i],
+    format_paragraph: [/\b(bold|italic|underline|heading|centre|center|left|right|justify|format)/i],
 };
 
-function selectActiveTools(userMessage) {
+// Tools that should always be available when the user has a doc open in
+// the editor — set via ?docEditor=1 on the chat call from doc-editor.html.
+const DOC_EDITOR_TOOLS = new Set([
+    'read_doc', 'replace_text', 'delete_paragraph', 'insert_paragraph',
+    'move_paragraph', 'merge_paragraph', 'format_paragraph',
+]);
+
+function selectActiveTools(userMessage, options = {}) {
     const msg = String(userMessage || '');
     return TOOL_DEFINITIONS.filter(t => {
         const name = t.function?.name;
         if (!name) return false;
         if (ALWAYS_ON.has(name)) return true;
+        // Doc-editor page: all doc-editor tools always on
+        if (options.docEditor && DOC_EDITOR_TOOLS.has(name)) return true;
         const triggers = TRIGGERS[name];
         if (!triggers) return false;
         return triggers.some(rx => rx.test(msg));

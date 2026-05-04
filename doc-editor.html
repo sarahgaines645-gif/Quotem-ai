@@ -1,0 +1,438 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <script src="/q-auth.js"></script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Q Doc Editor — talk Q through editing your Word doc</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #e8e8e8; --text: #1a1a1a;
+    --text-muted: rgba(0,0,0,0.42); --text-faint: rgba(0,0,0,0.26);
+    --shadow-light: #ffffff; --shadow-dark: #ababab;
+    --accent: #e91e63;
+    --neu-raised:    10px 10px 28px #ababab, -8px -8px 20px #ffffff, inset 0 1px 0 rgba(255,255,255,0.5);
+    --neu-raised-sm: 6px 6px 16px #ababab, -5px -5px 12px #ffffff;
+    --neu-inset:     inset 5px 5px 14px #ababab, inset -4px -4px 10px #ffffff;
+    --neu-inset-sm:  inset 3px 3px 8px #ababab, inset -2px -2px 6px #ffffff;
+    --neu-inset-xs:  inset 3px 3px 8px #ababab, inset -2px -2px 6px #ffffff;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: 'Space Grotesk', -apple-system, sans-serif;
+    background: var(--bg); color: var(--text);
+    font-size: 15px; line-height: 1.55;
+    min-height: 100vh; padding: 24px 20px 60px;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 1300px; margin: 0 auto; }
+  header { display: flex; align-items: baseline; gap: 14px; margin-bottom: 20px; flex-wrap: wrap; }
+  .logo-mark { display: inline-flex; align-items: baseline; }
+  .logo-mark .q { font-size: 28px; font-weight: 700; line-height: 1; letter-spacing: -0.05em; }
+  .logo-mark .dot { width: 8px; height: 8px; background: var(--accent); border-radius: 50%; display: inline-block; margin-left: 4px; align-self: flex-end; margin-bottom: 4px; box-shadow: 0 1px 2px rgba(233,30,99,0.3); }
+  h1 { font-size: 22px; font-weight: 600; letter-spacing: -0.02em; }
+  .tagline { font-size: 13px; color: var(--text-muted); margin-left: auto; }
+
+  .card { background: var(--bg); border-radius: 18px; padding: 18px; box-shadow: var(--neu-raised); }
+
+  .layout { display: grid; grid-template-columns: 1.4fr 1fr; gap: 16px; }
+  @media (max-width: 920px) { .layout { grid-template-columns: 1fr; } }
+
+  /* Upload zone */
+  .drop-zone {
+    border: 2px dashed var(--shadow-dark);
+    border-radius: 16px; padding: 36px 20px; text-align: center;
+    color: var(--text-muted); cursor: pointer;
+    transition: all 0.15s ease;
+    background: var(--bg); box-shadow: var(--neu-inset-xs);
+    margin-bottom: 14px;
+  }
+  .drop-zone:hover, .drop-zone.dragover { color: var(--accent); border-color: var(--accent); }
+  .drop-zone .icon { font-size: 28px; display: block; margin-bottom: 6px; }
+  .drop-zone .hint { font-size: 12px; color: var(--text-faint); margin-top: 4px; }
+
+  /* Preview area */
+  .preview-wrap { display: none; }
+  .preview-wrap.show { display: block; }
+  .preview-toolbar {
+    display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+    margin-bottom: 12px; font-size: 13px; color: var(--text-muted);
+  }
+  .filename { font-weight: 600; color: var(--text); }
+  .preview {
+    background: white;
+    border-radius: 12px;
+    box-shadow: var(--neu-inset-sm);
+    padding: 32px 36px;
+    max-height: 580px; overflow-y: auto;
+    line-height: 1.6;
+  }
+  .preview .paragraph {
+    margin-bottom: 10px;
+    position: relative; padding-left: 30px;
+    color: #1a1a1a;
+    transition: background 0.4s ease;
+  }
+  .preview .paragraph.flash { background: rgba(233,30,99,0.12); border-radius: 4px; }
+  .preview .paragraph .idx {
+    position: absolute; left: 0; top: 2px;
+    font-size: 10px; color: var(--text-faint);
+    font-weight: 600; min-width: 22px;
+  }
+  .preview .paragraph[data-style="Heading1"] .text { font-size: 22px; font-weight: 700; }
+  .preview .paragraph[data-style="Heading2"] .text { font-size: 18px; font-weight: 600; }
+  .preview .paragraph[data-style="Heading3"] .text { font-size: 16px; font-weight: 600; }
+  .preview .paragraph[data-style="Title"] .text { font-size: 24px; font-weight: 700; letter-spacing: -0.01em; }
+
+  /* Chat side */
+  .chat-panel { display: flex; flex-direction: column; height: 700px; }
+  .chat-log {
+    flex: 1; overflow-y: auto;
+    padding: 6px 4px 12px; margin-bottom: 12px;
+    border-radius: 12px; box-shadow: var(--neu-inset-sm);
+    background: var(--bg);
+    padding: 12px;
+  }
+  .msg { padding: 10px 14px; border-radius: 14px; margin-bottom: 10px; max-width: 92%; font-size: 14px; line-height: 1.5; word-wrap: break-word; }
+  .msg.you { background: var(--bg); box-shadow: var(--neu-raised-sm); margin-left: auto; }
+  .msg.q { background: var(--bg); box-shadow: var(--neu-inset-sm); }
+  .msg.tool { background: rgba(233,30,99,0.06); font-size: 12px; color: var(--text-muted); padding: 6px 12px; border-radius: 8px; font-style: italic; }
+  .msg .who { font-size: 10px; font-weight: 600; color: var(--text-faint); text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 4px; }
+
+  .composer { display: flex; gap: 8px; align-items: flex-end; }
+  .composer textarea {
+    flex: 1;
+    border: none; outline: none; resize: none;
+    font-family: inherit; font-size: 14px;
+    color: var(--text); background: var(--bg);
+    padding: 12px 14px; border-radius: 12px;
+    box-shadow: var(--neu-inset-sm);
+    min-height: 44px; max-height: 140px;
+    line-height: 1.4;
+  }
+  button {
+    border: none; cursor: pointer;
+    background: var(--bg); color: var(--text);
+    font-family: inherit; font-size: 14px; font-weight: 600;
+    padding: 10px 16px; border-radius: 12px;
+    box-shadow: var(--neu-raised-sm);
+    white-space: nowrap;
+  }
+  button:hover:not(:disabled) { color: var(--accent); }
+  button:active:not(:disabled) { box-shadow: var(--neu-inset-xs); }
+  button:disabled { opacity: 0.5; cursor: not-allowed; }
+  button.mic.active { color: var(--accent); }
+
+  .back-link { display: inline-block; margin-top: 24px; font-size: 12px; color: var(--text-muted); text-decoration: none; }
+  .back-link:hover { color: var(--text); }
+
+  .status { font-size: 12px; color: var(--text-muted); }
+  .status.err { color: var(--accent); }
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <header>
+    <span class="logo-mark"><span class="q">Q</span><span class="dot"></span></span>
+    <h1>Doc Editor</h1>
+    <span class="tagline">Drop a Word doc. Tell Q what to fix. Watch him do it.</span>
+  </header>
+
+  <div class="layout">
+
+    <!-- Left: doc preview -->
+    <div class="card">
+      <input type="file" id="file-input" accept=".docx" style="display:none">
+      <div class="drop-zone" id="drop-zone">
+        <span class="icon">⬆</span>
+        <div>Click or drag a .docx here</div>
+        <div class="hint">If you came from the form filler the file's already loaded.</div>
+      </div>
+
+      <div class="preview-wrap" id="preview-wrap">
+        <div class="preview-toolbar">
+          <span class="filename" id="filename">document.docx</span>
+          <span class="status" id="doc-status"></span>
+          <span style="flex: 1"></span>
+          <button id="reload-btn">Reload original</button>
+          <button id="download-btn">Download</button>
+        </div>
+        <div class="preview" id="preview"></div>
+      </div>
+    </div>
+
+    <!-- Right: chat with Q -->
+    <div class="card chat-panel">
+      <div class="chat-log" id="chat-log">
+        <div class="msg q">
+          <div class="who">Q</div>
+          <div>Drop in a Word doc and tell me what to do. I can move paragraphs, merge stranded text into the line above, delete bits, change formatting — any of it. Talk to me like you would a real assistant: <i>"the tenant name is on a line by itself, put it next to the label"</i>.</div>
+        </div>
+      </div>
+      <div class="composer">
+        <button class="mic" id="mic-btn" title="Press to talk">🎤</button>
+        <textarea id="input" placeholder="Tell Q what to do…" rows="1"></textarea>
+        <button id="send-btn">Send</button>
+      </div>
+    </div>
+
+  </div>
+
+  <a href="/chat" class="back-link">← back to Q's chat</a>
+</div>
+
+<script>
+let originalBytes = null;       // first-uploaded version, for "reload original"
+let currentFilename = 'document.docx';
+
+const $fileInput  = document.getElementById('file-input');
+const $dropZone   = document.getElementById('drop-zone');
+const $previewWrap = document.getElementById('preview-wrap');
+const $preview    = document.getElementById('preview');
+const $filename   = document.getElementById('filename');
+const $docStatus  = document.getElementById('doc-status');
+const $reloadBtn  = document.getElementById('reload-btn');
+const $downloadBtn = document.getElementById('download-btn');
+const $chatLog    = document.getElementById('chat-log');
+const $input      = document.getElementById('input');
+const $sendBtn    = document.getElementById('send-btn');
+const $micBtn     = document.getElementById('mic-btn');
+
+// ─── upload ─────────────────────────────────────────────────
+$dropZone.addEventListener('click', () => $fileInput.click());
+$fileInput.addEventListener('change', () => {
+  if ($fileInput.files && $fileInput.files[0]) loadFile($fileInput.files[0]);
+});
+['dragenter', 'dragover'].forEach(ev => {
+  $dropZone.addEventListener(ev, e => { e.preventDefault(); $dropZone.classList.add('dragover'); });
+});
+['dragleave', 'drop'].forEach(ev => {
+  $dropZone.addEventListener(ev, e => { e.preventDefault(); $dropZone.classList.remove('dragover'); });
+});
+$dropZone.addEventListener('drop', e => {
+  const f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+  if (f) loadFile(f);
+});
+
+async function loadFile(file) {
+  if (!file.name.toLowerCase().endsWith('.docx')) {
+    alert('Please upload a .docx file');
+    return;
+  }
+  currentFilename = file.name;
+  const reader = new FileReader();
+  reader.onload = async () => {
+    originalBytes = reader.result;
+    await uploadToServer(reader.result, file.name);
+  };
+  reader.readAsDataURL(file);
+}
+
+async function uploadToServer(dataUrl, filename, fieldValues = null) {
+  $docStatus.textContent = 'Uploading…';
+  try {
+    const r = await fetch('/doc-editor/upload', {
+      method: 'POST', credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ dataUrl, filename, fieldValues }),
+    });
+    const data = await r.json();
+    if (!r.ok) throw new Error(data.error || 'HTTP ' + r.status);
+    $filename.textContent = filename;
+    $previewWrap.classList.add('show');
+    $dropZone.style.display = 'none';
+    renderPreview(data.paragraphs);
+    $docStatus.textContent = data.paragraphs.length + ' paragraphs loaded';
+    $docStatus.className = 'status';
+    if (fieldValues) {
+      addMessage('tool', 'Loaded with form-filler receipt: ' + Object.keys(fieldValues).length + ' fields filled originally.');
+    }
+  } catch (e) {
+    $docStatus.textContent = 'Upload failed: ' + e.message;
+    $docStatus.className = 'status err';
+  }
+}
+
+function renderPreview(paragraphs) {
+  $preview.innerHTML = paragraphs.map(p =>
+    '<div class="paragraph" data-idx="' + p.index + '" data-style="' + (p.style || 'Normal') + '">'
+      + '<span class="idx">' + p.index + '</span>'
+      + '<span class="text">' + escapeHtml(p.text || '') + '</span>'
+    + '</div>'
+  ).join('');
+}
+
+function flashChangedParagraphs(before, after) {
+  // Quick visual cue: any paragraph whose text differs gets a momentary highlight.
+  const beforeMap = new Map(before.map(p => [p.index, p.text]));
+  after.forEach(p => {
+    if (beforeMap.get(p.index) !== p.text) {
+      const el = $preview.querySelector('[data-idx="' + p.index + '"]');
+      if (el) {
+        el.classList.add('flash');
+        setTimeout(() => el.classList.remove('flash'), 1500);
+      }
+    }
+  });
+}
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]));
+}
+
+// ─── auto-load if form-filler stashed something ─────────────
+async function checkForExistingDoc() {
+  try {
+    const r = await fetch('/doc-editor/state', { credentials: 'include' });
+    const data = await r.json();
+    if (data.open && Array.isArray(data.paragraphs)) {
+      $filename.textContent = data.filename;
+      currentFilename = data.filename;
+      $previewWrap.classList.add('show');
+      $dropZone.style.display = 'none';
+      renderPreview(data.paragraphs);
+      $docStatus.textContent = data.paragraphs.length + ' paragraphs loaded';
+      if (data.fieldValues) {
+        addMessage('tool', 'Form-filler receipt: ' + Object.keys(data.fieldValues).length + ' fields. Tell me what looks wrong.');
+      }
+    }
+  } catch {}
+}
+checkForExistingDoc();
+
+// ─── reload + download ──────────────────────────────────────
+$reloadBtn.addEventListener('click', async () => {
+  if (!originalBytes) {
+    alert('No original to reload — upload a fresh file.');
+    return;
+  }
+  await uploadToServer(originalBytes, currentFilename);
+  addMessage('tool', 'Reloaded the original. Indices reset.');
+});
+
+$downloadBtn.addEventListener('click', () => {
+  window.location.href = '/doc-editor/download';
+});
+
+// ─── chat ───────────────────────────────────────────────────
+$input.addEventListener('keydown', e => {
+  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); }
+});
+$sendBtn.addEventListener('click', send);
+
+async function send() {
+  const text = $input.value.trim();
+  if (!text) return;
+  $input.value = '';
+  addMessage('you', text);
+  $sendBtn.disabled = true;
+
+  // Capture before-state so we can flash the diffs after Q's edit
+  const beforePara = currentParagraphsFromDom();
+
+  try {
+    const r = await fetch('/chat', {
+      method: 'POST', credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ message: text, surface: 'doc-editor' }),
+    });
+    const data = await r.json();
+    if (data.error) {
+      addMessage('q', '(error: ' + data.error + ')');
+    } else {
+      if (Array.isArray(data.toolCalls)) {
+        data.toolCalls.forEach(tc => {
+          addMessage('tool', tc.name + ' → ' + (tc.result?.error ? 'error: ' + tc.result.error : 'ok'));
+        });
+      }
+      if (data.reply) addMessage('q', data.reply);
+      // After every chat (which may have called tools), refetch state and re-render
+      await refreshPreview(beforePara);
+    }
+  } catch (e) {
+    addMessage('q', '(network error: ' + e.message + ')');
+  } finally {
+    $sendBtn.disabled = false;
+  }
+}
+
+function currentParagraphsFromDom() {
+  return Array.from($preview.querySelectorAll('.paragraph')).map(el => ({
+    index: Number(el.dataset.idx),
+    text: el.querySelector('.text').textContent,
+  }));
+}
+
+async function refreshPreview(beforePara) {
+  const r = await fetch('/doc-editor/state', { credentials: 'include' });
+  const data = await r.json();
+  if (data.open && Array.isArray(data.paragraphs)) {
+    renderPreview(data.paragraphs);
+    if (beforePara) flashChangedParagraphs(beforePara, data.paragraphs);
+    $docStatus.textContent = data.paragraphs.length + ' paragraphs';
+  }
+}
+
+function addMessage(who, text) {
+  const div = document.createElement('div');
+  div.className = 'msg ' + who;
+  if (who !== 'tool') {
+    const w = document.createElement('div');
+    w.className = 'who';
+    w.textContent = who === 'you' ? 'You' : 'Q';
+    div.appendChild(w);
+  }
+  const t = document.createElement('div');
+  t.textContent = text;
+  div.appendChild(t);
+  $chatLog.appendChild(div);
+  $chatLog.scrollTop = $chatLog.scrollHeight;
+}
+
+// ─── voice (simple Web Speech API for input only) ───────────
+let recognition = null;
+let listening = false;
+
+if (window.SpeechRecognition || window.webkitSpeechRecognition) {
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  recognition = new SR();
+  recognition.lang = 'en-GB';
+  recognition.continuous = false;
+  recognition.interimResults = false;
+  recognition.onresult = e => {
+    const text = e.results[0][0].transcript;
+    $input.value = (($input.value || '') + ' ' + text).trim();
+    $input.focus();
+  };
+  recognition.onend = () => {
+    listening = false;
+    $micBtn.classList.remove('active');
+  };
+  recognition.onerror = e => {
+    listening = false;
+    $micBtn.classList.remove('active');
+    addMessage('tool', 'Mic error: ' + e.error);
+  };
+} else {
+  $micBtn.disabled = true;
+  $micBtn.title = 'Speech recognition not supported in this browser — use Chrome';
+}
+
+$micBtn.addEventListener('click', () => {
+  if (!recognition) return;
+  if (listening) {
+    recognition.stop();
+  } else {
+    listening = true;
+    $micBtn.classList.add('active');
+    recognition.start();
+  }
+});
+</script>
+
+</body>
+</html>

@@ -347,7 +347,14 @@ async function chat(messages, options = {}) {
                     // unchanged.
                     ...(isVision && { stream: true }),
                     ...(!isVision && reasoningEffort && { reasoning_effort: reasoningEffort }),
-                    ...(useTools && { tools: TOOL_DEFINITIONS, tool_choice: 'auto' }),
+                    ...(useTools && {
+                        tools: (() => {
+                            const lastUser = [...messages].reverse().find(m => m.role === 'user');
+                            const msgText = typeof lastUser?.content === 'string' ? lastUser.content : '';
+                            return selectActiveTools(msgText, { docEditor: options.surface === 'doc-editor' });
+                        })(),
+                        tool_choice: 'auto',
+                    }),
                     messages: conversation,
                 }),
             });
