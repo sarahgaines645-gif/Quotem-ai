@@ -305,7 +305,12 @@ async function chat(messages, options = {}) {
     const mode = (options.mode === 'aps') ? 'aps' : undefined;
 
     // Vision model = no thinking budget needed; text brain bumps for Deep.
-    const maxTokens = (!isVision && reasoningEffort === 'max') ? 8000 : 1500;
+    // Doc-editor surface gets more room — Q reasons over many paragraphs and
+    // tool results can be substantial; 1500 was running him dry.
+    const isDocEditor = options.surface === 'doc-editor';
+    const maxTokens = (!isVision && reasoningEffort === 'max')
+        ? 8000
+        : (isDocEditor ? 4096 : 1500);
     const model = isVision ? Q_CONFIG.visionModel : Q_CONFIG.model;
 
     // When images are attached, the LAST user message becomes a multimodal

@@ -521,21 +521,34 @@ function docEditTool(personId, op, opts = {}) {
         const bytes = getDoc(personId);
         const result = op(bytes);
         if (opts.keepBytes) {
-            // Read-only operation — result is the data itself
-            return { ok: true, paragraphs: result };
+            return { ok: true, paragraphs: trimParagraphs(result) };
         }
-        // Write operation — result is { bytes, ... } from the editor
         if (result && result.bytes) {
             docEditor.setSession(personId, { bytes: result.bytes });
         }
         return {
             ok: true,
-            paragraphs: docEditor.readDoc(result.bytes),
+            paragraphs: trimParagraphs(docEditor.readDoc(result.bytes)),
             ...(result.replacements !== undefined ? { replacements: result.replacements } : {}),
         };
     } catch (e) {
         return { error: e.message };
     }
+}
+
+/**
+ * Keep tool results compact — long paragraphs blow the context window
+ * (NRLA-style forms can be 100+ paragraphs with full sentences each).
+ * Q gets the index + first 100 chars; if he needs more he can replace_text
+ * targeting the prefix he can see.
+ */
+function trimParagraphs(paragraphs) {
+    if (!Array.isArray(paragraphs)) return paragraphs;
+    return paragraphs.map(p => ({
+        index: p.index,
+        style: p.style,
+        text: p.text && p.text.length > 120 ? p.text.slice(0, 117) + '…' : (p.text || ''),
+    }));
 }
 
 /**
