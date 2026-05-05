@@ -987,9 +987,13 @@ const VOICE_MODE_KEY = 'q-voice-mode-v1';  // 'off' | 'default' | 'cloned:{id}'
 const THINK_KEY = 'q-thinking-level-v1';
 
 // Migrate legacy boolean → new mode string on first load.
+// New visitors default to 'default' (Kokoro TTS on) so Q actually speaks
+// — used to default to 'off' which made him silent until you found the
+// settings panel.
 let voiceMode = localStorage.getItem(VOICE_MODE_KEY);
 if (!voiceMode) {
-  voiceMode = (localStorage.getItem(VOICE_KEY) === 'true') ? 'default' : 'off';
+  const legacy = localStorage.getItem(VOICE_KEY);
+  voiceMode = (legacy === 'false') ? 'off' : 'default';
   localStorage.setItem(VOICE_MODE_KEY, voiceMode);
 }
 const isVoiceOn = () => voiceMode !== 'off';
