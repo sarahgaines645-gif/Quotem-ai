@@ -19,7 +19,8 @@
     "nodemailer": "^8.0.7",
     "pdf-lib": "^1.17.1",
     "pdf-parse": "^2.4.5",
-    "pizzip": "^3.2.0"
+    "pizzip": "^3.2.0",
+    "sharp": "^0.34.5"
   },
   "private": true,
   "license": "UNLICENSED"

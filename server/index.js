@@ -91,15 +91,23 @@ app.get('/q-auth.js', (req, res) => {
     res.sendFile(path.join(ROOT, 'q-auth.js'));
 });
 
-// Favicon — Q with pink dot, served as SVG so it stays sharp at every size
-app.get('/favicon.svg', (req, res) => {
-    res.setHeader('Cache-Control', 'public, max-age=86400');
-    res.sendFile(path.join(ROOT, 'favicon.svg'));
-});
-app.get('/favicon.ico', (req, res) => {
-    // Browsers that don't speak SVG favicons get pointed at the SVG too
-    res.setHeader('Cache-Control', 'public, max-age=86400');
-    res.sendFile(path.join(ROOT, 'favicon.svg'));
+// Favicon — Q with pink dot. Multiple sizes for desktop + mobile + home-screen.
+//   /favicon.svg          → modern browsers (scalable)
+//   /favicon.ico          → fallback for older browsers (just the SVG)
+//   /favicon-180.png      → iOS apple-touch-icon (home-screen widget)
+//   /favicon-192.png      → Android home-screen (via manifest)
+//   /favicon-512.png      → Android splash / large home-screen
+//   /manifest.webmanifest → tells Android how to render the home-screen icon
+const ONE_DAY = 'public, max-age=86400';
+app.get('/favicon.svg',     (req, res) => { res.setHeader('Cache-Control', ONE_DAY); res.sendFile(path.join(ROOT, 'favicon.svg')); });
+app.get('/favicon.ico',     (req, res) => { res.setHeader('Cache-Control', ONE_DAY); res.sendFile(path.join(ROOT, 'favicon.svg')); });
+app.get('/favicon-180.png', (req, res) => { res.setHeader('Cache-Control', ONE_DAY); res.sendFile(path.join(ROOT, 'favicon-180.png')); });
+app.get('/favicon-192.png', (req, res) => { res.setHeader('Cache-Control', ONE_DAY); res.sendFile(path.join(ROOT, 'favicon-192.png')); });
+app.get('/favicon-512.png', (req, res) => { res.setHeader('Cache-Control', ONE_DAY); res.sendFile(path.join(ROOT, 'favicon-512.png')); });
+app.get('/manifest.webmanifest', (req, res) => {
+    res.setHeader('Cache-Control', ONE_DAY);
+    res.setHeader('Content-Type', 'application/manifest+json');
+    res.sendFile(path.join(ROOT, 'manifest.webmanifest'));
 });
 
 // ── Health check ───────────────────────────────────────────────
