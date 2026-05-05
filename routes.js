@@ -165,6 +165,17 @@ router.get('/download/:token', requirePerson, (req, res) => {
     res.download(found.fullPath, found.filename);
 });
 
+// Public download — same files, no auth. Used when an external service
+// (Google Drive viewer, Save-to-Drive) needs to fetch the file. The 16-hex
+// token is the auth: 64 bits of entropy, 24h TTL, not enumerable. Inline
+// disposition so Google's viewer can render the PDF rather than download it.
+router.get('/public-download/:token', (req, res) => {
+    const found = resolveGeneratedDoc(req.params.token);
+    if (!found) return res.status(404).send('That file has expired or never existed.');
+    res.setHeader('Content-Disposition', `inline; filename="${found.filename}"`);
+    res.sendFile(found.fullPath);
+});
+
 // Admin: add someone to the Circle (Sarah only)
 router.post('/circle/add', requirePerson, express.json({ limit: '4kb' }), async (req, res) => {
     if (req.person.id !== 'sarah') return res.status(403).json({ error: 'Forbidden' });
@@ -369,6 +380,41 @@ router.post('/forms/fill', requirePerson, express.json({ limit: '24mb' }), async
         res.send(Buffer.from(filledBytes));
     } catch (e) {
         console.error('[forms/fill]', e.message);
+        res.status(500).json({ error: e.message });
+    }
+});
+
+// POST /forms/fill-public-link
+// Same input as /forms/fill but stashes the filled PDF and returns a JSON
+// { url, filename } pointing at /public-download/:token — used by the
+// "Open in Google Docs" button to feed Google's viewer a public URL.
+// Token is unguessable (64 bits) and expires in 24h.
+router.post('/forms/fill-public-link', requirePerson, express.json({ limit: '24mb' }), async (req, res) => {
+    try {
+        const { pdfBase64, values: directValues, fields, infoText, imageDataUrl } = req.body || {};
+        if (!pdfBase64) return res.status(400).json({ error: 'pdfBase64 required' });
+
+        const pdfBytes = Buffer.from(pdfBase64, 'base64');
+        let filledBytes;
+        if (directValues && typeof directValues === 'object' && Object.keys(directValues).length) {
+            ({ filledBytes } = await qFormFiller.fillPdf(pdfBytes, directValues));
+        } else {
+            if (!fields || !fields.length) return res.status(400).json({ error: 'fields required' });
+            if (!infoText && !imageDataUrl) return res.status(400).json({ error: 'infoText or imageDataUrl required' });
+            ({ filledBytes } = await qFormFiller.intakeAndFill({
+                pdfBytes, fields, infoText: infoText || '', imageDataUrl: imageDataUrl || null,
+            }));
+        }
+
+        const { stashFile } = require('./plugins/doc-creator');
+        const stashed = stashFile(Buffer.from(filledBytes), 'pdf', 'filled-form');
+        // Build the absolute public URL Google's servers can fetch
+        const proto = req.headers['x-forwarded-proto'] || req.protocol || 'https';
+        const host = req.headers['x-forwarded-host'] || req.headers.host;
+        const url = `${proto}://${host}/public-download/${stashed.token}`;
+        res.json({ ok: true, url, filename: stashed.filename, expiresInHours: 24 });
+    } catch (e) {
+        console.error('[forms/fill-public-link]', e.message);
         res.status(500).json({ error: e.message });
     }
 });

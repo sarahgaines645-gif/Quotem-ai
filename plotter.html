@@ -374,6 +374,7 @@
       <div class="intake-actions">
         <button class="q-btn accent" id="fill-btn" type="button">Q, fill it</button>
         <button class="q-btn accent" id="download-btn" type="button">Download PDF</button>
+        <button class="q-btn" id="open-gdocs-btn" type="button" style="display:none">Open in Google Docs</button>
         <button class="q-btn" id="download-docx-btn" type="button" style="display:none">Download Word (.docx)</button>
         <span class="fill-status" id="fill-status"></span>
       </div>
@@ -1060,9 +1061,10 @@
         await renderPage(currentPage);
         flashFilledInputs(data.values || {});
         const n = Object.keys(data.values || {}).length;
-        $fillStatus.textContent = '✓ Q filled ' + n + ' field' + (n === 1 ? '' : 's') + ' — edit any, then download PDF or Word.';
+        $fillStatus.textContent = '✓ Q filled ' + n + ' field' + (n === 1 ? '' : 's') + ' — download as PDF or open in Google Docs.';
         $fillStatus.className = 'fill-status ok';
         $downloadDocxBtn.style.display = '';
+        document.getElementById('open-gdocs-btn').style.display = '';
       } catch (e) {
         $fillStatus.textContent = 'Q hit a snag: ' + e.message;
         $fillStatus.className = 'fill-status err';
@@ -1152,6 +1154,47 @@
         $fillStatus.className = 'fill-status err';
       } finally {
         $downloadDocxBtn.disabled = false;
+      }
+    });
+
+    // Google Docs button — fills the PDF, stashes it under a public token,
+    // opens Google's PDF viewer in a new tab. The user clicks "Open with
+    // Google Docs" from there to get an editable conversion. No Drive API
+    // setup needed; the link expires in 24h.
+    const $openGDocsBtn = document.getElementById('open-gdocs-btn');
+    $openGDocsBtn.addEventListener('click', async () => {
+      if (!pdfBase64) { $fillStatus.textContent = 'Load a PDF first.'; $fillStatus.className = 'fill-status err'; return; }
+      const values = {};
+      for (const [k, v] of Object.entries(fieldValues)) {
+        if (typeof v === 'boolean') values[k] = v;
+        else if (v && String(v).trim()) values[k] = String(v).trim();
+      }
+      if (!Object.keys(values).length) {
+        $fillStatus.textContent = 'Nothing filled in yet — type into the form first.';
+        $fillStatus.className = 'fill-status err';
+        return;
+      }
+      $openGDocsBtn.disabled = true;
+      $fillStatus.textContent = 'Preparing for Google Docs…';
+      $fillStatus.className = 'fill-status';
+      try {
+        const r = await fetch('/forms/fill-public-link', {
+          method: 'POST', credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ pdfBase64, values }),
+        });
+        const data = await r.json();
+        if (!r.ok || !data.url) throw new Error(data.error || 'HTTP ' + r.status);
+        // Google's viewer takes the file URL and offers "Open with Google Docs"
+        const gdocsUrl = 'https://docs.google.com/viewer?url=' + encodeURIComponent(data.url);
+        window.open(gdocsUrl, '_blank', 'noopener');
+        $fillStatus.textContent = '✓ Opened in Google Docs viewer — click "Open with Google Docs" there to edit.';
+        $fillStatus.className = 'fill-status ok';
+      } catch (e) {
+        $fillStatus.textContent = 'Google Docs handoff failed: ' + e.message;
+        $fillStatus.className = 'fill-status err';
+      } finally {
+        $openGDocsBtn.disabled = false;
       }
     });
 
