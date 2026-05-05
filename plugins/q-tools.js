@@ -22,8 +22,12 @@
 
 const { Q_CONFIG } = require('../config');
 const { addFact, searchFacts, listFacts } = require('../facts');
-const { createDocx } = require('./doc-creator');
+const { createDocx, stashFile } = require('./doc-creator');
 const docEditor = require('./q-doc-editor');
+const qImageGen = require('./q-image-gen');
+const qGraphics = require('./q-graphics');
+const qMusic = require('./q-music');
+const qVideo = require('./q-video');
 
 // ─────────────────────────────────────────────────────────────
 //  TOOL DEFINITIONS — OpenAI function-calling schema
@@ -285,6 +289,73 @@ const TOOL_DEFINITIONS = [
             },
         },
     },
+
+    // ─── CREATIVE STACK TOOLS ──────────────────────────────────
+    // Generate images, vectors, music, video. Each saves the result to a
+    // temporary download URL Q embeds in his reply as a markdown link/image.
+    // First call after idle has a ~5–10s GPU cold-start; warm calls are quick.
+
+    {
+        type: 'function',
+        function: {
+            name: 'generate_image',
+            description: 'Draw an image from a description. Use this when the user asks for a picture, illustration, hero shot, banner, or any visual asset. Returns a download link Q can embed in his reply as a markdown image so it shows inline.',
+            parameters: {
+                type: 'object',
+                properties: {
+                    prompt: { type: 'string', description: 'What to draw. Describe scene, subject, style. Specific beats vague.' },
+                    width:  { type: 'integer', description: 'Width in pixels. Default 1024. Range 512–2048.' },
+                    height: { type: 'integer', description: 'Height in pixels. Default 1024. Range 512–2048.' },
+                    negative_prompt: { type: 'string', description: 'Optional things to avoid in the image.' },
+                },
+                required: ['prompt'],
+            },
+        },
+    },
+    {
+        type: 'function',
+        function: {
+            name: 'vectorise_image',
+            description: 'Convert a raster image (PNG/JPG) into a clean SVG vector. Use this for logos, icons, line art, or anywhere the user wants something scalable / editable. Returns a download link to the SVG.',
+            parameters: {
+                type: 'object',
+                properties: {
+                    image_url: { type: 'string', description: 'URL or data URL of the raster image to vectorise.' },
+                },
+                required: ['image_url'],
+            },
+        },
+    },
+    {
+        type: 'function',
+        function: {
+            name: 'generate_music',
+            description: 'Compose a music track from a description. Use this when the user asks for a song, music, tune, jingle, hold music, or background track for a video. Returns a download link to the audio file.',
+            parameters: {
+                type: 'object',
+                properties: {
+                    prompt: { type: 'string', description: 'What kind of music — genre, instruments, mood, tempo, vocals or instrumental.' },
+                    duration_seconds: { type: 'integer', description: 'Length of the track in seconds. Default 30, max 240.' },
+                },
+                required: ['prompt'],
+            },
+        },
+    },
+    {
+        type: 'function',
+        function: {
+            name: 'generate_video',
+            description: 'Generate a short video clip from a description. Use this when the user asks for a video, clip, demo reel, or animation. Returns a download link to the MP4. Larger model — first call from cold can take 20+ seconds.',
+            parameters: {
+                type: 'object',
+                properties: {
+                    prompt: { type: 'string', description: 'What the clip should show — subject, action, style, camera movement.' },
+                    duration_seconds: { type: 'integer', description: 'Clip length in seconds. Default 5, max 10.' },
+                },
+                required: ['prompt'],
+            },
+        },
+    },
 ];
 
 // ─────────────────────────────────────────────────────────────
@@ -499,6 +570,11 @@ async function executeTool(name, argsRaw, personId) {
         case 'move_paragraph':    return docEditTool(personId, (b) => docEditor.moveParagraph(b, args.from_index, args.to_index));
         case 'merge_paragraph':   return docEditTool(personId, (b) => docEditor.mergeParagraph(b, args.source_index, args.target_index, args.position || 'end'));
         case 'format_paragraph':  return docEditTool(personId, (b) => docEditor.formatParagraph(b, args.index, args.style));
+        // Creative stack — image, vector, music, video
+        case 'generate_image':    return await generateImageTool(args);
+        case 'vectorise_image':   return await vectoriseImageTool(args);
+        case 'generate_music':    return await generateMusicTool(args);
+        case 'generate_video':    return await generateVideoTool(args);
         default:                 return { error: `Unknown tool: "${name}"` };
     }
 }
@@ -572,6 +648,101 @@ async function createDocument({ title, content } = {}) {
     }
 }
 
+// ─── Creative tool implementations ─────────────────────────────
+// Each calls its plugin, stashes the result via stashFile, returns a
+// download URL Q embeds in his reply. Errors are surfaced as { error: ... }
+// so Q can tell the user what went wrong instead of failing silently.
+
+async function generateImageTool({ prompt, width, height, negative_prompt } = {}) {
+    if (!prompt || typeof prompt !== 'string') return { error: 'prompt (string) is required' };
+    try {
+        const result = await qImageGen.generateImage(prompt, {
+            width, height, negativePrompt: negative_prompt,
+        });
+        if (result.error || !result.image) {
+            return { error: result.error || 'Image generation returned nothing.' };
+        }
+        const stashed = stashFile(result.image, 'png', prompt);
+        const url = '/download/' + stashed.token;
+        return {
+            ok: true,
+            filename: stashed.filename,
+            sizeBytes: stashed.sizeBytes,
+            durationMs: result.durationMs,
+            downloadUrl: url,
+            instruction_for_q: `Embed this in your reply as inline markdown so the user sees the image: ![${prompt.slice(0, 60)}](${url}). Add one short sentence about it. Do NOT describe the image in detail — they can see it.`,
+        };
+    } catch (e) {
+        return { error: e.message || 'Image generation failed.' };
+    }
+}
+
+async function vectoriseImageTool({ image_url } = {}) {
+    if (!image_url || typeof image_url !== 'string') return { error: 'image_url (string) is required' };
+    try {
+        const result = await qGraphics.vectoriseImage(image_url);
+        if (result.error || !result.svg) {
+            return { error: result.error || 'Vectorise returned nothing.' };
+        }
+        const buf = Buffer.isBuffer(result.svg) ? result.svg : Buffer.from(String(result.svg), 'utf8');
+        const stashed = stashFile(buf, 'svg', 'vector');
+        const url = '/download/' + stashed.token;
+        return {
+            ok: true,
+            filename: stashed.filename,
+            downloadUrl: url,
+            instruction_for_q: `Tell the user the SVG is ready with a markdown link: [Download ${stashed.filename}](${url}). One short sentence.`,
+        };
+    } catch (e) {
+        return { error: e.message || 'Vectorise failed.' };
+    }
+}
+
+async function generateMusicTool({ prompt, duration_seconds } = {}) {
+    if (!prompt || typeof prompt !== 'string') return { error: 'prompt (string) is required' };
+    try {
+        const dur = Math.min(Math.max(parseInt(duration_seconds) || 30, 5), 240);
+        const result = await qMusic.generateMusic(prompt, { duration: dur });
+        if (result.error || !result.audio) {
+            return { error: result.error || 'Music generation returned nothing.' };
+        }
+        const ext = (result.mimeType && result.mimeType.includes('mp3')) ? 'mp3' : 'wav';
+        const stashed = stashFile(result.audio, ext, prompt);
+        const url = '/download/' + stashed.token;
+        return {
+            ok: true,
+            filename: stashed.filename,
+            durationMs: result.durationMs,
+            downloadUrl: url,
+            instruction_for_q: `Tell the user the track is ready with a markdown link: [Listen / download ${stashed.filename}](${url}). One short sentence about the vibe.`,
+        };
+    } catch (e) {
+        return { error: e.message || 'Music generation failed.' };
+    }
+}
+
+async function generateVideoTool({ prompt, duration_seconds } = {}) {
+    if (!prompt || typeof prompt !== 'string') return { error: 'prompt (string) is required' };
+    try {
+        const dur = Math.min(Math.max(parseInt(duration_seconds) || 5, 1), 10);
+        const result = await qVideo.generateVideo(prompt, { duration: dur });
+        if (result.error || !result.video) {
+            return { error: result.error || 'Video generation returned nothing.' };
+        }
+        const stashed = stashFile(result.video, 'mp4', prompt);
+        const url = '/download/' + stashed.token;
+        return {
+            ok: true,
+            filename: stashed.filename,
+            durationMs: result.durationMs,
+            downloadUrl: url,
+            instruction_for_q: `Tell the user the clip is ready and give a markdown link: [Watch / download ${stashed.filename}](${url}). One short sentence on what they'll see.`,
+        };
+    } catch (e) {
+        return { error: e.message || 'Video generation failed.' };
+    }
+}
+
 /**
  * remember — write a fact to Q's persistent memory.
  */
@@ -639,6 +810,20 @@ const TRIGGERS = {
     create_document: [
         /\b(create|make|write|generate|draft|build) (a|me a|me)? ?(document|doc|file|pdf|word|letter)\b/i,
         /\bsave (this|that|it) (as a|to a)? ?(document|doc|file|pdf|word)\b/i,
+    ],
+    generate_image: [
+        /\b(draw|generate|create|make|paint|render|design) [^.?!]{0,40}\b(image|picture|photo|illustration|hero|banner|poster|graphic|visual|artwork)\b/i,
+        /\bshow me (a|an) (image|picture|illustration)\b/i,
+        /\b(picture|image) of\b/i,
+    ],
+    vectorise_image: [
+        /\b(vector(ise|ize)?|svg|trace|convert .* to (svg|vector))\b/i,
+    ],
+    generate_music: [
+        /\b(compose|generate|make|write|create) [^.?!]{0,40}\b(music|song|tune|jingle|track|score|backing track|hold music)\b/i,
+    ],
+    generate_video: [
+        /\b(generate|make|create|render|produce) [^.?!]{0,40}\b(video|clip|reel|animation)\b/i,
     ],
     // Doc-editor tools — fire when the user is talking about editing the
     // document on screen. The doc-editor page also passes a flag that

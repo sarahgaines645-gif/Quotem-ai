@@ -127,4 +127,24 @@ function resolveToken(token) {
     }
 }
 
-module.exports = { createDocx, resolveToken, GENERATED_DIR };
+/**
+ * Stash an arbitrary file buffer (image, audio, video) under a token so the
+ * /download/:token route can serve it back. Same TTL and dir as createDocx.
+ *
+ * @param {Buffer} buffer
+ * @param {string} extension - e.g. 'png', 'mp3', 'mp4', 'svg'
+ * @param {string} label     - human-friendly stem for the filename
+ * @returns {{ token, filename, sizeBytes }}
+ */
+function stashFile(buffer, extension, label) {
+    if (!Buffer.isBuffer(buffer)) throw new Error('stashFile: buffer required');
+    if (!extension) throw new Error('stashFile: extension required');
+    pruneOldFiles();
+    const token = crypto.randomBytes(8).toString('hex');
+    const filename = safeFilenameStem(label || 'file') + '.' + extension.replace(/^\./, '');
+    const onDiskName = token + '__' + filename;
+    fs.writeFileSync(path.join(GENERATED_DIR, onDiskName), buffer);
+    return { token, filename, sizeBytes: buffer.length };
+}
+
+module.exports = { createDocx, resolveToken, stashFile, GENERATED_DIR };
