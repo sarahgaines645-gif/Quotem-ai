@@ -91,6 +91,17 @@ app.get('/q-auth.js', (req, res) => {
     res.sendFile(path.join(ROOT, 'q-auth.js'));
 });
 
+// Favicon — Q with pink dot, served as SVG so it stays sharp at every size
+app.get('/favicon.svg', (req, res) => {
+    res.setHeader('Cache-Control', 'public, max-age=86400');
+    res.sendFile(path.join(ROOT, 'favicon.svg'));
+});
+app.get('/favicon.ico', (req, res) => {
+    // Browsers that don't speak SVG favicons get pointed at the SVG too
+    res.setHeader('Cache-Control', 'public, max-age=86400');
+    res.sendFile(path.join(ROOT, 'favicon.svg'));
+});
+
 // ── Health check ───────────────────────────────────────────────
 app.get('/health', (req, res) => {
     res.json({

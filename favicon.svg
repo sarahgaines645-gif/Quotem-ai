@@ -1,0 +1,7 @@
+<!-- Q — Quotem's own AI. Favicon.
+     Same colours as assets/q-logo.svg: dark Q (#2a2f36), pink dot (#e91e63).
+     Square viewBox so it scales cleanly to 16/32/64px tab sizes. -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Q">
+  <text x="6" y="50" font-family="'Space Grotesk', 'Inter', system-ui, sans-serif" font-weight="700" font-size="56" fill="#2a2f36" letter-spacing="-0.04em">Q</text>
+  <circle cx="52" cy="48" r="6" fill="#e91e63"/>
+</svg>
