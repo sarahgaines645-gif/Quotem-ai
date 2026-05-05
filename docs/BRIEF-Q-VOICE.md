@@ -79,18 +79,26 @@ Q would be able to do things like:
 
 3. **A `speak_as_q` tool definition** in `q-tools.js`, parameters: `{ text, exaggeration?, cfg_weight? }`. Returns a download URL to the generated audio.
 
-**Decisions needed before building:**
+**Decisions made (2026-05-05):**
 
-- **Whose voice does Q use?** Three options:
-  - (a) Sarah's — Q speaks in her voice
-  - (b) A stock voice — pick one online (e.g., a public domain narrator clip)
-  - (c) Something custom — record a friend or hire a voice actor
-- **Where is the reference stored?**
-  - Server filesystem at `data/q-voice-reference.wav`
-  - Or in the SQLite db as a blob
-- **Same voice for everyone, or per-user?** For v1, same voice for all users. Per-user comes later.
+- ✅ **Whose voice:** stock public-domain — option (b)
+- ✅ **Profile:** British male, *normal conversational voice* (not audiobook-narrator drone — Sarah was specific: "normal")
+- ✅ **Source:** Mozilla Common Voice (CC0). Crowdsourced clips of regular people in their everyday voice. Stitch 30 seconds from a single British male speaker.
+- ✅ **Storage:** server filesystem at `data/q-voice-reference.wav`
+- ✅ **Scope:** same voice for everyone in v1. Per-user later.
 
-**Build effort once decided:** ~30 min. The Space is deployed, the plugin works, only the tool wrapper and reference loading need adding.
+**Next session pickup:**
+
+1. Pull Common Voice corpus index, filter `gender=male`, `accent=england`, group by `client_id`
+2. Pick a speaker with several clean ~5-sec clips. Stitch ~30 sec of one speaker's audio with `ffmpeg` (concat). Convert to mono 16kHz WAV.
+3. Send Sarah the clip — she listens, approves or asks to swap.
+4. Save approved clip to `data/q-voice-reference.wav`
+5. Wire `speak_as_q` tool in `q-tools.js`:
+   - Reads `data/q-voice-reference.wav` once at startup, caches the buffer
+   - Calls `speakAsVoice(text, refBuf, 'audio/wav')` from `q-voice-clone.js`
+   - Stashes resulting audio with `stashFile()`, returns download URL Q embeds
+
+**Build effort once Sarah approves the clip:** ~30 min.
 
 ---
 
