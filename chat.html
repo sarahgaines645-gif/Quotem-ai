@@ -277,6 +277,27 @@
     border-top-left-radius: 4px;
   }
 
+  /* Copy button on Q's messages — always visible on mobile (no hover). */
+  .copy-btn {
+    margin-top: 8px;
+    font-family: inherit;
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text-muted);
+    background: var(--bg);
+    border: none;
+    cursor: pointer;
+    padding: 6px 12px;
+    border-radius: 8px;
+    box-shadow: var(--neu-raised-sm);
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    transition: color 0.12s ease;
+  }
+  .copy-btn:hover { color: var(--accent); }
+  .copy-btn:active { box-shadow: var(--neu-inset-xs); }
+  .copy-btn.copied { color: var(--accent); }
+
   /* Q's rendered markdown — accent-coloured headings, neat lists, code wells. */
   .message.q .message-body > p { margin: 0 0 12px; }
   .message.q .message-body > p:last-child { margin-bottom: 0; }
@@ -2041,6 +2062,38 @@ function renderMessage(role, content, animate, images) {
     ? '<div class="message-content"><div class="message-meta">You</div>' + bodyHtml + '</div><div class="avatar you">YOU</div>'
     : '<div class="avatar q">Q</div><div class="message-content"><div class="message-meta">Q</div>' + bodyHtml + '</div>';
   messageEl.innerHTML = inner;
+
+  // Copy button on Q's messages — always visible (touch-friendly on mobile
+  // where text selection is fiddly). Copies the plain-text version of the
+  // reply, not the rendered HTML.
+  if (!isUser && typeof content === 'string' && content.trim()) {
+    const btn = document.createElement('button');
+    btn.className = 'copy-btn';
+    btn.type = 'button';
+    btn.textContent = 'Copy';
+    btn.addEventListener('click', async () => {
+      try {
+        await navigator.clipboard.writeText(content);
+        btn.textContent = 'Copied ✓';
+        btn.classList.add('copied');
+        setTimeout(() => { btn.textContent = 'Copy'; btn.classList.remove('copied'); }, 1500);
+      } catch {
+        // Fallback for older browsers / insecure contexts
+        const ta = document.createElement('textarea');
+        ta.value = content;
+        ta.style.position = 'fixed'; ta.style.opacity = '0';
+        document.body.appendChild(ta);
+        ta.select();
+        try { document.execCommand('copy'); } catch {}
+        document.body.removeChild(ta);
+        btn.textContent = 'Copied ✓';
+        setTimeout(() => { btn.textContent = 'Copy'; }, 1500);
+      }
+    });
+    const contentEl = messageEl.querySelector('.message-content');
+    if (contentEl) contentEl.appendChild(btn);
+  }
+
   $conversation.appendChild(messageEl);
   scrollToBottom();
   return messageEl;
