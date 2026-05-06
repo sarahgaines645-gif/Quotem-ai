@@ -14,6 +14,7 @@
 'use strict';
 
 const { Q_CONFIG } = require('../config');
+const { cleanModelOutput } = require('./cjk-filter');
 
 async function callQ(systemPrompt, userPrompt, { maxTokens = 4096 } = {}) {
     const response = await fetch(`${Q_CONFIG.baseURL}/chat/completions`, {
@@ -37,7 +38,7 @@ async function callQ(systemPrompt, userPrompt, { maxTokens = 4096 } = {}) {
         throw new Error(`Q upstream ${response.status}: ${errText.substring(0, 200)}`);
     }
     const data = await response.json();
-    const raw = data.choices?.[0]?.message?.content || '{}';
+    const raw = cleanModelOutput(data.choices?.[0]?.message?.content || '{}', 'writer');
     const cleaned = raw.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim();
     return JSON.parse(cleaned);
 }

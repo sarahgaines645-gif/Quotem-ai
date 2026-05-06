@@ -15,6 +15,7 @@
 
 const { PDFDocument, StandardFonts, PDFName, rgb } = require('pdf-lib');
 const { Q_CONFIG } = require('../config');
+const { cleanModelOutput } = require('./cjk-filter');
 
 const EXTRACT_SYSTEM = `You are a form-filling assistant. Your output is ALWAYS a single JSON object — never prose, never markdown, never an explanation.
 
@@ -140,6 +141,7 @@ ${infoText || '(none)'}`;
         const data = await response.json();
         raw = data.choices?.[0]?.message?.content || '';
     }
+    raw = cleanModelOutput(raw, 'form-filler');
 
     if (!raw || !raw.trim()) {
         console.error('[q-form-filler] Q returned empty content. Model:', model);

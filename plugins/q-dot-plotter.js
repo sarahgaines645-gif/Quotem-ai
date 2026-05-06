@@ -19,6 +19,7 @@
 'use strict';
 
 const { Q_CONFIG } = require('../config');
+const { cleanModelOutput } = require('./cjk-filter');
 
 const PLOTTER_PROMPT = `You are the Plotter — a precision coordinate AI for document form-filling.
 
@@ -128,7 +129,7 @@ async function plotDots(imageDataUrl, dimensions) {
         throw new Error(`Plotter upstream ${response.status}: ${errText.substring(0, 200)}`);
     }
 
-    const text = await readStreamAsResponse(response);
+    const text = cleanModelOutput(await readStreamAsResponse(response), 'dot-plotter');
     const cleaned = text.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim();
     const parsed = JSON.parse(cleaned);
 

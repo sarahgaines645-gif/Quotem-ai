@@ -13,6 +13,7 @@
 'use strict';
 
 const { Q_CONFIG } = require('../config');
+const { cleanModelOutput } = require('./cjk-filter');
 
 // QS_PERSONA — copied verbatim from server/templates/sor-engine.js
 // Must stay in sync with the source. If sor-engine's persona changes, update this.
@@ -121,7 +122,7 @@ Apply QS principles. Select the ONE item that best matches. Return JSON only.`;
         }
 
         const data = await response.json();
-        let text = data.choices?.[0]?.message?.content || '{}';
+        let text = cleanModelOutput(data.choices?.[0]?.message?.content || '{}', 'sor-picker');
         text = text.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim();
 
         let picked;

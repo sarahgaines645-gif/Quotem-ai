@@ -17,6 +17,7 @@
 const fs = require('fs');
 const path = require('path');
 const { Q_CONFIG } = require('../config');
+const { cleanModelOutput } = require('./cjk-filter');
 
 let sorFacts = '';
 try {
@@ -87,7 +88,7 @@ async function expandItem(description, breakdownNote = '') {
         }
 
         const data = await response.json();
-        let result = data.choices?.[0]?.message?.content || '{}';
+        let result = cleanModelOutput(data.choices?.[0]?.message?.content || '{}', 'expander');
         result = result.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim();
 
         let items;

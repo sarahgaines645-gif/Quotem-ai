@@ -24,6 +24,7 @@
 'use strict';
 
 const { Q_CONFIG } = require('../config');
+const { cleanModelOutput } = require('./cjk-filter');
 
 const VERIFIER_SYSTEM = `You are a strict quality reviewer. Given a user's question and an AI's draft reply, find any way the draft fails to meet the user's actual need.
 
@@ -128,7 +129,7 @@ Review the draft against the user question and return JSON.`;
         // If the verifier says fail but didn't supply a usable correction, fall
         // back to the original draft — better the un-corrected answer than nothing.
         const corrected = (typeof parsed.corrected === 'string' && parsed.corrected.trim())
-            ? parsed.corrected
+            ? cleanModelOutput(parsed.corrected, 'verifier')
             : draftReply;
 
         return {

@@ -18,6 +18,7 @@
 'use strict';
 
 const { Q_CONFIG } = require('../config');
+const { cleanModelOutput } = require('./cjk-filter');
 
 const SYSTEM_PROMPT = `You are a senior UK Quantity Surveyor and trade specialist reading incoming correspondence. You have 20 years experience in council housing maintenance, private sector repairs, and construction estimating.
 
@@ -151,7 +152,7 @@ async function readText(text, options = {}) {
         }
 
         const data = await response.json();
-        let result = data.choices?.[0]?.message?.content || '{}';
+        let result = cleanModelOutput(data.choices?.[0]?.message?.content || '{}', 'text-reader');
         result = result.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim();
 
         let parsed;

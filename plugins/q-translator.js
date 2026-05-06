@@ -29,6 +29,7 @@
 const fs = require('fs');
 const path = require('path');
 const { Q_CONFIG } = require('../config');
+const { cleanModelOutput } = require('./cjk-filter');
 
 // Load SOR facts (data file, not code)
 let sorFacts = '';
@@ -151,7 +152,7 @@ async function translateToSOR(items) {
         }
 
         const data = await response.json();
-        let result = data.choices?.[0]?.message?.content || '[]';
+        let result = cleanModelOutput(data.choices?.[0]?.message?.content || '[]', 'translator');
         result = result.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim();
 
         let terms;

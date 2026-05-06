@@ -23,6 +23,7 @@
 const { Q_CONFIG } = require('../config');
 const { addFact, searchFacts, listFacts } = require('../facts');
 const { createDocx, stashFile } = require('./doc-creator');
+const { cleanModelOutput } = require('./cjk-filter');
 const docEditor = require('./q-doc-editor');
 const qImageGen = require('./q-image-gen');
 const qGraphics = require('./q-graphics');
@@ -514,7 +515,7 @@ async function analyzeDocument({ image_url, question }) {
         }
 
         const data = await response.json();
-        const content = data.choices?.[0]?.message?.content || '';
+        const content = cleanModelOutput(data.choices?.[0]?.message?.content || '', 'analyze-document');
 
         // For form-detection prompts, try to parse JSON. Fall back to raw text.
         if (isFormQuestion) {

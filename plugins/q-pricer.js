@@ -18,6 +18,7 @@
 'use strict';
 
 const { Q_CONFIG } = require('../config');
+const { cleanModelOutput } = require('./cjk-filter');
 
 const SYSTEM_PROMPT = `You are a senior UK Quantity Surveyor pricing construction work that falls outside a standard Schedule of Rates.
 
@@ -100,7 +101,7 @@ Details: ${detail || 'none given'}`;
         }
 
         const data = await response.json();
-        let result = data.choices?.[0]?.message?.content || '{}';
+        let result = cleanModelOutput(data.choices?.[0]?.message?.content || '{}', 'pricer');
         result = result.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim();
 
         let parsed;
@@ -182,7 +183,7 @@ async function priceItems(items) {
         }
 
         const data = await response.json();
-        let result = data.choices?.[0]?.message?.content || '{}';
+        let result = cleanModelOutput(data.choices?.[0]?.message?.content || '{}', 'pricer');
         result = result.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim();
 
         let arr;

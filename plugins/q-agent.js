@@ -25,6 +25,7 @@
 const { Q_CONFIG } = require('../config');
 const { TOOL_DEFINITIONS, executeTool } = require('./q-tools');
 const { verify } = require('./q-verifier');
+const { cleanModelOutput } = require('./cjk-filter');
 
 const DEFAULT_MAX_STEPS = 25;
 
@@ -128,7 +129,7 @@ async function runAgent(goal, options = {}) {
 
             // No more tool calls → Q is finished. Capture his final summary.
             if (!useTools || !callsRequested || callsRequested.length === 0) {
-                finalSummary = message?.content || '(Q returned no summary)';
+                finalSummary = cleanModelOutput(message?.content || '(Q returned no summary)', 'agent');
                 transcript.push({ type: 'finish', step: stepsTaken, summary: finalSummary, t: Date.now() - startTime });
                 break;
             }
