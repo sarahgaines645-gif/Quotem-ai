@@ -14,6 +14,68 @@ const { TOOL_DEFINITIONS, executeTool, selectActiveTools } = require('./q-tools'
 const { verify } = require('./q-verifier');
 const { listFacts } = require('../facts');
 const { logCall } = require('../cost-tracker');
+const { cleanModelOutput } = require('./cjk-filter');
+
+// ─────────────────────────────────────────────────────────────
+//  DSML TOOL-CALL PARSER
+// ─────────────────────────────────────────────────────────────
+//  DeepSeek V4 Pro on Together AI sometimes ignores OpenAI's tool_calls
+//  schema and emits its native markup inside message.content instead:
+//
+//    <｜DSML｜tool_calls>
+//    <｜DSML｜invoke name="web_search">
+//    <｜DSML｜parameter name="query" string="true">…</｜DSML｜parameter>
+//    </｜DSML｜invoke>
+//    </｜DSML｜tool_calls>
+//
+//  When that happens message.tool_calls is null, the markup leaks straight
+//  to the user's screen, and no tool ever runs. Parse it back out and
+//  convert to the OpenAI shape so the rest of the loop is unchanged.
+//
+//  The pipe-like character is U+FF5C (FULLWIDTH VERTICAL LINE), not ASCII |.
+
+const DSML_BAR = '\\uFF5C';
+const DSML_BLOCK_RE = new RegExp(`<${DSML_BAR}DSML${DSML_BAR}tool_calls>([\\s\\S]*?)</${DSML_BAR}DSML${DSML_BAR}tool_calls>`);
+const DSML_INVOKE_RE = new RegExp(`<${DSML_BAR}DSML${DSML_BAR}invoke\\s+name="([^"]+)">([\\s\\S]*?)</${DSML_BAR}DSML${DSML_BAR}invoke>`, 'g');
+const DSML_PARAM_RE = new RegExp(`<${DSML_BAR}DSML${DSML_BAR}parameter\\s+name="([^"]+)"[^>]*>([\\s\\S]*?)</${DSML_BAR}DSML${DSML_BAR}parameter>`, 'g');
+
+/**
+ * If `content` contains DSML tool_calls markup, return:
+ *   { toolCalls: [{ id, type:'function', function:{ name, arguments } }], remainingText }
+ * Otherwise return null.
+ */
+function parseDsmlToolCalls(content) {
+    if (typeof content !== 'string' || !content) return null;
+    const block = content.match(DSML_BLOCK_RE);
+    if (!block) return null;
+
+    const inner = block[1];
+    const toolCalls = [];
+    let m;
+    DSML_INVOKE_RE.lastIndex = 0;
+    while ((m = DSML_INVOKE_RE.exec(inner)) !== null) {
+        const name = m[1];
+        const body = m[2];
+        const args = {};
+        let pm;
+        DSML_PARAM_RE.lastIndex = 0;
+        while ((pm = DSML_PARAM_RE.exec(body)) !== null) {
+            const paramName = pm[1];
+            const paramValue = pm[2].trim();
+            // Try JSON first (numbers, booleans, arrays, objects); fall back to string
+            try { args[paramName] = JSON.parse(paramValue); }
+            catch { args[paramName] = paramValue; }
+        }
+        toolCalls.push({
+            id: 'dsml_' + Date.now() + '_' + toolCalls.length,
+            type: 'function',
+            function: { name, arguments: JSON.stringify(args) },
+        });
+    }
+    if (toolCalls.length === 0) return null;
+    const remainingText = (content.slice(0, block.index) + content.slice(block.index + block[0].length)).trim();
+    return { toolCalls, remainingText };
+}
 
 // How many of Q's most recent stored facts to inject into the system prompt
 // at the start of each chat. Older facts are still reachable via `recall`.
@@ -403,7 +465,21 @@ async function chat(messages, options = {}) {
 
             const choice = data.choices?.[0];
             const message = choice?.message;
-            const callsRequested = message?.tool_calls;
+            let callsRequested = message?.tool_calls;
+
+            // DeepSeek V4 Pro sometimes emits tool calls as DSML markup in
+            // content instead of using the proper tool_calls array. Parse
+            // it out and treat as a regular tool call. If parsing succeeds
+            // we also strip the markup from the content the user sees.
+            let dsmlContentRemainder = null;
+            if (useTools && (!callsRequested || callsRequested.length === 0) && message?.content) {
+                const parsed = parseDsmlToolCalls(message.content);
+                if (parsed) {
+                    console.log('[q-chat] recovered ' + parsed.toolCalls.length + ' DSML tool call(s) from content');
+                    callsRequested = parsed.toolCalls;
+                    dsmlContentRemainder = parsed.remainingText;
+                }
+            }
 
             // No tool calls → Q's done. Capture the draft and exit the loop.
             if (!useTools || !callsRequested || callsRequested.length === 0) {
@@ -419,14 +495,19 @@ async function chat(messages, options = {}) {
                         + ' raw_choice=' + JSON.stringify(choice).substring(0, 500));
                     draftReply = pickFriendlyError();
                 }
+                // Belt-and-braces: strip any stray CJK / DSML chars that
+                // slipped through without being parsed as a tool call.
+                draftReply = cleanModelOutput(draftReply, 'chat');
                 break;
             }
 
             // Append the assistant's tool-call message verbatim, then execute each
             // call and append its result so the next iteration sees them.
+            // When we recovered DSML markup, push the *cleaned* content so the
+            // next turn doesn't see the broken markup.
             conversation.push({
                 role: 'assistant',
-                content: message.content || '',
+                content: dsmlContentRemainder !== null ? dsmlContentRemainder : (message.content || ''),
                 tool_calls: callsRequested,
             });
 
@@ -521,6 +602,10 @@ async function chat(messages, options = {}) {
                 draftReply = v.corrected;
             }
         }
+
+        // Final pass: catches the fallback no-tools call + verifier-corrected
+        // replies, neither of which went through the in-loop wrap at line ~500.
+        draftReply = cleanModelOutput(draftReply, 'chat-final');
 
         const durationMs = Date.now() - startTime;
         logCall({
