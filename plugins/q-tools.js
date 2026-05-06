@@ -20,6 +20,8 @@
  */
 'use strict';
 
+const fs = require('fs');
+const path = require('path');
 const { Q_CONFIG } = require('../config');
 const { addFact, searchFacts, listFacts } = require('../facts');
 const { createDocx, stashFile } = require('./doc-creator');
@@ -29,6 +31,20 @@ const qImageGen = require('./q-image-gen');
 const qGraphics = require('./q-graphics');
 const qMusic = require('./q-music');
 const qVideo = require('./q-video');
+const { speakAsVoice } = require('./q-voice-clone');
+
+// Q's canonical voice — read once at module load, reused for every call.
+// Swap voices by replacing this file (commit a different .mp3 with the
+// same name, or change the filename below).
+const Q_VOICE_FILE = path.join(__dirname, '..', 'assets', 'voice-candidates', 'q-current.mp3');
+const Q_VOICE_MIME = 'audio/mpeg';
+let qVoiceBuffer = null;
+try {
+    qVoiceBuffer = fs.readFileSync(Q_VOICE_FILE);
+    console.log('[q-tools] Q voice reference loaded: ' + qVoiceBuffer.length + ' bytes');
+} catch (e) {
+    console.warn('[q-tools] Q voice reference not loaded: ' + e.message);
+}
 
 // ─────────────────────────────────────────────────────────────
 //  TOOL DEFINITIONS — OpenAI function-calling schema
@@ -357,6 +373,20 @@ const TOOL_DEFINITIONS = [
             },
         },
     },
+    {
+        type: 'function',
+        function: {
+            name: 'speak_as_q',
+            description: 'Narrate a text passage in Q\'s own voice. Use this when the user asks Q to "say that out loud", "narrate this in your voice", "read it aloud", or wants an audio version of a script for a video. Returns a download link to the audio file Q should embed in his reply.',
+            parameters: {
+                type: 'object',
+                properties: {
+                    text: { type: 'string', description: 'The text to speak. Keep it under ~500 chars per call for snappy results.' },
+                },
+                required: ['text'],
+            },
+        },
+    },
 ];
 
 // ─────────────────────────────────────────────────────────────
@@ -571,11 +601,12 @@ async function executeTool(name, argsRaw, personId) {
         case 'move_paragraph':    return docEditTool(personId, (b) => docEditor.moveParagraph(b, args.from_index, args.to_index));
         case 'merge_paragraph':   return docEditTool(personId, (b) => docEditor.mergeParagraph(b, args.source_index, args.target_index, args.position || 'end'));
         case 'format_paragraph':  return docEditTool(personId, (b) => docEditor.formatParagraph(b, args.index, args.style));
-        // Creative stack — image, vector, music, video
+        // Creative stack — image, vector, music, video, voice
         case 'generate_image':    return await generateImageTool(args);
         case 'vectorise_image':   return await vectoriseImageTool(args);
         case 'generate_music':    return await generateMusicTool(args);
         case 'generate_video':    return await generateVideoTool(args);
+        case 'speak_as_q':        return await speakAsQTool(args);
         default:                 return { error: `Unknown tool: "${name}"` };
     }
 }
@@ -744,6 +775,27 @@ async function generateVideoTool({ prompt, duration_seconds } = {}) {
     }
 }
 
+async function speakAsQTool({ text } = {}) {
+    if (!text || typeof text !== 'string') return { error: 'text (string) is required' };
+    if (!qVoiceBuffer) return { error: "Q's voice reference isn't loaded — assets/voice-candidates/q-current.mp3 missing." };
+    try {
+        const result = await speakAsVoice(text, qVoiceBuffer, Q_VOICE_MIME, {});
+        if (result.error || !result.audio) {
+            return { error: result.error || 'Voice generation returned nothing.' };
+        }
+        const stashed = stashFile(result.audio, 'wav', 'q-narration');
+        const url = '/download/' + stashed.token;
+        return {
+            ok: true,
+            filename: stashed.filename,
+            downloadUrl: url,
+            instruction_for_q: `Tell the user the narration is ready with a markdown link: [Listen / download ${stashed.filename}](${url}). One short sentence about what you said.`,
+        };
+    } catch (e) {
+        return { error: e.message || 'Voice generation failed.' };
+    }
+}
+
 /**
  * remember — write a fact to Q's persistent memory.
  */
@@ -825,6 +877,9 @@ const TRIGGERS = {
     ],
     generate_video: [
         /\b(generate|make|create|render|produce) [^.?!]{0,40}\b(video|clip|reel|animation)\b/i,
+    ],
+    speak_as_q: [
+        /\b(say (that|this)|speak (that|this|it)|narrate|read (that|it|this) aloud|in your (own )?voice|out loud)\b/i,
     ],
     // Doc-editor tools — fire when the user is talking about editing the
     // document on screen. The doc-editor page also passes a flag that
