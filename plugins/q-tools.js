@@ -859,60 +859,25 @@ async function speakAsQTool({ text } = {}) {
 }
 
 /**
- * save_situation — write an ongoing situation (case, dispute, project) to a folder
- * on the Railway volume so Sarah can come back to it later. Returns the folder name
- * and path so Q can confirm in his reply.
+ * save_situation — create a Thread (a folder for one ongoing situation) on
+ * the Railway volume. Sarah can view all her threads at /threads and continue
+ * working on any one at /thread/{id}.
  */
+const qThreads = require('./q-threads');
 function saveSituation({ title, summary, content } = {}) {
     if (!title || typeof title !== 'string') return { error: 'title (string) is required' };
-    if (!content || typeof content !== 'string') return { error: 'content (string) is required' };
-
-    const baseDir = process.env.RAILWAY_VOLUME_MOUNT_PATH
-        ? path.join(process.env.RAILWAY_VOLUME_MOUNT_PATH, 'situations')
-        : path.join(__dirname, '..', 'data', 'situations');
-
-    const slug = title.toLowerCase()
-        .replace(/[^a-z0-9]+/g, '-')
-        .replace(/^-+|-+$/g, '')
-        .slice(0, 60) || 'situation-' + Date.now();
-
     try {
-        fs.mkdirSync(baseDir, { recursive: true });
-    } catch (e) {
-        return { error: 'Could not create folders directory: ' + e.message };
-    }
-
-    // If a file with this slug already exists, append a counter so we don't clobber.
-    let finalSlug = slug;
-    let counter = 1;
-    while (fs.existsSync(path.join(baseDir, finalSlug + '.md'))) {
-        finalSlug = `${slug}-${++counter}`;
-    }
-    const filePath = path.join(baseDir, finalSlug + '.md');
-    const now = new Date().toISOString();
-
-    const body = [
-        `# ${title}`,
-        '',
-        `**Saved:** ${now}`,
-        summary ? `**Summary:** ${summary}` : '',
-        '',
-        '---',
-        '',
-        content,
-    ].filter(Boolean).join('\n');
-
-    try {
-        fs.writeFileSync(filePath, body, 'utf8');
+        const thread = qThreads.createThread({ title, summary: summary || '', content: content || '' });
+        const url = `/thread/${thread.id}`;
         return {
             ok: true,
-            title,
-            slug: finalSlug,
-            path: filePath,
-            instruction_for_q: `Tell Sarah the situation is saved as "${title}" in her folders. Confirm what's in it briefly so she knows it captured the right things, then suggest the next concrete action.`,
+            title: thread.title,
+            id: thread.id,
+            url,
+            instruction_for_q: `Tell Sarah the situation is saved. Give her a markdown link to open it: [${thread.title}](${url}). Briefly confirm what's in it (1 sentence) so she knows it captured the right thing, then propose the next concrete move on the case.`,
         };
     } catch (e) {
-        return { error: 'Could not write folder file: ' + e.message };
+        return { error: 'Could not save situation: ' + e.message };
     }
 }
 

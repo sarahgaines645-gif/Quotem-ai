@@ -1059,6 +1059,93 @@ router.post('/email-writer/reply', express.json({ limit: '256kb' }), async (req,
     }
 });
 
+// ── THREADS — saved situations (folders) ───────────────────────────────
+const qThreads = require('./plugins/q-threads');
+
+router.get('/threads', (req, res) => {
+    res.sendFile(path.join(__dirname, 'threads.html'));
+});
+
+router.get('/thread/:id', (req, res) => {
+    res.sendFile(path.join(__dirname, 'thread.html'));
+});
+
+router.get('/api/threads', (req, res) => {
+    res.json(qThreads.listThreads());
+});
+
+router.get('/api/threads/:id', (req, res) => {
+    const t = qThreads.readThread(req.params.id);
+    if (!t) return res.status(404).json({ error: 'Not found' });
+    res.json(t);
+});
+
+router.post('/api/threads', express.json({ limit: '256kb' }), (req, res) => {
+    const { title, summary, content } = req.body || {};
+    if (!title) return res.status(400).json({ error: 'title required' });
+    try {
+        const thread = qThreads.createThread({ title, summary, content });
+        res.json(thread);
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+router.post('/api/threads/:id/emails', express.json({ limit: '256kb' }), (req, res) => {
+    const updated = qThreads.addEmail(req.params.id, req.body || {});
+    if (!updated) return res.status(404).json({ error: 'Not found' });
+    res.json(updated);
+});
+
+router.patch('/api/threads/:id', express.json({ limit: '32kb' }), (req, res) => {
+    const updated = qThreads.updateThread(req.params.id, req.body || {});
+    if (!updated) return res.status(404).json({ error: 'Not found' });
+    res.json(updated);
+});
+
+router.delete('/api/threads/:id', (req, res) => {
+    const ok = qThreads.deleteThread(req.params.id);
+    res.json({ ok });
+});
+
+// Chat with Q scoped to a Thread — full thread context (all emails + history) on every turn.
+router.post('/api/threads/:id/chat', express.json({ limit: '256kb' }), async (req, res) => {
+    const { EMAIL_MANAGER_PROMPT: PROMPT } = require('./plugins/q-email-writer');
+    const t = qThreads.readThread(req.params.id);
+    if (!t) return res.status(404).json({ error: 'Not found' });
+    const { message } = req.body || {};
+    if (!message || typeof message !== 'string') return res.status(400).json({ error: 'message required' });
+
+    const messages = [{ role: 'system', content: PROMPT }];
+    if (t.emails.length > 0) {
+        const emailContext = t.emails.map((e, i) => {
+            const dir = e.type === 'in' ? 'RECEIVED' : 'SENT';
+            const meta = [e.from && `from: ${e.from}`, e.to && `to: ${e.to}`, e.date && `date: ${e.date}`, e.subject && `subject: ${e.subject}`].filter(Boolean).join(' · ');
+            return `--- ${dir} #${i + 1}${meta ? ' (' + meta + ')' : ''} ---\n${e.body}`;
+        }).join('\n\n');
+        messages.push({ role: 'user', content: `This is the saved situation "${t.title}". Here's everything so far:\n\n${emailContext}` });
+        messages.push({ role: 'assistant', content: 'Got it — fully up to speed on this case.' });
+    }
+    for (const h of (t.chatHistory || [])) {
+        if (h && (h.role === 'user' || h.role === 'assistant') && typeof h.content === 'string') {
+            messages.push({ role: h.role, content: h.content });
+        }
+    }
+    messages.push({ role: 'user', content: message });
+
+    try {
+        const result = await qChat(messages, { useTools: true });
+        if (result.error || !result.reply) {
+            return res.status(500).json({ error: result.error || 'No reply from Q' });
+        }
+        qThreads.appendChat(t.id, 'user', message);
+        qThreads.appendChat(t.id, 'assistant', result.reply);
+        res.json({ reply: result.reply });
+    } catch (e) {
+        res.status(500).json({ error: e.message || 'Chat failed' });
+    }
+});
+
 // Chat with Q about a pasted email — multi-turn project manager mode.
 // Body: { emailText, history: [{role, content}], message }
 const { EMAIL_MANAGER_PROMPT } = require('./plugins/q-email-writer');
