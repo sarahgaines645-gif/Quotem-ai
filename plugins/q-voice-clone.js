@@ -47,19 +47,45 @@ async function speakAsVoice(text, referenceAudio, referenceMimeType, options = {
     const cfgWeight = typeof options.cfgWeight === 'number' ? options.cfgWeight : 0.5;
 
     try {
-        // Gradio's HTTP API: POST /gradio_api/call/generate with JSON body, then GET the result.
-        // Reference audio is sent as a base64 data URL — Gradio's audio file input accepts that.
-        const referenceB64 = referenceAudio.toString('base64');
-        const referenceDataUrl = `data:${referenceMimeType || 'audio/webm'};base64,${referenceB64}`;
+        // Gradio v6 changed FileData handling — clients can no longer send a
+        // base64 data URL inline. We must upload first via /gradio_api/upload,
+        // get a server-side path back, then reference that path in the call.
+        const ext = (referenceMimeType || '').includes('wav')  ? 'wav'
+                  : (referenceMimeType || '').includes('mpeg') ? 'mp3'
+                  : 'webm';
+        const uploadForm = new FormData();
+        uploadForm.append(
+            'files',
+            new Blob([referenceAudio], { type: referenceMimeType || 'audio/webm' }),
+            `reference.${ext}`,
+        );
+        const uploadRes = await fetch(`${spaceUrl}/gradio_api/upload`, {
+            method: 'POST',
+            body: uploadForm,
+        });
+        if (!uploadRes.ok) {
+            const errText = await uploadRes.text();
+            return {
+                audio: null,
+                mimeType: '',
+                error: `HF Space upload HTTP ${uploadRes.status}: ${errText.substring(0, 200)}`,
+                durationMs: Date.now() - startTime,
+            };
+        }
+        const uploadJson = await uploadRes.json();
+        const uploadedPath = Array.isArray(uploadJson) ? uploadJson[0] : null;
+        if (!uploadedPath) {
+            return { audio: null, mimeType: '', error: 'Upload returned no path', durationMs: Date.now() - startTime };
+        }
 
-        // Step 1: POST to enqueue the call.
+        // Step 1: POST to enqueue the call, referencing the uploaded file by path.
         const enqueueRes = await fetch(`${spaceUrl}/gradio_api/call/generate`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 data: [
                     text.trim(),
-                    { url: referenceDataUrl, meta: { _type: 'gradio.FileData' } },
+                    { path: uploadedPath, meta: { _type: 'gradio.FileData' } },
                     exaggeration,
                     cfgWeight,
                 ],
