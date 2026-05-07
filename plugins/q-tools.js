@@ -33,17 +33,62 @@ const qMusic = require('./q-music');
 const qVideo = require('./q-video');
 const { speakAsVoice } = require('./q-voice-clone');
 
-// Q's canonical voice — read once at module load, reused for every call.
-// Swap voices by replacing this file (commit a different .mp3 with the
-// same name, or change the filename below).
-const Q_VOICE_FILE = path.join(__dirname, '..', 'assets', 'voice-candidates', 'q-current.mp3');
-const Q_VOICE_MIME = 'audio/mpeg';
+// Q's voice — runtime override (Railway volume) wins over the bundled default.
+// Saving an override happens through /q-voice/save-* routes, no restart needed.
+const Q_VOICE_DEFAULT = path.join(__dirname, '..', 'assets', 'voice-candidates', 'q-current.mp3');
+const Q_VOICE_VOLUME_DIR = process.env.RAILWAY_VOLUME_MOUNT_PATH
+    ? path.join(process.env.RAILWAY_VOLUME_MOUNT_PATH, 'q-voice')
+    : path.join(__dirname, '..', 'data', 'q-voice');
+const Q_VOICE_OVERRIDE = path.join(Q_VOICE_VOLUME_DIR, 'q-voice-override.wav');
+let Q_VOICE_MIME = 'audio/mpeg';
 let qVoiceBuffer = null;
-try {
-    qVoiceBuffer = fs.readFileSync(Q_VOICE_FILE);
-    console.log('[q-tools] Q voice reference loaded: ' + qVoiceBuffer.length + ' bytes');
-} catch (e) {
-    console.warn('[q-tools] Q voice reference not loaded: ' + e.message);
+let qVoiceSource = 'none';
+
+function loadQVoice() {
+    // Try override first, fall back to bundled default.
+    try {
+        if (fs.existsSync(Q_VOICE_OVERRIDE)) {
+            qVoiceBuffer = fs.readFileSync(Q_VOICE_OVERRIDE);
+            Q_VOICE_MIME = 'audio/wav';
+            qVoiceSource = 'override';
+            console.log('[q-tools] Q voice (override): ' + qVoiceBuffer.length + ' bytes');
+            return;
+        }
+    } catch (e) {
+        console.warn('[q-tools] Override read failed, falling back: ' + e.message);
+    }
+    try {
+        qVoiceBuffer = fs.readFileSync(Q_VOICE_DEFAULT);
+        Q_VOICE_MIME = 'audio/mpeg';
+        qVoiceSource = 'default';
+        console.log('[q-tools] Q voice (default): ' + qVoiceBuffer.length + ' bytes');
+    } catch (e) {
+        qVoiceBuffer = null;
+        qVoiceSource = 'none';
+        console.warn('[q-tools] Q voice not loaded: ' + e.message);
+    }
+}
+loadQVoice();
+
+function setQVoiceFromBuffer(audioBuffer) {
+    fs.mkdirSync(Q_VOICE_VOLUME_DIR, { recursive: true });
+    fs.writeFileSync(Q_VOICE_OVERRIDE, audioBuffer);
+    loadQVoice();
+    return { ok: true, bytes: audioBuffer.length, source: qVoiceSource };
+}
+
+function clearQVoice() {
+    try { fs.unlinkSync(Q_VOICE_OVERRIDE); } catch { /* didn't exist */ }
+    loadQVoice();
+    return { ok: true, source: qVoiceSource };
+}
+
+function getQVoiceStatus() {
+    return {
+        source: qVoiceSource,        // 'override' | 'default' | 'none'
+        bytes: qVoiceBuffer ? qVoiceBuffer.length : 0,
+        overridePath: Q_VOICE_OVERRIDE,
+    };
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -914,4 +959,13 @@ function selectActiveTools(userMessage, options = {}) {
     });
 }
 
-module.exports = { TOOL_DEFINITIONS, executeTool, analyzeDocument, selectActiveTools };
+module.exports = {
+    TOOL_DEFINITIONS,
+    executeTool,
+    analyzeDocument,
+    selectActiveTools,
+    // Q voice override controls — used by /q-voice/* routes
+    setQVoiceFromBuffer,
+    clearQVoice,
+    getQVoiceStatus,
+};

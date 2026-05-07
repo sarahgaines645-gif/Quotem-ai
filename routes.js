@@ -1291,6 +1291,46 @@ router.get('/voice-clone', (req, res) => {
     res.sendFile(path.join(__dirname, 'voice-clone.html'));
 });
 
+// ── Q's permanent voice — saved override on the Railway volume ────────────
+const { setQVoiceFromBuffer, clearQVoice, getQVoiceStatus } = require('./plugins/q-tools');
+
+router.get('/q-voice/status', (req, res) => {
+    res.json(getQVoiceStatus());
+});
+
+// Save Q's voice from a file upload (base64 in body).
+router.post('/q-voice/save-from-upload', express.json({ limit: '8mb' }), (req, res) => {
+    const b64 = req.body?.audioBase64;
+    if (!b64 || typeof b64 !== 'string') {
+        return res.status(400).json({ error: 'audioBase64 (string) is required' });
+    }
+    try {
+        const buf = Buffer.from(b64, 'base64');
+        const result = setQVoiceFromBuffer(buf);
+        res.json(result);
+    } catch (e) {
+        res.status(500).json({ error: e.message || 'Failed to save voice' });
+    }
+});
+
+// Save Q's voice from a URL — uses the audio-fetch plugin to grab a clean slice.
+router.post('/q-voice/save-from-url', express.json({ limit: '8kb' }), async (req, res) => {
+    const url = req.body?.url;
+    if (!url || typeof url !== 'string') return res.status(400).json({ error: 'url is required' });
+    try {
+        const buf = await fetchAudioClip(url);
+        const result = setQVoiceFromBuffer(buf);
+        res.json(result);
+    } catch (e) {
+        res.status(500).json({ error: e.message || 'Failed to fetch and save voice' });
+    }
+});
+
+// Reset Q's voice back to the bundled default.
+router.post('/q-voice/reset', (req, res) => {
+    res.json(clearQVoice());
+});
+
 // Voice cloning from a URL — server-side downloads ~15s of audio from the URL,
 // then forwards to the cloning space. One-shot endpoint: returns audio binary.
 const { fetchAudioClip } = require('./plugins/q-audio-fetch');

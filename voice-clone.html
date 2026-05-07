@@ -153,6 +153,8 @@
     <audio id="player" controls></audio>
     <div class="controls">
       <button id="download">Download</button>
+      <button id="save-as-q" style="background: var(--accent); color: white; box-shadow: var(--neu-raised-sm);">⭐ Make this Q's voice forever</button>
+      <span class="status" id="save-status"></span>
     </div>
   </div>
 
@@ -351,6 +353,50 @@ function blobToBase64(blob) {
     reader.readAsDataURL(blob);
   });
 }
+
+// ── Save as Q's voice forever ────────────────────────────────────
+const $saveBtn    = document.getElementById('save-as-q');
+const $saveStatus = document.getElementById('save-status');
+
+$saveBtn.addEventListener('click', async () => {
+  // Same mode-detection as Generate
+  let mode;
+  if      (panelUrl.classList.contains('show'))    mode = 'url';
+  else if (panelUpload.classList.contains('show')) mode = 'upload';
+  else                                             mode = 'record';
+
+  $saveBtn.disabled = true;
+  $saveStatus.innerHTML = '<span class="dot"></span>Saving as Q\'s voice…';
+
+  try {
+    let res;
+    if (mode === 'url') {
+      const urlValue = document.getElementById('url-input').value.trim();
+      if (!urlValue) { throw new Error('Paste a link first'); }
+      res = await fetch('/q-voice/save-from-url', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url: urlValue }),
+      });
+    } else {
+      const blob = (mode === 'upload') ? uploadedFile : recordedBlob;
+      if (!blob) { throw new Error('No reference audio to save'); }
+      const audioBase64 = await blobToBase64(blob);
+      res = await fetch('/q-voice/save-from-upload', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ audioBase64 }),
+      });
+    }
+    const json = await res.json();
+    if (!res.ok) throw new Error(json.error || 'Save failed');
+    $saveStatus.textContent = '⭐ Saved — Q now speaks in this voice everywhere';
+  } catch (e) {
+    $saveStatus.textContent = 'Error: ' + e.message;
+  } finally {
+    $saveBtn.disabled = false;
+  }
+});
 </script>
 </body>
 </html>
