@@ -296,6 +296,35 @@ async function loadThread() {
   setStatus(thread.status || 'open');
   renderEmails();
   renderChat();
+  // Auto-kickoff: if there's content but Q hasn't spoken yet, get him to take the case
+  // and run the diagnostic before Sarah has to ask. The kickoff message itself
+  // is sent as a hidden user message — only Q's reply renders.
+  const hasContent = (thread.emails || []).length > 0 || (thread.notes || []).length > 0;
+  const noQYet     = !(thread.chatHistory || []).some(m => m.role === 'assistant');
+  if (hasContent && noQYet) {
+    autoKickoff();
+  }
+}
+
+async function autoKickoff() {
+  $chatTyping.classList.add('show');
+  try {
+    const res = await fetch('/api/threads/' + threadId + '/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        message: "Take this case. Run the diagnostic now — call list_threads to see if anything else I have is related, read all the correspondence above, spot the timing gaps and what's wrong, name the rules in my favour, draft any immediate replies, set the chase reminders, research anything you need to with web_search. Then report back. Use 'I've' not 'I could' — completed actions, not offers. The only things you ask me are things only I can answer. You're holding this now.",
+      }),
+    });
+    const json = await res.json();
+    if (!res.ok) throw new Error(json.error || 'HTTP ' + res.status);
+    appendChatMsg('q', json.reply);
+  } catch (e) {
+    appendChatMsg('q', '⚠️ Kickoff failed: ' + (e.message || 'unknown') + '. Type below and I\'ll pick it up.');
+  } finally {
+    $chatTyping.classList.remove('show');
+    $chatInput.focus();
+  }
 }
 
 function setStatus(value) {
