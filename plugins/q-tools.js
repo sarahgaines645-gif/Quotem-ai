@@ -436,15 +436,37 @@ const TOOL_DEFINITIONS = [
         type: 'function',
         function: {
             name: 'save_situation',
-            description: 'Save an ongoing situation (a complaint, dispute, project, anything with multiple emails or steps) to a folder so Sarah can come back to it. Use this whenever Sarah is dealing with something that has legs — multiple emails back and forth, a deadline, a chase pattern. After calling, tell Sarah the folder is saved and confirm what title you used.',
+            description: 'Save an ongoing situation (a complaint, dispute, project, anything with multiple emails or steps) to a folder (Thread) so Sarah can come back to it. Use this whenever Sarah is dealing with something that has legs — multiple emails back and forth, a deadline, a chase pattern. Returns a /thread/{id} URL Sarah can open. After calling, tell Sarah the Thread is saved with a clickable markdown link and confirm what title you used.',
             parameters: {
                 type: 'object',
                 properties: {
-                    title:   { type: 'string', description: 'Short descriptive title for the folder, e.g. "Boiler dispute with X" or "Wedding caterer dates". Used as the folder name.' },
+                    title:   { type: 'string', description: 'Short descriptive title for the Thread, e.g. "Boiler dispute with X" or "Wedding caterer dates". Used as the Thread name.' },
                     summary: { type: 'string', description: 'One-line summary of what this situation is about — the elevator pitch.' },
                     content: { type: 'string', description: 'Full content to save: the original email(s), key facts, deadlines, anything important. Markdown is fine.' },
                 },
                 required: ['title', 'summary', 'content'],
+            },
+        },
+    },
+    {
+        type: 'function',
+        function: {
+            name: 'list_threads',
+            description: 'List all of Sarah\'s saved Threads (situations / cases). Use this whenever she references something you might have a Thread for — "the landlord thing", "that complaint with X", "what happened with the boiler" — so you can match her words to a real Thread and pull its details with read_thread. Returns: array of {id, title, summary, status, updatedAt, emailCount}.',
+            parameters: { type: 'object', properties: {} },
+        },
+    },
+    {
+        type: 'function',
+        function: {
+            name: 'read_thread',
+            description: 'Read the full contents of one Thread — all emails, all prior chat with Q on this case, status, notes. Use this AFTER list_threads when you\'ve identified the Thread Sarah is asking about. Once read, you have the whole case in context and can speak about it confidently. Returns the complete Thread object.',
+            parameters: {
+                type: 'object',
+                properties: {
+                    id: { type: 'string', description: 'The Thread id from list_threads.' },
+                },
+                required: ['id'],
             },
         },
     },
@@ -669,6 +691,8 @@ async function executeTool(name, argsRaw, personId) {
         case 'generate_video':    return await generateVideoTool(args);
         case 'speak_as_q':        return await speakAsQTool(args);
         case 'save_situation':    return saveSituation(args);
+        case 'list_threads':      return listThreadsTool();
+        case 'read_thread':       return readThreadTool(args);
         default:                 return { error: `Unknown tool: "${name}"` };
     }
 }
@@ -879,6 +903,52 @@ function saveSituation({ title, summary, content } = {}) {
     } catch (e) {
         return { error: 'Could not save situation: ' + e.message };
     }
+}
+
+/**
+ * list_threads — return a compact list of all of Sarah's saved Threads
+ * so Q can match her words to a real saved situation.
+ */
+function listThreadsTool() {
+    try {
+        const threads = qThreads.listThreads();
+        return {
+            count: threads.length,
+            threads: threads.map(t => ({
+                id: t.id,
+                title: t.title,
+                summary: t.summary,
+                status: t.status,
+                updatedAt: t.updatedAt,
+                emailCount: (t.emails || []).length,
+            })),
+            instruction_for_q: threads.length === 0
+                ? 'No saved threads yet. If Sarah is asking about a situation that should be saved, offer to save it with save_situation.'
+                : 'Match Sarah\'s words to one of these threads. If you find the one she means, call read_thread next to load the full content. If unsure between two, ask which.',
+        };
+    } catch (e) {
+        return { error: e.message || 'Failed to list threads' };
+    }
+}
+
+/**
+ * read_thread — load one Thread's full contents (emails, chat history, notes)
+ * so Q can speak about the case knowledgeably.
+ */
+function readThreadTool({ id } = {}) {
+    if (!id || typeof id !== 'string') return { error: 'id (string) is required' };
+    const t = qThreads.readThread(id);
+    if (!t) return { error: 'Thread not found: ' + id };
+    return {
+        id: t.id,
+        title: t.title,
+        summary: t.summary,
+        status: t.status,
+        emails: t.emails || [],
+        chatHistory: t.chatHistory || [],
+        notes: t.notes || [],
+        instruction_for_q: 'You now have the full case. Reference it confidently in your reply — name the parties, dates, what was said. Always end with the next concrete move.',
+    };
 }
 
 /**
