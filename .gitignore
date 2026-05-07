@@ -2,6 +2,7 @@
 .env
 .env.*
 !.env.example
+.hf-secrets
 
 # Node
 node_modules/
@@ -19,6 +20,8 @@ data/q-facts-*.json
 data/people.json
 data/cost-log.json
 data/cost-log-*.json
+data/generated/
+data/*.legacy
 
 # Editor / OS
 .vscode/

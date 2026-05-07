@@ -1028,6 +1028,70 @@ router.post('/video/generate', express.json({ limit: '64kb' }), async (req, res)
     return res.end(result.video);
 });
 
+// ── Email writer — paste email or thread, get clickable response options + reply ──
+const emailWriter = require('./plugins/q-email-writer');
+
+router.get('/email-writer', (req, res) => {
+    res.sendFile(path.join(__dirname, 'email-writer.html'));
+});
+
+router.post('/email-writer/analyse', express.json({ limit: '256kb' }), async (req, res) => {
+    const text = req.body?.text;
+    if (!text || typeof text !== 'string' || !text.trim()) {
+        return res.status(400).json({ error: 'Body must include text:string' });
+    }
+    try {
+        const analysis = await emailWriter.analyseEmail(text);
+        res.json({ analysis });
+    } catch (e) {
+        res.status(500).json({ error: e.message || 'Analyse failed' });
+    }
+});
+
+router.post('/email-writer/reply', express.json({ limit: '256kb' }), async (req, res) => {
+    const { text, options, extraNotes, tone } = req.body || {};
+    if (!text) return res.status(400).json({ error: 'Body must include text:string' });
+    try {
+        const reply = await emailWriter.generateReply(text, options, extraNotes, tone);
+        res.json(reply);
+    } catch (e) {
+        res.status(500).json({ error: e.message || 'Reply failed' });
+    }
+});
+
+router.post('/email-writer/adjust-tone', express.json({ limit: '64kb' }), async (req, res) => {
+    const { body, tone } = req.body || {};
+    if (!body) return res.status(400).json({ error: 'Body must include body:string' });
+    if (!tone) return res.status(400).json({ error: 'Body must include tone:string' });
+    try {
+        const rewritten = await emailWriter.adjustTone(body, tone);
+        res.json({ body: rewritten });
+    } catch (e) {
+        res.status(500).json({ error: e.message || 'Tone adjust failed' });
+    }
+});
+
+// "I don't know what to do" — runs Q in APS mode (A Problem Shared) on the
+// pasted email. Q reads it as a friend who's good with the small print,
+// finds the angle the user missed, gives the plan + odds.
+const { chat: qChat } = require('./plugins/q-chat');
+router.post('/email-writer/advice', express.json({ limit: '256kb' }), async (req, res) => {
+    const text = req.body?.text;
+    if (!text || typeof text !== 'string' || !text.trim()) {
+        return res.status(400).json({ error: 'Body must include text:string' });
+    }
+    const userMsg = `I've been sent this email and I don't know how to deal with it. Can you read it, work out what's actually going on, and tell me what to do? Find the angle if there is one — what they're not telling me, what I might have missed, deadlines I should know about, anything in their small print that helps me. Then give me a step-by-step plan.\n\n--- THE EMAIL ---\n${text.trim()}\n--- END ---`;
+    try {
+        const result = await qChat([{ role: 'user', content: userMsg }], { mode: 'aps', useTools: false });
+        if (result.error || !result.reply) {
+            return res.status(500).json({ error: result.error || 'No reply from Q' });
+        }
+        res.json({ advice: result.reply });
+    } catch (e) {
+        res.status(500).json({ error: e.message || 'Advice failed' });
+    }
+});
+
 // ── Image generation — text prompt → PNG via Z-Image-Turbo HF Space ──────
 router.get('/image-gen', (req, res) => {
     res.sendFile(path.join(__dirname, 'image-gen.html'));
@@ -1221,6 +1285,36 @@ router.post('/agent/run', requirePerson, express.json({ limit: '256kb' }), async
         reasoningEffort,
     });
     res.json(result);
+});
+
+router.get('/voice-clone', (req, res) => {
+    res.sendFile(path.join(__dirname, 'voice-clone.html'));
+});
+
+// Voice cloning from a URL — server-side downloads ~15s of audio from the URL,
+// then forwards to the cloning space. One-shot endpoint: returns audio binary.
+const { fetchAudioClip } = require('./plugins/q-audio-fetch');
+router.post('/voice-clone/from-url', express.json({ limit: '8kb' }), async (req, res) => {
+    const { url, text, exaggeration, cfgWeight } = req.body || {};
+    if (!url || typeof url !== 'string') return res.status(400).json({ error: 'url is required' });
+    if (!text || typeof text !== 'string') return res.status(400).json({ error: 'text is required' });
+
+    try {
+        const refBuf = await fetchAudioClip(url);
+        const result = await speakAsVoice(text, refBuf, 'audio/wav', {
+            exaggeration: typeof exaggeration === 'number' ? exaggeration : undefined,
+            cfgWeight:    typeof cfgWeight    === 'number' ? cfgWeight    : undefined,
+        });
+        if (result.error || !result.audio) {
+            return res.status(500).json({ error: result.error || 'No audio returned', durationMs: result.durationMs });
+        }
+        res.setHeader('Content-Type', result.mimeType);
+        res.setHeader('Content-Length', result.audio.length);
+        res.setHeader('X-Generation-Ms', String(result.durationMs));
+        return res.end(result.audio);
+    } catch (e) {
+        res.status(500).json({ error: e.message || 'Audio fetch failed' });
+    }
 });
 
 // Voice cloning — POST text + reference audio (base64), get back WAV audio

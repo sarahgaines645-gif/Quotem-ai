@@ -71,7 +71,6 @@ demo = gr.Interface(
         "Powered by StarVector (ServiceNow, Apache 2.0). "
         "Best results on logos, icons, and clean line art with limited colours."
     ),
-    allow_flagging="never",
     api_name="vectorise",
 )
 

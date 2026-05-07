@@ -1,0 +1,459 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <script src="/q-auth.js"></script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Q Email Writer</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/marked@12.0.0/marked.min.js"></script>
+<style>
+  :root {
+    --bg: #e8e8e8; --text: #1a1a1a;
+    --text-muted: rgba(0,0,0,0.42); --text-faint: rgba(0,0,0,0.26);
+    --shadow-light: #ffffff; --shadow-dark: #ababab;
+    --accent: #e91e63; --accent-soft: rgba(233,30,99,0.12);
+    --neu-raised: 10px 10px 28px #ababab, -8px -8px 20px #ffffff, inset 0 1px 0 rgba(255,255,255,0.5);
+    --neu-raised-sm: 6px 6px 16px #ababab, -5px -5px 12px #ffffff;
+    --neu-inset: inset 5px 5px 14px #ababab, inset -4px -4px 10px #ffffff;
+    --neu-inset-sm: inset 3px 3px 8px #ababab, inset -2px -2px 6px #ffffff;
+    --neu-inset-xs: inset 3px 3px 8px #ababab, inset -2px -2px 6px #ffffff;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Space Grotesk', -apple-system, sans-serif; background: var(--bg); color: var(--text); font-size: 15px; line-height: 1.55; min-height: 100vh; padding: 32px 24px 80px; -webkit-font-smoothing: antialiased; }
+  .wrap { max-width: 820px; margin: 0 auto; }
+
+  header { display: flex; align-items: center; gap: 14px; margin-bottom: 32px; }
+  .logo-mark { display: inline-flex; align-items: baseline; }
+  .logo-mark .q { font-size: 28px; font-weight: 700; line-height: 1; letter-spacing: -0.05em; }
+  .logo-mark .dot { width: 8px; height: 8px; background: var(--accent); border-radius: 50%; display: inline-block; margin-left: 4px; align-self: flex-end; margin-bottom: 4px; box-shadow: 0 1px 2px rgba(233,30,99,0.3); }
+  h1 { font-size: 22px; font-weight: 700; letter-spacing: -0.03em; }
+  .back-link { margin-left: auto; font-size: 12px; color: var(--text-muted); text-decoration: none; }
+  .back-link:hover { color: var(--text); }
+
+  .card { background: var(--bg); border-radius: 20px; padding: 22px; box-shadow: var(--neu-raised); margin-bottom: 16px; }
+  .section-label { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; color: var(--text-faint); margin-bottom: 10px; }
+
+  textarea {
+    width: 100%; border: none; outline: none; resize: vertical;
+    font-family: inherit; font-size: 14px; color: var(--text);
+    background: var(--bg); padding: 12px 16px; border-radius: 12px;
+    box-shadow: var(--neu-inset-sm); line-height: 1.6;
+  }
+  textarea::placeholder { color: var(--text-faint); }
+
+  /* Buttons */
+  button { border: none; cursor: pointer; background: var(--bg); color: var(--text); font-family: inherit; }
+  button:disabled { opacity: 0.5; cursor: not-allowed; }
+  .btn-primary {
+    font-size: 15px; font-weight: 700; padding: 13px 32px; border-radius: 14px;
+    box-shadow: var(--neu-raised); letter-spacing: -0.01em; transition: color 0.15s;
+  }
+  .btn-primary:hover:not(:disabled) { color: var(--accent); }
+  .btn-primary:active:not(:disabled) { box-shadow: var(--neu-inset-xs); }
+  .btn-sm {
+    font-size: 12px; font-weight: 600; padding: 8px 16px; border-radius: 10px;
+    box-shadow: var(--neu-raised-sm); color: var(--text-muted);
+  }
+  .btn-sm:hover:not(:disabled) { color: var(--accent); }
+
+  /* Headline (Step 2) */
+  .headline-card { background: var(--bg); border-radius: 16px; padding: 18px 20px; box-shadow: var(--neu-inset-sm); margin-bottom: 16px; }
+  .headline-text { font-size: 17px; font-weight: 600; letter-spacing: -0.02em; line-height: 1.4; }
+  .summary-text { font-size: 13px; color: var(--text-muted); margin-top: 6px; }
+  .meta-row { display: flex; gap: 14px; flex-wrap: wrap; margin-top: 12px; font-size: 11px; color: var(--text-faint); text-transform: uppercase; letter-spacing: 0.06em; font-weight: 600; }
+  .meta-pill { padding: 4px 10px; border-radius: 8px; box-shadow: var(--neu-raised-sm); }
+  .meta-pill.urgency-high, .meta-pill.urgency-urgent { color: var(--accent); }
+
+  /* Response options grid */
+  .options-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 16px; }
+  @media (max-width: 600px) { .options-grid { grid-template-columns: 1fr; } }
+  .option-tile {
+    background: var(--bg); padding: 14px 16px; border-radius: 14px;
+    box-shadow: var(--neu-raised-sm); text-align: left;
+    font-size: 14px; font-weight: 500; color: var(--text);
+    cursor: pointer; line-height: 1.4; transition: color 0.15s;
+  }
+  .option-tile:hover { color: var(--accent); }
+  .option-tile.on { box-shadow: var(--neu-inset-xs); color: var(--accent); }
+
+  /* Tone chips */
+  .tones { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; }
+  .tone-chip {
+    font-size: 12px; font-weight: 600; padding: 7px 14px; border-radius: 20px;
+    background: var(--bg); cursor: pointer; color: var(--text-muted);
+    box-shadow: var(--neu-raised-sm); transition: color 0.15s;
+  }
+  .tone-chip:hover { color: var(--text); }
+  .tone-chip.on { color: var(--accent); box-shadow: var(--neu-inset-xs); }
+
+  /* Status / spinner */
+  .status { font-size: 12px; color: var(--text-muted); margin-left: 14px; align-self: center; }
+  .status .dot { display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: var(--accent); margin-right: 6px; animation: pulse 1.2s infinite; vertical-align: middle; }
+  @keyframes pulse { 0%,100% { opacity: 0.4; } 50% { opacity: 1; } }
+
+  /* Reply card */
+  .reply-card { display: none; }
+  .reply-card.show { display: block; }
+  .reply-subject {
+    font-size: 16px; font-weight: 700; letter-spacing: -0.02em;
+    background: var(--bg); padding: 12px 16px; border-radius: 12px;
+    box-shadow: var(--neu-inset-sm); margin-bottom: 12px;
+    border: none; outline: none; width: 100%;
+    font-family: inherit;
+  }
+  .reply-body {
+    width: 100%; min-height: 260px; border: none; outline: none; resize: vertical;
+    font-family: inherit; font-size: 14px; color: var(--text);
+    background: var(--bg); padding: 14px 16px; border-radius: 12px;
+    box-shadow: var(--neu-inset-sm); line-height: 1.7;
+  }
+  .reply-actions { display: flex; gap: 10px; margin-top: 14px; flex-wrap: wrap; }
+
+  /* Hide / show */
+  .step-2, .step-3 { display: none; }
+  .step-2.show, .step-3.show { display: block; }
+
+  .gen-row { display: flex; align-items: center; gap: 10px; margin-top: 16px; flex-wrap: wrap; }
+
+  /* APS button + advice card */
+  .aps-row { display: flex; align-items: center; gap: 10px; margin-top: 14px; flex-wrap: wrap; }
+  .aps-btn {
+    font-size: 13px; font-weight: 700; padding: 10px 18px; border-radius: 12px;
+    background: var(--bg); color: var(--text);
+    box-shadow: var(--neu-raised-sm); display: inline-flex; align-items: center; gap: 8px;
+    transition: color 0.15s;
+  }
+  .aps-btn:hover:not(:disabled) { color: var(--accent); }
+  .aps-btn:active:not(:disabled) { box-shadow: var(--neu-inset-xs); }
+  .aps-hint { font-size: 11px; color: var(--text-faint); font-style: italic; }
+
+  .advice-card { display: none; margin-top: 16px; }
+  .advice-card.show { display: block; }
+  .advice-body {
+    background: var(--bg); border-radius: 16px; padding: 18px 22px;
+    box-shadow: var(--neu-inset-sm); line-height: 1.65; font-size: 14px;
+  }
+  .advice-body h1, .advice-body h2, .advice-body h3 {
+    font-size: 14px; font-weight: 700; letter-spacing: -0.01em;
+    margin: 14px 0 6px; color: var(--accent);
+  }
+  .advice-body h1:first-child, .advice-body h2:first-child, .advice-body h3:first-child { margin-top: 0; }
+  .advice-body p { margin: 0 0 10px; }
+  .advice-body ol, .advice-body ul { margin: 0 0 10px 22px; }
+  .advice-body li { margin-bottom: 4px; }
+  .advice-body strong { font-weight: 700; }
+  .advice-body code { font-family: monospace; font-size: 13px; background: var(--accent-soft); padding: 1px 5px; border-radius: 4px; }
+  .advice-header { display: flex; align-items: center; gap: 8px; font-size: 11px; color: var(--text-faint); text-transform: uppercase; letter-spacing: 0.1em; font-weight: 700; margin-bottom: 10px; }
+
+  /* Toast */
+  .toast {
+    position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
+    background: var(--text); color: var(--bg); padding: 10px 18px;
+    border-radius: 12px; font-size: 13px; font-weight: 600;
+    opacity: 0; transition: opacity 0.2s; pointer-events: none; z-index: 100;
+  }
+  .toast.show { opacity: 0.92; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <span class="logo-mark"><span class="q">Q</span><span class="dot"></span></span>
+    <h1>Email Writer</h1>
+    <a href="/chat" class="back-link">← back to Q</a>
+  </header>
+
+  <!-- ── STEP 1: paste ── -->
+  <div class="card" id="step-1-card">
+    <div class="section-label">📥 Paste the email — or the whole thread</div>
+    <textarea id="paste-area" rows="10" placeholder="Paste the email you've been sent here. If it's a thread with several emails back and forth, paste the whole lot — Q reads everything and replies to the latest one with the full context in mind."></textarea>
+    <div class="gen-row">
+      <button class="btn-primary" id="read-btn">Read it</button>
+      <span class="status" id="read-status"></span>
+    </div>
+  </div>
+
+  <!-- ── STEP 2: headline + options ── -->
+  <div class="step-2" id="step-2">
+    <div class="card">
+      <div class="section-label">📌 What it's about</div>
+      <div class="headline-card">
+        <div class="headline-text" id="headline"></div>
+        <div class="summary-text" id="summary"></div>
+        <div class="meta-row" id="meta"></div>
+        <div class="aps-row">
+          <button class="aps-btn" id="aps-btn">🪄 Q take this one</button>
+          <span class="aps-hint">Hand it over — Q reads it properly and tells you what to do</span>
+          <span class="status" id="aps-status"></span>
+        </div>
+      </div>
+
+      <div class="advice-card" id="advice-card">
+        <div class="advice-header">
+          <span>💡 Q says</span>
+        </div>
+        <div class="advice-body" id="advice-body"></div>
+      </div>
+
+      <div class="section-label">💬 How do you want to reply? Click one or more</div>
+      <div class="options-grid" id="options"></div>
+
+      <div class="section-label">✏️ Anything to add? (optional)</div>
+      <textarea id="extra-notes" rows="3" placeholder="e.g. The price is £450, I can come Tuesday morning, Mum says hi..."></textarea>
+
+      <div class="section-label" style="margin-top: 18px;">🎨 Tone</div>
+      <div class="tones" id="tones">
+        <button class="tone-chip on" data-tone="professional">💼 Professional</button>
+        <button class="tone-chip" data-tone="friendly">☕ Friendly</button>
+        <button class="tone-chip" data-tone="formal">🎩 Formal</button>
+        <button class="tone-chip" data-tone="brief">⚡ Brief</button>
+      </div>
+
+      <div class="gen-row">
+        <button class="btn-primary" id="write-btn">Write reply</button>
+        <span class="status" id="write-status"></span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── STEP 3: draft ── -->
+  <div class="step-3" id="step-3">
+    <div class="card reply-card show">
+      <div class="section-label">📨 Subject</div>
+      <input type="text" class="reply-subject" id="reply-subject" />
+
+      <div class="section-label">📝 Reply (edit freely)</div>
+      <textarea class="reply-body" id="reply-body"></textarea>
+
+      <div class="section-label" style="margin-top: 14px;">🎨 Re-tone</div>
+      <div class="tones" id="retones">
+        <button class="tone-chip" data-tone="professional">💼 Professional</button>
+        <button class="tone-chip" data-tone="friendly">☕ Friendly</button>
+        <button class="tone-chip" data-tone="formal">🎩 Formal</button>
+        <button class="tone-chip" data-tone="brief">⚡ Brief</button>
+      </div>
+
+      <div class="reply-actions">
+        <button class="btn-sm" id="copy-btn">📋 Copy</button>
+        <button class="btn-sm" id="copy-both-btn">📋 Copy subject + body</button>
+        <button class="btn-sm" id="restart-btn">↩️ Start over</button>
+        <span class="status" id="retone-status"></span>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const $paste     = document.getElementById('paste-area');
+const $readBtn   = document.getElementById('read-btn');
+const $readStat  = document.getElementById('read-status');
+const $step2     = document.getElementById('step-2');
+const $step3     = document.getElementById('step-3');
+const $headline  = document.getElementById('headline');
+const $summary   = document.getElementById('summary');
+const $meta      = document.getElementById('meta');
+const $options   = document.getElementById('options');
+const $extra     = document.getElementById('extra-notes');
+const $writeBtn  = document.getElementById('write-btn');
+const $writeStat = document.getElementById('write-status');
+const $rsubject  = document.getElementById('reply-subject');
+const $rbody     = document.getElementById('reply-body');
+const $copyBtn   = document.getElementById('copy-btn');
+const $copyBoth  = document.getElementById('copy-both-btn');
+const $restart   = document.getElementById('restart-btn');
+const $retoneStatus = document.getElementById('retone-status');
+const $toast     = document.getElementById('toast');
+
+let currentTone = 'professional';
+let currentText = '';
+let currentAnalysis = null;
+
+// Tone picker (step 2) — only one selected at a time
+document.querySelectorAll('#tones .tone-chip').forEach(chip => {
+  chip.addEventListener('click', () => {
+    document.querySelectorAll('#tones .tone-chip').forEach(c => c.classList.remove('on'));
+    chip.classList.add('on');
+    currentTone = chip.dataset.tone;
+  });
+});
+
+// Tone re-pick (step 3) — clicking re-runs adjust-tone
+document.querySelectorAll('#retones .tone-chip').forEach(chip => {
+  chip.addEventListener('click', async () => {
+    document.querySelectorAll('#retones .tone-chip').forEach(c => c.classList.remove('on'));
+    chip.classList.add('on');
+    const newTone = chip.dataset.tone;
+    if (!$rbody.value.trim()) return;
+    $retoneStatus.innerHTML = '<span class="dot"></span>Re-toning…';
+    try {
+      const res = await fetch('/email-writer/adjust-tone', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ body: $rbody.value, tone: newTone }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || 'Failed');
+      $rbody.value = json.body;
+      $retoneStatus.textContent = '';
+    } catch (e) {
+      $retoneStatus.textContent = 'Error: ' + e.message;
+    }
+  });
+});
+
+// Step 1 → analyse
+$readBtn.addEventListener('click', async () => {
+  const text = $paste.value.trim();
+  if (!text) { $paste.focus(); return; }
+  currentText = text;
+  $readBtn.disabled = true;
+  $readStat.innerHTML = '<span class="dot"></span>Reading…';
+
+  try {
+    const res = await fetch('/email-writer/analyse', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text }),
+    });
+    const json = await res.json();
+    if (!res.ok) throw new Error(json.error || 'Analyse failed');
+
+    currentAnalysis = json.analysis;
+    renderStep2(json.analysis);
+    $step2.classList.add('show');
+    $readStat.textContent = '';
+    $step2.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  } catch (e) {
+    $readStat.textContent = 'Error: ' + e.message;
+  } finally {
+    $readBtn.disabled = false;
+  }
+});
+
+function renderStep2(a) {
+  $headline.textContent = a.headline || '';
+  $summary.textContent = a.summary || '';
+
+  // Meta pills
+  const pills = [];
+  if (a.urgency)    pills.push(`<span class="meta-pill urgency-${a.urgency}">${a.urgency}</span>`);
+  if (a.senderTone) pills.push(`<span class="meta-pill">tone: ${a.senderTone}</span>`);
+  if (a.sender)     pills.push(`<span class="meta-pill">${escapeHtml(a.sender)}</span>`);
+  $meta.innerHTML = pills.join('');
+
+  // Options
+  $options.innerHTML = '';
+  (a.options || []).forEach(opt => {
+    const btn = document.createElement('button');
+    btn.className = 'option-tile';
+    btn.textContent = opt;
+    btn.addEventListener('click', () => btn.classList.toggle('on'));
+    $options.appendChild(btn);
+  });
+}
+
+// Step 2 → reply
+$writeBtn.addEventListener('click', async () => {
+  const picked = Array.from($options.querySelectorAll('.option-tile.on')).map(b => b.textContent);
+  const extra  = $extra.value.trim();
+  if (picked.length === 0 && !extra) {
+    showToast('Pick at least one option, or add a note');
+    return;
+  }
+  $writeBtn.disabled = true;
+  $writeStat.innerHTML = '<span class="dot"></span>Writing…';
+
+  try {
+    const res = await fetch('/email-writer/reply', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text: currentText, options: picked, extraNotes: extra, tone: currentTone }),
+    });
+    const json = await res.json();
+    if (!res.ok) throw new Error(json.error || 'Reply failed');
+
+    $rsubject.value = json.subject || '';
+    $rbody.value    = json.body || '';
+
+    // Sync re-tone chips with current tone
+    document.querySelectorAll('#retones .tone-chip').forEach(c => {
+      c.classList.toggle('on', c.dataset.tone === currentTone);
+    });
+
+    $step3.classList.add('show');
+    $writeStat.textContent = '';
+    $step3.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  } catch (e) {
+    $writeStat.textContent = 'Error: ' + e.message;
+  } finally {
+    $writeBtn.disabled = false;
+  }
+});
+
+// Copy actions
+$copyBtn.addEventListener('click', async () => {
+  await navigator.clipboard.writeText($rbody.value);
+  showToast('Reply copied');
+});
+$copyBoth.addEventListener('click', async () => {
+  const combined = `Subject: ${$rsubject.value}\n\n${$rbody.value}`;
+  await navigator.clipboard.writeText(combined);
+  showToast('Subject + body copied');
+});
+
+$restart.addEventListener('click', () => {
+  $paste.value = ''; $extra.value = '';
+  $rsubject.value = ''; $rbody.value = '';
+  $options.innerHTML = '';
+  $step2.classList.remove('show');
+  $step3.classList.remove('show');
+  currentText = ''; currentAnalysis = null;
+  $paste.focus();
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+});
+
+// ── APS button: "I don't know what to do" ───────────────────────
+const $apsBtn    = document.getElementById('aps-btn');
+const $apsStatus = document.getElementById('aps-status');
+const $adviceCard = document.getElementById('advice-card');
+const $adviceBody = document.getElementById('advice-body');
+
+$apsBtn.addEventListener('click', async () => {
+  if (!currentText) return;
+  $apsBtn.disabled = true;
+  $apsStatus.innerHTML = '<span class="dot"></span>Q is reading it properly…';
+  try {
+    const res = await fetch('/email-writer/advice', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text: currentText }),
+    });
+    const json = await res.json();
+    if (!res.ok) throw new Error(json.error || 'Failed');
+    $adviceBody.innerHTML = (window.marked ? window.marked.parse(json.advice) : escapeHtml(json.advice).replace(/\n/g, '<br>'));
+    $adviceCard.classList.add('show');
+    $apsStatus.textContent = '';
+    $adviceCard.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  } catch (e) {
+    $apsStatus.textContent = 'Error: ' + e.message;
+  } finally {
+    $apsBtn.disabled = false;
+  }
+});
+
+function showToast(msg) {
+  $toast.textContent = msg;
+  $toast.classList.add('show');
+  setTimeout(() => $toast.classList.remove('show'), 1800);
+}
+
+function escapeHtml(s) {
+  return String(s == null ? '' : s)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+</script>
+</body>
+</html>

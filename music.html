@@ -4,7 +4,7 @@
   <script src="/q-auth.js"></script>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Q Music — text to music</title>
+<title>Q Music</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -14,6 +14,7 @@
     --text-muted: rgba(0,0,0,0.42); --text-faint: rgba(0,0,0,0.26);
     --shadow-light: #ffffff; --shadow-dark: #ababab;
     --accent: #e91e63;
+    --accent-soft: rgba(233,30,99,0.12);
     --neu-raised: 10px 10px 28px #ababab, -8px -8px 20px #ffffff, inset 0 1px 0 rgba(255,255,255,0.5);
     --neu-raised-sm: 6px 6px 16px #ababab, -5px -5px 12px #ffffff;
     --neu-inset: inset 5px 5px 14px #ababab, inset -4px -4px 10px #ffffff;
@@ -22,107 +23,289 @@
   }
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body { font-family: 'Space Grotesk', -apple-system, sans-serif; background: var(--bg); color: var(--text); font-size: 15px; line-height: 1.55; min-height: 100vh; padding: 32px 24px 80px; -webkit-font-smoothing: antialiased; }
-  .wrap { max-width: 880px; margin: 0 auto; }
-  header { display: flex; align-items: baseline; gap: 14px; margin-bottom: 24px; flex-wrap: wrap; }
+  .wrap { max-width: 820px; margin: 0 auto; }
+
+  /* ── Header ── */
+  header { display: flex; align-items: center; gap: 14px; margin-bottom: 32px; }
   .logo-mark { display: inline-flex; align-items: baseline; }
   .logo-mark .q { font-size: 28px; font-weight: 700; line-height: 1; letter-spacing: -0.05em; }
   .logo-mark .dot { width: 8px; height: 8px; background: var(--accent); border-radius: 50%; display: inline-block; margin-left: 4px; align-self: flex-end; margin-bottom: 4px; box-shadow: 0 1px 2px rgba(233,30,99,0.3); }
-  h1 { font-size: 22px; font-weight: 600; letter-spacing: -0.02em; }
-  .tagline { font-size: 13px; color: var(--text-muted); margin-left: auto; }
-  .card { background: var(--bg); border-radius: 18px; padding: 18px; box-shadow: var(--neu-raised); margin-bottom: 18px; }
-  label { display: block; font-size: 11px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 6px; }
-  textarea, input[type="number"] { width: 100%; border: none; outline: none; resize: vertical; font-family: inherit; font-size: 14px; color: var(--text); background: var(--bg); padding: 10px 14px; border-radius: 10px; box-shadow: var(--neu-inset-sm); margin-bottom: 12px; line-height: 1.5; }
-  textarea { min-height: 70px; }
-  .row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
-  .row label { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 500; text-transform: none; letter-spacing: 0; color: var(--text); margin-bottom: 0; }
-  .row input { width: 80px; margin-bottom: 0; padding: 6px 10px; }
-  .controls { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-top: 14px; }
-  button { border: none; cursor: pointer; background: var(--bg); color: var(--text); font-family: inherit; font-size: 14px; font-weight: 600; padding: 10px 22px; border-radius: 12px; box-shadow: var(--neu-raised-sm); }
-  button:hover:not(:disabled) { color: var(--accent); }
-  button:active:not(:disabled) { box-shadow: var(--neu-inset-xs); }
-  button:disabled { opacity: 0.5; cursor: not-allowed; }
-  .status { font-size: 12px; color: var(--text-muted); }
-  .status .dot { display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: var(--accent); margin-right: 6px; animation: pulse 1.2s infinite; vertical-align: middle; }
-  @keyframes pulse { 0%,100% { opacity: 0.4; } 50% { opacity: 1; } }
-  .result { display: none; }
-  .result.show { display: block; }
-  .result audio { width: 100%; margin-top: 8px; }
-  .back-link { display: inline-block; margin-top: 32px; font-size: 12px; color: var(--text-muted); text-decoration: none; }
+  h1 { font-size: 22px; font-weight: 700; letter-spacing: -0.03em; }
+  .back-link { margin-left: auto; font-size: 12px; color: var(--text-muted); text-decoration: none; }
   .back-link:hover { color: var(--text); }
+
+  /* ── Cards ── */
+  .card { background: var(--bg); border-radius: 20px; padding: 22px; box-shadow: var(--neu-raised); margin-bottom: 16px; }
+
+  /* ── Genre chips ── */
+  .section-label { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; color: var(--text-faint); margin-bottom: 10px; }
+  .chips { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 20px; }
+  .chip {
+    font-size: 12px; font-weight: 600; padding: 7px 14px; border-radius: 20px;
+    background: var(--bg); border: none; cursor: pointer; font-family: inherit;
+    color: var(--text-muted); box-shadow: var(--neu-raised-sm);
+    transition: color 0.15s;
+  }
+  .chip:hover { color: var(--text); }
+  .chip.on { color: var(--accent); box-shadow: var(--neu-inset-xs); }
+
+  /* ── Prompt ── */
+  textarea {
+    width: 100%; border: none; outline: none; resize: none;
+    font-family: inherit; font-size: 14px; color: var(--text);
+    background: var(--bg); padding: 12px 16px; border-radius: 12px;
+    box-shadow: var(--neu-inset-sm); line-height: 1.6;
+    min-height: 68px; margin-bottom: 0;
+  }
+  textarea::placeholder { color: var(--text-faint); }
+
+  /* ── Lyrics toggle ── */
+  .lyrics-toggle { font-size: 12px; color: var(--text-muted); cursor: pointer; margin: 12px 0 0; display: inline-flex; align-items: center; gap: 6px; user-select: none; }
+  .lyrics-toggle:hover { color: var(--text); }
+  .lyrics-toggle .arr { font-size: 10px; transition: transform 0.2s; display: inline-block; }
+  .lyrics-toggle.open .arr { transform: rotate(90deg); }
+  .lyrics-wrap { overflow: hidden; max-height: 0; transition: max-height 0.3s ease; }
+  .lyrics-wrap.open { max-height: 200px; }
+  .lyrics-wrap textarea { margin-top: 10px; min-height: 80px; }
+
+  /* ── Duration slider ── */
+  .dur-row { display: flex; align-items: center; gap: 16px; margin-top: 18px; flex-wrap: wrap; }
+  .dur-label { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; color: var(--text-faint); min-width: 60px; }
+  input[type=range] {
+    flex: 1; min-width: 120px; -webkit-appearance: none; appearance: none;
+    height: 6px; border-radius: 3px; outline: none;
+    box-shadow: var(--neu-inset-xs);
+    background: linear-gradient(to right, var(--accent) 0%, var(--accent) var(--pct, 25%), transparent var(--pct, 25%));
+  }
+  input[type=range]::-webkit-slider-thumb {
+    -webkit-appearance: none; width: 20px; height: 20px; border-radius: 50%;
+    background: var(--bg); box-shadow: var(--neu-raised-sm), 0 0 0 2px var(--accent);
+    cursor: pointer;
+  }
+  .dur-val { font-size: 18px; font-weight: 700; letter-spacing: -0.03em; min-width: 46px; text-align: right; }
+  .dur-val span { font-size: 12px; font-weight: 400; color: var(--text-muted); }
+
+  /* ── Generate button ── */
+  .gen-row { display: flex; align-items: center; gap: 14px; margin-top: 20px; }
+  .btn-generate {
+    border: none; cursor: pointer; background: var(--bg);
+    color: var(--text); font-family: inherit; font-size: 15px; font-weight: 700;
+    padding: 13px 32px; border-radius: 14px; box-shadow: var(--neu-raised);
+    letter-spacing: -0.01em; transition: color 0.15s;
+  }
+  .btn-generate:hover:not(:disabled) { color: var(--accent); }
+  .btn-generate:active:not(:disabled) { box-shadow: var(--neu-inset-xs); }
+  .btn-generate:disabled { opacity: 0.5; cursor: not-allowed; }
+
+  /* ── Composing animation ── */
+  .composing { display: none; align-items: flex-end; gap: 3px; height: 22px; }
+  .composing.show { display: flex; }
+  .composing-bar {
+    width: 4px; border-radius: 2px; background: var(--accent);
+    animation: compose-bar 1s ease-in-out infinite;
+  }
+  .composing-bar:nth-child(1) { animation-delay: 0s; }
+  .composing-bar:nth-child(2) { animation-delay: 0.12s; }
+  .composing-bar:nth-child(3) { animation-delay: 0.24s; }
+  .composing-bar:nth-child(4) { animation-delay: 0.36s; }
+  .composing-bar:nth-child(5) { animation-delay: 0.48s; }
+  .composing-bar:nth-child(6) { animation-delay: 0.60s; }
+  @keyframes compose-bar {
+    0%,100% { height: 4px; opacity: 0.4; }
+    50% { height: 22px; opacity: 1; }
+  }
+  .composing-text { font-size: 12px; color: var(--text-muted); margin-left: 10px; align-self: center; }
+  .status-text { font-size: 12px; color: var(--text-muted); }
+
+  /* ── Player card ── */
+  .player-card { display: none; }
+  .player-card.show { display: block; }
+  .player-card .track-name { font-size: 16px; font-weight: 700; letter-spacing: -0.02em; margin-bottom: 4px; }
+  .player-card .track-sub { font-size: 12px; color: var(--text-muted); margin-bottom: 16px; }
+
+  /* Waveform canvas */
+  .viz-wrap {
+    border-radius: 12px; overflow: hidden;
+    box-shadow: var(--neu-inset-sm);
+    margin-bottom: 14px; background: var(--bg);
+    height: 80px; display: flex; align-items: center;
+  }
+  canvas#viz { width: 100%; height: 80px; display: block; }
+
+  /* Custom player controls */
+  .player-controls { display: flex; align-items: center; gap: 12px; }
+  .play-btn {
+    width: 46px; height: 46px; border-radius: 50%; border: none; cursor: pointer;
+    background: var(--bg); box-shadow: var(--neu-raised-sm);
+    display: flex; align-items: center; justify-content: center;
+    color: var(--text); flex-shrink: 0;
+  }
+  .play-btn:hover { color: var(--accent); }
+  .play-btn svg { width: 18px; height: 18px; }
+  .scrub-wrap { flex: 1; display: flex; flex-direction: column; gap: 4px; }
+  input[type=range].scrubber {
+    background: linear-gradient(to right, var(--accent) 0%, var(--accent) var(--spct,0%), transparent var(--spct,0%));
+  }
+  .time-row { display: flex; justify-content: space-between; font-size: 11px; color: var(--text-muted); }
+  .btn-download {
+    border: none; cursor: pointer; background: var(--bg); color: var(--text-muted);
+    font-family: inherit; font-size: 12px; font-weight: 600; padding: 8px 16px;
+    border-radius: 10px; box-shadow: var(--neu-raised-sm);
+  }
+  .btn-download:hover { color: var(--accent); }
 </style>
 </head>
 <body>
-
 <div class="wrap">
+
   <header>
     <span class="logo-mark"><span class="q">Q</span><span class="dot"></span></span>
-    <h1>Music</h1>
-    <span class="tagline">ACE-Step text-to-music. Apache 2.0.</span>
+    <h1>Music Studio</h1>
+    <a href="/chat" class="back-link">← back to Q</a>
   </header>
 
+  <!-- Compose card -->
   <div class="card">
-    <label for="prompt">Style / genre prompt</label>
-    <textarea id="prompt" placeholder="warm acoustic folk, fingerpicked guitar, gentle female vocals, hopeful and quiet"></textarea>
-
-    <label for="lyrics">Lyrics (optional)</label>
-    <textarea id="lyrics" placeholder="(blank for instrumental)&#10;Verse 1...&#10;Chorus..."></textarea>
-
-    <div class="row" style="margin-bottom: 6px;">
-      <label>Duration (sec)<input type="number" id="duration" value="30" min="10" max="120" step="5"></label>
-      <label>Seed<input type="number" id="seed" value="-1" placeholder="-1 random"></label>
+    <div class="section-label">Mood &amp; Genre</div>
+    <div class="chips">
+      <button class="chip" data-prompt="cinematic orchestral, sweeping strings, powerful brass, emotional and epic">Cinematic</button>
+      <button class="chip" data-prompt="lo-fi hip hop, soft piano, mellow beats, warm vinyl crackle, relaxing study music">Lo-fi Chill</button>
+      <button class="chip" data-prompt="warm acoustic folk, fingerpicked guitar, gentle vocals, hopeful and intimate">Acoustic Folk</button>
+      <button class="chip" data-prompt="upbeat pop, catchy melody, energetic drums, bright synths, feel-good summer vibes">Upbeat Pop</button>
+      <button class="chip" data-prompt="dark ambient, deep drones, ethereal pads, mysterious and haunting atmosphere">Dark Ambient</button>
+      <button class="chip" data-prompt="smooth jazz piano trio, walking bass, brushed drums, late night cafe feel">Jazz</button>
+      <button class="chip" data-prompt="electronic dance, four-on-the-floor kick, pulsing synth bass, euphoric build and drop">Electronic</button>
+      <button class="chip" data-prompt="soulful R&B, warm electric piano, lush chords, smooth vocals, groove-driven">R&amp;B</button>
     </div>
 
-    <div class="controls">
-      <button id="generate">Generate</button>
-      <span class="status" id="status"></span>
+    <div class="section-label">Describe your track</div>
+    <textarea id="prompt" rows="2" placeholder="warm acoustic folk, fingerpicked guitar, gentle female vocals, hopeful and quiet…"></textarea>
+
+    <div class="lyrics-toggle" id="lyrics-toggle">
+      <span class="arr">▶</span> Add lyrics
+    </div>
+    <div class="lyrics-wrap" id="lyrics-wrap">
+      <textarea id="lyrics" rows="4" placeholder="Leave blank for instrumental&#10;&#10;Verse 1:&#10;…"></textarea>
+    </div>
+
+    <div class="dur-row">
+      <div class="dur-label">Duration</div>
+      <input type="range" id="duration" min="10" max="120" step="5" value="30">
+      <div class="dur-val" id="dur-display">30<span>s</span></div>
+    </div>
+
+    <div class="gen-row">
+      <button class="btn-generate" id="generate">Compose</button>
+      <div class="composing" id="composing">
+        <div class="composing-bar"></div>
+        <div class="composing-bar"></div>
+        <div class="composing-bar"></div>
+        <div class="composing-bar"></div>
+        <div class="composing-bar"></div>
+        <div class="composing-bar"></div>
+        <span class="composing-text" id="composing-text">Composing…</span>
+      </div>
+      <span class="status-text" id="status"></span>
     </div>
   </div>
 
-  <div class="card result" id="result">
-    <label>Track</label>
-    <audio id="player" controls></audio>
-    <div class="controls">
-      <button id="download">Download .wav</button>
+  <!-- Player card -->
+  <div class="card player-card" id="player-card">
+    <div class="track-name" id="track-name">Your track</div>
+    <div class="track-sub" id="track-sub"></div>
+
+    <div class="viz-wrap">
+      <canvas id="viz"></canvas>
     </div>
+
+    <div class="player-controls">
+      <button class="play-btn" id="play-btn">
+        <svg id="play-icon" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+      </button>
+      <div class="scrub-wrap">
+        <input type="range" class="scrubber" id="scrubber" min="0" max="100" step="0.1" value="0">
+        <div class="time-row">
+          <span id="time-cur">0:00</span>
+          <span id="time-dur">0:00</span>
+        </div>
+      </div>
+      <button class="btn-download" id="download">Download</button>
+    </div>
+
+    <!-- hidden audio element -->
+    <audio id="audio" style="display:none"></audio>
   </div>
 
-  <a href="/chat" class="back-link">← back to Q's chat</a>
 </div>
-
 <script>
+// ── Genre chips ──────────────────────────────────────────────────
 const $prompt = document.getElementById('prompt');
-const $lyrics = document.getElementById('lyrics');
-const $duration = document.getElementById('duration');
-const $seed = document.getElementById('seed');
-const $generate = document.getElementById('generate');
-const $status = document.getElementById('status');
-const $result = document.getElementById('result');
-const $player = document.getElementById('player');
-const $download = document.getElementById('download');
+document.querySelectorAll('.chip').forEach(chip => {
+  chip.addEventListener('click', () => {
+    const isOn = chip.classList.contains('on');
+    document.querySelectorAll('.chip').forEach(c => c.classList.remove('on'));
+    if (!isOn) {
+      chip.classList.add('on');
+      $prompt.value = chip.dataset.prompt;
+    }
+  });
+});
 
+// ── Lyrics toggle ────────────────────────────────────────────────
+const lyricsToggle = document.getElementById('lyrics-toggle');
+const lyricsWrap   = document.getElementById('lyrics-wrap');
+lyricsToggle.addEventListener('click', () => {
+  lyricsToggle.classList.toggle('open');
+  lyricsWrap.classList.toggle('open');
+});
+
+// ── Duration slider ──────────────────────────────────────────────
+const $dur = document.getElementById('duration');
+const $durDisplay = document.getElementById('dur-display');
+function updateDurSlider() {
+  const pct = (($dur.value - $dur.min) / ($dur.max - $dur.min)) * 100;
+  $dur.style.setProperty('--pct', pct + '%');
+  $durDisplay.innerHTML = $dur.value + '<span>s</span>';
+}
+$dur.addEventListener('input', updateDurSlider);
+updateDurSlider();
+
+// ── Generate ─────────────────────────────────────────────────────
+const $generate    = document.getElementById('generate');
+const $composing   = document.getElementById('composing');
+const $composingTx = document.getElementById('composing-text');
+const $status      = document.getElementById('status');
+const $playerCard  = document.getElementById('player-card');
+const $trackName   = document.getElementById('track-name');
+const $trackSub    = document.getElementById('track-sub');
 let lastBlob = null;
-let elapsedTimer = null;
+let composingTimer = null;
 
 $generate.addEventListener('click', async () => {
   const prompt = $prompt.value.trim();
   if (!prompt) { $prompt.focus(); return; }
   $generate.disabled = true;
-  $result.classList.remove('show');
+  $status.textContent = '';
+  $composing.classList.add('show');
 
   const start = Date.now();
-  elapsedTimer = setInterval(() => { $status.innerHTML = '<span class="dot"></span>Composing… ' + ((Date.now()-start)/1000).toFixed(1) + 's'; }, 100);
+  composingTimer = setInterval(() => {
+    $composingTx.textContent = 'Composing… ' + ((Date.now() - start) / 1000).toFixed(0) + 's';
+  }, 500);
 
   try {
     const res = await fetch('/music/generate', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         prompt,
-        lyrics: $lyrics.value || undefined,
-        duration: parseFloat($duration.value),
-        seed: parseInt($seed.value),
+        lyrics: document.getElementById('lyrics').value || undefined,
+        duration: parseFloat($dur.value),
+        seed: -1,
       }),
     });
-    clearInterval(elapsedTimer); elapsedTimer = null;
+    clearInterval(composingTimer); composingTimer = null;
+    $composing.classList.remove('show');
+
     if (!res.ok) {
       const err = await res.json().catch(() => ({ error: 'HTTP ' + res.status }));
       $status.textContent = 'Error: ' + (err.error || 'unknown');
@@ -130,22 +313,136 @@ $generate.addEventListener('click', async () => {
       return;
     }
     lastBlob = await res.blob();
-    $player.src = URL.createObjectURL(lastBlob);
-    $result.classList.add('show');
-    const dur = res.headers.get('X-Generation-Ms');
-    $status.textContent = dur ? 'Done in ' + (parseInt(dur) / 1000).toFixed(1) + 's' : 'Done';
+    const genMs = parseInt(res.headers.get('X-Generation-Ms') || '0');
+    $status.textContent = genMs ? 'Generated in ' + (genMs / 1000).toFixed(1) + 's' : 'Done';
+
+    // Set up player
+    const url = URL.createObjectURL(lastBlob);
+    $audio.src = url;
+    const firstLine = prompt.split(',')[0].trim();
+    $trackName.textContent = firstLine.charAt(0).toUpperCase() + firstLine.slice(1);
+    $trackSub.textContent = $dur.value + 's · generated by Q';
+    $playerCard.classList.add('show');
+    setupAudioContext();
   } catch (e) {
-    clearInterval(elapsedTimer); elapsedTimer = null;
+    clearInterval(composingTimer); composingTimer = null;
+    $composing.classList.remove('show');
     $status.textContent = 'Network error: ' + e.message;
-  } finally { $generate.disabled = false; }
+  } finally {
+    $generate.disabled = false;
+  }
 });
 
-$download.addEventListener('click', () => {
+// ── Custom player ─────────────────────────────────────────────────
+const $audio   = document.getElementById('audio');
+const $playBtn = document.getElementById('play-btn');
+const $playIco = document.getElementById('play-icon');
+const $scrubber = document.getElementById('scrubber');
+const $timeCur  = document.getElementById('time-cur');
+const $timeDur  = document.getElementById('time-dur');
+
+const PLAY_ICON  = '<polygon points="5 3 19 12 5 21 5 3"/>';
+const PAUSE_ICON = '<rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/>';
+
+$playBtn.addEventListener('click', () => {
+  if ($audio.paused) { $audio.play(); } else { $audio.pause(); }
+});
+$audio.addEventListener('play',  () => { $playIco.innerHTML = PAUSE_ICON; startViz(); });
+$audio.addEventListener('pause', () => { $playIco.innerHTML = PLAY_ICON; });
+$audio.addEventListener('ended', () => { $playIco.innerHTML = PLAY_ICON; });
+$audio.addEventListener('timeupdate', () => {
+  if (!$audio.duration) return;
+  const pct = ($audio.currentTime / $audio.duration) * 100;
+  $scrubber.value = pct;
+  $scrubber.style.setProperty('--spct', pct + '%');
+  $timeCur.textContent = fmtTime($audio.currentTime);
+  $timeDur.textContent = fmtTime($audio.duration);
+});
+$scrubber.addEventListener('input', () => {
+  if ($audio.duration) $audio.currentTime = ($scrubber.value / 100) * $audio.duration;
+  $scrubber.style.setProperty('--spct', $scrubber.value + '%');
+});
+function fmtTime(s) {
+  const m = Math.floor(s / 60); const sec = Math.floor(s % 60);
+  return m + ':' + String(sec).padStart(2, '0');
+}
+
+// ── Download ──────────────────────────────────────────────────────
+document.getElementById('download').addEventListener('click', () => {
   if (!lastBlob) return;
-  const a = document.createElement('a'); a.href = URL.createObjectURL(lastBlob); a.download = 'q-track.wav';
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(lastBlob);
+  a.download = 'q-track.wav';
   document.body.appendChild(a); a.click();
   setTimeout(() => { document.body.removeChild(a); URL.revokeObjectURL(a.href); }, 100);
 });
+
+// ── Waveform visualizer ───────────────────────────────────────────
+const canvas = document.getElementById('viz');
+const ctx2d  = canvas.getContext('2d');
+let audioCtx = null, analyser = null, source = null, vizRaf = null, vizRunning = false;
+
+function setupAudioContext() {
+  if (audioCtx) return;
+  audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  analyser = audioCtx.createAnalyser();
+  analyser.fftSize = 128;
+  source = audioCtx.createMediaElementSource($audio);
+  source.connect(analyser);
+  analyser.connect(audioCtx.destination);
+}
+
+function startViz() {
+  if (vizRunning) return;
+  vizRunning = true;
+  drawViz();
+}
+
+function drawViz() {
+  if (!analyser) { vizRaf = requestAnimationFrame(drawViz); return; }
+
+  const W = canvas.offsetWidth;
+  const H = canvas.offsetHeight;
+  canvas.width  = W;
+  canvas.height = H;
+
+  const bufLen = analyser.frequencyBinCount;
+  const data   = new Uint8Array(bufLen);
+  analyser.getByteFrequencyData(data);
+
+  ctx2d.clearRect(0, 0, W, H);
+
+  const barW   = (W / bufLen) * 1.6;
+  const gap    = 2;
+  const total  = barW + gap;
+  const count  = Math.floor(W / total);
+
+  for (let i = 0; i < count; i++) {
+    const v   = data[Math.floor(i * bufLen / count)] / 255;
+    const h   = Math.max(4, v * H * 0.9);
+    const x   = i * total;
+    const y   = (H - h) / 2;
+    const alpha = 0.35 + v * 0.65;
+    ctx2d.fillStyle = `rgba(233,30,99,${alpha})`;
+    ctx2d.beginPath();
+    ctx2d.roundRect(x, y, barW, h, 2);
+    ctx2d.fill();
+  }
+
+  if (!$audio.paused) {
+    vizRaf = requestAnimationFrame(drawViz);
+  } else {
+    vizRunning = false;
+    // draw static low bars when paused
+    ctx2d.clearRect(0, 0, W, H);
+    for (let i = 0; i < count; i++) {
+      ctx2d.fillStyle = 'rgba(233,30,99,0.18)';
+      ctx2d.beginPath();
+      ctx2d.roundRect(i * total, H / 2 - 2, barW, 4, 2);
+      ctx2d.fill();
+    }
+  }
+}
 </script>
 </body>
 </html>

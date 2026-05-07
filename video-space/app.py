@@ -75,7 +75,6 @@ demo = gr.Interface(
         "Powered by Wan 2.2 (Alibaba, Apache 2.0). "
         "Conservative defaults (16 frames @ 8fps = 2 sec) to fit ZeroGPU's 300s call cap."
     ),
-    allow_flagging="never",
     api_name="generate",
 )
 

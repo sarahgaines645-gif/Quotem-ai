@@ -34,10 +34,7 @@ const Q_CONFIG = {
   // See voice-cloning-space/README.md for setup. URL looks like:
   //   https://YOUR-USERNAME-q-voice-cloning.hf.space
   chatterboxSpaceUrl: process.env.CHATTERBOX_SPACE_URL || '',
-  // Image generation — set after deploying q-lab/image-gen-space/ to a HF Space.
-  // See image-gen-space/README.md for setup. URL looks like:
-  //   https://YOUR-USERNAME-q-image-gen.hf.space
-  zImageSpaceUrl: process.env.ZIMAGE_SPACE_URL || '',
+  // Image generation — runs on Together AI (FLUX.1-schnell-Free, no extra key needed).
   // Graphics — image-to-SVG via StarVector. q-lab/graphics-space/.
   starVectorSpaceUrl: process.env.STARVECTOR_SPACE_URL || '',
   // Music — text-to-music via ACE-Step. q-lab/music-space/.

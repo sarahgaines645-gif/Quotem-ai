@@ -1,0 +1,356 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <script src="/q-auth.js"></script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Q Voice Cloning</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #e8e8e8; --text: #1a1a1a;
+    --text-muted: rgba(0,0,0,0.42); --text-faint: rgba(0,0,0,0.26);
+    --shadow-light: #ffffff; --shadow-dark: #ababab;
+    --accent: #e91e63;
+    --neu-raised: 10px 10px 28px #ababab, -8px -8px 20px #ffffff, inset 0 1px 0 rgba(255,255,255,0.5);
+    --neu-raised-sm: 6px 6px 16px #ababab, -5px -5px 12px #ffffff;
+    --neu-inset: inset 5px 5px 14px #ababab, inset -4px -4px 10px #ffffff;
+    --neu-inset-sm: inset 3px 3px 8px #ababab, inset -2px -2px 6px #ffffff;
+    --neu-inset-xs: inset 3px 3px 8px #ababab, inset -2px -2px 6px #ffffff;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Space Grotesk', -apple-system, sans-serif; background: var(--bg); color: var(--text); font-size: 15px; line-height: 1.55; min-height: 100vh; padding: 32px 24px 80px; -webkit-font-smoothing: antialiased; }
+  .wrap { max-width: 880px; margin: 0 auto; }
+  header { display: flex; align-items: baseline; gap: 14px; margin-bottom: 24px; flex-wrap: wrap; }
+  .logo-mark { display: inline-flex; align-items: baseline; }
+  .logo-mark .q { font-size: 28px; font-weight: 700; line-height: 1; letter-spacing: -0.05em; }
+  .logo-mark .dot { width: 8px; height: 8px; background: var(--accent); border-radius: 50%; display: inline-block; margin-left: 4px; align-self: flex-end; margin-bottom: 4px; box-shadow: 0 1px 2px rgba(233,30,99,0.3); }
+  h1 { font-size: 22px; font-weight: 600; letter-spacing: -0.02em; }
+  .tagline { font-size: 13px; color: var(--text-muted); margin-left: auto; }
+  .card { background: var(--bg); border-radius: 18px; padding: 18px; box-shadow: var(--neu-raised); margin-bottom: 18px; }
+  label { display: block; font-size: 11px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 6px; }
+  textarea { width: 100%; border: none; outline: none; resize: vertical; font-family: inherit; font-size: 14px; color: var(--text); background: var(--bg); padding: 10px 14px; border-radius: 10px; box-shadow: var(--neu-inset-sm); margin-bottom: 12px; line-height: 1.5; min-height: 80px; }
+  .controls { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-top: 14px; }
+  button { border: none; cursor: pointer; background: var(--bg); color: var(--text); font-family: inherit; font-size: 14px; font-weight: 600; padding: 10px 22px; border-radius: 12px; box-shadow: var(--neu-raised-sm); }
+  button:hover:not(:disabled) { color: var(--accent); }
+  button:active:not(:disabled) { box-shadow: var(--neu-inset-xs); }
+  button:disabled { opacity: 0.5; cursor: not-allowed; }
+  .status { font-size: 12px; color: var(--text-muted); }
+  .status .dot { display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: var(--accent); margin-right: 6px; animation: pulse 1.2s infinite; vertical-align: middle; }
+  @keyframes pulse { 0%,100% { opacity: 0.4; } 50% { opacity: 1; } }
+
+  /* Reference audio section */
+  .ref-zone { border-radius: 12px; box-shadow: var(--neu-inset-sm); padding: 16px; margin-bottom: 12px; }
+  .ref-tabs { display: flex; gap: 8px; margin-bottom: 14px; }
+  .ref-tab { font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; padding: 7px 16px; border-radius: 9px; box-shadow: var(--neu-raised-sm); color: var(--text-muted); }
+  .ref-tab.on { box-shadow: var(--neu-inset-xs); color: var(--accent); }
+  .ref-panel { display: none; }
+  .ref-panel.show { display: block; }
+
+  /* Upload */
+  .upload-drop { border: 2px dashed var(--shadow-dark); border-radius: 10px; padding: 28px; text-align: center; color: var(--text-muted); cursor: pointer; font-size: 13px; }
+  .upload-drop:hover { color: var(--text); }
+  .upload-drop input { display: none; }
+  .upload-name { margin-top: 10px; font-size: 12px; color: var(--text-muted); }
+
+  /* Record */
+  .record-row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+  .rec-dot { width: 10px; height: 10px; border-radius: 50%; background: var(--accent); display: none; animation: pulse 1s infinite; }
+  .rec-dot.show { display: inline-block; }
+  .rec-timer { font-size: 13px; color: var(--text-muted); min-width: 40px; }
+  .ref-preview { width: 100%; margin-top: 12px; display: none; }
+  .ref-preview.show { display: block; }
+
+  /* Sliders */
+  .sliders { display: flex; gap: 18px; flex-wrap: wrap; margin-top: 6px; }
+  .slider-group { flex: 1; min-width: 160px; }
+  .slider-group label { margin-bottom: 4px; }
+  .slider-row { display: flex; align-items: center; gap: 8px; }
+  input[type=range] { flex: 1; accent-color: var(--accent); }
+  .slider-val { font-size: 12px; color: var(--text-muted); min-width: 28px; text-align: right; }
+
+  /* Result */
+  .result { display: none; }
+  .result.show { display: block; }
+  .result audio { width: 100%; margin-top: 8px; }
+  .back-link { display: inline-block; margin-top: 32px; font-size: 12px; color: var(--text-muted); text-decoration: none; }
+  .back-link:hover { color: var(--text); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <span class="logo-mark"><span class="q">Q</span><span class="dot"></span></span>
+    <h1>Voice Cloning</h1>
+    <span class="tagline">Chatterbox · clone any voice from a 5–15 sec sample</span>
+  </header>
+
+  <div class="card">
+    <label>Reference voice (5–15 seconds)</label>
+    <div class="ref-zone">
+      <div class="ref-tabs">
+        <button class="ref-tab on" id="tab-url">Paste link</button>
+        <button class="ref-tab" id="tab-upload">Upload</button>
+        <button class="ref-tab" id="tab-record">Record</button>
+      </div>
+
+      <div class="ref-panel show" id="panel-url">
+        <input type="text" id="url-input" placeholder="https://www.youtube.com/watch?v=..." style="width:100%;border:none;outline:none;font-family:inherit;font-size:14px;color:var(--text);background:var(--bg);padding:12px 16px;border-radius:10px;box-shadow:var(--neu-inset-sm);">
+        <div style="font-size:11px;color:var(--text-faint);margin-top:8px;font-style:italic;">Q grabs ~15 seconds of clean audio from the link automatically. Works with YouTube, SoundCloud, BBC archives, podcast feeds, and most audio sources.</div>
+      </div>
+
+      <div class="ref-panel" id="panel-upload">
+        <div class="upload-drop" id="upload-drop">
+          <input type="file" id="file-input" accept="audio/*">
+          Drop an audio file here, or click to browse
+          <div class="upload-name" id="upload-name"></div>
+        </div>
+      </div>
+
+      <div class="ref-panel" id="panel-record">
+        <div class="record-row">
+          <button id="rec-start">Start recording</button>
+          <button id="rec-stop" disabled>Stop</button>
+          <span class="rec-dot" id="rec-dot"></span>
+          <span class="rec-timer" id="rec-timer">0s</span>
+        </div>
+        <audio class="ref-preview" id="rec-preview" controls></audio>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <label for="text-input">What to say</label>
+    <textarea id="text-input" placeholder="Type the words you want spoken in the cloned voice…"></textarea>
+
+    <div class="sliders">
+      <div class="slider-group">
+        <label>Expressiveness</label>
+        <div class="slider-row">
+          <input type="range" id="exaggeration" min="0" max="1" step="0.05" value="0.5">
+          <span class="slider-val" id="exaggeration-val">0.5</span>
+        </div>
+      </div>
+      <div class="slider-group">
+        <label>Pacing</label>
+        <div class="slider-row">
+          <input type="range" id="cfg-weight" min="0" max="1" step="0.05" value="0.5">
+          <span class="slider-val" id="cfg-val">0.5</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="controls" style="margin-top: 18px;">
+      <button id="generate">Generate</button>
+      <span class="status" id="status"></span>
+    </div>
+  </div>
+
+  <div class="card result" id="result">
+    <label>Output</label>
+    <audio id="player" controls></audio>
+    <div class="controls">
+      <button id="download">Download</button>
+    </div>
+  </div>
+
+  <a href="/chat" class="back-link">← back to Q's chat</a>
+</div>
+
+<script>
+// ── Tab switching ────────────────────────────────────────────────
+const tabUrl    = document.getElementById('tab-url');
+const tabUpload = document.getElementById('tab-upload');
+const tabRecord = document.getElementById('tab-record');
+const panelUrl    = document.getElementById('panel-url');
+const panelUpload = document.getElementById('panel-upload');
+const panelRecord = document.getElementById('panel-record');
+
+function setTab(activeTab, activePanel) {
+  [tabUrl, tabUpload, tabRecord].forEach(t => t.classList.remove('on'));
+  [panelUrl, panelUpload, panelRecord].forEach(p => p.classList.remove('show'));
+  activeTab.classList.add('on');
+  activePanel.classList.add('show');
+}
+tabUrl.addEventListener('click',    () => setTab(tabUrl,    panelUrl));
+tabUpload.addEventListener('click', () => setTab(tabUpload, panelUpload));
+tabRecord.addEventListener('click', () => setTab(tabRecord, panelRecord));
+
+// ── File upload ──────────────────────────────────────────────────
+let uploadedFile = null;
+const dropZone  = document.getElementById('upload-drop');
+const fileInput = document.getElementById('file-input');
+const uploadName = document.getElementById('upload-name');
+
+dropZone.addEventListener('click', () => fileInput.click());
+dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.style.opacity = '0.7'; });
+dropZone.addEventListener('dragleave', () => { dropZone.style.opacity = ''; });
+dropZone.addEventListener('drop', e => {
+  e.preventDefault(); dropZone.style.opacity = '';
+  const f = e.dataTransfer.files[0];
+  if (f && f.type.startsWith('audio/')) setUploadFile(f);
+});
+fileInput.addEventListener('change', () => { if (fileInput.files[0]) setUploadFile(fileInput.files[0]); });
+
+function setUploadFile(f) {
+  uploadedFile = f;
+  uploadName.textContent = f.name + ' (' + (f.size / 1024).toFixed(0) + ' KB)';
+}
+
+// ── Recording ────────────────────────────────────────────────────
+let mediaRecorder = null;
+let recordedChunks = [];
+let recordedBlob = null;
+let recTimerInterval = null;
+let recSeconds = 0;
+
+const recStart  = document.getElementById('rec-start');
+const recStop   = document.getElementById('rec-stop');
+const recDot    = document.getElementById('rec-dot');
+const recTimer  = document.getElementById('rec-timer');
+const recPreview = document.getElementById('rec-preview');
+
+recStart.addEventListener('click', async () => {
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    recordedChunks = [];
+    mediaRecorder = new MediaRecorder(stream);
+    mediaRecorder.ondataavailable = e => { if (e.data.size > 0) recordedChunks.push(e.data); };
+    mediaRecorder.onstop = () => {
+      stream.getTracks().forEach(t => t.stop());
+      recordedBlob = new Blob(recordedChunks, { type: 'audio/webm' });
+      recPreview.src = URL.createObjectURL(recordedBlob);
+      recPreview.classList.add('show');
+    };
+    mediaRecorder.start();
+    recSeconds = 0; recTimer.textContent = '0s';
+    recTimerInterval = setInterval(() => { recSeconds++; recTimer.textContent = recSeconds + 's'; }, 1000);
+    recDot.classList.add('show');
+    recStart.disabled = true; recStop.disabled = false;
+  } catch (e) {
+    alert('Microphone access denied: ' + e.message);
+  }
+});
+
+recStop.addEventListener('click', () => {
+  if (mediaRecorder && mediaRecorder.state !== 'inactive') mediaRecorder.stop();
+  clearInterval(recTimerInterval);
+  recDot.classList.remove('show');
+  recStart.disabled = false; recStop.disabled = true;
+});
+
+// ── Sliders ──────────────────────────────────────────────────────
+const exaggerationSlider = document.getElementById('exaggeration');
+const cfgSlider = document.getElementById('cfg-weight');
+exaggerationSlider.addEventListener('input', () => { document.getElementById('exaggeration-val').textContent = exaggerationSlider.value; });
+cfgSlider.addEventListener('input', () => { document.getElementById('cfg-val').textContent = cfgSlider.value; });
+
+// ── Generate ─────────────────────────────────────────────────────
+const $text     = document.getElementById('text-input');
+const $generate = document.getElementById('generate');
+const $status   = document.getElementById('status');
+const $result   = document.getElementById('result');
+const $player   = document.getElementById('player');
+const $download = document.getElementById('download');
+let lastBlob = null;
+
+$generate.addEventListener('click', async () => {
+  const text = $text.value.trim();
+  if (!text) { $text.focus(); return; }
+
+  // Which tab is active?
+  let mode;
+  if      (panelUrl.classList.contains('show'))    mode = 'url';
+  else if (panelUpload.classList.contains('show')) mode = 'upload';
+  else                                             mode = 'record';
+
+  let refBlob = null, refMime = 'audio/webm', urlValue = '';
+  if (mode === 'url') {
+    urlValue = document.getElementById('url-input').value.trim();
+    if (!urlValue) { alert('Paste a link first.'); return; }
+  } else if (mode === 'upload') {
+    if (!uploadedFile) { alert('Please upload a reference audio file.'); return; }
+    refBlob = uploadedFile; refMime = uploadedFile.type || 'audio/wav';
+  } else {
+    if (!recordedBlob) { alert('Please record a reference voice sample first.'); return; }
+    refBlob = recordedBlob; refMime = 'audio/webm';
+  }
+
+  $generate.disabled = true;
+  $result.classList.remove('show');
+  const start = Date.now();
+  const timer = setInterval(() => {
+    const stage = (mode === 'url' && (Date.now() - start) < 8000) ? 'Grabbing audio…' : 'Cloning…';
+    $status.innerHTML = '<span class="dot"></span>' + stage + ' ' + ((Date.now() - start) / 1000).toFixed(1) + 's';
+  }, 100);
+
+  try {
+    let res;
+    if (mode === 'url') {
+      res = await fetch('/voice-clone/from-url', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          url: urlValue,
+          text,
+          exaggeration: parseFloat(exaggerationSlider.value),
+          cfgWeight: parseFloat(cfgSlider.value),
+        }),
+      });
+    } else {
+      const refBase64 = await blobToBase64(refBlob);
+      res = await fetch('/speak-as-voice', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          text,
+          referenceAudioBase64: refBase64,
+          referenceMimeType: refMime,
+          exaggeration: parseFloat(exaggerationSlider.value),
+          cfgWeight: parseFloat(cfgSlider.value),
+        }),
+      });
+    }
+
+    clearInterval(timer);
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ error: 'HTTP ' + res.status }));
+      $status.textContent = 'Error: ' + (err.error || 'unknown');
+      $generate.disabled = false;
+      return;
+    }
+    lastBlob = await res.blob();
+    $player.src = URL.createObjectURL(lastBlob);
+    $result.classList.add('show');
+    const ms = res.headers.get('X-Generation-Ms');
+    $status.textContent = ms ? 'Done in ' + (parseInt(ms) / 1000).toFixed(1) + 's' : 'Done';
+  } catch (e) {
+    clearInterval(timer);
+    $status.textContent = 'Network error: ' + e.message;
+  } finally {
+    $generate.disabled = false;
+  }
+});
+
+$download.addEventListener('click', () => {
+  if (!lastBlob) return;
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(lastBlob);
+  a.download = 'q-voice.wav';
+  document.body.appendChild(a); a.click();
+  setTimeout(() => { document.body.removeChild(a); URL.revokeObjectURL(a.href); }, 100);
+});
+
+function blobToBase64(blob) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result.split(',')[1]);
+    reader.onerror = reject;
+    reader.readAsDataURL(blob);
+  });
+}
+</script>
+</body>
+</html>

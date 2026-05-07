@@ -16,20 +16,28 @@ const path = require('path');
 const os = require('os');
 const { execSync } = require('child_process');
 
-const REPO_ROOT = path.resolve(__dirname, '../..');
+const REPO_ROOT = path.resolve(__dirname, '..');
 const SECRETS_FILE = path.join(REPO_ROOT, '.hf-secrets');
 
+// image-gen-space removed — image generation now runs via Together AI (FLUX.1-schnell-Free).
 const SPACES = [
     { folder: 'voice-cloning-space', name: 'q-voice-cloning', envVar: 'CHATTERBOX_SPACE_URL', sdk: 'gradio' },
-    { folder: 'image-gen-space',     name: 'q-image-gen',     envVar: 'ZIMAGE_SPACE_URL',     sdk: 'gradio' },
     { folder: 'graphics-space',      name: 'q-graphics',      envVar: 'STARVECTOR_SPACE_URL', sdk: 'gradio' },
     { folder: 'music-space',         name: 'q-music',         envVar: 'ACESTEP_SPACE_URL',    sdk: 'gradio' },
     { folder: 'video-space',         name: 'q-video',         envVar: 'WAN_SPACE_URL',        sdk: 'gradio' },
 ];
 
 function readSecrets() {
+    // Prefer .hf-secrets file; fall back to environment variables.
     if (!fs.existsSync(SECRETS_FILE)) {
-        console.error('ERROR: .hf-secrets not found at', SECRETS_FILE);
+        const token = process.env.HF_TOKEN;
+        const user  = process.env.HF_USER;
+        if (token && user) {
+            return { HF_TOKEN: token, HF_USER: user };
+        }
+        console.error('ERROR: .hf-secrets not found and HF_TOKEN/HF_USER not set in environment.');
+        console.error('Either create ' + SECRETS_FILE + ' or run:');
+        console.error('  $env:HF_TOKEN="hf_..."; $env:HF_USER="your-username"; node scripts/deploy-spaces.js');
         process.exit(1);
     }
     const content = fs.readFileSync(SECRETS_FILE, 'utf8');
@@ -65,7 +73,7 @@ async function createSpace({ name, sdk, token, user }) {
 }
 
 function pushSpace({ folder, name, token, user }) {
-    const sourceDir = path.join(REPO_ROOT, 'q-lab', folder);
+    const sourceDir = path.join(REPO_ROOT, folder);
     const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'q-deploy-' + name + '-'));
     const remoteUrl = `https://${encodeURIComponent(user)}:${token}@huggingface.co/spaces/${user}/${name}`;
 
@@ -82,6 +90,7 @@ function pushSpace({ folder, name, token, user }) {
 
         execSync('git config user.email "deploy@quotem.local"', { cwd: tempDir, stdio: 'ignore' });
         execSync('git config user.name "Q Deploy"', { cwd: tempDir, stdio: 'ignore' });
+        execSync('git config core.autocrlf false', { cwd: tempDir, stdio: 'ignore' });
         execSync('git add .', { cwd: tempDir, stdio: 'ignore' });
 
         // Check if anything actually changed
