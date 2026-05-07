@@ -1315,10 +1315,10 @@ router.post('/q-voice/save-from-upload', express.json({ limit: '8mb' }), (req, r
 
 // Save Q's voice from a URL — uses the audio-fetch plugin to grab a clean slice.
 router.post('/q-voice/save-from-url', express.json({ limit: '8kb' }), async (req, res) => {
-    const url = req.body?.url;
+    const { url, startTime } = req.body || {};
     if (!url || typeof url !== 'string') return res.status(400).json({ error: 'url is required' });
     try {
-        const buf = await fetchAudioClip(url);
+        const buf = await fetchAudioClip(url, { startTime });
         const result = setQVoiceFromBuffer(buf);
         res.json(result);
     } catch (e) {
@@ -1335,12 +1335,12 @@ router.post('/q-voice/reset', (req, res) => {
 // then forwards to the cloning space. One-shot endpoint: returns audio binary.
 const { fetchAudioClip } = require('./plugins/q-audio-fetch');
 router.post('/voice-clone/from-url', express.json({ limit: '8kb' }), async (req, res) => {
-    const { url, text, exaggeration, cfgWeight } = req.body || {};
+    const { url, text, exaggeration, cfgWeight, startTime } = req.body || {};
     if (!url || typeof url !== 'string') return res.status(400).json({ error: 'url is required' });
     if (!text || typeof text !== 'string') return res.status(400).json({ error: 'text is required' });
 
     try {
-        const refBuf = await fetchAudioClip(url);
+        const refBuf = await fetchAudioClip(url, { startTime });
         const result = await speakAsVoice(text, refBuf, 'audio/wav', {
             exaggeration: typeof exaggeration === 'number' ? exaggeration : undefined,
             cfgWeight:    typeof cfgWeight    === 'number' ? cfgWeight    : undefined,

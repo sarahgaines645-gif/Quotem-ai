@@ -98,7 +98,11 @@
 
       <div class="ref-panel show" id="panel-url">
         <input type="text" id="url-input" placeholder="https://www.youtube.com/watch?v=..." style="width:100%;border:none;outline:none;font-family:inherit;font-size:14px;color:var(--text);background:var(--bg);padding:12px 16px;border-radius:10px;box-shadow:var(--neu-inset-sm);">
-        <div style="font-size:11px;color:var(--text-faint);margin-top:8px;font-style:italic;">Q grabs ~15 seconds of clean audio from the link automatically. Works with YouTube, SoundCloud, BBC archives, podcast feeds, and most audio sources.</div>
+        <div style="display:flex;gap:8px;align-items:center;margin-top:10px;">
+          <label style="font-size:11px;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.06em;flex-shrink:0;">Start at</label>
+          <input type="text" id="start-time-input" placeholder="0:00 or 1:30 or 90s" style="flex:1;border:none;outline:none;font-family:inherit;font-size:13px;color:var(--text);background:var(--bg);padding:8px 12px;border-radius:8px;box-shadow:var(--neu-inset-xs);">
+        </div>
+        <div style="font-size:11px;color:var(--text-faint);margin-top:8px;font-style:italic;">Q grabs ~15 sec from the start time. Skip past hosts/intros by jumping to where the voice you want starts speaking. Leave blank to start from 0.</div>
       </div>
 
       <div class="ref-panel" id="panel-upload">
@@ -291,11 +295,13 @@ $generate.addEventListener('click', async () => {
   try {
     let res;
     if (mode === 'url') {
+      const startTime = (document.getElementById('start-time-input').value || '').trim();
       res = await fetch('/voice-clone/from-url', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           url: urlValue,
+          startTime,
           text,
           exaggeration: parseFloat(exaggerationSlider.value),
           cfgWeight: parseFloat(cfgSlider.value),
@@ -373,10 +379,11 @@ $saveBtn.addEventListener('click', async () => {
     if (mode === 'url') {
       const urlValue = document.getElementById('url-input').value.trim();
       if (!urlValue) { throw new Error('Paste a link first'); }
+      const startTime = (document.getElementById('start-time-input').value || '').trim();
       res = await fetch('/q-voice/save-from-url', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url: urlValue }),
+        body: JSON.stringify({ url: urlValue, startTime }),
       });
     } else {
       const blob = (mode === 'upload') ? uploadedFile : recordedBlob;
