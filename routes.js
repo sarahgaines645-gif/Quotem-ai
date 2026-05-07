@@ -1059,6 +1059,45 @@ router.post('/email-writer/reply', express.json({ limit: '256kb' }), async (req,
     }
 });
 
+// Chat with Q about a pasted email — multi-turn project manager mode.
+// Body: { emailText, history: [{role, content}], message }
+const { EMAIL_MANAGER_PROMPT } = require('./plugins/q-email-writer');
+router.post('/email-writer/chat', express.json({ limit: '512kb' }), async (req, res) => {
+    const { emailText, history, message } = req.body || {};
+    if (!message || typeof message !== 'string') {
+        return res.status(400).json({ error: 'message required' });
+    }
+    const messages = [{ role: 'system', content: EMAIL_MANAGER_PROMPT }];
+    if (emailText && typeof emailText === 'string') {
+        messages.push({
+            role: 'user',
+            content: `--- THE SITUATION (pasted email or thread) ---\n${emailText.trim()}\n--- END ---`,
+        });
+        messages.push({
+            role: 'assistant',
+            content: "Right, I've read it. Tell me what you want to do — draft a reply, set a chase reminder, save this as a folder, or talk it through. I'm on this with you.",
+        });
+    }
+    if (Array.isArray(history)) {
+        for (const m of history) {
+            if (m && (m.role === 'user' || m.role === 'assistant') && typeof m.content === 'string') {
+                messages.push({ role: m.role, content: m.content });
+            }
+        }
+    }
+    messages.push({ role: 'user', content: message });
+
+    try {
+        const result = await qChat(messages, { useTools: true });
+        if (result.error || !result.reply) {
+            return res.status(500).json({ error: result.error || 'No reply from Q' });
+        }
+        res.json({ reply: result.reply, toolCalls: result.toolCalls || [] });
+    } catch (e) {
+        res.status(500).json({ error: e.message || 'Chat failed' });
+    }
+});
+
 router.post('/email-writer/adjust-tone', express.json({ limit: '64kb' }), async (req, res) => {
     const { body, tone } = req.body || {};
     if (!body) return res.status(400).json({ error: 'Body must include body:string' });

@@ -432,6 +432,22 @@ const TOOL_DEFINITIONS = [
             },
         },
     },
+    {
+        type: 'function',
+        function: {
+            name: 'save_situation',
+            description: 'Save an ongoing situation (a complaint, dispute, project, anything with multiple emails or steps) to a folder so Sarah can come back to it. Use this whenever Sarah is dealing with something that has legs — multiple emails back and forth, a deadline, a chase pattern. After calling, tell Sarah the folder is saved and confirm what title you used.',
+            parameters: {
+                type: 'object',
+                properties: {
+                    title:   { type: 'string', description: 'Short descriptive title for the folder, e.g. "Boiler dispute with X" or "Wedding caterer dates". Used as the folder name.' },
+                    summary: { type: 'string', description: 'One-line summary of what this situation is about — the elevator pitch.' },
+                    content: { type: 'string', description: 'Full content to save: the original email(s), key facts, deadlines, anything important. Markdown is fine.' },
+                },
+                required: ['title', 'summary', 'content'],
+            },
+        },
+    },
 ];
 
 // ─────────────────────────────────────────────────────────────
@@ -652,6 +668,7 @@ async function executeTool(name, argsRaw, personId) {
         case 'generate_music':    return await generateMusicTool(args);
         case 'generate_video':    return await generateVideoTool(args);
         case 'speak_as_q':        return await speakAsQTool(args);
+        case 'save_situation':    return saveSituation(args);
         default:                 return { error: `Unknown tool: "${name}"` };
     }
 }
@@ -838,6 +855,64 @@ async function speakAsQTool({ text } = {}) {
         };
     } catch (e) {
         return { error: e.message || 'Voice generation failed.' };
+    }
+}
+
+/**
+ * save_situation — write an ongoing situation (case, dispute, project) to a folder
+ * on the Railway volume so Sarah can come back to it later. Returns the folder name
+ * and path so Q can confirm in his reply.
+ */
+function saveSituation({ title, summary, content } = {}) {
+    if (!title || typeof title !== 'string') return { error: 'title (string) is required' };
+    if (!content || typeof content !== 'string') return { error: 'content (string) is required' };
+
+    const baseDir = process.env.RAILWAY_VOLUME_MOUNT_PATH
+        ? path.join(process.env.RAILWAY_VOLUME_MOUNT_PATH, 'situations')
+        : path.join(__dirname, '..', 'data', 'situations');
+
+    const slug = title.toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-+|-+$/g, '')
+        .slice(0, 60) || 'situation-' + Date.now();
+
+    try {
+        fs.mkdirSync(baseDir, { recursive: true });
+    } catch (e) {
+        return { error: 'Could not create folders directory: ' + e.message };
+    }
+
+    // If a file with this slug already exists, append a counter so we don't clobber.
+    let finalSlug = slug;
+    let counter = 1;
+    while (fs.existsSync(path.join(baseDir, finalSlug + '.md'))) {
+        finalSlug = `${slug}-${++counter}`;
+    }
+    const filePath = path.join(baseDir, finalSlug + '.md');
+    const now = new Date().toISOString();
+
+    const body = [
+        `# ${title}`,
+        '',
+        `**Saved:** ${now}`,
+        summary ? `**Summary:** ${summary}` : '',
+        '',
+        '---',
+        '',
+        content,
+    ].filter(Boolean).join('\n');
+
+    try {
+        fs.writeFileSync(filePath, body, 'utf8');
+        return {
+            ok: true,
+            title,
+            slug: finalSlug,
+            path: filePath,
+            instruction_for_q: `Tell Sarah the situation is saved as "${title}" in her folders. Confirm what's in it briefly so she knows it captured the right things, then suggest the next concrete action.`,
+        };
+    } catch (e) {
+        return { error: 'Could not write folder file: ' + e.message };
     }
 }
 

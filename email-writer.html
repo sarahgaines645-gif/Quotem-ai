@@ -118,6 +118,39 @@
 
   .gen-row { display: flex; align-items: center; gap: 10px; margin-top: 16px; flex-wrap: wrap; }
 
+  /* Chat-with-Q surface */
+  .chat-card { display: none; }
+  .chat-card.show { display: block; }
+  .chat-thread { display: flex; flex-direction: column; gap: 12px; max-height: 500px; overflow-y: auto; padding: 4px; margin-bottom: 14px; }
+  .chat-msg { display: flex; gap: 10px; align-items: flex-start; }
+  .chat-msg.user { flex-direction: row-reverse; }
+  .chat-avatar { width: 30px; height: 30px; border-radius: 50%; background: var(--bg); box-shadow: var(--neu-raised-sm); display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 13px; flex-shrink: 0; }
+  .chat-avatar.q { color: var(--accent); }
+  .chat-avatar.user { color: var(--text-muted); font-size: 14px; }
+  .chat-bubble { max-width: 85%; padding: 12px 16px; border-radius: 14px; background: var(--bg); box-shadow: var(--neu-inset-sm); font-size: 14px; line-height: 1.6; }
+  .chat-bubble.user { box-shadow: var(--neu-raised-sm); color: var(--text); }
+  .chat-bubble.q h1, .chat-bubble.q h2, .chat-bubble.q h3 { font-size: 14px; font-weight: 700; color: var(--accent); margin: 10px 0 4px; }
+  .chat-bubble.q h1:first-child, .chat-bubble.q h2:first-child, .chat-bubble.q h3:first-child { margin-top: 0; }
+  .chat-bubble.q p { margin: 0 0 8px; }
+  .chat-bubble.q p:last-child { margin-bottom: 0; }
+  .chat-bubble.q ol, .chat-bubble.q ul { margin: 6px 0 8px 22px; }
+  .chat-bubble.q li { margin-bottom: 3px; }
+  .chat-bubble.q strong { font-weight: 700; }
+  .chat-bubble.q code { font-family: monospace; font-size: 13px; background: var(--accent-soft); padding: 1px 5px; border-radius: 4px; }
+  .chat-input-row { display: flex; gap: 10px; align-items: flex-end; }
+  .chat-input-row textarea { flex: 1; border: none; outline: none; resize: none; font-family: inherit; font-size: 14px; color: var(--text); background: var(--bg); padding: 12px 16px; border-radius: 12px; box-shadow: var(--neu-inset-sm); line-height: 1.5; min-height: 44px; max-height: 120px; }
+  .chat-send {
+    border: none; cursor: pointer; background: var(--accent); color: white;
+    font-family: inherit; font-size: 14px; font-weight: 700;
+    padding: 12px 22px; border-radius: 12px; box-shadow: var(--neu-raised-sm);
+    flex-shrink: 0; transition: opacity 0.15s;
+  }
+  .chat-send:hover:not(:disabled) { opacity: 0.9; }
+  .chat-send:disabled { opacity: 0.5; cursor: not-allowed; }
+  .chat-typing { font-size: 12px; color: var(--text-muted); padding: 4px 0; font-style: italic; }
+  .chat-typing.show { display: block; }
+  .chat-typing { display: none; }
+
   /* APS button + advice card */
   .aps-row { display: flex; align-items: center; gap: 10px; margin-top: 14px; flex-wrap: wrap; }
   .aps-btn {
@@ -217,6 +250,17 @@
         <button class="btn-primary" id="write-btn">Write reply</button>
         <span class="status" id="write-status"></span>
       </div>
+    </div>
+  </div>
+
+  <!-- ── CHAT WITH Q ── (multi-turn project-manager mode) -->
+  <div class="card chat-card" id="chat-card">
+    <div class="section-label">💬 Talk to Q about it — he's project managing this with you</div>
+    <div class="chat-thread" id="chat-thread"></div>
+    <div class="chat-typing" id="chat-typing">Q is thinking…</div>
+    <div class="chat-input-row">
+      <textarea id="chat-input" rows="1" placeholder="Tell Q what to do — 'draft a firmer reply', 'chase them in 7 days', 'save this as a folder called X'…"></textarea>
+      <button class="chat-send" id="chat-send">Send</button>
     </div>
   </div>
 
@@ -326,6 +370,7 @@ $readBtn.addEventListener('click', async () => {
     currentAnalysis = json.analysis;
     renderStep2(json.analysis);
     $step2.classList.add('show');
+    showChatCard();
     $readStat.textContent = '';
     $step2.scrollIntoView({ behavior: 'smooth', block: 'start' });
   } catch (e) {
@@ -414,6 +459,82 @@ $restart.addEventListener('click', () => {
   currentText = ''; currentAnalysis = null;
   $paste.focus();
   window.scrollTo({ top: 0, behavior: 'smooth' });
+});
+
+// ── Chat with Q (project manager mode) ───────────────────────────
+const $chatCard   = document.getElementById('chat-card');
+const $chatThread = document.getElementById('chat-thread');
+const $chatInput  = document.getElementById('chat-input');
+const $chatSend   = document.getElementById('chat-send');
+const $chatTyping = document.getElementById('chat-typing');
+let chatHistory = [];
+
+function showChatCard() {
+  if ($chatCard.classList.contains('show')) return;
+  $chatCard.classList.add('show');
+  appendChatMsg('q', "Right, I've read it. Tell me what you want to do — draft a reply, set a chase reminder, save this as a folder, or talk it through. I'm on this with you.");
+}
+
+function appendChatMsg(role, content) {
+  const msgEl = document.createElement('div');
+  msgEl.className = 'chat-msg ' + (role === 'q' ? 'q' : 'user');
+  const avatar = document.createElement('div');
+  avatar.className = 'chat-avatar ' + (role === 'q' ? 'q' : 'user');
+  avatar.textContent = role === 'q' ? 'Q' : '🙂';
+  const bubble = document.createElement('div');
+  bubble.className = 'chat-bubble ' + (role === 'q' ? 'q' : 'user');
+  if (role === 'q' && window.marked) bubble.innerHTML = window.marked.parse(content);
+  else bubble.textContent = content;
+  msgEl.appendChild(avatar);
+  msgEl.appendChild(bubble);
+  $chatThread.appendChild(msgEl);
+  $chatThread.scrollTop = $chatThread.scrollHeight;
+}
+
+async function sendChatMessage() {
+  const text = $chatInput.value.trim();
+  if (!text) return;
+  appendChatMsg('user', text);
+  chatHistory.push({ role: 'user', content: text });
+  $chatInput.value = '';
+  $chatInput.style.height = 'auto';
+  $chatSend.disabled = true;
+  $chatTyping.classList.add('show');
+
+  try {
+    const res = await fetch('/email-writer/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        emailText: currentText || '',
+        history: chatHistory.slice(0, -1),  // already have current user msg in chatHistory; the route adds it itself
+        message: text,
+      }),
+    });
+    const json = await res.json();
+    if (!res.ok) throw new Error(json.error || 'HTTP ' + res.status);
+    appendChatMsg('q', json.reply);
+    chatHistory.push({ role: 'assistant', content: json.reply });
+  } catch (e) {
+    appendChatMsg('q', '⚠️ ' + (e.message || 'Something went wrong'));
+  } finally {
+    $chatTyping.classList.remove('show');
+    $chatSend.disabled = false;
+    $chatInput.focus();
+  }
+}
+
+$chatSend.addEventListener('click', sendChatMessage);
+$chatInput.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' && !e.shiftKey) {
+    e.preventDefault();
+    sendChatMessage();
+  }
+});
+// Auto-grow textarea
+$chatInput.addEventListener('input', () => {
+  $chatInput.style.height = 'auto';
+  $chatInput.style.height = Math.min($chatInput.scrollHeight, 120) + 'px';
 });
 
 // ── APS button: "I don't know what to do" ───────────────────────
