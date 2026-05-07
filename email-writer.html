@@ -469,10 +469,32 @@ const $chatSend   = document.getElementById('chat-send');
 const $chatTyping = document.getElementById('chat-typing');
 let chatHistory = [];
 
-function showChatCard() {
+async function showChatCard() {
   if ($chatCard.classList.contains('show')) return;
   $chatCard.classList.add('show');
-  appendChatMsg('q', "Right, I've read it. Tell me what you want to do — draft a reply, set a chase reminder, save this as a folder, or talk it through. I'm on this with you.");
+  // Fire a kickoff so Q opens the chat by leading — his read + first proposed move,
+  // not by asking Sarah what she wants. The kickoff message itself isn't rendered.
+  $chatTyping.classList.add('show');
+  try {
+    const res = await fetch('/email-writer/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        emailText: currentText || '',
+        history: [],
+        message: "I've shown you the email/thread above. Give me your read — what's actually happening, who has the upper hand and why, the angle I might be missing, the rule on my side. Then propose the first concrete move. Lead the way.",
+      }),
+    });
+    const json = await res.json();
+    if (!res.ok) throw new Error(json.error || 'HTTP ' + res.status);
+    appendChatMsg('q', json.reply);
+    chatHistory.push({ role: 'assistant', content: json.reply });
+  } catch (e) {
+    appendChatMsg('q', '⚠️ Something went wrong on the kickoff: ' + (e.message || 'unknown') + '. Type below to talk to me anyway.');
+  } finally {
+    $chatTyping.classList.remove('show');
+    $chatInput.focus();
+  }
 }
 
 function appendChatMsg(role, content) {
