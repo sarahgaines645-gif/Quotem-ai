@@ -66,6 +66,23 @@
   .email-card.expanded .email-body { display: block; }
   .email-body .subject { font-weight: 700; margin-bottom: 8px; }
 
+  /* Notes (case summary, research, free-form) */
+  .notes-list { display: flex; flex-direction: column; gap: 10px; }
+  .note-card {
+    background: var(--bg); border-radius: 14px; padding: 14px 18px;
+    box-shadow: var(--neu-inset-sm); font-size: 14px; line-height: 1.65;
+  }
+  .note-kind { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; color: var(--text-faint); margin-bottom: 6px; display: flex; align-items: center; gap: 8px; }
+  .note-kind .ago { font-weight: 500; text-transform: none; letter-spacing: 0; color: var(--text-muted); }
+  .note-body h1, .note-body h2, .note-body h3 { font-size: 14px; font-weight: 700; color: var(--accent); margin: 12px 0 4px; letter-spacing: -0.01em; }
+  .note-body h1:first-child, .note-body h2:first-child, .note-body h3:first-child { margin-top: 0; }
+  .note-body p  { margin: 0 0 8px; }
+  .note-body ul, .note-body ol { margin: 4px 0 8px 22px; }
+  .note-body li { margin-bottom: 3px; }
+  .note-body strong { font-weight: 700; }
+  .note-body code { font-family: monospace; font-size: 13px; background: var(--accent-soft); padding: 1px 5px; border-radius: 4px; }
+  .note-body hr { border: 0; border-top: 1px solid var(--shadow-dark); margin: 10px 0; }
+
   /* Files / evidence */
   .files-list { display: flex; flex-direction: column; gap: 8px; margin-bottom: 10px; }
   .file-card { background: var(--bg); border-radius: 12px; padding: 10px 14px; box-shadow: var(--neu-raised-sm); display: flex; align-items: center; gap: 12px; }
@@ -159,6 +176,9 @@
     </div>
     <textarea class="summary-input" id="summary-input" rows="1" placeholder="One-line summary…"></textarea>
   </div>
+
+  <div class="section-label" id="notes-label" style="display:none;">📋 Case notes</div>
+  <div id="notes-list" class="notes-list"></div>
 
   <div class="section-label">📨 Correspondence</div>
   <div id="email-list" class="email-list"></div>
@@ -301,6 +321,27 @@ function renderEmails() {
     });
     $emailList.appendChild(card);
   });
+}
+
+function renderNotes() {
+  const $list = document.getElementById('notes-list');
+  const $lbl  = document.getElementById('notes-label');
+  $list.innerHTML = '';
+  const notes = thread.notes || [];
+  if (!notes.length) {
+    $lbl.style.display = 'none';
+    return;
+  }
+  $lbl.style.display = '';
+  for (const n of notes) {
+    const card = document.createElement('div');
+    card.className = 'note-card';
+    const kindLabel = (n.kind && n.kind !== 'note') ? n.kind.replace(/-/g, ' ') : 'Note';
+    card.innerHTML = `
+      <div class="note-kind">📋 ${escapeHtml(kindLabel)} <span class="ago">· ${escapeHtml(fmtAgo(n.addedAt))}</span></div>
+      <div class="note-body">${window.marked ? window.marked.parse(n.content || '') : escapeHtml(n.content || '').replace(/\n/g, '<br>')}</div>`;
+    $list.appendChild(card);
+  }
 }
 
 function renderFiles() {
@@ -489,7 +530,9 @@ async function loadThread() {
   $title.value   = thread.title || '';
   $summary.value = thread.summary || '';
   setStatus(thread.status || 'open');
+  renderNotes();
   renderEmails();
+  renderFiles();
   renderChat();
   // Auto-kickoff: if there's content but Q hasn't spoken yet, get him to take the case
   // and run the diagnostic before Sarah has to ask. The kickoff message itself

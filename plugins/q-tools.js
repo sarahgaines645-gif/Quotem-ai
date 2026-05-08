@@ -436,15 +436,51 @@ const TOOL_DEFINITIONS = [
         type: 'function',
         function: {
             name: 'save_situation',
-            description: 'Save an ongoing situation (a complaint, dispute, project, anything with multiple emails or steps) to a folder (Thread) so Sarah can come back to it. Use this whenever Sarah is dealing with something that has legs — multiple emails back and forth, a deadline, a chase pattern. Returns a /thread/{id} URL Sarah can open. After calling, tell Sarah the Thread is saved with a clickable markdown link and confirm what title you used.',
+            description: 'Create a new Thread (folder) for an ongoing situation. The `content` you pass is the CASE SUMMARY / ANALYSIS — Parties, Timeline, Key Facts, Gaps, etc. — and gets stored as a Note on the Thread, NOT as an email. To save the actual back-and-forth emails as proper email cards on the Thread, follow up with one or more `add_email_to_thread` calls (one per email). Returns a /thread/{id} URL.',
             parameters: {
                 type: 'object',
                 properties: {
-                    title:   { type: 'string', description: 'Short descriptive title for the Thread, e.g. "Boiler dispute with X" or "Wedding caterer dates". Used as the Thread name.' },
-                    summary: { type: 'string', description: 'One-line summary of what this situation is about — the elevator pitch.' },
-                    content: { type: 'string', description: 'Full content to save: the original email(s), key facts, deadlines, anything important. Markdown is fine.' },
+                    title:   { type: 'string', description: 'Short descriptive Thread name, e.g. "Council Tax dispute — Sarah Gaines" or "Tom\'s 30th party".' },
+                    summary: { type: 'string', description: 'One-line summary — the elevator pitch.' },
+                    content: { type: 'string', description: 'Case summary / analysis (Parties, Timeline, Key Facts, Gaps). Markdown is fine. Stored as a Note on the Thread, NOT as an email. Pass the actual emails separately via add_email_to_thread.' },
                 },
-                required: ['title', 'summary', 'content'],
+                required: ['title', 'summary'],
+            },
+        },
+    },
+    {
+        type: 'function',
+        function: {
+            name: 'add_email_to_thread',
+            description: 'Add an actual email (received or sent) to an existing Thread as its own card on the timeline. Use this for every real email in the back-and-forth — your 8 May reply to Jenny, Jenny\'s 27 Apr message, the council\'s auto-acknowledgment, etc. — one call per email. The Thread page renders each as a collapsible card with date / from→to / response-time pill. Call this after save_situation when you have the actual email chain.',
+            parameters: {
+                type: 'object',
+                properties: {
+                    threadId: { type: 'string', description: 'The Thread id (slug) returned by save_situation, or from list_threads.' },
+                    type:     { type: 'string', enum: ['in', 'out'], description: '"in" if the user received this email, "out" if they sent it.' },
+                    from:     { type: 'string', description: 'Sender name (and email if known). E.g. "Jenny Wills (Senior Caseworker, MP Zöe Franklin)".' },
+                    to:       { type: 'string', description: 'Recipient name. E.g. "Sarah" or "Guildford Borough Council".' },
+                    date:     { type: 'string', description: 'When the email was sent — natural format like "27 Apr 2026" or "8 May 2026 14:30".' },
+                    subject:  { type: 'string', description: 'Email subject line if known.' },
+                    body:     { type: 'string', description: 'The email body verbatim. Plain text is fine.' },
+                },
+                required: ['threadId', 'type', 'body'],
+            },
+        },
+    },
+    {
+        type: 'function',
+        function: {
+            name: 'add_note_to_thread',
+            description: 'Add a free-form note to an existing Thread. Use this for anything that\'s not an email or a file: case analysis updates, research findings, important phone-call summaries, "what they said when I rang them", procedural deadlines you\'ve worked out. Notes show in their own section on the Thread page.',
+            parameters: {
+                type: 'object',
+                properties: {
+                    threadId: { type: 'string', description: 'The Thread id.' },
+                    content:  { type: 'string', description: 'The note content. Markdown is fine.' },
+                    kind:     { type: 'string', description: 'Optional category — e.g. "research", "phone-call", "deadline", "case-summary". Defaults to "note".' },
+                },
+                required: ['threadId', 'content'],
             },
         },
     },
@@ -690,9 +726,11 @@ async function executeTool(name, argsRaw, personId) {
         case 'generate_music':    return await generateMusicTool(args);
         case 'generate_video':    return await generateVideoTool(args);
         case 'speak_as_q':        return await speakAsQTool(args);
-        case 'save_situation':    return saveSituation(args);
-        case 'list_threads':      return listThreadsTool();
-        case 'read_thread':       return readThreadTool(args);
+        case 'save_situation':       return saveSituation(args);
+        case 'list_threads':         return listThreadsTool();
+        case 'read_thread':          return readThreadTool(args);
+        case 'add_email_to_thread':  return addEmailToThreadTool(args);
+        case 'add_note_to_thread':   return addNoteToThreadTool(args);
         default:                 return { error: `Unknown tool: "${name}"` };
     }
 }
@@ -952,6 +990,38 @@ function readThreadTool({ id } = {}) {
 }
 
 /**
+ * add_email_to_thread — append a real email card to an existing Thread.
+ */
+function addEmailToThreadTool({ threadId, type, from, to, date, subject, body } = {}) {
+    if (!threadId) return { error: 'threadId is required' };
+    if (!body) return { error: 'body is required' };
+    const updated = qThreads.addEmail(threadId, { type, from, to, date, subject, body });
+    if (!updated) return { error: 'Thread not found: ' + threadId };
+    return {
+        ok: true,
+        threadId: updated.id,
+        emailCount: (updated.emails || []).length,
+        instruction_for_q: 'Email added to the Thread. Tell Sarah briefly what was added (who/when), then continue.',
+    };
+}
+
+/**
+ * add_note_to_thread — append a free-form note to an existing Thread.
+ */
+function addNoteToThreadTool({ threadId, content, kind } = {}) {
+    if (!threadId) return { error: 'threadId is required' };
+    if (!content) return { error: 'content is required' };
+    const updated = qThreads.addNote(threadId, { content, kind });
+    if (!updated) return { error: 'Thread not found: ' + threadId };
+    return {
+        ok: true,
+        threadId: updated.id,
+        noteCount: (updated.notes || []).length,
+        instruction_for_q: 'Note saved on the Thread. Brief confirmation, then move on.',
+    };
+}
+
+/**
  * remember — write a fact to Q's persistent memory.
  */
 function remember({ content, tags = [] } = {}, personId) {
@@ -994,6 +1064,7 @@ const ALWAYS_ON = new Set([
     // every turn so he can correlate to a saved case whenever Sarah refers
     // to one (anywhere — main chat, email writer, inside a Thread).
     'list_threads', 'read_thread', 'save_situation',
+    'add_email_to_thread', 'add_note_to_thread',
 ]);
 
 const TRIGGERS = {

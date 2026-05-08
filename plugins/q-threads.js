@@ -70,7 +70,29 @@ function listThreads() {
 
 function readThread(id) {
     try {
-        return JSON.parse(fs.readFileSync(pathFor(id), 'utf8'));
+        const t = JSON.parse(fs.readFileSync(pathFor(id), 'utf8'));
+        // Lazy migration: earlier versions of save_situation stored the case-
+        // summary content as a fake email in emails[0]. Spot that exact shape
+        // and move the content into notes where it belongs. The heuristic is
+        // tight (single email with empty from/to/subject/date and body that
+        // starts with a markdown H1) so it only catches the legacy bug.
+        if (Array.isArray(t.emails) && t.emails.length === 1) {
+            const e = t.emails[0];
+            if (e && !e.from && !e.to && !e.subject && !e.date &&
+                typeof e.body === 'string' && e.body.trim().startsWith('# ')) {
+                if (!Array.isArray(t.notes)) t.notes = [];
+                t.notes.unshift({
+                    id: 'note-migrated-' + Date.now(),
+                    content: e.body.trim(),
+                    kind: 'case-summary',
+                    addedAt: e.addedAt || t.createdAt,
+                });
+                t.emails = [];
+                writeThread(t);
+                console.log('[q-threads] migrated legacy case-summary email -> note for thread ' + t.id);
+            }
+        }
+        return t;
     } catch {
         return null;
     }
@@ -101,17 +123,30 @@ function createThread({ title, summary = '', content = '' } = {}) {
         notes: [],
         files: [],
     };
-    if (content) {
-        thread.emails.push({
-            id: 'email-' + Date.now(),
-            type: 'in',
-            from: '', to: '', date: '', subject: '',
-            body: content,
+    // `content` is the case summary / analysis — NOT an email. Goes into notes.
+    if (content && content.trim()) {
+        thread.notes.push({
+            id: 'note-' + Date.now(),
+            content: content.trim(),
             addedAt: now,
+            kind: 'case-summary',
         });
     }
     writeThread(thread);
     return thread;
+}
+
+function addNote(threadId, { content, kind = 'note' } = {}) {
+    const thread = readThread(threadId);
+    if (!thread || !content) return null;
+    if (!Array.isArray(thread.notes)) thread.notes = [];
+    thread.notes.push({
+        id: 'note-' + Date.now(),
+        content: String(content).trim(),
+        kind,
+        addedAt: new Date().toISOString(),
+    });
+    return writeThread(thread);
 }
 
 
@@ -226,6 +261,7 @@ module.exports = {
     readThread,
     createThread,
     addEmail,
+    addNote,
     appendChat,
     updateThread,
     deleteThread,
