@@ -6,6 +6,7 @@ Format: `- [ ] {date}: thing to do`
 
 ---
 
+- [ ] 2026-05-08: Chat sessions on /chat — sidebar of past conversations like ChatGPT, "+ New chat" button, auto-titled from first message. Plus "move these messages to a Thread" so heavyweight bits get pulled out of main chat into a proper Thread. Sarah's main chat is hundreds long and unmanageable.
 - [ ] 2026-04-29: Memory migration from Quotem Railway volume → Quotem-ai Railway volume (preserve friend's first-day presence)
 - [ ] 2026-04-29: DNS at IONOS — point quotem-ai.co.uk at Railway custom domain target
 - [ ] 2026-04-29: Verify Q's chat works end-to-end at quotem-ai.co.uk after deploy

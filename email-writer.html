@@ -161,6 +161,7 @@
   }
   .chat-option:hover { color: var(--accent); }
   .chat-option:active { box-shadow: var(--neu-inset-xs); }
+  .chat-option.on { box-shadow: var(--neu-inset-xs); color: var(--accent); }
   .chat-option:disabled { opacity: 0.5; cursor: default; }
 
   /* APS button + advice card */
@@ -543,17 +544,41 @@ function appendChatMsg(role, content) {
   if (optionsToRender.length > 0) {
     const optsEl = document.createElement('div');
     optsEl.className = 'chat-options';
+    const picked = new Set();
+
     optionsToRender.forEach(optText => {
       const btn = document.createElement('button');
       btn.className = 'chat-option';
       btn.textContent = optText;
       btn.addEventListener('click', () => {
-        optsEl.querySelectorAll('.chat-option').forEach(b => b.disabled = true);
-        $chatInput.value = optText;
-        sendChatMessage();
+        if (picked.has(optText)) {
+          picked.delete(optText);
+          btn.classList.remove('on');
+        } else {
+          picked.add(optText);
+          btn.classList.add('on');
+        }
+        sendBtn.style.display = picked.size > 0 ? 'inline-block' : 'none';
       });
       optsEl.appendChild(btn);
     });
+
+    const sendBtn = document.createElement('button');
+    sendBtn.className = 'chat-option chat-options-send';
+    sendBtn.textContent = '↪ Send selected';
+    sendBtn.style.display = 'none';
+    sendBtn.style.fontWeight = '700';
+    sendBtn.style.background = 'var(--accent)';
+    sendBtn.style.color = 'white';
+    sendBtn.addEventListener('click', () => {
+      if (picked.size === 0) return;
+      const combined = Array.from(picked).join('\n');
+      optsEl.querySelectorAll('.chat-option').forEach(b => b.disabled = true);
+      $chatInput.value = combined;
+      sendChatMessage();
+    });
+    optsEl.appendChild(sendBtn);
+
     $chatThread.appendChild(optsEl);
   }
 
