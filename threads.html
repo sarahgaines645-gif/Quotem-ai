@@ -34,6 +34,21 @@
 
   .controls { display: flex; gap: 10px; margin-bottom: 18px; align-items: center; flex-wrap: wrap; }
   .search { flex: 1; min-width: 220px; border: none; outline: none; font-family: inherit; font-size: 14px; color: var(--text); background: var(--bg); padding: 11px 16px; border-radius: 12px; box-shadow: var(--neu-inset-sm); }
+  .new-btn { border: none; cursor: pointer; background: var(--accent); color: white; font-family: inherit; font-size: 14px; font-weight: 700; padding: 11px 22px; border-radius: 12px; box-shadow: var(--neu-raised-sm); transition: opacity 0.15s; }
+  .new-btn:hover { opacity: 0.9; }
+  .new-btn:active { box-shadow: var(--neu-inset-xs); }
+  /* New-thread modal */
+  .modal-bg { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.35); z-index: 100; align-items: center; justify-content: center; padding: 20px; }
+  .modal-bg.show { display: flex; }
+  .modal { background: var(--bg); border-radius: 18px; padding: 24px; box-shadow: var(--neu-raised); width: 100%; max-width: 480px; }
+  .modal h3 { font-size: 17px; font-weight: 700; letter-spacing: -0.02em; margin-bottom: 14px; }
+  .modal label { display: block; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; color: var(--text-faint); margin-bottom: 6px; }
+  .modal input, .modal textarea { width: 100%; border: none; outline: none; font-family: inherit; font-size: 14px; color: var(--text); background: var(--bg); padding: 11px 14px; border-radius: 10px; box-shadow: var(--neu-inset-sm); margin-bottom: 14px; }
+  .modal textarea { resize: vertical; min-height: 60px; line-height: 1.5; }
+  .modal-actions { display: flex; gap: 10px; justify-content: flex-end; }
+  .modal-actions button { border: none; cursor: pointer; font-family: inherit; font-size: 13px; font-weight: 600; padding: 10px 20px; border-radius: 10px; }
+  .modal-actions .cancel { background: var(--bg); color: var(--text-muted); box-shadow: var(--neu-raised-sm); }
+  .modal-actions .save   { background: var(--accent); color: white; box-shadow: var(--neu-raised-sm); }
 
   .threads-list { display: flex; flex-direction: column; gap: 12px; }
   .thread-card {
@@ -74,6 +89,21 @@
 
   <div class="controls">
     <input type="text" class="search" id="search" placeholder="Search by title…">
+    <button class="new-btn" id="new-btn">+ New Thread</button>
+  </div>
+
+  <div class="modal-bg" id="modal-bg">
+    <div class="modal">
+      <h3>Start a new Thread</h3>
+      <label>Title</label>
+      <input type="text" id="new-title" placeholder="e.g. Boiler dispute with Bob, Tom's birthday party">
+      <label>One-line summary (optional)</label>
+      <textarea id="new-summary" rows="2" placeholder="What's this Thread about?"></textarea>
+      <div class="modal-actions">
+        <button class="cancel" id="new-cancel">Cancel</button>
+        <button class="save" id="new-save">Create</button>
+      </div>
+    </div>
   </div>
 
   <div id="threads-list" class="threads-list"></div>
@@ -140,6 +170,47 @@ function applyFilter() {
 }
 
 $search.addEventListener('input', applyFilter);
+
+// ── New Thread modal ───────────────────────────────────────────
+const $newBtn    = document.getElementById('new-btn');
+const $modalBg   = document.getElementById('modal-bg');
+const $newTitle  = document.getElementById('new-title');
+const $newSummary = document.getElementById('new-summary');
+const $newCancel = document.getElementById('new-cancel');
+const $newSave   = document.getElementById('new-save');
+
+function openModal() {
+  $modalBg.classList.add('show');
+  setTimeout(() => $newTitle.focus(), 50);
+}
+function closeModal() {
+  $modalBg.classList.remove('show');
+  $newTitle.value = '';
+  $newSummary.value = '';
+}
+$newBtn.addEventListener('click', openModal);
+$newCancel.addEventListener('click', closeModal);
+$modalBg.addEventListener('click', (e) => { if (e.target === $modalBg) closeModal(); });
+$newTitle.addEventListener('keydown', (e) => { if (e.key === 'Enter') $newSave.click(); });
+
+$newSave.addEventListener('click', async () => {
+  const title = $newTitle.value.trim();
+  if (!title) { $newTitle.focus(); return; }
+  $newSave.disabled = true;
+  try {
+    const res = await fetch('/api/threads', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ title, summary: $newSummary.value.trim() }),
+    });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const thread = await res.json();
+    location.href = '/thread/' + thread.id;
+  } catch (e) {
+    alert('Could not create thread: ' + e.message);
+    $newSave.disabled = false;
+  }
+});
 
 (async () => {
   try {

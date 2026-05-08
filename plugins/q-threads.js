@@ -99,6 +99,7 @@ function createThread({ title, summary = '', content = '' } = {}) {
         emails: [],
         chatHistory: [],
         notes: [],
+        files: [],
     };
     if (content) {
         thread.emails.push({
@@ -111,6 +112,73 @@ function createThread({ title, summary = '', content = '' } = {}) {
     }
     writeThread(thread);
     return thread;
+}
+
+
+function filesDirFor(threadId) {
+    return path.join(VOLUME_DIR, threadId + '-files');
+}
+
+function addFile(threadId, { filename, mimeType, base64 } = {}) {
+    if (!filename || !base64) return null;
+    const thread = readThread(threadId);
+    if (!thread) return null;
+
+    // Sanitise filename — strip path separators, keep extension
+    const safe = String(filename).replace(/[\\/]/g, '_').replace(/^\.+/, '').slice(0, 200);
+    if (!safe) return null;
+
+    const dir = filesDirFor(threadId);
+    fs.mkdirSync(dir, { recursive: true });
+
+    // De-duplicate filenames within a thread
+    let finalName = safe;
+    let counter = 1;
+    while (fs.existsSync(path.join(dir, finalName))) {
+        const dot = safe.lastIndexOf('.');
+        finalName = dot > 0
+            ? `${safe.slice(0, dot)}-${++counter}${safe.slice(dot)}`
+            : `${safe}-${++counter}`;
+    }
+
+    const buf = Buffer.from(base64, 'base64');
+    fs.writeFileSync(path.join(dir, finalName), buf);
+
+    if (!Array.isArray(thread.files)) thread.files = [];
+    thread.files.push({
+        id: 'file-' + Date.now(),
+        filename: finalName,
+        mimeType: mimeType || 'application/octet-stream',
+        size: buf.length,
+        uploadedAt: new Date().toISOString(),
+    });
+    return writeThread(thread);
+}
+
+function readFile(threadId, filename) {
+    const safe = String(filename).replace(/[\\/]/g, '_').replace(/^\.+/, '');
+    const filepath = path.join(filesDirFor(threadId), safe);
+    if (!fs.existsSync(filepath)) return null;
+    const thread = readThread(threadId);
+    const meta = thread && Array.isArray(thread.files)
+        ? thread.files.find(f => f.filename === safe)
+        : null;
+    return {
+        buffer: fs.readFileSync(filepath),
+        mimeType: meta?.mimeType || 'application/octet-stream',
+        filename: safe,
+    };
+}
+
+function removeFile(threadId, filename) {
+    const thread = readThread(threadId);
+    if (!thread) return null;
+    const safe = String(filename).replace(/[\\/]/g, '_').replace(/^\.+/, '');
+    try { fs.unlinkSync(path.join(filesDirFor(threadId), safe)); } catch { /* already gone */ }
+    if (Array.isArray(thread.files)) {
+        thread.files = thread.files.filter(f => f.filename !== safe);
+    }
+    return writeThread(thread);
 }
 
 
@@ -162,4 +230,7 @@ module.exports = {
     updateThread,
     deleteThread,
     writeThread,
+    addFile,
+    readFile,
+    removeFile,
 };

@@ -1109,22 +1109,51 @@ router.delete('/api/threads/:id', (req, res) => {
     res.json({ ok });
 });
 
+// File attachments — base64 in JSON body for simplicity (no multipart parser dep)
+router.post('/api/threads/:id/files', express.json({ limit: '50mb' }), (req, res) => {
+    const updated = qThreads.addFile(req.params.id, req.body || {});
+    if (!updated) return res.status(400).json({ error: 'Could not save file (thread not found or filename/base64 missing)' });
+    res.json(updated);
+});
+
+router.get('/api/threads/:id/files/:filename', (req, res) => {
+    const file = qThreads.readFile(req.params.id, req.params.filename);
+    if (!file) return res.status(404).json({ error: 'File not found' });
+    res.setHeader('Content-Type', file.mimeType);
+    res.setHeader('Content-Disposition', `inline; filename="${file.filename}"`);
+    res.end(file.buffer);
+});
+
+router.delete('/api/threads/:id/files/:filename', (req, res) => {
+    const updated = qThreads.removeFile(req.params.id, req.params.filename);
+    if (!updated) return res.status(404).json({ error: 'Thread not found' });
+    res.json(updated);
+});
+
 // Chat with Q scoped to a Thread — full thread context (all emails + history) on every turn.
+// Q stays the same person here as on the main chat — Q_PERSONA + memory + facts —
+// with the APS overlay added by passing mode:'aps' to qChat.
 router.post('/api/threads/:id/chat', express.json({ limit: '256kb' }), async (req, res) => {
-    const { EMAIL_MANAGER_PROMPT: PROMPT } = require('./plugins/q-email-writer');
     const t = qThreads.readThread(req.params.id);
     if (!t) return res.status(404).json({ error: 'Not found' });
     const { message } = req.body || {};
     if (!message || typeof message !== 'string') return res.status(400).json({ error: 'message required' });
 
-    const messages = [{ role: 'system', content: PROMPT }];
-    if (t.emails.length > 0) {
-        const emailContext = t.emails.map((e, i) => {
-            const dir = e.type === 'in' ? 'RECEIVED' : 'SENT';
-            const meta = [e.from && `from: ${e.from}`, e.to && `to: ${e.to}`, e.date && `date: ${e.date}`, e.subject && `subject: ${e.subject}`].filter(Boolean).join(' · ');
-            return `--- ${dir} #${i + 1}${meta ? ' (' + meta + ')' : ''} ---\n${e.body}`;
-        }).join('\n\n');
-        messages.push({ role: 'user', content: `This is the saved situation "${t.title}". Here's everything so far:\n\n${emailContext}` });
+    const messages = [];
+    if (t.emails.length > 0 || (t.files && t.files.length > 0)) {
+        const parts = [];
+        if (t.emails.length > 0) {
+            parts.push(t.emails.map((e, i) => {
+                const dir = e.type === 'in' ? 'RECEIVED' : 'SENT';
+                const meta = [e.from && `from: ${e.from}`, e.to && `to: ${e.to}`, e.date && `date: ${e.date}`, e.subject && `subject: ${e.subject}`].filter(Boolean).join(' · ');
+                return `--- ${dir} #${i + 1}${meta ? ' (' + meta + ')' : ''} ---\n${e.body}`;
+            }).join('\n\n'));
+        }
+        if (t.files && t.files.length > 0) {
+            parts.push('--- FILES ATTACHED TO THIS THREAD ---\n' +
+                t.files.map(f => `• ${f.filename} (${f.mimeType}, ${(f.size / 1024).toFixed(0)} KB) — uploaded ${f.uploadedAt}`).join('\n'));
+        }
+        messages.push({ role: 'user', content: `This is the saved situation "${t.title}". Here's everything so far:\n\n${parts.join('\n\n')}` });
         messages.push({ role: 'assistant', content: 'Got it — fully up to speed on this case.' });
     }
     for (const h of (t.chatHistory || [])) {
@@ -1135,7 +1164,7 @@ router.post('/api/threads/:id/chat', express.json({ limit: '256kb' }), async (re
     messages.push({ role: 'user', content: message });
 
     try {
-        const result = await qChat(messages, { useTools: true });
+        const result = await qChat(messages, { useTools: true, mode: 'aps', surface: 'thread' });
         if (result.error || !result.reply) {
             return res.status(500).json({ error: result.error || 'No reply from Q' });
         }
@@ -1148,15 +1177,14 @@ router.post('/api/threads/:id/chat', express.json({ limit: '256kb' }), async (re
     }
 });
 
-// Chat with Q about a pasted email — multi-turn project manager mode.
+// Chat with Q about a pasted email — Q's persona + memory + APS overlay (mode:'aps').
 // Body: { emailText, history: [{role, content}], message }
-const { EMAIL_MANAGER_PROMPT } = require('./plugins/q-email-writer');
 router.post('/email-writer/chat', express.json({ limit: '512kb' }), async (req, res) => {
     const { emailText, history, message } = req.body || {};
     if (!message || typeof message !== 'string') {
         return res.status(400).json({ error: 'message required' });
     }
-    const messages = [{ role: 'system', content: EMAIL_MANAGER_PROMPT }];
+    const messages = [];
     if (emailText && typeof emailText === 'string') {
         messages.push({
             role: 'user',
@@ -1164,7 +1192,7 @@ router.post('/email-writer/chat', express.json({ limit: '512kb' }), async (req, 
         });
         messages.push({
             role: 'assistant',
-            content: "Right, I've read it. Tell me what you want to do — draft a reply, set a chase reminder, save this as a folder, or talk it through. I'm on this with you.",
+            content: 'Got it — fully read.',
         });
     }
     if (Array.isArray(history)) {
@@ -1177,7 +1205,7 @@ router.post('/email-writer/chat', express.json({ limit: '512kb' }), async (req, 
     messages.push({ role: 'user', content: message });
 
     try {
-        const result = await qChat(messages, { useTools: true });
+        const result = await qChat(messages, { useTools: true, mode: 'aps', surface: 'email-writer' });
         if (result.error || !result.reply) {
             return res.status(500).json({ error: result.error || 'No reply from Q' });
         }
