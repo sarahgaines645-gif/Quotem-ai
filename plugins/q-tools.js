@@ -988,7 +988,13 @@ function recall({ query = '', limit = 10 } = {}, personId) {
 //
 // Default = remember + recall (cheap, useful for memory). Everything else is
 // gated behind explicit triggers in the user's message.
-const ALWAYS_ON = new Set(['remember', 'recall']);
+const ALWAYS_ON = new Set([
+    'remember', 'recall',
+    // Threads/situations are core memory across surfaces — Q gets these on
+    // every turn so he can correlate to a saved case whenever Sarah refers
+    // to one (anywhere — main chat, email writer, inside a Thread).
+    'list_threads', 'read_thread', 'save_situation',
+]);
 
 const TRIGGERS = {
     web_search: [

@@ -1061,6 +1061,7 @@ router.post('/email-writer/reply', express.json({ limit: '256kb' }), async (req,
 
 // ── THREADS — saved situations (folders) ───────────────────────────────
 const qThreads = require('./plugins/q-threads');
+const { polishUK } = require('./plugins/polish-uk');
 
 router.get('/threads', (req, res) => {
     res.sendFile(path.join(__dirname, 'threads.html'));
@@ -1138,9 +1139,10 @@ router.post('/api/threads/:id/chat', express.json({ limit: '256kb' }), async (re
         if (result.error || !result.reply) {
             return res.status(500).json({ error: result.error || 'No reply from Q' });
         }
+        const polished = polishUK(result.reply);
         qThreads.appendChat(t.id, 'user', message);
-        qThreads.appendChat(t.id, 'assistant', result.reply);
-        res.json({ reply: result.reply });
+        qThreads.appendChat(t.id, 'assistant', polished);
+        res.json({ reply: polished });
     } catch (e) {
         res.status(500).json({ error: e.message || 'Chat failed' });
     }
@@ -1179,7 +1181,7 @@ router.post('/email-writer/chat', express.json({ limit: '512kb' }), async (req, 
         if (result.error || !result.reply) {
             return res.status(500).json({ error: result.error || 'No reply from Q' });
         }
-        res.json({ reply: result.reply, toolCalls: result.toolCalls || [] });
+        res.json({ reply: polishUK(result.reply), toolCalls: result.toolCalls || [] });
     } catch (e) {
         res.status(500).json({ error: e.message || 'Chat failed' });
     }
