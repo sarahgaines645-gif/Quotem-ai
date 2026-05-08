@@ -108,6 +108,18 @@
   .chat-send:disabled { opacity: 0.5; cursor: not-allowed; }
   .chat-typing { font-size: 12px; color: var(--text-muted); padding: 4px 0; font-style: italic; display: none; }
   .chat-typing.show { display: block; }
+  /* Clickable option buttons under a Q message */
+  .chat-options { display: flex; flex-direction: column; gap: 6px; margin: 8px 0 0 40px; max-width: 85%; }
+  .chat-option {
+    background: var(--bg); padding: 10px 14px; border-radius: 12px;
+    box-shadow: var(--neu-raised-sm); text-align: left;
+    font-size: 13px; font-weight: 500; color: var(--text);
+    cursor: pointer; line-height: 1.4; border: none; font-family: inherit;
+    transition: color 0.15s;
+  }
+  .chat-option:hover { color: var(--accent); }
+  .chat-option:active { box-shadow: var(--neu-inset-xs); }
+  .chat-option:disabled { opacity: 0.5; cursor: default; }
 </style>
 </head>
 <body>
@@ -268,6 +280,19 @@ function renderChat() {
   }
 }
 
+function parseOptionsBlock(content) {
+  // Pull a trailing [OPTIONS]...[/OPTIONS] block out of Q's message and
+  // return { stripped, options[] }. Each option is a full answer string.
+  const m = content && content.match(/\[OPTIONS\]([\s\S]*?)\[\/OPTIONS\]\s*$/i);
+  if (!m) return { stripped: content || '', options: [] };
+  const optionsBlock = m[1];
+  const options = optionsBlock
+    .split('\n')
+    .map(l => l.replace(/^\s*[-*]\s*/, '').trim())
+    .filter(Boolean);
+  return { stripped: content.replace(m[0], '').trim(), options };
+}
+
 function appendChatMsg(role, content) {
   const msgEl = document.createElement('div');
   msgEl.className = 'chat-msg ' + (role === 'q' ? 'q' : 'user');
@@ -276,11 +301,39 @@ function appendChatMsg(role, content) {
   avatar.textContent = role === 'q' ? 'Q' : '🙂';
   const bubble = document.createElement('div');
   bubble.className = 'chat-bubble ' + (role === 'q' ? 'q' : 'user');
-  if (role === 'q' && window.marked) bubble.innerHTML = window.marked.parse(content || '');
-  else bubble.textContent = content || '';
+
+  let optionsToRender = [];
+  if (role === 'q') {
+    const { stripped, options } = parseOptionsBlock(content || '');
+    optionsToRender = options;
+    bubble.innerHTML = window.marked ? window.marked.parse(stripped) : stripped.replace(/\n/g, '<br>');
+  } else {
+    bubble.textContent = content || '';
+  }
+
   msgEl.appendChild(avatar);
   msgEl.appendChild(bubble);
   $chatThread.appendChild(msgEl);
+
+  if (optionsToRender.length > 0) {
+    const optsEl = document.createElement('div');
+    optsEl.className = 'chat-options';
+    optionsToRender.forEach(optText => {
+      const btn = document.createElement('button');
+      btn.className = 'chat-option';
+      btn.textContent = optText;
+      btn.addEventListener('click', () => {
+        // Disable all sibling option buttons so the choice is locked.
+        optsEl.querySelectorAll('.chat-option').forEach(b => b.disabled = true);
+        // Send the option text as if Sarah typed it.
+        $chatInput.value = optText;
+        sendMessage();
+      });
+      optsEl.appendChild(btn);
+    });
+    $chatThread.appendChild(optsEl);
+  }
+
   $chatThread.scrollTop = $chatThread.scrollHeight;
 }
 

@@ -150,6 +150,18 @@
   .chat-typing { font-size: 12px; color: var(--text-muted); padding: 4px 0; font-style: italic; }
   .chat-typing.show { display: block; }
   .chat-typing { display: none; }
+  /* Clickable option buttons under a Q message */
+  .chat-options { display: flex; flex-direction: column; gap: 6px; margin: 8px 0 0 40px; max-width: 85%; }
+  .chat-option {
+    background: var(--bg); padding: 10px 14px; border-radius: 12px;
+    box-shadow: var(--neu-raised-sm); text-align: left;
+    font-size: 13px; font-weight: 500; color: var(--text);
+    cursor: pointer; line-height: 1.4; border: none; font-family: inherit;
+    transition: color 0.15s;
+  }
+  .chat-option:hover { color: var(--accent); }
+  .chat-option:active { box-shadow: var(--neu-inset-xs); }
+  .chat-option:disabled { opacity: 0.5; cursor: default; }
 
   /* APS button + advice card */
   .aps-row { display: flex; align-items: center; gap: 10px; margin-top: 14px; flex-wrap: wrap; }
@@ -497,6 +509,15 @@ async function showChatCard() {
   }
 }
 
+function parseOptionsBlock(content) {
+  const m = content && content.match(/\[OPTIONS\]([\s\S]*?)\[\/OPTIONS\]\s*$/i);
+  if (!m) return { stripped: content || '', options: [] };
+  const options = m[1].split('\n')
+    .map(l => l.replace(/^\s*[-*]\s*/, '').trim())
+    .filter(Boolean);
+  return { stripped: content.replace(m[0], '').trim(), options };
+}
+
 function appendChatMsg(role, content) {
   const msgEl = document.createElement('div');
   msgEl.className = 'chat-msg ' + (role === 'q' ? 'q' : 'user');
@@ -505,11 +526,37 @@ function appendChatMsg(role, content) {
   avatar.textContent = role === 'q' ? 'Q' : '🙂';
   const bubble = document.createElement('div');
   bubble.className = 'chat-bubble ' + (role === 'q' ? 'q' : 'user');
-  if (role === 'q' && window.marked) bubble.innerHTML = window.marked.parse(content);
-  else bubble.textContent = content;
+
+  let optionsToRender = [];
+  if (role === 'q') {
+    const { stripped, options } = parseOptionsBlock(content || '');
+    optionsToRender = options;
+    bubble.innerHTML = window.marked ? window.marked.parse(stripped) : stripped.replace(/\n/g, '<br>');
+  } else {
+    bubble.textContent = content || '';
+  }
+
   msgEl.appendChild(avatar);
   msgEl.appendChild(bubble);
   $chatThread.appendChild(msgEl);
+
+  if (optionsToRender.length > 0) {
+    const optsEl = document.createElement('div');
+    optsEl.className = 'chat-options';
+    optionsToRender.forEach(optText => {
+      const btn = document.createElement('button');
+      btn.className = 'chat-option';
+      btn.textContent = optText;
+      btn.addEventListener('click', () => {
+        optsEl.querySelectorAll('.chat-option').forEach(b => b.disabled = true);
+        $chatInput.value = optText;
+        sendChatMessage();
+      });
+      optsEl.appendChild(btn);
+    });
+    $chatThread.appendChild(optsEl);
+  }
+
   $chatThread.scrollTop = $chatThread.scrollHeight;
 }
 
