@@ -717,7 +717,10 @@ async function autoKickoff() {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        message: "Take this case. Run the diagnostic now — call list_threads to see if anything else I have is related, read all the correspondence above, spot the timing gaps and what's wrong, name the rules in my favour, draft any immediate replies, set the chase reminders, research anything you need to with web_search. Then report back. Use 'I've' not 'I could' — completed actions, not offers. The only things you ask me are things only I can answer. You're holding this now.",
+        // silentUser keeps this kickoff prompt out of saved chat history so
+        // it doesn't render as a user message next time the page loads.
+        silentUser: true,
+        message: "Open this case in Phase 1. Run the research sweep first (web_search for rules, deadlines, recent ombudsman rulings, similar cases), then list_threads to spot anything related I've already saved. Then give me the diagnosis: what's happening, why I'm right, the rules in my favour, the gaps in the facts, what they're likely to come back with. Ask me ONE question to fill the most important gap. NO DRAFTING — Phase 1 is diagnosis only. Use 'I've' not 'I could'.",
       }),
     });
     const json = await res.json();

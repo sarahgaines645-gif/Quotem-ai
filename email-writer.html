@@ -495,7 +495,10 @@ async function showChatCard() {
       body: JSON.stringify({
         emailText: currentText || '',
         history: [],
-        message: "I've shown you the email/thread above. Give me your read — what's actually happening, who has the upper hand and why, the angle I might be missing, the rule on my side. Then propose the first concrete move. Lead the way.",
+        // The /email-writer/chat endpoint doesn't currently honour silentUser,
+        // but the email writer's history is page-local (not persisted to a
+        // Thread), so the kickoff naturally disappears on reload.
+        message: "Open this in Phase 1. Run the research sweep first (web_search for rules, deadlines, recent ombudsman rulings, similar cases), then give me the diagnosis: what's happening, why I'm right, the rules in my favour, the gaps in the facts, what they're likely to come back with. Ask me ONE question to fill the most important gap. NO DRAFTING — Phase 1 is diagnosis only. Use 'I've' not 'I could'.",
       }),
     });
     const json = await res.json();

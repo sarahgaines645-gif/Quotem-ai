@@ -1180,7 +1180,7 @@ router.post('/api/threads/:id/draft-action', express.json({ limit: '256kb' }), a
 router.post('/api/threads/:id/chat', express.json({ limit: '256kb' }), async (req, res) => {
     const t = qThreads.readThread(req.params.id);
     if (!t) return res.status(404).json({ error: 'Not found' });
-    const { message } = req.body || {};
+    const { message, silentUser } = req.body || {};
     if (!message || typeof message !== 'string') return res.status(400).json({ error: 'message required' });
 
     const messages = [];
@@ -1213,7 +1213,9 @@ router.post('/api/threads/:id/chat', express.json({ limit: '256kb' }), async (re
             return res.status(500).json({ error: result.error || 'No reply from Q' });
         }
         const polished = polishUK(result.reply);
-        qThreads.appendChat(t.id, 'user', message);
+        if (!silentUser) {
+            qThreads.appendChat(t.id, 'user', message);
+        }
         qThreads.appendChat(t.id, 'assistant', polished);
         res.json({ reply: polished });
     } catch (e) {

@@ -92,6 +92,21 @@ function readThread(id) {
                 console.log('[q-threads] migrated legacy case-summary email -> note for thread ' + t.id);
             }
         }
+        // Lazy migration: strip the old auto-kickoff message from chatHistory.
+        // The previous version saved the kickoff prompt as a user message; it's
+        // now sent silentUser:true. Old threads still have it in history so
+        // remove any user message that opens with the legacy kickoff phrase.
+        if (Array.isArray(t.chatHistory) && t.chatHistory.length > 0) {
+            const isLegacyKickoff = (m) => m && m.role === 'user' && typeof m.content === 'string'
+                && (/^Take this case\.?\s/i.test(m.content)
+                    || /^Open this( case)? in Phase 1\.?\s/i.test(m.content));
+            const before = t.chatHistory.length;
+            t.chatHistory = t.chatHistory.filter(m => !isLegacyKickoff(m));
+            if (t.chatHistory.length !== before) {
+                writeThread(t);
+                console.log('[q-threads] removed ' + (before - t.chatHistory.length) + ' legacy kickoff message(s) from thread ' + t.id);
+            }
+        }
         return t;
     } catch {
         return null;
