@@ -1130,6 +1130,50 @@ router.delete('/api/threads/:id/files/:filename', (req, res) => {
     res.json(updated);
 });
 
+// Draft action — when Q produces a draft email reply in chat, the UI shows
+// three buttons under it: I'll send this / I won't / Save until reminder.
+// Body: { action: 'sent'|'discarded'|'save-until', subject, body, remindIn? }
+router.post('/api/threads/:id/draft-action', express.json({ limit: '256kb' }), async (req, res) => {
+    const { action, subject = '', body = '', remindIn } = req.body || {};
+    if (!action || !['sent', 'discarded', 'save-until'].includes(action)) {
+        return res.status(400).json({ error: 'action must be sent | discarded | save-until' });
+    }
+    const t = qThreads.readThread(req.params.id);
+    if (!t) return res.status(404).json({ error: 'Thread not found' });
+
+    if (action === 'discarded') {
+        return res.json({ ok: true, action });
+    }
+
+    // Both 'sent' and 'save-until' add an outgoing email card.
+    const status = action === 'sent' ? 'sent' : 'draft';
+    const updated = qThreads.addEmail(req.params.id, {
+        type: 'out',
+        from: '', to: '',
+        date: new Date().toLocaleString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }),
+        subject,
+        body: status === 'draft' ? `[DRAFT] ${body}` : body,
+    });
+
+    let reminderInfo = null;
+    if (action === 'save-until' && remindIn) {
+        // Try to schedule a chase reminder via Q's scheduler tool. Soft-fail if
+        // the scheduler isn't reachable — the draft is saved either way.
+        try {
+            const { executeTool } = require('./plugins/q-tools');
+            const result = await executeTool('schedule_reminder', {
+                when: remindIn,
+                what: `Chase the draft on Thread "${t.title}" — ${subject || '(no subject)'}`,
+            });
+            reminderInfo = result;
+        } catch (e) {
+            console.warn('[draft-action] schedule_reminder failed:', e.message);
+        }
+    }
+
+    res.json({ ok: true, action, thread: updated, reminder: reminderInfo });
+});
+
 // Chat with Q scoped to a Thread — full thread context (all emails + history) on every turn.
 // Q stays the same person here as on the main chat — Q_PERSONA + memory + facts —
 // with the APS overlay added by passing mode:'aps' to qChat.

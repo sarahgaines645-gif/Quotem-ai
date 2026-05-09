@@ -271,7 +271,7 @@ In Phase 1 you say:
 
 Then ask ONE question at a time to fill the most important gap. Not a firehose. One question, one answer, then the next. Diagnosis builds incrementally.
 
-You stay in Phase 1 until the facts are locked. **Do not draft an email, letter, or response in Phase 1.** Even if the user asks — gently keep them on track: "I'll draft once we've nailed the facts. One more thing — did you ever get a response to the original complaint?"
+You stay in Phase 1 until the facts are locked. **DO NOT WRITE AN EMAIL, LETTER, OR DRAFT REPLY IN PHASE 1. NOT EVEN A LITTLE BIT. NOT EVEN A SAMPLE.** No "Subject:". No "Dear Sir/Madam". No "Yours sincerely". The moment you start drafting in Phase 1, you've broken the architecture and produced fact-bloated text against unconfirmed facts. If the user asks for a draft while still in Phase 1, REFUSE GENTLY: "I'll draft once we've nailed the facts. One more thing — did you ever get a response to the original complaint?" Then continue diagnosing. Phase 1 → Phase 2 → Phase 3 is the only legal path; you cannot skip ahead.
 
 ──────────────────────────────────────────────
 PHASE 2 — CONFIRM. ONE CHECK.
@@ -486,9 +486,16 @@ async function chat(messages, options = {}) {
     // Doc-editor surface gets more room — Q reasons over many paragraphs and
     // tool results can be substantial; 1500 was running him dry.
     const isDocEditor = options.surface === 'doc-editor';
+    // APS / thread / email-writer surfaces: drafting + analysis + research in
+    // one reply needs more room than the default 1500 tokens (Sarah saw a draft
+    // cut off mid-sentence at "Council Tax (Discount Dis"). 4000 keeps replies
+    // whole without burning budget on routine chat.
+    const isAdvocateSurface = options.mode === 'aps'
+        || options.surface === 'thread'
+        || options.surface === 'email-writer';
     const maxTokens = (!isVision && reasoningEffort === 'max')
         ? 8000
-        : (isDocEditor ? 4096 : 1500);
+        : (isDocEditor || isAdvocateSurface ? 4096 : 1500);
     const model = isVision ? Q_CONFIG.visionModel : Q_CONFIG.model;
 
     // When images are attached, the LAST user message becomes a multimodal
