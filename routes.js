@@ -1109,11 +1109,45 @@ router.delete('/api/threads/:id', (req, res) => {
     res.json({ ok });
 });
 
-// File attachments — base64 in JSON body for simplicity (no multipart parser dep)
+// File attachments — base64 in JSON body for simplicity (no multipart parser dep).
+// Detects email-format uploads (.eml or text with From:/To:/Subject: headers) and
+// routes them to addEmail so they land on the Correspondence timeline instead of
+// the Files section.
 router.post('/api/threads/:id/files', express.json({ limit: '50mb' }), (req, res) => {
+    const { filename = '', mimeType = '', base64 } = req.body || {};
+
+    const looksLikeEmailFile = /\.(eml|msg)$/i.test(filename)
+        || mimeType.includes('rfc822')
+        || mimeType.includes('message/');
+
+    const isTextFile = mimeType.startsWith('text/')
+        || /\.(txt|text|md)$/i.test(filename)
+        || mimeType === '';
+
+    if ((looksLikeEmailFile || isTextFile) && base64) {
+        try {
+            const text = Buffer.from(base64, 'base64').toString('utf-8');
+            const parsed = qThreads.parseEmailContent(text);
+            if (parsed) {
+                const updated = qThreads.addEmail(req.params.id, {
+                    type: 'in',  // default to received; user can flip on the card later
+                    from: parsed.from,
+                    to: parsed.to,
+                    date: parsed.date,
+                    subject: parsed.subject,
+                    body: parsed.body,
+                });
+                if (updated) return res.json({ ...updated, savedAs: 'email' });
+            }
+        } catch (e) {
+            // Fall through to file save
+            console.warn('[threads] email parse failed for ' + filename + ': ' + e.message);
+        }
+    }
+
     const updated = qThreads.addFile(req.params.id, req.body || {});
     if (!updated) return res.status(400).json({ error: 'Could not save file (thread not found or filename/base64 missing)' });
-    res.json(updated);
+    res.json({ ...updated, savedAs: 'file' });
 });
 
 router.get('/api/threads/:id/files/:filename', (req, res) => {

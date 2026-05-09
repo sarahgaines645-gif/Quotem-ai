@@ -271,6 +271,37 @@ function deleteThread(id) {
 }
 
 
+/**
+ * Best-effort email parser — pulls From/To/Subject/Date and body out of a
+ * .eml-style or pasted-headers text blob. Returns null if it doesn't look
+ * like an email (so the caller can fall back to treating it as a file).
+ */
+function parseEmailContent(text) {
+    if (!text || typeof text !== 'string') return null;
+    const trimmed = text.replace(/^﻿/, ''); // strip BOM if present
+    // Find header / body separator (blank line)
+    const sep = trimmed.search(/\r?\n\r?\n/);
+    const headers = sep === -1 ? trimmed : trimmed.slice(0, sep);
+    const body    = sep === -1 ? ''      : trimmed.slice(sep).replace(/^\r?\n\r?\n/, '');
+
+    const hasFrom    = /^from:\s*\S/im.test(headers);
+    const hasSubject = /^subject:\s*\S/im.test(headers);
+    const hasTo      = /^to:\s*\S/im.test(headers);
+    if (!hasFrom && !hasSubject && !hasTo) return null;
+
+    const get = (key) => {
+        const m = headers.match(new RegExp(`^${key}:\\s*(.+(?:\\r?\\n[ \\t].+)*)`, 'im'));
+        return m ? m[1].replace(/\r?\n[ \t]+/g, ' ').trim() : '';
+    };
+    return {
+        from:    get('from'),
+        to:      get('to'),
+        subject: get('subject'),
+        date:    get('date'),
+        body:    body.trim() || trimmed.trim(),
+    };
+}
+
 module.exports = {
     listThreads,
     readThread,
@@ -284,4 +315,5 @@ module.exports = {
     addFile,
     readFile,
     removeFile,
+    parseEmailContent,
 };

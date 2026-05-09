@@ -244,6 +244,7 @@
 
   <div class="section-label">💬 Q on the case</div>
   <div class="chat-card">
+    <button id="kickoff-btn" style="display:none; width: 100%; border: none; cursor: pointer; background: var(--accent); color: white; font-family: inherit; font-size: 15px; font-weight: 700; padding: 14px 18px; border-radius: 12px; box-shadow: var(--neu-raised-sm); margin-bottom: 14px; letter-spacing: -0.01em;">🪄 Q, take this case — I'm done adding things</button>
     <div class="chat-thread" id="chat-thread"></div>
     <div class="chat-typing" id="chat-typing">Q is thinking…</div>
     <div class="chat-input-row">
@@ -303,24 +304,30 @@ function fmtAgo(iso) {
   return d + 'd ago';
 }
 
-function pillForResponseTime(currentEmail, prevOpposite) {
-  if (!prevOpposite) return { text: 'first message', class: 'none' };
-  // Use email.date if parseable, else fall back to addedAt
-  const a = parseDateLoose(prevOpposite.date) || new Date(prevOpposite.addedAt);
+function pillForResponseTime(currentEmail, prevAny, prevOpposite) {
+  if (!prevAny) return { text: 'first message', class: 'none' };
+  // Use email.date if parseable, else fall back to addedAt as a soft signal
+  const a = parseDateLoose(prevAny.date) || new Date(prevAny.addedAt);
   const b = parseDateLoose(currentEmail.date) || new Date(currentEmail.addedAt);
   const ms = b.getTime() - a.getTime();
   if (ms < 0 || isNaN(ms)) return { text: '', class: 'none' };
   const days = ms / 86_400_000;
-  const direction = currentEmail.type === 'in' ? 'they replied' : 'you replied';
-  if (days < 1) return { text: direction + ' same day', class: 'fast' };
-  if (days < 2) return { text: direction + ' next day', class: 'fast' };
-  if (days < 7) return { text: `${direction} in ${Math.round(days)} day${Math.round(days)===1?'':'s'}`, class: days < 4 ? 'fast' : 'slow' };
+
+  // If this email changes direction, name who replied. Otherwise it's a follow-up.
+  const directionChanged = prevOpposite && prevOpposite === prevAny;
+  const verb = directionChanged
+    ? (currentEmail.type === 'in' ? 'they replied' : 'you replied')
+    : 'follow-up';
+
+  if (days < 1)  return { text: verb + ' same day',  class: 'fast' };
+  if (days < 2)  return { text: verb + ' next day',  class: 'fast' };
+  if (days < 7)  return { text: `${verb} ${Math.round(days)}d later`, class: days < 4 ? 'fast' : 'slow' };
   if (days < 31) {
     const wks = Math.round(days / 7);
-    return { text: `${direction} after ${wks} week${wks===1?'':'s'}`, class: wks <= 2 ? 'slow' : 'bad' };
+    return { text: `${verb} ${wks}w later`, class: wks <= 2 ? 'slow' : 'bad' };
   }
   const months = Math.round(days / 30);
-  return { text: `${direction} after ${months} month${months===1?'':'s'}`, class: 'bad' };
+  return { text: `${verb} ${months}mo later`, class: 'bad' };
 }
 
 function parseDateLoose(s) {
@@ -338,8 +345,9 @@ function renderEmails() {
     return;
   }
   emails.forEach((e, i) => {
+    const prevAny = i > 0 ? emails[i - 1] : null;
     const prevOpposite = [...emails.slice(0, i)].reverse().find(p => p.type !== e.type);
-    const pill = pillForResponseTime(e, prevOpposite);
+    const pill = pillForResponseTime(e, prevAny, prevOpposite);
 
     const card = document.createElement('div');
     card.className = 'email-card';
@@ -354,12 +362,13 @@ function renderEmails() {
     const previewSrc = e.subject ? bodyText : bodyText.slice(firstLine.length).trim();
     const preview = previewSrc.replace(/\s+/g, ' ').slice(0, 110);
 
-    // Sub-line: from / to / date
+    // Sub-line: from / to / date — date is the EMAIL's own date if known,
+    // otherwise nothing. We never fall back to upload time on the visible card.
     const ppl = e.type === 'in'
       ? (e.from ? `From <b>${escapeHtml(e.from)}</b>` : '')
       : (e.to   ? `To <b>${escapeHtml(e.to)}</b>`     : '');
-    const dt = e.date || fmtAgo(e.addedAt);
-    const subParts = [ppl, escapeHtml(dt)].filter(Boolean).join(' · ');
+    const dt = e.date ? escapeHtml(e.date) : '';
+    const subParts = [ppl, dt].filter(Boolean).join(' · ');
 
     card.innerHTML = `
       <div class="email-head">
@@ -470,9 +479,18 @@ async function handleFiles(fileList) {
         }),
       });
       if (!res.ok) throw new Error('HTTP ' + res.status);
-      thread = await res.json();
+      const json = await res.json();
+      const savedAs = json.savedAs;
+      thread = json;
+      // The server may have detected this as an email and routed it to addEmail
+      // instead of addFile — re-render both sections to be safe.
+      renderEmails();
       renderFiles();
-      $uploadStatus.textContent = 'Uploaded ' + file.name;
+      refreshKickoffButton();
+      $uploadStatus.textContent = savedAs === 'email'
+        ? '📥 Read as email and added to the timeline: ' + file.name
+        : '📎 Uploaded as file: ' + file.name;
+      pingQOnUpdate(savedAs === 'email' ? 'a new email' : 'a new file');
     } catch (e) {
       $uploadStatus.textContent = 'Upload failed: ' + (e.message || 'unknown');
     }
@@ -700,14 +718,44 @@ async function loadThread() {
   renderEmails();
   renderFiles();
   renderChat();
-  // Auto-kickoff: if there's content but Q hasn't spoken yet, get him to take the case
-  // and run the diagnostic before Sarah has to ask. The kickoff message itself
-  // is sent as a hidden user message — only Q's reply renders.
-  const hasContent = (thread.emails || []).length > 0 || (thread.notes || []).length > 0;
-  const noQYet     = !(thread.chatHistory || []).some(m => m.role === 'assistant');
-  if (hasContent && noQYet) {
-    autoKickoff();
-  }
+  refreshKickoffButton();
+}
+
+// Show the "Q, take this case" button when there's content but Q hasn't spoken yet.
+// Q only fires when Sarah explicitly hands him the case — no surprise auto-kicks
+// while she's mid-upload.
+function refreshKickoffButton() {
+  const $btn = document.getElementById('kickoff-btn');
+  const hasContent = (thread.emails || []).length > 0 || (thread.notes || []).length > 0 || (thread.files || []).length > 0;
+  const qHasSpoken = (thread.chatHistory || []).some(m => m.role === 'assistant');
+  $btn.style.display = (hasContent && !qHasSpoken) ? 'block' : 'none';
+}
+
+document.getElementById('kickoff-btn').addEventListener('click', () => {
+  document.getElementById('kickoff-btn').style.display = 'none';
+  autoKickoff();
+});
+
+// After Q has been engaged with the case, anything Sarah adds (email, file)
+// fires a silent ping so Q reads it and updates his diagnosis. Before kickoff
+// (i.e. while Sarah's still loading the thread) — silent, no fires.
+async function pingQOnUpdate(what) {
+  const qHasSpoken = (thread.chatHistory || []).some(m => m.role === 'assistant');
+  if (!qHasSpoken) return;
+  $chatTyping.classList.add('show');
+  try {
+    const res = await fetch('/api/threads/' + threadId + '/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        silentUser: true,
+        message: `I've just added ${what} to the case. Read it, see what changes, and tell me only what's new in your diagnosis or what's now a different next move. Keep it short.`,
+      }),
+    });
+    const json = await res.json();
+    if (res.ok) appendChatMsg('q', json.reply);
+  } catch { /* silent fail */ }
+  finally { $chatTyping.classList.remove('show'); }
 }
 
 async function autoKickoff() {
@@ -796,8 +844,10 @@ $aeSave.addEventListener('click', async () => {
     if (!res.ok) throw new Error('HTTP ' + res.status);
     thread = await res.json();
     renderEmails();
+    refreshKickoffButton();
     $aeCard.classList.add('collapsed');
     ['ae-from','ae-to','ae-date','ae-subject','ae-body'].forEach(id => document.getElementById(id).value = '');
+    pingQOnUpdate('a new email');
   } catch (e) {
     alert('Could not add email: ' + e.message);
   } finally {
