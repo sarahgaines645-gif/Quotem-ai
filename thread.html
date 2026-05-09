@@ -355,11 +355,18 @@ function parseDateLoose(s) {
 
 function renderEmails() {
   $emailList.innerHTML = '';
-  const emails = thread.emails || [];
-  if (!emails.length) {
+  const raw = thread.emails || [];
+  if (!raw.length) {
     $emailList.innerHTML = '<div style="font-size:13px;color:var(--text-faint);text-align:center;padding:20px;">No emails yet — click "Add an email" below.</div>';
     return;
   }
+  // Sort the timeline by the email's actual date. Fall back to addedAt if
+  // the email's own date is missing/unparseable. Earliest first.
+  const emails = [...raw].sort((a, b) => {
+    const aT = (parseDateLoose(a.date) || new Date(a.addedAt || 0)).getTime();
+    const bT = (parseDateLoose(b.date) || new Date(b.addedAt || 0)).getTime();
+    return aT - bT;
+  });
   emails.forEach((e, i) => {
     const prevAny = i > 0 ? emails[i - 1] : null;
     const prevOpposite = [...emails.slice(0, i)].reverse().find(p => p.type !== e.type);
