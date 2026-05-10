@@ -4,6 +4,8 @@
      bold Q (700) with: circular ring + short tail + the pink brand dot.
      Colours match chat.html: text #1a1a1a, accent #e91e63. -->
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Q">
+  <!-- White background square -->
+  <rect width="64" height="64" fill="#ffffff"/>
   <!-- Q bowl: solid filled letterform via even-odd (outer disk minus inner counter) -->
   <path fill="#1a1a1a" fill-rule="evenodd"
         d="M22,11 a19,19 0 1,0 0,38 a19,19 0 1,0 0,-38 z
