@@ -633,7 +633,7 @@ async function chat(messages, options = {}) {
                 const name = call.function?.name || 'unknown';
                 const argsRaw = call.function?.arguments || '{}';
                 const callStart = Date.now();
-                const result = await executeTool(name, argsRaw, options.person?.id);
+                const result = await executeTool(name, argsRaw, options.person?.id, options.person?.email);
                 const callMs = Date.now() - callStart;
                 toolCalls.push({
                     name,

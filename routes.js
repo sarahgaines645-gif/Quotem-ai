@@ -1060,8 +1060,23 @@ router.post('/email-writer/reply', express.json({ limit: '256kb' }), async (req,
 });
 
 // ── THREADS — saved situations (folders) ───────────────────────────────
+// Every Thread is owned by ONE user (by email). All routes here require
+// sign-in via requirePerson and only operate on Threads owned by req.person.
 const qThreads = require('./plugins/q-threads');
 const { polishUK } = require('./plugins/polish-uk');
+const { requirePerson } = require('./auth');
+
+// Helper: ownership-checked read. Returns the thread only if the current
+// person owns it; otherwise sends 404 (deliberately not 403 — we don't want
+// to leak the existence of other users' threads).
+function readOwnedThread(req, res) {
+    const t = qThreads.readThread(req.params.id, req.person.email);
+    if (!t) {
+        res.status(404).json({ error: 'Not found' });
+        return null;
+    }
+    return t;
+}
 
 router.get('/threads', (req, res) => {
     res.sendFile(path.join(__dirname, 'threads.html'));
@@ -1071,49 +1086,60 @@ router.get('/thread/:id', (req, res) => {
     res.sendFile(path.join(__dirname, 'thread.html'));
 });
 
-router.get('/api/threads', (req, res) => {
-    res.json(qThreads.listThreads());
+router.get('/api/threads', requirePerson, (req, res) => {
+    res.json(qThreads.listThreads(req.person.email));
 });
 
-router.get('/api/threads/:id', (req, res) => {
-    const t = qThreads.readThread(req.params.id);
-    if (!t) return res.status(404).json({ error: 'Not found' });
-    res.json(t);
+router.get('/api/threads/:id', requirePerson, (req, res) => {
+    const t = readOwnedThread(req, res);
+    if (t) res.json(t);
 });
 
-router.post('/api/threads', express.json({ limit: '256kb' }), (req, res) => {
+router.post('/api/threads', requirePerson, express.json({ limit: '256kb' }), (req, res) => {
     const { title, summary, content } = req.body || {};
     if (!title) return res.status(400).json({ error: 'title required' });
     try {
-        const thread = qThreads.createThread({ title, summary, content });
+        const thread = qThreads.createThread({ title, summary, content, ownerEmail: req.person.email });
         res.json(thread);
     } catch (e) {
         res.status(500).json({ error: e.message });
     }
 });
 
-router.post('/api/threads/:id/emails', express.json({ limit: '256kb' }), (req, res) => {
+router.post('/api/threads/:id/emails', requirePerson, express.json({ limit: '256kb' }), (req, res) => {
+    if (!readOwnedThread(req, res)) return;
     const updated = qThreads.addEmail(req.params.id, req.body || {});
     if (!updated) return res.status(404).json({ error: 'Not found' });
     res.json(updated);
 });
 
-router.patch('/api/threads/:id', express.json({ limit: '32kb' }), (req, res) => {
+router.patch('/api/threads/:id', requirePerson, express.json({ limit: '32kb' }), (req, res) => {
+    if (!readOwnedThread(req, res)) return;
     const updated = qThreads.updateThread(req.params.id, req.body || {});
     if (!updated) return res.status(404).json({ error: 'Not found' });
     res.json(updated);
 });
 
-router.delete('/api/threads/:id', (req, res) => {
+router.delete('/api/threads/:id', requirePerson, (req, res) => {
+    if (!readOwnedThread(req, res)) return;
     const ok = qThreads.deleteThread(req.params.id);
     res.json({ ok });
+});
+
+// One-time legacy claim — Sarah's existing Threads were created without
+// owner-scoping and got locked to '__legacy__' on next read. This endpoint
+// claims every '__legacy__' Thread for the calling user. Run once.
+router.post('/api/threads/claim-legacy', requirePerson, (req, res) => {
+    const result = qThreads.claimLegacyThreads(req.person.email);
+    res.json(result);
 });
 
 // File attachments — base64 in JSON body for simplicity (no multipart parser dep).
 // Detects email-format uploads (.eml or text with From:/To:/Subject: headers) and
 // routes them to addEmail so they land on the Correspondence timeline instead of
 // the Files section.
-router.post('/api/threads/:id/files', express.json({ limit: '50mb' }), (req, res) => {
+router.post('/api/threads/:id/files', requirePerson, express.json({ limit: '50mb' }), (req, res) => {
+    if (!readOwnedThread(req, res)) return;
     const { filename = '', mimeType = '', base64 } = req.body || {};
 
     const looksLikeEmailFile = /\.(eml|msg)$/i.test(filename)
@@ -1150,7 +1176,8 @@ router.post('/api/threads/:id/files', express.json({ limit: '50mb' }), (req, res
     res.json({ ...updated, savedAs: 'file' });
 });
 
-router.get('/api/threads/:id/files/:filename', (req, res) => {
+router.get('/api/threads/:id/files/:filename', requirePerson, (req, res) => {
+    if (!readOwnedThread(req, res)) return;
     const file = qThreads.readFile(req.params.id, req.params.filename);
     if (!file) return res.status(404).json({ error: 'File not found' });
     res.setHeader('Content-Type', file.mimeType);
@@ -1158,7 +1185,8 @@ router.get('/api/threads/:id/files/:filename', (req, res) => {
     res.end(file.buffer);
 });
 
-router.delete('/api/threads/:id/files/:filename', (req, res) => {
+router.delete('/api/threads/:id/files/:filename', requirePerson, (req, res) => {
+    if (!readOwnedThread(req, res)) return;
     const updated = qThreads.removeFile(req.params.id, req.params.filename);
     if (!updated) return res.status(404).json({ error: 'Thread not found' });
     res.json(updated);
@@ -1167,12 +1195,12 @@ router.delete('/api/threads/:id/files/:filename', (req, res) => {
 // Draft action — when Q produces a draft email reply in chat, the UI shows
 // three buttons under it: I'll send this / I won't / Save until reminder.
 // Body: { action: 'sent'|'discarded'|'save-until', subject, body, remindIn? }
-router.post('/api/threads/:id/draft-action', express.json({ limit: '256kb' }), async (req, res) => {
+router.post('/api/threads/:id/draft-action', requirePerson, express.json({ limit: '256kb' }), async (req, res) => {
     const { action, subject = '', body = '', remindIn } = req.body || {};
     if (!action || !['sent', 'discarded', 'save-until'].includes(action)) {
         return res.status(400).json({ error: 'action must be sent | discarded | save-until' });
     }
-    const t = qThreads.readThread(req.params.id);
+    const t = qThreads.readThread(req.params.id, req.person.email);
     if (!t) return res.status(404).json({ error: 'Thread not found' });
 
     if (action === 'discarded') {
@@ -1211,8 +1239,8 @@ router.post('/api/threads/:id/draft-action', express.json({ limit: '256kb' }), a
 // Chat with Q scoped to a Thread — full thread context (all emails + history) on every turn.
 // Q stays the same person here as on the main chat — Q_PERSONA + memory + facts —
 // with the APS overlay added by passing mode:'aps' to qChat.
-router.post('/api/threads/:id/chat', express.json({ limit: '256kb' }), async (req, res) => {
-    const t = qThreads.readThread(req.params.id);
+router.post('/api/threads/:id/chat', requirePerson, express.json({ limit: '256kb' }), async (req, res) => {
+    const t = qThreads.readThread(req.params.id, req.person.email);
     if (!t) return res.status(404).json({ error: 'Not found' });
     const { message, silentUser } = req.body || {};
     if (!message || typeof message !== 'string') return res.status(400).json({ error: 'message required' });
@@ -1242,7 +1270,7 @@ router.post('/api/threads/:id/chat', express.json({ limit: '256kb' }), async (re
     messages.push({ role: 'user', content: message });
 
     try {
-        const result = await qChat(messages, { useTools: true, mode: 'aps', surface: 'thread' });
+        const result = await qChat(messages, { useTools: true, mode: 'aps', surface: 'thread', person: req.person });
         if (result.error || !result.reply) {
             return res.status(500).json({ error: result.error || 'No reply from Q' });
         }
@@ -1259,7 +1287,7 @@ router.post('/api/threads/:id/chat', express.json({ limit: '256kb' }), async (re
 
 // Chat with Q about a pasted email — Q's persona + memory + APS overlay (mode:'aps').
 // Body: { emailText, history: [{role, content}], message }
-router.post('/email-writer/chat', express.json({ limit: '512kb' }), async (req, res) => {
+router.post('/email-writer/chat', requirePerson, express.json({ limit: '512kb' }), async (req, res) => {
     const { emailText, history, message } = req.body || {};
     if (!message || typeof message !== 'string') {
         return res.status(400).json({ error: 'message required' });
@@ -1285,7 +1313,7 @@ router.post('/email-writer/chat', express.json({ limit: '512kb' }), async (req, 
     messages.push({ role: 'user', content: message });
 
     try {
-        const result = await qChat(messages, { useTools: true, mode: 'aps', surface: 'email-writer' });
+        const result = await qChat(messages, { useTools: true, mode: 'aps', surface: 'email-writer', person: req.person });
         if (result.error || !result.reply) {
             return res.status(500).json({ error: result.error || 'No reply from Q' });
         }

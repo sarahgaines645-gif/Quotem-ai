@@ -51,8 +51,18 @@ function uniqueId(base) {
 }
 
 
-function listThreads() {
+// Owner used to lock legacy Threads (created before owner-scoping shipped) so
+// they're invisible to everyone. Sarah can recover them via /api/threads/claim-legacy.
+const LEGACY_OWNER = '__legacy__';
+
+function normaliseOwner(email) {
+    return String(email || '').trim().toLowerCase();
+}
+
+function listThreads(ownerEmail) {
     ensureDir();
+    const owner = normaliseOwner(ownerEmail);
+    if (!owner) return [];
     try {
         return fs.readdirSync(VOLUME_DIR)
             .filter(f => f.endsWith('.json'))
@@ -60,7 +70,7 @@ function listThreads() {
                 try { return JSON.parse(fs.readFileSync(path.join(VOLUME_DIR, f), 'utf8')); }
                 catch { return null; }
             })
-            .filter(Boolean)
+            .filter(t => t && normaliseOwner(t.ownerEmail) === owner)
             .sort((a, b) => String(b.updatedAt || '').localeCompare(String(a.updatedAt || '')));
     } catch {
         return [];
@@ -68,9 +78,23 @@ function listThreads() {
 }
 
 
-function readThread(id) {
+function readThread(id, ownerEmail) {
     try {
         const t = JSON.parse(fs.readFileSync(pathFor(id), 'utf8'));
+        // Lock legacy Threads (created before owner-scoping shipped) to a
+        // placeholder owner that nobody can match. Sarah recovers them via
+        // /api/threads/claim-legacy.
+        if (!t.ownerEmail) {
+            t.ownerEmail = LEGACY_OWNER;
+            writeThread(t);
+            console.log('[q-threads] locked legacy thread ' + t.id + ' to __legacy__');
+        }
+        // If a caller passed an ownerEmail, enforce it. No email = internal call
+        // (e.g. tools), still allowed but treat with care.
+        if (ownerEmail !== undefined) {
+            const owner = normaliseOwner(ownerEmail);
+            if (!owner || normaliseOwner(t.ownerEmail) !== owner) return null;
+        }
         // Lazy migration: earlier versions of save_situation stored the case-
         // summary content as a fake email in emails[0]. Spot that exact shape
         // and move the content into notes where it belongs. The heuristic is
@@ -122,12 +146,15 @@ function writeThread(thread) {
 }
 
 
-function createThread({ title, summary = '', content = '' } = {}) {
+function createThread({ title, summary = '', content = '', ownerEmail = '' } = {}) {
     if (!title) throw new Error('title is required');
+    const owner = normaliseOwner(ownerEmail);
+    if (!owner) throw new Error('ownerEmail is required — Threads must be owned by a person');
     const id = uniqueId(slugify(title));
     const now = new Date().toISOString();
     const thread = {
         id,
+        ownerEmail: owner,
         title,
         summary,
         status: 'open',
@@ -272,6 +299,35 @@ function deleteThread(id) {
 
 
 /**
+ * One-time recovery: claim every legacy Thread (those locked to '__legacy__'
+ * because they were created before owner-scoping shipped) for a given email.
+ * Returns the count claimed. Called by Sarah after the security fix deploys
+ * so she can recover her existing case data.
+ */
+function claimLegacyThreads(ownerEmail) {
+    ensureDir();
+    const owner = normaliseOwner(ownerEmail);
+    if (!owner) return { claimed: 0, error: 'ownerEmail required' };
+    let claimed = 0;
+    try {
+        for (const f of fs.readdirSync(VOLUME_DIR)) {
+            if (!f.endsWith('.json')) continue;
+            try {
+                const filepath = path.join(VOLUME_DIR, f);
+                const t = JSON.parse(fs.readFileSync(filepath, 'utf8'));
+                if (normaliseOwner(t.ownerEmail) === LEGACY_OWNER) {
+                    t.ownerEmail = owner;
+                    t.updatedAt = new Date().toISOString();
+                    fs.writeFileSync(filepath, JSON.stringify(t, null, 2), 'utf8');
+                    claimed++;
+                }
+            } catch { /* skip bad file */ }
+        }
+    } catch { /* dir issue */ }
+    return { claimed };
+}
+
+/**
  * Best-effort email parser — pulls From/To/Subject/Date and body out of a
  * .eml-style or pasted-headers text blob. Returns null if it doesn't look
  * like an email (so the caller can fall back to treating it as a file).
@@ -316,4 +372,7 @@ module.exports = {
     readFile,
     removeFile,
     parseEmailContent,
+    claimLegacyThreads,
+    LEGACY_OWNER,
+    normaliseOwner,
 };

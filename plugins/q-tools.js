@@ -692,7 +692,7 @@ async function analyzeDocument({ image_url, question }) {
  * Execute a tool by name with its arguments. Always returns an object —
  * never throws. Errors are returned as { error: '...' } so Q sees them.
  */
-async function executeTool(name, argsRaw, personId) {
+async function executeTool(name, argsRaw, personId, personEmail) {
     let args = argsRaw;
     if (typeof argsRaw === 'string') {
         try { args = JSON.parse(argsRaw); }
@@ -726,11 +726,11 @@ async function executeTool(name, argsRaw, personId) {
         case 'generate_music':    return await generateMusicTool(args);
         case 'generate_video':    return await generateVideoTool(args);
         case 'speak_as_q':        return await speakAsQTool(args);
-        case 'save_situation':       return saveSituation(args);
-        case 'list_threads':         return listThreadsTool();
-        case 'read_thread':          return readThreadTool(args);
-        case 'add_email_to_thread':  return addEmailToThreadTool(args);
-        case 'add_note_to_thread':   return addNoteToThreadTool(args);
+        case 'save_situation':       return saveSituation(args, personEmail);
+        case 'list_threads':         return listThreadsTool(personEmail);
+        case 'read_thread':          return readThreadTool(args, personEmail);
+        case 'add_email_to_thread':  return addEmailToThreadTool(args, personEmail);
+        case 'add_note_to_thread':   return addNoteToThreadTool(args, personEmail);
         default:                 return { error: `Unknown tool: "${name}"` };
     }
 }
@@ -926,10 +926,11 @@ async function speakAsQTool({ text } = {}) {
  * working on any one at /thread/{id}.
  */
 const qThreads = require('./q-threads');
-function saveSituation({ title, summary, content } = {}) {
+function saveSituation({ title, summary, content } = {}, personEmail) {
     if (!title || typeof title !== 'string') return { error: 'title (string) is required' };
+    if (!personEmail) return { error: 'Cannot save without a signed-in user.' };
     try {
-        const thread = qThreads.createThread({ title, summary: summary || '', content: content || '' });
+        const thread = qThreads.createThread({ title, summary: summary || '', content: content || '', ownerEmail: personEmail });
         const url = `/thread/${thread.id}`;
         return {
             ok: true,
@@ -947,9 +948,10 @@ function saveSituation({ title, summary, content } = {}) {
  * list_threads — return a compact list of all of Sarah's saved Threads
  * so Q can match her words to a real saved situation.
  */
-function listThreadsTool() {
+function listThreadsTool(personEmail) {
+    if (!personEmail) return { error: 'Cannot list threads without a signed-in user.' };
     try {
-        const threads = qThreads.listThreads();
+        const threads = qThreads.listThreads(personEmail);
         return {
             count: threads.length,
             threads: threads.map(t => ({
@@ -973,9 +975,10 @@ function listThreadsTool() {
  * read_thread — load one Thread's full contents (emails, chat history, notes)
  * so Q can speak about the case knowledgeably.
  */
-function readThreadTool({ id } = {}) {
+function readThreadTool({ id } = {}, personEmail) {
     if (!id || typeof id !== 'string') return { error: 'id (string) is required' };
-    const t = qThreads.readThread(id);
+    if (!personEmail) return { error: 'Cannot read a thread without a signed-in user.' };
+    const t = qThreads.readThread(id, personEmail);
     if (!t) return { error: 'Thread not found: ' + id };
     return {
         id: t.id,
@@ -992,9 +995,13 @@ function readThreadTool({ id } = {}) {
 /**
  * add_email_to_thread — append a real email card to an existing Thread.
  */
-function addEmailToThreadTool({ threadId, type, from, to, date, subject, body } = {}) {
+function addEmailToThreadTool({ threadId, type, from, to, date, subject, body } = {}, personEmail) {
     if (!threadId) return { error: 'threadId is required' };
     if (!body) return { error: 'body is required' };
+    if (!personEmail) return { error: 'Cannot mutate a thread without a signed-in user.' };
+    // Ownership check — only the owner can append to a Thread.
+    const owned = qThreads.readThread(threadId, personEmail);
+    if (!owned) return { error: 'Thread not found: ' + threadId };
     const updated = qThreads.addEmail(threadId, { type, from, to, date, subject, body });
     if (!updated) return { error: 'Thread not found: ' + threadId };
     return {
@@ -1008,9 +1015,12 @@ function addEmailToThreadTool({ threadId, type, from, to, date, subject, body } 
 /**
  * add_note_to_thread — append a free-form note to an existing Thread.
  */
-function addNoteToThreadTool({ threadId, content, kind } = {}) {
+function addNoteToThreadTool({ threadId, content, kind } = {}, personEmail) {
     if (!threadId) return { error: 'threadId is required' };
     if (!content) return { error: 'content is required' };
+    if (!personEmail) return { error: 'Cannot mutate a thread without a signed-in user.' };
+    const owned = qThreads.readThread(threadId, personEmail);
+    if (!owned) return { error: 'Thread not found: ' + threadId };
     const updated = qThreads.addNote(threadId, { content, kind });
     if (!updated) return { error: 'Thread not found: ' + threadId };
     return {
