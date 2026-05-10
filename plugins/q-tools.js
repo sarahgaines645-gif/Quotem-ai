@@ -1006,7 +1006,7 @@ function addEmailToThreadTool({ threadId, type, from, to, date, subject, body } 
     // Ownership check — only the owner can append to a Thread.
     const owned = qThreads.readThread(threadId, personEmail);
     if (!owned) return { error: 'Thread not found: ' + threadId };
-    const updated = qThreads.addEmail(threadId, { type, from, to, date, subject, body });
+    const updated = qThreads.addEmail(threadId, { type, from, to, date, subject, body }, personEmail);
     if (!updated) return { error: 'Thread not found: ' + threadId };
     return {
         ok: true,
@@ -1025,7 +1025,7 @@ function addNoteToThreadTool({ threadId, content, kind } = {}, personEmail) {
     if (!personEmail) return { error: 'Cannot mutate a thread without a signed-in user.' };
     const owned = qThreads.readThread(threadId, personEmail);
     if (!owned) return { error: 'Thread not found: ' + threadId };
-    const updated = qThreads.addNote(threadId, { content, kind });
+    const updated = qThreads.addNote(threadId, { content, kind }, personEmail);
     if (!updated) return { error: 'Thread not found: ' + threadId };
     return {
         ok: true,

@@ -1109,21 +1109,21 @@ router.post('/api/threads', requirePerson, express.json({ limit: '256kb' }), (re
 
 router.post('/api/threads/:id/emails', requirePerson, express.json({ limit: '256kb' }), (req, res) => {
     if (!readOwnedThread(req, res)) return;
-    const updated = qThreads.addEmail(req.params.id, req.body || {});
+    const updated = qThreads.addEmail(req.params.id, req.body || {}, req.person.email);
     if (!updated) return res.status(404).json({ error: 'Not found' });
     res.json(updated);
 });
 
 router.patch('/api/threads/:id', requirePerson, express.json({ limit: '32kb' }), (req, res) => {
     if (!readOwnedThread(req, res)) return;
-    const updated = qThreads.updateThread(req.params.id, req.body || {});
+    const updated = qThreads.updateThread(req.params.id, req.body || {}, req.person.email);
     if (!updated) return res.status(404).json({ error: 'Not found' });
     res.json(updated);
 });
 
 router.delete('/api/threads/:id', requirePerson, (req, res) => {
     if (!readOwnedThread(req, res)) return;
-    const ok = qThreads.deleteThread(req.params.id);
+    const ok = qThreads.deleteThread(req.params.id, req.person.email);
     res.json({ ok });
 });
 
@@ -1163,7 +1163,7 @@ router.post('/api/threads/:id/files', requirePerson, express.json({ limit: '50mb
                     date: parsed.date,
                     subject: parsed.subject,
                     body: parsed.body,
-                });
+                }, req.person.email);
                 if (updated) return res.json({ ...updated, savedAs: 'email' });
             }
         } catch (e) {
@@ -1172,14 +1172,14 @@ router.post('/api/threads/:id/files', requirePerson, express.json({ limit: '50mb
         }
     }
 
-    const updated = qThreads.addFile(req.params.id, req.body || {});
+    const updated = qThreads.addFile(req.params.id, req.body || {}, req.person.email);
     if (!updated) return res.status(400).json({ error: 'Could not save file (thread not found or filename/base64 missing)' });
     res.json({ ...updated, savedAs: 'file' });
 });
 
 router.get('/api/threads/:id/files/:filename', requirePerson, (req, res) => {
     if (!readOwnedThread(req, res)) return;
-    const file = qThreads.readFile(req.params.id, req.params.filename);
+    const file = qThreads.readFile(req.params.id, req.params.filename, req.person.email);
     if (!file) return res.status(404).json({ error: 'File not found' });
     res.setHeader('Content-Type', file.mimeType);
     res.setHeader('Content-Disposition', `inline; filename="${file.filename}"`);
@@ -1188,7 +1188,7 @@ router.get('/api/threads/:id/files/:filename', requirePerson, (req, res) => {
 
 router.delete('/api/threads/:id/files/:filename', requirePerson, (req, res) => {
     if (!readOwnedThread(req, res)) return;
-    const updated = qThreads.removeFile(req.params.id, req.params.filename);
+    const updated = qThreads.removeFile(req.params.id, req.params.filename, req.person.email);
     if (!updated) return res.status(404).json({ error: 'Thread not found' });
     res.json(updated);
 });
@@ -1216,7 +1216,7 @@ router.post('/api/threads/:id/draft-action', requirePerson, express.json({ limit
         date: new Date().toLocaleString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }),
         subject,
         body: status === 'draft' ? `[DRAFT] ${body}` : body,
-    });
+    }, req.person.email);
 
     let reminderInfo = null;
     if (action === 'save-until' && remindIn) {
@@ -1277,9 +1277,9 @@ router.post('/api/threads/:id/chat', requirePerson, express.json({ limit: '256kb
         }
         const polished = polishUK(result.reply);
         if (!silentUser) {
-            qThreads.appendChat(t.id, 'user', message);
+            qThreads.appendChat(t.id, 'user', message, req.person.email);
         }
-        qThreads.appendChat(t.id, 'assistant', polished);
+        qThreads.appendChat(t.id, 'assistant', polished, req.person.email);
         res.json({ reply: polished });
     } catch (e) {
         res.status(500).json({ error: e.message || 'Chat failed' });

@@ -19,14 +19,22 @@
 
 const fs = require('fs');
 const path = require('path');
+const { userDataPath, USER_BASE_DIR } = require('./user-data');
 
-const VOLUME_DIR = process.env.RAILWAY_VOLUME_MOUNT_PATH
+// Threads now physically live under each user's directory tree:
+//   ${VOLUME}/users/{email-slug}/threads/{thread-id}.json
+// There is no shared threads dir. Functions that take an ownerEmail look
+// only inside that user's directory — no other user's data is reachable.
+//
+// The legacy shared dir (${VOLUME}/threads/) still exists from before the
+// per-user refactor; the bootstrap migration in server/index.js + the
+// claimLegacyThreads helper below sweep it into Sarah's user dir on boot.
+const LEGACY_SHARED_DIR = process.env.RAILWAY_VOLUME_MOUNT_PATH
     ? path.join(process.env.RAILWAY_VOLUME_MOUNT_PATH, 'threads')
     : path.join(__dirname, '..', 'data', 'threads');
 
-
-function ensureDir() {
-    fs.mkdirSync(VOLUME_DIR, { recursive: true });
+function userThreadsDir(email) {
+    return userDataPath(email, 'threads');
 }
 
 function slugify(s) {
@@ -37,14 +45,14 @@ function slugify(s) {
         .slice(0, 60) || 'thread-' + Date.now();
 }
 
-function pathFor(id) {
-    return path.join(VOLUME_DIR, id + '.json');
+function pathFor(id, ownerEmail) {
+    return path.join(userThreadsDir(ownerEmail), id + '.json');
 }
 
-function uniqueId(base) {
+function uniqueId(base, ownerEmail) {
     let id = base;
     let counter = 1;
-    while (fs.existsSync(pathFor(id))) {
+    while (fs.existsSync(pathFor(id, ownerEmail))) {
         id = `${base}-${++counter}`;
     }
     return id;
@@ -60,17 +68,17 @@ function normaliseOwner(email) {
 }
 
 function listThreads(ownerEmail) {
-    ensureDir();
     const owner = normaliseOwner(ownerEmail);
     if (!owner) return [];
+    const dir = userThreadsDir(owner);
     try {
-        return fs.readdirSync(VOLUME_DIR)
+        return fs.readdirSync(dir)
             .filter(f => f.endsWith('.json'))
             .map(f => {
-                try { return JSON.parse(fs.readFileSync(path.join(VOLUME_DIR, f), 'utf8')); }
+                try { return JSON.parse(fs.readFileSync(path.join(dir, f), 'utf8')); }
                 catch { return null; }
             })
-            .filter(t => t && normaliseOwner(t.ownerEmail) === owner)
+            .filter(Boolean)
             .sort((a, b) => String(b.updatedAt || '').localeCompare(String(a.updatedAt || '')));
     } catch {
         return [];
@@ -79,22 +87,10 @@ function listThreads(ownerEmail) {
 
 
 function readThread(id, ownerEmail) {
+    const owner = normaliseOwner(ownerEmail);
+    if (!owner) return null;
     try {
-        const t = JSON.parse(fs.readFileSync(pathFor(id), 'utf8'));
-        // Lock legacy Threads (created before owner-scoping shipped) to a
-        // placeholder owner that nobody can match. Sarah recovers them via
-        // /api/threads/claim-legacy.
-        if (!t.ownerEmail) {
-            t.ownerEmail = LEGACY_OWNER;
-            writeThread(t);
-            console.log('[q-threads] locked legacy thread ' + t.id + ' to __legacy__');
-        }
-        // If a caller passed an ownerEmail, enforce it. No email = internal call
-        // (e.g. tools), still allowed but treat with care.
-        if (ownerEmail !== undefined) {
-            const owner = normaliseOwner(ownerEmail);
-            if (!owner || normaliseOwner(t.ownerEmail) !== owner) return null;
-        }
+        const t = JSON.parse(fs.readFileSync(pathFor(id, owner), 'utf8'));
         // Lazy migration: earlier versions of save_situation stored the case-
         // summary content as a fake email in emails[0]. Spot that exact shape
         // and move the content into notes where it belongs. The heuristic is
@@ -139,9 +135,9 @@ function readThread(id, ownerEmail) {
 
 
 function writeThread(thread) {
-    ensureDir();
+    if (!thread || !thread.ownerEmail) throw new Error('writeThread: thread must have ownerEmail');
     thread.updatedAt = new Date().toISOString();
-    fs.writeFileSync(pathFor(thread.id), JSON.stringify(thread, null, 2), 'utf8');
+    fs.writeFileSync(pathFor(thread.id, thread.ownerEmail), JSON.stringify(thread, null, 2), 'utf8');
     return thread;
 }
 
@@ -150,7 +146,7 @@ function createThread({ title, summary = '', content = '', ownerEmail = '' } = {
     if (!title) throw new Error('title is required');
     const owner = normaliseOwner(ownerEmail);
     if (!owner) throw new Error('ownerEmail is required — Threads must be owned by a person');
-    const id = uniqueId(slugify(title));
+    const id = uniqueId(slugify(title), owner);
     const now = new Date().toISOString();
     const thread = {
         id,
@@ -178,8 +174,8 @@ function createThread({ title, summary = '', content = '', ownerEmail = '' } = {
     return thread;
 }
 
-function addNote(threadId, { content, kind = 'note' } = {}) {
-    const thread = readThread(threadId);
+function addNote(threadId, { content, kind = 'note' } = {}, ownerEmail) {
+    const thread = readThread(threadId, ownerEmail);
     if (!thread || !content) return null;
     if (!Array.isArray(thread.notes)) thread.notes = [];
     thread.notes.push({
@@ -192,20 +188,20 @@ function addNote(threadId, { content, kind = 'note' } = {}) {
 }
 
 
-function filesDirFor(threadId) {
-    return path.join(VOLUME_DIR, threadId + '-files');
+function filesDirFor(threadId, ownerEmail) {
+    return userDataPath(ownerEmail, 'threads/' + threadId + '-files');
 }
 
-function addFile(threadId, { filename, mimeType, base64 } = {}) {
+function addFile(threadId, { filename, mimeType, base64 } = {}, ownerEmail) {
     if (!filename || !base64) return null;
-    const thread = readThread(threadId);
+    const thread = readThread(threadId, ownerEmail);
     if (!thread) return null;
 
     // Sanitise filename — strip path separators, keep extension
     const safe = String(filename).replace(/[\\/]/g, '_').replace(/^\.+/, '').slice(0, 200);
     if (!safe) return null;
 
-    const dir = filesDirFor(threadId);
+    const dir = filesDirFor(threadId, thread.ownerEmail);
     fs.mkdirSync(dir, { recursive: true });
 
     // De-duplicate filenames within a thread
@@ -232,12 +228,13 @@ function addFile(threadId, { filename, mimeType, base64 } = {}) {
     return writeThread(thread);
 }
 
-function readFile(threadId, filename) {
+function readFile(threadId, filename, ownerEmail) {
+    const thread = readThread(threadId, ownerEmail);
+    if (!thread) return null;
     const safe = String(filename).replace(/[\\/]/g, '_').replace(/^\.+/, '');
-    const filepath = path.join(filesDirFor(threadId), safe);
+    const filepath = path.join(filesDirFor(threadId, thread.ownerEmail), safe);
     if (!fs.existsSync(filepath)) return null;
-    const thread = readThread(threadId);
-    const meta = thread && Array.isArray(thread.files)
+    const meta = Array.isArray(thread.files)
         ? thread.files.find(f => f.filename === safe)
         : null;
     return {
@@ -247,11 +244,11 @@ function readFile(threadId, filename) {
     };
 }
 
-function removeFile(threadId, filename) {
-    const thread = readThread(threadId);
+function removeFile(threadId, filename, ownerEmail) {
+    const thread = readThread(threadId, ownerEmail);
     if (!thread) return null;
     const safe = String(filename).replace(/[\\/]/g, '_').replace(/^\.+/, '');
-    try { fs.unlinkSync(path.join(filesDirFor(threadId), safe)); } catch { /* already gone */ }
+    try { fs.unlinkSync(path.join(filesDirFor(threadId, thread.ownerEmail), safe)); } catch { /* already gone */ }
     if (Array.isArray(thread.files)) {
         thread.files = thread.files.filter(f => f.filename !== safe);
     }
@@ -259,8 +256,8 @@ function removeFile(threadId, filename) {
 }
 
 
-function addEmail(threadId, { type = 'in', from = '', to = '', date = '', subject = '', body = '' } = {}) {
-    const thread = readThread(threadId);
+function addEmail(threadId, { type = 'in', from = '', to = '', date = '', subject = '', body = '' } = {}, ownerEmail) {
+    const thread = readThread(threadId, ownerEmail);
     if (!thread) return null;
     thread.emails.push({
         id: 'email-' + Date.now(),
@@ -271,8 +268,8 @@ function addEmail(threadId, { type = 'in', from = '', to = '', date = '', subjec
 }
 
 
-function appendChat(threadId, role, content) {
-    const thread = readThread(threadId);
+function appendChat(threadId, role, content, ownerEmail) {
+    const thread = readThread(threadId, ownerEmail);
     if (!thread) return null;
     thread.chatHistory.push({
         role, content,
@@ -282,8 +279,8 @@ function appendChat(threadId, role, content) {
 }
 
 
-function updateThread(id, patch) {
-    const thread = readThread(id);
+function updateThread(id, patch, ownerEmail) {
+    const thread = readThread(id, ownerEmail);
     if (!thread) return null;
     if (patch.title)   thread.title = patch.title;
     if (patch.summary !== undefined) thread.summary = patch.summary;
@@ -292,37 +289,68 @@ function updateThread(id, patch) {
 }
 
 
-function deleteThread(id) {
-    try { fs.unlinkSync(pathFor(id)); return true; }
-    catch { return false; }
+function deleteThread(id, ownerEmail) {
+    const owner = normaliseOwner(ownerEmail);
+    if (!owner) return false;
+    // Verify ownership before deleting
+    const thread = readThread(id, owner);
+    if (!thread) return false;
+    try {
+        fs.unlinkSync(pathFor(id, owner));
+        // Best-effort cleanup of the files dir
+        try {
+            const fdir = filesDirFor(id, owner);
+            if (fs.existsSync(fdir)) fs.rmSync(fdir, { recursive: true, force: true });
+        } catch { /* ignore */ }
+        return true;
+    } catch {
+        return false;
+    }
 }
 
 
 /**
- * One-time recovery: claim every legacy Thread (those locked to '__legacy__'
- * because they were created before owner-scoping shipped) for a given email.
- * Returns the count claimed. Called by Sarah after the security fix deploys
- * so she can recover her existing case data.
+ * One-time legacy migration: move every Thread from the old shared dir
+ * (${VOLUME}/threads/) into the given user's per-user dir. Used by the
+ * server bootstrap to claim legacy unowned data for the admin (Sarah).
+ * Idempotent — re-running on an already-claimed shared dir is a no-op.
+ * Returns { claimed: N }.
  */
 function claimLegacyThreads(ownerEmail) {
-    ensureDir();
     const owner = normaliseOwner(ownerEmail);
     if (!owner) return { claimed: 0, error: 'ownerEmail required' };
+    if (!fs.existsSync(LEGACY_SHARED_DIR)) return { claimed: 0 };
+
+    const userDir = userThreadsDir(owner);
     let claimed = 0;
     try {
-        for (const f of fs.readdirSync(VOLUME_DIR)) {
+        for (const f of fs.readdirSync(LEGACY_SHARED_DIR)) {
             if (!f.endsWith('.json')) continue;
+            const oldPath = path.join(LEGACY_SHARED_DIR, f);
             try {
-                const filepath = path.join(VOLUME_DIR, f);
-                const t = JSON.parse(fs.readFileSync(filepath, 'utf8'));
-                if (normaliseOwner(t.ownerEmail) === LEGACY_OWNER) {
-                    t.ownerEmail = owner;
-                    t.updatedAt = new Date().toISOString();
-                    fs.writeFileSync(filepath, JSON.stringify(t, null, 2), 'utf8');
-                    claimed++;
+                const t = JSON.parse(fs.readFileSync(oldPath, 'utf8'));
+                t.ownerEmail = owner;
+                t.updatedAt = new Date().toISOString();
+                const newPath = path.join(userDir, f);
+                fs.writeFileSync(newPath, JSON.stringify(t, null, 2), 'utf8');
+                fs.unlinkSync(oldPath);
+                // Move associated files dir if present
+                const oldFilesDir = path.join(LEGACY_SHARED_DIR, t.id + '-files');
+                if (fs.existsSync(oldFilesDir)) {
+                    const newFilesDir = filesDirFor(t.id, owner);
+                    fs.mkdirSync(path.dirname(newFilesDir), { recursive: true });
+                    try { fs.renameSync(oldFilesDir, newFilesDir); }
+                    catch { /* may exist or cross-device — leave for next boot */ }
                 }
-            } catch { /* skip bad file */ }
+                claimed++;
+            } catch (e) {
+                console.warn('[q-threads] could not migrate ' + f + ': ' + e.message);
+            }
         }
+        // If shared dir is now empty, remove it
+        try {
+            if (fs.readdirSync(LEGACY_SHARED_DIR).length === 0) fs.rmdirSync(LEGACY_SHARED_DIR);
+        } catch { /* not empty or cannot remove — leave */ }
     } catch { /* dir issue */ }
     return { claimed };
 }
