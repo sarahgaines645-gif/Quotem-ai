@@ -1,7 +1,16 @@
 <!-- Q — Quotem's own AI. Favicon.
-     Same colours as assets/q-logo.svg: dark Q (#2a2f36), pink dot (#e91e63).
-     Square viewBox so it scales cleanly to 16/32/64px tab sizes. -->
+     Path-based mark so it renders identically on every browser tab.
+     Favicons can't load web fonts, so we approximate Space Grotesk's
+     bold Q (700) with: circular ring + short tail + the pink brand dot.
+     Colours match chat.html: text #1a1a1a, accent #e91e63. -->
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Q">
-  <text x="6" y="50" font-family="'Space Grotesk', 'Inter', system-ui, sans-serif" font-weight="700" font-size="56" fill="#2a2f36" letter-spacing="-0.04em">Q</text>
-  <circle cx="52" cy="48" r="6" fill="#e91e63"/>
+  <!-- Q bowl: solid filled letterform via even-odd (outer disk minus inner counter) -->
+  <path fill="#1a1a1a" fill-rule="evenodd"
+        d="M22,11 a19,19 0 1,0 0,38 a19,19 0 1,0 0,-38 z
+           M22,21 a9,9 0 1,1 0,18 a9,9 0 1,1 0,-18 z" />
+  <!-- Q tail -->
+  <path fill="#1a1a1a"
+        d="M30,38 l10,11 l-5,4 l-10,-11 z" />
+  <!-- Pink brand dot, sits beside the Q like a punctuation mark -->
+  <circle cx="50" cy="46" r="5" fill="#e91e63"/>
 </svg>
