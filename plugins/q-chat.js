@@ -619,15 +619,21 @@ async function chat(messages, options = {}) {
                 break;
             }
 
-            // Append the assistant's tool-call message verbatim, then execute each
-            // call and append its result so the next iteration sees them.
-            // When we recovered DSML markup, push the *cleaned* content so the
-            // next turn doesn't see the broken markup.
-            conversation.push({
-                role: 'assistant',
-                content: dsmlContentRemainder !== null ? dsmlContentRemainder : (message.content || ''),
-                tool_calls: callsRequested,
-            });
+            // Execute each tool call, then push the exchange back into the
+            // conversation so the next iteration sees the results.
+            //
+            // Two formats depending on where the tool calls came from:
+            //   - Native tool_calls from the model → push structured
+            //     assistant{tool_calls} + tool{tool_call_id, result}. This is
+            //     the canonical OpenAI/Together shape.
+            //   - DSML markup recovered from content (parseDsmlToolCalls
+            //     synthesises a tool_calls array with invented IDs) → inline
+            //     the exchange as plain user text. V4 Pro returns HTTP 500
+            //     on the followup call when the structured format is used
+            //     with synthetic IDs that Together's server-side state
+            //     doesn't know about; plain text avoids that path entirely.
+            const isDsmlRecovered = dsmlContentRemainder !== null;
+            const toolResults = [];
 
             for (const call of callsRequested) {
                 const name = call.function?.name || 'unknown';
@@ -641,11 +647,37 @@ async function chat(messages, options = {}) {
                     result,
                     durationMs: callMs,
                 });
-                conversation.push({
-                    role: 'tool',
-                    tool_call_id: call.id,
-                    content: typeof result === 'string' ? result : JSON.stringify(result),
+                toolResults.push({ call, name, result });
+            }
+
+            if (isDsmlRecovered) {
+                // Inline format — single user message summarising the round.
+                const lines = toolResults.map(({ name, result }) => {
+                    const body = typeof result === 'string' ? result : JSON.stringify(result);
+                    return `[Tool ${name} returned]\n${body}`;
                 });
+                const assistantText = dsmlContentRemainder || '';
+                if (assistantText.trim()) {
+                    conversation.push({ role: 'assistant', content: assistantText });
+                }
+                conversation.push({
+                    role: 'user',
+                    content: lines.join('\n\n') + '\n\n— continue.',
+                });
+            } else {
+                // Native format — structured assistant + tool messages.
+                conversation.push({
+                    role: 'assistant',
+                    content: message.content || '',
+                    tool_calls: callsRequested,
+                });
+                for (const { call, result } of toolResults) {
+                    conversation.push({
+                        role: 'tool',
+                        tool_call_id: call.id,
+                        content: typeof result === 'string' ? result : JSON.stringify(result),
+                    });
+                }
             }
         }
 
