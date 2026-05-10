@@ -1,55 +1,76 @@
 'use strict';
 
-const { Q_CONFIG } = require('../config');
+// Image generation via OpenAI gpt-image-1.
+//
+// Best-in-class prompt fidelity (Apr 2026), notably stronger on text and
+// logos than FLUX. Uses OPENAI_API_KEY (already provisioned for embeddings
+// + Whisper) — no new wiring.
+//
+// Previous: black-forest-labs/FLUX.1-schnell on Together (drew "vaguely in
+// the area" — not specific enough for actual user requests).
+//
+// Cost: ~$0.04/image medium quality, ~$0.17 high (Apr 2026 pricing).
+// Note: OpenAI's content moderation is stricter than Together's — some
+// prompts that worked on FLUX may be refused.
 
-// Together AI image generation models (cheapest → best quality):
-//   FLUX.1-schnell-Free  — pulled from serverless tier 2026-05-10
-//   FLUX.1-schnell       — paid, fast, slightly sharper (~$0.003/image)
-//   FLUX.1-dev           — paid, best quality, slower (~$0.025/image)
-const IMAGE_MODEL = 'black-forest-labs/FLUX.1-schnell';
+const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
+const OPENAI_BASE_URL = 'https://api.openai.com/v1';
+const IMAGE_MODEL = 'gpt-image-1';
 
 /**
- * Generate an image from a prompt via Together AI's images API.
+ * Generate an image from a prompt via OpenAI's images API.
  *
  * @param {string} prompt
  * @param {Object} [options]
- * @param {number} [options.steps=4]
- * @param {number} [options.width=1024]
+ * @param {number} [options.width=1024]   Mapped to nearest supported size.
  * @param {number} [options.height=1024]
- * @param {number} [options.seed]
+ * @param {string} [options.quality]      'low' | 'medium' | 'high' (default medium)
+ * @param {string} [options.negativePrompt]  Folded into the prompt — gpt-image-1
+ *   has no native negative_prompt field.
  * @returns {Promise<{image: Buffer|null, mimeType: string, error?: string, durationMs: number}>}
  */
 async function generateImage(prompt, options = {}) {
     const startTime = Date.now();
 
-    if (!Q_CONFIG.apiKey) {
-        return { image: null, mimeType: '', error: 'TOGETHER_API_KEY not set', durationMs: 0 };
+    if (!OPENAI_API_KEY) {
+        return { image: null, mimeType: '', error: 'OPENAI_API_KEY not set', durationMs: 0 };
     }
     if (!prompt || !prompt.trim()) {
         return { image: null, mimeType: '', error: 'No prompt', durationMs: 0 };
     }
 
-    const steps  = Math.min(Math.max(parseInt(options.steps) || 4, 1), 12);
-    const width  = parseInt(options.width)  || 1024;
-    const height = parseInt(options.height) || 1024;
+    // gpt-image-1 supports 1024x1024, 1024x1536 (portrait), 1536x1024
+    // (landscape), or 'auto'. Map any width/height the caller passed to the
+    // closest aspect-ratio match.
+    const w = parseInt(options.width) || 1024;
+    const h = parseInt(options.height) || 1024;
+    const ratio = w / h;
+    const size = ratio > 1.15 ? '1536x1024'
+              : ratio < 0.87 ? '1024x1536'
+              : '1024x1024';
+
+    const quality = options.quality === 'high' ? 'high'
+                  : options.quality === 'low' ? 'low'
+                  : 'medium';
+
+    const fullPrompt = options.negativePrompt
+        ? `${prompt.trim()}\n\nAvoid: ${String(options.negativePrompt).trim()}`
+        : prompt.trim();
 
     const body = {
         model: IMAGE_MODEL,
-        prompt: prompt.trim(),
+        prompt: fullPrompt,
         n: 1,
-        width,
-        height,
-        steps,
-        response_format: 'b64_json',
+        size,
+        quality,
     };
-    if (typeof options.seed === 'number') body.seed = options.seed;
 
     try {
-        const res = await fetch(`${Q_CONFIG.baseURL}/images/generations`, {
+        const res = await fetch(`${OPENAI_BASE_URL}/images/generations`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
-                'Authorization': `Bearer ${Q_CONFIG.apiKey}`,
+                'Authorization': `Bearer ${OPENAI_API_KEY}`,
             },
             body: JSON.stringify(body),
         });
@@ -59,7 +80,7 @@ async function generateImage(prompt, options = {}) {
             return {
                 image: null,
                 mimeType: '',
-                error: `Together AI HTTP ${res.status}: ${errText.substring(0, 300)}`,
+                error: `OpenAI HTTP ${res.status}: ${errText.substring(0, 300)}`,
                 durationMs: Date.now() - startTime,
             };
         }
