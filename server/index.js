@@ -73,10 +73,88 @@ try {
             console.log('═══════════════════════════════════════════════════════════════');
             console.log('');
         }
+
+        // ── Legacy-data migration: anything on the volume that pre-dates
+        // the per-user scoping rewrite gets claimed for Sarah (the admin).
+        // Idempotent — only moves things that aren't already owned. Runs
+        // every boot but is a no-op once everything's been migrated.
+        await migrateLegacyDataToAdmin(peopleMod);
     } catch (e) {
         console.error('[Q] bootstrap failed:', e.message);
     }
 })();
+
+async function migrateLegacyDataToAdmin(peopleMod) {
+    const sarah = peopleMod.listPeople().find(p => p.id === 'sarah');
+    if (!sarah || !sarah.email) return;
+    const adminEmail = sarah.email;
+    const VOLUME_DIR = process.env.RAILWAY_VOLUME_MOUNT_PATH
+        || (fs.existsSync('/data') ? '/data' : path.join(ROOT, 'data'));
+
+    let { userDataPath } = (() => {
+        try { return require(path.join(ROOT, 'plugins', 'user-data.js')); }
+        catch { return {}; }
+    })();
+    if (!userDataPath) return;
+
+    // 1. Threads — claim '__legacy__'
+    try {
+        const qThreads = require(path.join(ROOT, 'plugins', 'q-threads.js'));
+        const r = qThreads.claimLegacyThreads(adminEmail);
+        if (r.claimed > 0) console.log(`[migrate] ${r.claimed} legacy Thread(s) → ${adminEmail}`);
+    } catch (e) { console.warn('[migrate] threads:', e.message); }
+
+    // 2. Old shared voice override → user dir
+    try {
+        const oldVoice = path.join(VOLUME_DIR, 'q-voice', 'q-voice-override.wav');
+        if (fs.existsSync(oldVoice)) {
+            const newVoice = userDataPath(adminEmail, 'q-voice/override.wav');
+            if (!fs.existsSync(newVoice)) {
+                fs.copyFileSync(oldVoice, newVoice);
+                fs.unlinkSync(oldVoice);
+                console.log(`[migrate] voice override → ${adminEmail}`);
+            }
+        }
+    } catch (e) { console.warn('[migrate] voice:', e.message); }
+
+    // 3. Old shared scheduler jobs → tag with ownerEmail
+    try {
+        const oldJobs = path.join(VOLUME_DIR, 'q-memory', 'q-jobs.json');
+        if (fs.existsSync(oldJobs)) {
+            const jobs = JSON.parse(fs.readFileSync(oldJobs, 'utf8'));
+            let claimed = 0;
+            for (const j of jobs) {
+                if (!j.ownerEmail) {
+                    j.ownerEmail = adminEmail.toLowerCase();
+                    claimed++;
+                }
+            }
+            if (claimed > 0) {
+                fs.writeFileSync(oldJobs, JSON.stringify(jobs, null, 2));
+                console.log(`[migrate] ${claimed} unowned job(s) → ${adminEmail}`);
+            }
+        }
+    } catch (e) { console.warn('[migrate] jobs:', e.message); }
+
+    // 4. Old shared generated files → user dir
+    try {
+        const oldGen = path.join(VOLUME_DIR, 'q-generated');
+        if (fs.existsSync(oldGen)) {
+            const newGen = userDataPath(adminEmail, 'q-generated');
+            let moved = 0;
+            for (const f of fs.readdirSync(oldGen)) {
+                const src = path.join(oldGen, f);
+                const dst = path.join(newGen, f);
+                if (!fs.existsSync(dst)) {
+                    try { fs.renameSync(src, dst); moved++; }
+                    catch { /* skip */ }
+                }
+            }
+            if (moved > 0) console.log(`[migrate] ${moved} generated file(s) → ${adminEmail}`);
+            try { fs.rmdirSync(oldGen); } catch { /* dir may still hold files for other users in future */ }
+        }
+    } catch (e) { console.warn('[migrate] generated:', e.message); }
+}
 
 // ── Static assets (logo, JS widgets, etc.) ─────────────────────
 app.use('/assets', express.static(path.join(ROOT, 'assets')));
@@ -122,13 +200,48 @@ app.get('/health', (req, res) => {
     });
 });
 
+// ── Default-auth gate ──────────────────────────────────────────
+// EVERY route past this line requires a signed-in user, with one
+// explicit allowlist of public paths. Adding a new route is auto-
+// authenticated by default — there is no way to forget the auth
+// check on a new feature. This is the architectural fix for the
+// privacy leak: auth is no longer per-route, it's per-app.
+const { requirePerson, verifySessionCookie } = require(path.join(ROOT, 'auth'));
+
+const PUBLIC_PATHS = new Set([
+    '/health',
+    '/q-auth.js',
+    '/favicon.svg', '/favicon.ico',
+    '/favicon-180.png', '/favicon-192.png', '/favicon-512.png',
+    '/manifest.webmanifest',
+    '/trace-widget.js', '/looking-glass-widget.js',
+    '/login', '/signup', '/logout',
+    '/forgot-password', '/reset-password',
+]);
+const PUBLIC_PREFIXES = [
+    '/assets/',
+    '/widgets/',
+    '/public-download/',
+];
+function isPublicPath(p) {
+    if (PUBLIC_PATHS.has(p)) return true;
+    return PUBLIC_PREFIXES.some(prefix => p.startsWith(prefix));
+}
+
+app.use((req, res, next) => {
+    if (isPublicPath(req.path)) return next();
+    return requirePerson(req, res, next);
+});
+
 // ── Mount Q's existing router under root ───────────────────────
 // routes.js handles GET / → ui.html, POST /chat, /code, /agent, etc.
 // Mounted at root so the URL paths match what Q's HTML pages expect.
+// Routes inside still use requirePerson where they need req.person —
+// it's a no-op now (already attached) but kept as defence in depth.
 try {
     const qRouter = require(path.join(ROOT, 'routes.js'));
     app.use('/', qRouter);
-    console.log('[Q] ✅ Routes mounted');
+    console.log('[Q] ✅ Routes mounted (default-auth gate active)');
 } catch (e) {
     console.error('[Q] ❌ Failed to mount routes.js:', e.message);
     console.error(e.stack);
