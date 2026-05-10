@@ -16,10 +16,11 @@ const Q_CONFIG = {
   model: 'deepseek-ai/DeepSeek-V4-Pro',
   // V4 Pro is text-only. When the chat carries an image attachment we
   // switch the call to a vision-capable model on the same Together key.
-  // Qwen3.6-Plus is Together AI's current multimodal flagship (Apr 2026) —
-  // supports images and reads text inside them (screenshots, forms, docs).
+  // Kimi K2.5 (Moonshot AI) — strong on OCR / document reading / structured
+  // image understanding. Open-weights, sovereignty-compatible.
+  // Previous: Qwen/Qwen3.6-Plus (Apr 2026)
   // Previous: Qwen2.5-VL-72B-Instruct (retired from Together, Apr 2026)
-  visionModel: 'Qwen/Qwen3.6-Plus',
+  visionModel: 'moonshotai/Kimi-K2.5',
   // Fast model for utility tasks where top-tier reasoning isn't needed —
   // form-field extraction, simple JSON shaping, lightweight transforms.
   // DeepSeek V3 on Together AI: V4 Pro's predecessor, sharper at sentence-
