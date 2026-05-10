@@ -1065,7 +1065,7 @@ router.post('/email-writer/reply', express.json({ limit: '256kb' }), async (req,
 // sign-in via requirePerson and only operate on Threads owned by req.person.
 const qThreads = require('./plugins/q-threads');
 const { polishUK } = require('./plugins/polish-uk');
-const { requirePerson } = require('./auth');
+// requirePerson already imported at the top of this file from ./auth
 
 // Helper: ownership-checked read. Returns the thread only if the current
 // person owns it; otherwise sends 404 (deliberately not 403 — we don't want

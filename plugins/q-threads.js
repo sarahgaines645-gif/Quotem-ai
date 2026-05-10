@@ -322,6 +322,7 @@ function claimLegacyThreads(ownerEmail) {
     if (!fs.existsSync(LEGACY_SHARED_DIR)) return { claimed: 0 };
 
     const userDir = userThreadsDir(owner);
+    fs.mkdirSync(userDir, { recursive: true });   // ensure target dir exists
     let claimed = 0;
     try {
         for (const f of fs.readdirSync(LEGACY_SHARED_DIR)) {
