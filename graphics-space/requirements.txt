@@ -2,8 +2,7 @@ torch>=2.4.0
 transformers>=4.46.0
 accelerate>=1.0.0
 sentencepiece
-gradio>=5.0.0
-spaces>=0.30.0
 Pillow
 einops
+huggingface_hub>=0.24.0
 audioop-lts; python_version >= "3.13"
