@@ -3,10 +3,10 @@
 const { Q_CONFIG } = require('../config');
 
 // Together AI image generation models (cheapest → best quality):
-//   FLUX.1-schnell-Free  — free tier, fast, good for drafts
-//   FLUX.1-schnell       — paid, same speed, slightly sharper
-//   FLUX.1-dev           — paid, best quality, slower
-const IMAGE_MODEL = 'black-forest-labs/FLUX.1-schnell-Free';
+//   FLUX.1-schnell-Free  — pulled from serverless tier 2026-05-10
+//   FLUX.1-schnell       — paid, fast, slightly sharper (~$0.003/image)
+//   FLUX.1-dev           — paid, best quality, slower (~$0.025/image)
+const IMAGE_MODEL = 'black-forest-labs/FLUX.1-schnell';
 
 /**
  * Generate an image from a prompt via Together AI's images API.
