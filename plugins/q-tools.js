@@ -33,61 +33,59 @@ const qMusic = require('./q-music');
 const qVideo = require('./q-video');
 const { speakAsVoice } = require('./q-voice-clone');
 
-// Q's voice — runtime override (Railway volume) wins over the bundled default.
-// Saving an override happens through /q-voice/save-* routes, no restart needed.
+// Q's voice — every user has their own override. The bundled default is a
+// shared fallback (it's just the stock voice and is identical for everyone).
+// Personal overrides live under userDataPath(email, 'q-voice/override.wav')
+// so one user can never replace another user's voice.
+const { userDataPath } = require('./user-data');
 const Q_VOICE_DEFAULT = path.join(__dirname, '..', 'assets', 'voice-candidates', 'q-current.mp3');
-const Q_VOICE_VOLUME_DIR = process.env.RAILWAY_VOLUME_MOUNT_PATH
-    ? path.join(process.env.RAILWAY_VOLUME_MOUNT_PATH, 'q-voice')
-    : path.join(__dirname, '..', 'data', 'q-voice');
-const Q_VOICE_OVERRIDE = path.join(Q_VOICE_VOLUME_DIR, 'q-voice-override.wav');
-let Q_VOICE_MIME = 'audio/mpeg';
-let qVoiceBuffer = null;
-let qVoiceSource = 'none';
 
-function loadQVoice() {
-    // Try override first, fall back to bundled default.
-    try {
-        if (fs.existsSync(Q_VOICE_OVERRIDE)) {
-            qVoiceBuffer = fs.readFileSync(Q_VOICE_OVERRIDE);
-            Q_VOICE_MIME = 'audio/wav';
-            qVoiceSource = 'override';
-            console.log('[q-tools] Q voice (override): ' + qVoiceBuffer.length + ' bytes');
-            return;
+function _userOverridePath(personEmail) {
+    return userDataPath(personEmail, 'q-voice/override.wav');
+}
+
+/**
+ * Load the user's Q voice — their personal override if they've saved one,
+ * else the bundled default. Loaded fresh each call so a save takes effect
+ * on the next message without a restart.
+ */
+function loadQVoiceFor(personEmail) {
+    if (personEmail) {
+        try {
+            const p = _userOverridePath(personEmail);
+            if (fs.existsSync(p)) {
+                return { buffer: fs.readFileSync(p), mimeType: 'audio/wav', source: 'override' };
+            }
+        } catch (e) {
+            console.warn('[q-tools] override read failed for ' + personEmail + ': ' + e.message);
         }
-    } catch (e) {
-        console.warn('[q-tools] Override read failed, falling back: ' + e.message);
     }
     try {
-        qVoiceBuffer = fs.readFileSync(Q_VOICE_DEFAULT);
-        Q_VOICE_MIME = 'audio/mpeg';
-        qVoiceSource = 'default';
-        console.log('[q-tools] Q voice (default): ' + qVoiceBuffer.length + ' bytes');
+        return { buffer: fs.readFileSync(Q_VOICE_DEFAULT), mimeType: 'audio/mpeg', source: 'default' };
     } catch (e) {
-        qVoiceBuffer = null;
-        qVoiceSource = 'none';
-        console.warn('[q-tools] Q voice not loaded: ' + e.message);
+        return { buffer: null, mimeType: '', source: 'none' };
     }
 }
-loadQVoice();
 
-function setQVoiceFromBuffer(audioBuffer) {
-    fs.mkdirSync(Q_VOICE_VOLUME_DIR, { recursive: true });
-    fs.writeFileSync(Q_VOICE_OVERRIDE, audioBuffer);
-    loadQVoice();
-    return { ok: true, bytes: audioBuffer.length, source: qVoiceSource };
+function setQVoiceFromBuffer(audioBuffer, personEmail) {
+    if (!personEmail) return { error: 'Cannot save voice without a signed-in user.' };
+    if (!audioBuffer || !audioBuffer.length) return { error: 'Empty audio buffer.' };
+    const p = _userOverridePath(personEmail);
+    fs.writeFileSync(p, audioBuffer);
+    return { ok: true, bytes: audioBuffer.length, source: 'override' };
 }
 
-function clearQVoice() {
-    try { fs.unlinkSync(Q_VOICE_OVERRIDE); } catch { /* didn't exist */ }
-    loadQVoice();
-    return { ok: true, source: qVoiceSource };
+function clearQVoice(personEmail) {
+    if (!personEmail) return { error: 'Cannot reset voice without a signed-in user.' };
+    try { fs.unlinkSync(_userOverridePath(personEmail)); } catch { /* didn't exist */ }
+    return { ok: true, source: 'default' };
 }
 
-function getQVoiceStatus() {
+function getQVoiceStatus(personEmail) {
+    const v = loadQVoiceFor(personEmail);
     return {
-        source: qVoiceSource,        // 'override' | 'default' | 'none'
-        bytes: qVoiceBuffer ? qVoiceBuffer.length : 0,
-        overridePath: Q_VOICE_OVERRIDE,
+        source: v.source,            // 'override' | 'default' | 'none'
+        bytes: v.buffer ? v.buffer.length : 0,
     };
 }
 
@@ -709,7 +707,7 @@ async function executeTool(name, argsRaw, personId, personEmail) {
         case 'calculator':       return calculator(args);
         case 'current_datetime': return currentDatetime(args);
         case 'analyze_document': return await analyzeDocument(args);
-        case 'create_document':  return await createDocument(args);
+        case 'create_document':  return await createDocument(args, personEmail);
         case 'remember':         return remember(args, personId);
         case 'recall':           return recall(args, personId);
         // Doc-editor tools — operate on the user's current uploaded doc
@@ -721,11 +719,11 @@ async function executeTool(name, argsRaw, personId, personEmail) {
         case 'merge_paragraph':   return docEditTool(personId, (b) => docEditor.mergeParagraph(b, args.source_index, args.target_index, args.position || 'end'));
         case 'format_paragraph':  return docEditTool(personId, (b) => docEditor.formatParagraph(b, args.index, args.style));
         // Creative stack — image, vector, music, video, voice
-        case 'generate_image':    return await generateImageTool(args);
-        case 'vectorise_image':   return await vectoriseImageTool(args);
-        case 'generate_music':    return await generateMusicTool(args);
-        case 'generate_video':    return await generateVideoTool(args);
-        case 'speak_as_q':        return await speakAsQTool(args);
+        case 'generate_image':    return await generateImageTool(args, personEmail);
+        case 'vectorise_image':   return await vectoriseImageTool(args, personEmail);
+        case 'generate_music':    return await generateMusicTool(args, personEmail);
+        case 'generate_video':    return await generateVideoTool(args, personEmail);
+        case 'speak_as_q':        return await speakAsQTool(args, personEmail);
         case 'save_situation':       return saveSituation(args, personEmail);
         case 'list_threads':         return listThreadsTool(personEmail);
         case 'read_thread':          return readThreadTool(args, personEmail);
@@ -787,11 +785,12 @@ function trimParagraphs(paragraphs) {
  * create_document — generate a .docx file and return a download link.
  * Q embeds the link in his reply so the user can click and save the file.
  */
-async function createDocument({ title, content } = {}) {
+async function createDocument({ title, content } = {}, personEmail) {
     if (!title || typeof title !== 'string') return { error: 'title (string) is required' };
     if (!content || typeof content !== 'string') return { error: 'content (string) is required' };
+    if (!personEmail) return { error: 'Cannot create a document without a signed-in user.' };
     try {
-        const result = await createDocx({ title, content });
+        const result = await createDocx({ title, content }, personEmail);
         return {
             ok: true,
             filename: result.filename,
@@ -809,8 +808,9 @@ async function createDocument({ title, content } = {}) {
 // download URL Q embeds in his reply. Errors are surfaced as { error: ... }
 // so Q can tell the user what went wrong instead of failing silently.
 
-async function generateImageTool({ prompt, width, height, negative_prompt } = {}) {
+async function generateImageTool({ prompt, width, height, negative_prompt } = {}, personEmail) {
     if (!prompt || typeof prompt !== 'string') return { error: 'prompt (string) is required' };
+    if (!personEmail) return { error: 'Cannot generate without a signed-in user.' };
     try {
         const result = await qImageGen.generateImage(prompt, {
             width, height, negativePrompt: negative_prompt,
@@ -818,7 +818,7 @@ async function generateImageTool({ prompt, width, height, negative_prompt } = {}
         if (result.error || !result.image) {
             return { error: result.error || 'Image generation returned nothing.' };
         }
-        const stashed = stashFile(result.image, 'png', prompt);
+        const stashed = stashFile(result.image, 'png', prompt, personEmail);
         const url = '/download/' + stashed.token;
         return {
             ok: true,
@@ -833,15 +833,16 @@ async function generateImageTool({ prompt, width, height, negative_prompt } = {}
     }
 }
 
-async function vectoriseImageTool({ image_url } = {}) {
+async function vectoriseImageTool({ image_url } = {}, personEmail) {
     if (!image_url || typeof image_url !== 'string') return { error: 'image_url (string) is required' };
+    if (!personEmail) return { error: 'Cannot generate without a signed-in user.' };
     try {
         const result = await qGraphics.vectoriseImage(image_url);
         if (result.error || !result.svg) {
             return { error: result.error || 'Vectorise returned nothing.' };
         }
         const buf = Buffer.isBuffer(result.svg) ? result.svg : Buffer.from(String(result.svg), 'utf8');
-        const stashed = stashFile(buf, 'svg', 'vector');
+        const stashed = stashFile(buf, 'svg', 'vector', personEmail);
         const url = '/download/' + stashed.token;
         return {
             ok: true,
@@ -854,8 +855,9 @@ async function vectoriseImageTool({ image_url } = {}) {
     }
 }
 
-async function generateMusicTool({ prompt, duration_seconds } = {}) {
+async function generateMusicTool({ prompt, duration_seconds } = {}, personEmail) {
     if (!prompt || typeof prompt !== 'string') return { error: 'prompt (string) is required' };
+    if (!personEmail) return { error: 'Cannot generate without a signed-in user.' };
     try {
         const dur = Math.min(Math.max(parseInt(duration_seconds) || 30, 5), 240);
         const result = await qMusic.generateMusic(prompt, { duration: dur });
@@ -863,7 +865,7 @@ async function generateMusicTool({ prompt, duration_seconds } = {}) {
             return { error: result.error || 'Music generation returned nothing.' };
         }
         const ext = (result.mimeType && result.mimeType.includes('mp3')) ? 'mp3' : 'wav';
-        const stashed = stashFile(result.audio, ext, prompt);
+        const stashed = stashFile(result.audio, ext, prompt, personEmail);
         const url = '/download/' + stashed.token;
         return {
             ok: true,
@@ -877,15 +879,16 @@ async function generateMusicTool({ prompt, duration_seconds } = {}) {
     }
 }
 
-async function generateVideoTool({ prompt, duration_seconds } = {}) {
+async function generateVideoTool({ prompt, duration_seconds } = {}, personEmail) {
     if (!prompt || typeof prompt !== 'string') return { error: 'prompt (string) is required' };
+    if (!personEmail) return { error: 'Cannot generate without a signed-in user.' };
     try {
         const dur = Math.min(Math.max(parseInt(duration_seconds) || 5, 1), 10);
         const result = await qVideo.generateVideo(prompt, { duration: dur });
         if (result.error || !result.video) {
             return { error: result.error || 'Video generation returned nothing.' };
         }
-        const stashed = stashFile(result.video, 'mp4', prompt);
+        const stashed = stashFile(result.video, 'mp4', prompt, personEmail);
         const url = '/download/' + stashed.token;
         return {
             ok: true,
@@ -899,15 +902,16 @@ async function generateVideoTool({ prompt, duration_seconds } = {}) {
     }
 }
 
-async function speakAsQTool({ text } = {}) {
+async function speakAsQTool({ text } = {}, personEmail) {
     if (!text || typeof text !== 'string') return { error: 'text (string) is required' };
-    if (!qVoiceBuffer) return { error: "Q's voice reference isn't loaded — assets/voice-candidates/q-current.mp3 missing." };
+    const voice = loadQVoiceFor(personEmail);
+    if (!voice.buffer) return { error: "Q's voice reference isn't loaded — assets/voice-candidates/q-current.mp3 missing." };
     try {
-        const result = await speakAsVoice(text, qVoiceBuffer, Q_VOICE_MIME, {});
+        const result = await speakAsVoice(text, voice.buffer, voice.mimeType, {});
         if (result.error || !result.audio) {
             return { error: result.error || 'Voice generation returned nothing.' };
         }
-        const stashed = stashFile(result.audio, 'wav', 'q-narration');
+        const stashed = stashFile(result.audio, 'wav', 'q-narration', personEmail);
         const url = '/download/' + stashed.token;
         return {
             ok: true,

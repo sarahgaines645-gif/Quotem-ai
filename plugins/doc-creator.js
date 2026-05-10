@@ -1,19 +1,12 @@
 /**
- * doc-creator.js — generates .docx files for Q's create_document tool.
+ * doc-creator.js — generates .docx files (and stashes any other binary
+ * Q produces — images, audio, video) for the create_document and other
+ * tools.
  *
- * Q calls create_document with title + sections (or plain content). We write
- * a .docx into the data/generated/ folder under a random token name, and
- * return the download URL. The /download/:token route serves the file back.
- *
- * The content shape Q sends:
- *   {
- *     title: 'Cover letter for the council',
- *     content: 'Full plain text of the document, paragraphs separated by blank lines'
- *   }
- *
- * Plain text is enough for v1 — Q writes the body in his reply, and we just
- * shape it into a Word doc with a heading + paragraphs. Tables / styles can
- * come later when there's a real ask for them.
+ * Each user's generated files live in their own directory on the volume
+ * (userDataPath(email, 'q-generated/<token>__<filename>')) so a download
+ * URL only resolves for the user who created the file. The /download/:token
+ * route checks ownership via the same per-user lookup.
  */
 'use strict';
 
@@ -21,19 +14,7 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 const { Document, Packer, Paragraph, HeadingLevel, TextRun } = require('docx');
-
-const VOLUME_DIR = process.env.RAILWAY_VOLUME_MOUNT_PATH
-    || (fs.existsSync('/data') ? '/data' : null);
-
-const GENERATED_DIR = VOLUME_DIR
-    ? path.join(VOLUME_DIR, 'q-generated')
-    : path.join(__dirname, '..', 'data', 'generated');
-
-try {
-    fs.mkdirSync(GENERATED_DIR, { recursive: true });
-} catch (e) {
-    console.error('[doc-creator] could not create generated dir:', e.message);
-}
+const { userDataPath, userDir, USER_BASE_DIR } = require('./user-data');
 
 const FILE_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
 
@@ -45,11 +26,17 @@ function safeFilenameStem(s) {
         .slice(0, 60) || 'document';
 }
 
-function pruneOldFiles() {
+function generatedDirFor(personEmail) {
+    return userDataPath(personEmail, 'q-generated');
+}
+
+function pruneOldFiles(personEmail) {
+    if (!personEmail) return;
     try {
+        const dir = generatedDirFor(personEmail);
         const now = Date.now();
-        for (const f of fs.readdirSync(GENERATED_DIR)) {
-            const full = path.join(GENERATED_DIR, f);
+        for (const f of fs.readdirSync(dir)) {
+            const full = path.join(dir, f);
             try {
                 const st = fs.statSync(full);
                 if (now - st.mtimeMs > FILE_TTL_MS) fs.unlinkSync(full);
@@ -61,14 +48,14 @@ function pruneOldFiles() {
 }
 
 /**
- * Produce a .docx and return { token, filename, downloadUrl }.
- * The caller embeds downloadUrl into Q's reply as a markdown link.
+ * Produce a .docx and return { token, filename } scoped to one user.
  */
-async function createDocx({ title, content }) {
+async function createDocx({ title, content }, personEmail) {
     if (!title || typeof title !== 'string') throw new Error('title (string) is required');
     if (!content || typeof content !== 'string') throw new Error('content (string) is required');
+    if (!personEmail) throw new Error('personEmail required — generated docs must belong to a user');
 
-    pruneOldFiles();
+    pruneOldFiles(personEmail);
 
     const paragraphs = [];
     paragraphs.push(new Paragraph({
@@ -76,8 +63,6 @@ async function createDocx({ title, content }) {
         heading: HeadingLevel.HEADING_1,
     }));
 
-    // Split on blank lines → each block is a paragraph. Single newlines stay
-    // as soft breaks within the same paragraph (Word renders this naturally).
     const blocks = content.split(/\n\s*\n/);
     for (const block of blocks) {
         const trimmed = block.trim();
@@ -101,7 +86,8 @@ async function createDocx({ title, content }) {
     const token = crypto.randomBytes(8).toString('hex');
     const filename = safeFilenameStem(title) + '.docx';
     const onDiskName = token + '__' + filename;
-    fs.writeFileSync(path.join(GENERATED_DIR, onDiskName), buffer);
+    const dir = generatedDirFor(personEmail);
+    fs.writeFileSync(path.join(dir, onDiskName), buffer);
     return {
         token,
         filename,
@@ -110,17 +96,20 @@ async function createDocx({ title, content }) {
 }
 
 /**
- * Look up a token and return { fullPath, filename } if it exists, else null.
- * Token is 16 hex chars; we glob the generated dir for a file starting with it.
+ * Resolve a token only inside the calling user's directory. If they don't
+ * own the file (or it doesn't exist), returns null — same shape regardless,
+ * so it's safe to wire into a /download/:token route.
  */
-function resolveToken(token) {
+function resolveToken(token, personEmail) {
     if (!token || !/^[a-f0-9]{16}$/.test(token)) return null;
+    if (!personEmail) return null;
     try {
-        const files = fs.readdirSync(GENERATED_DIR);
+        const dir = generatedDirFor(personEmail);
+        const files = fs.readdirSync(dir);
         const match = files.find(f => f.startsWith(token + '__'));
         if (!match) return null;
-        const fullPath = path.join(GENERATED_DIR, match);
-        const filename = match.slice(token.length + 2); // strip "<token>__"
+        const fullPath = path.join(dir, match);
+        const filename = match.slice(token.length + 2);
         return { fullPath, filename };
     } catch (e) {
         return null;
@@ -128,23 +117,48 @@ function resolveToken(token) {
 }
 
 /**
- * Stash an arbitrary file buffer (image, audio, video) under a token so the
- * /download/:token route can serve it back. Same TTL and dir as createDocx.
- *
- * @param {Buffer} buffer
- * @param {string} extension - e.g. 'png', 'mp3', 'mp4', 'svg'
- * @param {string} label     - human-friendly stem for the filename
- * @returns {{ token, filename, sizeBytes }}
+ * Stash an arbitrary file buffer (image, audio, video) under a token in
+ * the calling user's generated dir. Returns { token, filename, sizeBytes }.
  */
-function stashFile(buffer, extension, label) {
+function stashFile(buffer, extension, label, personEmail) {
     if (!Buffer.isBuffer(buffer)) throw new Error('stashFile: buffer required');
     if (!extension) throw new Error('stashFile: extension required');
-    pruneOldFiles();
+    if (!personEmail) throw new Error('stashFile: personEmail required');
+    pruneOldFiles(personEmail);
     const token = crypto.randomBytes(8).toString('hex');
     const filename = safeFilenameStem(label || 'file') + '.' + extension.replace(/^\./, '');
     const onDiskName = token + '__' + filename;
-    fs.writeFileSync(path.join(GENERATED_DIR, onDiskName), buffer);
+    const dir = generatedDirFor(personEmail);
+    fs.writeFileSync(path.join(dir, onDiskName), buffer);
     return { token, filename, sizeBytes: buffer.length };
 }
 
-module.exports = { createDocx, resolveToken, stashFile, GENERATED_DIR };
+/**
+ * Search every user's generated dir for a file matching `token`. Used ONLY
+ * by /public-download/:token (the external-services route that has no auth
+ * — the 64-bit random token is the auth itself, practically unguessable).
+ * Returns the same shape as resolveToken or null.
+ */
+function resolveTokenAcrossUsers(token) {
+    if (!token || !/^[a-f0-9]{16}$/.test(token)) return null;
+    try {
+        if (!fs.existsSync(USER_BASE_DIR)) return null;
+        for (const userSlug of fs.readdirSync(USER_BASE_DIR)) {
+            const dir = path.join(USER_BASE_DIR, userSlug, 'q-generated');
+            if (!fs.existsSync(dir)) continue;
+            try {
+                const files = fs.readdirSync(dir);
+                const match = files.find(f => f.startsWith(token + '__'));
+                if (match) {
+                    return {
+                        fullPath: path.join(dir, match),
+                        filename: match.slice(token.length + 2),
+                    };
+                }
+            } catch { /* skip unreadable user dir */ }
+        }
+    } catch { /* ignore */ }
+    return null;
+}
+
+module.exports = { createDocx, resolveToken, resolveTokenAcrossUsers, stashFile, generatedDirFor };

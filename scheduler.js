@@ -225,9 +225,15 @@ function stopScheduler() {
 
 // ─── CRUD ─────────────────────────────────────────────────────────────────
 
-function createJob({ name, goal, trigger, agentOptions = {}, enabled = true }) {
+function _normOwner(email) {
+    return String(email || '').trim().toLowerCase();
+}
+
+function createJob({ name, goal, trigger, agentOptions = {}, enabled = true, ownerEmail = '' }) {
     if (!name || typeof name !== 'string') return { error: 'name required' };
     if (!goal || typeof goal !== 'string') return { error: 'goal required' };
+    const owner = _normOwner(ownerEmail);
+    if (!owner) return { error: 'ownerEmail required — jobs must belong to a person' };
     const t = normaliseTrigger(trigger);
     if (t.error) return t;
 
@@ -236,6 +242,7 @@ function createJob({ name, goal, trigger, agentOptions = {}, enabled = true }) {
 
     const job = {
         id: newJobId(),
+        ownerEmail: owner,
         name: name.trim().substring(0, 120),
         goal: goal.trim(),
         trigger: t.trigger,
@@ -255,12 +262,24 @@ function createJob({ name, goal, trigger, agentOptions = {}, enabled = true }) {
     return { ok: true, job };
 }
 
-function listJobs() {
-    return loadJobs();
+// listJobs/getJob now filter by owner. Pass undefined ONLY for internal
+// scheduler calls (workerTick / runJobNow) that need to see every job.
+function listJobs(ownerEmail) {
+    const all = loadJobs();
+    if (ownerEmail === undefined) return all;
+    const owner = _normOwner(ownerEmail);
+    if (!owner) return [];
+    return all.filter(j => _normOwner(j.ownerEmail) === owner);
 }
 
-function getJob(id) {
-    return loadJobs().find(j => j.id === id) || null;
+function getJob(id, ownerEmail) {
+    const job = loadJobs().find(j => j.id === id) || null;
+    if (!job) return null;
+    if (ownerEmail !== undefined) {
+        const owner = _normOwner(ownerEmail);
+        if (!owner || _normOwner(job.ownerEmail) !== owner) return null;
+    }
+    return job;
 }
 
 function patchJob(id, patch) {
