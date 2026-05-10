@@ -27,7 +27,14 @@ function safeFilenameStem(s) {
 }
 
 function generatedDirFor(personEmail) {
-    return userDataPath(personEmail, 'q-generated');
+    // userDataPath() only creates the *parent* of the returned path. When the
+    // subpath is a directory (no filename), the dir itself isn't created and
+    // the first stashFile/createDocx for a user throws ENOENT. Ensure it here
+    // so every stash path (image, vector, music, video, narration, docx) is
+    // safe on the first call.
+    const dir = userDataPath(personEmail, 'q-generated');
+    fs.mkdirSync(dir, { recursive: true });
+    return dir;
 }
 
 function pruneOldFiles(personEmail) {
