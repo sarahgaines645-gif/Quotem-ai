@@ -244,20 +244,15 @@
     <span class="tagline">Calendar · Tasks · Photos in, dates out</span>
   </header>
 
-  <!-- ABOUT YOU — context Q reads alongside every photo/paste -->
-  <div class="card">
-    <h2>About you <span class="right" id="context-status">Tell Q who's in the household so he only pulls out what's relevant</span></h2>
-    <textarea id="context-text" placeholder="e.g. My daughter's in Year 9 at Park High, my son's in Year 12 at Sixth Form, allergic to nuts. I work Mon–Thu."></textarea>
-  </div>
-
   <!-- INTAKE -->
   <div class="card">
-    <h2>Add anything <span class="right" id="intake-hint">Photo, paste, or drop a file</span></h2>
+    <h2>Add anything <span class="right" id="intake-hint"><a href="/about" style="color: var(--text-muted); text-decoration: none; font-size: 12px; font-weight: 500;">About you →</a></span></h2>
     <div class="intake-row">
       <div class="drop-zone" id="drop-photo">📷 Take or upload a photo</div>
       <div class="drop-zone" id="drop-file">📎 Drop a file (PDF / Word / image)</div>
     </div>
     <textarea id="paste-text" placeholder="…or paste a school letter, email, or note here." style="margin-top: 12px;"></textarea>
+    <input type="text" id="intake-note" placeholder="Any notes? e.g. every other Wednesday goes in my calendar." style="margin-bottom: 6px;">
     <div class="actions">
       <button id="extract-btn">Read it</button>
       <button id="manual-event" class="small">+ Manual event</button>
@@ -484,10 +479,11 @@ $('extract-btn').addEventListener('click', async () => {
   if (!text) { setStatus('Paste some text first.', true); return; }
   setStatus('Reading…');
   try {
+    const note = $('intake-note').value.trim();
     const r = await fetch('/life/extract', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ text, source: 'paste' }),
+      body: JSON.stringify({ text, note, source: 'paste' }),
     });
     const data = await r.json();
     if (data.error) { setStatus(data.error, true); return; }
@@ -523,7 +519,7 @@ async function handlePhoto(file) {
     const r = await fetch('/life/extract-photo', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ dataUrl, source: 'photo' }),
+      body: JSON.stringify({ dataUrl, note: $('intake-note').value.trim(), source: 'photo' }),
     });
     const data = await r.json();
     if (data.error) { setStatus(data.error, true); return; }
@@ -536,11 +532,13 @@ async function handleFile(file) {
   if (!file) return;
   if (file.type.startsWith('image/')) return handlePhoto(file);
   setStatus('Reading document…');
-  // For PDFs/Word: send to the existing /extract-text route (server-side parse)
-  const fd = new FormData();
-  fd.append('file', file);
   try {
-    const r = await fetch('/extract-text', { method: 'POST', body: fd });
+    const dataUrl = await fileToDataUrl(file);
+    const r = await fetch('/extract-text', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ dataUrl, name: file.name }),
+    });
     const out = await r.json();
     const text = out?.text;
     if (!text) { setStatus(out.error || 'Could not read that file.', true); return; }
@@ -762,46 +760,9 @@ $('m-delete').addEventListener('click', async () => {
   if (kind === 'event') await loadEvents(); else await loadTasks();
 });
 
-// ── About-you context ───────────────────────────────────────────
-
-async function loadContext() {
-  try {
-    const r = await fetch('/life/context');
-    const data = await r.json();
-    $('context-text').value = data.context || '';
-  } catch {}
-}
-
-let contextSaveTimer = null;
-$('context-text').addEventListener('input', () => {
-  clearTimeout(contextSaveTimer);
-  $('context-status').textContent = 'Saving…';
-  contextSaveTimer = setTimeout(saveContext, 600);
-});
-$('context-text').addEventListener('blur', () => {
-  clearTimeout(contextSaveTimer);
-  saveContext();
-});
-
-async function saveContext() {
-  try {
-    await fetch('/life/context', {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ context: $('context-text').value }),
-    });
-    $('context-status').textContent = 'Saved — Q uses this on every photo + paste';
-    setTimeout(() => {
-      $('context-status').textContent = 'Tell Q who\'s in the household so he only pulls out what\'s relevant';
-    }, 2500);
-  } catch (e) {
-    $('context-status').textContent = 'Could not save: ' + e.message;
-  }
-}
 
 // ── Init ────────────────────────────────────────────────────────
 
-loadContext();
 loadEvents();
 loadTasks();
 </script>

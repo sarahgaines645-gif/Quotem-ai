@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <script src="/q-auth.js"></script>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>About You — Q</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #e8e8e8;
+      --text: #1a1a1a;
+      --text-muted: rgba(0,0,0,0.42);
+      --text-faint: rgba(0,0,0,0.26);
+      --accent: #e91e63;
+      --neu-raised:    10px 10px 28px #ababab, -8px -8px 20px #ffffff, inset 0 1px 0 rgba(255,255,255,0.5);
+      --neu-raised-sm: 6px 6px 16px #ababab, -5px -5px 12px #ffffff;
+      --neu-inset:     inset 5px 5px 14px #ababab, inset -4px -4px 10px #ffffff;
+      --neu-inset-sm:  inset 3px 3px 8px #ababab, inset -2px -2px 6px #ffffff;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Space Grotesk', -apple-system, BlinkMacSystemFont, sans-serif;
+      background: var(--bg); color: var(--text);
+      font-size: 15px; line-height: 1.55;
+      min-height: 100vh; padding: 32px 24px 80px;
+      -webkit-font-smoothing: antialiased;
+    }
+    .wrap { max-width: 640px; margin: 0 auto; }
+
+    header { display: flex; align-items: baseline; gap: 14px; margin-bottom: 24px; }
+    .logo-mark { display: inline-flex; align-items: baseline; }
+    .logo-mark .q { font-size: 28px; font-weight: 700; line-height: 1; letter-spacing: -0.05em; color: var(--text); }
+    .logo-mark .dot { width: 8px; height: 8px; background: var(--accent); border-radius: 50%; display: inline-block; margin-left: 4px; align-self: flex-end; margin-bottom: 4px; box-shadow: 0 1px 2px rgba(233,30,99,0.3); }
+    h1 { font-size: 22px; font-weight: 600; letter-spacing: -0.02em; }
+
+    .card { background: var(--bg); border-radius: 18px; padding: 22px; box-shadow: var(--neu-raised); margin-bottom: 18px; }
+    .card h2 {
+      font-size: 13px; font-weight: 600;
+      color: var(--text-muted);
+      text-transform: uppercase; letter-spacing: 0.08em;
+      margin-bottom: 6px;
+    }
+    .hint { font-size: 13px; color: var(--text-muted); margin-bottom: 14px; line-height: 1.5; }
+
+    textarea {
+      width: 100%; border: none; outline: none;
+      font-family: inherit; font-size: 14px;
+      color: var(--text); background: var(--bg);
+      padding: 12px 14px;
+      border-radius: 10px;
+      box-shadow: var(--neu-inset-sm);
+      min-height: 180px; resize: vertical; line-height: 1.6;
+    }
+
+    .save-status { font-size: 12px; color: var(--text-muted); margin-top: 10px; min-height: 16px; }
+    .save-status.ok { color: #2ecc71; }
+
+    .back-link {
+      display: inline-block; margin-top: 24px;
+      font-size: 13px; color: var(--text-muted);
+      text-decoration: none;
+    }
+    .back-link:hover { color: var(--text); }
+  </style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <a href="/tools" style="text-decoration: none;">
+      <span class="logo-mark"><span class="q">Q</span><span class="dot"></span></span>
+    </a>
+    <h1>About you</h1>
+  </header>
+
+  <div class="card">
+    <h2>Your household</h2>
+    <p class="hint">Q reads this every time you drop a photo or paste something into Life. The more detail, the better he filters — year groups, schools, work pattern, allergies, anything that helps him know which bits matter to you.</p>
+    <textarea id="context-text" placeholder="e.g. My daughter's in Year 9 at Park High, my son's in Year 12 at Sixth Form, allergic to nuts. I work Mon–Thu."></textarea>
+    <div class="save-status" id="save-status"></div>
+  </div>
+
+  <a class="back-link" href="/life">← Back to Life</a>
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+
+async function loadContext() {
+  try {
+    const r = await fetch('/life/context');
+    const data = await r.json();
+    $('context-text').value = data.context || '';
+  } catch {}
+}
+
+let saveTimer = null;
+$('context-text').addEventListener('input', () => {
+  clearTimeout(saveTimer);
+  $('save-status').textContent = 'Saving…';
+  $('save-status').className = 'save-status';
+  saveTimer = setTimeout(saveContext, 600);
+});
+$('context-text').addEventListener('blur', () => {
+  clearTimeout(saveTimer);
+  saveContext();
+});
+
+async function saveContext() {
+  try {
+    await fetch('/life/context', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ context: $('context-text').value }),
+    });
+    $('save-status').textContent = 'Saved';
+    $('save-status').className = 'save-status ok';
+    setTimeout(() => { $('save-status').textContent = ''; }, 2500);
+  } catch (e) {
+    $('save-status').textContent = 'Could not save: ' + e.message;
+  }
+}
+
+loadContext();
+</script>
+</body>
+</html>

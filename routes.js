@@ -1379,6 +1379,9 @@ const { extractLifeAdmin, extractFromImage: extractLifeFromImage } = require('./
 router.get('/life', (req, res) => {
     res.sendFile(path.join(__dirname, 'life.html'));
 });
+router.get('/about', (req, res) => {
+    res.sendFile(path.join(__dirname, 'about.html'));
+});
 
 router.get('/life/events', requirePerson, (req, res) => {
     const { from, to } = req.query;
@@ -1433,7 +1436,9 @@ router.post('/life/extract', requirePerson, express.json({ limit: '256kb' }), as
     if (!text || typeof text !== 'string' || !text.trim()) {
         return res.status(400).json({ error: 'text (string) required' });
     }
-    const context = qLife.getContext(req.person.email);
+    let context = qLife.getContext(req.person.email);
+    const note = req.body?.note ? String(req.body.note).trim() : '';
+    if (note) context = context ? `${context}\n\nINSTRUCTION: ${note}` : `INSTRUCTION: ${note}`;
     const result = await extractLifeAdmin(text, { source: req.body?.source || 'paste', context });
     res.json(result);
 });
@@ -1444,7 +1449,9 @@ router.post('/life/extract-photo', requirePerson, express.json({ limit: '32mb' }
     if (!dataUrl || typeof dataUrl !== 'string' || !dataUrl.startsWith('data:')) {
         return res.status(400).json({ error: 'dataUrl (image) required' });
     }
-    const context = qLife.getContext(req.person.email);
+    let context = qLife.getContext(req.person.email);
+    const note = req.body?.note ? String(req.body.note).trim() : '';
+    if (note) context = context ? `${context}\n\nINSTRUCTION: ${note}` : `INSTRUCTION: ${note}`;
     const result = await extractLifeFromImage(dataUrl, { source: req.body?.source || 'photo', context });
     res.json(result);
 });
