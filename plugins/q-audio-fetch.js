@@ -69,6 +69,11 @@ function runCmd(cmd, args, { timeoutMs = 60000 } = {}) {
  * @param {string|number} [options.startTime]  - Where in the source to begin (e.g. "1:30", "90", "1m30s")
  * @returns {Promise<Buffer>}
  */
+// Direct-media file extensions — these we fetch with plain HTTP instead of
+// yt-dlp. yt-dlp's "generic" extractor 500s on many direct archive.org MP3
+// URLs because it tries to scrape a webpage that isn't there.
+const DIRECT_MEDIA_RE = /\.(mp3|wav|ogg|m4a|flac|aac|opus|wma|aiff)(\?|$)/i;
+
 async function fetchAudioClip(url, options = {}) {
     if (!url || typeof url !== 'string') throw new Error('url is required');
 
@@ -80,30 +85,52 @@ async function fetchAudioClip(url, options = {}) {
     const trimmedPath  = path.join(tmpDir, 'trimmed.wav');
 
     try {
-        // Step 1: pull a small slice of audio only — starting at the user's chosen point.
-        await runCmd('yt-dlp', [
-            '-x',
-            '--audio-format', 'wav',
-            '--audio-quality', '0',
-            '--download-sections', `*${startSec}-${endSec}`,
-            '--max-filesize', MAX_FILESIZE,
-            '--no-playlist',
-            '--no-warnings',
-            '-o', `${downloadStem}.%(ext)s`,
-            url,
-        ], { timeoutMs: 90000 });
+        let downloadedPath;
 
-        // Resolve the output filename — yt-dlp will write raw.wav (or raw.<ext>).
-        const candidates = (await fs.readdir(tmpDir)).filter(f => f.startsWith('raw.'));
-        if (candidates.length === 0) throw new Error('Download produced no file');
-        const downloadedPath = path.join(tmpDir, candidates[0]);
+        if (DIRECT_MEDIA_RE.test(url)) {
+            // Direct media URL — fetch the whole file, let ffmpeg do the slice.
+            // Avoids yt-dlp's generic extractor entirely (which 500s on
+            // archive.org direct MP3 links).
+            console.log(`[q-audio-fetch] direct media URL — fetching via HTTP`);
+            const res = await fetch(url, {
+                headers: { 'User-Agent': 'Mozilla/5.0 q-audio-fetch' },
+                redirect: 'follow',
+            });
+            if (!res.ok) throw new Error(`HTTP ${res.status} fetching ${url}`);
+            const ext = (url.match(DIRECT_MEDIA_RE) || ['', 'mp3'])[1].toLowerCase();
+            downloadedPath = `${downloadStem}.${ext}`;
+            const buf = Buffer.from(await res.arrayBuffer());
+            await fs.writeFile(downloadedPath, buf);
+        } else {
+            // Step 1: yt-dlp for indirect sources (YouTube, podcast pages, etc.)
+            await runCmd('yt-dlp', [
+                '-x',
+                '--audio-format', 'wav',
+                '--audio-quality', '0',
+                '--download-sections', `*${startSec}-${endSec}`,
+                '--max-filesize', MAX_FILESIZE,
+                '--no-playlist',
+                '--no-warnings',
+                '-o', `${downloadStem}.%(ext)s`,
+                url,
+            ], { timeoutMs: 90000 });
+
+            const candidates = (await fs.readdir(tmpDir)).filter(f => f.startsWith('raw.'));
+            if (candidates.length === 0) throw new Error('Download produced no file');
+            downloadedPath = path.join(tmpDir, candidates[0]);
+        }
 
         // Step 2: drop a small lead-in pad, take 15s, downmix to mono 22050Hz,
         // and run silenceremove so a residual silent gap at the start gets dropped.
+        // For direct-fetch we have the full file → seek to user's startSec + pad.
+        // For yt-dlp path the file was already sliced from startSec → just skip pad.
+        const ffmpegSeek = DIRECT_MEDIA_RE.test(url)
+            ? startSec + TRIM_PAD_SECONDS
+            : TRIM_PAD_SECONDS;
         await runCmd('ffmpeg', [
             '-y',
             '-i', downloadedPath,
-            '-ss', String(TRIM_PAD_SECONDS),
+            '-ss', String(ffmpegSeek),
             '-t',  String(TRIM_LENGTH_SECONDS),
             '-af', 'silenceremove=start_periods=1:start_duration=0.3:start_threshold=-40dB',
             '-ar', '22050',
