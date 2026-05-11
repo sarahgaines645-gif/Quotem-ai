@@ -1558,6 +1558,10 @@ router.get('/voice-clone', (req, res) => {
     res.sendFile(path.join(__dirname, 'voice-clone.html'));
 });
 
+router.get('/voices', (req, res) => {
+    res.sendFile(path.join(__dirname, 'voices.html'));
+});
+
 // ── Q's permanent voice — saved override on the Railway volume ────────────
 const { setQVoiceFromBuffer, clearQVoice, getQVoiceStatus } = require('./plugins/q-tools');
 

@@ -1,0 +1,415 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <script src="/q-auth.js"></script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Q Voice Test Rig</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #e8e8e8; --text: #1a1a1a;
+    --text-muted: rgba(0,0,0,0.42); --text-faint: rgba(0,0,0,0.26);
+    --shadow-light: #ffffff; --shadow-dark: #ababab;
+    --accent: #e91e63;
+    --neu-raised: 10px 10px 28px #ababab, -8px -8px 20px #ffffff, inset 0 1px 0 rgba(255,255,255,0.5);
+    --neu-raised-sm: 6px 6px 16px #ababab, -5px -5px 12px #ffffff;
+    --neu-inset: inset 5px 5px 14px #ababab, inset -4px -4px 10px #ffffff;
+    --neu-inset-sm: inset 3px 3px 8px #ababab, inset -2px -2px 6px #ffffff;
+    --neu-inset-xs: inset 3px 3px 8px #ababab, inset -2px -2px 6px #ffffff;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Space Grotesk', -apple-system, sans-serif; background: var(--bg); color: var(--text); font-size: 15px; line-height: 1.55; min-height: 100vh; padding: 32px 24px 80px; -webkit-font-smoothing: antialiased; }
+  .wrap { max-width: 1080px; margin: 0 auto; }
+  header { display: flex; align-items: baseline; gap: 14px; margin-bottom: 24px; flex-wrap: wrap; }
+  .logo-mark { display: inline-flex; align-items: baseline; }
+  .logo-mark .q { font-size: 28px; font-weight: 700; line-height: 1; letter-spacing: -0.05em; }
+  .logo-mark .dot { width: 8px; height: 8px; background: var(--accent); border-radius: 50%; display: inline-block; margin-left: 4px; align-self: flex-end; margin-bottom: 4px; box-shadow: 0 1px 2px rgba(233,30,99,0.3); }
+  h1 { font-size: 22px; font-weight: 600; letter-spacing: -0.02em; }
+  .tagline { font-size: 13px; color: var(--text-muted); margin-left: auto; }
+  .card { background: var(--bg); border-radius: 18px; padding: 18px; box-shadow: var(--neu-raised); margin-bottom: 18px; }
+  label { display: block; font-size: 11px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 6px; }
+  textarea { width: 100%; border: none; outline: none; resize: vertical; font-family: inherit; font-size: 14px; color: var(--text); background: var(--bg); padding: 12px 14px; border-radius: 10px; box-shadow: var(--neu-inset-sm); margin-bottom: 12px; line-height: 1.5; min-height: 80px; }
+  .controls { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-top: 14px; }
+  button { border: none; cursor: pointer; background: var(--bg); color: var(--text); font-family: inherit; font-size: 14px; font-weight: 600; padding: 10px 22px; border-radius: 12px; box-shadow: var(--neu-raised-sm); transition: color 0.15s; }
+  button:hover:not(:disabled) { color: var(--accent); }
+  button:active:not(:disabled) { box-shadow: var(--neu-inset-xs); }
+  button:disabled { opacity: 0.5; cursor: not-allowed; }
+  .status { font-size: 12px; color: var(--text-muted); }
+  .status .dot { display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: var(--accent); margin-right: 6px; animation: pulse 1.2s infinite; vertical-align: middle; }
+  @keyframes pulse { 0%,100% { opacity: 0.4; } 50% { opacity: 1; } }
+
+  /* Preset chips for sample scripts */
+  .chips { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
+  .chip { font-size: 12px; padding: 6px 14px; border-radius: 9px; box-shadow: var(--neu-raised-sm); color: var(--text-muted); cursor: pointer; }
+  .chip:hover { color: var(--accent); }
+  .chip:active { box-shadow: var(--neu-inset-xs); }
+
+  /* Voice grid */
+  .group-title { font-size: 13px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.08em; margin: 22px 0 10px 4px; display: flex; align-items: baseline; gap: 10px; }
+  .group-title .count { font-size: 11px; color: var(--text-faint); font-weight: 400; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px; }
+  .voice { background: var(--bg); border-radius: 12px; padding: 12px 14px; box-shadow: var(--neu-raised-sm); display: flex; flex-direction: column; gap: 8px; transition: box-shadow 0.15s; }
+  .voice.picked { box-shadow: var(--neu-inset-sm); }
+  .voice .name { font-size: 14px; font-weight: 600; }
+  .voice .id { font-size: 11px; color: var(--text-faint); font-family: ui-monospace, monospace; }
+  .voice .row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .voice button.play { padding: 6px 14px; font-size: 13px; border-radius: 9px; }
+  .voice button.pick { padding: 6px 12px; font-size: 12px; border-radius: 9px; color: var(--text-muted); }
+  .voice button.pick.on { color: var(--accent); box-shadow: var(--neu-inset-xs); }
+  .voice audio { width: 100%; height: 32px; }
+  .voice .gen-status { font-size: 11px; color: var(--text-muted); }
+
+  /* Top bar buttons */
+  .top-actions { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 14px; }
+  .top-actions .primary { background: var(--accent); color: white; box-shadow: var(--neu-raised-sm); }
+  .top-actions .primary:hover { color: white; opacity: 0.92; }
+
+  /* Picks panel */
+  .picks { background: var(--bg); border-radius: 18px; padding: 18px; box-shadow: var(--neu-inset-sm); margin-bottom: 18px; }
+  .picks .row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+  .picks .pick-slot { flex: 1; min-width: 220px; padding: 10px 14px; background: var(--bg); border-radius: 10px; box-shadow: var(--neu-raised-sm); font-size: 13px; }
+  .picks .pick-slot .label-row { font-size: 10px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 3px; }
+  .picks .pick-slot .val { font-weight: 600; }
+  .picks .pick-slot .val.empty { color: var(--text-faint); font-weight: 400; }
+
+  .back-link { display: inline-block; margin-top: 32px; font-size: 12px; color: var(--text-muted); text-decoration: none; }
+  .back-link:hover { color: var(--text); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <span class="logo-mark"><span class="q">Q</span><span class="dot"></span></span>
+    <h1>Voice Test Rig</h1>
+    <span class="tagline">All Kokoro presets, same script, side by side</span>
+  </header>
+
+  <div class="card">
+    <label for="text-input">Script (same line gets spoken in every voice)</label>
+    <textarea id="text-input">Got it Sarah. I've blocked off Tuesday two to four for the contractor visit and sent you a calendar invite. Anything you want me to bring up with them?</textarea>
+    <div class="chips">
+      <span class="chip" data-preset="pa">PA reply</span>
+      <span class="chip" data-preset="q">Q reply</span>
+      <span class="chip" data-preset="warm">Warm bit</span>
+      <span class="chip" data-preset="brief">Brief bit</span>
+    </div>
+    <div class="top-actions">
+      <button id="generate-all" class="primary">Generate all voices</button>
+      <button id="stop-all">Stop playback</button>
+      <span class="status" id="top-status"></span>
+    </div>
+    <div style="font-size:11px;color:var(--text-faint);margin-top:10px;font-style:italic;">
+      First click loads Kokoro from CDN (~80MB) — takes a few seconds on first use, instant after. Everything runs in your browser. Zero per-call cost, forever.
+    </div>
+  </div>
+
+  <!-- Your picks -->
+  <div class="picks">
+    <label style="margin-bottom:12px;">Your picks</label>
+    <div class="row">
+      <div class="pick-slot">
+        <div class="label-row">For Q</div>
+        <div class="val empty" id="pick-q-display">none picked yet</div>
+      </div>
+      <div class="pick-slot">
+        <div class="label-row">For PA</div>
+        <div class="val empty" id="pick-pa-display">none picked yet</div>
+      </div>
+      <button id="copy-picks">Copy picks</button>
+    </div>
+  </div>
+
+  <!-- Voice grid will be injected here -->
+  <div id="voice-area"></div>
+
+  <div class="card" style="margin-top:24px;">
+    <label>Want a custom cloned voice?</label>
+    <div style="font-size:13px;color:var(--text-muted);margin-bottom:10px;">
+      For voices that aren't in Kokoro (a specific person, a YouTube clip, your own voice) use the cloning rig — same zero-per-call setup via your XTTS-v2 Space.
+    </div>
+    <a href="/voice-clone" style="text-decoration:none;"><button>Open voice-clone →</button></a>
+  </div>
+
+  <a href="/chat" class="back-link">← back to Q's chat</a>
+</div>
+
+<script>
+// ── Voice catalogue (Kokoro-82M-v1.0-ONNX) ───────────────────────
+// Only English-output voices listed. CJK / non-English voices are
+// excluded — Q's user-visible output is English only.
+const VOICE_GROUPS = [
+  {
+    title: 'British female',
+    voices: [
+      { id: 'bf_alice',    name: 'Alice' },
+      { id: 'bf_emma',     name: 'Emma' },
+      { id: 'bf_isabella', name: 'Isabella' },
+      { id: 'bf_lily',     name: 'Lily' },
+    ],
+  },
+  {
+    title: 'British male',
+    voices: [
+      { id: 'bm_daniel', name: 'Daniel' },
+      { id: 'bm_fable',  name: 'Fable' },
+      { id: 'bm_george', name: 'George', note: 'currently Q’s voice' },
+      { id: 'bm_lewis',  name: 'Lewis' },
+    ],
+  },
+  {
+    title: 'American female',
+    voices: [
+      { id: 'af_alloy',   name: 'Alloy' },
+      { id: 'af_aoede',   name: 'Aoede' },
+      { id: 'af_bella',   name: 'Bella' },
+      { id: 'af_heart',   name: 'Heart' },
+      { id: 'af_jessica', name: 'Jessica' },
+      { id: 'af_kore',    name: 'Kore' },
+      { id: 'af_nicole',  name: 'Nicole' },
+      { id: 'af_nova',    name: 'Nova' },
+      { id: 'af_river',   name: 'River' },
+      { id: 'af_sarah',   name: 'Sarah' },
+      { id: 'af_sky',     name: 'Sky' },
+    ],
+  },
+  {
+    title: 'American male',
+    voices: [
+      { id: 'am_adam',    name: 'Adam' },
+      { id: 'am_echo',    name: 'Echo' },
+      { id: 'am_eric',    name: 'Eric' },
+      { id: 'am_fenrir',  name: 'Fenrir' },
+      { id: 'am_liam',    name: 'Liam' },
+      { id: 'am_michael', name: 'Michael' },
+      { id: 'am_onyx',    name: 'Onyx' },
+      { id: 'am_puck',    name: 'Puck' },
+      { id: 'am_santa',   name: 'Santa' },
+    ],
+  },
+];
+
+const PRESETS = {
+  pa:    "Got it Sarah. I've blocked off Tuesday two to four for the contractor visit and sent you a calendar invite. Anything you want me to bring up with them?",
+  q:     "I've drafted the response and set a fourteen-day chase. The draft is in your email tab — give it a read, and let me know if you want me to soften it or push harder.",
+  warm:  "Morning, Sarah. Big day ahead — but you've got this. I've sorted the diary, picked the three priorities, and made you a cup of tea. Metaphorically.",
+  brief: "Done. Sent. Filed. Next.",
+};
+
+const $text = document.getElementById('text-input');
+const $area = document.getElementById('voice-area');
+const $topStatus = document.getElementById('top-status');
+const $generateAll = document.getElementById('generate-all');
+const $stopAll = document.getElementById('stop-all');
+
+// ── Preset chips ──────────────────────────────────────────────────
+document.querySelectorAll('.chip').forEach(chip => {
+  chip.addEventListener('click', () => {
+    const key = chip.dataset.preset;
+    if (PRESETS[key]) $text.value = PRESETS[key];
+  });
+});
+
+// ── Picks state ───────────────────────────────────────────────────
+let pickedForQ = null;
+let pickedForPA = null;
+const $pickQ = document.getElementById('pick-q-display');
+const $pickPA = document.getElementById('pick-pa-display');
+
+function renderPick(slot, voiceId) {
+  const el = slot === 'q' ? $pickQ : $pickPA;
+  if (!voiceId) {
+    el.classList.add('empty');
+    el.textContent = 'none picked yet';
+    return;
+  }
+  const v = findVoice(voiceId);
+  el.classList.remove('empty');
+  el.textContent = (v ? v.name : voiceId) + '  ·  ' + voiceId;
+}
+
+function findVoice(id) {
+  for (const g of VOICE_GROUPS) for (const v of g.voices) if (v.id === id) return v;
+  return null;
+}
+
+document.getElementById('copy-picks').addEventListener('click', () => {
+  const lines = [];
+  lines.push('Voice picks:');
+  lines.push('  Q  -> ' + (pickedForQ  ? pickedForQ  : '(none)'));
+  lines.push('  PA -> ' + (pickedForPA ? pickedForPA : '(none)'));
+  navigator.clipboard.writeText(lines.join('\n')).then(() => {
+    const btn = document.getElementById('copy-picks');
+    const t = btn.textContent;
+    btn.textContent = 'Copied';
+    setTimeout(() => { btn.textContent = t; }, 1200);
+  });
+});
+
+// ── Render voice grid ─────────────────────────────────────────────
+function renderGrid() {
+  for (const group of VOICE_GROUPS) {
+    const title = document.createElement('div');
+    title.className = 'group-title';
+    title.innerHTML = group.title + ' <span class="count">' + group.voices.length + '</span>';
+    $area.appendChild(title);
+
+    const grid = document.createElement('div');
+    grid.className = 'grid';
+
+    for (const v of group.voices) {
+      const card = document.createElement('div');
+      card.className = 'voice';
+      card.dataset.voiceId = v.id;
+      card.innerHTML =
+        '<div>' +
+          '<div class="name">' + v.name + (v.note ? ' <span style="font-size:11px;color:var(--accent);font-weight:400;">· ' + v.note + '</span>' : '') + '</div>' +
+          '<div class="id">' + v.id + '</div>' +
+        '</div>' +
+        '<div class="row">' +
+          '<button class="play">Play</button>' +
+          '<button class="pick" data-slot="q">Q</button>' +
+          '<button class="pick" data-slot="pa">PA</button>' +
+          '<span class="gen-status"></span>' +
+        '</div>' +
+        '<audio controls style="display:none;"></audio>';
+      grid.appendChild(card);
+
+      const $play = card.querySelector('button.play');
+      const $audio = card.querySelector('audio');
+      const $stat = card.querySelector('.gen-status');
+      $play.addEventListener('click', async () => {
+        $play.disabled = true;
+        $stat.textContent = 'Generating...';
+        try {
+          const url = await generateForVoice(v.id, $text.value.trim());
+          $audio.src = url;
+          $audio.style.display = '';
+          $audio.play();
+          $stat.textContent = '';
+        } catch (e) {
+          $stat.textContent = 'Failed: ' + (e.message || e);
+          console.warn('[voices]', v.id, 'failed:', e);
+        } finally {
+          $play.disabled = false;
+        }
+      });
+
+      card.querySelectorAll('button.pick').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const slot = btn.dataset.slot;
+          // Toggle off if already picked
+          if (slot === 'q' && pickedForQ === v.id) {
+            pickedForQ = null;
+            btn.classList.remove('on');
+          } else if (slot === 'pa' && pickedForPA === v.id) {
+            pickedForPA = null;
+            btn.classList.remove('on');
+          } else {
+            // Clear previous pick for this slot in any card
+            document.querySelectorAll('button.pick[data-slot="' + slot + '"].on').forEach(b => b.classList.remove('on'));
+            btn.classList.add('on');
+            if (slot === 'q') pickedForQ = v.id;
+            else              pickedForPA = v.id;
+          }
+          renderPick(slot, slot === 'q' ? pickedForQ : pickedForPA);
+        });
+      });
+    }
+    $area.appendChild(grid);
+  }
+}
+renderGrid();
+
+// ── Kokoro loader (matches chat.html) ─────────────────────────────
+let kokoroPromise = null;
+function loadKokoro() {
+  if (kokoroPromise) return kokoroPromise;
+  $topStatus.innerHTML = '<span class="dot"></span>Loading Kokoro (first time only)...';
+  kokoroPromise = (async () => {
+    const { KokoroTTS } = await import('https://cdn.jsdelivr.net/npm/kokoro-js@1.2.1/dist/kokoro.web.js');
+    const useGPU = !!navigator.gpu;
+    const tts = await KokoroTTS.from_pretrained('onnx-community/Kokoro-82M-v1.0-ONNX', {
+      dtype: useGPU ? 'fp32' : 'q8',
+      device: useGPU ? 'webgpu' : 'wasm',
+    });
+    $topStatus.textContent = 'Kokoro ready' + (useGPU ? ' (WebGPU)' : ' (CPU)');
+    setTimeout(() => { if ($topStatus.textContent.startsWith('Kokoro ready')) $topStatus.textContent = ''; }, 2500);
+    return tts;
+  })().catch(e => {
+    $topStatus.textContent = 'Kokoro failed to load: ' + (e.message || e);
+    kokoroPromise = null;
+    throw e;
+  });
+  return kokoroPromise;
+}
+
+// Cache generated audio so repeat plays don't re-render
+const audioCache = new Map(); // key = voiceId + '|' + text
+
+async function generateForVoice(voiceId, text) {
+  if (!text) throw new Error('script is empty');
+  const key = voiceId + '|' + text;
+  if (audioCache.has(key)) return audioCache.get(key);
+
+  const tts = await loadKokoro();
+  const audio = await tts.generate(text, { voice: voiceId });
+  const blob = audio.toBlob();
+  const url = URL.createObjectURL(blob);
+  audioCache.set(key, url);
+  return url;
+}
+
+// ── Generate all ──────────────────────────────────────────────────
+$generateAll.addEventListener('click', async () => {
+  const text = $text.value.trim();
+  if (!text) { $text.focus(); return; }
+
+  $generateAll.disabled = true;
+  const cards = Array.from(document.querySelectorAll('.voice'));
+  let done = 0;
+  const total = cards.length;
+  const updateTop = () => {
+    $topStatus.innerHTML = '<span class="dot"></span>Generating ' + done + ' / ' + total + '...';
+  };
+  updateTop();
+
+  // Pre-load once so we don't race for the model
+  try { await loadKokoro(); } catch (e) {
+    $generateAll.disabled = false;
+    return;
+  }
+
+  // Generate sequentially — Kokoro on CPU runs one at a time anyway,
+  // and we want to show progress not just spin.
+  for (const card of cards) {
+    const voiceId = card.dataset.voiceId;
+    const $audio = card.querySelector('audio');
+    const $stat = card.querySelector('.gen-status');
+    try {
+      $stat.textContent = '...';
+      const url = await generateForVoice(voiceId, text);
+      $audio.src = url;
+      $audio.style.display = '';
+      $stat.textContent = '';
+    } catch (e) {
+      $stat.textContent = 'Failed';
+      console.warn('[voices] bulk', voiceId, e);
+    }
+    done++;
+    updateTop();
+  }
+  $topStatus.textContent = 'All ' + total + ' ready';
+  setTimeout(() => { if ($topStatus.textContent.startsWith('All ')) $topStatus.textContent = ''; }, 3000);
+  $generateAll.disabled = false;
+});
+
+// ── Stop playback on every card ───────────────────────────────────
+$stopAll.addEventListener('click', () => {
+  document.querySelectorAll('.voice audio').forEach(a => { try { a.pause(); a.currentTime = 0; } catch {} });
+});
+</script>
+</body>
+</html>
