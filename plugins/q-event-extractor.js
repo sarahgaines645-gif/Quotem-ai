@@ -95,7 +95,9 @@ async function extractLifeAdmin(rawText, opts = {}) {
     try { raw = (await res.json()).choices?.[0]?.message?.content || ''; }
     catch { return { events: [], tasks: [], error: 'response not JSON' }; }
 
-    raw = cleanModelOutput(raw, 'event-extractor').replace(/```json\s*/gi, '').replace(/```\s*/g, '').trim();
+    raw = cleanModelOutput(raw, 'event-extractor')
+        .replace(/<think>[\s\S]*?<\/think>/gi, '')
+        .replace(/```json\s*/gi, '').replace(/```\s*/g, '').trim();
 
     let parsed;
     try { parsed = JSON.parse(raw); }
@@ -182,7 +184,9 @@ async function extractFromImage(dataUrl, opts = {}) {
     try { raw = (await res.json()).choices?.[0]?.message?.content || ''; }
     catch { return { events: [], tasks: [], error: 'response not JSON' }; }
 
-    raw = cleanModelOutput(raw, 'event-extractor').replace(/```json\s*/gi, '').replace(/```\s*/g, '').trim();
+    raw = cleanModelOutput(raw, 'event-extractor')
+        .replace(/<think>[\s\S]*?<\/think>/gi, '')
+        .replace(/```json\s*/gi, '').replace(/```\s*/g, '').trim();
 
     let parsed;
     try { parsed = JSON.parse(raw); }
