@@ -1623,16 +1623,24 @@ router.post('/q-voice/reset', requirePerson, (req, res) => {
 const { fetchAudioClip } = require('./plugins/q-audio-fetch');
 router.post('/voice-clone/from-url', express.json({ limit: '8kb' }), async (req, res) => {
     const { url, text, exaggeration, cfgWeight, startTime } = req.body || {};
+    console.log(`[voice-clone/from-url] IN  url="${(url || '').slice(0,80)}" startTime=${startTime} textLen=${text?.length}`);
     if (!url || typeof url !== 'string') return res.status(400).json({ error: 'url is required' });
     if (!text || typeof text !== 'string') return res.status(400).json({ error: 'text is required' });
 
     try {
+        console.log(`[voice-clone/from-url] fetching audio clip...`);
         const refBuf = await fetchAudioClip(url, { startTime });
+        console.log(`[voice-clone/from-url] OK clip fetched, ${refBuf?.length || 0} bytes`);
+
+        console.log(`[voice-clone/from-url] calling speakAsVoice (SPACE_URL=${process.env.CHATTERBOX_SPACE_URL ? 'set' : 'UNSET'})...`);
         const result = await speakAsVoice(text, refBuf, 'audio/wav', {
             exaggeration: typeof exaggeration === 'number' ? exaggeration : undefined,
             cfgWeight:    typeof cfgWeight    === 'number' ? cfgWeight    : undefined,
         });
+        console.log(`[voice-clone/from-url] speakAsVoice returned: hasAudio=${!!result.audio} (${result.audio?.length || 0}b), error=${JSON.stringify(result.error)}, durationMs=${result.durationMs}`);
+
         if (result.error || !result.audio) {
+            console.warn(`[voice-clone/from-url] FAIL → 500: ${result.error || 'No audio returned'}`);
             return res.status(500).json({ error: result.error || 'No audio returned', durationMs: result.durationMs });
         }
         res.setHeader('Content-Type', result.mimeType);
@@ -1640,6 +1648,7 @@ router.post('/voice-clone/from-url', express.json({ limit: '8kb' }), async (req,
         res.setHeader('X-Generation-Ms', String(result.durationMs));
         return res.end(result.audio);
     } catch (e) {
+        console.error(`[voice-clone/from-url] THREW: ${e.message}\n${e.stack}`);
         res.status(500).json({ error: e.message || 'Audio fetch failed' });
     }
 });
@@ -1671,7 +1680,9 @@ router.post('/speak-as-voice', express.json({ limit: '8mb' }), async (req, res) 
         return res.status(400).json({ error: 'referenceAudioBase64 is not valid base64' });
     }
 
+    console.log(`[speak-as-voice] IN  textLen=${text.length}, refMime=${refMime}, refBytes=${refBuf.length}, SPACE_URL=${process.env.CHATTERBOX_SPACE_URL ? 'set' : 'UNSET'}`);
     const result = await speakAsVoice(text, refBuf, refMime, { exaggeration, cfgWeight });
+    console.log(`[speak-as-voice] speakAsVoice returned: hasAudio=${!!result.audio} (${result.audio?.length || 0}b), error=${JSON.stringify(result.error)}, durationMs=${result.durationMs}`);
 
     if (result.error || !result.audio) {
         return res.status(500).json({ error: result.error || 'No audio returned', durationMs: result.durationMs });
