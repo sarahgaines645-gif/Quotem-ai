@@ -338,6 +338,24 @@
     border-radius: 6px;
     box-shadow: var(--neu-inset-xs);
   }
+  .message-body img {
+    max-width: 320px;
+    max-height: 320px;
+    width: auto;
+    height: auto;
+    border-radius: 10px;
+    margin: 8px 0;
+    cursor: zoom-in;
+    box-shadow: var(--neu-inset-xs);
+  }
+  .message-body img:hover { opacity: 0.92; }
+  /* Click-to-expand: when an image has the .expanded class (toggled by JS
+     below) it breaks out to natural size. */
+  .message-body img.expanded {
+    max-width: 100%;
+    max-height: none;
+    cursor: zoom-out;
+  }
   .message.q .message-body pre {
     background: var(--bg);
     padding: 12px 14px;
@@ -1411,6 +1429,13 @@ document.addEventListener('click', (e) => {
   if (!$voicesPanel.contains(e.target) && e.target !== $voiceToggle && !$voiceToggle.contains(e.target)) {
     closeVoicesPanel();
   }
+});
+
+// Click-to-expand for inline images Q embeds in his replies. Thumbnail in
+// the chat, full size on click, click again to collapse.
+document.getElementById('conversation').addEventListener('click', (e) => {
+  const img = e.target.closest('.message-body img');
+  if (img) img.classList.toggle('expanded');
 });
 
 // Voice row clicks (Off / Default / saved cloned voices) + delete buttons.
