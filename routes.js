@@ -593,11 +593,27 @@ router.post('/chat', requirePerson, express.json({ limit: '24mb' }), async (req,
     // writer card only shows messages from /writer. Q's prompt sees the
     // FULL thread regardless of surface so he has continuous memory.
     const surface = (req.body?.surface || 'chat').toString().toLowerCase();
-    // Reasoning effort: explicit 'low' for Quick mode (was undefined before
-    // — V4 Pro then fell back to its own default which is heavier than
-    // expected, so 'Quick' wasn't actually quick).
+    // Reasoning effort. V4 Pro's documented values are 'high' / 'max' /
+    // undefined. We previously passed 'low' for Quick which V4 didn't
+    // recognise — it fell back to default thinking and burned the full
+    // token budget on hidden reasoning, returning empty content
+    // (finish_reason=length). Quick now sends undefined → genuine non-think.
+    //
+    // Auto-escalate: if the user picked Quick but their message looks like a
+    // real question (length, keywords, math, code), bump to 'high' for this
+    // turn so Q doesn't read as dumb on hard prompts. Manual Think/Deep
+    // selections are untouched.
     const rawEffort = req.body?.reasoningEffort;
-    const reasoningEffort = (rawEffort === 'high' || rawEffort === 'max') ? rawEffort : 'low';
+    let reasoningEffort = (rawEffort === 'high' || rawEffort === 'max') ? rawEffort : undefined;
+    if (rawEffort === 'off' && typeof req.body?.message === 'string') {
+        const m = req.body.message.toLowerCase();
+        const needsThink =
+            m.length > 400
+            || /\b(why|how does|how do|explain|compare|difference between|step.by.step|break.down|calculate|prove|derive|reason|analyse|analyze)\b/.test(m)
+            || /[=+\-*/^%]\s*\d/.test(m)
+            || m.includes('```');
+        if (needsThink) reasoningEffort = 'high';
+    }
     const rawImages = req.body?.images;
     const images = Array.isArray(rawImages)
         ? rawImages.filter(i => i && typeof i.dataUrl === 'string' && i.dataUrl.startsWith('data:'))
@@ -1541,11 +1557,11 @@ router.post('/agent/run', requirePerson, express.json({ limit: '256kb' }), async
     }
     const maxSteps = parseInt(req.body?.maxSteps);
     const verify = req.body?.verify === true;
-    // Reasoning effort: explicit 'low' for Quick mode (was undefined before
-    // — V4 Pro then fell back to its own default which is heavier than
-    // expected, so 'Quick' wasn't actually quick).
+    // Reasoning effort. V4 Pro recognises 'high' / 'max' / undefined. 'low'
+    // wasn't a valid value and caused token blow-out. Agent runs are
+    // typically complex so 'high' is the sane default when Quick is picked.
     const rawEffort = req.body?.reasoningEffort;
-    const reasoningEffort = (rawEffort === 'high' || rawEffort === 'max') ? rawEffort : 'low';
+    const reasoningEffort = (rawEffort === 'high' || rawEffort === 'max') ? rawEffort : 'high';
     const result = await runAgent(goal, {
         maxSteps: Number.isFinite(maxSteps) ? maxSteps : undefined,
         verify,
