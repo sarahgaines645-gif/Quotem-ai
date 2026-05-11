@@ -586,7 +586,7 @@ const TOOL_DEFINITIONS = [
         type: 'function',
         function: {
             name: 'update_life_context',
-            description: 'Append a fact about the user or their household to their saved "About you" context on /life. The context is read every time Q extracts events/tasks from a photo or paste, so it lets him filter to what\'s relevant. ONLY call this AFTER explicitly asking the user and getting a yes. Phrase the ask warmly and name the benefit — e.g. "Can I remember [X] about you? It means [concrete benefit]. Yes or no?" — never call this tool silently.',
+            description: 'Append ONE fact to the user\'s "About you" filter on /life. NARROW SCOPE: only facts that change WHICH ITEMS get pulled out when reading a school letter / forwarded email / pasted notice. Allowed: kids\' year groups + schools, household allergies, dietary requirements, work pattern, who lives in the house. NOT for: birthday, name, partner\'s name, where they live, preferences, projects, deadlines — those go through `remember`. Always ask first (warm, name the /life benefit, yes/no), never call silently.',
             parameters: {
                 type: 'object',
                 properties: {
