@@ -582,6 +582,20 @@ const TOOL_DEFINITIONS = [
             },
         },
     },
+    {
+        type: 'function',
+        function: {
+            name: 'update_life_context',
+            description: 'Append a fact about the user or their household to their saved "About you" context on /life. The context is read every time Q extracts events/tasks from a photo or paste, so it lets him filter to what\'s relevant. ONLY call this AFTER explicitly asking the user and getting a yes. Phrase the ask warmly and name the benefit — e.g. "Can I remember [X] about you? It means [concrete benefit]. Yes or no?" — never call this tool silently.',
+            parameters: {
+                type: 'object',
+                properties: {
+                    addition: { type: 'string', description: 'The new fact to append. Short, declarative, third-person where natural ("Daughter in Year 9 at Park High"; "Works Mon–Thu"; "Nut allergy in the house"). One fact per call.' },
+                },
+                required: ['addition'],
+            },
+        },
+    },
 ];
 
 // ─────────────────────────────────────────────────────────────
@@ -813,6 +827,7 @@ async function executeTool(name, argsRaw, personId, personEmail) {
         case 'add_task':             return addTaskTool(args, personEmail);
         case 'list_tasks':           return listTasksTool(args, personEmail);
         case 'complete_task':        return completeTaskTool(args, personEmail);
+        case 'update_life_context':  return updateLifeContextTool(args, personEmail);
         default:                 return { error: `Unknown tool: "${name}"` };
     }
 }
@@ -1184,6 +1199,22 @@ function completeTaskTool({ id } = {}, personEmail) {
     };
 }
 
+function updateLifeContextTool({ addition } = {}, personEmail) {
+    if (!personEmail) return { error: 'Cannot update life context without a signed-in user.' };
+    const fact = String(addition || '').trim();
+    if (!fact) return { error: 'addition (string) is required' };
+    const existing = qLife.getContext(personEmail) || '';
+    const stamp = new Date().toISOString().slice(0, 10);
+    const line = `- ${fact} (${stamp})`;
+    const next = existing.trim() ? `${existing.trim()}\n${line}\n` : `${line}\n`;
+    qLife.setContext(next, personEmail);
+    return {
+        ok: true,
+        addition: fact,
+        instruction_for_q: 'Saved. One short warm confirmation in your own voice — don\'t parrot the fact back verbatim.',
+    };
+}
+
 /**
  * remember — write a fact to Q's persistent memory.
  */
@@ -1231,6 +1262,10 @@ const ALWAYS_ON = new Set([
     // Life calendar + tasks — common life-admin asks ("what's on Friday",
     // "remind me to bring the form") need these without ceremony.
     'add_event', 'list_events', 'add_task', 'list_tasks', 'complete_task',
+    // Q can volunteer to remember household facts (kids' year groups, work
+    // patterns, allergies) that bias what counts as "relevant" on /life.
+    // Tool description requires Q to ASK first — never silent.
+    'update_life_context',
 ]);
 
 const TRIGGERS = {
