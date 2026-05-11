@@ -1253,19 +1253,19 @@ function recall({ query = '', limit = 10 } = {}, personId) {
 // Default = remember + recall (cheap, useful for memory). Everything else is
 // gated behind explicit triggers in the user's message.
 const ALWAYS_ON = new Set([
+    // Memory is core to every chat surface — Q should silently save and
+    // recall facts without ceremony.
     'remember', 'recall',
     // Threads/situations are core memory across surfaces — Q gets these on
     // every turn so he can correlate to a saved case whenever Sarah refers
     // to one (anywhere — main chat, email writer, inside a Thread).
     'list_threads', 'read_thread', 'save_situation',
     'add_email_to_thread', 'add_note_to_thread',
-    // Life calendar + tasks — common life-admin asks ("what's on Friday",
-    // "remind me to bring the form") need these without ceremony.
-    'add_event', 'list_events', 'add_task', 'list_tasks', 'complete_task',
-    // Q can volunteer to remember household facts (kids' year groups, work
-    // patterns, allergies) that bias what counts as "relevant" on /life.
-    // Tool description requires Q to ASK first — never silent.
-    'update_life_context',
+    // Life tools (add_event / list_events / add_task / list_tasks /
+    // complete_task / update_life_context) are trigger-gated below — only
+    // attached when the user's message clearly asks for them. Keeping them
+    // ALWAYS_ON wasted V4 calls (every turn reasoned over a 15-tool menu)
+    // and hit Together's rate limit. One tool per turn, max.
 ]);
 
 const TRIGGERS = {
@@ -1324,6 +1324,44 @@ const TRIGGERS = {
     move_paragraph:   [/\b(move|relocate|shift)\b.*\b(paragraph|line|to)/i],
     merge_paragraph:  [/\b(merge|combine|inline|join|put on (the|that) line|same line|stranded|bring (it|that) up)/i],
     format_paragraph: [/\b(bold|italic|underline|heading|centre|center|left|right|justify|format)/i],
+
+    // Life — calendar + tasks. Each tool fires only when the message
+    // clearly references its purpose.
+    add_event: [
+        /\b(add|put|book|schedule|pencil|stick)\b.*\b(in|on|for|to)\b.*\b(calendar|diary|on (the )?\d|monday|tuesday|wednesday|thursday|friday|saturday|sunday|tomorrow|next week)\b/i,
+        /\b(i('ve)? got|i have)\b.*\b(meeting|appointment|trip|party|event|thing)\b.*\b(on|at|next|tomorrow|tonight|tonight|monday|tuesday|wednesday|thursday|friday|saturday|sunday|\d{1,2}(st|nd|rd|th)?)\b/i,
+        /\bnew event\b/i,
+    ],
+    list_events: [
+        /\b(what'?s|whats|anything)\b.*\b(on|coming up|happening|in (the )?diary|this week|next week|tomorrow|today|tonight|monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b/i,
+        /\b(do i have|have i got)\b.*\b(anything|something|meetings?|appointments?|plans?)\b/i,
+        /\b(my )?calendar\b/i,
+        /\b(what'?s|whats) (my )?(week|day|weekend) (like|looking like)\b/i,
+    ],
+    add_task: [
+        /\b(remind me|don'?t let me forget|i need to|i('ve)? got to|i have to|i must|got to)\b/i,
+        /\b(add|put)\b.*\b(to (my|the) (list|tasks?|todo|to-do))\b/i,
+        /\b(todo|to-do)\b.*\b(:|add)\b/i,
+    ],
+    list_tasks: [
+        /\b(what'?s|whats|show me|list)\b.*\b(on (my|the) list|my tasks?|my todos?|my to-?dos?|left to do|outstanding|on my plate)\b/i,
+        /\bwhat do i need to (do|get done)\b/i,
+    ],
+    complete_task: [
+        /\b(i('ve)? )?(done|finished|completed?|sorted)\b.*\b(that|this|it|the|with)\b/i,
+        /\btick (off|that|this|it)\b/i,
+        /\bcross (off|that|this|it)\b/i,
+    ],
+    // Q can offer to save household-filter facts (year groups, schools,
+    // allergies, work pattern). Triggers when the user volunteers info that
+    // would change /life intake filtering. Q's persona requires asking first.
+    update_life_context: [
+        /\b(my )?(daughter|son|child|kid|partner|husband|wife)('s)?\b/i,
+        /\byear\s*\d{1,2}\b/i,
+        /\b(i'?m|im) (vegan|vegetarian|veggie|gluten[- ]free|dairy[- ]free|lactose|coeliac|allergic)\b/i,
+        /\b(allerg(ic|y)|nut[- ]free)\b/i,
+        /\bi work\b.*\b(mon|tue|wed|thu|fri|sat|sun|monday|tuesday|wednesday|thursday|friday|weekend|nights?)\b/i,
+    ],
 };
 
 // Tools that should always be available when the user has a doc open in
