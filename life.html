@@ -196,13 +196,13 @@
   }
 
   /* Modal */
-  /* Modal overlay — neumorphic pages NEVER use a dark overlay (kills the
-     light-on-light depth illusion). Soft blur on the page beneath, no tint. */
+  /* Modal overlay — neumorphic pages use NO overlay (no dark tint, no blur).
+     Focus comes from the modal's own raised shadow against the live page.
+     The .modal-bg element is kept transparent so click-outside-to-dismiss
+     still works. */
   .modal-bg {
     position: fixed; inset: 0;
-    background: rgba(232,232,232,0.55);
-    backdrop-filter: blur(6px);
-    -webkit-backdrop-filter: blur(6px);
+    background: transparent;
     display: none; align-items: center; justify-content: center;
     z-index: 100; padding: 20px;
   }

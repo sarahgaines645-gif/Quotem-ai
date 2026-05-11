@@ -4,16 +4,17 @@ The whole app is **neumorphic light** — `#e8e8e8` base, soft inset/raised shad
 
 ## Hard rules
 
-### 1. NEVER grey out the background on modals or overlays
-Neumorphic depth depends on light-on-light contrast. A dark overlay (e.g. `rgba(0,0,0,0.35)`) collapses the entire light-side shadow and makes the page look broken behind the modal.
+### 1. NO overlay on modals — no dark tint, no blur, no light tint
+Neumorphic depth depends on light-on-light contrast. ANY overlay (dark or blurred) breaks the illusion. Focus comes from the modal's own raised neumorphic shadow against the live page beneath.
 
-Use instead: a **soft blur with a light tint** —
 ```css
-background: rgba(232,232,232,0.55);
-backdrop-filter: blur(6px);
--webkit-backdrop-filter: blur(6px);
+.modal-bg {
+    position: fixed; inset: 0;
+    background: transparent;   /* nothing — kept transparent so click-outside-to-dismiss still works */
+}
 ```
-The page beneath stays visible and on-theme; focus comes from the modal's own raised neumorphic shadow.
+
+Don't add `backdrop-filter`, don't tint, don't dim. The page beneath stays fully visible; the modal floats above with its raised shadow doing the focus work.
 
 ### 2. Accent colour is for ICONS and indicators, not fills
 `#e91e63` belongs on:
