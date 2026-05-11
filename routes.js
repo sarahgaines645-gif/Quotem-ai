@@ -755,7 +755,7 @@ router.post('/extract-text', requirePerson, express.json({ limit: '24mb' }), asy
     } catch (e) {
         console.warn('[extract-text] failed for ' + name + ': ' + e.message);
         return res.status(500).json({
-            error: 'Could not read that file. It might be encrypted, scanned (image-only), or corrupted.',
+            error: `Could not read that file: ${e.message}`,
         });
     }
 });
