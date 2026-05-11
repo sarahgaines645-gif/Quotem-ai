@@ -1400,6 +1400,14 @@ router.delete('/life/events/:id', requirePerson, (req, res) => {
     res.json({ ok: true });
 });
 
+router.get('/life/context', requirePerson, (req, res) => {
+    res.json({ context: qLife.getContext(req.person.email) });
+});
+router.put('/life/context', requirePerson, express.json({ limit: '8kb' }), (req, res) => {
+    const saved = qLife.setContext(req.body?.context || '', req.person.email);
+    res.json({ context: saved });
+});
+
 router.get('/life/tasks', requirePerson, (req, res) => {
     res.json(qLife.listTasks(req.person.email, { status: req.query.status }));
 });
@@ -1419,13 +1427,15 @@ router.delete('/life/tasks/:id', requirePerson, (req, res) => {
 });
 
 // Extract events + tasks from a paste of text. Returns preview shape — nothing
-// is saved until POST /life/batch confirms it.
+// is saved until POST /life/batch confirms it. Pulls the user's saved
+// "About me" context so the extractor can filter to what's relevant to them.
 router.post('/life/extract', requirePerson, express.json({ limit: '256kb' }), async (req, res) => {
     const text = req.body?.text;
     if (!text || typeof text !== 'string' || !text.trim()) {
         return res.status(400).json({ error: 'text (string) required' });
     }
-    const result = await extractLifeAdmin(text, { source: req.body?.source || 'paste' });
+    const context = qLife.getContext(req.person.email);
+    const result = await extractLifeAdmin(text, { source: req.body?.source || 'paste', context });
     res.json(result);
 });
 
@@ -1435,7 +1445,8 @@ router.post('/life/extract-photo', requirePerson, express.json({ limit: '32mb' }
     if (!dataUrl || typeof dataUrl !== 'string' || !dataUrl.startsWith('data:')) {
         return res.status(400).json({ error: 'dataUrl (image) required' });
     }
-    const result = await extractLifeFromImage(dataUrl, { source: req.body?.source || 'photo' });
+    const context = qLife.getContext(req.person.email);
+    const result = await extractLifeFromImage(dataUrl, { source: req.body?.source || 'photo', context });
     res.json(result);
 });
 

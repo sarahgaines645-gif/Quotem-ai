@@ -45,6 +45,7 @@ RULES:
 4. Priority defaults to "med". Bump to "high" for words like urgent, today, deadline, last chance. Drop to "low" for "if you have time", "optional".
 5. Don't invent items not in the text. If the text has nothing date-shaped, return empty arrays.
 6. Plain English, British spellings. No emoji.
+7. If the user gives you ABOUT-ME context (family, year groups, allergies, what they do), filter out items that clearly don't apply to them or their household. When in doubt, keep it.
 
 OUTPUT ONLY THE JSON OBJECT.`;
 
@@ -58,8 +59,10 @@ async function extractLifeAdmin(rawText, opts = {}) {
 
     const today = opts.today || new Date().toISOString().slice(0, 10);
     const source = opts.source || 'paste';
+    const context = (opts.context && String(opts.context).trim()) || '';
 
-    const userMessage = `TODAY: ${today}\n\n--- TEXT ---\n${rawText.trim()}\n--- END ---\n\nReturn the JSON object.`;
+    const contextBlock = context ? `\n\nABOUT ME:\n${context}\n` : '';
+    const userMessage = `TODAY: ${today}${contextBlock}\n\n--- TEXT ---\n${rawText.trim()}\n--- END ---\n\nReturn the JSON object.`;
 
     let res;
     try {
@@ -139,6 +142,8 @@ async function extractFromImage(dataUrl, opts = {}) {
 
     const today = opts.today || new Date().toISOString().slice(0, 10);
     const source = opts.source || 'photo';
+    const context = (opts.context && String(opts.context).trim()) || '';
+    const contextBlock = context ? `\n\nABOUT ME:\n${context}\n` : '';
 
     let res;
     try {
@@ -157,7 +162,7 @@ async function extractFromImage(dataUrl, opts = {}) {
                     {
                         role: 'user',
                         content: [
-                            { type: 'text', text: `TODAY: ${today}\n\nRead this image and extract everything date-shaped. Return the JSON object.` },
+                            { type: 'text', text: `TODAY: ${today}${contextBlock}\n\nRead this image and extract everything date-shaped. Return the JSON object.` },
                             { type: 'image_url', image_url: { url: dataUrl } },
                         ],
                     },

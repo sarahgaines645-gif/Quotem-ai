@@ -244,6 +244,12 @@
     <span class="tagline">Calendar · Tasks · Photos in, dates out</span>
   </header>
 
+  <!-- ABOUT YOU — context Q reads alongside every photo/paste -->
+  <div class="card">
+    <h2>About you <span class="right" id="context-status">Tell Q who's in the household so he only pulls out what's relevant</span></h2>
+    <textarea id="context-text" placeholder="e.g. My daughter's in Year 9 at Park High, my son's in Year 12 at Sixth Form, allergic to nuts. I work Mon–Thu."></textarea>
+  </div>
+
   <!-- INTAKE -->
   <div class="card">
     <h2>Add anything <span class="right" id="intake-hint">Photo, paste, or drop a file</span></h2>
@@ -756,8 +762,46 @@ $('m-delete').addEventListener('click', async () => {
   if (kind === 'event') await loadEvents(); else await loadTasks();
 });
 
+// ── About-you context ───────────────────────────────────────────
+
+async function loadContext() {
+  try {
+    const r = await fetch('/life/context');
+    const data = await r.json();
+    $('context-text').value = data.context || '';
+  } catch {}
+}
+
+let contextSaveTimer = null;
+$('context-text').addEventListener('input', () => {
+  clearTimeout(contextSaveTimer);
+  $('context-status').textContent = 'Saving…';
+  contextSaveTimer = setTimeout(saveContext, 600);
+});
+$('context-text').addEventListener('blur', () => {
+  clearTimeout(contextSaveTimer);
+  saveContext();
+});
+
+async function saveContext() {
+  try {
+    await fetch('/life/context', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ context: $('context-text').value }),
+    });
+    $('context-status').textContent = 'Saved — Q uses this on every photo + paste';
+    setTimeout(() => {
+      $('context-status').textContent = 'Tell Q who\'s in the household so he only pulls out what\'s relevant';
+    }, 2500);
+  } catch (e) {
+    $('context-status').textContent = 'Could not save: ' + e.message;
+  }
+}
+
 // ── Init ────────────────────────────────────────────────────────
 
+loadContext();
 loadEvents();
 loadTasks();
 </script>

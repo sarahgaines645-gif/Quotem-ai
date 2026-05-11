@@ -32,6 +32,7 @@ const TAG_COLOURS = ['#a78bfa', '#2ecc71', '#f39c12', '#e74c3c', '#95a5a6', '#f8
 function lifeDir(email) { return userDataPath(email, 'life'); }
 function calendarFile(email) { return path.join(lifeDir(email), 'calendar.json'); }
 function tasksFile(email) { return path.join(lifeDir(email), 'tasks.json'); }
+function contextFile(email) { return path.join(lifeDir(email), 'context.txt'); }
 
 function ensureDir(email) {
     fs.mkdirSync(lifeDir(email), { recursive: true });
@@ -206,6 +207,24 @@ function deleteTask(id, ownerEmail) {
     return true;
 }
 
+// ── Context — free-text "about you" used to filter extracted items ─────
+
+function getContext(ownerEmail) {
+    if (!ownerEmail) return '';
+    try {
+        if (!fs.existsSync(contextFile(ownerEmail))) return '';
+        return fs.readFileSync(contextFile(ownerEmail), 'utf8');
+    } catch { return ''; }
+}
+
+function setContext(text, ownerEmail) {
+    if (!ownerEmail) throw new Error('ownerEmail required');
+    ensureDir(ownerEmail);
+    const safe = String(text || '').slice(0, 4000);
+    fs.writeFileSync(contextFile(ownerEmail), safe);
+    return safe;
+}
+
 // ── Batch add (used by intake confirm) ──────────────────────────────────
 
 function addBatch({ events = [], tasks = [] } = {}, ownerEmail) {
@@ -222,5 +241,6 @@ module.exports = {
     TAG_COLOURS,
     listEvents, addEvent, updateEvent, deleteEvent,
     listTasks, addTask, updateTask, deleteTask,
+    getContext, setContext,
     addBatch,
 };
