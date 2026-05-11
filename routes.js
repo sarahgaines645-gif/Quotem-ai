@@ -593,26 +593,25 @@ router.post('/chat', requirePerson, express.json({ limit: '24mb' }), async (req,
     // writer card only shows messages from /writer. Q's prompt sees the
     // FULL thread regardless of surface so he has continuous memory.
     const surface = (req.body?.surface || 'chat').toString().toLowerCase();
-    // Reasoning effort. V4 Pro's documented values are 'high' / 'max' /
-    // undefined. We previously passed 'low' for Quick which V4 didn't
-    // recognise — it fell back to default thinking and burned the full
-    // token budget on hidden reasoning, returning empty content
-    // (finish_reason=length). Quick now sends undefined → genuine non-think.
+    // Reasoning effort. V4 Pro values: 'high' / 'max' / undefined.
     //
-    // Auto-escalate: if the user picked Quick but their message looks like a
-    // real question (length, keywords, math, code), bump to 'high' for this
-    // turn so Q doesn't read as dumb on hard prompts. Manual Think/Deep
-    // selections are untouched.
+    // Quick is Think-by-default. Reason: Sarah found Q on pure non-think too
+    // shallow — having to send three messages where one should do. People
+    // won't repeat themselves on a product, so smart-default beats
+    // fastest-default. Quick drops to genuine non-think (undefined) ONLY for
+    // trivially short, non-question messages (greetings, acknowledgements),
+    // so "hi" and "thanks" stay fast.
+    //
+    // Think/Deep manual selections are untouched ('high' / 'max').
     const rawEffort = req.body?.reasoningEffort;
-    let reasoningEffort = (rawEffort === 'high' || rawEffort === 'max') ? rawEffort : undefined;
+    let reasoningEffort = (rawEffort === 'high' || rawEffort === 'max') ? rawEffort : 'high';
     if (rawEffort === 'off' && typeof req.body?.message === 'string') {
-        const m = req.body.message.toLowerCase();
-        const needsThink =
-            m.length > 400
-            || /\b(why|how does|how do|explain|compare|difference between|step.by.step|break.down|calculate|prove|derive|reason|analyse|analyze)\b/.test(m)
-            || /[=+\-*/^%]\s*\d/.test(m)
-            || m.includes('```');
-        if (needsThink) reasoningEffort = 'high';
+        const m = req.body.message.trim();
+        const trivial = m.length < 25
+            && !m.includes('?')
+            && !m.includes('```')
+            && !/\d/.test(m);
+        if (trivial) reasoningEffort = undefined;
     }
     const rawImages = req.body?.images;
     const images = Array.isArray(rawImages)
