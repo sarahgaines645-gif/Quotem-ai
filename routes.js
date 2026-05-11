@@ -1373,6 +1373,78 @@ router.post('/email-writer/advice', express.json({ limit: '256kb' }), async (req
     }
 });
 
+// ── LIFE — personal calendar + tasks (school dates, appointments, errands) ──
+const qLife = require('./plugins/q-life');
+const { extractLifeAdmin, extractFromImage: extractLifeFromImage } = require('./plugins/q-event-extractor');
+
+router.get('/life', (req, res) => {
+    res.sendFile(path.join(__dirname, 'life.html'));
+});
+
+router.get('/life/events', requirePerson, (req, res) => {
+    const { from, to } = req.query;
+    res.json(qLife.listEvents(req.person.email, { from, to }));
+});
+router.post('/life/events', requirePerson, express.json({ limit: '16kb' }), (req, res) => {
+    try { res.json(qLife.addEvent(req.body || {}, req.person.email)); }
+    catch (e) { res.status(400).json({ error: e.message }); }
+});
+router.patch('/life/events/:id', requirePerson, express.json({ limit: '16kb' }), (req, res) => {
+    const updated = qLife.updateEvent(req.params.id, req.body || {}, req.person.email);
+    if (!updated) return res.status(404).json({ error: 'Not found' });
+    res.json(updated);
+});
+router.delete('/life/events/:id', requirePerson, (req, res) => {
+    const ok = qLife.deleteEvent(req.params.id, req.person.email);
+    if (!ok) return res.status(404).json({ error: 'Not found' });
+    res.json({ ok: true });
+});
+
+router.get('/life/tasks', requirePerson, (req, res) => {
+    res.json(qLife.listTasks(req.person.email, { status: req.query.status }));
+});
+router.post('/life/tasks', requirePerson, express.json({ limit: '16kb' }), (req, res) => {
+    try { res.json(qLife.addTask(req.body || {}, req.person.email)); }
+    catch (e) { res.status(400).json({ error: e.message }); }
+});
+router.patch('/life/tasks/:id', requirePerson, express.json({ limit: '16kb' }), (req, res) => {
+    const updated = qLife.updateTask(req.params.id, req.body || {}, req.person.email);
+    if (!updated) return res.status(404).json({ error: 'Not found' });
+    res.json(updated);
+});
+router.delete('/life/tasks/:id', requirePerson, (req, res) => {
+    const ok = qLife.deleteTask(req.params.id, req.person.email);
+    if (!ok) return res.status(404).json({ error: 'Not found' });
+    res.json({ ok: true });
+});
+
+// Extract events + tasks from a paste of text. Returns preview shape — nothing
+// is saved until POST /life/batch confirms it.
+router.post('/life/extract', requirePerson, express.json({ limit: '256kb' }), async (req, res) => {
+    const text = req.body?.text;
+    if (!text || typeof text !== 'string' || !text.trim()) {
+        return res.status(400).json({ error: 'text (string) required' });
+    }
+    const result = await extractLifeAdmin(text, { source: req.body?.source || 'paste' });
+    res.json(result);
+});
+
+// Same shape but from a photo (image dataUrl). Vision call.
+router.post('/life/extract-photo', requirePerson, express.json({ limit: '32mb' }), async (req, res) => {
+    const dataUrl = req.body?.dataUrl;
+    if (!dataUrl || typeof dataUrl !== 'string' || !dataUrl.startsWith('data:')) {
+        return res.status(400).json({ error: 'dataUrl (image) required' });
+    }
+    const result = await extractLifeFromImage(dataUrl, { source: req.body?.source || 'photo' });
+    res.json(result);
+});
+
+// Confirm + save a batch (used after extract preview).
+router.post('/life/batch', requirePerson, express.json({ limit: '256kb' }), (req, res) => {
+    const { events, tasks } = req.body || {};
+    res.json(qLife.addBatch({ events, tasks }, req.person.email));
+});
+
 // ── Image generation — text prompt → PNG via Z-Image-Turbo HF Space ──────
 router.get('/image-gen', (req, res) => {
     res.sendFile(path.join(__dirname, 'image-gen.html'));

@@ -32,6 +32,7 @@ const qGraphics = require('./q-graphics');
 const qMusic = require('./q-music');
 const qVideo = require('./q-video');
 const { speakAsVoice } = require('./q-voice-clone');
+const qLife = require('./q-life');
 
 // Q's voice — every user has their own override. The bundled default is a
 // shared fallback (it's just the stock voice and is identical for everyone).
@@ -504,6 +505,83 @@ const TOOL_DEFINITIONS = [
             },
         },
     },
+    // ── Life admin: calendar + tasks ──────────────────────────────
+    {
+        type: 'function',
+        function: {
+            name: 'add_event',
+            description: 'Add a dated event (appointment, school trip, meeting, deadline-as-a-moment) to the user\'s calendar on the /life page. Returns the created event.',
+            parameters: {
+                type: 'object',
+                properties: {
+                    title:    { type: 'string', description: 'Short event title.' },
+                    date:     { type: 'string', description: 'Date as YYYY-MM-DD.' },
+                    time:     { type: 'string', description: 'Time as HH:MM 24h, optional.' },
+                    location: { type: 'string', description: 'Where, optional.' },
+                    notes:    { type: 'string', description: 'Extra info, optional.' },
+                },
+                required: ['title', 'date'],
+            },
+        },
+    },
+    {
+        type: 'function',
+        function: {
+            name: 'list_events',
+            description: 'List upcoming events on the user\'s calendar. Optionally filter by date range (YYYY-MM-DD). Use this when the user asks "what\'s on this week", "do I have anything Friday", "what\'s coming up".',
+            parameters: {
+                type: 'object',
+                properties: {
+                    from: { type: 'string', description: 'Earliest date YYYY-MM-DD, optional.' },
+                    to:   { type: 'string', description: 'Latest date YYYY-MM-DD, optional.' },
+                },
+            },
+        },
+    },
+    {
+        type: 'function',
+        function: {
+            name: 'add_task',
+            description: 'Add a to-do task to the user\'s task list on the /life page. Use this for "remind me to…", "I need to…", or anything actionable with no specific time.',
+            parameters: {
+                type: 'object',
+                properties: {
+                    title:    { type: 'string', description: 'Short imperative title — "Bring PE kit", "Pay the trip fee".' },
+                    due:      { type: 'string', description: 'Due date YYYY-MM-DD, optional.' },
+                    priority: { type: 'string', enum: ['low', 'med', 'high'], description: 'Priority. Default med.' },
+                    notes:    { type: 'string', description: 'Extra info, optional.' },
+                },
+                required: ['title'],
+            },
+        },
+    },
+    {
+        type: 'function',
+        function: {
+            name: 'list_tasks',
+            description: 'List the user\'s tasks. Optionally filter by status (open or done). Default returns open tasks.',
+            parameters: {
+                type: 'object',
+                properties: {
+                    status: { type: 'string', enum: ['open', 'done'], description: 'Filter. Default open.' },
+                },
+            },
+        },
+    },
+    {
+        type: 'function',
+        function: {
+            name: 'complete_task',
+            description: 'Tick a task as done. Use this when the user says "I did X", "done with Y", "tick off Z". The id comes from list_tasks.',
+            parameters: {
+                type: 'object',
+                properties: {
+                    id: { type: 'string', description: 'Task id from list_tasks.' },
+                },
+                required: ['id'],
+            },
+        },
+    },
 ];
 
 // ─────────────────────────────────────────────────────────────
@@ -729,6 +807,12 @@ async function executeTool(name, argsRaw, personId, personEmail) {
         case 'read_thread':          return readThreadTool(args, personEmail);
         case 'add_email_to_thread':  return addEmailToThreadTool(args, personEmail);
         case 'add_note_to_thread':   return addNoteToThreadTool(args, personEmail);
+        // Life — calendar + tasks
+        case 'add_event':            return addEventTool(args, personEmail);
+        case 'list_events':          return listEventsTool(args, personEmail);
+        case 'add_task':             return addTaskTool(args, personEmail);
+        case 'list_tasks':           return listTasksTool(args, personEmail);
+        case 'complete_task':        return completeTaskTool(args, personEmail);
         default:                 return { error: `Unknown tool: "${name}"` };
     }
 }
@@ -1035,6 +1119,71 @@ function addNoteToThreadTool({ threadId, content, kind } = {}, personEmail) {
     };
 }
 
+// ── Life — calendar + tasks ─────────────────────────────────────────────
+
+function addEventTool({ title, date, time, location, notes } = {}, personEmail) {
+    if (!personEmail) return { error: 'Cannot add an event without a signed-in user.' };
+    if (!title) return { error: 'title is required' };
+    if (!date)  return { error: 'date is required (YYYY-MM-DD)' };
+    try {
+        const event = qLife.addEvent({ title, date, time, location, notes, source: 'chat' }, personEmail);
+        return {
+            ok: true,
+            event,
+            instruction_for_q: 'Event saved to the calendar. One short line confirming it (title + date). Don\'t repeat the whole thing back.',
+        };
+    } catch (e) { return { error: e.message }; }
+}
+
+function listEventsTool({ from, to } = {}, personEmail) {
+    if (!personEmail) return { error: 'Cannot list events without a signed-in user.' };
+    const events = qLife.listEvents(personEmail, { from, to });
+    return {
+        count: events.length,
+        events,
+        instruction_for_q: events.length === 0
+            ? 'Nothing on the calendar in that range. Say so plainly.'
+            : 'Summarise what\'s coming up. Use date + title; mention time + location only where they help.',
+    };
+}
+
+function addTaskTool({ title, due, priority, notes } = {}, personEmail) {
+    if (!personEmail) return { error: 'Cannot add a task without a signed-in user.' };
+    if (!title) return { error: 'title is required' };
+    try {
+        const task = qLife.addTask({ title, due, priority, notes, source: 'chat' }, personEmail);
+        return {
+            ok: true,
+            task,
+            instruction_for_q: 'Task added. One short confirming line — title (and due date if there is one).',
+        };
+    } catch (e) { return { error: e.message }; }
+}
+
+function listTasksTool({ status } = {}, personEmail) {
+    if (!personEmail) return { error: 'Cannot list tasks without a signed-in user.' };
+    const tasks = qLife.listTasks(personEmail, { status: status || 'open' });
+    return {
+        count: tasks.length,
+        tasks,
+        instruction_for_q: tasks.length === 0
+            ? 'No open tasks. Say so plainly.'
+            : 'Summarise the open tasks. Lead with anything overdue or due soon.',
+    };
+}
+
+function completeTaskTool({ id } = {}, personEmail) {
+    if (!personEmail) return { error: 'Cannot complete a task without a signed-in user.' };
+    if (!id) return { error: 'id is required (use list_tasks first)' };
+    const updated = qLife.updateTask(id, { done: true }, personEmail);
+    if (!updated) return { error: 'Task not found: ' + id };
+    return {
+        ok: true,
+        task: updated,
+        instruction_for_q: 'Task ticked off. Brief warm acknowledgement, no fuss.',
+    };
+}
+
 /**
  * remember — write a fact to Q's persistent memory.
  */
@@ -1079,6 +1228,9 @@ const ALWAYS_ON = new Set([
     // to one (anywhere — main chat, email writer, inside a Thread).
     'list_threads', 'read_thread', 'save_situation',
     'add_email_to_thread', 'add_note_to_thread',
+    // Life calendar + tasks — common life-admin asks ("what's on Friday",
+    // "remind me to bring the form") need these without ceremony.
+    'add_event', 'list_events', 'add_task', 'list_tasks', 'complete_task',
 ]);
 
 const TRIGGERS = {
