@@ -6,6 +6,8 @@ Format: `- [ ] {date}: thing to do`
 
 ---
 
+- [ ] 2026-05-11: Create `quotem-ai/plugins/TEMPLATE_CATALOGUE.md` — quotem-ai has ~28 plugins (incl. today's q-life, q-event-extractor) and no catalogue. Shared-plugins and Quoteapp both have one; this is the gap. Seed it with every existing plugin, one row each.
+- [ ] 2026-05-11: `shared-plugins/` is not a git repo — `git init` + push to a new GitHub remote so it's version-controlled and backed up beyond OneDrive sync. Then wire as an npm dependency in consuming apps so the local mirror file (`quotem-ai/plugins/q-event-extractor.js`) can be deleted.
 - [ ] 2026-05-08: Chat sessions on /chat — sidebar of past conversations like ChatGPT, "+ New chat" button, auto-titled from first message. Plus "move these messages to a Thread" so heavyweight bits get pulled out of main chat into a proper Thread. Sarah's main chat is hundreds long and unmanageable.
 - [ ] 2026-04-29: Memory migration from Quotem Railway volume → Quotem-ai Railway volume (preserve friend's first-day presence)
 - [ ] 2026-04-29: DNS at IONOS — point quotem-ai.co.uk at Railway custom domain target
