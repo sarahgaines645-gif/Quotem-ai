@@ -261,7 +261,11 @@ app.use((err, req, res, next) => {
 });
 
 // ── Start ──────────────────────────────────────────────────────
-app.listen(PORT, () => {
+const httpServer = app.listen(PORT, () => {
     console.log(`[Q] 🟢 Listening on http://localhost:${PORT}`);
     console.log(`[Q]    Volume: ${process.env.RAILWAY_VOLUME_MOUNT_PATH || (fs.existsSync('/data') ? '/data' : '(local data folder)')}`);
 });
+// Allow tool chains + report generation up to 5 minutes.
+// Node's default is 120s — long AI calls were dying mid-response.
+httpServer.setTimeout(300000);
+httpServer.keepAliveTimeout = 310000;
