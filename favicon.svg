@@ -1,18 +1,6 @@
-<!-- Q — Quotem's own AI. Favicon.
-     Path-based mark so it renders identically on every browser tab.
-     Favicons can't load web fonts, so we approximate Space Grotesk's
-     bold Q (700) with: circular ring + short tail + the pink brand dot.
-     Colours match chat.html: text #1a1a1a, accent #e91e63. -->
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Q">
-  <!-- White background square -->
-  <rect width="64" height="64" fill="#ffffff"/>
-  <!-- Q bowl: solid filled letterform via even-odd (outer disk minus inner counter) -->
-  <path fill="#1a1a1a" fill-rule="evenodd"
-        d="M22,11 a19,19 0 1,0 0,38 a19,19 0 1,0 0,-38 z
-           M22,21 a9,9 0 1,1 0,18 a9,9 0 1,1 0,-18 z" />
-  <!-- Q tail -->
-  <path fill="#1a1a1a"
-        d="M30,38 l10,11 l-5,4 l-10,-11 z" />
-  <!-- Pink brand dot, sits beside the Q like a punctuation mark -->
-  <circle cx="50" cy="46" r="5" fill="#e91e63"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Q — Quotem's own AI">
+  <rect width="512" height="512" fill="#ffffff"/>
+  <path d="M256 374.02L256 374.02Q200.56 374.02 167.80 343.57Q135.04 313.12 135.04 256.42L135.04 256.42L135.04 185.86Q135.04 129.16 167.80 98.71Q200.56 68.26 256 68.26L256 68.26Q311.44 68.26 344.20 98.71Q376.96 129.16 376.96 185.86L376.96 185.86L376.96 256.42Q376.96 313.12 344.20 343.57Q311.44 374.02 256 374.02ZM256 324.46L256 324.46Q287.08 324.46 304.30 306.40Q321.52 288.34 321.52 258.10L321.52 258.10L321.52 184.18Q321.52 153.94 304.30 135.88Q287.08 117.82 256 117.82L256 117.82Q225.34 117.82 207.91 135.88Q190.48 153.94 190.48 184.18L190.48 184.18L190.48 258.10Q190.48 288.34 207.91 306.40Q225.34 324.46 256 324.46ZM319.42 443.74L275.32 443.74Q254.74 443.74 241.93 430.93Q229.12 418.12 229.12 396.70L229.12 396.70L229.12 368.14L282.88 368.14L282.88 388.30Q282.88 400.90 294.64 400.90L294.64 400.90L319.42 400.90L319.42 443.74Z" fill="#1a1a1a"/>
+  <!-- Pink brand dot -->
+  <circle cx="430" cy="430" r="52" fill="#e91e63"/>
 </svg>
