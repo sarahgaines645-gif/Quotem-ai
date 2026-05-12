@@ -5,7 +5,7 @@
  *   - web_search       → live web search via Brave Search API (independent index, not Google/Bing)
  *   - calculator       → accurate arithmetic (LLMs are bad at maths)
  *   - current_datetime → timezone-aware time/date
- *   - analyze_document → vision via Qwen2.5-VL on Together AI (Q is text-only, this is his eyes)
+ *   - analyze_document → vision via Q_CONFIG.visionModel on Together AI (Q is text-only, this is his eyes)
  *
  * Format: OpenAI-compatible function-calling. Together AI's API accepts the same
  * tool definitions and tool_call response shape as OpenAI.
@@ -704,11 +704,11 @@ function currentDatetime({ timezone = 'Europe/London' } = {}) {
 }
 
 /**
- * analyze_document — vision via Qwen2.5-VL-72B on Together AI.
+ * analyze_document — vision via Q_CONFIG.visionModel on Together AI.
  * Q is text-only, so this is his eyes. Same Together API key as Q himself.
  *
  * For form-field detection, we prompt the vision model to return structured JSON
- * with bounding boxes. Together's Qwen-VL outputs normalised 0-1000 coordinates.
+ * with bounding boxes in normalised 0-1000 coordinates.
  */
 async function analyzeDocument({ image_url, question }) {
     if (!Q_CONFIG.apiKey) {

@@ -84,51 +84,6 @@ function parseDsmlToolCalls(content) {
 // at the start of each chat. Older facts are still reachable via `recall`.
 const FACTS_INJECT_LIMIT = 25;
 
-/**
- * Read a Together-AI SSE streaming response and collapse it back into the
- * non-streaming { choices, usage } shape so the rest of the chat loop is
- * unchanged. Required for vision-capable models (Qwen3.6-Plus) that
- * Together AI exposes streaming-only — without this, vision calls return
- * empty and Q hallucinates "I see images but can't access them".
- *
- * Ported from q-lab/plugins/qwen-chat.js — same parser, same shape.
- */
-async function readStreamAsResponse(response) {
-    const reader = response.body.getReader();
-    const decoder = new TextDecoder();
-    let content = '';
-    let finishReason = null;
-    let usage = null;
-    let buffer = '';
-
-    while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split('\n');
-        buffer = lines.pop() || '';
-        for (const line of lines) {
-            const s = line.replace(/^data: /, '').trim();
-            if (!s || s === '[DONE]') continue;
-            try {
-                const chunk = JSON.parse(s);
-                const delta = chunk.choices?.[0]?.delta;
-                if (delta?.content) content += delta.content;
-                const fr = chunk.choices?.[0]?.finish_reason;
-                if (fr) finishReason = fr;
-                if (chunk.usage) usage = chunk.usage;
-            } catch { /* ignore malformed SSE line */ }
-        }
-    }
-    return {
-        choices: [{
-            message: { role: 'assistant', content, tool_calls: null },
-            finish_reason: finishReason || 'stop',
-        }],
-        usage: usage || {},
-    };
-}
-
 // Tool loop limit — prevents runaway when Q gets stuck calling tools forever.
 // Bumped from 5 → 8 to give Q more headroom for legitimate multi-step tool
 // chains (e.g. recall → web_search → analyze_document). When the cap IS hit
@@ -227,17 +182,16 @@ Sarah is your owner, your developer, and the person whose voice will eventually 
 Your memory and the chat surfaces:
 - The product has multiple pages, each with its own chat box (main chat, writer, more being added). Each page is its own CONVERSATION THREAD — when you're on the writer, you don't see the literal back-and-forth from the main chat, and vice versa. They're separate rooms.
 - BUT your long-term FACTS are shared across all pages. One memory, many rooms. The facts injected below are visible to you on every surface.
-- Whenever something matters across pages — a project Sarah's working on, her preferences, a decision she's made, a name, a deadline — use the \`remember\` tool to store it as a fact. That's the bridge: anything in your facts is visible from anywhere. Don't ask permission, just remember. Skip casual in-conversation context that won't matter tomorrow.
+- You are building a picture of this person over time. Silently \`remember\` anything personal they mention — birthdays, anniversaries, kids' names and ages, pets, food preferences, allergies, things they like and dislike, jobs, places, hobbies, recurring commitments. Don't ask permission. Don't announce it. Just remember. If someone says "my birthday's in July" or "my cat hates Mondays" — that goes in. Their facts also feed the /life calendar intake, so the more you know about them, the smarter their calendar gets.
+- Whenever something matters across pages — a project they're working on, a decision they've made, a name, a deadline — use the \`remember\` tool. Skip only pure in-conversation context that truly won't matter tomorrow.
 - Use the \`recall\` tool when you need to look up something from a previous session that isn't in the facts injected below.
 - Reference facts naturally without announcing "I remember that…".
 - If a user on one page asks about something that happened on another page and the answer isn't in your facts, say so honestly — "that conversation was on the main chat, I don't have those messages here, but I remember [whatever's in your facts about it]."
 
-Life context — a narrow extra store for filtering /life intake:
-- The /life page has an "About you" store that is read EVERY TIME the user drops a photo of a school letter / forwarded email / pasted notice, so the extractor can ignore items that don't apply to them.
-- \`update_life_context\` is ONLY for facts that change which items get picked when reading those external documents. Specifically: kids' year groups, kids' schools, household allergies, dietary requirements, work pattern, who lives in the house. That is the entire list.
-- Personal facts — birthday, name, partner's name, where they live, what they like, what they're working on, deadlines — do NOT belong here. Those still go through \`remember\` (silent, no asking).
-- Test before asking: "If they dropped a school letter tomorrow, would knowing this change which items I'd pull out as 'for them'?" If yes → ask, then call \`update_life_context\` on yes. If no → just \`remember\` silently.
-- When you DO ask for life-context, phrase it warmly and name the concrete /life-intake benefit: "Can I remember your daughter's in Year 9? Means next time you drop a school newsletter I'll only pull out things that affect her." End with a yes/no.`;
+Life context — calendar filtering:
+- Everything you \`remember\` about a person is automatically fed into the /life calendar intake. So every personal fact you collect in chat makes their calendar smarter — no extra step needed.
+- \`update_life_context\` is a separate, narrower store for household-filter facts that rarely change: kids' year groups, kids' schools, household allergies, dietary requirements, work pattern, who lives in the house. Use it for those specifically.
+- When someone mentions their child's year group or a household allergy, ask warmly and name the benefit: "Can I note your daughter's in Year 9? Means next time you drop a school newsletter I'll only pull out things that affect her." End with a yes/no. Call \`update_life_context\` on yes.`;
 
 // APS — A Problem Shared. Overlay added on top of Q_PERSONA wherever Q is in
 // advocate mode: the main-chat APS button, the email writer chat, and inside
@@ -546,13 +500,13 @@ async function chat(messages, options = {}) {
                     model,
                     max_tokens: maxTokens,
                     temperature: 0.7,
-                    // Qwen3.6-Plus (the vision model) is exposed streaming-only on
-                    // Together AI's serverless tier. Without stream:true the call
-                    // returns empty and Q hallucinates 'I can see them but can't
-                    // access them'. Force streaming for vision turns; non-vision
-                    // calls stay non-streaming so the existing tool loop is
-                    // unchanged.
-                    ...(isVision && { stream: true }),
+                    // Vision turns are non-streaming on Kimi K2.5 (Moonshot). The
+                    // previous vision model (Qwen3.6-Plus, retired) was exposed
+                    // streaming-only and required stream:true. After the swap to
+                    // K2.5 the forced stream + Qwen-shaped SSE parser were
+                    // returning empty content; Q then said "I can see them but
+                    // can't access them" — the same hallucination, different
+                    // cause. K2.5 supports a normal JSON response.
                     ...(!isVision && reasoningEffort && { reasoning_effort: reasoningEffort }),
                     ...(useTools && {
                         tools: (() => {
@@ -579,12 +533,7 @@ async function chat(messages, options = {}) {
                 };
             }
 
-            // Vision turns stream — collapse the SSE chunks back to the same
-            // shape as the non-streaming response so the rest of the loop is
-            // unchanged.
-            const data = isVision
-                ? await readStreamAsResponse(response)
-                : await response.json();
+            const data = await response.json();
             totalTokensIn += data.usage?.prompt_tokens || 0;
             totalTokensOut += data.usage?.completion_tokens || 0;
 
