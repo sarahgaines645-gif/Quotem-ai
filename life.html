@@ -830,11 +830,29 @@ $('add-batch-btn').addEventListener('click', async () => {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ events, tasks }),
   });
-  setStatus(`Saved ${events.length + tasks.length} item${events.length + tasks.length === 1 ? '' : 's'}.`);
   $('preview-card').style.display = 'none';
   $('paste-text').value = '';
   state.preview = { events: [], tasks: [] };
   await Promise.all([loadEvents(), loadTasks()]);
+
+  // Jump the calendar to the month of the earliest saved event so it's visible immediately.
+  const monthNames = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+  let jumpMsg = '';
+  if (events.length > 0) {
+    const earliest = events.map(e => e.date).filter(Boolean).sort()[0];
+    if (earliest) {
+      const parts = earliest.split('-');
+      const y = parseInt(parts[0], 10);
+      const m = parseInt(parts[1], 10) - 1;
+      if (y !== state.calYear || m !== state.calMonth) {
+        state.calYear = y;
+        state.calMonth = m;
+        renderCalendar();
+        jumpMsg = ` — showing ${monthNames[m]}`;
+      }
+    }
+  }
+  setStatus(`Saved ${events.length + tasks.length} item${events.length + tasks.length === 1 ? '' : 's'}${jumpMsg}.`);
 });
 
 $('clear-preview').addEventListener('click', () => {
