@@ -284,6 +284,50 @@
 
   .back-link { display: inline-block; margin-top: 32px; font-size: 12px; color: var(--text-muted); text-decoration: none; }
   .back-link:hover { color: var(--text); }
+
+  /* ── 2-col layout ─────────────────────────────────── */
+  .main-grid {
+    display: grid;
+    grid-template-columns: 2fr 1fr;
+    gap: 18px;
+    align-items: start;
+  }
+  .side-col { display: flex; flex-direction: column; }
+  .side-col .card { margin-bottom: 18px; }
+  @media (max-width: 680px) { .main-grid { grid-template-columns: 1fr; } }
+
+  /* Black section headings — override the muted uppercase default */
+  .card h2 { color: var(--text); text-transform: none; letter-spacing: 0; font-size: 15px; }
+
+  /* Compact drop zone row in sidebar */
+  .drop-row { display: flex; gap: 8px; margin-bottom: 10px; }
+  .drop-sm {
+    flex: 1; padding: 8px; text-align: center; cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 12px; min-height: 38px;
+    border-radius: 10px; box-shadow: var(--neu-inset-xs);
+    color: var(--text-muted);
+  }
+  .drop-sm:hover { color: var(--text); }
+  .drop-sm.over { box-shadow: var(--neu-inset); color: var(--accent); }
+
+  /* Collapse toggle button */
+  .collapse-btn {
+    background: none; box-shadow: none;
+    padding: 0 6px; font-size: 13px; color: var(--text-muted);
+    display: inline-block; margin-left: 2px;
+    vertical-align: middle;
+  }
+  .body-collapsed { display: none; }
+
+  /* Delete button on rows — visible on row hover */
+  .row-del {
+    flex: 0 0 auto; background: none; box-shadow: none;
+    color: transparent; font-size: 16px; line-height: 1;
+    padding: 2px 4px;
+  }
+  .task-row:hover .row-del { color: var(--text-muted); }
+  .row-del:hover { color: #ef4444 !important; }
 </style>
 </head>
 <body>
@@ -298,62 +342,83 @@
     <span class="tagline">Calendar · Tasks · Photos in, dates out</span>
   </header>
 
-  <!-- INTAKE -->
-  <div class="card">
-    <h2>Add anything <span class="right" id="intake-hint"><a href="/about" style="color: var(--text-muted); text-decoration: none; font-size: 12px; font-weight: 500;">About you →</a></span></h2>
-    <div class="intake-row">
-      <div class="drop-zone" id="drop-photo">📷 Take or upload a photo</div>
-      <div class="drop-zone" id="drop-file">📎 Drop a file (PDF / Word / image)</div>
-    </div>
-    <textarea id="paste-text" placeholder="…or paste a school letter, email, or note here." style="margin-top: 12px;"></textarea>
-    <input type="text" id="intake-note" placeholder="Any notes? e.g. every other Wednesday goes in my calendar." style="margin-bottom: 6px;">
-    <div class="actions">
-      <button id="extract-btn">Read it</button>
-      <button id="manual-event" class="small">+ Manual event</button>
-      <button id="manual-task"  class="small">+ Manual task</button>
-    </div>
-    <div class="status" id="extract-status"></div>
-    <input type="file" id="photo-input" class="hidden-file" accept="image/*" capture="environment">
-    <input type="file" id="file-input"  class="hidden-file" accept=".pdf,.doc,.docx,image/*">
-  </div>
-
-  <!-- PREVIEW (extracted, not yet saved) -->
-  <div class="card" id="preview-card" style="display: none;">
-    <h2>Found in your text <span class="right"><button id="add-batch-btn" class="small">Add ticked</button> <button id="clear-preview" class="small">Clear</button></span></h2>
-    <div id="preview-list"></div>
-  </div>
-
-  <!-- CATEGORY PILLS -->
+  <!-- CATEGORY PILLS — full width above the grid -->
   <div class="card">
     <h2>Show <span class="right" style="font-size: 11px; color: var(--text-muted); font-weight: 400;">Click to hide · hover to delete</span></h2>
     <div class="cat-pills" id="cat-pills"></div>
   </div>
 
-  <!-- CALENDAR -->
-  <div class="card">
-    <div class="cal-head">
-      <button class="small" id="cal-prev">‹</button>
-      <h3 id="cal-title">Month</h3>
-      <button class="small" id="cal-today">Today</button>
-      <button class="small" id="cal-next">›</button>
+  <!-- MAIN 2-COL GRID -->
+  <div class="main-grid">
+
+    <!-- LEFT 2/3 — Calendar -->
+    <div class="cal-col">
+      <div class="card">
+        <div class="cal-head">
+          <button class="small" id="cal-prev">‹</button>
+          <h3 id="cal-title">Month</h3>
+          <button class="small" id="cal-today">Today</button>
+          <button class="small" id="cal-next">›</button>
+        </div>
+        <div class="cal-grid" id="cal-grid"></div>
+      </div>
     </div>
-    <div class="cal-grid" id="cal-grid"></div>
-  </div>
 
-  <!-- REMINDERS (prep tasks tied to events) -->
-  <div class="card">
-    <h2>Reminders <span style="font-size: 11px; color: var(--text-muted); font-weight: 400; margin-left: 6px;">Things to do before events</span></h2>
-    <div id="reminder-list"></div>
-  </div>
+    <!-- RIGHT 1/3 — Sidebar -->
+    <div class="side-col">
 
-  <!-- TASKS -->
-  <div class="card">
-    <h2>Tasks <span class="right">
-      <button class="small" id="task-filter-open">Open</button>
-      <button class="small" id="task-filter-done">Done</button>
-    </span></h2>
-    <div id="task-list"></div>
-  </div>
+      <!-- Compact intake -->
+      <div class="card">
+        <h2>Add anything <span class="right"><a href="/about" style="color: var(--text-muted); text-decoration: none; font-size: 12px; font-weight: 400;">About you →</a></span></h2>
+        <div class="drop-row">
+          <div class="drop-sm" id="drop-photo">📷 Photo</div>
+          <div class="drop-sm" id="drop-file">📎 File</div>
+        </div>
+        <textarea id="paste-text" placeholder="…or paste a school letter, email, or note here." style="min-height: 70px; margin-bottom: 8px;"></textarea>
+        <input type="text" id="intake-note" style="display:none">
+        <div class="actions">
+          <button id="extract-btn">Read it</button>
+          <button id="manual-event" class="small">+ Event</button>
+          <button id="manual-task"  class="small">+ Task</button>
+        </div>
+        <div class="status" id="extract-status"></div>
+        <input type="file" id="photo-input" class="hidden-file" accept="image/*" capture="environment">
+        <input type="file" id="file-input"  class="hidden-file" accept=".pdf,.doc,.docx,image/*">
+      </div>
+
+      <!-- PREVIEW (extracted, not yet saved) -->
+      <div class="card" id="preview-card" style="display: none;">
+        <h2>Found <span class="right"><button id="add-batch-btn" class="small">Add ticked</button> <button id="clear-preview" class="small">Clear</button></span></h2>
+        <div id="preview-list"></div>
+      </div>
+
+      <!-- REMINDERS (collapsible) -->
+      <div class="card">
+        <h2>Reminders
+          <button class="collapse-btn" id="reminder-toggle">▾</button>
+          <span class="right" style="font-size: 11px; color: var(--text-muted); font-weight: 400;">Before events</span>
+        </h2>
+        <div id="reminder-body">
+          <div id="reminder-list"></div>
+        </div>
+      </div>
+
+      <!-- TASKS (collapsible) -->
+      <div class="card">
+        <h2>Tasks
+          <button class="collapse-btn" id="task-toggle">▾</button>
+          <span class="right">
+            <button class="small" id="task-filter-open">Open</button>
+            <button class="small" id="task-filter-done">Done</button>
+          </span>
+        </h2>
+        <div id="task-body">
+          <div id="task-list"></div>
+        </div>
+      </div>
+
+    </div><!-- end side-col -->
+  </div><!-- end main-grid -->
 
   <a class="back-link" href="/tools">← All tools</a>
 </div>
@@ -661,8 +726,20 @@ function renderTaskGroup(list, items, type) {
     `;
     row.querySelector('input').addEventListener('change', () => toggleTaskDone(t));
     row.querySelector('.body').addEventListener('click', () => openEdit('task', t));
+    const delBtn = document.createElement('button');
+    delBtn.className = 'row-del';
+    delBtn.title = 'Delete';
+    delBtn.textContent = '×';
+    delBtn.addEventListener('click', (e) => { e.stopPropagation(); deleteTaskItem(t); });
+    row.appendChild(delBtn);
     list.appendChild(row);
   });
+}
+
+async function deleteTaskItem(t) {
+  if (!confirm(`Delete "${t.title}"?`)) return;
+  const r = await fetch('/life/tasks/' + t.id, { method: 'DELETE' });
+  if (r.ok) await loadTasks();
 }
 
 function escape(s) {
@@ -1091,6 +1168,17 @@ $('cat-save').addEventListener('click', async () => {
   $('cat-modal').classList.remove('show');
   await loadCategories();
 });
+
+// ── Collapse toggles ────────────────────────────────────────────
+
+function toggleCollapse(bodyId, btnId) {
+  const body = $(bodyId);
+  const btn  = $(btnId);
+  const collapsed = body.classList.toggle('body-collapsed');
+  btn.textContent = collapsed ? '▸' : '▾';
+}
+$('reminder-toggle').addEventListener('click', () => toggleCollapse('reminder-body', 'reminder-toggle'));
+$('task-toggle').addEventListener('click',     () => toggleCollapse('task-body',     'task-toggle'));
 
 // ── Init ────────────────────────────────────────────────────────
 
