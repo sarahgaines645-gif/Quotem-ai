@@ -519,6 +519,7 @@ const TOOL_DEFINITIONS = [
                     time:     { type: 'string', description: 'Time as HH:MM 24h, optional.' },
                     location: { type: 'string', description: 'Where, optional.' },
                     notes:    { type: 'string', description: 'Extra info, optional.' },
+                    category: { type: 'string', description: 'Category slug from the user\'s pill row. Defaults are "work", "kids", "home", "health", "money" — they may have added more. Pick the one that fits: a school trip → "kids", a meeting → "work", a bill → "money", a dentist appt → "health". Optional.' },
                 },
                 required: ['title', 'date'],
             },
@@ -550,6 +551,7 @@ const TOOL_DEFINITIONS = [
                     due:      { type: 'string', description: 'Due date YYYY-MM-DD, optional.' },
                     priority: { type: 'string', enum: ['low', 'med', 'high'], description: 'Priority. Default med.' },
                     notes:    { type: 'string', description: 'Extra info, optional.' },
+                    category: { type: 'string', description: 'Category slug from the user\'s pill row. Defaults are "work", "kids", "home", "health", "money" — they may have added more. Pick the fit: "Bring PE kit" → "kids", "Pay invoice" → "money". Optional.' },
                 },
                 required: ['title'],
             },
@@ -1136,12 +1138,12 @@ function addNoteToThreadTool({ threadId, content, kind } = {}, personEmail) {
 
 // ── Life — calendar + tasks ─────────────────────────────────────────────
 
-function addEventTool({ title, date, time, location, notes } = {}, personEmail) {
+function addEventTool({ title, date, time, location, notes, category } = {}, personEmail) {
     if (!personEmail) return { error: 'Cannot add an event without a signed-in user.' };
     if (!title) return { error: 'title is required' };
     if (!date)  return { error: 'date is required (YYYY-MM-DD)' };
     try {
-        const event = qLife.addEvent({ title, date, time, location, notes, source: 'chat' }, personEmail);
+        const event = qLife.addEvent({ title, date, time, location, notes, category, source: 'chat' }, personEmail);
         return {
             ok: true,
             event,
@@ -1162,11 +1164,11 @@ function listEventsTool({ from, to } = {}, personEmail) {
     };
 }
 
-function addTaskTool({ title, due, priority, notes } = {}, personEmail) {
+function addTaskTool({ title, due, priority, notes, category } = {}, personEmail) {
     if (!personEmail) return { error: 'Cannot add a task without a signed-in user.' };
     if (!title) return { error: 'title is required' };
     try {
-        const task = qLife.addTask({ title, due, priority, notes, source: 'chat' }, personEmail);
+        const task = qLife.addTask({ title, due, priority, notes, category, source: 'chat' }, personEmail);
         return {
             ok: true,
             task,

@@ -7,19 +7,23 @@
  * and Q's chat tools (add_event / list_events / add_task / complete_task).
  *
  * Files (per user):
- *   ${VOLUME}/users/{slug}/life/calendar.json   — array of events
- *   ${VOLUME}/users/{slug}/life/tasks.json      — array of tasks
+ *   ${VOLUME}/users/{slug}/life/calendar.json    — array of events
+ *   ${VOLUME}/users/{slug}/life/tasks.json       — array of tasks
+ *   ${VOLUME}/users/{slug}/life/categories.json  — user's category list
  *
  * Event schema:
  *   { id, title, date (YYYY-MM-DD), time (HH:MM|null), location, notes,
- *     source, color, createdAt }
+ *     source, color, category, createdAt }
  *
  * Task schema:
  *   { id, title, due (YYYY-MM-DD|null), priority ('low'|'med'|'high'),
- *     notes, source, color, done, doneAt, createdAt }
+ *     notes, source, color, category, done, doneAt, createdAt }
  *
- * `color` is one of the 7 swatches from the feature tracker (or null).
- * Validation is light — anything not in the palette gets stored as null.
+ * `color` is one of the 7 swatches (or null). `category` is a slug like
+ * 'work' / 'kids' — when set, the renderer paints the item in the
+ * category's colour unless the user picked one explicitly.
+ * Validation is light — anything outside the palette / category list
+ * gets stored as null.
  */
 
 const fs = require('fs');
@@ -29,10 +33,21 @@ const { userDataPath } = require('./user-data');
 
 const TAG_COLOURS = ['#a78bfa', '#2ecc71', '#f39c12', '#e74c3c', '#95a5a6', '#f87171', '#fbbf24'];
 
+// Starter categories — first time a user opens /life they see these five.
+// They can rename, recolour, delete, or add more from the pill row.
+const STARTER_CATEGORIES = [
+    { slug: 'work',   name: 'Work',   color: '#a78bfa' },
+    { slug: 'kids',   name: 'Kids',   color: '#2ecc71' },
+    { slug: 'home',   name: 'Home',   color: '#f39c12' },
+    { slug: 'health', name: 'Health', color: '#e74c3c' },
+    { slug: 'money',  name: 'Money',  color: '#fbbf24' },
+];
+
 function lifeDir(email) { return userDataPath(email, 'life'); }
 function calendarFile(email) { return path.join(lifeDir(email), 'calendar.json'); }
 function tasksFile(email) { return path.join(lifeDir(email), 'tasks.json'); }
 function contextFile(email) { return path.join(lifeDir(email), 'context.txt'); }
+function categoriesFile(email) { return path.join(lifeDir(email), 'categories.json'); }
 
 function ensureDir(email) {
     fs.mkdirSync(lifeDir(email), { recursive: true });
@@ -71,6 +86,68 @@ function normalColor(c) {
     return TAG_COLOURS.includes(c) ? c : null;
 }
 
+function slugify(s) {
+    return String(s || '')
+        .toLowerCase()
+        .trim()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-+|-+$/g, '')
+        .slice(0, 32);
+}
+
+function normalCategory(c) {
+    if (!c) return null;
+    const slug = slugify(c);
+    return slug || null;
+}
+
+// ── Categories ──────────────────────────────────────────────────────────
+
+function listCategories(ownerEmail) {
+    if (!ownerEmail) return STARTER_CATEGORIES.slice();
+    ensureDir(ownerEmail);
+    const file = categoriesFile(ownerEmail);
+    if (!fs.existsSync(file)) {
+        writeArr(file, STARTER_CATEGORIES);
+        return STARTER_CATEGORIES.slice();
+    }
+    const arr = readArr(file);
+    return Array.isArray(arr) ? arr : STARTER_CATEGORIES.slice();
+}
+
+function addCategory(payload, ownerEmail) {
+    if (!ownerEmail) throw new Error('ownerEmail required');
+    const name = String(payload?.name || '').trim();
+    if (!name) throw new Error('name required');
+    const slug = slugify(name);
+    if (!slug) throw new Error('name must contain at least one letter or digit');
+    const color = normalColor(payload?.color) || TAG_COLOURS[0];
+    const categories = listCategories(ownerEmail);
+    if (categories.some(c => c.slug === slug)) {
+        throw new Error('A category with that name already exists.');
+    }
+    const cat = { slug, name, color };
+    categories.push(cat);
+    writeArr(categoriesFile(ownerEmail), categories);
+    return cat;
+}
+
+function deleteCategory(slug, ownerEmail) {
+    if (!ownerEmail || !slug) return false;
+    const categories = listCategories(ownerEmail);
+    const next = categories.filter(c => c.slug !== slug);
+    if (next.length === categories.length) return false;
+    writeArr(categoriesFile(ownerEmail), next);
+    return true;
+}
+
+// Resolve a category slug to its colour, or null if unknown.
+function colorForCategory(slug, ownerEmail) {
+    if (!slug || !ownerEmail) return null;
+    const cat = listCategories(ownerEmail).find(c => c.slug === slug);
+    return cat ? cat.color : null;
+}
+
 // ── Events ──────────────────────────────────────────────────────────────
 
 function listEvents(ownerEmail, { from, to } = {}) {
@@ -92,6 +169,8 @@ function addEvent(payload, ownerEmail) {
     if (!title) throw new Error('title required');
     if (!date)  throw new Error('date required (YYYY-MM-DD)');
     ensureDir(ownerEmail);
+    const category = normalCategory(payload?.category);
+    const explicit = normalColor(payload?.color);
     const event = {
         id: newId(),
         title,
@@ -100,7 +179,8 @@ function addEvent(payload, ownerEmail) {
         location: payload?.location ? String(payload.location).trim() : null,
         notes: payload?.notes ? String(payload.notes).trim() : null,
         source: payload?.source ? String(payload.source).slice(0, 32) : 'manual',
-        color: normalColor(payload?.color),
+        color: explicit || colorForCategory(category, ownerEmail),
+        category,
         createdAt: new Date().toISOString(),
     };
     const events = readArr(calendarFile(ownerEmail));
@@ -122,6 +202,13 @@ function updateEvent(id, patch, ownerEmail) {
     if ('location' in patch) next.location = patch.location ? String(patch.location).trim() : null;
     if ('notes' in patch)    next.notes = patch.notes ? String(patch.notes).trim() : null;
     if ('color' in patch)    next.color = normalColor(patch.color);
+    if ('category' in patch) {
+        next.category = normalCategory(patch.category);
+        // If user didn't pick a colour explicitly this turn, follow the category.
+        if (!('color' in patch)) {
+            next.color = colorForCategory(next.category, ownerEmail);
+        }
+    }
     events[idx] = next;
     writeArr(calendarFile(ownerEmail), events);
     return next;
@@ -159,6 +246,8 @@ function addTask(payload, ownerEmail) {
     const title = String(payload?.title || '').trim();
     if (!title) throw new Error('title required');
     ensureDir(ownerEmail);
+    const category = normalCategory(payload?.category);
+    const explicit = normalColor(payload?.color);
     const task = {
         id: newId(),
         title,
@@ -166,7 +255,8 @@ function addTask(payload, ownerEmail) {
         priority: ['low', 'med', 'high'].includes(payload?.priority) ? payload.priority : 'med',
         notes: payload?.notes ? String(payload.notes).trim() : null,
         source: payload?.source ? String(payload.source).slice(0, 32) : 'manual',
-        color: normalColor(payload?.color),
+        color: explicit || colorForCategory(category, ownerEmail),
+        category,
         done: false,
         doneAt: null,
         createdAt: new Date().toISOString(),
@@ -189,6 +279,12 @@ function updateTask(id, patch, ownerEmail) {
     if ('priority' in patch && ['low', 'med', 'high'].includes(patch.priority)) next.priority = patch.priority;
     if ('notes' in patch)    next.notes = patch.notes ? String(patch.notes).trim() : null;
     if ('color' in patch)    next.color = normalColor(patch.color);
+    if ('category' in patch) {
+        next.category = normalCategory(patch.category);
+        if (!('color' in patch)) {
+            next.color = colorForCategory(next.category, ownerEmail);
+        }
+    }
     if ('done' in patch) {
         next.done = !!patch.done;
         next.doneAt = next.done ? new Date().toISOString() : null;
@@ -239,8 +335,10 @@ function addBatch({ events = [], tasks = [] } = {}, ownerEmail) {
 
 module.exports = {
     TAG_COLOURS,
+    STARTER_CATEGORIES,
     listEvents, addEvent, updateEvent, deleteEvent,
     listTasks, addTask, updateTask, deleteTask,
+    listCategories, addCategory, deleteCategory,
     getContext, setContext,
     addBatch,
 };

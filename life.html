@@ -143,6 +143,35 @@
     font-size: 14px; color: var(--text-muted); line-height: 1;
   }
 
+  /* Category pills — toggle which categories show on the calendar + tasks */
+  .cat-pills {
+    display: flex; flex-wrap: wrap; gap: 8px; align-items: center;
+  }
+  .cat-pill {
+    display: inline-flex; align-items: center; gap: 6px;
+    background: var(--bg); box-shadow: var(--neu-raised-sm);
+    color: var(--text);
+    padding: 6px 12px; border-radius: 999px;
+    font-size: 12px; font-weight: 500;
+    cursor: pointer;
+    user-select: none;
+    border: 2px solid transparent;
+    transition: opacity 0.15s, box-shadow 0.15s;
+  }
+  .cat-pill.off { opacity: 0.4; box-shadow: var(--neu-inset-xs); }
+  .cat-pill .dot {
+    width: 10px; height: 10px; border-radius: 50%;
+    flex: 0 0 auto;
+  }
+  .cat-pill .x {
+    display: none; margin-left: 4px; padding: 0 4px;
+    font-size: 14px; line-height: 1; color: var(--text-muted);
+    border-radius: 4px;
+  }
+  .cat-pill:hover .x { display: inline; }
+  .cat-pill .x:hover { color: #e74c3c; background: var(--bg); box-shadow: var(--neu-inset-xs); }
+  .cat-pill.add { color: var(--text-muted); font-size: 16px; padding: 4px 10px; }
+
   /* Calendar grid */
   .cal-head {
     display: flex; align-items: center; gap: 10px; margin-bottom: 10px;
@@ -272,6 +301,12 @@
     <div id="preview-list"></div>
   </div>
 
+  <!-- CATEGORY PILLS -->
+  <div class="card">
+    <h2>Show <span class="right" style="font-size: 11px; color: var(--text-muted); font-weight: 400;">Click to hide · hover to delete</span></h2>
+    <div class="cat-pills" id="cat-pills"></div>
+  </div>
+
   <!-- CALENDAR -->
   <div class="card">
     <div class="cal-head">
@@ -323,12 +358,31 @@
     <input type="text" id="m-location">
     <label>Notes</label>
     <textarea id="m-notes"></textarea>
-    <label>Tag colour</label>
+    <label>Category</label>
+    <select id="m-category">
+      <option value="">— Uncategorised —</option>
+    </select>
+    <label>Tag colour <span style="font-size: 11px; color: var(--text-muted); font-weight: 400;">(overrides category colour)</span></label>
     <div class="swatches" id="m-swatches"></div>
     <div class="modal-actions">
       <button id="m-save">Save</button>
       <button id="m-delete" class="danger" style="display: none;">Delete</button>
       <button id="m-cancel">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<!-- Add-category modal -->
+<div class="modal-bg" id="cat-modal">
+  <div class="modal">
+    <h3>New category</h3>
+    <label>Name</label>
+    <input type="text" id="cat-name" placeholder="e.g. Fitness, Voiceharp, Mum">
+    <label>Colour</label>
+    <div class="swatches" id="cat-swatches"></div>
+    <div class="modal-actions">
+      <button id="cat-save">Save</button>
+      <button id="cat-cancel">Cancel</button>
     </div>
   </div>
 </div>
@@ -340,12 +394,34 @@ const $ = (id) => document.getElementById(id);
 const state = {
   events: [],
   tasks: [],
+  categories: [],
+  // Set of slugs the user has hidden. Empty = everything shown.
+  // Empty-string slug '' represents "Uncategorised".
+  hiddenCategories: loadHiddenCategories(),
   preview: { events: [], tasks: [] },
   calYear: new Date().getFullYear(),
   calMonth: new Date().getMonth(),
   taskFilter: 'open',
-  modal: { mode: null, kind: null, item: null, color: null },
+  modal: { mode: null, kind: null, item: null, color: null, category: null },
+  catModal: { color: TAG_COLOURS[0] },
 };
+
+function loadHiddenCategories() {
+  try {
+    const raw = localStorage.getItem('life:hiddenCategories');
+    return new Set(raw ? JSON.parse(raw) : []);
+  } catch { return new Set(); }
+}
+function saveHiddenCategories() {
+  try { localStorage.setItem('life:hiddenCategories', JSON.stringify([...state.hiddenCategories])); } catch {}
+}
+function isVisible(item) {
+  const slug = item.category || '';
+  return !state.hiddenCategories.has(slug);
+}
+function findCategory(slug) {
+  return state.categories.find(c => c.slug === slug) || null;
+}
 
 function fmtDate(d) {
   if (!d) return '';
@@ -370,6 +446,79 @@ async function loadTasks() {
   const r = await fetch('/life/tasks');
   state.tasks = await r.json();
   renderTasks();
+}
+async function loadCategories() {
+  try {
+    const r = await fetch('/life/categories');
+    const data = await r.json();
+    state.categories = Array.isArray(data) ? data : [];
+  } catch { state.categories = []; }
+  renderCategoryPills();
+}
+
+function renderCategoryPills() {
+  const wrap = $('cat-pills');
+  wrap.innerHTML = '';
+
+  // One pill per user category…
+  state.categories.forEach(cat => wrap.appendChild(buildCatPill(cat)));
+
+  // …plus an "Uncategorised" toggle (slug = '') so things tagged with
+  // nothing can be hidden too.
+  wrap.appendChild(buildCatPill({ slug: '', name: 'Uncategorised', color: '#95a5a6' }, { undeletable: true }));
+
+  const add = document.createElement('span');
+  add.className = 'cat-pill add';
+  add.textContent = '+ Add';
+  add.addEventListener('click', openCategoryModal);
+  wrap.appendChild(add);
+}
+
+function buildCatPill(cat, opts = {}) {
+  const pill = document.createElement('span');
+  const hidden = state.hiddenCategories.has(cat.slug);
+  pill.className = 'cat-pill' + (hidden ? ' off' : '');
+  pill.dataset.slug = cat.slug;
+  pill.innerHTML = `
+    <span class="dot" style="background: ${cat.color}"></span>
+    <span>${escape(cat.name)}</span>
+  `;
+  pill.addEventListener('click', (e) => {
+    if (e.target.classList.contains('x')) return;
+    toggleCategory(cat.slug);
+  });
+  if (!opts.undeletable) {
+    const x = document.createElement('span');
+    x.className = 'x';
+    x.textContent = '×';
+    x.title = 'Delete category';
+    x.addEventListener('click', (e) => { e.stopPropagation(); deleteCategoryPrompt(cat); });
+    pill.appendChild(x);
+  }
+  return pill;
+}
+
+function toggleCategory(slug) {
+  if (state.hiddenCategories.has(slug)) state.hiddenCategories.delete(slug);
+  else state.hiddenCategories.add(slug);
+  saveHiddenCategories();
+  renderCategoryPills();
+  renderCalendar();
+  renderTasks();
+}
+
+async function deleteCategoryPrompt(cat) {
+  const inUse = state.events.filter(e => e.category === cat.slug).length
+              + state.tasks.filter(t  => t.category === cat.slug).length;
+  const msg = inUse > 0
+    ? `Delete "${cat.name}"? ${inUse} item${inUse === 1 ? '' : 's'} still tagged with it will become uncategorised.`
+    : `Delete "${cat.name}"?`;
+  if (!confirm(msg)) return;
+  const r = await fetch('/life/categories/' + encodeURIComponent(cat.slug), { method: 'DELETE' });
+  if (!r.ok) { setStatus('Could not delete category.', true); return; }
+  state.hiddenCategories.delete(cat.slug);
+  saveHiddenCategories();
+  await loadCategories();
 }
 
 function renderCalendar() {
@@ -406,11 +555,12 @@ function renderCalendar() {
     cell.className = 'cal-cell' + (iso === todayIso ? ' today' : '');
     cell.dataset.date = iso;
     cell.innerHTML = `<div class="num">${d}</div>`;
-    const onDay = state.events.filter(e => e.date === iso);
+    const onDay = state.events.filter(e => e.date === iso && isVisible(e));
     onDay.slice(0, 3).forEach(e => {
       const tag = document.createElement('div');
       tag.className = 'cal-event';
-      tag.style.borderLeftColor = e.color || '#95a5a6';
+      const cat = findCategory(e.category);
+      tag.style.borderLeftColor = e.color || (cat && cat.color) || '#95a5a6';
       tag.textContent = (e.time ? e.time + ' ' : '') + e.title;
       tag.addEventListener('click', (ev) => { ev.stopPropagation(); openEdit('event', e); });
       cell.appendChild(tag);
@@ -440,7 +590,10 @@ function renderCalendar() {
 function renderTasks() {
   const list = $('task-list');
   list.innerHTML = '';
-  const filtered = state.tasks.filter(t => state.taskFilter === 'done' ? t.done : !t.done);
+  const filtered = state.tasks.filter(t => {
+    if (state.taskFilter === 'done' ? !t.done : t.done) return false;
+    return isVisible(t);
+  });
   if (filtered.length === 0) {
     list.innerHTML = `<div class="preview-empty">${state.taskFilter === 'done' ? 'Nothing ticked off yet.' : 'No open tasks. Nice.'}</div>`;
     return;
@@ -453,11 +606,13 @@ function renderTasks() {
     if (t.priority === 'high') meta.push('high');
     if (t.priority === 'low')  meta.push('low');
     if (t.notes) meta.push(t.notes);
+    const cat = findCategory(t.category);
+    const dotColor = t.color || (cat && cat.color) || null;
     row.innerHTML = `
       <input type="checkbox" ${t.done ? 'checked' : ''}>
       <div class="body">
         <div class="title">
-          ${t.color ? `<span class="colour-dot" style="background:${t.color}"></span>` : ''}
+          ${dotColor ? `<span class="colour-dot" style="background:${dotColor}"></span>` : ''}
           ${escape(t.title)}
         </div>
         ${meta.length ? `<div class="meta">${meta.map(escape).join(' · ')}</div>` : ''}
@@ -654,7 +809,7 @@ $('manual-event').addEventListener('click', () => openNew('event', new Date().to
 $('manual-task').addEventListener('click',  () => openNew('task'));
 
 function openNew(kind, dateIso) {
-  state.modal = { mode: 'new', kind, item: null, color: null };
+  state.modal = { mode: 'new', kind, item: null, color: null, category: null };
   $('modal-title').textContent = kind === 'event' ? 'New event' : 'New task';
   $('m-title').value = '';
   $('m-date').value = dateIso || '';
@@ -662,6 +817,7 @@ function openNew(kind, dateIso) {
   $('m-location').value = '';
   $('m-notes').value = '';
   $('m-priority').value = 'med';
+  populateCategorySelect(null);
   setSwatches(null);
   showModalFor(kind);
   $('m-delete').style.display = 'none';
@@ -670,7 +826,7 @@ function openNew(kind, dateIso) {
 }
 
 function openEdit(kind, item) {
-  state.modal = { mode: 'edit', kind, item, color: item.color || null };
+  state.modal = { mode: 'edit', kind, item, color: item.color || null, category: item.category || null };
   $('modal-title').textContent = (kind === 'event' ? 'Edit event' : 'Edit task');
   $('m-title').value = item.title;
   $('m-date').value = kind === 'event' ? item.date : (item.due || '');
@@ -678,12 +834,31 @@ function openEdit(kind, item) {
   $('m-location').value = kind === 'event' ? (item.location || '') : '';
   $('m-notes').value = item.notes || '';
   if (kind === 'task') $('m-priority').value = item.priority || 'med';
+  populateCategorySelect(item.category || null);
   setSwatches(item.color || null);
   showModalFor(kind);
   $('m-delete').style.display = 'inline-block';
   $('modal').classList.add('show');
   $('m-title').focus();
 }
+
+function populateCategorySelect(currentSlug) {
+  const sel = $('m-category');
+  sel.innerHTML = '<option value="">— Uncategorised —</option>';
+  state.categories.forEach(c => {
+    const opt = document.createElement('option');
+    opt.value = c.slug;
+    opt.textContent = c.name;
+    if (c.slug === currentSlug) opt.selected = true;
+    sel.appendChild(opt);
+  });
+  state.modal.category = currentSlug || null;
+}
+document.addEventListener('change', (e) => {
+  if (e.target && e.target.id === 'm-category') {
+    state.modal.category = e.target.value || null;
+  }
+});
 
 function showModalFor(kind) {
   if (kind === 'event') {
@@ -725,7 +900,7 @@ $('m-save').addEventListener('click', async () => {
   const title = $('m-title').value.trim();
   if (!title) return;
   const dateVal = $('m-date').value;
-  const { mode, kind, item, color } = state.modal;
+  const { mode, kind, item, color, category } = state.modal;
 
   if (kind === 'event') {
     if (!dateVal) { alert('Date is required for an event.'); return; }
@@ -735,6 +910,7 @@ $('m-save').addEventListener('click', async () => {
       location: $('m-location').value.trim() || null,
       notes: $('m-notes').value.trim() || null,
       color,
+      category,
     };
     if (mode === 'new') await fetch('/life/events', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
     else await fetch('/life/events/' + item.id, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
@@ -746,6 +922,7 @@ $('m-save').addEventListener('click', async () => {
       priority: $('m-priority').value,
       notes: $('m-notes').value.trim() || null,
       color,
+      category,
     };
     if (mode === 'new') await fetch('/life/tasks', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
     else await fetch('/life/tasks/' + item.id, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
@@ -764,10 +941,52 @@ $('m-delete').addEventListener('click', async () => {
 });
 
 
+// ── Add-category modal ──────────────────────────────────────────
+
+function openCategoryModal() {
+  state.catModal.color = TAG_COLOURS[0];
+  $('cat-name').value = '';
+  renderCatSwatches();
+  $('cat-modal').classList.add('show');
+  setTimeout(() => $('cat-name').focus(), 30);
+}
+
+function renderCatSwatches() {
+  const wrap = $('cat-swatches');
+  wrap.innerHTML = '';
+  TAG_COLOURS.forEach(c => {
+    const sw = document.createElement('div');
+    sw.className = 'swatch' + (state.catModal.color === c ? ' selected' : '');
+    sw.style.background = c;
+    sw.addEventListener('click', () => { state.catModal.color = c; renderCatSwatches(); });
+    wrap.appendChild(sw);
+  });
+}
+
+$('cat-cancel').addEventListener('click', () => $('cat-modal').classList.remove('show'));
+$('cat-modal').addEventListener('click', (e) => { if (e.target.id === 'cat-modal') $('cat-modal').classList.remove('show'); });
+
+$('cat-save').addEventListener('click', async () => {
+  const name = $('cat-name').value.trim();
+  if (!name) { setStatus('Give it a name first.', true); return; }
+  const r = await fetch('/life/categories', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name, color: state.catModal.color }),
+  });
+  const data = await r.json();
+  if (!r.ok) { setStatus(data.error || 'Could not add category.', true); return; }
+  $('cat-modal').classList.remove('show');
+  await loadCategories();
+});
+
 // ── Init ────────────────────────────────────────────────────────
 
-loadEvents();
-loadTasks();
+(async () => {
+  // Categories first so events/tasks can resolve their colours on render.
+  await loadCategories();
+  await Promise.all([loadEvents(), loadTasks()]);
+})();
 </script>
 
 </body>

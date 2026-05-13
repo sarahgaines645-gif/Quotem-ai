@@ -1428,6 +1428,19 @@ router.delete('/life/tasks/:id', requirePerson, (req, res) => {
     res.json({ ok: true });
 });
 
+router.get('/life/categories', requirePerson, (req, res) => {
+    res.json(qLife.listCategories(req.person.email));
+});
+router.post('/life/categories', requirePerson, express.json({ limit: '4kb' }), (req, res) => {
+    try { res.json(qLife.addCategory(req.body || {}, req.person.email)); }
+    catch (e) { res.status(400).json({ error: e.message }); }
+});
+router.delete('/life/categories/:slug', requirePerson, (req, res) => {
+    const ok = qLife.deleteCategory(req.params.slug, req.person.email);
+    if (!ok) return res.status(404).json({ error: 'Not found' });
+    res.json({ ok: true });
+});
+
 // Extract events + tasks from a paste of text. Returns preview shape — nothing
 // is saved until POST /life/batch confirms it. Pulls the user's saved
 // "About me" context so the extractor can filter to what's relevant to them.
@@ -1439,6 +1452,20 @@ router.post('/life/extract', requirePerson, express.json({ limit: '256kb' }), as
     let context = qLife.getContext(req.person.email);
     const note = req.body?.note ? String(req.body.note).trim() : '';
     if (note) context = context ? `${context}\n\nINSTRUCTION: ${note}` : `INSTRUCTION: ${note}`;
+    // Enrich with everything Q knows — facts Q collected in chat are used here too
+    const userFacts = listFacts({ limit: 100 }, req.person.id);
+    if (userFacts.length > 0) {
+        const factsBlock = userFacts.map(f => f.content).join('\n');
+        context = context ? `${context}\n\nQ ALSO KNOWS ABOUT THIS PERSON:\n${factsBlock}` : `Q KNOWS ABOUT THIS PERSON:\n${factsBlock}`;
+    }
+    // Pass upcoming calendar so the extractor can spot busy days and shift prep tasks
+    const today = new Date().toISOString().slice(0, 10);
+    const in30 = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+    const upcoming = qLife.listEvents(req.person.email, { from: today, to: in30 });
+    if (upcoming.length > 0) {
+        const calBlock = upcoming.map(e => `${e.date}: ${e.title}`).join('\n');
+        context = context ? `${context}\n\nCALENDAR (next 30 days):\n${calBlock}` : `CALENDAR (next 30 days):\n${calBlock}`;
+    }
     const result = await extractLifeAdmin(text, { source: req.body?.source || 'paste', context });
     res.json(result);
 });
@@ -1452,6 +1479,20 @@ router.post('/life/extract-photo', requirePerson, express.json({ limit: '32mb' }
     let context = qLife.getContext(req.person.email);
     const note = req.body?.note ? String(req.body.note).trim() : '';
     if (note) context = context ? `${context}\n\nINSTRUCTION: ${note}` : `INSTRUCTION: ${note}`;
+    // Enrich with everything Q knows — facts Q collected in chat are used here too
+    const userFacts = listFacts({ limit: 100 }, req.person.id);
+    if (userFacts.length > 0) {
+        const factsBlock = userFacts.map(f => f.content).join('\n');
+        context = context ? `${context}\n\nQ ALSO KNOWS ABOUT THIS PERSON:\n${factsBlock}` : `Q KNOWS ABOUT THIS PERSON:\n${factsBlock}`;
+    }
+    // Pass upcoming calendar so the extractor can spot busy days and shift prep tasks
+    const today = new Date().toISOString().slice(0, 10);
+    const in30 = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+    const upcoming = qLife.listEvents(req.person.email, { from: today, to: in30 });
+    if (upcoming.length > 0) {
+        const calBlock = upcoming.map(e => `${e.date}: ${e.title}`).join('\n');
+        context = context ? `${context}\n\nCALENDAR (next 30 days):\n${calBlock}` : `CALENDAR (next 30 days):\n${calBlock}`;
+    }
     const result = await extractLifeFromImage(dataUrl, { source: req.body?.source || 'photo', context });
     res.json(result);
 });
