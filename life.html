@@ -32,7 +32,7 @@
     min-height: 100vh; padding: 20px 6px 80px;
     -webkit-font-smoothing: antialiased;
   }
-  .wrap { max-width: 980px; margin: 0 auto; }
+  .wrap { max-width: 1400px; margin: 0 auto; }
   header { display: flex; align-items: baseline; gap: 14px; margin-bottom: 24px; flex-wrap: wrap; }
   .logo-mark { display: inline-flex; align-items: baseline; }
   .logo-mark .q { font-size: 28px; font-weight: 700; line-height: 1; letter-spacing: -0.05em; color: var(--text); }
@@ -360,12 +360,28 @@
   .mini-chat-btn {
     position: fixed; bottom: 24px; right: 24px;
     width: 50px; height: 50px; border-radius: 50%;
-    background: var(--bg); box-shadow: var(--neu-raised);
+    background: var(--accent); box-shadow: 4px 4px 12px rgba(233,30,99,0.35), -2px -2px 8px rgba(255,255,255,0.4);
     display: flex; align-items: center; justify-content: center;
     font-size: 18px; font-weight: 700;
     cursor: pointer; z-index: 200; border: none;
-    font-family: inherit; color: var(--text);
+    font-family: inherit; color: #fff;
   }
+
+  /* Colour picker popover on category dots */
+  .dot-picker {
+    position: absolute; top: calc(100% + 6px); left: 0;
+    background: var(--bg); box-shadow: var(--neu-raised);
+    border-radius: 10px; padding: 8px;
+    display: flex; flex-wrap: wrap; gap: 6px;
+    z-index: 400; width: 154px;
+  }
+  .dot-picker .dp-sw {
+    width: 18px; height: 18px; border-radius: 50%;
+    cursor: pointer; border: 2px solid transparent;
+    box-shadow: var(--neu-raised-sm);
+    flex: 0 0 auto;
+  }
+  .dot-picker .dp-sw:hover { border-color: var(--text); }
   .mini-chat-panel {
     position: fixed; bottom: 84px; right: 24px;
     width: 300px;
@@ -414,7 +430,7 @@
 
   <!-- CATEGORY PILLS — full width above the grid -->
   <div class="card">
-    <h2>Show <span class="right" style="font-size: 11px; color: var(--text-muted); font-weight: 400;">Click to hide · hover to delete</span></h2>
+    <h2>Show <span class="right" style="font-size: 11px; color: var(--text-muted); font-weight: 400;">Click to hide · click dot to recolour · hover to delete</span></h2>
     <div class="cat-pills" id="cat-pills"></div>
   </div>
 
@@ -667,15 +683,30 @@ function renderCategoryPills() {
 
 function buildCatPill(cat, opts = {}) {
   const pill = document.createElement('span');
+  pill.style.position = 'relative';
   const hidden = state.hiddenCategories.has(cat.slug);
   pill.className = 'cat-pill' + (hidden ? ' off' : '');
   pill.dataset.slug = cat.slug;
-  pill.innerHTML = `
-    <span class="dot" style="background: ${cat.color}"></span>
-    <span>${escape(cat.name)}</span>
-  `;
+
+  const dot = document.createElement('span');
+  dot.className = 'dot';
+  dot.style.background = cat.color;
+  if (!opts.undeletable) {
+    dot.title = 'Click to recolour';
+    dot.style.cursor = 'pointer';
+    dot.addEventListener('click', (e) => {
+      e.stopPropagation();
+      openDotPicker(dot, cat);
+    });
+  }
+
+  const label = document.createElement('span');
+  label.textContent = cat.name;
+
+  pill.appendChild(dot);
+  pill.appendChild(label);
   pill.addEventListener('click', (e) => {
-    if (e.target.classList.contains('x')) return;
+    if (e.target === dot || e.target.classList.contains('x')) return;
     toggleCategory(cat.slug);
   });
   if (!opts.undeletable) {
@@ -687,6 +718,47 @@ function buildCatPill(cat, opts = {}) {
     pill.appendChild(x);
   }
   return pill;
+}
+
+function openDotPicker(dotEl, cat) {
+  // Close any open picker first
+  document.querySelectorAll('.dot-picker').forEach(p => p.remove());
+
+  const picker = document.createElement('div');
+  picker.className = 'dot-picker';
+  TAG_COLOURS.forEach(c => {
+    const sw = document.createElement('div');
+    sw.className = 'dp-sw';
+    sw.style.background = c;
+    if (c === cat.color) sw.style.borderColor = 'var(--text)';
+    sw.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      picker.remove();
+      await recolourCategory(cat, c);
+    });
+    picker.appendChild(sw);
+  });
+  dotEl.parentElement.appendChild(picker);
+
+  // Click outside closes
+  setTimeout(() => {
+    document.addEventListener('click', () => picker.remove(), { once: true });
+  }, 0);
+}
+
+async function recolourCategory(cat, newColor) {
+  const r = await fetch('/life/categories/' + cat.slug, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ color: newColor }),
+  });
+  if (!r.ok) return;
+  cat.color = newColor;
+  const idx = state.categories.findIndex(c => c.slug === cat.slug);
+  if (idx !== -1) state.categories[idx].color = newColor;
+  renderCategoryPills();
+  renderCalendar();
+  renderTasks();
 }
 
 function toggleCategory(slug) {

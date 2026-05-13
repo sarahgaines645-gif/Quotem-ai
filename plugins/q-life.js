@@ -139,6 +139,22 @@ function addCategory(payload, ownerEmail) {
     return cat;
 }
 
+function updateCategory(slug, payload, ownerEmail) {
+    if (!ownerEmail || !slug) return null;
+    const categories = listCategories(ownerEmail);
+    const cat = categories.find(c => c.slug === slug);
+    if (!cat) return null;
+    if (payload?.color) {
+        const c = normalColor(payload.color);
+        if (c) cat.color = c;
+    }
+    if (payload?.name) {
+        cat.name = String(payload.name).trim() || cat.name;
+    }
+    writeArr(categoriesFile(ownerEmail), categories);
+    return cat;
+}
+
 function deleteCategory(slug, ownerEmail) {
     if (!ownerEmail || !slug) return false;
     const categories = listCategories(ownerEmail);
@@ -349,7 +365,7 @@ module.exports = {
     STARTER_CATEGORIES,
     listEvents, addEvent, updateEvent, deleteEvent,
     listTasks, addTask, updateTask, deleteTask,
-    listCategories, addCategory, deleteCategory,
+    listCategories, addCategory, updateCategory, deleteCategory,
     getContext, setContext,
     addBatch,
 };

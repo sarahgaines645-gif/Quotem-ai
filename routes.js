@@ -1435,6 +1435,11 @@ router.post('/life/categories', requirePerson, express.json({ limit: '4kb' }), (
     try { res.json(qLife.addCategory(req.body || {}, req.person.email)); }
     catch (e) { res.status(400).json({ error: e.message }); }
 });
+router.patch('/life/categories/:slug', requirePerson, express.json({ limit: '4kb' }), (req, res) => {
+    const cat = qLife.updateCategory(req.params.slug, req.body || {}, req.person.email);
+    if (!cat) return res.status(404).json({ error: 'Not found' });
+    res.json(cat);
+});
 router.delete('/life/categories/:slug', requirePerson, (req, res) => {
     const ok = qLife.deleteCategory(req.params.slug, req.person.email);
     if (!ok) return res.status(404).json({ error: 'Not found' });
