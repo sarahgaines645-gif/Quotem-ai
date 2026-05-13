@@ -478,8 +478,18 @@ async function chat(messages, options = {}) {
     }
 
     // Conversation buffer that grows as we loop through tool calls.
+    // Vision turns get an extra system note explaining that for this single
+    // call the model has vision. Without it, Kimi K2.5 (or any vision model
+    // we route to) reads "You run on DeepSeek V4 Pro" in Q_PERSONA and
+    // refuses to use its actual vision capability — telling the user "I can
+    // see images but can't access them." This note overrides that confusion
+    // just for the multimodal turn; text turns are unaffected.
+    const systemContent = buildSystemMessage(mode, options.person?.id, options.surface)
+        + (isVision
+            ? `\n\n--- VISION TURN ---\nFor this single turn you ARE looking through a vision-capable lens — the user has attached an image (or images) to their latest message. You CAN see them. Describe what you see directly and answer their question about the image. Do not say you can't see images; do not say you are text-only; the multimodal request has been routed to a vision-capable model on your behalf. Treat the image as the primary content of the user's message.`
+            : '');
     let conversation = [
-        { role: 'system', content: buildSystemMessage(mode, options.person?.id, options.surface) },
+        { role: 'system', content: systemContent },
         ...outboundMessages,
     ];
     const toolCalls = [];     // [{ name, args, result, durationMs }]
