@@ -17,7 +17,7 @@
 const { Q_CONFIG } = require('../config');
 const { cleanModelOutput } = require('./cjk-filter');
 
-const SYSTEM_PROMPT = `You are a personal-admin assistant. The user gives you TEXT (from a school letter, email, message, photo OCR, bank statement, newsletter, or similar). Your job is to read THAT TEXT and pull out events that are happening, plus any preparation the user has to do for them.
+const SYSTEM_PROMPT = `You are a personal-admin assistant. The user gives you TEXT (from a school letter, email, message, photo OCR, bank statement, newsletter, or similar). Your job is to read THAT TEXT and pull out two arrays: the events that are happening, and the tasks the user must do for them.
 
 Return ONE JSON object. No markdown, no prose, no code fences. Just the object:
 {
@@ -26,35 +26,61 @@ Return ONE JSON object. No markdown, no prose, no code fences. Just the object:
 }
 
 ═══════════════════════════════════════════
-EVENT vs TASK — this is the rule that matters most
+STEP 1 — EXTRACT EVENTS FIRST. ALWAYS.
 ═══════════════════════════════════════════
+Before you think about tasks at all, scan the TEXT for things that HAPPEN on a date. The default for ANY dated item is EVENT. Only after the events array is filled do you decide if there's also a TASK to add.
 
-An EVENT is something that HAPPENS on a date — the user (or someone they care about) shows up to it, attends it, is part of it. It exists in the world on that date whether the user prepares for it or not.
-  Examples of events:
-  • "School trip to the Tate, Thursday 19 June" → EVENT (the trip happens)
-  • "Parents' evening, 6pm Wednesday" → EVENT
-  • "Dentist appointment, 14:30 on the 12th" → EVENT
-  • "Trumpet exam on the 22nd" → EVENT
-  • "Mum's birthday party, Saturday" → EVENT
-  • "Bin day Tuesday" → EVENT (it happens whether you act or not)
+An EVENT is something that happens on a date — the user (or someone they care about) attends, is there for it, participates in it. It exists on that date whether the user prepares for it or not.
+  ✓ "School trip to the Tate, Thursday 19 June" → EVENT
+  ✓ "Parents' evening, Wed 22 May, 4–7pm" → EVENT
+  ✓ "Dentist appointment, 14:30 on the 12th" → EVENT
+  ✓ "Trumpet exam on the 22nd" → EVENT
+  ✓ "Mum's birthday party, Saturday" → EVENT
+  ✓ "Bin day Tuesday" → EVENT (it happens whether you act or not)
+  ✓ "Half term, 27 May – 31 May" → EVENT (use the start date)
 
-A TASK is something the user has to DO. Action verbs. Usually preparation for an event, sometimes standalone.
-  Examples of tasks:
-  • "Buy PE kit before Thursday" → TASK
-  • "Return permission slip by Wednesday" → TASK
-  • "Pay £8 trip fee by 14 June" → TASK
-  • "Book a haircut" → TASK
-  • "Reply to email" → TASK
+A TASK is an action the USER has to DO. The title starts with (or implies) an action verb: buy, return, pay, book, send, call, fill in, reply, sign.
+  ✓ "Buy PE kit before Thursday" → TASK
+  ✓ "Return permission slip by Wednesday" → TASK
+  ✓ "Pay £8 trip fee by 14 June" → TASK
+  ✓ "Sign up for parents' evening slot at school-cloud.co.uk/abc" → TASK
 
-Default behaviour: if a date is mentioned and something is HAPPENING on it, it's an EVENT. Tasks live around events. A bare date + a noun ("trumpet exam on the 22nd") is an EVENT, not a task. Do not put events in the tasks array because they "need doing" — attending an event is not the same as a task.
+NEVER put an event into the tasks array because it "needs to be remembered" — attending is not a task. If something has a date and is happening, it goes in events. End of decision.
 
-ONE source item can produce BOTH: e.g. a school trip on the 19th is an EVENT, plus tasks like "pay £8 trip fee", "send permission slip", "remember packed lunch".
+ONE source item often produces BOTH. A parents' evening letter typically gives you:
+  • EVENT: "Parents' evening" on the evening date, notes = booking link + time window
+  • TASK: "Sign up for parents' evening slot" with due date = sign-up deadline, notes = booking link, prepFor = "Parents' evening"
+
+═══════════════════════════════════════════
+STEP 2 — CAPTURE THE DETAIL THAT MAKES IT USEFUL
+═══════════════════════════════════════════
+Put into \`notes\` anything the user will need to actually act on this when they look at it later. Especially:
+  • URLs — booking links, sign-up forms, payment pages, video-call links, Teams/Zoom IDs
+  • Reference numbers — booking refs, case numbers, ticket IDs, order numbers
+  • Costs — "£8 trip fee", "£25 deposit"
+  • Required items — "bring a packed lunch", "wear PE kit", "labelled water bottle"
+  • Contact details — phone numbers, email addresses to reply to
+  • Sign-up windows — "book between 8 May and 18 May"
+  • Address details when they aren't in the location field
+A parents' evening with a booking URL: the URL goes in the EVENT's notes AND in the related TASK's notes, so wherever the user looks they can act.
+
+═══════════════════════════════════════════
+STEP 3 — AUTO-CATEGORISE (only if CATEGORIES is provided)
+═══════════════════════════════════════════
+If a CATEGORIES list is provided below, set \`category\` on every event and task to the slug that fits best. Pattern hints:
+  • Anything about the user's child / school / school trip / school activity → "kids"
+  • Bill, invoice, payment, statement, fee → "money"
+  • GP, dentist, hospital, blood test, prescription, vaccination → "health"
+  • Meeting, work event, conference, work deadline → "work"
+  • Bin day, plumber, delivery, household repair, mortgage admin → "home"
+If the categories list contains slugs other than those, use those when they fit better.
+If no good fit, leave category as null — the user will pick it from a dropdown.
 
 ═══════════════════════════════════════════
 FIELDS
 ═══════════════════════════════════════════
-EVENT: title (string), date (YYYY-MM-DD, required), time (HH:MM 24h or null), location (string or null), notes (string or null)
-TASK:  title (string, imperative), due (YYYY-MM-DD or null), priority ("low"|"med"|"high"), notes (string or null), prepFor (string or null — the exact title of the event in the events array this task is preparing for, or null if standalone)
+EVENT: title (string), date (YYYY-MM-DD, required), time (HH:MM 24h or null), location (string or null), notes (string or null), category (slug from CATEGORIES, or null)
+TASK:  title (string, imperative), due (YYYY-MM-DD or null), priority ("low"|"med"|"high"), notes (string or null), prepFor (exact event title or null), category (slug from CATEGORIES, or null)
 
 ═══════════════════════════════════════════
 EXTRACTION RULES
@@ -107,9 +133,14 @@ async function extractLifeAdmin(rawText, opts = {}) {
     const today = opts.today || new Date().toISOString().slice(0, 10);
     const source = opts.source || 'paste';
     const context = (opts.context && String(opts.context).trim()) || '';
+    const categories = Array.isArray(opts.categories) ? opts.categories : [];
+    const validCategorySlugs = new Set(categories.map(c => c?.slug).filter(Boolean));
 
     const contextBlock = context ? `\n\nABOUT ME:\n${context}\n` : '';
-    const userMessage = `TODAY: ${today}${contextBlock}\n\n--- TEXT ---\n${rawText.trim()}\n--- END ---\n\nThink it through, then return the JSON object.`;
+    const categoriesBlock = categories.length > 0
+        ? `\n\nCATEGORIES (pick by slug):\n${categories.map(c => `- ${c.slug} — ${c.name}`).join('\n')}\n`
+        : '';
+    const userMessage = `TODAY: ${today}${categoriesBlock}${contextBlock}\n\n--- TEXT ---\n${rawText.trim()}\n--- END ---\n\nThink it through, then return the JSON object.`;
 
     let res;
     try {
@@ -158,12 +189,19 @@ async function extractLifeAdmin(rawText, opts = {}) {
     const events = Array.isArray(parsed?.events) ? parsed.events : [];
     const tasks  = Array.isArray(parsed?.tasks)  ? parsed.tasks  : [];
 
+    const normCategory = (raw) => {
+        if (!raw) return null;
+        const s = String(raw).trim().toLowerCase();
+        return validCategorySlugs.has(s) ? s : null;
+    };
+
     const normEvent = (e) => ({
         title:    String(e?.title || '').trim(),
         date:     String(e?.date || '').slice(0, 10),
         time:     e?.time && /^\d{1,2}:\d{2}$/.test(String(e.time)) ? String(e.time) : null,
         location: e?.location ? String(e.location).trim() : null,
         notes:    e?.notes ? String(e.notes).trim() : null,
+        category: normCategory(e?.category),
         source,
     });
 
@@ -173,6 +211,7 @@ async function extractLifeAdmin(rawText, opts = {}) {
         priority: ['low','med','high'].includes(t?.priority) ? t.priority : 'med',
         notes:    t?.notes ? String(t.notes).trim() : null,
         prepFor:  t?.prepFor ? String(t.prepFor).trim().slice(0, 200) : null,
+        category: normCategory(t?.category),
         source,
     });
 
@@ -197,7 +236,12 @@ async function extractFromImage(dataUrl, opts = {}) {
     const today = opts.today || new Date().toISOString().slice(0, 10);
     const source = opts.source || 'photo';
     const context = (opts.context && String(opts.context).trim()) || '';
+    const categories = Array.isArray(opts.categories) ? opts.categories : [];
+    const validCategorySlugs = new Set(categories.map(c => c?.slug).filter(Boolean));
     const contextBlock = context ? `\n\nABOUT ME:\n${context}\n` : '';
+    const categoriesBlock = categories.length > 0
+        ? `\n\nCATEGORIES (pick by slug):\n${categories.map(c => `- ${c.slug} — ${c.name}`).join('\n')}\n`
+        : '';
 
     let res;
     try {
@@ -216,7 +260,7 @@ async function extractFromImage(dataUrl, opts = {}) {
                     {
                         role: 'user',
                         content: [
-                            { type: 'text', text: `TODAY: ${today}${contextBlock}\n\nRead this image, extract everything date-shaped, think through any prep tasks needed, then return the JSON object.` },
+                            { type: 'text', text: `TODAY: ${today}${categoriesBlock}${contextBlock}\n\nRead this image. Extract events that are HAPPENING (default for anything dated) into the events array. Extract action-verb tasks the user must do into the tasks array. Capture URLs, costs, reference numbers, and "bring X" details into notes. Auto-categorise using the slugs above. Then return the JSON object.` },
                             { type: 'image_url', image_url: { url: dataUrl } },
                         ],
                     },
@@ -252,6 +296,12 @@ async function extractFromImage(dataUrl, opts = {}) {
     const events = Array.isArray(parsed?.events) ? parsed.events : [];
     const tasks  = Array.isArray(parsed?.tasks)  ? parsed.tasks  : [];
 
+    const normCategory = (raw) => {
+        if (!raw) return null;
+        const s = String(raw).trim().toLowerCase();
+        return validCategorySlugs.has(s) ? s : null;
+    };
+
     return {
         events: events.filter(e => e?.title && e?.date).map(e => ({
             title: String(e.title).trim(),
@@ -259,6 +309,7 @@ async function extractFromImage(dataUrl, opts = {}) {
             time: e.time && /^\d{1,2}:\d{2}$/.test(String(e.time)) ? String(e.time) : null,
             location: e.location ? String(e.location).trim() : null,
             notes: e.notes ? String(e.notes).trim() : null,
+            category: normCategory(e.category),
             source,
         })),
         tasks: tasks.filter(t => t?.title).map(t => ({
@@ -267,6 +318,7 @@ async function extractFromImage(dataUrl, opts = {}) {
             priority: ['low','med','high'].includes(t.priority) ? t.priority : 'med',
             notes: t.notes ? String(t.notes).trim() : null,
             prepFor: t.prepFor ? String(t.prepFor).trim().slice(0, 200) : null,
+            category: normCategory(t.category),
             source,
         })),
     };

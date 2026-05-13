@@ -1466,7 +1466,8 @@ router.post('/life/extract', requirePerson, express.json({ limit: '256kb' }), as
         const calBlock = upcoming.map(e => `${e.date}: ${e.title}`).join('\n');
         context = context ? `${context}\n\nCALENDAR (next 30 days):\n${calBlock}` : `CALENDAR (next 30 days):\n${calBlock}`;
     }
-    const result = await extractLifeAdmin(text, { source: req.body?.source || 'paste', context });
+    const categories = qLife.listCategories(req.person.email);
+    const result = await extractLifeAdmin(text, { source: req.body?.source || 'paste', context, categories });
     res.json(result);
 });
 
@@ -1493,7 +1494,8 @@ router.post('/life/extract-photo', requirePerson, express.json({ limit: '32mb' }
         const calBlock = upcoming.map(e => `${e.date}: ${e.title}`).join('\n');
         context = context ? `${context}\n\nCALENDAR (next 30 days):\n${calBlock}` : `CALENDAR (next 30 days):\n${calBlock}`;
     }
-    const result = await extractLifeFromImage(dataUrl, { source: req.body?.source || 'photo', context });
+    const categories = qLife.listCategories(req.person.email);
+    const result = await extractLifeFromImage(dataUrl, { source: req.body?.source || 'photo', context, categories });
     res.json(result);
 });
 
