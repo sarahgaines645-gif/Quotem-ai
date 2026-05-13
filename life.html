@@ -29,7 +29,7 @@
     font-family: 'Space Grotesk', -apple-system, BlinkMacSystemFont, sans-serif;
     background: var(--bg); color: var(--text);
     font-size: 15px; line-height: 1.55;
-    min-height: 100vh; padding: 32px 24px 80px;
+    min-height: 100vh; padding: 20px 6px 80px;
     -webkit-font-smoothing: antialiased;
   }
   .wrap { max-width: 980px; margin: 0 auto; }
@@ -40,7 +40,7 @@
   h1 { font-size: 22px; font-weight: 600; letter-spacing: -0.02em; }
   .tagline { font-size: 13px; color: var(--text-muted); margin-left: auto; }
 
-  .card { background: var(--bg); border-radius: 14px; padding: 18px; box-shadow: var(--neu-raised); margin-bottom: 18px; }
+  .card { background: var(--bg); border-radius: 10px; padding: 14px; box-shadow: var(--neu-raised); margin-bottom: 14px; }
   .card h2 {
     font-size: 13px; font-weight: 600;
     color: var(--text-muted);
@@ -213,7 +213,7 @@
     text-align: center; padding: 4px 0;
   }
   .cal-cell {
-    height: 100px; overflow: hidden;
+    aspect-ratio: 1; min-height: 72px; overflow: hidden;
     background: var(--bg); box-shadow: var(--neu-inset-xs);
     border-radius: 10px;
     padding: 6px; cursor: pointer;
@@ -235,10 +235,10 @@
   /* Task list */
   .task-row {
     display: flex; gap: 10px; align-items: flex-start;
-    padding: 10px 12px;
-    background: var(--bg); border-radius: 8px;
-    box-shadow: var(--neu-inset-xs);
-    margin-bottom: 6px;
+    padding: 6px 8px;
+    background: var(--bg); border-radius: 4px;
+    box-shadow: var(--neu-raised-sm);
+    margin-bottom: 4px;
     border-left: 4px solid transparent;
   }
   .task-row input[type=checkbox] {
@@ -479,7 +479,6 @@
           <button class="collapse-btn" id="task-toggle">▾</button>
           <span class="right">
             <button class="small" id="task-filter-open">Open</button>
-            <button class="small" id="task-filter-done">Done</button>
           </span>
         </h2>
         <div id="task-body">
@@ -577,7 +576,10 @@
 </div>
 
 <script>
-const TAG_COLOURS = ['#a78bfa', '#4ade80', '#fb923c', '#e91e8a', '#3B82F6', '#00d4aa', '#fbbf24'];
+const TAG_COLOURS = [
+  '#a78bfa', '#635bff', '#4285f4', '#60a5fa', '#06b6d4', '#34d399', '#34a853',
+  '#2ecc71', '#fbbf24', '#f39c12', '#d97757', '#e74c3c', '#f87171', '#95a5a6',
+];
 const $ = (id) => document.getElementById(id);
 
 const state = {
@@ -788,8 +790,7 @@ function renderTasks() {
   });
   renderTaskGroup($('reminder-list'), reminders, 'reminder');
   renderTaskGroup($('task-list'), tasks, 'task');
-  $('task-filter-open').style.opacity = state.taskFilter === 'open' ? '1' : '0.5';
-  $('task-filter-done').style.opacity = state.taskFilter === 'done' ? '1' : '0.5';
+  $('task-filter-open').style.opacity = '1';
 }
 
 function renderTaskGroup(list, items, type) {
@@ -1127,7 +1128,6 @@ $('cal-today').addEventListener('click', () => {
 // ── Task filter ─────────────────────────────────────────────────
 
 $('task-filter-open').addEventListener('click', () => { state.taskFilter = 'open'; renderTasks(); });
-$('task-filter-done').addEventListener('click', () => { state.taskFilter = 'done'; renderTasks(); });
 
 async function toggleTaskDone(t) {
   const r = await fetch('/life/tasks/' + t.id, {
