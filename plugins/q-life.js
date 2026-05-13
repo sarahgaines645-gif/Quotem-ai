@@ -17,7 +17,11 @@
  *
  * Task schema:
  *   { id, title, due (YYYY-MM-DD|null), priority ('low'|'med'|'high'),
- *     notes, source, color, category, done, doneAt, createdAt }
+ *     notes, source, color, category, prepFor, done, doneAt, createdAt }
+ *
+ * `prepFor` is the title of the event this task is preparing for (or null
+ * for standalone tasks). Set by the intake extractor so the preview can
+ * group prep tasks under their event.
  *
  * `color` is one of the 7 swatches (or null). `category` is a slug like
  * 'work' / 'kids' — when set, the renderer paints the item in the
@@ -257,6 +261,7 @@ function addTask(payload, ownerEmail) {
         source: payload?.source ? String(payload.source).slice(0, 32) : 'manual',
         color: explicit || colorForCategory(category, ownerEmail),
         category,
+        prepFor: payload?.prepFor ? String(payload.prepFor).trim().slice(0, 200) : null,
         done: false,
         doneAt: null,
         createdAt: new Date().toISOString(),
@@ -284,6 +289,9 @@ function updateTask(id, patch, ownerEmail) {
         if (!('color' in patch)) {
             next.color = colorForCategory(next.category, ownerEmail);
         }
+    }
+    if ('prepFor' in patch) {
+        next.prepFor = patch.prepFor ? String(patch.prepFor).trim().slice(0, 200) : null;
     }
     if ('done' in patch) {
         next.done = !!patch.done;

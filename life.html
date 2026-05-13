@@ -112,6 +112,22 @@
   .preview-item .body { flex: 1; min-width: 0; }
   .preview-item .body .title { font-size: 14px; font-weight: 600; }
   .preview-item .body .meta { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
+  .preview-item .cat-pick {
+    margin-top: 6px;
+    font-size: 12px; padding: 4px 6px; border-radius: 8px;
+    background: var(--bg); box-shadow: var(--neu-inset-xs);
+    color: var(--text); border: 0;
+  }
+  /* Prep tasks nest visually under their event */
+  .preview-item.prep { margin-left: 28px; }
+  .preview-item.prep .body .title { font-weight: 500; }
+  .preview-item.prep .body .title::before {
+    content: '↳ '; color: var(--text-muted); margin-right: 2px;
+  }
+  .preview-group-label {
+    font-size: 11px; color: var(--text-muted); margin: 12px 0 4px 0;
+    text-transform: uppercase; letter-spacing: 0.06em;
+  }
   .pill {
     display: inline-block;
     background: var(--bg); box-shadow: var(--neu-raised-sm);
@@ -723,24 +739,79 @@ function showPreview({ events, tasks }) {
     $('preview-card').style.display = 'block';
     return;
   }
-  events.forEach((e, i) => list.appendChild(previewItem('event', e, i)));
-  tasks.forEach((t, i)  => list.appendChild(previewItem('task',  t, i)));
+
+  // Index tasks by the event title they prep for so we can nest them.
+  const taskIdxByEventTitle = new Map();
+  const standaloneTaskIdxs = [];
+  tasks.forEach((t, i) => {
+    const key = (t.prepFor || '').trim().toLowerCase();
+    if (key) {
+      if (!taskIdxByEventTitle.has(key)) taskIdxByEventTitle.set(key, []);
+      taskIdxByEventTitle.get(key).push(i);
+    } else {
+      standaloneTaskIdxs.push(i);
+    }
+  });
+
+  events.forEach((e, i) => {
+    list.appendChild(previewItem('event', e, i));
+    const key = (e.title || '').trim().toLowerCase();
+    const prepIdxs = taskIdxByEventTitle.get(key) || [];
+    prepIdxs.forEach(ti => list.appendChild(previewItem('task', tasks[ti], ti, { prep: true })));
+    taskIdxByEventTitle.delete(key);
+  });
+
+  // Any prep tasks whose event didn't make it into the events array — render flat.
+  const orphanTaskIdxs = [];
+  taskIdxByEventTitle.forEach(idxs => idxs.forEach(i => orphanTaskIdxs.push(i)));
+  const flatTaskIdxs = [...standaloneTaskIdxs, ...orphanTaskIdxs];
+  if (flatTaskIdxs.length > 0 && events.length > 0) {
+    const label = document.createElement('div');
+    label.className = 'preview-group-label';
+    label.textContent = 'Other tasks';
+    list.appendChild(label);
+  }
+  flatTaskIdxs.forEach(ti => list.appendChild(previewItem('task', tasks[ti], ti)));
+
   $('preview-card').style.display = 'block';
 }
 
-function previewItem(kind, item, idx) {
+function previewItem(kind, item, idx, opts = {}) {
   const row = document.createElement('div');
-  row.className = 'preview-item';
+  row.className = 'preview-item' + (opts.prep ? ' prep' : '');
   const meta = kind === 'event'
     ? `${fmtDate(item.date)}${item.time ? ' · ' + item.time : ''}${item.location ? ' · ' + item.location : ''}`
     : `${item.due ? 'Due ' + fmtDate(item.due) + ' · ' : ''}${item.priority}`;
-  row.innerHTML = `
-    <input type="checkbox" checked data-kind="${kind}" data-idx="${idx}">
-    <div class="body">
-      <div class="title"><span class="pill ${kind}">${kind}</span>${escape(item.title)}</div>
-      <div class="meta">${escape(meta)}${item.notes ? ' · ' + escape(item.notes) : ''}</div>
-    </div>
+
+  const checkbox = document.createElement('input');
+  checkbox.type = 'checkbox';
+  checkbox.checked = true;
+  checkbox.dataset.kind = kind;
+  checkbox.dataset.idx = idx;
+
+  const body = document.createElement('div');
+  body.className = 'body';
+  body.innerHTML = `
+    <div class="title"><span class="pill ${kind}">${kind}</span>${escape(item.title)}</div>
+    <div class="meta">${escape(meta)}${item.notes ? ' · ' + escape(item.notes) : ''}</div>
   `;
+
+  // Category picker — defaults to whatever the extractor guessed (none, today).
+  const sel = document.createElement('select');
+  sel.className = 'cat-pick';
+  sel.innerHTML = '<option value="">— Uncategorised —</option>';
+  state.categories.forEach(c => {
+    const opt = document.createElement('option');
+    opt.value = c.slug;
+    opt.textContent = c.name;
+    if (c.slug === item.category) opt.selected = true;
+    sel.appendChild(opt);
+  });
+  sel.addEventListener('change', () => { item.category = sel.value || null; });
+  body.appendChild(sel);
+
+  row.appendChild(checkbox);
+  row.appendChild(body);
   return row;
 }
 

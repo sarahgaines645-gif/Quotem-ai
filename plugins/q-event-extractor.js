@@ -17,7 +17,7 @@
 const { Q_CONFIG } = require('../config');
 const { cleanModelOutput } = require('./cjk-filter');
 
-const SYSTEM_PROMPT = `You are a personal-admin assistant. The user gives you text from a school letter, email, message, photo OCR, bank statement, newsletter, or anything else. Extract everything date-shaped and add preparation tasks where needed.
+const SYSTEM_PROMPT = `You are a personal-admin assistant. The user gives you TEXT (from a school letter, email, message, photo OCR, bank statement, newsletter, or similar). Your job is to read THAT TEXT and pull out events that are happening, plus any preparation the user has to do for them.
 
 Return ONE JSON object. No markdown, no prose, no code fences. Just the object:
 {
@@ -25,29 +25,74 @@ Return ONE JSON object. No markdown, no prose, no code fences. Just the object:
   "tasks":  [ ... ]
 }
 
-EVENT fields: title (string), date (YYYY-MM-DD, required), time (HH:MM 24h or null), location (string or null), notes (string or null)
-TASK fields: title (string, imperative), due (YYYY-MM-DD or null), priority ("low"|"med"|"high"), notes (string or null)
+═══════════════════════════════════════════
+EVENT vs TASK — this is the rule that matters most
+═══════════════════════════════════════════
 
-EXTRACTION:
-- Resolve relative dates against TODAY. Both arrays required even if empty. Priority defaults to "med".
-- One item can produce both an event and a prep task.
-- If ABOUT-ME or Q KNOWS context is provided, filter out items that clearly don't apply. When in doubt, keep it.
-- Plain English, British spellings.
+An EVENT is something that HAPPENS on a date — the user (or someone they care about) shows up to it, attends it, is part of it. It exists in the world on that date whether the user prepares for it or not.
+  Examples of events:
+  • "School trip to the Tate, Thursday 19 June" → EVENT (the trip happens)
+  • "Parents' evening, 6pm Wednesday" → EVENT
+  • "Dentist appointment, 14:30 on the 12th" → EVENT
+  • "Trumpet exam on the 22nd" → EVENT
+  • "Mum's birthday party, Saturday" → EVENT
+  • "Bin day Tuesday" → EVENT (it happens whether you act or not)
 
-PREP TASK THINKING:
-For every event that requires preparation, think it through before setting the due date. Do not apply fixed offsets or category rules. Reason about this specific task:
+A TASK is something the user has to DO. Action verbs. Usually preparation for an event, sometimes standalone.
+  Examples of tasks:
+  • "Buy PE kit before Thursday" → TASK
+  • "Return permission slip by Wednesday" → TASK
+  • "Pay £8 trip fee by 14 June" → TASK
+  • "Book a haircut" → TASK
+  • "Reply to email" → TASK
 
-What does completing this actually require in real life? Think concretely about what the person has to physically do. A quick errand is not the same as a day trip. Booking something means waiting on someone else's availability. Making something takes real hours across real days.
+Default behaviour: if a date is mentioned and something is HAPPENING on it, it's an EVENT. Tasks live around events. A bare date + a noun ("trumpet exam on the 22nd") is an EVENT, not a task. Do not put events in the tasks array because they "need doing" — attending an event is not the same as a task.
 
-How much time does it genuinely need? Be honest about the actual effort, not a generic approximation.
+ONE source item can produce BOTH: e.g. a school trip on the 19th is an EVENT, plus tasks like "pay £8 trip fee", "send permission slip", "remember packed lunch".
+
+═══════════════════════════════════════════
+FIELDS
+═══════════════════════════════════════════
+EVENT: title (string), date (YYYY-MM-DD, required), time (HH:MM 24h or null), location (string or null), notes (string or null)
+TASK:  title (string, imperative), due (YYYY-MM-DD or null), priority ("low"|"med"|"high"), notes (string or null), prepFor (string or null — the exact title of the event in the events array this task is preparing for, or null if standalone)
+
+═══════════════════════════════════════════
+EXTRACTION RULES
+═══════════════════════════════════════════
+- Resolve relative dates ("next Tuesday", "tomorrow", "in two weeks") against TODAY. Today's date is given to you.
+- Both arrays required, even if empty.
+- Priority defaults to "med". Use "high" only when the source text is explicit about urgency.
+- Plain English, British spellings (organise, colour, behaviour).
+
+═══════════════════════════════════════════
+ABOUT-ME / Q KNOWS / CALENDAR — CONTEXT IS FOR FILTERING ONLY
+═══════════════════════════════════════════
+ANY context block you receive (ABOUT ME, Q KNOWS, CALENDAR) is BACKGROUND knowledge to help you understand the TEXT block — NOT a source of events or tasks.
+
+DO NOT extract events or tasks FROM the context block. Even if it mentions dates ("sister's birthday is May 14th", "kids are on half-term next week"), those are facts ABOUT the user — they are NOT items to add to the calendar from this run. The user already knows them. The user is adding THIS TEXT, not their whole life history.
+
+Use the context only to:
+  • Decide if an item in the TEXT applies to the user (e.g. if ABOUT ME says "child in Year 4" and the TEXT mentions Year 6 activities, skip them)
+  • Pick better times for prep tasks (if CALENDAR shows the user is busy on a given day, schedule prep earlier)
+
+When in doubt about an item in the TEXT, keep it.
+
+═══════════════════════════════════════════
+PREP TASK THINKING
+═══════════════════════════════════════════
+For every event in the TEXT that requires preparation, think it through before setting the due date. Do not apply fixed offsets or category rules. Reason about this specific task:
+
+What does completing it actually require in real life? A quick errand is not the same as a day trip. Booking something means waiting on someone else's availability. Making something takes real hours across real days.
+
+How much time does it genuinely need? Be honest about the actual effort.
 
 When is this person free? If a CALENDAR is provided, look at it. Find free days. Avoid days that are already packed. Overnight is not available. Work backwards from the event date to find the latest realistic slot, then go one earlier for safety.
 
-Is there a hard deadline? Some tasks must be done before a specific moment (present in hand before a birthday, car sold on a specific date). Work backwards from that moment, not from today.
+Is there a hard deadline (form return date, payment cut-off)? Work backwards from THAT moment, not from today.
 
-Does it depend on someone else? Booking, arranging, contacting a service — their availability is not yours to control. Go earlier.
+Does it depend on someone else? Their availability is not yours to control. Go earlier.
 
-Set the due date to what you actually reasoned. Write the task title specifically, not generically. Put anything useful in notes (e.g. "needs a full free day", "call ahead to check availability").
+Set the due date to what you reasoned. Write the task title specifically, not generically ("Buy navy PE shorts size 11" beats "Sort out PE kit"). Put anything useful in notes ("needs a full free day", "call ahead to check availability"). Set prepFor to the exact event title this task supports.
 
 OUTPUT ONLY THE JSON OBJECT.`;
 
@@ -127,6 +172,7 @@ async function extractLifeAdmin(rawText, opts = {}) {
         due:      t?.due ? String(t.due).slice(0, 10) : null,
         priority: ['low','med','high'].includes(t?.priority) ? t.priority : 'med',
         notes:    t?.notes ? String(t.notes).trim() : null,
+        prepFor:  t?.prepFor ? String(t.prepFor).trim().slice(0, 200) : null,
         source,
     });
 
@@ -220,6 +266,7 @@ async function extractFromImage(dataUrl, opts = {}) {
             due: t.due ? String(t.due).slice(0, 10) : null,
             priority: ['low','med','high'].includes(t.priority) ? t.priority : 'med',
             notes: t.notes ? String(t.notes).trim() : null,
+            prepFor: t.prepFor ? String(t.prepFor).trim().slice(0, 200) : null,
             source,
         })),
     };
