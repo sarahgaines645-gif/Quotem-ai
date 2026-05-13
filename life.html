@@ -108,6 +108,8 @@
     width: 18px; height: 18px; flex: 0 0 auto;
     margin: 2px 0 0 0; padding: 0; box-shadow: none; border-radius: 4px;
     accent-color: var(--accent);
+    border: 2px solid #1a1a1a;
+    cursor: pointer;
   }
   .preview-item .body { flex: 1; min-width: 0; }
   .preview-item .body .title { font-size: 14px; font-weight: 600; }
@@ -228,11 +230,15 @@
     background: var(--bg); border-radius: 12px;
     box-shadow: var(--neu-inset-xs);
     margin-bottom: 8px;
+    border-left: 3px solid transparent;
   }
   .task-row input[type=checkbox] {
     width: 20px; height: 20px; flex: 0 0 auto;
     margin: 0; padding: 0; box-shadow: none;
     accent-color: var(--accent);
+    border: 2px solid #1a1a1a;
+    border-radius: 4px;
+    cursor: pointer;
   }
   .task-row .body { flex: 1; min-width: 0; }
   .task-row .title { font-size: 14px; font-weight: 500; }
@@ -332,6 +338,12 @@
       <button class="small" id="cal-next">›</button>
     </div>
     <div class="cal-grid" id="cal-grid"></div>
+  </div>
+
+  <!-- REMINDERS (prep tasks tied to events) -->
+  <div class="card">
+    <h2>Reminders <span style="font-size: 11px; color: var(--text-muted); font-weight: 400; margin-left: 6px;">Things to do before events</span></h2>
+    <div id="reminder-list"></div>
   </div>
 
   <!-- TASKS -->
@@ -604,33 +616,46 @@ function renderCalendar() {
 }
 
 function renderTasks() {
-  const list = $('task-list');
-  list.innerHTML = '';
-  const filtered = state.tasks.filter(t => {
-    if (state.taskFilter === 'done' ? !t.done : t.done) return false;
-    return isVisible(t);
+  // Reminders = tasks with prepFor (linked to an event). Tasks = standalone.
+  const reminders = state.tasks.filter(t => t.prepFor && !t.done && isVisible(t));
+  const tasks = state.tasks.filter(t => {
+    if (!t.prepFor) {
+      if (state.taskFilter === 'done' ? !t.done : t.done) return false;
+      return isVisible(t);
+    }
+    return false;
   });
-  if (filtered.length === 0) {
-    list.innerHTML = `<div class="preview-empty">${state.taskFilter === 'done' ? 'Nothing ticked off yet.' : 'No open tasks. Nice.'}</div>`;
+  renderTaskGroup($('reminder-list'), reminders, 'reminder');
+  renderTaskGroup($('task-list'), tasks, 'task');
+  $('task-filter-open').style.opacity = state.taskFilter === 'open' ? '1' : '0.5';
+  $('task-filter-done').style.opacity = state.taskFilter === 'done' ? '1' : '0.5';
+}
+
+function renderTaskGroup(list, items, type) {
+  list.innerHTML = '';
+  if (items.length === 0) {
+    const empty = type === 'reminder'
+      ? 'No upcoming reminders.'
+      : (state.taskFilter === 'done' ? 'Nothing ticked off yet.' : 'No open tasks. Nice.');
+    list.innerHTML = `<div class="preview-empty">${empty}</div>`;
     return;
   }
-  filtered.forEach(t => {
+  items.forEach(t => {
     const row = document.createElement('div');
     row.className = 'task-row' + (t.done ? ' done' : '');
+    const cat = findCategory(t.category);
+    const rowColor = t.color || (cat && cat.color) || '#95a5a6';
+    row.style.borderLeftColor = rowColor;
     const meta = [];
     if (t.due) meta.push('Due ' + fmtDate(t.due));
-    if (t.priority === 'high') meta.push('high');
-    if (t.priority === 'low')  meta.push('low');
+    if (t.prepFor) meta.push('For: ' + t.prepFor);
+    if (t.priority === 'high') meta.push('High priority');
+    if (t.priority === 'low')  meta.push('Low priority');
     if (t.notes) meta.push(t.notes);
-    const cat = findCategory(t.category);
-    const dotColor = t.color || (cat && cat.color) || null;
     row.innerHTML = `
       <input type="checkbox" ${t.done ? 'checked' : ''}>
       <div class="body">
-        <div class="title">
-          ${dotColor ? `<span class="colour-dot" style="background:${dotColor}"></span>` : ''}
-          ${escape(t.title)}
-        </div>
+        <div class="title">${escape(t.title)}</div>
         ${meta.length ? `<div class="meta">${meta.map(escape).join(' · ')}</div>` : ''}
       </div>
     `;
@@ -638,8 +663,6 @@ function renderTasks() {
     row.querySelector('.body').addEventListener('click', () => openEdit('task', t));
     list.appendChild(row);
   });
-  $('task-filter-open').style.opacity = state.taskFilter === 'open' ? '1' : '0.5';
-  $('task-filter-done').style.opacity = state.taskFilter === 'done' ? '1' : '0.5';
 }
 
 function escape(s) {
