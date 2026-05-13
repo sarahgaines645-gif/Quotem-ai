@@ -40,7 +40,7 @@
   h1 { font-size: 22px; font-weight: 600; letter-spacing: -0.02em; }
   .tagline { font-size: 13px; color: var(--text-muted); margin-left: auto; }
 
-  .card { background: var(--bg); border-radius: 18px; padding: 18px; box-shadow: var(--neu-raised); margin-bottom: 18px; }
+  .card { background: var(--bg); border-radius: 14px; padding: 18px; box-shadow: var(--neu-raised); margin-bottom: 18px; }
   .card h2 {
     font-size: 13px; font-weight: 600;
     color: var(--text-muted);
@@ -213,7 +213,7 @@
     text-align: center; padding: 4px 0;
   }
   .cal-cell {
-    min-height: 80px;
+    height: 100px; overflow: hidden;
     background: var(--bg); box-shadow: var(--neu-inset-xs);
     border-radius: 10px;
     padding: 6px; cursor: pointer;
@@ -236,10 +236,10 @@
   .task-row {
     display: flex; gap: 10px; align-items: flex-start;
     padding: 10px 12px;
-    background: var(--bg); border-radius: 12px;
+    background: var(--bg); border-radius: 8px;
     box-shadow: var(--neu-inset-xs);
-    margin-bottom: 8px;
-    border-left: 3px solid transparent;
+    margin-bottom: 6px;
+    border-left: 4px solid transparent;
   }
   .task-row input[type=checkbox] {
     -webkit-appearance: none; appearance: none;
@@ -577,7 +577,7 @@
 </div>
 
 <script>
-const TAG_COLOURS = ['#a78bfa', '#2ecc71', '#f39c12', '#e74c3c', '#95a5a6', '#f87171', '#fbbf24'];
+const TAG_COLOURS = ['#a78bfa', '#4ade80', '#fb923c', '#e91e8a', '#3B82F6', '#00d4aa', '#fbbf24'];
 const $ = (id) => document.getElementById(id);
 
 const state = {

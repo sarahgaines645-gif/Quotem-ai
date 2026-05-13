@@ -35,15 +35,15 @@ const path = require('path');
 const crypto = require('crypto');
 const { userDataPath } = require('./user-data');
 
-const TAG_COLOURS = ['#a78bfa', '#2ecc71', '#f39c12', '#e74c3c', '#95a5a6', '#f87171', '#fbbf24'];
+const TAG_COLOURS = ['#a78bfa', '#4ade80', '#fb923c', '#e91e8a', '#3B82F6', '#00d4aa', '#fbbf24'];
 
 // Starter categories — first time a user opens /life they see these five.
 // They can rename, recolour, delete, or add more from the pill row.
 const STARTER_CATEGORIES = [
     { slug: 'work',   name: 'Work',   color: '#a78bfa' },
-    { slug: 'kids',   name: 'Kids',   color: '#2ecc71' },
-    { slug: 'home',   name: 'Home',   color: '#f39c12' },
-    { slug: 'health', name: 'Health', color: '#e74c3c' },
+    { slug: 'kids',   name: 'Kids',   color: '#4ade80' },
+    { slug: 'home',   name: 'Home',   color: '#fb923c' },
+    { slug: 'health', name: 'Health', color: '#e91e8a' },
     { slug: 'money',  name: 'Money',  color: '#fbbf24' },
 ];
 
