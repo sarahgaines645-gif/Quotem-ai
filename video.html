@@ -55,7 +55,7 @@
   .result.show { display: block; }
   .result video { width: 100%; max-height: 480px; border-radius: 12px; box-shadow: var(--neu-raised); background: black; }
   .hint-row { font-size: 11px; color: var(--text-faint); margin-top: 8px; line-height: 1.5; }
-  .back-link { display: inline-block; margin-top: 32px; font-size: 12px; color: var(--text-muted); text-decoration: none; }
+  .back-link { margin-left: auto; font-size: 12px; color: var(--text-muted); text-decoration: none; }
   .back-link:hover { color: var(--text); }
 </style>
 </head>
@@ -66,6 +66,7 @@
     <span class="logo-mark"><span class="q">Q</span><span class="dot"></span></span>
     <h1>Video</h1>
     <span class="tagline">Wan 2.2 text-to-video. Short clips for now (ZeroGPU cap).</span>
+    <a href="/chat" class="back-link">← back to Q's chat</a>
   </header>
 
   <div class="card">
@@ -98,8 +99,6 @@
       <button id="download">Download .mp4</button>
     </div>
   </div>
-
-  <a href="/chat" class="back-link">← back to Q's chat</a>
 </div>
 
 <script>

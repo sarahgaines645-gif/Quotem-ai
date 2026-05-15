@@ -108,7 +108,7 @@
     color: var(--text-muted);
     letter-spacing: 0.04em;
   }
-  .back-link { display: inline-block; margin-top: 24px; font-size: 12px; color: var(--text-muted); text-decoration: none; }
+  .back-link { margin-left: auto; font-size: 12px; color: var(--text-muted); text-decoration: none; }
   .back-link:hover { color: var(--accent); }
 </style>
 </head>
@@ -118,6 +118,7 @@
       <span class="logo-mark"><span class="q">q</span><span class="dot"></span></span>
       <h1>Quote Builder — lab</h1>
       <span class="tagline">Q's pipeline · click 📋 floating button to open trace</span>
+      <a href="/" class="back-link">← back to q-lab</a>
     </header>
 
     <div class="card">
@@ -142,8 +143,6 @@
       <span class="card-label">Final priced quote</span>
       <div id="final-content"></div>
     </div>
-
-    <a href="/" class="back-link">← back to q-lab</a>
   </div>
 
 <script>

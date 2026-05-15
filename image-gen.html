@@ -83,7 +83,7 @@
   }
   .result-actions { display: flex; gap: 10px; margin-top: 12px; }
 
-  .back-link { display: inline-block; margin-top: 32px; font-size: 12px; color: var(--text-muted); text-decoration: none; }
+  .back-link { margin-left: auto; font-size: 12px; color: var(--text-muted); text-decoration: none; }
   .back-link:hover { color: var(--text); }
 </style>
 </head>
@@ -94,6 +94,7 @@
     <span class="logo-mark"><span class="q">Q</span><span class="dot"></span></span>
     <h1>Image Gen</h1>
     <span class="tagline">Z-Image-Turbo · Apache 2.0 · runs on HF ZeroGPU.</span>
+    <a href="/chat" class="back-link">← back to Q's chat</a>
   </header>
 
   <div class="card">
@@ -126,8 +127,6 @@
       <button id="copy">Copy as data URL</button>
     </div>
   </div>
-
-  <a href="/chat" class="back-link">← back to Q's chat</a>
 </div>
 
 <script>

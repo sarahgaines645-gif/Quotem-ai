@@ -101,7 +101,7 @@
 
   .hint-row { font-size: 11px; color: var(--text-faint); margin-top: 8px; line-height: 1.5; }
 
-  .back-link { display: inline-block; margin-top: 32px; font-size: 12px; color: var(--text-muted); text-decoration: none; }
+  .back-link { margin-left: auto; font-size: 12px; color: var(--text-muted); text-decoration: none; }
   .back-link:hover { color: var(--text); }
 </style>
 </head>
@@ -112,6 +112,7 @@
     <span class="logo-mark"><span class="q">Q</span><span class="dot"></span></span>
     <h1>Image Tools</h1>
     <span class="tagline">Bg removal + upscale, runs on your machine, free forever.</span>
+    <a href="/chat" class="back-link">← back to Q's chat</a>
   </header>
 
   <div class="tools">
@@ -150,8 +151,6 @@
       First run downloads ~80–150 MB of model weights (one-off, cached forever after). Uses WebGPU when available, WASM otherwise.
     </div>
   </div>
-
-  <a href="/chat" class="back-link">← back to Q's chat</a>
 </div>
 
 <script type="module">

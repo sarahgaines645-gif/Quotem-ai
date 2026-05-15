@@ -129,7 +129,7 @@
   button:disabled { opacity: 0.5; cursor: not-allowed; }
   button.mic.active { color: var(--accent); }
 
-  .back-link { display: inline-block; margin-top: 24px; font-size: 12px; color: var(--text-muted); text-decoration: none; }
+  .back-link { margin-left: auto; font-size: 12px; color: var(--text-muted); text-decoration: none; }
   .back-link:hover { color: var(--text); }
 
   .status { font-size: 12px; color: var(--text-muted); }
@@ -143,6 +143,7 @@
     <span class="logo-mark"><span class="q">Q</span><span class="dot"></span></span>
     <h1>Doc Editor</h1>
     <span class="tagline">Drop a Word doc. Tell Q what to fix. Watch him do it.</span>
+    <a href="/chat" class="back-link">← back to Q's chat</a>
   </header>
 
   <div class="layout">
@@ -184,8 +185,6 @@
     </div>
 
   </div>
-
-  <a href="/chat" class="back-link">← back to Q's chat</a>
 </div>
 
 <script>

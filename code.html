@@ -98,7 +98,7 @@
 
   .hint-row { font-size: 11px; color: var(--text-faint); margin-top: 8px; line-height: 1.5; }
 
-  .back-link { display: inline-block; margin-top: 32px; font-size: 12px; color: var(--text-muted); text-decoration: none; }
+  .back-link { margin-left: auto; font-size: 12px; color: var(--text-muted); text-decoration: none; }
   .back-link:hover { color: var(--text); }
 </style>
 </head>
@@ -109,6 +109,7 @@
     <span class="logo-mark"><span class="q">Q</span><span class="dot"></span></span>
     <h1>Code</h1>
     <span class="tagline">Python in your browser via Pyodide. numpy / pandas / matplotlib pre-loaded.</span>
+    <a href="/chat" class="back-link">← back to Q's chat</a>
   </header>
 
   <div class="card">
@@ -133,8 +134,6 @@
     <label>Output</label>
     <div class="output empty" id="output">Output will appear here.</div>
   </div>
-
-  <a href="/chat" class="back-link">← back to Q's chat</a>
 </div>
 
 <script>
