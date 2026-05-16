@@ -3,9 +3,8 @@
 <head>
   <script src="/q-auth.js?v=4"></script>
   <meta charset="UTF-8">
-    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-    <link rel="apple-touch-icon" sizes="180x180" href="/favicon-180.png" />
-
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+  <link rel="apple-touch-icon" sizes="180x180" href="/favicon-180.png" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <title>Q — Writing Coach</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -18,12 +17,12 @@
       --text-muted: rgba(0,0,0,0.55);
       --text-faint: rgba(0,0,0,0.35);
       --accent: #e91e63;
-      --paper:        #fbf9f3;          /* warm off-white — the front of the paper */
-      --paper-back:   #ece8da;          /* slightly darker — the underside that shows on the curl */
+      --paper:        #fbf9f3;
+      --paper-back:   #ece8da;
       --paper-shadow: rgba(80,70,40,0.18);
-      --paper-edge:   rgba(0,0,0,0.07);
       --neu-raised-sm: 6px 6px 16px #ababab, -5px -5px 12px #ffffff;
       --neu-inset-sm:  inset 3px 3px 8px #ababab, inset -2px -2px 6px #ffffff;
+      --neu-raised-xs: 3px 3px 8px #ababab, -2px -2px 6px #ffffff;
     }
     * { box-sizing: border-box; margin: 0; padding: 0; }
     html, body {
@@ -34,179 +33,199 @@
     body { padding: 28px 16px 100px; }
 
     header {
-      max-width: 760px; margin: 0 auto 28px;
-      display: flex; align-items: center; justify-content: space-between;
+      max-width: 760px; margin: 0 auto 20px;
+      display: flex; align-items: center; gap: 12px;
     }
     header .brand { font-size: 26px; font-weight: 700; }
     header .brand .dot { color: var(--accent); }
     header .crumbs { color: var(--text-muted); font-size: 13px; }
+    header .nav-links { margin-left: auto; display: flex; gap: 14px; align-items: center; }
     header a.back { color: var(--text-muted); text-decoration: none; font-size: 13px; }
     header a.back:hover { color: var(--accent); }
-    header .nav-links { display: flex; gap: 16px; align-items: center; }
 
-    /* The desk: a centred area where the paper sits.
-       The paper itself is a card with a curled top-right corner. */
+    /* ── Setup strip ─────────────────────────────────────────────────────── */
+    .setup-strip {
+      max-width: 760px; margin: 0 auto 20px;
+      background: var(--bg);
+      box-shadow: var(--neu-raised-sm);
+      border-radius: 14px;
+      padding: 16px 20px;
+      display: flex; flex-direction: column; gap: 12px;
+    }
+    .setup-strip.hidden { display: none; }
+    .setup-strip-header {
+      font-size: 13px; color: var(--text-muted); font-weight: 500;
+      display: flex; align-items: center; justify-content: space-between;
+    }
+    .setup-strip-header span { font-size: 11px; color: var(--text-faint); }
+    .setup-row { display: flex; gap: 10px; flex-wrap: wrap; align-items: flex-start; }
+    .setup-label { font-size: 12px; color: var(--text-muted); margin-bottom: 4px; }
+    .setup-field { display: flex; flex-direction: column; flex: 1; min-width: 140px; }
+
+    .setup-voice-toggle {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 6px 14px; border: none; cursor: pointer;
+      font-family: 'Space Grotesk', sans-serif; font-size: 12px;
+      color: var(--text-muted); background: var(--bg);
+      box-shadow: var(--neu-raised-xs); border-radius: 20px;
+      transition: color 0.15s;
+    }
+    .setup-voice-toggle:hover { color: var(--accent); }
+    .setup-voice-area {
+      width: 100%; font-family: 'Space Grotesk', sans-serif; font-size: 12px;
+      background: var(--bg); box-shadow: var(--neu-inset-sm);
+      border: none; outline: none; border-radius: 10px;
+      padding: 10px 12px; resize: none; color: var(--text);
+      line-height: 1.5; margin-top: 6px;
+    }
+    .setup-voice-area::placeholder { color: var(--text-faint); font-style: italic; }
+    .setup-voice-area.hidden { display: none; }
+
+    .setup-input {
+      width: 100%; font-family: 'Space Grotesk', sans-serif; font-size: 12px;
+      background: var(--bg); box-shadow: var(--neu-inset-sm);
+      border: none; outline: none; border-radius: 10px;
+      padding: 8px 12px; color: var(--text);
+    }
+    .setup-input::placeholder { color: var(--text-faint); font-style: italic; }
+
+    .setup-select {
+      font-family: 'Space Grotesk', sans-serif; font-size: 12px;
+      background: var(--bg); box-shadow: var(--neu-inset-sm);
+      border: none; outline: none; border-radius: 10px;
+      padding: 8px 12px; color: var(--text); cursor: pointer;
+      width: 100%;
+    }
+
+    .setup-start {
+      align-self: flex-end;
+      padding: 8px 20px; border: none; border-radius: 20px;
+      font-family: 'Space Grotesk', sans-serif; font-size: 13px; font-weight: 600;
+      color: var(--text); background: var(--bg); cursor: pointer;
+      box-shadow: var(--neu-raised-sm);
+      transition: box-shadow 0.15s;
+    }
+    .setup-start:hover { box-shadow: var(--neu-raised-xs); }
+    .setup-start:active { box-shadow: var(--neu-inset-sm); }
+
+    /* ── The desk + paper ───────────────────────────────────────────────── */
     .desk { max-width: 760px; margin: 0 auto; position: relative; }
 
     .paper {
       position: relative;
       background: var(--paper);
-      border-radius: 4px 0 4px 4px;       /* sharp top-right where the curl bites in */
+      border-radius: 4px 0 4px 4px;
       padding: 64px 72px 80px;
       min-height: 920px;
       box-shadow:
-        0 1px 0 rgba(255,255,255,0.6) inset,            /* tiny top highlight */
-        0 24px 50px -10px var(--paper-shadow),          /* lift off the page */
+        0 1px 0 rgba(255,255,255,0.6) inset,
+        0 24px 50px -10px var(--paper-shadow),
         0 6px 14px -4px rgba(0,0,0,0.08);
-      /* Faint horizontal rule lines (notebook feel, very subtle).
-         Set spacing to 32px to match the editor line-height. */
       background-image:
         linear-gradient(to bottom,
-          transparent 0,
-          transparent 95px,
-          rgba(0,0,0,0.04) 95px,
-          rgba(0,0,0,0.04) 96px,
+          transparent 0, transparent 95px,
+          rgba(0,0,0,0.04) 95px, rgba(0,0,0,0.04) 96px,
           transparent 96px),
-        repeating-linear-gradient(
-          to bottom,
-          transparent 0,
-          transparent 31px,
-          rgba(0,0,0,0.025) 31px,
-          rgba(0,0,0,0.025) 32px);
+        repeating-linear-gradient(to bottom,
+          transparent 0, transparent 31px,
+          rgba(0,0,0,0.025) 31px, rgba(0,0,0,0.025) 32px);
       background-attachment: local;
     }
 
-    /* Margin line down the left side, like a notebook */
     .paper::after {
       content: '';
-      position: absolute; top: 0; bottom: 0;
-      left: 56px; width: 1px;
+      position: absolute; top: 0; bottom: 0; left: 56px; width: 1px;
       background: rgba(233,30,99,0.18);
     }
 
-    /* The curl. Triangular flap in the top-right corner showing the
-       underside of the paper, with a soft drop shadow underneath. */
-    .paper .curl {
-      position: absolute; top: 0; right: 0;
-      width: 56px; height: 56px;
-      pointer-events: none;
-    }
+    .paper .curl { position: absolute; top: 0; right: 0; width: 56px; height: 56px; pointer-events: none; }
     .paper .curl::before {
-      /* The shadow that the curling corner casts on the page */
-      content: '';
-      position: absolute; top: 6px; right: 6px;
-      width: 44px; height: 44px;
-      background: rgba(40,30,10,0.18);
-      filter: blur(6px);
-      border-radius: 0 0 0 100%;
+      content: ''; position: absolute; top: 6px; right: 6px;
+      width: 44px; height: 44px; background: rgba(40,30,10,0.18);
+      filter: blur(6px); border-radius: 0 0 0 100%;
     }
     .paper .curl::after {
-      /* The folded triangle itself — gradient from back-paper colour
-         to a slightly darker edge gives it depth. */
-      content: '';
-      position: absolute; top: 0; right: 0;
-      width: 56px; height: 56px;
-      background:
-        linear-gradient(225deg,
-          var(--paper-back) 0%,
-          var(--paper-back) 48%,
-          rgba(0,0,0,0.08) 49%,
-          var(--paper) 50%,
-          var(--paper) 100%);
+      content: ''; position: absolute; top: 0; right: 0; width: 56px; height: 56px;
+      background: linear-gradient(225deg, var(--paper-back) 0%, var(--paper-back) 48%, rgba(0,0,0,0.08) 49%, var(--paper) 50%, var(--paper) 100%);
       clip-path: polygon(100% 0, 100% 100%, 0 0);
       box-shadow: -1px 1px 2px rgba(0,0,0,0.05) inset;
     }
 
-    /* Document content */
     .doc-title {
       font-family: 'Lora', Georgia, serif;
-      font-size: 28px; font-weight: 600;
-      color: var(--text);
-      border: none; outline: none;
-      width: 100%; background: transparent;
-      margin-bottom: 8px;
-      padding: 0;
+      font-size: 28px; font-weight: 600; color: var(--text);
+      border: none; outline: none; width: 100%; background: transparent;
+      margin-bottom: 8px; padding: 0;
     }
     .doc-title::placeholder { color: rgba(0,0,0,0.25); font-style: italic; }
 
     .doc-meta {
       font-size: 12px; color: var(--text-muted);
-      margin-bottom: 14px;
-      display: flex; gap: 14px; flex-wrap: wrap; align-items: center;
+      margin-bottom: 14px; display: flex; gap: 14px; flex-wrap: wrap; align-items: center;
     }
 
-    /* Source slot — small paperclip button when empty, chip when filled.
-       Sits just under the title. Quiet visual weight; doesn't compete
-       with the writing surface. */
+    /* Source slot */
     .source-slot { margin: 0 0 24px; }
     .source-add {
       display: inline-flex; align-items: center; gap: 8px;
-      padding: 7px 14px;
-      background: transparent; border: none; cursor: pointer;
-      font-family: 'Space Grotesk', sans-serif;
-      font-size: 12px; color: var(--text-faint);
-      box-shadow: 0 0 0 1px rgba(0,0,0,0.06);
-      border-radius: 14px;
+      padding: 7px 14px; background: transparent; border: none; cursor: pointer;
+      font-family: 'Space Grotesk', sans-serif; font-size: 12px; color: var(--text-faint);
+      box-shadow: 0 0 0 1px rgba(0,0,0,0.06); border-radius: 14px;
       transition: color 0.15s, box-shadow 0.15s;
     }
     .source-add:hover { color: var(--text-muted); box-shadow: 0 0 0 1px rgba(0,0,0,0.12); }
     .source-chip {
       display: inline-flex; align-items: center; gap: 8px;
-      padding: 7px 12px 7px 14px;
-      background: var(--bg);
-      box-shadow: var(--neu-inset-sm);
-      border-radius: 14px;
-      font-family: 'Space Grotesk', sans-serif;
-      font-size: 12px; color: var(--text-muted);
-      max-width: 100%;
+      padding: 7px 12px 7px 14px; background: var(--bg);
+      box-shadow: var(--neu-inset-sm); border-radius: 14px;
+      font-family: 'Space Grotesk', sans-serif; font-size: 12px; color: var(--text-muted); max-width: 100%;
     }
     .source-chip .name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 240px; }
     .source-chip .remove {
       width: 20px; height: 20px; border: none; background: transparent;
       color: var(--text-faint); cursor: pointer; padding: 0; line-height: 1;
-      font-size: 16px; display: inline-flex; align-items: center; justify-content: center;
-      border-radius: 50%;
+      font-size: 16px; display: inline-flex; align-items: center; justify-content: center; border-radius: 50%;
     }
     .source-chip .remove:hover { color: var(--accent); }
     .source-chip.loading { opacity: 0.6; }
 
-    /* Drop overlay — appears when a file is dragged anywhere over the page */
+    /* Drop overlay */
     .drop-overlay {
       position: fixed; inset: 0; z-index: 1000;
-      background: rgba(232,232,232,0.85);
-      backdrop-filter: blur(2px);
-      display: none;
-      align-items: center; justify-content: center;
-      pointer-events: none;
-      font-family: 'Space Grotesk', sans-serif;
-      font-size: 18px; color: var(--text);
+      background: rgba(232,232,232,0.85); backdrop-filter: blur(2px);
+      display: none; align-items: center; justify-content: center; pointer-events: none;
+      font-family: 'Space Grotesk', sans-serif; font-size: 18px; color: var(--text);
       border: 4px dashed var(--accent);
     }
     .drop-overlay.show { display: flex; }
 
+    /* Rich contenteditable doc body */
     .doc-body {
       font-family: 'Lora', Georgia, serif;
-      font-size: 16px; line-height: 32px;     /* matches the rule lines */
-      color: var(--text);
-      width: 100%; min-height: 700px;
-      border: none; outline: none;
-      background: transparent;
-      resize: none;
+      font-size: 16px; line-height: 32px;
+      color: var(--text); width: 100%; min-height: 700px;
+      border: none; outline: none; background: transparent;
     }
-    .doc-body::placeholder { color: rgba(0,0,0,0.25); font-style: italic; }
+    .doc-body:empty::before {
+      content: attr(data-placeholder);
+      color: rgba(0,0,0,0.25); font-style: italic;
+      pointer-events: none;
+    }
+    /* Highlight when a word is "selected for swap" */
+    .doc-body .word-selected {
+      background: rgba(233,30,99,0.10); border-radius: 3px;
+      cursor: pointer;
+    }
 
-    /* Floating Q card — same shape and shadow as the "Hi Sarah" card on
-       sign-in. Q sits on this card. Small and out of the way; coaching
-       messages will appear inside it as the user writes. ~5cm × 2.5cm. */
+    /* ── Floating coach card ─────────────────────────────────────────────── */
     .coach-card {
       position: fixed; right: 28px; top: 50%; transform: translateY(-50%);
-      width: 190px; min-height: 95px;
-      background: var(--bg);
-      border-radius: 18px;
+      width: 210px; min-height: 100px;
+      background: var(--bg); border-radius: 18px;
       box-shadow: 10px 10px 28px #ababab, -8px -8px 20px #ffffff;
       padding: 14px 16px;
       display: flex; flex-direction: column;
-      cursor: default;
+      cursor: default; z-index: 100;
     }
     .coach-card .q-logo {
       font-family: 'Space Grotesk', sans-serif;
@@ -214,46 +233,99 @@
       line-height: 1; margin-bottom: 6px;
     }
     .coach-card .q-logo .dot { color: var(--accent); }
+    .coach-card .q-section {
+      font-size: 10px; color: var(--accent);
+      text-transform: uppercase; letter-spacing: 0.06em;
+      margin-bottom: 6px; font-weight: 600;
+    }
     .coach-card .q-msg {
       font-family: 'Space Grotesk', sans-serif;
-      font-size: 12px; color: var(--text-muted);
-      line-height: 1.4;
-      max-height: 160px; overflow-y: auto;
-      margin-bottom: 10px;
-      flex: 1;
-      /* Hide scrollbar — keep scroll behaviour, lose the chrome */
-      scrollbar-width: none;
-      -ms-overflow-style: none;
+      font-size: 12px; color: var(--text-muted); line-height: 1.45;
+      max-height: 200px; overflow-y: auto; margin-bottom: 10px; flex: 1;
+      scrollbar-width: none; -ms-overflow-style: none;
     }
     .coach-card .q-msg::-webkit-scrollbar { display: none; }
     .coach-card .q-msg.thinking { font-style: italic; color: var(--text-faint); }
+    .coach-card .q-hint {
+      font-size: 11px; color: var(--text-faint); font-style: italic;
+      margin-bottom: 8px; line-height: 1.4;
+    }
+    .coach-card .q-actions {
+      display: flex; flex-direction: column; gap: 6px; margin-bottom: 8px;
+    }
+    .coach-card .q-actions.hidden { display: none; }
+    .q-btn {
+      padding: 6px 10px; border: none; border-radius: 12px;
+      font-family: 'Space Grotesk', sans-serif; font-size: 11px; font-weight: 500;
+      background: var(--bg); color: var(--text); cursor: pointer;
+      box-shadow: var(--neu-raised-xs);
+      transition: box-shadow 0.15s; text-align: left;
+    }
+    .q-btn:hover { box-shadow: var(--neu-raised-sm); }
+    .q-btn:active { box-shadow: var(--neu-inset-sm); }
+    .q-btn.primary { color: var(--accent); }
     .coach-card input.coach-input {
       width: 100%; border: none; outline: none;
-      background: transparent; box-shadow: none;
-      border-radius: 0; padding: 4px 0 5px;
-      border-bottom: 1px solid rgba(0,0,0,0.10);
-      font-family: 'Space Grotesk', sans-serif;
-      font-size: 12px; color: var(--text);
-      touch-action: manipulation;
+      background: transparent; box-shadow: none; border-radius: 0;
+      padding: 4px 0 5px; border-bottom: 1px solid rgba(0,0,0,0.10);
+      font-family: 'Space Grotesk', sans-serif; font-size: 12px; color: var(--text);
       transition: border-color 0.2s;
     }
     .coach-card input.coach-input:focus { border-bottom-color: var(--accent); }
-    .coach-card input.coach-input::placeholder {
-      color: var(--text-faint); font-style: italic;
+    .coach-card input.coach-input::placeholder { color: var(--text-faint); font-style: italic; }
+    .coach-card input.coach-input.hidden { display: none; }
+
+    /* Settings cog to re-open setup */
+    .setup-cog {
+      position: fixed; bottom: 20px; left: 20px;
+      width: 36px; height: 36px; border-radius: 50%; border: none;
+      background: var(--bg); box-shadow: var(--neu-raised-sm);
+      cursor: pointer; display: flex; align-items: center; justify-content: center;
+      color: var(--text-muted); z-index: 99;
+      transition: color 0.15s;
+    }
+    .setup-cog:hover { color: var(--accent); }
+    .setup-cog.hidden { display: none; }
+
+    /* ── Word swap popup ─────────────────────────────────────────────────── */
+    .word-popup {
+      position: fixed; z-index: 200;
+      background: var(--bg); border-radius: 12px;
+      box-shadow: 8px 8px 22px #ababab, -6px -6px 16px #ffffff;
+      padding: 8px 10px;
+      display: none; flex-direction: column; gap: 4px;
+      min-width: 130px;
+    }
+    .word-popup.show { display: flex; }
+    .word-popup-title {
+      font-size: 10px; color: var(--text-faint); text-transform: uppercase;
+      letter-spacing: 0.06em; font-weight: 600; margin-bottom: 2px;
+    }
+    .word-popup .swap-opt {
+      padding: 5px 8px; border: none; border-radius: 8px;
+      font-family: 'Space Grotesk', sans-serif; font-size: 12px;
+      background: var(--bg); color: var(--text); cursor: pointer;
+      box-shadow: var(--neu-raised-xs);
+      display: flex; justify-content: space-between; align-items: center; gap: 8px;
+      text-align: left;
+    }
+    .word-popup .swap-opt:hover { color: var(--accent); }
+    .word-popup .swap-opt .why {
+      font-size: 10px; color: var(--text-faint); font-style: italic;
+      white-space: nowrap;
+    }
+    .word-popup .swap-loading {
+      font-size: 11px; color: var(--text-faint); font-style: italic; padding: 4px 8px;
     }
 
-    /* Hide scrollbars on the writing textarea too — autosize keeps height
-       in step with content so the user never needs to see a scroll chrome */
-    .doc-body { scrollbar-width: none; -ms-overflow-style: none; }
-    .doc-body::-webkit-scrollbar { display: none; }
-
-    /* Mobile tweaks */
+    /* Mobile */
     @media (max-width: 600px) {
       .paper { padding: 48px 28px 64px; min-height: 700px; }
       .paper::after { left: 22px; }
       .doc-title { font-size: 22px; }
       .doc-body { font-size: 15px; line-height: 28px; }
-      .coach-card { right: 14px; bottom: 14px; top: auto; transform: none; width: 170px; }
+      .coach-card { right: 10px; bottom: 14px; top: auto; transform: none; width: 180px; }
+      .setup-strip { padding: 14px 16px; }
     }
   </style>
 </head>
@@ -262,133 +334,469 @@
     <div class="brand">Q<span class="dot">.</span></div>
     <div class="crumbs">Writing Coach</div>
     <div class="nav-links">
-      <a href="/plotter" class="back">Forms</a>
       <a href="/chat" class="back">← Chat</a>
     </div>
   </header>
 
+  <!-- Setup strip — shown on first load, collapses after "Start writing" -->
+  <div class="setup-strip" id="setup-strip">
+    <div class="setup-strip-header">
+      Tell Q a bit about this writing session
+      <span>all optional</span>
+    </div>
+    <div class="setup-row">
+      <div class="setup-field" style="flex:2">
+        <div class="setup-label">Their world</div>
+        <input class="setup-input" id="setup-relate" type="text"
+          placeholder="e.g. Kardashians, football, Roblox…" autocomplete="off" />
+      </div>
+      <div class="setup-field" style="flex:1">
+        <div class="setup-label">Year group</div>
+        <select class="setup-select" id="setup-year">
+          <option value="">— pick one —</option>
+          <option>Year 7</option>
+          <option>Year 8</option>
+          <option>Year 9</option>
+          <option>Year 10</option>
+          <option>Year 11</option>
+          <option>Year 12</option>
+          <option>Year 13</option>
+          <option>University</option>
+          <option>Adult</option>
+        </select>
+      </div>
+    </div>
+    <div>
+      <button type="button" class="setup-voice-toggle" id="setup-voice-toggle">
+        <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
+        Teach Q their voice (paste a bit of their writing)
+      </button>
+      <textarea class="setup-voice-area hidden" id="setup-voice-area" rows="4"
+        placeholder="Paste a paragraph or two they've written before — Q will match their vocabulary and rhythm in every suggestion…"></textarea>
+    </div>
+    <div style="display:flex; justify-content:flex-end; gap:10px; align-items:center">
+      <span id="setup-voice-status" style="font-size:11px; color:var(--text-faint);"></span>
+      <button type="button" class="setup-start" id="setup-start">Start writing →</button>
+    </div>
+  </div>
+
   <div class="desk">
     <div class="paper">
       <div class="curl"></div>
-
-      <input type="text" class="doc-title" placeholder="Untitled document" />
+      <input type="text" class="doc-title" id="doc-title" placeholder="Untitled document" />
       <div class="doc-meta">
         <span id="meta-words">0 words</span>
         <span id="meta-saved">Not yet saved</span>
       </div>
-
       <div class="source-slot" id="source-slot">
         <button type="button" class="source-add" id="source-add-btn"
-          title="Drop, paste, or click to add a task / source">
+          title="Drop, paste, or click to add your homework / task">
           <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor"
             stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/>
           </svg>
-          <span>Drop the task / source — or paste / click</span>
+          <span>Drop your task / homework here — or paste / click</span>
         </button>
-        <input type="file" id="source-file-input" style="display: none" />
+        <input type="file" id="source-file-input" style="display:none" />
       </div>
-
-      <textarea class="doc-body" id="doc-body"
-        placeholder="Start writing — Q joins in once you do."
-        autocomplete="off" spellcheck="true"></textarea>
+      <div class="doc-body" id="doc-body"
+        contenteditable="true"
+        data-placeholder="Start writing — Q joins in once you do."
+        spellcheck="true"
+        autocomplete="off"></div>
     </div>
   </div>
 
-  <div class="drop-overlay" id="drop-overlay">Drop the file — Q reads it</div>
+  <div class="drop-overlay" id="drop-overlay">Drop it — Q reads it</div>
 
+  <!-- Settings cog to re-open setup strip -->
+  <button class="setup-cog hidden" id="setup-cog" title="Writing session settings" aria-label="Open settings">
+    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+    </svg>
+  </button>
+
+  <!-- Floating Q coach card -->
   <div class="coach-card" id="coach-card">
     <div class="q-logo">Q<span class="dot">.</span></div>
-    <div class="q-msg" id="coach-msg">I'm here. Type to me — I can see your page.</div>
+    <div class="q-section" id="coach-section"></div>
+    <div class="q-msg" id="coach-msg">Drop your task in above and I'll read it. I'll ask you the questions — you write the answers. Your words, your work.</div>
+    <div class="q-hint" id="coach-hint"></div>
+    <div class="q-actions hidden" id="coach-actions"></div>
     <input class="coach-input" id="coach-input" type="text"
       placeholder="Ask Q…" autocomplete="off" />
   </div>
 
-  <script>
-    const body = document.getElementById('doc-body');
-    const titleEl = document.querySelector('.doc-title');
-    const wordEl = document.getElementById('meta-words');
-    const card = document.getElementById('coach-card');
-    const msgEl = document.getElementById('coach-msg');
-    const input = document.getElementById('coach-input');
+  <!-- Word swap popup -->
+  <div class="word-popup" id="word-popup">
+    <div class="word-popup-title">better words</div>
+    <div class="swap-loading" id="swap-loading">asking Q…</div>
+  </div>
 
-    function countWords(s) {
-      const t = (s || '').trim();
+  <script>
+  (() => {
+    'use strict';
+
+    // ── State ──────────────────────────────────────────────────────────────
+    const state = {
+      voiceSignature: null,
+      relateAnchor: '',
+      yearGroup: '',
+      analysis: null,
+      brief: null,
+      coachHistory: [],     // [{question, answer}]
+      currentQuestion: '',
+      currentSection: '',
+      pendingReframe: null, // {reframed, explanation} while [Use it]/[No] visible
+      setupDone: false,
+      docSnapshot: '',      // doc text at time Q last asked a question
+    };
+
+    // ── Element refs ───────────────────────────────────────────────────────
+    const docBody    = document.getElementById('doc-body');
+    const titleEl   = document.getElementById('doc-title');
+    const wordEl    = document.getElementById('meta-words');
+    const coachCard = document.getElementById('coach-card');
+    const coachMsg  = document.getElementById('coach-msg');
+    const coachHint = document.getElementById('coach-hint');
+    const coachSection = document.getElementById('coach-section');
+    const coachActions = document.getElementById('coach-actions');
+    const coachInput = document.getElementById('coach-input');
+    const setupStrip = document.getElementById('setup-strip');
+    const setupCog   = document.getElementById('setup-cog');
+    const wordPopup  = document.getElementById('word-popup');
+    const swapLoading = document.getElementById('swap-loading');
+
+    // ── Word count ─────────────────────────────────────────────────────────
+    function countWords() {
+      const t = (docBody.textContent || '').trim();
       return t ? t.split(/\s+/).length : 0;
     }
-    body.addEventListener('input', () => {
-      wordEl.textContent = countWords(body.value) + ' words';
+    docBody.addEventListener('input', () => {
+      wordEl.textContent = countWords() + ' words';
     });
 
-    function autosize() {
-      body.style.height = 'auto';
-      body.style.height = (body.scrollHeight) + 'px';
-    }
-    body.addEventListener('input', autosize);
-    setTimeout(autosize, 0);
+    // ── Setup strip ────────────────────────────────────────────────────────
+    const voiceToggleBtn = document.getElementById('setup-voice-toggle');
+    const voiceArea      = document.getElementById('setup-voice-area');
+    const voiceStatus    = document.getElementById('setup-voice-status');
+    const startBtn       = document.getElementById('setup-start');
+    const relateInput    = document.getElementById('setup-relate');
+    const yearSelect     = document.getElementById('setup-year');
 
-    /* DRAGGABLE Q CARD ─────────────────────────────────
-       Click anywhere on the card except the input to start dragging.
-       Position persists across reloads via localStorage. */
-    let drag = null;
-    function startDrag(ev) {
-      if (ev.target === input) return;
-      const point = ev.touches ? ev.touches[0] : ev;
-      const rect = card.getBoundingClientRect();
-      // Switch from right/transform anchoring to plain left/top so we can move freely
-      card.style.right = 'auto';
-      card.style.transform = 'none';
-      card.style.left = rect.left + 'px';
-      card.style.top = rect.top + 'px';
-      drag = {
-        startX: point.clientX, startY: point.clientY,
-        baseLeft: rect.left, baseTop: rect.top,
-      };
-      ev.preventDefault();
-    }
-    function moveDrag(ev) {
-      if (!drag) return;
-      const point = ev.touches ? ev.touches[0] : ev;
-      const dx = point.clientX - drag.startX;
-      const dy = point.clientY - drag.startY;
-      const newLeft = Math.max(8, Math.min(window.innerWidth - card.offsetWidth - 8, drag.baseLeft + dx));
-      const newTop  = Math.max(8, Math.min(window.innerHeight - card.offsetHeight - 8, drag.baseTop + dy));
-      card.style.left = newLeft + 'px';
-      card.style.top = newTop + 'px';
-    }
-    function endDrag() {
-      if (!drag) return;
-      drag = null;
-      try {
-        localStorage.setItem('q-coach-pos', JSON.stringify({ left: card.style.left, top: card.style.top }));
-      } catch (_) {}
-    }
-    card.addEventListener('mousedown', startDrag);
-    card.addEventListener('touchstart', startDrag, { passive: false });
-    window.addEventListener('mousemove', moveDrag);
-    window.addEventListener('touchmove', moveDrag, { passive: false });
-    window.addEventListener('mouseup', endDrag);
-    window.addEventListener('touchend', endDrag);
+    voiceToggleBtn.addEventListener('click', () => {
+      voiceArea.classList.toggle('hidden');
+      if (!voiceArea.classList.contains('hidden')) voiceArea.focus();
+    });
 
-    // Restore saved position
-    try {
-      const saved = JSON.parse(localStorage.getItem('q-coach-pos') || 'null');
-      if (saved && saved.left && saved.top) {
-        card.style.right = 'auto';
-        card.style.transform = 'none';
-        card.style.left = saved.left;
-        card.style.top = saved.top;
+    // Load existing voice signature on page load
+    fetch('/writer/voice', { credentials: 'include' })
+      .then(r => r.json())
+      .then(d => {
+        if (d.signature) {
+          state.voiceSignature = d.signature;
+          voiceStatus.textContent = '✓ Voice saved';
+        }
+      })
+      .catch(() => {});
+
+    startBtn.addEventListener('click', async () => {
+      state.relateAnchor = relateInput.value.trim();
+      state.yearGroup    = yearSelect.value;
+      const sample = (voiceArea.value || '').trim();
+
+      if (sample.length >= 30) {
+        voiceStatus.textContent = 'Saving voice…';
+        try {
+          const r = await fetch('/writer/voice', {
+            method: 'POST', credentials: 'include',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ sampleText: sample }),
+          });
+          const d = await r.json();
+          if (d.signature) {
+            state.voiceSignature = d.signature;
+            voiceStatus.textContent = '✓ Voice saved';
+          }
+        } catch (e) {
+          voiceStatus.textContent = '';
+        }
       }
-    } catch (_) {}
 
-    /* SOURCE MATERIAL ─────────────────────────────────
-       The task / brief / homework the user is writing about. Loaded via
-       file picker, drag-drop, or paste. PDFs and DOCX go through
-       /extract-text. Images keep their data URL so Q's vision can see
-       them when needed. Plain text just sits as a string. */
+      state.setupDone = true;
+      setupStrip.classList.add('hidden');
+      setupCog.classList.remove('hidden');
+      docBody.focus();
+    });
+
+    setupCog.addEventListener('click', () => {
+      setupStrip.classList.remove('hidden');
+      setupCog.classList.add('hidden');
+    });
+
+    // ── Coach card rendering ───────────────────────────────────────────────
+    function setCoach({ msg, section, hint, actions, inputVisible, thinking }) {
+      coachMsg.classList.toggle('thinking', !!thinking);
+      coachMsg.textContent = msg || '';
+      coachSection.textContent = section || '';
+      coachHint.textContent = hint || '';
+
+      if (actions && actions.length) {
+        coachActions.classList.remove('hidden');
+        coachActions.innerHTML = '';
+        actions.forEach(a => {
+          const btn = document.createElement('button');
+          btn.className = 'q-btn' + (a.primary ? ' primary' : '');
+          btn.textContent = a.label;
+          btn.addEventListener('click', a.onClick);
+          coachActions.appendChild(btn);
+        });
+      } else {
+        coachActions.classList.add('hidden');
+        coachActions.innerHTML = '';
+      }
+
+      if (inputVisible === false) {
+        coachInput.classList.add('hidden');
+      } else {
+        coachInput.classList.remove('hidden');
+      }
+    }
+
+    // ── API helpers ────────────────────────────────────────────────────────
+    async function post(url, body) {
+      const r = await fetch(url, {
+        method: 'POST', credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      return r.json();
+    }
+
+    function voicePayload() {
+      return {
+        voiceSignature: state.voiceSignature,
+        relateAnchor: state.relateAnchor || undefined,
+        yearGroup: state.yearGroup || undefined,
+      };
+    }
+
+    // ── After source loaded: brief + first question ────────────────────────
+    async function runBrief(taskText) {
+      setCoach({ msg: 'Reading your task…', thinking: true, inputVisible: false });
+
+      try {
+        const d = await post('/writer/brief', { taskText });
+        if (!d.ok) throw new Error(d.error || 'brief failed');
+        state.analysis = d.analysis;
+        state.brief = d.brief;
+
+        // Show the tutor brief, then offer to start coaching
+        const b = d.brief;
+        const summaryText = b.whatItWants || b.summary || 'Got it.';
+        setCoach({
+          msg: summaryText,
+          section: 'TASK',
+          hint: b.teachersBrief ? '🔑 ' + b.teachersBrief : '',
+          actions: [{
+            label: 'Start coaching →',
+            primary: true,
+            onClick: () => askNextQuestion(),
+          }],
+          inputVisible: false,
+        });
+      } catch (e) {
+        setCoach({ msg: 'Couldn\'t read that — try pasting the task as text.' });
+      }
+    }
+
+    async function askNextQuestion() {
+      setCoach({ msg: 'Thinking…', thinking: true, inputVisible: false });
+
+      try {
+        const d = await post('/writer/lead', {
+          analysis: state.analysis,
+          brief: state.brief,
+          history: state.coachHistory,
+          ...voicePayload(),
+        });
+        if (!d.ok) throw new Error(d.error || 'lead failed');
+
+        state.currentQuestion = d.question || '';
+        state.currentSection  = d.sectionName || '';
+        state.docSnapshot     = (docBody.textContent || '').trim();
+
+        setCoach({
+          msg: d.question,
+          section: d.sectionName || '',
+          hint: d.hint || '',
+          inputVisible: true,
+        });
+        coachInput.placeholder = 'Type your answer…';
+        coachInput.focus();
+      } catch (e) {
+        setCoach({ msg: 'Try me again — type your answer below or ask anything.' });
+      }
+    }
+
+    // ── Handle coach input: user answers leading question ──────────────────
+    coachInput.addEventListener('keydown', async (ev) => {
+      if (ev.key !== 'Enter') return;
+      const text = coachInput.value.trim();
+      if (!text) return;
+      coachInput.value = '';
+
+      // If we have a current leading question, treat this as the answer
+      if (state.currentQuestion) {
+        const rawAnswer = text;
+        const currentQ  = state.currentQuestion;
+        state.coachHistory.push({ question: currentQ, answer: rawAnswer });
+        state.currentQuestion = '';
+
+        setCoach({ msg: 'Thinking how to put that…', thinking: true, inputVisible: false });
+
+        try {
+          const d = await post('/writer/reframe', {
+            rawAnswer,
+            question: currentQ,
+            context: (docBody.textContent || '').slice(0, 800),
+            ...voicePayload(),
+          });
+          if (!d.ok) throw new Error(d.error || 'reframe failed');
+          state.pendingReframe = d;
+
+          setCoach({
+            msg: '"' + d.reframed + '"',
+            section: 'SUGGESTION',
+            hint: d.explanation || '',
+            actions: [
+              {
+                label: '✓ Use it',
+                primary: true,
+                onClick: () => insertReframe(d.reframed),
+              },
+              {
+                label: '↻ Another',
+                onClick: () => getAnotherReframe(rawAnswer, currentQ),
+              },
+              {
+                label: '✗ Keep mine',
+                onClick: () => {
+                  // Insert their raw answer into the doc instead
+                  insertTextAtEnd(rawAnswer);
+                  state.pendingReframe = null;
+                  askNextQuestion();
+                },
+              },
+            ],
+            inputVisible: false,
+          });
+        } catch (e) {
+          setCoach({ msg: 'Try again — type your answer.' });
+        }
+      } else {
+        // Free chat with Q
+        await askQ(text);
+      }
+    });
+
+    async function getAnotherReframe(rawAnswer, question) {
+      setCoach({ msg: 'Let me try another angle…', thinking: true, inputVisible: false });
+      try {
+        const d = await post('/writer/reframe', {
+          rawAnswer,
+          question,
+          context: (docBody.textContent || '').slice(0, 800),
+          ...voicePayload(),
+        });
+        if (!d.ok) throw new Error(d.error);
+        state.pendingReframe = d;
+
+        setCoach({
+          msg: '"' + d.reframed + '"',
+          section: 'SUGGESTION',
+          hint: d.explanation || '',
+          actions: [
+            { label: '✓ Use it', primary: true, onClick: () => insertReframe(d.reframed) },
+            { label: '↻ Another', onClick: () => getAnotherReframe(rawAnswer, question) },
+            { label: '✗ Keep mine', onClick: () => {
+              insertTextAtEnd(rawAnswer);
+              state.pendingReframe = null;
+              askNextQuestion();
+            }},
+          ],
+          inputVisible: false,
+        });
+      } catch (e) {
+        setCoach({ msg: 'Try again — type your answer.' });
+      }
+    }
+
+    function insertReframe(text) {
+      // Append text to the doc body as a new paragraph
+      const current = (docBody.textContent || '').trim();
+      const newContent = current ? current + '\n\n' + text : text;
+      docBody.textContent = newContent;
+      wordEl.textContent = countWords() + ' words';
+      // Move cursor to end
+      const range = document.createRange();
+      const sel = window.getSelection();
+      range.selectNodeContents(docBody);
+      range.collapse(false);
+      sel.removeAllRanges();
+      sel.addRange(range);
+      state.pendingReframe = null;
+      askNextQuestion();
+    }
+
+    function insertTextAtEnd(text) {
+      const current = (docBody.textContent || '').trim();
+      const newContent = current ? current + '\n\n' + text : text;
+      docBody.textContent = newContent;
+      wordEl.textContent = countWords() + ' words';
+    }
+
+    // ── Free chat with Q (existing /chat endpoint) ─────────────────────────
+    async function askQ(userText) {
+      const t = (titleEl.value || '').trim();
+      const b = (docBody.textContent || '').trim();
+      const sourceBlock = sourceState.text
+        ? `[Task/source: "${sourceState.name}"]\n${sourceState.text.slice(0, 3000)}\n[end source]\n\n`
+        : sourceState.imageDataUrl
+          ? `[Image task: "${sourceState.name}". Use vision if relevant.]\n\n`
+          : '';
+      const docBlock = b
+        ? `[Writing Coach — document so far]\nTitle: ${t || 'untitled'}\n\n${b.slice(0, 1500)}\n[end]\n\n`
+        : `[Writing Coach — page still blank]\n\n`;
+
+      const message = sourceBlock + docBlock + userText;
+      setCoach({ msg: 'thinking…', thinking: true, inputVisible: false });
+
+      const fetchBody = { message, surface: 'writer' };
+      if (sourceState.imageDataUrl) {
+        fetchBody.images = [{ dataUrl: sourceState.imageDataUrl, name: sourceState.name }];
+      }
+      try {
+        const r = await fetch('/chat', {
+          method: 'POST', credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(fetchBody),
+        });
+        const d = await r.json().catch(() => ({}));
+        setCoach({
+          msg: (d.reply || d.error || 'Q went quiet — try again.').toString(),
+          inputVisible: true,
+        });
+        coachInput.placeholder = 'Ask Q…';
+        coachMsg.scrollTop = 0;
+      } catch (e) {
+        setCoach({ msg: 'Network blip — try again.', inputVisible: true });
+      }
+    }
+
+    // ── Source material handling (same as before) ──────────────────────────
     const sourceState = { name: null, text: null, imageDataUrl: null };
-    const sourceSlot = document.getElementById('source-slot');
-    const sourceAddBtn = document.getElementById('source-add-btn');
+    const sourceSlot  = document.getElementById('source-slot');
     const sourceFileInput = document.getElementById('source-file-input');
     const dropOverlay = document.getElementById('drop-overlay');
 
@@ -397,20 +805,21 @@
       if (!sourceState.name) {
         const btn = document.createElement('button');
         btn.type = 'button'; btn.className = 'source-add'; btn.id = 'source-add-btn';
-        btn.title = 'Drop, paste, or click to add a task / source';
-        btn.innerHTML = '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg><span>Drop the task / source — or paste / click</span>';
+        btn.title = 'Drop, paste, or click to add your homework / task';
+        btn.innerHTML = '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg><span>Drop your task / homework here — or paste / click</span>';
         btn.addEventListener('click', () => sourceFileInput.click());
         sourceSlot.appendChild(btn);
       } else {
         const chip = document.createElement('div');
         chip.className = 'source-chip';
         const icon = sourceState.imageDataUrl ? '🖼️' : '📄';
-        chip.innerHTML = '<span>' + icon + '</span><span class="name"></span>'
-          + '<button class="remove" title="Remove">×</button>';
+        chip.innerHTML = `<span>${icon}</span><span class="name"></span><button class="remove" title="Remove">×</button>`;
         chip.querySelector('.name').textContent = sourceState.name;
         chip.querySelector('.remove').addEventListener('click', () => {
           sourceState.name = null; sourceState.text = null; sourceState.imageDataUrl = null;
+          state.analysis = null; state.brief = null;
           renderSourceSlot();
+          setCoach({ msg: 'Drop your task in above and I\'ll read it.', inputVisible: true });
         });
         sourceSlot.appendChild(chip);
       }
@@ -451,8 +860,7 @@
                    || file.type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') {
           const dataUrl = await fileToDataUrl(file);
           const r = await fetch('/extract-text', {
-            method: 'POST',
-            credentials: 'include',
+            method: 'POST', credentials: 'include',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ dataUrl, name }),
           });
@@ -467,10 +875,13 @@
           throw new Error('Unsupported file type — try PDF, Word, image, or .txt');
         }
         renderSourceSlot();
+        // Auto-run brief once source is loaded
+        const taskText = sourceState.text || '[image task — Q will use vision]';
+        await runBrief(taskText);
       } catch (e) {
         sourceState.name = null; sourceState.text = null; sourceState.imageDataUrl = null;
         renderSourceSlot();
-        alert('Could not load that file: ' + e.message);
+        setCoach({ msg: 'Couldn\'t load that — try pasting the task as text.', inputVisible: true });
       }
     }
 
@@ -480,7 +891,25 @@
       ev.target.value = '';
     });
 
-    // Drag-drop anywhere on the page
+    // Paste handler: if it's a file, load it; if it's text, fill the source
+    window.addEventListener('paste', (e) => {
+      const tag = (document.activeElement && document.activeElement.tagName) || '';
+      // Let the doc body and inputs handle their own pastes
+      if (tag === 'INPUT' || (document.activeElement && document.activeElement === docBody)) return;
+      const items = (e.clipboardData && e.clipboardData.items) || [];
+      for (const it of items) {
+        if (it.kind === 'file') { const f = it.getAsFile(); if (f) { loadSourceFile(f); return; } }
+      }
+      const text = e.clipboardData ? e.clipboardData.getData('text') : '';
+      if (text && text.length > 50 && !sourceState.name) {
+        sourceState.text = text;
+        sourceState.name = 'Pasted text (' + text.length + ' chars)';
+        renderSourceSlot();
+        runBrief(text);
+      }
+    });
+
+    // Drag-drop
     let dragDepth = 0;
     window.addEventListener('dragenter', (e) => {
       if (e.dataTransfer && Array.from(e.dataTransfer.types || []).includes('Files')) {
@@ -495,80 +924,122 @@
       if (e.dataTransfer && Array.from(e.dataTransfer.types || []).includes('Files')) e.preventDefault();
     });
     window.addEventListener('drop', (e) => {
-      e.preventDefault();
-      dragDepth = 0; dropOverlay.classList.remove('show');
+      e.preventDefault(); dragDepth = 0; dropOverlay.classList.remove('show');
       const f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
       if (f) loadSourceFile(f);
     });
 
-    // Paste — image or text
-    window.addEventListener('paste', (e) => {
-      // If user is typing in the body or title or coach input, don't intercept
-      const tag = (document.activeElement && document.activeElement.tagName) || '';
-      if (tag === 'TEXTAREA' || tag === 'INPUT') return;
-      const items = (e.clipboardData && e.clipboardData.items) || [];
-      for (const it of items) {
-        if (it.kind === 'file') {
-          const f = it.getAsFile();
-          if (f) { loadSourceFile(f); return; }
-        }
-      }
-      // Plain text paste — only fill source if it's not already set
-      const text = e.clipboardData ? e.clipboardData.getData('text') : '';
-      if (text && text.length > 50 && !sourceState.name) {
-        sourceState.text = text;
-        sourceState.name = 'Pasted text (' + text.length + ' chars)';
-        renderSourceSlot();
-      }
-    });
+    // ── Word swap popup ────────────────────────────────────────────────────
+    let wordPopupTarget = null;
+    let wordPopupTimer  = null;
 
-    /* CHAT TO Q ─────────────────────────────────
-       Sends to the same /chat endpoint the main chat uses, so Q has all
-       his memory and persona. We prepend a small context block so Q can
-       see what the user is currently writing AND the source/task. */
-    async function askQ(userText) {
-      const t = (titleEl.value || '').trim();
-      const b = (body.value || '').trim();
-      const sourceBlock = sourceState.text
-        ? `[The task / source she's writing about — "${sourceState.name}"]\n${sourceState.text.slice(0, 3000)}\n[end source]\n\n`
-        : sourceState.imageDataUrl
-          ? `[She's attached an image as the task: "${sourceState.name}". Use your vision to read it if relevant.]\n\n`
-          : '';
-      const docBlock = b
-        ? `[Writing Coach — what I'm working on right now]\nTitle: ${t || 'untitled'}\n\n${b.slice(0, 1500)}\n[end]\n\n`
-        : `[Writing Coach — the page is still blank]\n\n`;
-      const message = sourceBlock + docBlock + userText;
-
-      msgEl.classList.add('thinking');
-      msgEl.textContent = 'thinking…';
-      const fetchBody = { message, surface: 'writer' };
-      if (sourceState.imageDataUrl) {
-        fetchBody.images = [{ dataUrl: sourceState.imageDataUrl, name: sourceState.name }];
-      }
-      try {
-        const r = await fetch('/chat', {
-          method: 'POST',
-          credentials: 'include',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(fetchBody),
-        });
-        const data = await r.json().catch(() => ({}));
-        msgEl.classList.remove('thinking');
-        msgEl.textContent = (data.reply || data.error || 'Q went quiet — try again.').toString();
-        msgEl.scrollTop = 0;
-      } catch (e) {
-        msgEl.classList.remove('thinking');
-        msgEl.textContent = 'Network blip — try again.';
-      }
+    function hideWordPopup() {
+      wordPopup.classList.remove('show');
+      wordPopupTarget = null;
     }
 
-    input.addEventListener('keydown', (ev) => {
-      if (ev.key !== 'Enter') return;
-      const text = input.value.trim();
-      if (!text) return;
-      input.value = '';
-      askQ(text);
+    docBody.addEventListener('dblclick', async (ev) => {
+      // Get the double-clicked word via selection
+      const sel = window.getSelection();
+      if (!sel || sel.isCollapsed || !sel.toString().trim()) return;
+      const word = sel.toString().trim();
+      if (!word || word.length < 2 || word.includes(' ')) return; // single word only
+
+      const range = sel.getRangeAt(0);
+      const rect = range.getBoundingClientRect();
+      wordPopupTarget = { word, range: range.cloneRange() };
+
+      // Position popup just below the word
+      wordPopup.style.left = Math.min(rect.left, window.innerWidth - 160) + 'px';
+      wordPopup.style.top  = (rect.bottom + 8 + window.scrollY) + 'px';
+      wordPopup.classList.add('show');
+
+      // Clear old options
+      swapLoading.style.display = 'block';
+      const oldOpts = wordPopup.querySelectorAll('.swap-opt');
+      oldOpts.forEach(o => o.remove());
+
+      // Get the surrounding context (40 chars each side)
+      const contextText = (docBody.textContent || '');
+      const wordIdx = contextText.indexOf(word);
+      const context = wordIdx >= 0
+        ? contextText.slice(Math.max(0, wordIdx - 40), wordIdx + word.length + 40)
+        : contextText.slice(0, 200);
+
+      try {
+        const d = await post('/writer/words', {
+          word, context,
+          voiceSignature: state.voiceSignature,
+        });
+        swapLoading.style.display = 'none';
+        if (!d.ok || !d.suggestions) throw new Error('no suggestions');
+
+        d.suggestions.forEach(s => {
+          const btn = document.createElement('button');
+          btn.className = 'swap-opt';
+          btn.innerHTML = `<span>${s.word}</span><span class="why">${s.why || ''}</span>`;
+          btn.addEventListener('click', () => {
+            // Replace the selected word with the suggestion
+            const sel2 = window.getSelection();
+            sel2.removeAllRanges();
+            sel2.addRange(wordPopupTarget.range);
+            document.execCommand('insertText', false, s.word);
+            hideWordPopup();
+          });
+          wordPopup.appendChild(btn);
+        });
+      } catch (e) {
+        swapLoading.style.display = 'none';
+        const err = document.createElement('div');
+        err.className = 'swap-loading';
+        err.textContent = 'couldn\'t get suggestions';
+        wordPopup.appendChild(err);
+      }
     });
+
+    // Close popup when clicking elsewhere
+    document.addEventListener('mousedown', (e) => {
+      if (!wordPopup.contains(e.target)) hideWordPopup();
+    });
+
+    // ── Draggable coach card ───────────────────────────────────────────────
+    let drag = null;
+    function startDrag(ev) {
+      if (ev.target === coachInput || ev.target.classList.contains('q-btn')) return;
+      const point = ev.touches ? ev.touches[0] : ev;
+      const rect = coachCard.getBoundingClientRect();
+      coachCard.style.right = 'auto'; coachCard.style.transform = 'none';
+      coachCard.style.left = rect.left + 'px'; coachCard.style.top = rect.top + 'px';
+      drag = { startX: point.clientX, startY: point.clientY, baseLeft: rect.left, baseTop: rect.top };
+      ev.preventDefault();
+    }
+    function moveDrag(ev) {
+      if (!drag) return;
+      const point = ev.touches ? ev.touches[0] : ev;
+      const dx = point.clientX - drag.startX; const dy = point.clientY - drag.startY;
+      const newLeft = Math.max(8, Math.min(window.innerWidth - coachCard.offsetWidth - 8, drag.baseLeft + dx));
+      const newTop  = Math.max(8, Math.min(window.innerHeight - coachCard.offsetHeight - 8, drag.baseTop + dy));
+      coachCard.style.left = newLeft + 'px'; coachCard.style.top = newTop + 'px';
+    }
+    function endDrag() {
+      if (!drag) return; drag = null;
+      try { localStorage.setItem('q-coach-pos', JSON.stringify({ left: coachCard.style.left, top: coachCard.style.top })); } catch (_) {}
+    }
+    coachCard.addEventListener('mousedown', startDrag);
+    coachCard.addEventListener('touchstart', startDrag, { passive: false });
+    window.addEventListener('mousemove', moveDrag);
+    window.addEventListener('touchmove', moveDrag, { passive: false });
+    window.addEventListener('mouseup', endDrag);
+    window.addEventListener('touchend', endDrag);
+
+    try {
+      const saved = JSON.parse(localStorage.getItem('q-coach-pos') || 'null');
+      if (saved && saved.left && saved.top) {
+        coachCard.style.right = 'auto'; coachCard.style.transform = 'none';
+        coachCard.style.left = saved.left; coachCard.style.top = saved.top;
+      }
+    } catch (_) {}
+  })();
   </script>
 </body>
 </html>

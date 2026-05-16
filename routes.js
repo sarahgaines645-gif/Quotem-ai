@@ -43,7 +43,7 @@ const {
 // Boot the scheduler worker as soon as the routes module loads.
 // Idempotent — calling more than once is safe.
 startScheduler();
-const { loadMemory, clearMemory, appendMessage, getRecentMessages, getCircleSummary, getMemoryPath } = require('./memory');
+const { loadMemory, clearMemory, appendMessage, getRecentMessages, getCircleSummary, getMemoryPath, getVoicePath } = require('./memory');
 const { requirePerson, tryAttachPerson, setSessionCookie, clearSessionCookie } = require('./auth');
 const { listPeople, addPerson, signupPerson, getPerson, getPersonByEmail, removePerson, verifyLogin, changePassword, rotatePassword, createResetToken, consumeResetToken } = require('./people');
 const { sendMail, isConfigured: mailerConfigured } = require('./mailer');
@@ -577,6 +577,91 @@ router.post('/writer/assemble', requirePerson, express.json({ limit: '512kb' }),
         res.json({ ok: true, ...result });
     } catch (e) {
         console.error('[writer/assemble]', e.message);
+        res.status(500).json({ error: e.message });
+    }
+});
+
+// ── Writer Slice 1 routes ──────────────────────────────────────────────────
+
+// GET /writer/voice — load stored voice signature for this person
+router.get('/writer/voice', requirePerson, async (req, res) => {
+    try {
+        const p = getVoicePath(req.person.id);
+        if (!fs.existsSync(p)) return res.json({ ok: true, signature: null });
+        const sig = JSON.parse(fs.readFileSync(p, 'utf8'));
+        res.json({ ok: true, signature: sig });
+    } catch (e) {
+        res.json({ ok: true, signature: null });
+    }
+});
+
+// POST /writer/voice — analyse voice sample and store it for this person
+router.post('/writer/voice', requirePerson, express.json({ limit: '64kb' }), async (req, res) => {
+    const sampleText = (req.body?.sampleText || '').toString().trim();
+    if (sampleText.length < 30) return res.status(400).json({ error: 'sampleText too short (30 chars min)' });
+    try {
+        const sig = await qWriter.analyseVoice(sampleText);
+        fs.writeFileSync(getVoicePath(req.person.id), JSON.stringify(sig, null, 2), 'utf8');
+        res.json({ ok: true, signature: sig });
+    } catch (e) {
+        console.error('[writer/voice]', e.message);
+        res.status(500).json({ error: e.message });
+    }
+});
+
+// POST /writer/brief — analyse the task and build the tutor's brief (two-step in one call)
+router.post('/writer/brief', requirePerson, express.json({ limit: '512kb' }), async (req, res) => {
+    const taskText = (req.body?.taskText || '').toString().trim();
+    if (!taskText) return res.status(400).json({ error: 'taskText required' });
+    try {
+        const analysis = await qWriter.analyseTask(taskText);
+        const brief = await qWriter.tutorBrief(analysis);
+        res.json({ ok: true, analysis, brief });
+    } catch (e) {
+        console.error('[writer/brief]', e.message);
+        res.status(500).json({ error: e.message });
+    }
+});
+
+// POST /writer/lead — ask the next leading question for the current section
+router.post('/writer/lead', requirePerson, express.json({ limit: '128kb' }), async (req, res) => {
+    const { analysis, brief, history, voiceSignature, relateAnchor, yearGroup } = req.body || {};
+    if (!analysis || !brief) return res.status(400).json({ error: 'analysis and brief required' });
+    try {
+        const result = await qWriter.askLeadingQuestion(
+            analysis, brief, history || [], voiceSignature, relateAnchor, yearGroup
+        );
+        res.json({ ok: true, ...result });
+    } catch (e) {
+        console.error('[writer/lead]', e.message);
+        res.status(500).json({ error: e.message });
+    }
+});
+
+// POST /writer/reframe — reframe the student's raw answer in their own voice
+router.post('/writer/reframe', requirePerson, express.json({ limit: '64kb' }), async (req, res) => {
+    const { rawAnswer, question, context, voiceSignature, relateAnchor, yearGroup } = req.body || {};
+    if (!rawAnswer) return res.status(400).json({ error: 'rawAnswer required' });
+    try {
+        const result = await qWriter.reframeInVoice(
+            rawAnswer, question, context, voiceSignature, relateAnchor, yearGroup
+        );
+        res.json({ ok: true, ...result });
+    } catch (e) {
+        console.error('[writer/reframe]', e.message);
+        res.status(500).json({ error: e.message });
+    }
+});
+
+// POST /writer/words — suggest word swaps for a clicked word
+router.post('/writer/words', requirePerson, express.json({ limit: '32kb' }), async (req, res) => {
+    const { word, context, voiceSignature } = req.body || {};
+    if (!word) return res.status(400).json({ error: 'word required' });
+    try {
+        const result = await qWriter.suggestWordSwaps(word, context, voiceSignature);
+        res.json({ ok: true, ...result });
+    } catch (e) {
+        console.error('[writer/words]', e.message);
         res.status(500).json({ error: e.message });
     }
 });

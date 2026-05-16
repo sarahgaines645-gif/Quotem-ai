@@ -218,6 +218,10 @@ function getCircleSummary() {
     }
 }
 
+function getVoicePath(personId) {
+    return path.join(Q_DATA_DIR, `q-voice-${safeId(personId)}.json`);
+}
+
 module.exports = {
     loadMemory,
     saveMemory,
@@ -226,5 +230,6 @@ module.exports = {
     getRecentMessages,
     getCircleSummary,
     getMemoryPath,
+    getVoicePath,
     migrateLegacyMemory,
 };
