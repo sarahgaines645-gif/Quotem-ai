@@ -1,12 +1,44 @@
 # Q's Writer — Design Map
 
-**Status**: Phase 1 (wizard-style spine) shipped 2026-04-30 then redesigned 2026-05-01 before testing. Rebuild starts next session.
+**Status**: 2026-05-16 — document-first shell built (title, writing area, source-drop, draggable coach card that feeds Q the page + photos). The wizard is gone. Sarah articulated the FULL product flow on 2026-05-16 — see "THE FULL FLOW (canonical)" below; that section overrides anything older it conflicts with. Phase 1 (rich writing surface + voice signature + in-voice word swaps) authorised as the first vertical slice of the tutor loop.
 
 ## Core principle
 
 Q does NOT write the document. Q draws the writing out of the user, **in their own document**, **in their own words**. The output is theirs. AI detectors won't flag it because it genuinely isn't AI-written.
 
 The wizard approach (questions in one place, assembly at the end) is wrong — the assembly step IS AI writing connective tissue. Replace with **document-first inline coaching**.
+
+## THE FULL FLOW (canonical) — Sarah, 2026-05-16
+
+The philosophy, in her words: *"AI doesn't write. We cheat the system by getting the AI to write the homework through the human, thereby getting the human to learn and do their work without realising they are doing it all themselves."* The student genuinely authors every word; they learn the craft on the way; detectors can't flag it because it is genuinely theirs.
+
+The writing surface is a real page where **both the user and Q can write**, words can be clicked, lists pop up on words, words can be searched. (This settles the surface fork: rich editable surface, not a plain textarea.)
+
+The end-to-end loop:
+
+1. **Upload the work.** Coursework, homework, a poem in progress — file, photo, screenshot, or paste.
+2. **Q reads it like a tutor.** Gives the plain-English summary of what it's actually asking ("analyse the book, give your opinion, cite others' opinions"). Q forms an internal model of **what the finished piece should look like and what the marked sections are** — the rubric/structure.
+3. **Leading questions, section by section.** For each marked section Q asks a natural question to make the user type:
+   - Q: "did you like the book?" → user: "no."
+   - Q: "start the paragraph with a sentence saying that." → user types *"I didn't like the book."*
+   - Q reframes: *"what if we started with 'I read [book] and my thoughts on this are…'"* → **popup: [use it] / [no] / [give me another]**.
+   - Q probes deeper (the ladder, as natural tutor questioning): "why didn't you like it?" → … and so on per section.
+   - Q **can write if asked** — but only a sentence or two to break the blank page and get the flow going. Simple language so the student understands it and has room to build on it. Never more than that; the rest is theirs.
+   - Q **never imposes** — he proposes, the user chooses, the words land as the user's.
+4. **"I don't understand this" button** (per section/concept) → Q sends links to videos that explain it.
+5. **Q marks each section** once written and puts a **colour band around that section**: red = pass/low, amber/yellow = merit/medium, green = top. Grade scheme configurable (A–C, 1–9, pass/merit/dist, etc.).
+6. **Improve button** on each marked section. Click the section → Improve → Q opens a chat coaching it toward the **next grade up**:
+   - "could we find a better word for 'don't like'?" → dropdown of better words (**in the user's voice**).
+   - "what if we used a simile to compare the colour of Juliet's dress to…"
+   - **"tell me more"** button → Q teaches the *craft/technique* behind the suggestion (e.g. *"writers use colour and objects to inject feeling into the reader's subconscious, so the reader feels it without it being described"*) — teaching, not just fixing.
+
+Voice signature (below) underpins every suggestion so swaps/reframes sound like the user, never generic AI. Word-swaps are one tactic *inside* step 6's improve loop and step 3's reframes — not a standalone Grammarly feature.
+
+**Build as vertical slices (proper, no shortcut):**
+- **Slice 1 (Phase 1):** rich editable surface (user + Q write) · upload → Q tutor briefing + section/rubric model · voice signature · first marked section: leading question → user types → in-voice reframe + word-swap with [use it]/[no]/[another] popup.
+- **Slice 2:** full section-by-section progression + "I don't understand" → video teaching.
+- **Slice 3:** marking + colour grade bands per section (configurable scheme).
+- **Slice 4:** Improve → next-grade coaching loop + simile/technique suggestions + "tell me more" craft explainer.
 
 ## The UI — document-first
 
