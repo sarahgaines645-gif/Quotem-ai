@@ -624,12 +624,12 @@ router.post('/writer/brief', requirePerson, express.json({ limit: '512kb' }), as
 });
 
 // POST /writer/lead — ask the next leading question for the current section
-router.post('/writer/lead', requirePerson, express.json({ limit: '128kb' }), async (req, res) => {
-    const { analysis, brief, history, voiceSignature, relateAnchor, yearGroup } = req.body || {};
+router.post('/writer/lead', requirePerson, express.json({ limit: '256kb' }), async (req, res) => {
+    const { analysis, brief, history, voiceSignature, relateAnchor, yearGroup, docContext } = req.body || {};
     if (!analysis || !brief) return res.status(400).json({ error: 'analysis and brief required' });
     try {
         const result = await qWriter.askLeadingQuestion(
-            analysis, brief, history || [], voiceSignature, relateAnchor, yearGroup
+            analysis, brief, history || [], voiceSignature, relateAnchor, yearGroup, docContext || null
         );
         res.json({ ok: true, ...result });
     } catch (e) {

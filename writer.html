@@ -921,20 +921,17 @@
         state.analysis = d.analysis;
         state.brief = d.brief;
 
-        // Show the tutor brief, then offer to start coaching
+        // Show the tutor brief, then auto-start coaching
         const b = d.brief;
         const summaryText = b.whatItWants || b.summary || 'Got it.';
         setCoach({
           msg: summaryText,
           section: 'TASK',
           hint: b.teachersBrief ? '🔑 ' + b.teachersBrief : '',
-          actions: [{
-            label: 'Start coaching →',
-            primary: true,
-            onClick: () => askNextQuestion(),
-          }],
           inputVisible: false,
         });
+        // Auto-fire first question after a beat so the student can read the brief
+        setTimeout(() => askNextQuestion(), 1800);
       } catch (e) {
         setCoach({ msg: 'Couldn\'t read that — try pasting the task as text.' });
       }
@@ -948,6 +945,7 @@
           analysis: state.analysis,
           brief: state.brief,
           history: state.coachHistory,
+          docContext: sourceState.text || null,
           ...voicePayload(),
         });
         if (!d.ok) throw new Error(d.error || 'lead failed');
@@ -1305,8 +1303,10 @@
           throw new Error('Unsupported file type — try PDF, Word, image, or .txt');
         }
         renderSourceSlot();
-        // Auto-run brief once source is loaded
-        const taskText = sourceState.text || '[image task — Q will use vision]';
+        // Auto-run brief — cap at 5000 chars so Q doesn't choke on full PDFs
+        const MAX_TASK = 5000;
+        let taskText = sourceState.text || '[image task — Q will use vision]';
+        if (taskText.length > MAX_TASK) taskText = taskText.slice(0, MAX_TASK);
         await runBrief(taskText);
       } catch (e) {
         sourceState.name = null; sourceState.text = null; sourceState.imageDataUrl = null;
@@ -1335,7 +1335,8 @@
         sourceState.text = text;
         sourceState.name = 'Pasted text (' + text.length + ' chars)';
         renderSourceSlot();
-        runBrief(text);
+        const pasteText = text.length > 5000 ? text.slice(0, 5000) : text;
+        runBrief(pasteText);
       }
     });
 

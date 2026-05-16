@@ -147,7 +147,7 @@ Return ONLY valid JSON:
     );
 }
 
-async function askLeadingQuestion(analysis, brief, history, voiceSignature, relateAnchor, yearGroup) {
+async function askLeadingQuestion(analysis, brief, history, voiceSignature, relateAnchor, yearGroup, docContext) {
     const voiceHint = voiceSignature
         ? `The student's voice: "${voiceSignature.voiceSummary}". Formality: ${voiceSignature.formalityLevel}. Match their register exactly.`
         : '';
@@ -181,9 +181,13 @@ Return ONLY valid JSON:
         ? 'No exchanges yet — this is the first question.'
         : (history || []).map((h, i) => `Q${i + 1}: ${h.question}\nA${i + 1}: ${h.answer}`).join('\n\n');
 
+    const docBlock = docContext
+        ? `\n\nUPLOADED DOCUMENT (student's full task/reference material — use this to ask specific, document-aware questions):\n${docContext.slice(0, 8000)}`
+        : '';
+
     return await callQ(
         system,
-        `TASK ANALYSIS:\n${JSON.stringify(analysis, null, 2)}\n\nTUTOR BRIEF:\n${JSON.stringify(brief, null, 2)}\n\nCONVERSATION SO FAR:\n${historyBlock}\n\nWhat's the next leading question?`,
+        `TASK ANALYSIS:\n${JSON.stringify(analysis, null, 2)}\n\nTUTOR BRIEF:\n${JSON.stringify(brief, null, 2)}${docBlock}\n\nCONVERSATION SO FAR:\n${historyBlock}\n\nWhat's the next leading question?`,
         { maxTokens: 400 }
     );
 }
