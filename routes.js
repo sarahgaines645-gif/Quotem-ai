@@ -691,6 +691,47 @@ router.post('/writer/refs', requirePerson, express.json({ limit: '64kb' }), asyn
     }
 });
 
+// POST /writer/explain — plain-English explanation of a concept + search terms
+router.post('/writer/explain', requirePerson, express.json({ limit: '16kb' }), async (req, res) => {
+    const { concept, subject, yearGroup } = req.body || {};
+    if (!concept) return res.status(400).json({ error: 'concept required' });
+    try {
+        const result = await qWriter.explainConcept(concept, subject, yearGroup);
+        res.json({ ok: true, ...result });
+    } catch (e) {
+        console.error('[writer/explain]', e.message);
+        res.status(500).json({ error: e.message });
+    }
+});
+
+// POST /writer/mark-section — grade a completed section (red/amber/green)
+router.post('/writer/mark-section', requirePerson, express.json({ limit: '64kb' }), async (req, res) => {
+    const { sectionText, sectionName, analysis, gradeScheme } = req.body || {};
+    if (!sectionText) return res.status(400).json({ error: 'sectionText required' });
+    try {
+        const result = await qWriter.markSection(sectionText, sectionName, analysis, gradeScheme);
+        res.json({ ok: true, ...result });
+    } catch (e) {
+        console.error('[writer/mark-section]', e.message);
+        res.status(500).json({ error: e.message });
+    }
+});
+
+// POST /writer/improve — coaching suggestions to reach the next grade
+router.post('/writer/improve', requirePerson, express.json({ limit: '64kb' }), async (req, res) => {
+    const { sectionText, sectionName, currentGrade, voiceSignature, analysis, relateAnchor, yearGroup } = req.body || {};
+    if (!sectionText) return res.status(400).json({ error: 'sectionText required' });
+    try {
+        const result = await qWriter.improveSectionStep(
+            sectionText, sectionName, currentGrade, voiceSignature, analysis, relateAnchor, yearGroup
+        );
+        res.json({ ok: true, ...result });
+    } catch (e) {
+        console.error('[writer/improve]', e.message);
+        res.status(500).json({ error: e.message });
+    }
+});
+
 // POST /writer/ref-para — suggest references for a highlighted paragraph
 router.post('/writer/ref-para', requirePerson, express.json({ limit: '32kb' }), async (req, res) => {
     const { paragraphText, subject, keyConcepts } = req.body || {};

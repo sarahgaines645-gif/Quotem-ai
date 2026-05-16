@@ -292,6 +292,87 @@
     .setup-cog:hover { color: var(--accent); }
     .setup-cog.hidden { display: none; }
 
+    /* ── Grade bands ─────────────────────────────────────────────────────── */
+    .grade-band {
+      display: flex; align-items: center; gap: 10px;
+      padding: 8px 14px; margin: 10px 0;
+      border-radius: 8px; font-family: 'Space Grotesk', sans-serif;
+      font-size: 12px;
+    }
+    .grade-band[data-grade="red"]   { background: rgba(220,53,69,0.08);  border-left: 3px solid #dc3545; }
+    .grade-band[data-grade="amber"] { background: rgba(255,165,0,0.10);  border-left: 3px solid #e6a817; }
+    .grade-band[data-grade="green"] { background: rgba(40,167,69,0.09);  border-left: 3px solid #28a745; }
+    .grade-band .gb-dot {
+      width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0;
+    }
+    .grade-band[data-grade="red"]   .gb-dot { background: #dc3545; }
+    .grade-band[data-grade="amber"] .gb-dot { background: #e6a817; }
+    .grade-band[data-grade="green"] .gb-dot { background: #28a745; }
+    .grade-band .gb-info { flex: 1; }
+    .grade-band .gb-section { font-weight: 600; color: var(--text); }
+    .grade-band .gb-label   { color: var(--text-muted); margin-left: 6px; }
+    .grade-band .gb-reason  { font-size: 11px; color: var(--text-faint); margin-top: 2px; line-height: 1.4; }
+    .grade-band .gb-improve {
+      padding: 4px 12px; border: none; border-radius: 10px;
+      font-family: 'Space Grotesk', sans-serif; font-size: 11px; font-weight: 600;
+      background: var(--bg); color: var(--text); cursor: pointer;
+      box-shadow: var(--neu-raised-xs); flex-shrink: 0;
+    }
+    .grade-band .gb-improve:hover { color: var(--accent); }
+
+    /* ── Improve panel (in coach card) ───────────────────────────────────── */
+    .improve-suggestion {
+      background: var(--bg); border-radius: 10px;
+      box-shadow: var(--neu-inset-sm); padding: 9px 12px;
+      margin-bottom: 8px; display: flex; flex-direction: column; gap: 4px;
+    }
+    .improve-suggestion .imp-type {
+      font-size: 9px; font-weight: 600; text-transform: uppercase;
+      letter-spacing: 0.07em; color: var(--accent);
+    }
+    .improve-suggestion .imp-text { font-size: 11px; color: var(--text); line-height: 1.45; }
+    .improve-suggestion .imp-example { font-size: 10px; color: var(--text-faint); font-style: italic; line-height: 1.4; }
+    .improve-suggestion .imp-craft {
+      font-size: 11px; color: var(--text-muted); line-height: 1.45;
+      background: rgba(233,30,99,0.05); border-radius: 6px; padding: 6px 8px;
+    }
+    .improve-suggestion .imp-craft.hidden { display: none; }
+    .improve-suggestion .imp-tellmore {
+      font-size: 10px; color: var(--text-faint); cursor: pointer;
+      background: none; border: none; padding: 0; font-family: 'Space Grotesk', sans-serif;
+      text-decoration: underline; align-self: flex-start;
+    }
+    .improve-suggestion .imp-tellmore:hover { color: var(--accent); }
+
+    /* ── Explain popup ────────────────────────────────────────────────────── */
+    .explain-popup {
+      position: fixed; z-index: 200;
+      background: var(--bg); border-radius: 14px;
+      box-shadow: 10px 10px 28px #ababab, -8px -8px 20px #ffffff;
+      padding: 14px 16px; width: 260px;
+    }
+    .explain-popup.hidden { display: none; }
+    .explain-popup .exp-text {
+      font-size: 12px; color: var(--text); line-height: 1.55;
+      margin-bottom: 10px;
+    }
+    .explain-popup .exp-links { display: flex; flex-direction: column; gap: 5px; }
+    .explain-popup .exp-link {
+      display: flex; align-items: center; gap: 7px;
+      padding: 5px 10px; border-radius: 10px;
+      background: var(--bg); box-shadow: var(--neu-raised-xs);
+      font-family: 'Space Grotesk', sans-serif; font-size: 11px;
+      color: var(--text-muted); text-decoration: none;
+    }
+    .explain-popup .exp-link:hover { color: var(--accent); }
+    .explain-popup .exp-close {
+      display: block; width: 100%; padding: 5px; border: none;
+      font-family: 'Space Grotesk', sans-serif; font-size: 11px;
+      color: var(--text-faint); background: transparent; cursor: pointer;
+      text-align: center; margin-top: 6px;
+    }
+    .explain-popup .exp-close:hover { color: var(--text); }
+
     /* ── Inline reference button (appears on selection) ─────────────────── */
     .inline-ref-btn {
       position: fixed; z-index: 210;
@@ -531,6 +612,16 @@
           <option>Adult</option>
         </select>
       </div>
+      <div class="setup-field" style="flex:1">
+        <div class="setup-label">Grade scheme</div>
+        <select class="setup-select" id="setup-grade-scheme">
+          <option value="GCSE (9-1)">GCSE 9–1</option>
+          <option value="GCSE (A*-G)">GCSE A*–G</option>
+          <option value="A-Level (A*-E)">A-Level</option>
+          <option value="Pass / Merit / Distinction">Pass/Merit/Dist</option>
+          <option value="1st / 2:1 / 2:2 / 3rd">Degree</option>
+        </select>
+      </div>
     </div>
     <div>
       <button type="button" class="setup-voice-toggle" id="setup-voice-toggle">
@@ -631,9 +722,17 @@
     <div class="q-nudge-btns hidden" id="coach-nudge">
       <button class="q-btn" id="btn-start-me">Start me off</button>
       <button class="q-btn" id="btn-how-put">How could I put this?</button>
+      <button class="q-btn" id="btn-dont-understand">I don't understand this</button>
     </div>
     <input class="coach-input" id="coach-input" type="text"
       placeholder="Ask Q…" autocomplete="off" />
+  </div>
+
+  <!-- Explain concept popup -->
+  <div class="explain-popup hidden" id="explain-popup">
+    <div class="exp-text" id="explain-text"></div>
+    <div class="exp-links" id="explain-links"></div>
+    <button class="exp-close" id="explain-close">close</button>
   </div>
 
   <!-- Inline reference button — appears when text is selected in the doc -->
@@ -672,6 +771,9 @@
       setupDone: false,
       docSnapshot: '',      // doc text at time Q last asked a question
       qWordsWritten: 0,     // words Q has inserted into the doc this session
+      gradeScheme: 'GCSE (9-1)',
+      gradedSections: [],   // [{sectionName, text, grade, gradeLabel}]
+      improveTarget: null,  // section currently being improved in the coach card
     };
 
     // ── Element refs ───────────────────────────────────────────────────────
@@ -702,6 +804,7 @@
     });
 
     // ── Setup strip ────────────────────────────────────────────────────────
+    const gradeSchemeSelect = document.getElementById('setup-grade-scheme');
     const voiceToggleBtn = document.getElementById('setup-voice-toggle');
     const voiceArea      = document.getElementById('setup-voice-area');
     const voiceStatus    = document.getElementById('setup-voice-status');
@@ -726,8 +829,9 @@
       .catch(() => {});
 
     startBtn.addEventListener('click', async () => {
-      state.relateAnchor = relateInput.value.trim();
-      state.yearGroup    = yearSelect.value;
+      state.relateAnchor  = relateInput.value.trim();
+      state.yearGroup     = yearSelect.value;
+      state.gradeScheme   = gradeSchemeSelect.value || 'GCSE (9-1)';
       const sample = (voiceArea.value || '').trim();
 
       if (sample.length >= 30) {
@@ -875,8 +979,9 @@
 
       // If we have a current leading question, treat this as the answer
       if (state.currentQuestion) {
-        const rawAnswer = text;
-        const currentQ  = state.currentQuestion;
+        const rawAnswer     = text;
+        const currentQ      = state.currentQuestion;
+        const currentSection = state.currentSection;
         state.coachHistory.push({ question: currentQ, answer: rawAnswer });
         state.currentQuestion = '';
 
@@ -900,7 +1005,7 @@
               {
                 label: '✓ Use it',
                 primary: true,
-                onClick: () => insertReframe(d.reframed),
+                onClick: () => insertReframe(d.reframed, currentSection, d.reframed),
               },
               {
                 label: '↻ Another',
@@ -909,8 +1014,8 @@
               {
                 label: '✗ Keep mine',
                 onClick: () => {
-                  // Insert their raw answer into the doc instead
                   insertTextAtEnd(rawAnswer);
+                  markAndInsertGradeBand(currentSection || currentQ, rawAnswer);
                   state.pendingReframe = null;
                   askNextQuestion();
                 },
@@ -1070,8 +1175,9 @@
       sel.addRange(range);
     }
 
-    function insertReframe(text) {
-      insertTextIntoDoc(text, false); // reframes are user's words elevated — don't count against Q budget
+    function insertReframe(text, sectionName, sectionTextForGrade) {
+      insertTextIntoDoc(text, false);
+      if (sectionName) markAndInsertGradeBand(sectionName, sectionTextForGrade || text);
       state.pendingReframe = null;
       askNextQuestion();
     }
@@ -1252,6 +1358,166 @@
       const f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
       if (f) loadSourceFile(f);
     });
+
+    // ── "I don't understand this" ─────────────────────────────────────────
+    const btnDontUnderstand = document.getElementById('btn-dont-understand');
+    const explainPopup  = document.getElementById('explain-popup');
+    const explainText   = document.getElementById('explain-text');
+    const explainLinks  = document.getElementById('explain-links');
+    document.getElementById('explain-close').addEventListener('click', () => {
+      explainPopup.classList.add('hidden');
+    });
+
+    btnDontUnderstand.addEventListener('click', async () => {
+      const concept = state.currentSection || state.currentQuestion || 'this topic';
+      // Position popup near the button
+      const btnRect = btnDontUnderstand.getBoundingClientRect();
+      explainPopup.style.left = Math.min(btnRect.left, window.innerWidth - 280) + 'px';
+      explainPopup.style.top  = (btnRect.bottom + 8 + window.scrollY) + 'px';
+      explainText.textContent = 'Q is explaining…';
+      explainLinks.innerHTML = '';
+      explainPopup.classList.remove('hidden');
+
+      try {
+        const d = await post('/writer/explain', {
+          concept,
+          subject: state.analysis?.subject || '',
+          yearGroup: state.yearGroup || '',
+        });
+        if (!d.ok) throw new Error(d.error);
+        explainText.textContent = d.explanation || '';
+        explainLinks.innerHTML = '';
+
+        // Build search links from search terms — real search URLs, no hallucinated links
+        const platforms = [
+          { name: 'YouTube', icon: '▶', base: 'https://www.youtube.com/results?search_query=' },
+          { name: 'Khan Academy', icon: '◆', base: 'https://www.khanacademy.org/search?page_search_query=' },
+          { name: 'BBC Bitesize', icon: '●', base: 'https://www.bbc.co.uk/bitesize/search?q=' },
+        ];
+        const terms = d.searchTerms || [concept];
+        platforms.forEach((p, i) => {
+          const term = terms[i] || terms[0] || concept;
+          const a = document.createElement('a');
+          a.className = 'exp-link';
+          a.href = p.base + encodeURIComponent(term);
+          a.target = '_blank'; a.rel = 'noopener';
+          a.textContent = p.icon + '  ' + p.name;
+          explainLinks.appendChild(a);
+        });
+      } catch (e) {
+        explainText.textContent = 'Couldn\'t get an explanation — try again.';
+      }
+    });
+
+    // ── Section marking + grade bands ─────────────────────────────────────
+    async function markAndInsertGradeBand(sectionName, sectionText) {
+      if (!sectionText || sectionText.length < 20) return;
+      try {
+        const d = await post('/writer/mark-section', {
+          sectionText, sectionName,
+          analysis: state.analysis,
+          gradeScheme: state.gradeScheme,
+        });
+        if (!d.ok) throw new Error(d.error);
+
+        state.gradedSections.push({
+          sectionName, sectionText, grade: d.grade, gradeLabel: d.gradeLabel,
+        });
+
+        // Insert grade band into doc after current content
+        const band = document.createElement('div');
+        band.className = 'grade-band';
+        band.contentEditable = 'false';
+        band.dataset.grade = d.grade;
+        band.dataset.section = sectionName;
+        band.innerHTML = `
+          <div class="gb-dot"></div>
+          <div class="gb-info">
+            <span class="gb-section">${escHtml(sectionName)}</span>
+            <span class="gb-label">${escHtml(d.gradeLabel || d.grade)}</span>
+            <div class="gb-reason">${escHtml(d.nextGradeHint || d.reason || '')}</div>
+          </div>
+          <button class="gb-improve" data-section="${escHtml(sectionName)}">Improve →</button>`;
+
+        band.querySelector('.gb-improve').addEventListener('click', () => {
+          runImproveFlow(sectionName, sectionText, d.grade);
+        });
+
+        docBody.appendChild(band);
+
+        // Add a blank line after so the user can keep writing
+        const next = document.createElement('div');
+        next.innerHTML = '<br>';
+        docBody.appendChild(next);
+
+        // Place cursor in the new blank line
+        const range = document.createRange();
+        const sel = window.getSelection();
+        range.setStart(next, 0); range.collapse(true);
+        sel.removeAllRanges(); sel.addRange(range);
+
+      } catch (e) {
+        // Marking failed silently — don't block writing
+        console.warn('[writer] marking failed:', e.message);
+      }
+    }
+
+    // ── Improve → next grade coaching ─────────────────────────────────────
+    async function runImproveFlow(sectionName, sectionText, currentGrade) {
+      state.improveTarget = { sectionName, sectionText, currentGrade };
+      setCoach({ msg: 'Reading that section…', thinking: true, inputVisible: false });
+
+      try {
+        const d = await post('/writer/improve', {
+          sectionText, sectionName, currentGrade,
+          voiceSignature: state.voiceSignature,
+          analysis: state.analysis,
+          ...voicePayload(),
+        });
+        if (!d.ok || !d.suggestions) throw new Error(d.error || 'improve failed');
+
+        const targetLabel = currentGrade === 'red' ? 'merit' : 'top grade';
+        setCoach({
+          msg: `To push this to ${targetLabel}:`,
+          section: 'IMPROVE — ' + sectionName.toUpperCase(),
+          hint: '',
+          actions: [],
+          inputVisible: false,
+        });
+
+        // Render suggestions inside the coach card actions area
+        coachActions.classList.remove('hidden');
+        coachActions.innerHTML = '';
+
+        d.suggestions.forEach(s => {
+          const card = document.createElement('div');
+          card.className = 'improve-suggestion';
+          card.innerHTML = `
+            <div class="imp-type">${escHtml(s.type || '')}</div>
+            <div class="imp-text">${escHtml(s.suggestion || '')}</div>
+            ${s.example ? `<div class="imp-example">"${escHtml(s.example)}"</div>` : ''}
+            <button class="imp-tellmore">Tell me more</button>
+            <div class="imp-craft hidden">${escHtml(s.craftLesson || '')}</div>`;
+
+          card.querySelector('.imp-tellmore').addEventListener('click', function() {
+            const craft = card.querySelector('.imp-craft');
+            craft.classList.toggle('hidden');
+            this.textContent = craft.classList.contains('hidden') ? 'Tell me more' : 'Got it';
+          });
+          coachActions.appendChild(card);
+        });
+
+        // Back to coaching button
+        const backBtn = document.createElement('button');
+        backBtn.className = 'q-btn';
+        backBtn.textContent = '← Back to coaching';
+        backBtn.addEventListener('click', () => askNextQuestion());
+        coachActions.appendChild(backBtn);
+
+      } catch (e) {
+        setCoach({ msg: 'Couldn\'t get suggestions — try again.', inputVisible: true });
+      }
+    }
 
     // ── Harvard References panel ───────────────────────────────────────────
     const refsToggle   = document.getElementById('refs-toggle');

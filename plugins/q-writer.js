@@ -379,8 +379,96 @@ Return ONLY valid JSON:
     );
 }
 
+// ─── Slice 2: Explain concept ─────────────────────────────────────────────
+
+async function explainConcept(concept, subject, yearGroup) {
+    const ageHint = yearGroup
+        ? `Year group: ${yearGroup}. Use language at their level — plain and accessible.`
+        : '';
+    const system = `You are a tutor explaining a confusing concept to a student in plain English.
+
+${ageHint}
+
+Return ONLY valid JSON:
+- explanation (string): 2-3 sentences. Plain English, age-appropriate. No jargon. If a simple analogy helps, use one.
+- searchTerms (array of 3 strings): good search phrases the student could type into YouTube or a search engine to find videos that explain this. Make them specific enough to return useful results (e.g. "GCSE English Romeo and Juliet themes", "what is a simile explained simply", "Year 9 history WW1 causes").`;
+
+    return await callQ(
+        system,
+        `CONCEPT / THING THEY DON'T UNDERSTAND: "${concept}"\nSUBJECT: ${subject || 'unknown'}`,
+        { maxTokens: 350 }
+    );
+}
+
+// ─── Slice 3: Mark a section ─────────────────────────────────────────────
+
+async function markSection(sectionText, sectionName, analysis, gradeScheme) {
+    const bands = analysis?.gradeBands || {};
+    const schemeNote = gradeScheme ? `Grade scheme: ${gradeScheme}.` : 'Use GCSE standard grades.';
+
+    const system = `You are an examiner marking one section of a student's document.
+
+${schemeNote}
+Grade bands for this task:
+- Top: ${bands.top || 'strong analysis, personal voice, well evidenced'}
+- Mid: ${bands.mid || 'relevant points, some development, limited evidence'}
+- Low: ${bands.low || 'basic points, undeveloped, no evidence'}
+
+Return ONLY valid JSON:
+- grade (string): "red" | "amber" | "green"  (red = low/pass, amber = mid/merit, green = top/distinction)
+- gradeLabel (string): the grade in the chosen scheme (e.g. "Pass", "C", "4" — map red→low label, amber→mid, green→top)
+- reason (string): 2 sentences — what's good and specifically what's holding it back
+- nextGradeHint (string): the single most impactful thing they could add or change to reach the next grade — concrete and specific, not vague`;
+
+    return await callQ(
+        system,
+        `SECTION: ${sectionName}\nTASK: ${analysis?.task || 'unknown'}\n\nSTUDENT'S WRITING:\n${sectionText.slice(0, 1500)}`,
+        { maxTokens: 500 }
+    );
+}
+
+// ─── Slice 4: Improve → next grade coaching ──────────────────────────────
+
+async function improveSectionStep(sectionText, sectionName, currentGrade, voiceSignature, analysis, relateAnchor, yearGroup) {
+    const voiceHint = voiceSignature
+        ? `Student's voice: "${voiceSignature.voiceSummary}". Formality: ${voiceSignature.formalityLevel}. Make every suggestion sound like them.`
+        : 'Use plain natural language.';
+    const ageHint = yearGroup
+        ? `Year group: ${yearGroup}. Suggestions should feel achievable and natural at this age.`
+        : '';
+    const relateHint = relateAnchor
+        ? `Their world: "${relateAnchor}". Use it as a bridge for technique examples if helpful.`
+        : '';
+    const targetGrade = currentGrade === 'red' ? 'amber' : 'green';
+
+    const system = `You are a writing coach helping a student improve one marked section from ${currentGrade} to ${targetGrade}.
+
+${voiceHint}
+${ageHint}
+${relateHint}
+
+Give 3-4 specific coaching suggestions that would raise the grade. Mix types: a word upgrade, a technique, a structural fix, an evidence suggestion.
+
+For each suggestion, include the craft lesson — the WHY behind the technique (e.g. "Writers use colour to plant emotion in the reader's subconscious — the reader feels it without being told"). This is what "Tell me more" reveals.
+
+Return ONLY valid JSON:
+- suggestions (array of 3-4 objects): each {
+    type (string): "word" | "technique" | "structure" | "evidence",
+    suggestion (string): the specific, actionable coaching tip — what to add or change,
+    example (string): a short example showing it applied to their actual text or a close analogy,
+    craftLesson (string): 2-3 sentences teaching the CRAFT behind this — why it works, what it does to the reader
+  }`;
+
+    return await callQ(
+        system,
+        `SECTION NAME: ${sectionName}\nCURRENT GRADE: ${currentGrade}\nTARGET: ${targetGrade}\n\nSTUDENT'S WRITING:\n${sectionText.slice(0, 1000)}`,
+        { maxTokens: 900 }
+    );
+}
+
 module.exports = {
     analyseTask, nextQuestion, assembleDocument,
     analyseVoice, tutorBrief, askLeadingQuestion, reframeInVoice, suggestWordSwaps, writeStarter,
     formatHarvardRef, suggestReferences, referenceParagraph,
+    explainConcept, markSection, improveSectionStep,
 };
