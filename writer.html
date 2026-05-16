@@ -323,6 +323,98 @@
       font-size: 11px; color: var(--text-faint); font-style: italic; padding: 4px 8px;
     }
 
+    /* ── References panel ───────────────────────────────────────────────── */
+    .refs-bar { margin: 0 0 18px; }
+    .refs-toggle {
+      display: inline-flex; align-items: center; gap: 7px;
+      padding: 6px 14px; border: none; cursor: pointer;
+      font-family: 'Space Grotesk', sans-serif; font-size: 12px;
+      color: var(--text-muted); background: transparent;
+      box-shadow: 0 0 0 1px rgba(0,0,0,0.07); border-radius: 14px;
+      transition: color 0.15s, box-shadow 0.15s;
+    }
+    .refs-toggle:hover { color: var(--text); box-shadow: 0 0 0 1px rgba(0,0,0,0.14); }
+
+    .refs-panel {
+      background: rgba(255,255,255,0.5); border-radius: 10px;
+      padding: 16px; margin: 0 0 24px;
+      border: 1px solid rgba(0,0,0,0.06);
+    }
+    .refs-panel.hidden { display: none; }
+
+    .refs-tabs { display: flex; gap: 6px; margin-bottom: 14px; }
+    .refs-tab {
+      padding: 5px 14px; border: none; border-radius: 12px;
+      font-family: 'Space Grotesk', sans-serif; font-size: 12px;
+      background: transparent; color: var(--text-muted); cursor: pointer;
+      transition: all 0.15s;
+    }
+    .refs-tab.active {
+      background: var(--bg); color: var(--text);
+      box-shadow: var(--neu-raised-xs);
+    }
+
+    .refs-body { display: flex; flex-direction: column; gap: 10px; }
+    .refs-body.hidden { display: none; }
+    .refs-hint { font-size: 12px; color: var(--text-faint); line-height: 1.5; }
+
+    .refs-input {
+      width: 100%; font-family: 'Space Grotesk', sans-serif; font-size: 12px;
+      background: var(--bg); box-shadow: var(--neu-inset-sm);
+      border: none; outline: none; border-radius: 10px;
+      padding: 10px 12px; resize: none; color: var(--text); line-height: 1.5;
+    }
+    .refs-input::placeholder { color: var(--text-faint); font-style: italic; }
+
+    .refs-action-btn {
+      align-self: flex-start; padding: 7px 16px; border: none; border-radius: 14px;
+      font-family: 'Space Grotesk', sans-serif; font-size: 12px; font-weight: 600;
+      background: var(--bg); color: var(--text); cursor: pointer;
+      box-shadow: var(--neu-raised-sm); transition: box-shadow 0.15s;
+    }
+    .refs-action-btn:hover { box-shadow: var(--neu-raised-xs); }
+    .refs-action-btn:active { box-shadow: var(--neu-inset-sm); }
+    .refs-action-btn:disabled { opacity: 0.5; cursor: default; }
+
+    .refs-result.hidden { display: none; }
+    .refs-formatted {
+      font-family: 'Lora', Georgia, serif;
+      font-size: 13px; line-height: 1.6; color: var(--text);
+      background: var(--bg); box-shadow: var(--neu-inset-sm);
+      border-radius: 10px; padding: 10px 14px;
+      white-space: pre-wrap; word-break: break-word;
+    }
+    .refs-warnings {
+      font-size: 11px; color: var(--accent); line-height: 1.5;
+    }
+    .refs-actions-row { display: flex; gap: 8px; }
+    .refs-insert-btn, .refs-copy-btn {
+      padding: 5px 14px; border: none; border-radius: 12px;
+      font-family: 'Space Grotesk', sans-serif; font-size: 11px; font-weight: 500;
+      background: var(--bg); color: var(--text); cursor: pointer;
+      box-shadow: var(--neu-raised-xs);
+    }
+    .refs-insert-btn:hover, .refs-copy-btn:hover { box-shadow: var(--neu-raised-sm); }
+
+    .refs-suggestions { display: flex; flex-direction: column; gap: 10px; }
+    .ref-suggestion {
+      background: var(--bg); border-radius: 10px;
+      box-shadow: var(--neu-inset-sm); padding: 10px 14px;
+      display: flex; flex-direction: column; gap: 4px;
+    }
+    .ref-suggestion .ref-text {
+      font-family: 'Lora', Georgia, serif; font-size: 13px;
+      line-height: 1.6; color: var(--text);
+      white-space: pre-wrap; word-break: break-word;
+    }
+    .ref-suggestion .ref-relevance {
+      font-size: 11px; color: var(--text-faint); font-style: italic;
+    }
+    .ref-suggestion .ref-uncertain {
+      font-size: 10px; color: var(--accent);
+    }
+    .ref-suggestion .ref-row { display: flex; gap: 6px; margin-top: 4px; }
+
     /* Mobile */
     @media (max-width: 600px) {
       .paper { padding: 48px 28px 64px; min-height: 700px; }
@@ -404,6 +496,45 @@
         </button>
         <input type="file" id="source-file-input" style="display:none" />
       </div>
+      <!-- References bar — sits between source and body -->
+      <div class="refs-bar" id="refs-bar">
+        <button type="button" class="refs-toggle" id="refs-toggle">
+          <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
+          Harvard References
+        </button>
+      </div>
+
+      <!-- References panel — opens below the button -->
+      <div class="refs-panel hidden" id="refs-panel">
+        <div class="refs-tabs">
+          <button class="refs-tab active" data-tab="manual">Add a source</button>
+          <button class="refs-tab" data-tab="suggest">Suggest for this doc</button>
+        </div>
+
+        <!-- Manual tab -->
+        <div class="refs-body" id="refs-tab-manual">
+          <p class="refs-hint">Tell Q the source — book title, URL, author, article name, or any mix of details you have.</p>
+          <textarea class="refs-input" id="refs-manual-input" rows="2"
+            placeholder="e.g. Shakespeare, Romeo and Juliet, published 1597  /  bbc.co.uk/news/article  /  Orwell, 1984, Penguin Books"></textarea>
+          <button class="refs-action-btn" id="refs-format-btn">Format it →</button>
+          <div class="refs-result hidden" id="refs-manual-result">
+            <div class="refs-formatted" id="refs-formatted-text"></div>
+            <div class="refs-warnings" id="refs-warnings"></div>
+            <div class="refs-actions-row">
+              <button class="refs-insert-btn" id="refs-insert-manual">Insert into doc</button>
+              <button class="refs-copy-btn" id="refs-copy-manual">Copy</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Suggest tab -->
+        <div class="refs-body hidden" id="refs-tab-suggest">
+          <p class="refs-hint">Q reads your document and suggests what you should cite. Always verify the details before submitting.</p>
+          <button class="refs-action-btn" id="refs-suggest-btn">Suggest references →</button>
+          <div class="refs-suggestions" id="refs-suggestions"></div>
+        </div>
+      </div>
+
       <div class="doc-body" id="doc-body"
         contenteditable="true"
         data-placeholder="Start writing — Q joins in once you do."
@@ -1040,6 +1171,139 @@
       const f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
       if (f) loadSourceFile(f);
     });
+
+    // ── Harvard References panel ───────────────────────────────────────────
+    const refsToggle   = document.getElementById('refs-toggle');
+    const refsPanel    = document.getElementById('refs-panel');
+    const refsTabs     = document.querySelectorAll('.refs-tab');
+    const refsTabManual  = document.getElementById('refs-tab-manual');
+    const refsTabSuggest = document.getElementById('refs-tab-suggest');
+    const refsManualInput = document.getElementById('refs-manual-input');
+    const refsFormatBtn  = document.getElementById('refs-format-btn');
+    const refsResult     = document.getElementById('refs-manual-result');
+    const refsFormattedText = document.getElementById('refs-formatted-text');
+    const refsWarnings   = document.getElementById('refs-warnings');
+    const refsInsertManual = document.getElementById('refs-insert-manual');
+    const refsCopyManual   = document.getElementById('refs-copy-manual');
+    const refsSuggestBtn   = document.getElementById('refs-suggest-btn');
+    const refsSuggestions  = document.getElementById('refs-suggestions');
+
+    refsToggle.addEventListener('click', () => {
+      refsPanel.classList.toggle('hidden');
+    });
+
+    refsTabs.forEach(tab => {
+      tab.addEventListener('click', () => {
+        refsTabs.forEach(t => t.classList.remove('active'));
+        tab.classList.add('active');
+        const which = tab.dataset.tab;
+        refsTabManual.classList.toggle('hidden', which !== 'manual');
+        refsTabSuggest.classList.toggle('hidden', which !== 'suggest');
+      });
+    });
+
+    // Manual: format a source
+    refsFormatBtn.addEventListener('click', async () => {
+      const src = refsManualInput.value.trim();
+      if (!src) return;
+      refsFormatBtn.disabled = true;
+      refsFormatBtn.textContent = 'Formatting…';
+      refsResult.classList.add('hidden');
+      try {
+        const d = await post('/writer/harvard', { sourceDescription: src });
+        if (!d.ok) throw new Error(d.error);
+        refsFormattedText.textContent = d.formatted || '';
+        const warns = (d.warnings || []);
+        refsWarnings.textContent = warns.length
+          ? '⚠ Verify: ' + warns.join(' · ')
+          : '';
+        refsResult.classList.remove('hidden');
+      } catch (e) {
+        refsFormattedText.textContent = 'Could not format that — check your details and try again.';
+        refsWarnings.textContent = '';
+        refsResult.classList.remove('hidden');
+      } finally {
+        refsFormatBtn.disabled = false;
+        refsFormatBtn.textContent = 'Format it →';
+      }
+    });
+
+    function appendRefToDoc(refText) {
+      const current = (docBody.textContent || '').trim();
+      const hasRefsSection = current.includes('References\n') || current.includes('References:');
+      let newContent;
+      if (hasRefsSection) {
+        newContent = current + '\n' + refText;
+      } else {
+        newContent = current
+          ? current + '\n\n' + 'References\n\n' + refText
+          : 'References\n\n' + refText;
+      }
+      docBody.textContent = newContent;
+      wordEl.textContent = countWords() + ' words';
+    }
+
+    refsInsertManual.addEventListener('click', () => {
+      const text = refsFormattedText.textContent.trim();
+      if (!text) return;
+      appendRefToDoc(text);
+      refsPanel.classList.add('hidden');
+    });
+
+    refsCopyManual.addEventListener('click', () => {
+      const text = refsFormattedText.textContent.trim();
+      if (!text) return;
+      navigator.clipboard.writeText(text).catch(() => {});
+      refsCopyManual.textContent = 'Copied!';
+      setTimeout(() => { refsCopyManual.textContent = 'Copy'; }, 1500);
+    });
+
+    // Suggest: Q reads the doc and suggests references
+    refsSuggestBtn.addEventListener('click', async () => {
+      refsSuggestBtn.disabled = true;
+      refsSuggestBtn.textContent = 'Reading your doc…';
+      refsSuggestions.innerHTML = '';
+      try {
+        const d = await post('/writer/refs', {
+          docText: (docBody.textContent || '').slice(0, 2000),
+          subject: state.analysis?.subject || '',
+          keyConcepts: state.analysis?.keyConcepts || [],
+        });
+        if (!d.ok || !d.suggestions) throw new Error(d.error || 'no suggestions');
+
+        d.suggestions.forEach(s => {
+          const card = document.createElement('div');
+          card.className = 'ref-suggestion';
+          card.innerHTML = `
+            <div class="ref-text">${escHtml(s.formatted || '')}</div>
+            <div class="ref-relevance">${escHtml(s.relevance || '')}</div>
+            ${s.uncertain ? '<div class="ref-uncertain">⚠ Verify details before submitting</div>' : ''}
+            <div class="ref-row">
+              <button class="refs-insert-btn">Insert</button>
+              <button class="refs-copy-btn">Copy</button>
+            </div>`;
+          card.querySelector('.refs-insert-btn').addEventListener('click', () => {
+            appendRefToDoc(s.formatted || '');
+            refsPanel.classList.add('hidden');
+          });
+          card.querySelector('.refs-copy-btn').addEventListener('click', function() {
+            navigator.clipboard.writeText(s.formatted || '').catch(() => {});
+            this.textContent = 'Copied!';
+            setTimeout(() => { this.textContent = 'Copy'; }, 1500);
+          });
+          refsSuggestions.appendChild(card);
+        });
+      } catch (e) {
+        refsSuggestions.innerHTML = '<p style="font-size:12px;color:var(--text-faint)">Couldn\'t get suggestions — try again.</p>';
+      } finally {
+        refsSuggestBtn.disabled = false;
+        refsSuggestBtn.textContent = 'Suggest references →';
+      }
+    });
+
+    function escHtml(s) {
+      return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    }
 
     // ── Word swap popup ────────────────────────────────────────────────────
     let wordPopupTarget = null;

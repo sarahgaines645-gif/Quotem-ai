@@ -666,6 +666,31 @@ router.post('/writer/words', requirePerson, express.json({ limit: '32kb' }), asy
     }
 });
 
+// POST /writer/harvard — format a source into a Harvard reference
+router.post('/writer/harvard', requirePerson, express.json({ limit: '32kb' }), async (req, res) => {
+    const sourceDescription = (req.body?.sourceDescription || '').toString().trim();
+    if (!sourceDescription) return res.status(400).json({ error: 'sourceDescription required' });
+    try {
+        const result = await qWriter.formatHarvardRef(sourceDescription);
+        res.json({ ok: true, ...result });
+    } catch (e) {
+        console.error('[writer/harvard]', e.message);
+        res.status(500).json({ error: e.message });
+    }
+});
+
+// POST /writer/refs — suggest references for the current document
+router.post('/writer/refs', requirePerson, express.json({ limit: '64kb' }), async (req, res) => {
+    const { docText, subject, keyConcepts } = req.body || {};
+    try {
+        const result = await qWriter.suggestReferences(docText, subject, keyConcepts);
+        res.json({ ok: true, ...result });
+    } catch (e) {
+        console.error('[writer/refs]', e.message);
+        res.status(500).json({ error: e.message });
+    }
+});
+
 // POST /writer/starter — Q writes a basic starter sentence when asked; respects word budget
 router.post('/writer/starter', requirePerson, express.json({ limit: '32kb' }), async (req, res) => {
     const { question, context, voiceSignature, relateAnchor, yearGroup, qWordsWritten } = req.body || {};

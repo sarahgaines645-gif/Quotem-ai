@@ -292,7 +292,66 @@ Return ONLY valid JSON:
     );
 }
 
+// ─── Harvard References ────────────────────────────────────────────────────
+
+async function formatHarvardRef(sourceDescription) {
+    const system = `You format sources into Harvard referencing style (UK standard).
+
+The user will describe a source — a book title, URL, article name, author, or any mix of details they have.
+Your job: format it correctly in Harvard style using what they've given you.
+
+Rules:
+- Use ONLY the information the user provides. Never invent ISBNs, page numbers, publishers, or dates you don't know for certain.
+- For missing date: use (n.d.)
+- For missing place of publication: use (s.l.)
+- For missing publisher: use (s.n.)
+- For websites include [Online] and Available at: URL (Accessed: leave blank for the user to fill — write "Accessed: [date accessed]")
+- If the user gives a URL, check whether it looks like a journal (include volume/issue if guessable), news site, or general website.
+- Do not add anything the user hasn't told you — flag it with [?] if you're uncertain about a detail.
+
+Common Harvard formats (use the right one for the source type):
+Book: Author, A. (Year) *Title of Book*. Edition. Place: Publisher.
+Chapter in edited book: Author, A. (Year) 'Chapter title', in Editor, B. (ed.) *Book Title*. Place: Publisher, pp. 00–00.
+Journal article: Author, A. and Author, B. (Year) 'Article title', *Journal Name*, Volume(Issue), pp. 00–00.
+Website: Author, A. (Year) *Page title* [Online]. Available at: URL (Accessed: [date accessed]).
+Newspaper: Author, A. (Year) 'Article title', *Newspaper Name*, Day Month, p. 00.
+
+Return ONLY valid JSON:
+- formatted (string): the complete Harvard reference, ready to paste
+- type (string): "book", "article", "website", "newspaper", "chapter", or "other"
+- warnings (array of strings): any fields you had to leave as [?] or [n.d.] etc — so the user knows what to verify`;
+
+    return await callQ(system, `SOURCE TO FORMAT:\n${sourceDescription}`, { maxTokens: 500 });
+}
+
+async function suggestReferences(docText, subject, keyConcepts) {
+    const system = `You are an academic tutor helping a student identify sources they should cite in their work.
+
+Read their document and suggest 4-6 specific, relevant sources they could look up and reference in Harvard style.
+These are suggestions of real, well-known works — the student will need to verify the exact publication details themselves.
+
+Rules:
+- Suggest sources that are genuinely relevant to what they've written — books, articles, reports that an academic in this field would actually cite.
+- Prefer well-known, widely available sources (classic texts, major journals, accessible books) over obscure ones.
+- Format each as a complete Harvard reference using your best knowledge of the source — but mark any detail you're uncertain about with [verify].
+- Include a one-line note on WHY this source is relevant to their work.
+- Do NOT invent sources. Only suggest real works you are genuinely confident exist.
+
+Return ONLY valid JSON:
+- suggestions (array of objects): each { formatted (string — Harvard ref), type (string), relevance (string — one line why it fits their work), uncertain (boolean — true if any detail needs verification) }`;
+
+    const docSnippet = (docText || '').slice(0, 1200);
+    const conceptList = (keyConcepts || []).join(', ');
+
+    return await callQ(
+        system,
+        `SUBJECT: ${subject || 'unknown'}\nKEY CONCEPTS: ${conceptList || 'unknown'}\n\nDOCUMENT SO FAR:\n${docSnippet || '(blank)'}`,
+        { maxTokens: 1200 }
+    );
+}
+
 module.exports = {
     analyseTask, nextQuestion, assembleDocument,
     analyseVoice, tutorBrief, askLeadingQuestion, reframeInVoice, suggestWordSwaps, writeStarter,
+    formatHarvardRef, suggestReferences,
 };
