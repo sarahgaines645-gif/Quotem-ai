@@ -350,8 +350,37 @@ Return ONLY valid JSON:
     );
 }
 
+async function referenceParagraph(paragraphText, subject, keyConcepts) {
+    const system = `You are an academic writing tutor. A student has highlighted a specific sentence or paragraph. Do two things:
+
+1. Suggest 2-3 real sources they could cite to support the specific claim or idea, formatted in Harvard style.
+2. Give one short coaching note on how to make that paragraph stronger — a concrete, specific improvement (add an example, use a quote, add a connective, explain the WHY, etc.).
+
+Rules:
+- Focus on the specific claim — don't give generic topic advice.
+- Only suggest real works you are genuinely confident exist. Mark uncertain details with [verify].
+- The coaching note should be one sentence, direct, and actionable — not vague ("develop further") but specific ("add a direct quote from the text to prove this").
+- Include the short inline citation (Author, Year) for inserting into the text.
+
+Return ONLY valid JSON:
+- howToImprove (string — one concrete coaching sentence for this paragraph)
+- needsReference (boolean — true if this paragraph makes a claim that definitely needs a source)
+- suggestions (array of 2-3 objects): each {
+    formatted (string — full Harvard reference),
+    inlineCitation (string — e.g. "(Shakespeare, 1597)"),
+    relevance (string — one line: how this source backs up what the student wrote),
+    uncertain (boolean)
+  }`;
+
+    return await callQ(
+        system,
+        `HIGHLIGHTED TEXT:\n"${paragraphText.slice(0, 600)}"\n\nSUBJECT: ${subject || 'unknown'}\nKEY CONCEPTS: ${(keyConcepts || []).join(', ')}`,
+        { maxTokens: 900 }
+    );
+}
+
 module.exports = {
     analyseTask, nextQuestion, assembleDocument,
     analyseVoice, tutorBrief, askLeadingQuestion, reframeInVoice, suggestWordSwaps, writeStarter,
-    formatHarvardRef, suggestReferences,
+    formatHarvardRef, suggestReferences, referenceParagraph,
 };

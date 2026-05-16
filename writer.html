@@ -292,6 +292,75 @@
     .setup-cog:hover { color: var(--accent); }
     .setup-cog.hidden { display: none; }
 
+    /* ── Inline reference button (appears on selection) ─────────────────── */
+    .inline-ref-btn {
+      position: fixed; z-index: 210;
+      display: inline-flex; align-items: center; gap: 5px;
+      padding: 5px 12px; border: none; border-radius: 12px;
+      font-family: 'Space Grotesk', sans-serif; font-size: 11px; font-weight: 500;
+      background: var(--bg); color: var(--text); cursor: pointer;
+      box-shadow: var(--neu-raised-sm);
+      transition: color 0.15s;
+    }
+    .inline-ref-btn:hover { color: var(--accent); }
+    .inline-ref-btn.hidden { display: none; }
+
+    /* ── Reference paragraph popup ───────────────────────────────────────── */
+    .ref-para-popup {
+      position: fixed; z-index: 200;
+      background: var(--bg); border-radius: 14px;
+      box-shadow: 10px 10px 28px #ababab, -8px -8px 20px #ffffff;
+      padding: 14px 16px; width: 280px; max-height: 80vh; overflow-y: auto;
+      scrollbar-width: none;
+    }
+    .ref-para-popup::-webkit-scrollbar { display: none; }
+    .ref-para-popup.hidden { display: none; }
+    .ref-para-loading {
+      font-size: 12px; color: var(--text-faint); font-style: italic;
+    }
+    .ref-para-content.hidden { display: none; }
+    .ref-para-improve {
+      font-size: 12px; color: var(--text); line-height: 1.5;
+      background: rgba(233,30,99,0.06); border-radius: 8px;
+      padding: 8px 10px; margin-bottom: 10px;
+      border-left: 2px solid var(--accent);
+    }
+    .ref-para-improve-label {
+      font-size: 10px; font-weight: 600; color: var(--accent);
+      text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 4px;
+    }
+    .ref-para-sug {
+      background: var(--bg); border-radius: 10px;
+      box-shadow: var(--neu-inset-sm);
+      padding: 9px 12px; margin-bottom: 8px;
+      display: flex; flex-direction: column; gap: 4px;
+    }
+    .ref-para-sug .rp-text {
+      font-family: 'Lora', Georgia, serif; font-size: 12px;
+      line-height: 1.5; color: var(--text);
+    }
+    .ref-para-sug .rp-why {
+      font-size: 11px; color: var(--text-faint); font-style: italic;
+    }
+    .ref-para-sug .rp-uncertain {
+      font-size: 10px; color: var(--accent);
+    }
+    .ref-para-sug .rp-row { display: flex; gap: 5px; margin-top: 4px; }
+    .rp-use-btn, .rp-copy-btn {
+      padding: 4px 10px; border: none; border-radius: 10px;
+      font-family: 'Space Grotesk', sans-serif; font-size: 11px;
+      background: var(--bg); color: var(--text); cursor: pointer;
+      box-shadow: var(--neu-raised-xs);
+    }
+    .rp-use-btn:hover, .rp-copy-btn:hover { color: var(--accent); }
+    .rp-close {
+      display: block; width: 100%; padding: 5px; border: none;
+      font-family: 'Space Grotesk', sans-serif; font-size: 11px;
+      color: var(--text-faint); background: transparent; cursor: pointer;
+      text-align: center; margin-top: 4px;
+    }
+    .rp-close:hover { color: var(--text); }
+
     /* ── Word swap popup ─────────────────────────────────────────────────── */
     .word-popup {
       position: fixed; z-index: 200;
@@ -565,6 +634,18 @@
     </div>
     <input class="coach-input" id="coach-input" type="text"
       placeholder="Ask Q…" autocomplete="off" />
+  </div>
+
+  <!-- Inline reference button — appears when text is selected in the doc -->
+  <button class="inline-ref-btn hidden" id="inline-ref-btn" type="button">
+    <svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
+    Reference this?
+  </button>
+
+  <!-- Reference paragraph popup — appears near selection -->
+  <div class="ref-para-popup hidden" id="ref-para-popup">
+    <div class="ref-para-loading" id="ref-para-loading">Q is reading that…</div>
+    <div class="ref-para-content hidden" id="ref-para-content"></div>
   </div>
 
   <!-- Word swap popup -->
@@ -1304,6 +1385,120 @@
     function escHtml(s) {
       return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
     }
+
+    // ── Inline reference button (selection-triggered) ─────────────────────
+    const inlineRefBtn  = document.getElementById('inline-ref-btn');
+    const refParaPopup  = document.getElementById('ref-para-popup');
+    const refParaLoading = document.getElementById('ref-para-loading');
+    const refParaContent = document.getElementById('ref-para-content');
+    let selectedParaText = '';
+    let selectionRange   = null;
+
+    function hideRefParaPopup() {
+      inlineRefBtn.classList.add('hidden');
+      refParaPopup.classList.add('hidden');
+      selectedParaText = '';
+      selectionRange = null;
+    }
+
+    docBody.addEventListener('mouseup', (e) => {
+      setTimeout(() => {
+        const sel = window.getSelection();
+        if (!sel || sel.isCollapsed) { inlineRefBtn.classList.add('hidden'); return; }
+        const text = sel.toString().trim();
+        if (text.length < 20) { inlineRefBtn.classList.add('hidden'); return; }
+        selectedParaText = text;
+        selectionRange = sel.rangeCount ? sel.getRangeAt(0).cloneRange() : null;
+        // Position button just above the selection end
+        const rect = sel.getRangeAt(0).getBoundingClientRect();
+        inlineRefBtn.style.left = Math.min(rect.left, window.innerWidth - 160) + 'px';
+        inlineRefBtn.style.top  = (rect.top - 34 + window.scrollY) + 'px';
+        inlineRefBtn.classList.remove('hidden');
+        // Close the para popup if it was open
+        refParaPopup.classList.add('hidden');
+      }, 10);
+    });
+
+    inlineRefBtn.addEventListener('click', async () => {
+      if (!selectedParaText) return;
+      const rect = inlineRefBtn.getBoundingClientRect();
+      // Position popup below the button
+      refParaPopup.style.left = Math.min(rect.left, window.innerWidth - 300) + 'px';
+      refParaPopup.style.top  = (rect.bottom + 8 + window.scrollY) + 'px';
+      refParaPopup.classList.remove('hidden');
+      refParaLoading.style.display = 'block';
+      refParaContent.classList.add('hidden');
+      refParaContent.innerHTML = '';
+      inlineRefBtn.classList.add('hidden');
+
+      try {
+        const d = await post('/writer/ref-para', {
+          paragraphText: selectedParaText,
+          subject: state.analysis?.subject || '',
+          keyConcepts: state.analysis?.keyConcepts || [],
+        });
+        if (!d.ok) throw new Error(d.error || 'failed');
+
+        refParaLoading.style.display = 'none';
+        refParaContent.classList.remove('hidden');
+
+        // Improvement note
+        if (d.howToImprove) {
+          const imp = document.createElement('div');
+          imp.className = 'ref-para-improve';
+          imp.innerHTML = `<div class="ref-para-improve-label">How to improve</div>${escHtml(d.howToImprove)}`;
+          refParaContent.appendChild(imp);
+        }
+
+        // Reference suggestions
+        (d.suggestions || []).forEach(s => {
+          const card = document.createElement('div');
+          card.className = 'ref-para-sug';
+          card.innerHTML = `
+            <div class="rp-text">${escHtml(s.formatted || '')}</div>
+            <div class="rp-why">${escHtml(s.relevance || '')}</div>
+            ${s.uncertain ? '<div class="rp-uncertain">⚠ Verify details</div>' : ''}
+            <div class="rp-row">
+              <button class="rp-use-btn">Use ${escHtml(s.inlineCitation || '')}</button>
+              <button class="rp-copy-btn">Copy ref</button>
+            </div>`;
+          // Insert inline citation after selection + append full ref to References
+          card.querySelector('.rp-use-btn').addEventListener('click', () => {
+            if (selectionRange) {
+              selectionRange.collapse(false);
+              const inline = document.createTextNode(' ' + (s.inlineCitation || ''));
+              selectionRange.insertNode(inline);
+            }
+            appendRefToDoc(s.formatted || '');
+            hideRefParaPopup();
+          });
+          card.querySelector('.rp-copy-btn').addEventListener('click', function() {
+            navigator.clipboard.writeText(s.formatted || '').catch(() => {});
+            this.textContent = 'Copied!';
+            setTimeout(() => { this.textContent = 'Copy ref'; }, 1500);
+          });
+          refParaContent.appendChild(card);
+        });
+
+        const closeBtn = document.createElement('button');
+        closeBtn.className = 'rp-close';
+        closeBtn.textContent = 'close';
+        closeBtn.addEventListener('click', hideRefParaPopup);
+        refParaContent.appendChild(closeBtn);
+
+      } catch (e) {
+        refParaLoading.style.display = 'none';
+        refParaContent.classList.remove('hidden');
+        refParaContent.innerHTML = '<p style="font-size:12px;color:var(--text-faint)">Couldn\'t get suggestions — try again.</p>';
+      }
+    });
+
+    // Close ref-para popup when clicking outside
+    document.addEventListener('mousedown', (e) => {
+      if (!refParaPopup.contains(e.target) && e.target !== inlineRefBtn) {
+        hideRefParaPopup();
+      }
+    });
 
     // ── Word swap popup ────────────────────────────────────────────────────
     let wordPopupTarget = null;

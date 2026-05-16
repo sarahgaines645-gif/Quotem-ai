@@ -691,6 +691,19 @@ router.post('/writer/refs', requirePerson, express.json({ limit: '64kb' }), asyn
     }
 });
 
+// POST /writer/ref-para — suggest references for a highlighted paragraph
+router.post('/writer/ref-para', requirePerson, express.json({ limit: '32kb' }), async (req, res) => {
+    const { paragraphText, subject, keyConcepts } = req.body || {};
+    if (!paragraphText) return res.status(400).json({ error: 'paragraphText required' });
+    try {
+        const result = await qWriter.referenceParagraph(paragraphText, subject, keyConcepts);
+        res.json({ ok: true, ...result });
+    } catch (e) {
+        console.error('[writer/ref-para]', e.message);
+        res.status(500).json({ error: e.message });
+    }
+});
+
 // POST /writer/starter — Q writes a basic starter sentence when asked; respects word budget
 router.post('/writer/starter', requirePerson, express.json({ limit: '32kb' }), async (req, res) => {
     const { question, context, voiceSignature, relateAnchor, yearGroup, qWordsWritten } = req.body || {};
