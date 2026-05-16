@@ -1285,8 +1285,36 @@ router.post('/api/threads/:id/chat', requirePerson, express.json({ limit: '256kb
     }
     messages.push({ role: 'user', content: message });
 
+    // Photos attached to a thread are first-class — no different to a doc or
+    // email. When she's just added an image (the silent add-ping fires) or her
+    // message refers to one, hand Q the actual pixels so he SEES it, not just
+    // the filename line. Reuses the vision path q-chat.js already has
+    // (options.images → vision model). Non-image turns stay text+tools so the
+    // case-research tooling (web_search, list_threads) keeps working — that's
+    // why this is scoped to add-ping / referential turns, not every turn.
+    const imageFiles = (t.files || []).filter(f => (f.mimeType || '').startsWith('image/'));
+    const isAddPing = /I've just added .+ to the case/i.test(message);
+    const refersToImage = /\b(image|images|photo|photos|picture|pictured|pic|pics|screenshot|scan|scanned|see|look|shows?|attached)\b/i.test(message);
+    const visionImages = [];
+    if (imageFiles.length && (isAddPing || refersToImage)) {
+        for (const f of imageFiles) {
+            try {
+                const file = qThreads.readFile(t.id, f.filename, req.person.email);
+                if (file && file.buffer) {
+                    visionImages.push({
+                        dataUrl: `data:${file.mimeType || 'image/jpeg'};base64,${file.buffer.toString('base64')}`,
+                    });
+                }
+            } catch (e) {
+                console.warn('[threads] could not read image for vision: ' + f.filename + ' — ' + e.message);
+            }
+        }
+    }
+
     try {
-        const result = await qChat(messages, { useTools: true, mode: 'aps', surface: 'thread', person: req.person });
+        const qOpts = { useTools: true, mode: 'aps', surface: 'thread', person: req.person };
+        if (visionImages.length) qOpts.images = visionImages;
+        const result = await qChat(messages, qOpts);
         if (result.error || !result.reply) {
             return res.status(500).json({ error: result.error || 'No reply from Q' });
         }

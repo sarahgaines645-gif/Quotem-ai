@@ -1430,6 +1430,43 @@ function appendCoachLine(cls, text) {
 }
 appendCoachLine('', 'Ask me anything about your calendar or tasks.');
 
+// Q sees this page — same pattern writer.html uses. Every message to Q is
+// prefixed with exactly what's on her calendar right now (real state, not
+// invented), so he works off her actual life instead of asking her to
+// re-type what's already on screen.
+function lifeCatName(slug) {
+  if (!slug) return '';
+  const c = (state.categories || []).find(x => x.slug === slug);
+  return c ? c.name : slug;
+}
+function lifePageContext() {
+  const cats = (state.categories || []).map(c => c.name).filter(Boolean).join(', ');
+  const evs = (state.events || []).map(e => {
+    const cat = lifeCatName(e.category);
+    return `• ${e.date || '(no date)'}${e.time ? ' ' + e.time : ''} — ${e.title || '(untitled)'}`
+      + (e.location ? ` @ ${e.location}` : '')
+      + (cat ? ` [${cat}]` : '');
+  }).join('\n');
+  const tks = (state.tasks || []).map(t => {
+    const cat = lifeCatName(t.category);
+    return `• ${t.done ? '[done] ' : ''}${t.title || '(untitled)'}`
+      + (t.due ? ` (due ${t.due})` : '')
+      + (t.priority ? ` !${t.priority}` : '')
+      + (cat ? ` [${cat}]` : '')
+      + (t.notes ? ` — ${t.notes}` : '');
+  }).join('\n');
+  const prev = (state.preview && (state.preview.events.length || state.preview.tasks.length))
+    ? `\nJust extracted, not yet saved: ${state.preview.events.length} event(s), ${state.preview.tasks.length} task(s).`
+    : '';
+  return `[Q Life — exactly what's on her page right now. This is her real `
+    + `calendar; use it, don't ask her to re-tell you what's already here.]\n`
+    + (cats ? `Categories: ${cats}\n` : '')
+    + `\nCALENDAR — ${(state.events || []).length} event(s):\n${evs || '(none yet)'}\n`
+    + `\nTASKS — ${(state.tasks || []).length}:\n${tks || '(none yet)'}`
+    + prev
+    + `\n[end of page]\n\n`;
+}
+
 coachInput.addEventListener('keydown', async (e) => {
   if (e.key !== 'Enter' || coachBusy) return;
   e.preventDefault();
@@ -1442,7 +1479,7 @@ coachInput.addEventListener('keydown', async (e) => {
   try {
     const r = await fetch('/chat', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ message: text, surface: 'life', reasoningEffort: 'off' }),
+      body: JSON.stringify({ message: lifePageContext() + text, surface: 'life', reasoningEffort: 'off' }),
     });
     const data = await r.json();
     thinking.className = '';
