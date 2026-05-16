@@ -46,6 +46,8 @@ async function callQ(systemPrompt, userPrompt, { maxTokens = 4096 } = {}) {
 async function analyseTask(taskText) {
     const system = `You analyse writing tasks (homework questions, essay briefs, report prompts, letter requirements) and extract structure for a writing coach.
 
+CRITICAL: You MUST return ONLY valid JSON. No explanations, no comments about the length of the input, no preamble. If the input is long, scan it for the core writing task — do not refuse or explain. Just extract and return JSON.
+
 Return ONLY valid JSON with these fields:
 - task (string): a one-sentence plain-English statement of what the user actually has to write
 - docType (string): one of "essay", "report", "letter", "review", "analysis", "creative", "other"
@@ -134,9 +136,11 @@ Return ONLY valid JSON:
 async function tutorBrief(analysis) {
     const system = `You are an expert tutor. Given a task analysis, build your internal model of what the perfect finished piece looks like — the kind of prep a great teacher does before coaching a student.
 
+CRITICAL: Return ONLY valid JSON — no preamble, no explanations, no commentary.
+
 Return ONLY valid JSON:
 - summary (string): 2-sentence plain-English description of what the student needs to produce
-- whatItWants (string): one clear sentence — "This is asking you to [verb] [subject] [with what approach/evidence]"
+- whatItWants (string): one warm, direct sentence spoken to the student — "OK so you need to [verb] [subject] — here's the key thing..."
 - markedSections (array of 2-6 objects): the sections the student needs to write, in order. Each: { name (string), description (string — 1 sentence of what goes in it), suggestFirstQ (string — the natural leading question a real tutor would ask first to get them writing this section) }
 - teachersBrief (string): what an examiner is looking for in a top answer — the secret sauce, in plain language`;
 
