@@ -222,6 +222,10 @@ function getVoicePath(personId) {
     return path.join(Q_DATA_DIR, `q-voice-${safeId(personId)}.json`);
 }
 
+function getDocPath(personId) {
+    return path.join(Q_DATA_DIR, `q-doc-${safeId(personId)}.json`);
+}
+
 module.exports = {
     loadMemory,
     saveMemory,
@@ -231,5 +235,6 @@ module.exports = {
     getCircleSummary,
     getMemoryPath,
     getVoicePath,
+    getDocPath,
     migrateLegacyMemory,
 };

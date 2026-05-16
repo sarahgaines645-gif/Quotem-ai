@@ -43,7 +43,7 @@ const {
 // Boot the scheduler worker as soon as the routes module loads.
 // Idempotent — calling more than once is safe.
 startScheduler();
-const { loadMemory, clearMemory, appendMessage, getRecentMessages, getCircleSummary, getMemoryPath, getVoicePath } = require('./memory');
+const { loadMemory, clearMemory, appendMessage, getRecentMessages, getCircleSummary, getMemoryPath, getVoicePath, getDocPath } = require('./memory');
 const { requirePerson, tryAttachPerson, setSessionCookie, clearSessionCookie } = require('./auth');
 const { listPeople, addPerson, signupPerson, getPerson, getPersonByEmail, removePerson, verifyLogin, changePassword, rotatePassword, createResetToken, consumeResetToken } = require('./people');
 const { sendMail, isConfigured: mailerConfigured } = require('./mailer');
@@ -609,6 +609,32 @@ router.post('/writer/voice', requirePerson, express.json({ limit: '64kb' }), asy
     }
 });
 
+// POST /writer/doc — store the full extracted document text for this person
+router.post('/writer/doc', requirePerson, express.json({ limit: '4mb' }), async (req, res) => {
+    const { text, name } = req.body || {};
+    if (!text) return res.status(400).json({ error: 'text required' });
+    try {
+        const docPath = getDocPath(req.person.id);
+        fs.writeFileSync(docPath, JSON.stringify({ text, name: name || 'document', savedAt: Date.now() }));
+        res.json({ ok: true });
+    } catch (e) {
+        console.error('[writer/doc store]', e.message);
+        res.status(500).json({ error: e.message });
+    }
+});
+
+// GET /writer/doc — load stored document for this person
+router.get('/writer/doc', requirePerson, async (req, res) => {
+    try {
+        const docPath = getDocPath(req.person.id);
+        if (!fs.existsSync(docPath)) return res.json({ ok: true, text: null });
+        const { text, name, savedAt } = JSON.parse(fs.readFileSync(docPath, 'utf8'));
+        res.json({ ok: true, text, name, savedAt });
+    } catch (e) {
+        res.json({ ok: true, text: null });
+    }
+});
+
 // POST /writer/brief — analyse the task and build the tutor's brief (two-step in one call)
 router.post('/writer/brief', requirePerson, express.json({ limit: '512kb' }), async (req, res) => {
     const taskText = (req.body?.taskText || '').toString().trim();
@@ -624,12 +650,21 @@ router.post('/writer/brief', requirePerson, express.json({ limit: '512kb' }), as
 });
 
 // POST /writer/lead — ask the next leading question for the current section
-router.post('/writer/lead', requirePerson, express.json({ limit: '256kb' }), async (req, res) => {
-    const { analysis, brief, history, voiceSignature, relateAnchor, yearGroup, docContext } = req.body || {};
+router.post('/writer/lead', requirePerson, express.json({ limit: '128kb' }), async (req, res) => {
+    const { analysis, brief, history, voiceSignature, relateAnchor, yearGroup } = req.body || {};
     if (!analysis || !brief) return res.status(400).json({ error: 'analysis and brief required' });
     try {
+        // Load the full document from the server-side store
+        let docContext = null;
+        try {
+            const docPath = getDocPath(req.person.id);
+            if (fs.existsSync(docPath)) {
+                const stored = JSON.parse(fs.readFileSync(docPath, 'utf8'));
+                docContext = stored.text || null;
+            }
+        } catch (_) {}
         const result = await qWriter.askLeadingQuestion(
-            analysis, brief, history || [], voiceSignature, relateAnchor, yearGroup, docContext || null
+            analysis, brief, history || [], voiceSignature, relateAnchor, yearGroup, docContext
         );
         res.json({ ok: true, ...result });
     } catch (e) {
