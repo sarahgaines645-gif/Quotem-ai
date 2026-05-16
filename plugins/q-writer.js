@@ -152,7 +152,7 @@ async function askLeadingQuestion(analysis, brief, history, voiceSignature, rela
         ? `The student's voice: "${voiceSignature.voiceSummary}". Formality: ${voiceSignature.formalityLevel}. Match their register exactly.`
         : '';
     const ageHint = yearGroup
-        ? `Year group: ${yearGroup}. Calibrate your language to this age — use vocabulary, references, and examples they'd recognise. Current slang and cultural references are fine if the age warrants it.`
+        ? `Year group: ${yearGroup}. Talk to them in the language of their age — vocabulary, vibe, references they'd actually use. For secondary school years (7-11) that means casual, no jargon, maybe a bit of current slang ("ngl", "lowkey", "that's fire") if it fits — the goal is that they feel comfortable, not lectured at. For 6th form / uni / adult: more direct and intellectual but still human.`
         : '';
     const relateHint = relateAnchor
         ? `The student's world: "${relateAnchor}". Bridge abstract concepts to this where it helps.`
@@ -221,6 +221,58 @@ Return ONLY valid JSON:
     );
 }
 
+async function writeStarter(question, context, voiceSignature, relateAnchor, yearGroup, qWordsWritten) {
+    // If Q has already written too many words into the doc, nudge instead of write.
+    // Rough safe ceiling: ~40 words total Q-authored content in any one session.
+    const tooMuch = (qWordsWritten || 0) >= 40;
+
+    const voiceHint = voiceSignature
+        ? `Student's voice: "${voiceSignature.voiceSummary}". Formality: ${voiceSignature.formalityLevel}. Vocabulary: ${voiceSignature.vocabularyRange}.`
+        : 'Use plain, natural language.';
+    const ageHint = yearGroup
+        ? `Year group: ${yearGroup}. ${yearGroup.startsWith('Year') ? 'Keep it conversational and age-appropriate — use simple, everyday words a student that age would use and feel comfortable with.' : 'Match the level of the year group.'}`
+        : '';
+    const relateHint = relateAnchor
+        ? `Their world: "${relateAnchor}". If a bridge helps them see the point, use it.`
+        : '';
+
+    if (tooMuch) {
+        // Q has written enough — push them to try themselves now
+        const system = `You are a writing tutor. You've already helped this student start a couple of sentences. Now it's their turn — gently redirect them to try writing it themselves.
+
+${voiceHint}
+${ageHint}
+
+Return ONLY valid JSON:
+- starter (string): a warm, encouraging nudge — "You've got this one. Try starting with your exact first thought about [topic] — even one word is a start."
+- tooMuch (boolean): true`;
+
+        return await callQ(system, `QUESTION Q ASKED: "${question}"\n\nDOC SO FAR:\n${(context || '').slice(0, 400) || '(blank)'}`, { maxTokens: 200 });
+    }
+
+    const system = `You are a writing tutor. The student is stuck and has asked you to start them off. Write ONE opening sentence — a seed they can build on.
+
+${voiceHint}
+${ageHint}
+${relateHint}
+
+Rules:
+- ONE sentence. Maximum two.
+- Use simple, everyday words — the student must be able to read it, understand it, and keep going from there.
+- Don't write a polished finished sentence. Leave obvious room for them to add to it.
+- Don't make it sound like an AI wrote it. Keep it short and plain.
+
+Return ONLY valid JSON:
+- starter (string): the one opening sentence
+- tooMuch (boolean): false`;
+
+    return await callQ(
+        system,
+        `Q'S QUESTION: "${question}"\n\nDOC SO FAR:\n${(context || '').slice(0, 400) || '(blank)'}\n\nWrite a basic starter sentence.`,
+        { maxTokens: 250 }
+    );
+}
+
 async function suggestWordSwaps(word, context, voiceSignature) {
     const voiceHint = voiceSignature
         ? `Student's voice: "${voiceSignature.voiceSummary}". Formality: ${voiceSignature.formalityLevel}.`
@@ -242,5 +294,5 @@ Return ONLY valid JSON:
 
 module.exports = {
     analyseTask, nextQuestion, assembleDocument,
-    analyseVoice, tutorBrief, askLeadingQuestion, reframeInVoice, suggestWordSwaps,
+    analyseVoice, tutorBrief, askLeadingQuestion, reframeInVoice, suggestWordSwaps, writeStarter,
 };

@@ -274,6 +274,11 @@
     .coach-card input.coach-input:focus { border-bottom-color: var(--accent); }
     .coach-card input.coach-input::placeholder { color: var(--text-faint); font-style: italic; }
     .coach-card input.coach-input.hidden { display: none; }
+    .q-nudge-btns {
+      display: flex; gap: 5px; flex-wrap: wrap; margin-bottom: 8px;
+    }
+    .q-nudge-btns.hidden { display: none; }
+    .q-nudge-btns .q-btn { font-size: 10px; padding: 4px 8px; }
 
     /* Settings cog to re-open setup */
     .setup-cog {
@@ -423,6 +428,10 @@
     <div class="q-msg" id="coach-msg">Drop your task in above and I'll read it. I'll ask you the questions — you write the answers. Your words, your work.</div>
     <div class="q-hint" id="coach-hint"></div>
     <div class="q-actions hidden" id="coach-actions"></div>
+    <div class="q-nudge-btns hidden" id="coach-nudge">
+      <button class="q-btn" id="btn-start-me">Start me off</button>
+      <button class="q-btn" id="btn-how-put">How could I put this?</button>
+    </div>
     <input class="coach-input" id="coach-input" type="text"
       placeholder="Ask Q…" autocomplete="off" />
   </div>
@@ -450,6 +459,7 @@
       pendingReframe: null, // {reframed, explanation} while [Use it]/[No] visible
       setupDone: false,
       docSnapshot: '',      // doc text at time Q last asked a question
+      qWordsWritten: 0,     // words Q has inserted into the doc this session
     };
 
     // ── Element refs ───────────────────────────────────────────────────────
@@ -461,8 +471,11 @@
     const coachHint = document.getElementById('coach-hint');
     const coachSection = document.getElementById('coach-section');
     const coachActions = document.getElementById('coach-actions');
-    const coachInput = document.getElementById('coach-input');
-    const setupStrip = document.getElementById('setup-strip');
+    const coachInput   = document.getElementById('coach-input');
+    const coachNudge   = document.getElementById('coach-nudge');
+    const btnStartMe   = document.getElementById('btn-start-me');
+    const btnHowPut    = document.getElementById('btn-how-put');
+    const setupStrip   = document.getElementById('setup-strip');
     const setupCog   = document.getElementById('setup-cog');
     const wordPopup  = document.getElementById('word-popup');
     const swapLoading = document.getElementById('swap-loading');
@@ -534,11 +547,13 @@
     });
 
     // ── Coach card rendering ───────────────────────────────────────────────
-    function setCoach({ msg, section, hint, actions, inputVisible, thinking }) {
+    function setCoach({ msg, section, hint, actions, inputVisible, thinking, showNudge }) {
       coachMsg.classList.toggle('thinking', !!thinking);
       coachMsg.textContent = msg || '';
       coachSection.textContent = section || '';
       coachHint.textContent = hint || '';
+
+      coachNudge.classList.toggle('hidden', !showNudge);
 
       if (actions && actions.length) {
         coachActions.classList.remove('hidden');
@@ -630,6 +645,7 @@
           section: d.sectionName || '',
           hint: d.hint || '',
           inputVisible: true,
+          showNudge: true,
         });
         coachInput.placeholder = 'Type your answer…';
         coachInput.focus();
@@ -699,6 +715,99 @@
       }
     });
 
+    // "Start me off" — Q writes a basic opening sentence (tracks word budget)
+    btnStartMe.addEventListener('click', async () => {
+      if (!state.currentQuestion) return;
+      setCoach({ msg: 'Let me start you off…', thinking: true, inputVisible: false });
+      try {
+        const d = await post('/writer/starter', {
+          question: state.currentQuestion,
+          context: (docBody.textContent || '').slice(0, 600),
+          qWordsWritten: state.qWordsWritten,
+          ...voicePayload(),
+        });
+        if (!d.ok) throw new Error(d.error || 'starter failed');
+
+        if (d.tooMuch) {
+          // Q has written enough — nudge them to try
+          setCoach({
+            msg: d.starter,
+            section: 'YOUR TURN',
+            hint: '',
+            inputVisible: true,
+            showNudge: true,
+          });
+          coachInput.placeholder = 'Type your answer…';
+          return;
+        }
+
+        setCoach({
+          msg: '"' + d.starter + '"',
+          section: 'STARTER',
+          hint: 'Q wrote this — build on it in your own words.',
+          actions: [
+            {
+              label: '✓ Use it',
+              primary: true,
+              onClick: () => {
+                insertTextIntoDoc(d.starter, true); // counts against Q word budget
+                state.pendingReframe = null;
+                setCoach({ msg: 'Good — now keep going from there.', inputVisible: true, showNudge: true });
+                coachInput.placeholder = 'Type your answer…';
+              },
+            },
+            {
+              label: '↻ Try another',
+              onClick: () => btnStartMe.click(),
+            },
+          ],
+          inputVisible: false,
+        });
+      } catch (e) {
+        setCoach({ msg: 'Try me again.', inputVisible: true, showNudge: true });
+      }
+    });
+
+    // "How could I put this?" — reframes what they've typed so far
+    btnHowPut.addEventListener('click', async () => {
+      if (!state.currentQuestion) return;
+      const typed = (docBody.textContent || '').trim();
+      const sinceSnapshot = typed.slice(state.docSnapshot.length).trim();
+      if (!sinceSnapshot) {
+        setCoach({
+          msg: 'Type your rough idea first — even one messy sentence — then I\'ll help you say it better.',
+          hint: '',
+          inputVisible: true,
+          showNudge: true,
+        });
+        return;
+      }
+      setCoach({ msg: 'Let me find a better way to say that…', thinking: true, inputVisible: false });
+      try {
+        const d = await post('/writer/reframe', {
+          rawAnswer: sinceSnapshot,
+          question: state.currentQuestion,
+          context: state.docSnapshot.slice(0, 600),
+          ...voicePayload(),
+        });
+        if (!d.ok) throw new Error(d.error);
+        state.pendingReframe = d;
+        setCoach({
+          msg: '"' + d.reframed + '"',
+          section: 'SUGGESTION',
+          hint: d.explanation || '',
+          actions: [
+            { label: '✓ Use it', primary: true, onClick: () => insertReframe(d.reframed) },
+            { label: '↻ Another', onClick: () => btnHowPut.click() },
+            { label: '✗ Keep mine', onClick: () => { state.pendingReframe = null; askNextQuestion(); } },
+          ],
+          inputVisible: false,
+        });
+      } catch (e) {
+        setCoach({ msg: 'Try again.', inputVisible: true, showNudge: true });
+      }
+    });
+
     async function getAnotherReframe(rawAnswer, question) {
       setCoach({ msg: 'Let me try another angle…', thinking: true, inputVisible: false });
       try {
@@ -731,12 +840,15 @@
       }
     }
 
-    function insertReframe(text) {
-      // Append text to the doc body as a new paragraph
+    function insertTextIntoDoc(text, countAsQWords) {
       const current = (docBody.textContent || '').trim();
       const newContent = current ? current + '\n\n' + text : text;
       docBody.textContent = newContent;
       wordEl.textContent = countWords() + ' words';
+      if (countAsQWords) {
+        const added = text.trim().split(/\s+/).filter(Boolean).length;
+        state.qWordsWritten += added;
+      }
       // Move cursor to end
       const range = document.createRange();
       const sel = window.getSelection();
@@ -744,15 +856,16 @@
       range.collapse(false);
       sel.removeAllRanges();
       sel.addRange(range);
+    }
+
+    function insertReframe(text) {
+      insertTextIntoDoc(text, false); // reframes are user's words elevated — don't count against Q budget
       state.pendingReframe = null;
       askNextQuestion();
     }
 
     function insertTextAtEnd(text) {
-      const current = (docBody.textContent || '').trim();
-      const newContent = current ? current + '\n\n' + text : text;
-      docBody.textContent = newContent;
-      wordEl.textContent = countWords() + ' words';
+      insertTextIntoDoc(text, false);
     }
 
     // ── Free chat with Q (existing /chat endpoint) ─────────────────────────

@@ -666,6 +666,20 @@ router.post('/writer/words', requirePerson, express.json({ limit: '32kb' }), asy
     }
 });
 
+// POST /writer/starter — Q writes a basic starter sentence when asked; respects word budget
+router.post('/writer/starter', requirePerson, express.json({ limit: '32kb' }), async (req, res) => {
+    const { question, context, voiceSignature, relateAnchor, yearGroup, qWordsWritten } = req.body || {};
+    try {
+        const result = await qWriter.writeStarter(
+            question || '', context, voiceSignature, relateAnchor, yearGroup, qWordsWritten || 0
+        );
+        res.json({ ok: true, ...result });
+    } catch (e) {
+        console.error('[writer/starter]', e.message);
+        res.status(500).json({ error: e.message });
+    }
+});
+
 // Q's chat API — uses server-side memory by default
 // Body: { message: "..." } (preferred — uses server memory)
 //   OR: { messages: [...] } (legacy — full history sent each time)
