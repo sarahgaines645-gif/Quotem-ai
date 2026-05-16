@@ -921,18 +921,30 @@
         state.analysis = d.analysis;
         state.brief = d.brief;
 
-        // Store the brief summary so it persists into coaching
+        // Store the brief so it persists as a hint throughout coaching
         const b = d.brief;
         state.taskSummary = b.whatItWants || b.summary || '';
         state.teachersBrief = b.teachersBrief || '';
+
+        // Build a readable brief — summary + secret tip + section list
+        const sectionList = (b.markedSections || []).map((s, i) => `${i + 1}. ${s.name} — ${s.description}`).join('\n');
+        const briefMsg = [
+          state.taskSummary,
+          b.teachersBrief ? '\n🔑 ' + b.teachersBrief : '',
+          sectionList ? '\n\nYou\'ll need to cover:\n' + sectionList : '',
+        ].join('');
+
         setCoach({
-          msg: state.taskSummary,
-          section: 'TASK',
-          hint: b.teachersBrief ? '🔑 ' + b.teachersBrief : '',
+          msg: briefMsg,
+          section: 'YOUR TASK',
+          hint: 'Read this carefully — then click when you\'re ready.',
+          actions: [{
+            label: 'I\'m ready — start coaching →',
+            primary: true,
+            onClick: () => askNextQuestion(),
+          }],
           inputVisible: false,
         });
-        // Give them time to read the brief, then start coaching
-        setTimeout(() => askNextQuestion(), 4000);
       } catch (e) {
         setCoach({ msg: 'Couldn\'t read that — try pasting the task as text.' });
       }
