@@ -921,17 +921,18 @@
         state.analysis = d.analysis;
         state.brief = d.brief;
 
-        // Show the tutor brief, then auto-start coaching
+        // Store the brief summary so it persists into coaching
         const b = d.brief;
-        const summaryText = b.whatItWants || b.summary || 'Got it.';
+        state.taskSummary = b.whatItWants || b.summary || '';
+        state.teachersBrief = b.teachersBrief || '';
         setCoach({
-          msg: summaryText,
+          msg: state.taskSummary,
           section: 'TASK',
           hint: b.teachersBrief ? '🔑 ' + b.teachersBrief : '',
           inputVisible: false,
         });
-        // Auto-fire first question after a beat so the student can read the brief
-        setTimeout(() => askNextQuestion(), 1800);
+        // Give them time to read the brief, then start coaching
+        setTimeout(() => askNextQuestion(), 4000);
       } catch (e) {
         setCoach({ msg: 'Couldn\'t read that — try pasting the task as text.' });
       }
@@ -954,10 +955,14 @@
         state.currentSection  = d.sectionName || '';
         state.docSnapshot     = (docBody.textContent || '').trim();
 
+        // Keep the task summary visible as a persistent note under the question
+        const hintParts = [];
+        if (d.hint) hintParts.push(d.hint);
+        if (state.taskSummary) hintParts.push('📋 ' + state.taskSummary);
         setCoach({
           msg: d.question,
           section: d.sectionName || '',
-          hint: d.hint || '',
+          hint: hintParts.join('\n'),
           inputVisible: true,
           showNudge: true,
         });
@@ -1032,11 +1037,11 @@
 
     // "Start me off" — Q writes a basic opening sentence (tracks word budget)
     btnStartMe.addEventListener('click', async () => {
-      if (!state.currentQuestion) return;
+      const activeQuestion = state.currentQuestion || state.currentSection || 'the current section';
       setCoach({ msg: 'Let me start you off…', thinking: true, inputVisible: false });
       try {
         const d = await post('/writer/starter', {
-          question: state.currentQuestion,
+          question: activeQuestion,
           context: (docBody.textContent || '').slice(0, 600),
           qWordsWritten: state.qWordsWritten,
           ...voicePayload(),
@@ -1370,7 +1375,8 @@
     });
 
     btnDontUnderstand.addEventListener('click', async () => {
-      const concept = state.currentSection || state.currentQuestion || 'this topic';
+      // Prefer the full question text (most specific), fall back to section, then subject
+      const concept = state.currentQuestion || state.currentSection || state.analysis?.subject || 'this topic';
       // Position popup near the button
       const btnRect = btnDontUnderstand.getBoundingClientRect();
       explainPopup.style.left = Math.min(btnRect.left, window.innerWidth - 280) + 'px';
