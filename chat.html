@@ -439,8 +439,9 @@
     font-family: inherit; font-size: 15px;
     color: var(--text); background: transparent;
     line-height: 1.5;
-    max-height: 200px; min-height: 24px;
+    max-height: 200px; min-height: 44px;
     padding: 7px 0;
+    overflow: hidden;
   }
   textarea::placeholder { color: var(--text-faint); }
 
@@ -1023,7 +1024,7 @@
   </div>
   <div class="input-wrapper">
     <textarea id="input" rows="1"
-      placeholder="Message Q, drop a PDF / image / .txt, or click the mic..."
+      placeholder="Message Q…"
       spellcheck="true" autocapitalize="sentences" autocorrect="on" autofocus></textarea>
     <span class="voice-status" id="voice-status"><span class="dot"></span><span id="voice-status-text"></span></span>
     <button class="input-btn" id="attach" aria-label="Attach image" title="Attach image (or paste / drag-drop)">
@@ -2089,7 +2090,7 @@ async function send() {
 
   renderMessage('user', displayText, undefined, imagesNow);
   $input.value = '';
-  $input.style.height = 'auto';
+  $input.style.height = '';
   attachedImages = [];
   attachedTexts = [];
   renderAttachments();
