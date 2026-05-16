@@ -1329,8 +1329,8 @@
           });
         }
 
-        // Brief uses first 5000 chars — task question is always at the top
-        const MAX_TASK = 5000;
+        // Brief uses first 12000 chars — Pearson/university briefs bury the task after headers/tables
+        const MAX_TASK = 12000;
         let taskText = sourceState.text || '[image task — Q will use vision]';
         if (taskText.length > MAX_TASK) taskText = taskText.slice(0, MAX_TASK);
         await runBrief(taskText);

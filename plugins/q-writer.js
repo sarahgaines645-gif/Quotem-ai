@@ -44,18 +44,21 @@ async function callQ(systemPrompt, userPrompt, { maxTokens = 4096 } = {}) {
 }
 
 async function analyseTask(taskText) {
-    const system = `You analyse writing tasks (homework questions, essay briefs, report prompts, letter requirements) and extract structure for a writing coach.
+    const system = `You analyse assignment briefs and writing tasks to extract structure for a writing coach.
 
-CRITICAL: You MUST return ONLY valid JSON. No explanations, no comments about the length of the input, no preamble. If the input is long, scan it for the core writing task — do not refuse or explain. Just extract and return JSON.
+The input may be a formatted assessment document — a Pearson/university/college assignment brief with headers, tables, learning outcomes, and marking criteria before the actual task. SCAN THE WHOLE INPUT to find:
+- The actual writing task or assignment question (what the student must produce)
+- The subject area and key concepts they need to address
+- What a top-grade answer looks like vs a low-grade one
+
+CRITICAL: Return ONLY valid JSON — no preamble, no questions, no "I need more info". If you can see ANY assignment content, extract what you can and return JSON. Never ask for more information.
 
 Return ONLY valid JSON with these fields:
-- task (string): a one-sentence plain-English statement of what the user actually has to write
+- task (string): a one-sentence plain-English statement of what the student must write — be specific to THIS assignment
 - docType (string): one of "essay", "report", "letter", "review", "analysis", "creative", "other"
-- subject (string): the subject area (English Literature, History, Business Studies, etc.) — best guess if unclear
-- keyConcepts (array of strings): 3-6 specific concepts/themes/ideas the user will need to engage with
-- gradeBands (object with keys "top", "mid", "low"): one-sentence description of what each grade band of answer looks like for THIS task. Be concrete — what is in a top answer that is missing from a mid answer.
-
-Be specific to the task. No generic advice.`;
+- subject (string): the subject area (e.g. "Strategic HRM", "English Literature", "Business Studies")
+- keyConcepts (array of strings): 3-6 specific concepts/themes from THIS brief the student must address
+- gradeBands (object with keys "top", "mid", "low"): one concrete sentence per band — what distinguishes a top answer from a mid answer for THIS specific task`;
     return await callQ(system, `TASK INPUT:\n${taskText}`, { maxTokens: 800 });
 }
 
