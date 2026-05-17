@@ -2312,5 +2312,46 @@ if (launcherBtn && launcher) {
 }
 </script>
 
+<script>
+// ── Push notification setup ────────────────────────────────────────────────
+// Registers the service worker and subscribes to push so Q can reach you
+// when you're not on the page — reminders, calendar alerts, anything arranged.
+(async function setupPush() {
+  if (!('serviceWorker' in navigator) || !('PushManager' in window)) return;
+  try {
+    const reg = await navigator.serviceWorker.register('/sw.js');
+    // Wait for the SW to be ready before subscribing
+    await navigator.serviceWorker.ready;
+
+    // Check if already subscribed
+    let sub = await reg.pushManager.getSubscription();
+    if (sub) return; // already set up — nothing to do
+
+    // Ask the server for the public VAPID key
+    const keyRes = await fetch('/push/vapid-public-key', { credentials: 'include' });
+    if (!keyRes.ok) return;
+    const { key } = await keyRes.json();
+
+    // Request permission + subscribe (triggers browser permission prompt)
+    sub = await reg.pushManager.subscribe({
+      userVisibleOnly: true,
+      applicationServerKey: key,
+    });
+
+    // Save subscription on the server
+    await fetch('/push/subscribe', {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(sub),
+    });
+    console.log('[Q] push notifications active');
+  } catch (e) {
+    // Permission denied or browser doesn't support — silently ignore
+    if (e.name !== 'NotAllowedError') console.warn('[Q] push setup:', e.message);
+  }
+})();
+</script>
+
 </body>
 </html>

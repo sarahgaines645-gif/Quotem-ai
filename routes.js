@@ -49,6 +49,7 @@ const { listPeople, addPerson, signupPerson, getPerson, getPersonByEmail, remove
 const { sendMail, isConfigured: mailerConfigured } = require('./mailer');
 const { resolveToken: resolveGeneratedDoc, resolveTokenAcrossUsers } = require('./plugins/doc-creator');
 const { summarise: summariseCosts, getLogPath: costLogPath } = require('./cost-tracker');
+const qPush = require('./plugins/q-push');
 
 // ── Auth: login + logout ────────────────────────────────────────────────────
 
@@ -843,6 +844,37 @@ router.post('/writer/starter', requirePerson, express.json({ limit: '32kb' }), a
         console.error('[writer/starter]', e.message);
         res.status(500).json({ error: e.message });
     }
+});
+
+// ── Push notification routes ────────────────────────────────────────────────
+
+// GET /push/vapid-public-key — return the public VAPID key so the client can
+// subscribe. Auth required: only signed-in users should set up push.
+router.get('/push/vapid-public-key', requirePerson, (req, res) => {
+    try {
+        res.json({ key: qPush.getPublicKey() });
+    } catch (e) {
+        console.error('[push/vapid]', e.message);
+        res.status(500).json({ error: e.message });
+    }
+});
+
+// POST /push/subscribe — save a push subscription for the current user
+router.post('/push/subscribe', requirePerson, express.json({ limit: '4kb' }), (req, res) => {
+    try {
+        qPush.saveSubscription(req.person.email, req.body);
+        res.json({ ok: true });
+    } catch (e) {
+        console.error('[push/subscribe]', e.message);
+        res.status(500).json({ error: e.message });
+    }
+});
+
+// DELETE /push/subscribe — remove a subscription (e.g. when user revokes permission)
+router.delete('/push/subscribe', requirePerson, express.json({ limit: '4kb' }), (req, res) => {
+    const endpoint = (req.body || {}).endpoint;
+    if (endpoint) qPush.removeSubscription(req.person.email, endpoint);
+    res.json({ ok: true });
 });
 
 // Q's chat API — uses server-side memory by default

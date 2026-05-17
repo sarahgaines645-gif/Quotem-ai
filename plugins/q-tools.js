@@ -546,6 +546,23 @@ const TOOL_DEFINITIONS = [
             },
         },
     },
+    // ── Push notifications ────────────────────────────────────────
+    {
+        type: 'function',
+        function: {
+            name: 'send_notification',
+            description: "Send a push notification to the user's phone or browser. Use this to remind them of something, alert them to a calendar event or deadline, follow up on something they asked you to track, or send any message they want to receive when they're not looking at the screen. Only send if the user has explicitly asked for a reminder or notification, or if you're acting on a scheduled reminder you set up.",
+            parameters: {
+                type: 'object',
+                properties: {
+                    title: { type: 'string', description: 'Short notification title — like a subject line. Keep it under 60 chars.' },
+                    body:  { type: 'string', description: 'Notification message body. Can be slightly longer — 1-2 sentences max.' },
+                    url:   { type: 'string', description: 'Optional URL to open when the notification is tapped. Defaults to / (main chat). Use /life for calendar/task reminders, /finance for bill reminders, etc.' },
+                },
+                required: ['title', 'body'],
+            },
+        },
+    },
     // ── Life admin: calendar + tasks ──────────────────────────────
     {
         type: 'function',
@@ -867,6 +884,7 @@ async function executeTool(name, argsRaw, personId, personEmail) {
         case 'add_note_to_thread':   return addNoteToThreadTool(args, personEmail);
         case 'read_finance':         return readFinanceTool(personEmail);
         case 'add_finance_problem':  return addFinanceProblemTool(args, personEmail);
+        case 'send_notification':    return await sendNotificationTool(args, personEmail);
         // Life — calendar + tasks
         case 'add_event':            return addEventTool(args, personEmail);
         case 'list_events':          return listEventsTool(args, personEmail);
@@ -1235,6 +1253,33 @@ function addFinanceProblemTool({ title, provider, amount, dueDate, type, urgency
     }
 }
 
+async function sendNotificationTool({ title, body, url } = {}, personEmail) {
+    if (!personEmail) return { error: 'Cannot send a notification without a signed-in user.' };
+    if (!title) return { error: 'title is required' };
+    try {
+        const qPush = require('./q-push');
+        const result = await qPush.pushToUser(personEmail, {
+            title: String(title).slice(0, 100),
+            body:  String(body || '').slice(0, 200),
+            url:   String(url || '/'),
+        });
+        if (result.sent === 0 && result.failed === 0) {
+            return {
+                ok: false,
+                instruction_for_q: "No push subscriptions found for this user — they haven't granted notification permission yet, or they're on a browser/device that hasn't registered. Tell them to allow notifications (the bell icon in their browser) so you can reach them.",
+            };
+        }
+        return {
+            ok: true,
+            sent: result.sent,
+            instruction_for_q: `Notification sent (${result.sent} device${result.sent !== 1 ? 's' : ''}). Tell the user their phone/browser should ping shortly.`,
+        };
+    } catch (e) {
+        console.warn('[send_notification] error:', e.message);
+        return { error: 'Could not send notification: ' + e.message };
+    }
+}
+
 // ── Life — calendar + tasks ─────────────────────────────────────────────
 
 function addEventTool({ title, date, time, location, notes, category } = {}, personEmail) {
@@ -1392,6 +1437,7 @@ const ALWAYS_ON = new Set([
     // Finance tools — always available so Q can read and update the finance
     // data store from any page, not just when on /finance.
     'read_finance', 'add_finance_problem',
+    'send_notification',
     // Life tools (add_event / list_events / add_task / list_tasks /
     // complete_task / update_life_context) are trigger-gated below — only
     // attached when the user's message clearly asks for them. Keeping them

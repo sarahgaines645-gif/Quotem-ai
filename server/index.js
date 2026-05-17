@@ -164,6 +164,12 @@ app.use('/widgets', express.static(path.join(ROOT, 'widgets')));
 // tags continue to resolve (trace-widget.js, looking-glass-widget.js).
 app.get('/trace-widget.js', (req, res) => res.sendFile(path.join(ROOT, 'trace-widget.js')));
 app.get('/looking-glass-widget.js', (req, res) => res.sendFile(path.join(ROOT, 'looking-glass-widget.js')));
+app.get('/sw.js', (req, res) => {
+    // Service worker must not be cached — browser needs the latest version every load.
+    res.setHeader('Cache-Control', 'no-store, must-revalidate');
+    res.setHeader('Content-Type', 'application/javascript');
+    res.sendFile(path.join(ROOT, 'sw.js'));
+});
 app.get('/q-auth.js', (req, res) => {
     res.setHeader('Cache-Control', 'no-store, must-revalidate');
     res.sendFile(path.join(ROOT, 'q-auth.js'));
@@ -214,6 +220,7 @@ const PUBLIC_PATHS = new Set([
     '/favicon.svg', '/favicon.ico',
     '/favicon-180.png', '/favicon-192.png', '/favicon-512.png',
     '/manifest.webmanifest',
+    '/sw.js',                // service worker must be public — browser fetches it pre-auth
     '/trace-widget.js', '/looking-glass-widget.js',
     '/login', '/signup', '/logout',
     '/forgot-password', '/reset-password',
