@@ -1271,7 +1271,7 @@
       ? `[Finance context — spend £${fmt(graphData.summary.total_spend)}, income £${fmt(graphData.summary.total_income)}, net £${fmt(graphData.summary.net)}, ${graphData.summary.transaction_count} transactions. Top: ${Object.entries(graphData.by_category||{}).slice(0,4).map(([k,v])=>`${k} £${fmt(v)}`).join(', ')}. Open problems: ${problems.length}.]\n\n`
       : '';
 
-    const r = await apiFetch('/api/chat', {
+    const r = await apiFetch('/chat', {
       method: 'POST',
       body: {
         message: finContext + userMsg,

@@ -501,7 +501,7 @@ async function showChatCard() {
   $chatTyping.classList.add('show');
   try {
     const kickoff = `[EMAIL TO HANDLE]\n${currentText || ''}\n\n---\nOpen this in Phase 1. Run the research sweep first (web_search for rules, deadlines, recent ombudsman rulings, similar cases), then give me the diagnosis: what's happening, why I'm right, the rules in my favour, the gaps in the facts, what they're likely to come back with. Ask me ONE question to fill the most important gap. NO DRAFTING — Phase 1 is diagnosis only. Use 'I've' not 'I could'.`;
-    const res = await apiFetch('/api/chat', {
+    const res = await apiFetch('/chat', {
       method: 'POST',
       body: { message: kickoff, surface: 'email-writer' },
     });
@@ -601,7 +601,7 @@ async function sendChatMessage() {
   $chatTyping.classList.add('show');
 
   try {
-    const res = await apiFetch('/api/chat', {
+    const res = await apiFetch('/chat', {
       method: 'POST',
       body: { message: text, surface: 'email-writer' },
     });
@@ -642,7 +642,7 @@ $apsBtn.addEventListener('click', async () => {
   $apsStatus.innerHTML = '<span class="dot"></span>Q is reading it properly…';
   try {
     const apsMsg = `[EMAIL TO HANDLE]\n${currentText.trim()}\n\n---\nI've been sent this email and I don't know how to deal with it. Can you read it, work out what's actually going on, and tell me what to do? Find the angle if there is one — what they're not telling me, what I might have missed, deadlines I should know about, anything in their small print that helps me. Then give me a step-by-step plan.`;
-    const res = await apiFetch('/api/chat', {
+    const res = await apiFetch('/chat', {
       method: 'POST',
       body: { message: apsMsg, surface: 'email-writer', mode: 'aps' },
     });
