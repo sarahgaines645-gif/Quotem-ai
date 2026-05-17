@@ -25,14 +25,22 @@ const { Q_CONFIG }       = require('../config');
 const { userDataPath }   = require('./user-data');
 const { cleanModelOutput } = require('./cjk-filter');
 
-// Together-compatible OpenAI client (same as rest of quotem-ai)
-let _client = null;
-function client() {
-    if (!_client) {
-        const OpenAI = require('openai');
-        _client = new OpenAI({ apiKey: Q_CONFIG.apiKey, baseURL: Q_CONFIG.baseURL });
+// Call Together AI via plain fetch — same pattern as q-email-writer.js
+async function togetherChat({ model, messages, temperature = 0, max_tokens = 4000 }) {
+    const res = await fetch(`${Q_CONFIG.baseURL}/chat/completions`, {
+        method: 'POST',
+        headers: {
+            'Authorization': `Bearer ${Q_CONFIG.apiKey}`,
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ model, messages, temperature, max_tokens }),
+    });
+    if (!res.ok) {
+        const err = await res.text();
+        throw new Error(`Together AI ${res.status}: ${err.slice(0, 300)}`);
     }
-    return _client;
+    const json = await res.json();
+    return json.choices?.[0]?.message?.content || '';
 }
 
 // ── File helpers ──────────────────────────────────────────────────
@@ -105,16 +113,14 @@ Rules:
 - Return ONLY a JSON array. No markdown, no commentary.`;
 
 async function parseStatementText(rawText) {
-    const resp = await client().chat.completions.create({
-        model:       Q_CONFIG.fastModel,
-        temperature: 0,
-        max_tokens:  8000,
+    const raw = cleanModelOutput(await togetherChat({
+        model:      Q_CONFIG.fastModel,
+        max_tokens: 8000,
         messages: [
-            { role: 'system',  content: PARSE_SYSTEM },
-            { role: 'user',    content: rawText.slice(0, 40000) },
+            { role: 'system', content: PARSE_SYSTEM },
+            { role: 'user',   content: rawText.slice(0, 40000) },
         ],
-    });
-    const raw = cleanModelOutput(resp.choices[0]?.message?.content || '');
+    }));
     try {
         const m = raw.match(/\[[\s\S]*\]/);
         return m ? JSON.parse(m[0]) : [];
@@ -157,16 +163,14 @@ async function categoriseTransactions(transactions) {
         amount:      t.amount,
     }));
 
-    const resp = await client().chat.completions.create({
-        model:       Q_CONFIG.fastModel,
-        temperature: 0,
-        max_tokens:  6000,
+    const raw = cleanModelOutput(await togetherChat({
+        model:      Q_CONFIG.fastModel,
+        max_tokens: 6000,
         messages: [
             { role: 'system', content: CATEGORISE_SYSTEM },
             { role: 'user',   content: JSON.stringify(input) },
         ],
-    });
-    const raw = cleanModelOutput(resp.choices[0]?.message?.content || '');
+    }));
     let categories = [];
     try {
         const m = raw.match(/\[[\s\S]*\]/);
@@ -244,10 +248,9 @@ Return STRICT JSON only — no markdown fences:
 If you cannot read the document, return { "error": "Cannot read document" }.`;
 
 async function extractDocument(imageBase64, mimeType = 'image/jpeg') {
-    const resp = await client().chat.completions.create({
-        model:       Q_CONFIG.visionModel,
-        temperature: 0,
-        max_tokens:  1000,
+    const raw = cleanModelOutput(await togetherChat({
+        model:      Q_CONFIG.visionModel,
+        max_tokens: 1000,
         messages: [{
             role: 'user',
             content: [
@@ -255,9 +258,7 @@ async function extractDocument(imageBase64, mimeType = 'image/jpeg') {
                 { type: 'image_url', image_url: { url: `data:${mimeType};base64,${imageBase64}` } },
             ],
         }],
-        stream: false,
-    });
-    const raw = cleanModelOutput(resp.choices[0]?.message?.content || '');
+    }));
     try {
         const m = raw.match(/\{[\s\S]*\}/);
         return m ? JSON.parse(m[0]) : { error: 'Parse failed' };
@@ -439,17 +440,15 @@ async function getAdvice(email) {
         merchant_labels:     Object.entries(assignments).slice(0, 20).map(([k, v]) => ({ key: k, label: v.label })),
     };
 
-    const resp = await client().chat.completions.create({
-        model:       Q_CONFIG.model, // V4 Pro — this is the important one
+    return cleanModelOutput(await togetherChat({
+        model:       Q_CONFIG.model,
         temperature: 0.3,
         max_tokens:  2000,
         messages: [
             { role: 'system', content: ADVICE_SYSTEM },
             { role: 'user',   content: `Here is my financial data:\n\n${JSON.stringify(context, null, 2)}\n\nGive me your honest assessment.` },
         ],
-    });
-
-    return cleanModelOutput(resp.choices[0]?.message?.content || 'No advice generated.');
+    })) || 'No advice generated.';
 }
 
 
