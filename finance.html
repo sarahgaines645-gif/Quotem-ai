@@ -1054,7 +1054,7 @@
       showUploadProgress('uz-statement', false);
       if (!r.ok) {
         const err = await r.json().catch(() => ({}));
-        showUploadResult('uz-statement', 'Could not read PDF — try exporting as CSV from your banking app', 'err');
+        showUploadResult('uz-statement', err.error || 'Import failed — please try again', 'err');
         return;
       }
       const result = await r.json();

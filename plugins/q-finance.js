@@ -260,22 +260,7 @@ Rules:
 - Return ONLY the CSV. No explanation, no markdown.`;
 
 async function importStatementFromImage(email, imageBase64, mimeType = 'application/pdf') {
-    // PDFs: extract text with pdf-parse (better than vision for text-based bank PDFs)
-    if (mimeType === 'application/pdf' || mimeType === 'application/octet-stream') {
-        try {
-            const pdfParse = require('pdf-parse');
-            const buffer = Buffer.from(imageBase64, 'base64');
-            const parsed = await pdfParse(buffer);
-            const text = (parsed.text || '').trim();
-            if (text.length < 20) return { added: 0, total: 0 };
-            return importStatement(email, text);
-        } catch (pdfErr) {
-            console.error('[finance] pdf-parse failed:', pdfErr.message);
-            return { added: 0, total: 0, hint: 'Could not read PDF text — try exporting as CSV from your banking app' };
-        }
-    }
-
-    // Images (camera photo, JPEG/PNG from phone) — use vision model
+    const dataUrl = `data:${mimeType};base64,${imageBase64}`;
     const raw = cleanModelOutput(await togetherChat({
         model:      Q_CONFIG.visionModel,
         max_tokens: 8000,
@@ -283,7 +268,7 @@ async function importStatementFromImage(email, imageBase64, mimeType = 'applicat
             role: 'user',
             content: [
                 { type: 'text',      text: STATEMENT_IMAGE_PROMPT },
-                { type: 'image_url', image_url: { url: `data:${mimeType};base64,${imageBase64}` } },
+                { type: 'image_url', image_url: { url: dataUrl } },
             ],
         }],
     }));
