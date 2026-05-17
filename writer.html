@@ -568,8 +568,8 @@
 
     /* ── Brief Board (Q's whiteboard) ──────────────────────────────────── */
     .brief-board {
-      position: fixed; left: 50%; top: 88px; transform: translateX(-50%);
-      width: min(540px, calc(100vw - 32px)); max-height: 220px;
+      position: fixed; right: 28px; top: 14px;
+      width: 300px; max-height: 220px;
       background: var(--bg); border-radius: 18px;
       box-shadow: 10px 10px 28px #ababab, -8px -8px 20px #ffffff;
       display: flex; flex-direction: column; z-index: 101;
@@ -577,7 +577,7 @@
     }
     .brief-board.hidden { display: none; }
     .brief-board.minimised { max-height: 40px; }
-    .brief-board.dragged { transform: none; }
+    .brief-board.dragged { right: auto; transform: none; }
     .brief-board-head {
       display: flex; align-items: center; gap: 8px;
       padding: 9px 14px 7px; flex-shrink: 0;
@@ -595,17 +595,13 @@
     }
     .brief-board-head:hover .brief-board-tog { color: var(--text); }
     .brief-board-body {
-      padding: 0 16px 12px; overflow-y: auto;
+      padding: 0 14px 12px; overflow-y: auto;
       scrollbar-width: none; -ms-overflow-style: none;
       font-family: 'Space Grotesk', sans-serif;
       font-size: 12px; color: var(--text); line-height: 1.5;
-      display: grid; grid-template-columns: 1fr 1fr; gap: 0 20px;
     }
     .brief-board-body::-webkit-scrollbar { display: none; }
-    /* left column: what it is + asks */
-    .brief-col-left { grid-column: 1; }
-    /* right column: producing + grades */
-    .brief-col-right { grid-column: 2; padding-top: 1px; }
+    .brief-board.board-mode { width: 320px; }
     .brief-doctype {
       font-size: 13px; font-weight: 700; color: var(--text);
       margin-bottom: 6px; line-height: 1.3;
@@ -664,9 +660,7 @@
       .doc-title { font-size: 22px; }
       .doc-body { font-size: 15px; line-height: 28px; }
       .coach-card { right: 10px; top: auto; bottom: 14px; transform: none; width: 180px; }
-      .brief-board { width: calc(100vw - 20px); top: 70px; max-height: 200px; }
-      .brief-board-body { grid-template-columns: 1fr; }
-      .brief-col-right { grid-column: 1; }
+      .brief-board { right: 10px; top: 10px; width: 200px; max-height: 50vh; }
       .setup-strip { padding: 14px 16px; }
     }
   </style>
@@ -1135,7 +1129,7 @@
         <div class="brief-producing-text">${esc(producing)}</div>
         ${gradeHtml}`;
 
-      body.innerHTML = `<div class="brief-col-left">${leftHtml}</div><div class="brief-col-right">${rightHtml}</div>`;
+      body.innerHTML = leftHtml + rightHtml;
       board.classList.remove('hidden');
     }
 
