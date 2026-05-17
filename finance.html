@@ -52,15 +52,12 @@
       margin-bottom: 20px;
     }
     .upload-zone {
-      border-radius: 14px; padding: 18px 20px;
+      border-radius: 14px; padding: 16px 18px;
       background: var(--bg); box-shadow: var(--neu-inset-sm);
-      cursor: pointer; transition: box-shadow 0.15s;
       display: flex; flex-direction: column; align-items: center;
-      gap: 8px; text-align: center; min-height: 90px; justify-content: center;
-      position: relative; overflow: hidden;
+      gap: 10px; text-align: center;
     }
     .upload-zone.drag-over { box-shadow: var(--neu-inset), 0 0 0 2px var(--accent); }
-    .upload-zone input[type=file] { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
     .upload-zone .uz-icon { font-size: 24px; line-height: 1; }
     .upload-zone .uz-title { font-size: 13px; font-weight: 600; color: var(--text); }
     .upload-zone .uz-sub   { font-size: 11px; color: var(--text-muted); }
@@ -68,14 +65,23 @@
     .upload-zone.loading .uz-progress { display: block; }
     .upload-zone.loading .uz-icon,
     .upload-zone.loading .uz-title,
-    .upload-zone.loading .uz-sub { opacity: 0.4; }
+    .upload-zone.loading .uz-sub,
+    .upload-zone.loading .uz-btns { opacity: 0.4; pointer-events: none; }
 
-    /* Paste-text modal trigger */
-    .paste-btn {
-      border: none; background: transparent; cursor: pointer;
-      font-family: inherit; font-size: 11px; color: var(--accent);
-      text-decoration: underline; padding: 0; margin-top: 2px;
+    /* Two action buttons inside each zone */
+    .uz-btns { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; }
+    .uz-btn {
+      display: inline-flex; align-items: center; gap: 5px;
+      padding: 7px 14px; border: none; border-radius: 20px;
+      font-family: 'Space Grotesk', sans-serif; font-size: 12px; font-weight: 600;
+      cursor: pointer; background: var(--bg); color: var(--text);
+      box-shadow: var(--neu-raised-xs); transition: box-shadow 0.15s;
+      position: relative;
     }
+    .uz-btn:hover { box-shadow: var(--neu-raised-sm); }
+    .uz-btn:active { box-shadow: var(--neu-inset-xs); }
+    .uz-btn input[type=file] { position: absolute; inset: 0; opacity: 0; cursor: pointer; font-size: 0; }
+    .uz-btn.qr { color: var(--accent); }
 
     /* ── Summary bar ── */
     .summary-bar {
@@ -366,19 +372,32 @@
 
   <!-- UPLOAD STRIP -->
   <div class="upload-strip">
-    <div class="upload-zone" id="uz-statement" tabindex="0">
+    <div class="upload-zone" id="uz-statement">
       <div class="uz-icon">🏦</div>
-      <div class="uz-title">Drop your bank statement</div>
-      <div class="uz-sub">CSV or PDF • or <button class="paste-btn" id="paste-btn" type="button">paste text</button> • or <button class="paste-btn" id="qr-statement-btn" type="button">📱 scan from phone</button></div>
+      <div class="uz-title">Bank statement</div>
+      <div class="uz-sub">Drag a CSV or PDF here, or use a button below</div>
+      <div class="uz-btns">
+        <button class="uz-btn" type="button">
+          📁 Choose file
+          <input type="file" id="file-statement" accept=".csv,.pdf,.txt" />
+        </button>
+        <button class="uz-btn" type="button" id="paste-btn">✏️ Paste text</button>
+        <button class="uz-btn qr" type="button" id="qr-statement-btn">📱 Scan from phone</button>
+      </div>
       <div class="uz-progress">Q is reading your statement…</div>
-      <input type="file" id="file-statement" accept=".csv,.pdf,.txt" />
     </div>
-    <div class="upload-zone" id="uz-doc" tabindex="0">
+    <div class="upload-zone" id="uz-doc">
       <div class="uz-icon">📄</div>
-      <div class="uz-title">Drop a bill or debt letter</div>
-      <div class="uz-sub">Photo, PDF, or any document • or <button class="paste-btn" id="qr-doc-btn" type="button">📱 scan from phone</button></div>
+      <div class="uz-title">Bill or debt letter</div>
+      <div class="uz-sub">Drag a photo or PDF here, or use a button below</div>
+      <div class="uz-btns">
+        <button class="uz-btn" type="button">
+          📁 Choose file
+          <input type="file" id="file-doc" accept="image/*,.pdf" />
+        </button>
+        <button class="uz-btn qr" type="button" id="qr-doc-btn">📱 Scan from phone</button>
+      </div>
       <div class="uz-progress">Q is reading the document…</div>
-      <input type="file" id="file-doc" accept="image/*,.pdf" />
     </div>
   </div>
 
