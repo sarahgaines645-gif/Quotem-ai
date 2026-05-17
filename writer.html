@@ -630,6 +630,33 @@
     .brief-grade-chip.mid { background: rgba(255,165,0,0.12);  color: #e6a817; }
     .brief-grade-chip.low { background: rgba(220,53,69,0.10);  color: #dc3545; }
 
+    /* ── Teaching board (board mode replaces brief content) ────────────── */
+    .brief-board.board-mode { max-height: calc(74vh - 20px); }
+    .board-doctype {
+      font-size: 10px; font-weight: 700; color: var(--text-muted);
+      text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 8px;
+    }
+    .board-items { display: flex; flex-direction: column; gap: 8px; }
+    .board-item {
+      display: grid; grid-template-columns: 26px 1fr; gap: 6px; align-items: start;
+    }
+    .board-item.board-item-note { grid-template-columns: 1fr; }
+    .board-label {
+      font-size: 10px; font-weight: 700; color: #e91e63;
+      margin-top: 3px; line-height: 1;
+    }
+    .board-ans-label { color: #00b894; }
+    .board-qtext {
+      font-size: 14px; font-weight: 600; color: var(--text); line-height: 1.45;
+    }
+    .board-atext {
+      font-size: 14px; color: #00b894; line-height: 1.45; font-style: italic;
+    }
+    .board-note {
+      font-size: 11px; color: #b59a40; font-style: italic; line-height: 1.4;
+      padding-left: 32px;
+    }
+
     /* Mobile */
     @media (max-width: 600px) {
       .paper { padding: 48px 28px 64px; min-height: 700px; }
@@ -1112,6 +1139,46 @@
       board.classList.remove('hidden');
     }
 
+    // Shared HTML-escape helper
+    const escHtml = s => (s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+
+    // Switch the brief board from "summary" mode to "teaching board" mode.
+    // Called on the first coaching question — brief summary collapses to a
+    // single doc-type header and the board items list takes over below it.
+    function switchToBoardMode() {
+      const board = document.getElementById('brief-board');
+      const body  = document.getElementById('brief-board-body');
+      const badge = document.getElementById('brief-board-badge');
+      if (board.classList.contains('board-mode')) return; // already switched
+      badge.textContent = '📝 Teaching Board';
+      const docType = (state.brief && state.brief.documentType) || 'Your Assignment';
+      body.innerHTML = `<div class="board-doctype">${escHtml(docType)}</div>
+        <div class="board-items" id="board-items"></div>`;
+      board.classList.add('board-mode');
+      board.classList.remove('minimised');
+    }
+
+    // Append a question, answer, or note item to the teaching board.
+    // Switches to board mode on first call.
+    function appendBoardItem({ type, label, text }) {
+      switchToBoardMode();
+      const itemsEl = document.getElementById('board-items');
+      if (!itemsEl || !text) return;
+      const div = document.createElement('div');
+      div.className = 'board-item board-item-' + type;
+      if (type === 'question') {
+        div.innerHTML = `<span class="board-label">${escHtml(label || 'Q')}</span>
+          <span class="board-qtext">${escHtml(text)}</span>`;
+      } else if (type === 'answer') {
+        div.innerHTML = `<span class="board-label board-ans-label">→</span>
+          <span class="board-atext">${escHtml(text)}</span>`;
+      } else if (type === 'note') {
+        div.innerHTML = `<span class="board-note">${escHtml(text)}</span>`;
+      }
+      itemsEl.appendChild(div);
+      div.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+
     // Show the prerequisites check in the coach card after brief is built.
     // Prereqs come from the brief JSON (things to do before writing starts).
     // "Yes, let's go" kicks off the first coaching question.
@@ -1172,11 +1239,16 @@
       setCoach({ msg: 'Thinking…', thinking: true, inputVisible: false });
 
       try {
+        const qNum = state.coachHistory.length + 1;
         const histBlock = state.coachHistory.length
           ? 'Coaching so far:\n' + state.coachHistory.map((h, i) => `Q${i + 1}: ${h.question}\nA${i + 1}: ${h.answer}`).join('\n\n') + '\n\n'
           : '';
+        // Inject ideal answer into context so Q knows what he's coaching toward
+        const idealBlock = state.brief && state.brief.idealAnswer
+          ? `[Target: the ideal answer is — ${state.brief.idealAnswer}]\n\n`
+          : '';
         const reply = await qWriterChat(
-          histBlock + 'Ask me the next leading question for the next section that still needs work. One question, in your own warm voice. Don\'t repeat anything I\'ve already answered.',
+          idealBlock + histBlock + 'Ask the next discovery question — one question, your own warm voice. Don\'t repeat anything already answered.',
           12000
         );
         const { prose, data } = parseQBlock(reply, 'writer-question');
@@ -1187,14 +1259,18 @@
         state.currentSection  = (data && data.sectionName) || '';
         state.docSnapshot     = (docBody.textContent || '').trim();
 
-        // Keep the task summary visible as a persistent note under the question
-        const hintParts = [];
-        if (data && data.hint) hintParts.push(data.hint);
-        if (state.taskSummary) hintParts.push('📋 ' + state.taskSummary);
+        // Write full question to the teaching board
+        const label = 'Q' + qNum;
+        appendBoardItem({ type: 'question', label, text: question });
+        if (data && data.hint) {
+          appendBoardItem({ type: 'note', text: data.hint });
+        }
+
+        // Chat stays SHORT — just orient them toward the board
+        const chatMsg = prose && prose.length < 120 ? prose : label + ' is on the board — have a read.';
         setCoach({
-          msg: question,
-          section: state.currentSection,
-          hint: hintParts.join('\n'),
+          msg: chatMsg,
+          section: state.currentSection || '',
           inputVisible: true,
           showNudge: true,
         });
@@ -1202,7 +1278,7 @@
         coachInput.focus();
         saveTutor({ currentSection: state.currentSection, lastQuestion: question });
       } catch (e) {
-        setCoach({ msg: 'Try me again — type your answer below or ask anything.' });
+        setCoach({ msg: 'Try me again.' });
       }
     }
 
@@ -1218,6 +1294,10 @@
         const rawAnswer     = text;
         const currentQ      = state.currentQuestion;
         const currentSection = state.currentSection;
+
+        // Write student's answer to the teaching board in teal
+        appendBoardItem({ type: 'answer', text: rawAnswer });
+
         state.coachHistory.push({ question: currentQ, answer: rawAnswer });
         state.currentQuestion = '';
 
