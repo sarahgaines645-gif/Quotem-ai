@@ -24,6 +24,7 @@ const fs = require('fs');
 const path = require('path');
 const { Q_CONFIG } = require('../config');
 const { addFact, searchFacts, listFacts } = require('../facts');
+const { getTutorPath } = require('../memory');
 const { createDocx, stashFile } = require('./doc-creator');
 const { cleanModelOutput } = require('./cjk-filter');
 const docEditor = require('./q-doc-editor');
@@ -192,6 +193,17 @@ const TOOL_DEFINITIONS = [
                         maximum: 50,
                     },
                 },
+            },
+        },
+    },
+    {
+        type: 'function',
+        function: {
+            name: 'recall_tutor',
+            description: 'Look up your tutoring notebook for this person — the assignment you are coaching them on, the brief you built, which section they are on, and the last thing they were stuck on. This is a SEPARATE notebook from your everyday memory: it is your work as their tutor. Use it when the user asks about their essay / assignment / coursework / dissertation / homework / "the writer" / "my tutor", or "what was that question I was stuck on?" — especially when they ask from somewhere other than the writer page, where you would not otherwise see the tutoring thread.',
+            parameters: {
+                type: 'object',
+                properties: {},
             },
         },
     },
@@ -804,6 +816,7 @@ async function executeTool(name, argsRaw, personId, personEmail) {
         case 'create_document':  return await createDocument(args, personEmail);
         case 'remember':         return remember(args, personId);
         case 'recall':           return recall(args, personId);
+        case 'recall_tutor':     return recallTutor(personId);
         // Doc-editor tools — operate on the user's current uploaded doc
         case 'read_doc':          return docEditTool(personId, () => docEditor.readDoc(getDoc(personId)), { keepBytes: true });
         case 'replace_text':      return docEditTool(personId, (b) => docEditor.replaceText(b, args.target, args.replacement, args.paragraph_index ?? null));
@@ -1247,6 +1260,33 @@ function recall({ query = '', limit = 10 } = {}, personId) {
     };
 }
 
+/**
+ * recall_tutor — read Q's tutor notebook for this person. Separate store from
+ * facts/memory; written by the writer page as Q coaches. Lets Q answer "what
+ * was that question I was stuck on?" from any surface, not just the writer.
+ */
+function recallTutor(personId) {
+    try {
+        const p = getTutorPath(personId);
+        if (!fs.existsSync(p)) {
+            return { note: 'No tutoring work saved for this person yet — nothing in the notebook.' };
+        }
+        const t = JSON.parse(fs.readFileSync(p, 'utf8'));
+        return {
+            task: t.task || null,
+            whatItWants: t.whatItWants || null,
+            teachersBrief: t.teachersBrief || null,
+            sections: Array.isArray(t.markedSections) ? t.markedSections : null,
+            currentSection: t.currentSection || null,
+            lastQuestion: t.lastQuestion || null,
+            lastStuckOn: t.lastStuckOn || null,
+            updatedAt: t.updatedAt || null,
+        };
+    } catch (e) {
+        return { error: 'Could not read the tutor notebook: ' + e.message };
+    }
+}
+
 // Pick the tools Q is allowed to call THIS turn. Persona alone wasn't enough
 // to stop Q from running web_search uninvited (250 calls in two days from
 // silent searches). The structural fix: only put web_search (and other
@@ -1294,6 +1334,12 @@ const TRIGGERS = {
     ],
     analyze_document: [
         /\b(read|analy[sz]e|extract|summari[sz]e) (this|the|that|my|the file|the document|the pdf|attached)\b/i,
+    ],
+    recall_tutor: [
+        /\b(assignment|essay|coursework|dissertation|homework|thesis)\b/i,
+        /\b(my tutor|the writer page|writing coach)\b/i,
+        /\b(stuck on|got stuck|where was i|what was that question|pick up where|carry on with)\b/i,
+        /\b(my (last |current )?(brief|task)|section i was (on|doing))\b/i,
     ],
     create_document: [
         /\b(create|make|write|generate|draft|build) (a|me a|me)? ?(document|doc|file|pdf|word|letter)\b/i,

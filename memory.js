@@ -226,6 +226,15 @@ function getDocPath(personId) {
     return path.join(Q_DATA_DIR, `q-doc-${safeId(personId)}.json`);
 }
 
+// Q's tutor notebook — separate from his life memory and his facts. Holds the
+// tutoring work for this person: the assignment he's coaching them on, the
+// brief he built, which section they're on, the last thing they were stuck on.
+// He knows it's a distinct notebook (not mixed into his everyday facts) and can
+// reach it from any surface via the recall_tutor tool when the student asks.
+function getTutorPath(personId) {
+    return path.join(Q_DATA_DIR, `q-tutor-${safeId(personId)}.json`);
+}
+
 module.exports = {
     loadMemory,
     saveMemory,
@@ -236,5 +245,6 @@ module.exports = {
     getMemoryPath,
     getVoicePath,
     getDocPath,
+    getTutorPath,
     migrateLegacyMemory,
 };

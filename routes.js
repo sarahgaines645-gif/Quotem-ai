@@ -43,7 +43,7 @@ const {
 // Boot the scheduler worker as soon as the routes module loads.
 // Idempotent — calling more than once is safe.
 startScheduler();
-const { loadMemory, clearMemory, appendMessage, getRecentMessages, getCircleSummary, getMemoryPath, getVoicePath, getDocPath } = require('./memory');
+const { loadMemory, clearMemory, appendMessage, getRecentMessages, getCircleSummary, getMemoryPath, getVoicePath, getDocPath, getTutorPath } = require('./memory');
 const { requirePerson, tryAttachPerson, setSessionCookie, clearSessionCookie } = require('./auth');
 const { listPeople, addPerson, signupPerson, getPerson, getPersonByEmail, removePerson, verifyLogin, changePassword, rotatePassword, createResetToken, consumeResetToken } = require('./people');
 const { sendMail, isConfigured: mailerConfigured } = require('./mailer');
@@ -634,6 +634,52 @@ router.get('/writer/doc', requirePerson, async (req, res) => {
         res.json({ ok: true, text: null });
     }
 });
+
+// POST /writer/tutor — Q's tutor notebook for this person. The writer page
+// writes here as Q coaches: the brief he built, which section they're on, the
+// last thing they were stuck on. Merge-write so partial updates (just the
+// current section, just "stuck on") don't clobber the rest. Read back by the
+// recall_tutor tool from any surface — "what was that question I was stuck on?"
+router.post('/writer/tutor', requirePerson, express.json({ limit: '512kb' }), async (req, res) => {
+    try {
+        const tutorPath = getTutorPath(req.person.id);
+        let existing = {};
+        try {
+            if (fs.existsSync(tutorPath)) existing = JSON.parse(fs.readFileSync(tutorPath, 'utf8')) || {};
+        } catch (_) { existing = {}; }
+        // Only overwrite keys the client actually sent.
+        const patch = {};
+        for (const k of ['task', 'whatItWants', 'teachersBrief', 'markedSections', 'gradeBands', 'currentSection', 'lastQuestion', 'lastStuckOn']) {
+            if (req.body && req.body[k] !== undefined) patch[k] = req.body[k];
+        }
+        const merged = { ...existing, ...patch, updatedAt: Date.now() };
+        fs.writeFileSync(tutorPath, JSON.stringify(merged));
+        res.json({ ok: true });
+    } catch (e) {
+        console.error('[writer/tutor store]', e.message);
+        res.status(500).json({ error: e.message });
+    }
+});
+
+// GET /writer/tutor — load the tutor notebook for this person
+router.get('/writer/tutor', requirePerson, async (req, res) => {
+    try {
+        const tutorPath = getTutorPath(req.person.id);
+        if (!fs.existsSync(tutorPath)) return res.json({ ok: true, tutor: null });
+        res.json({ ok: true, tutor: JSON.parse(fs.readFileSync(tutorPath, 'utf8')) });
+    } catch (e) {
+        res.json({ ok: true, tutor: null });
+    }
+});
+
+// ─────────────────────────────────────────────────────────────────────────
+// DORMANT — replaced 2026-05-17. The brief + leading questions now run through
+// the one /chat brain (surface:'writer', SURFACE_PROMPTS.writer) so Q reads
+// the doc himself like he does everywhere else, instead of a separate
+// JSON-extraction pipeline that silently {}'d on long briefs. Kept in place
+// (not deleted) as a reversible fallback. analyseTask/tutorBrief/
+// askLeadingQuestion in plugins/q-writer.js are no longer on the live path.
+// ─────────────────────────────────────────────────────────────────────────
 
 // POST /writer/brief — analyse the task and build the tutor's brief (two-step in one call)
 router.post('/writer/brief', requirePerson, express.json({ limit: '512kb' }), async (req, res) => {

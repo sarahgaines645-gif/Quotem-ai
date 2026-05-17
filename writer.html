@@ -911,25 +911,93 @@
       };
     }
 
+    // ── Q is the tutor here: ONE /chat brain, surface:'writer' ─────────────
+    // Same Q as every other page, on the clock as a tutor. Builds the page
+    // state every turn (the attached task/source + the doc so far) and posts
+    // to the single /chat endpoint. SURFACE_PROMPTS.writer tells him he holds
+    // the tutor role and to append a fenced writer-brief / writer-question
+    // block the card binds to. No separate JSON pipeline.
+    async function qWriterChat(userText, sourceChars) {
+      const t = (titleEl.value || '').trim();
+      const b = (docBody.textContent || '').trim();
+      const srcLimit = sourceChars || 3000;
+      const sourceBlock = sourceState.text
+        ? `[Task/source: "${sourceState.name}"]\n${sourceState.text.slice(0, srcLimit)}\n[end source]\n\n`
+        : sourceState.imageDataUrl
+          ? `[Image task: "${sourceState.name}". Use vision if relevant.]\n\n`
+          : '';
+      const docBlock = b
+        ? `[Writing Coach — document so far]\nTitle: ${t || 'untitled'}\n\n${b.slice(0, 1500)}\n[end]\n\n`
+        : `[Writing Coach — page still blank]\n\n`;
+      const fetchBody = { message: sourceBlock + docBlock + userText, surface: 'writer' };
+      if (sourceState.imageDataUrl) {
+        fetchBody.images = [{ dataUrl: sourceState.imageDataUrl, name: sourceState.name }];
+      }
+      const r = await fetch('/chat', {
+        method: 'POST', credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(fetchBody),
+      });
+      const d = await r.json().catch(() => ({}));
+      return (d.reply || d.error || '').toString();
+    }
+
+    // Pull a fenced ```tag JSON block out of Q's reply. Returns
+    // { prose, data } — prose is what the student sees (block stripped),
+    // data is the parsed JSON, or null if absent / not valid JSON.
+    function parseQBlock(reply, tag) {
+      const re = new RegExp('```' + tag + '\\s*([\\s\\S]*?)```', 'i');
+      const m = (reply || '').match(re);
+      if (!m) return { prose: (reply || '').trim(), data: null };
+      let data = null;
+      try { data = JSON.parse(m[1].trim()); } catch (_) { data = null; }
+      return { prose: (reply || '').replace(m[0], '').trim(), data };
+    }
+
+    // Persist tutor work to Q's notebook (best-effort, non-blocking) so he can
+    // pick it up next time and recall it from any page via recall_tutor.
+    function saveTutor(patch) {
+      try {
+        fetch('/writer/tutor', {
+          method: 'POST', credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(patch),
+        });
+      } catch (_) {}
+    }
+
     // ── After source loaded: brief + first question ────────────────────────
     async function runBrief(taskText) {
       setCoach({ msg: 'Reading your task…', thinking: true, inputVisible: false });
 
       try {
-        const d = await post('/writer/brief', { taskText });
-        if (!d.ok) throw new Error(d.error || 'brief failed');
-        state.analysis = d.analysis;
-        state.brief = d.brief;
+        const reply = await qWriterChat(
+          'I\'ve given you my task above. Read the whole thing, work out what it\'s really asking (the task is often buried after headers and tables), and build my brief.',
+          12000
+        );
+        const { prose, data: b } = parseQBlock(reply, 'writer-brief');
+        if (!b) throw new Error('no brief block');
+
+        state.analysis = { task: b.whatItWants || '', gradeBands: b.gradeBands || null };
+        state.brief = b;
 
         // Store the brief so it persists as a hint throughout coaching
-        const b = d.brief;
         state.taskSummary = b.whatItWants || b.summary || '';
         state.teachersBrief = b.teachersBrief || '';
 
-        // Build a readable brief — summary + secret tip + section list
+        // Persist to Q's tutor notebook so he can pick it up / recall it later
+        saveTutor({
+          task: (taskText || '').slice(0, 4000),
+          whatItWants: state.taskSummary,
+          teachersBrief: state.teachersBrief,
+          markedSections: b.markedSections || [],
+          gradeBands: b.gradeBands || null,
+        });
+
+        // Build a readable brief — Q's own words + secret tip + section list
         const sectionList = (b.markedSections || []).map((s, i) => `${i + 1}. ${s.name} — ${s.description}`).join('\n');
         const briefMsg = [
-          state.taskSummary,
+          prose || state.taskSummary,
           b.teachersBrief ? '\n🔑 ' + b.teachersBrief : '',
           sectionList ? '\n\nYou\'ll need to cover:\n' + sectionList : '',
         ].join('');
@@ -954,31 +1022,35 @@
       setCoach({ msg: 'Thinking…', thinking: true, inputVisible: false });
 
       try {
-        const d = await post('/writer/lead', {
-          analysis: state.analysis,
-          brief: state.brief,
-          history: state.coachHistory,
-          ...voicePayload(),
-        });
-        if (!d.ok) throw new Error(d.error || 'lead failed');
+        const histBlock = state.coachHistory.length
+          ? 'Coaching so far:\n' + state.coachHistory.map((h, i) => `Q${i + 1}: ${h.question}\nA${i + 1}: ${h.answer}`).join('\n\n') + '\n\n'
+          : '';
+        const reply = await qWriterChat(
+          histBlock + 'Ask me the next leading question for the next section that still needs work. One question, in your own warm voice. Don\'t repeat anything I\'ve already answered.',
+          12000
+        );
+        const { prose, data } = parseQBlock(reply, 'writer-question');
+        const question = (data && data.question) || prose;
+        if (!question) throw new Error('no question');
 
-        state.currentQuestion = d.question || '';
-        state.currentSection  = d.sectionName || '';
+        state.currentQuestion = question;
+        state.currentSection  = (data && data.sectionName) || '';
         state.docSnapshot     = (docBody.textContent || '').trim();
 
         // Keep the task summary visible as a persistent note under the question
         const hintParts = [];
-        if (d.hint) hintParts.push(d.hint);
+        if (data && data.hint) hintParts.push(data.hint);
         if (state.taskSummary) hintParts.push('📋 ' + state.taskSummary);
         setCoach({
-          msg: d.question,
-          section: d.sectionName || '',
+          msg: question,
+          section: state.currentSection,
           hint: hintParts.join('\n'),
           inputVisible: true,
           showNudge: true,
         });
         coachInput.placeholder = 'Type your answer…';
         coachInput.focus();
+        saveTutor({ currentSection: state.currentSection, lastQuestion: question });
       } catch (e) {
         setCoach({ msg: 'Try me again — type your answer below or ask anything.' });
       }
@@ -1202,33 +1274,14 @@
 
     // ── Free chat with Q (existing /chat endpoint) ─────────────────────────
     async function askQ(userText) {
-      const t = (titleEl.value || '').trim();
-      const b = (docBody.textContent || '').trim();
-      const sourceBlock = sourceState.text
-        ? `[Task/source: "${sourceState.name}"]\n${sourceState.text.slice(0, 3000)}\n[end source]\n\n`
-        : sourceState.imageDataUrl
-          ? `[Image task: "${sourceState.name}". Use vision if relevant.]\n\n`
-          : '';
-      const docBlock = b
-        ? `[Writing Coach — document so far]\nTitle: ${t || 'untitled'}\n\n${b.slice(0, 1500)}\n[end]\n\n`
-        : `[Writing Coach — page still blank]\n\n`;
-
-      const message = sourceBlock + docBlock + userText;
       setCoach({ msg: 'thinking…', thinking: true, inputVisible: false });
-
-      const fetchBody = { message, surface: 'writer' };
-      if (sourceState.imageDataUrl) {
-        fetchBody.images = [{ dataUrl: sourceState.imageDataUrl, name: sourceState.name }];
-      }
       try {
-        const r = await fetch('/chat', {
-          method: 'POST', credentials: 'include',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(fetchBody),
-        });
-        const d = await r.json().catch(() => ({}));
+        const reply = await qWriterChat(userText, 3000);
+        // In free chat Q shouldn't emit a card block — but strip it if he does.
+        let shown = parseQBlock(reply, 'writer-question').prose;
+        shown = parseQBlock(shown, 'writer-brief').prose;
         setCoach({
-          msg: (d.reply || d.error || 'Q went quiet — try again.').toString(),
+          msg: (shown || 'Q went quiet — try again.').toString(),
           inputVisible: true,
         });
         coachInput.placeholder = 'Ask Q…';
@@ -1398,6 +1451,8 @@
     btnDontUnderstand.addEventListener('click', async () => {
       // Prefer the full question text (most specific), fall back to section, then subject
       const concept = state.currentQuestion || state.currentSection || state.analysis?.subject || 'this topic';
+      // Record what they were stuck on so Q can recall it from any page
+      saveTutor({ lastStuckOn: concept });
       // Position popup near the button
       const btnRect = btnDontUnderstand.getBoundingClientRect();
       explainPopup.style.left = Math.min(btnRect.left, window.innerWidth - 280) + 'px';
