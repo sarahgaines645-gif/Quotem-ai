@@ -284,6 +284,7 @@ async function importStatementFromFile(email, fileBase64, mimeType) {
         const buffer = Buffer.from(fileBase64, 'base64');
         const data = await pdfParse(buffer);
         const text = (data.text || '').trim();
+        console.log(`[finance] pdf-parse extracted ${text.length} chars, first 300: ${text.slice(0, 300).replace(/\n/g, '↵')}`);
         if (text.length < 20) {
             return { added: 0, total: 0, hint: 'Could not extract text from this PDF — try exporting as CSV from your bank, or take a photo and scan from phone' };
         }
