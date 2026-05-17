@@ -1055,7 +1055,8 @@
     // to the single /chat endpoint. SURFACE_PROMPTS.writer tells him he holds
     // the tutor role and to append a fenced writer-brief / writer-question
     // block the card binds to. No separate JSON pipeline.
-    async function qWriterChat(userText, sourceChars) {
+    // useReasoning=true for brief analysis (needs deep scan), false for coaching turns (speed matters)
+    async function qWriterChat(userText, sourceChars, useReasoning) {
       const t = (titleEl.value || '').trim();
       const b = (docBody.textContent || '').trim();
       const srcLimit = sourceChars || 3000;
@@ -1067,7 +1068,11 @@
       const docBlock = b
         ? `[Writing Coach — document so far]\nTitle: ${t || 'untitled'}\n\n${b.slice(0, 1500)}\n[end]\n\n`
         : `[Writing Coach — page still blank]\n\n`;
-      const fetchBody = { message: sourceBlock + docBlock + userText, surface: 'writer' };
+      const fetchBody = {
+        message: sourceBlock + docBlock + userText,
+        surface: 'writer',
+        reasoningEffort: useReasoning ? 'high' : 'off',
+      };
       if (sourceState.imageDataUrl) {
         fetchBody.images = [{ dataUrl: sourceState.imageDataUrl, name: sourceState.name }];
       }
@@ -1206,7 +1211,7 @@
       try {
         const reply = await qWriterChat(
           'I\'ve given you my task above. Read the whole thing, work out what it\'s really asking (the task is often buried after headers and tables), and build my brief.',
-          12000
+          12000, true
         );
         const { data: b } = parseQBlock(reply, 'writer-brief');
         if (!b) throw new Error('no brief block');
@@ -1246,7 +1251,7 @@
           : '';
         const reply = await qWriterChat(
           idealBlock + histBlock + 'Ask the next discovery question — one question, your own warm voice. Don\'t repeat anything already answered.',
-          12000
+          12000, false
         );
         const { prose, data } = parseQBlock(reply, 'writer-question');
         const question = (data && data.question) || prose;

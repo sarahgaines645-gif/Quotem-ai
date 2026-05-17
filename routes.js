@@ -869,14 +869,22 @@ router.post('/chat', requirePerson, express.json({ limit: '24mb' }), async (req,
     //
     // Think/Deep manual selections are untouched ('high' / 'max').
     const rawEffort = req.body?.reasoningEffort;
-    let reasoningEffort = (rawEffort === 'high' || rawEffort === 'max') ? rawEffort : 'high';
-    if (rawEffort === 'off' && typeof req.body?.message === 'string') {
-        const m = req.body.message.trim();
-        const trivial = m.length < 25
-            && !m.includes('?')
-            && !m.includes('```')
-            && !/\d/.test(m);
-        if (trivial) reasoningEffort = undefined;
+    let reasoningEffort;
+    if (rawEffort === 'high' || rawEffort === 'max') {
+        reasoningEffort = rawEffort;
+    } else if (rawEffort === 'off') {
+        reasoningEffort = undefined; // explicit off — no reasoning
+    } else {
+        // Default: high reasoning, but skip for trivially short messages
+        reasoningEffort = 'high';
+        if (typeof req.body?.message === 'string') {
+            const m = req.body.message.trim();
+            const trivial = m.length < 25
+                && !m.includes('?')
+                && !m.includes('```')
+                && !/\d/.test(m);
+            if (trivial) reasoningEffort = undefined;
+        }
     }
     const rawImages = req.body?.images;
     const images = Array.isArray(rawImages)
