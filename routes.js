@@ -1422,8 +1422,10 @@ router.get('/api/finance/subscriptions', requirePerson, (req, res) => {
 router.post('/api/finance/statement', requirePerson, express.json({ limit: '2mb' }), async (req, res) => {
     const { text } = req.body || {};
     if (!text) return res.status(400).json({ error: 'text required' });
+    console.log(`[finance] statement text import — ${req.person.email} — ${text.length} chars`);
     try {
         const result = await qFinance.importStatement(req.person.email, text);
+        console.log(`[finance] statement done — added:${result.added} total:${result.total}`);
         res.json(result);
     } catch (e) {
         console.error('[finance] import error', e);
@@ -1436,8 +1438,10 @@ router.post('/api/finance/statement', requirePerson, express.json({ limit: '2mb'
 router.post('/api/finance/statement/pdf', requirePerson, express.json({ limit: '25mb' }), async (req, res) => {
     const { imageBase64, mimeType } = req.body || {};
     if (!imageBase64) return res.status(400).json({ error: 'imageBase64 required' });
+    console.log(`[finance] statement file import — ${req.person.email} — mimeType:${mimeType}`);
     try {
         const result = await qFinance.importStatementFromFile(req.person.email, imageBase64, mimeType || 'application/pdf');
+        console.log(`[finance] statement file done — added:${result.added} total:${result.total}`);
         res.json(result);
     } catch (e) {
         console.error('[finance] statement/pdf error', e);
@@ -1449,8 +1453,10 @@ router.post('/api/finance/statement/pdf', requirePerson, express.json({ limit: '
 router.post('/api/finance/document', requirePerson, express.json({ limit: '10mb' }), async (req, res) => {
     const { imageBase64, mimeType } = req.body || {};
     if (!imageBase64) return res.status(400).json({ error: 'imageBase64 required' });
+    console.log(`[finance] document extract — ${req.person.email} — mimeType:${mimeType}`);
     try {
         const extracted = await qFinance.extractDocument(imageBase64, mimeType || 'image/jpeg');
+        console.log(`[finance] document done — type:${extracted.type} urgency:${extracted.urgency}`);
         res.json(extracted);
     } catch (e) {
         console.error('[finance] extract error', e);
