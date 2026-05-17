@@ -63,6 +63,11 @@
     .upload-zone .uz-sub   { font-size: 11px; color: var(--text-muted); }
     .upload-zone .uz-progress { font-size: 11px; color: var(--accent); display: none; }
     .upload-zone.loading .uz-progress { display: block; }
+    .upload-zone .uz-result { font-size: 12px; font-weight: 600; display: none; }
+    .upload-zone .uz-result.show { display: block; }
+    .upload-zone .uz-result.ok   { color: var(--green); }
+    .upload-zone .uz-result.info { color: var(--text-muted); }
+    .upload-zone .uz-result.err  { color: var(--red); }
     .upload-zone.loading .uz-icon,
     .upload-zone.loading .uz-title,
     .upload-zone.loading .uz-sub,
@@ -385,6 +390,7 @@
         <button class="uz-btn qr" type="button" id="qr-statement-btn">📱 Scan from phone</button>
       </div>
       <div class="uz-progress">Q is reading your statement…</div>
+      <div class="uz-result" id="uz-statement-result"></div>
     </div>
     <div class="upload-zone" id="uz-doc">
       <div class="uz-icon">📄</div>
@@ -398,6 +404,7 @@
         <button class="uz-btn qr" type="button" id="qr-doc-btn">📱 Scan from phone</button>
       </div>
       <div class="uz-progress">Q is reading the document…</div>
+      <div class="uz-result" id="uz-doc-result"></div>
     </div>
   </div>
 
@@ -1027,35 +1034,58 @@
     e.target.value = '';
   });
 
+  function showUploadResult(zoneId, msg, type = 'ok') {
+    const el = document.getElementById(zoneId + '-result');
+    if (!el) return;
+    el.textContent = msg;
+    el.className = 'uz-result show ' + type;
+  }
+  function clearUploadResult(zoneId) {
+    const el = document.getElementById(zoneId + '-result');
+    if (el) { el.textContent = ''; el.className = 'uz-result'; }
+  }
+
   async function handleStatementFile(file) {
+    clearUploadResult('uz-statement');
     showUploadProgress('uz-statement', true);
-    let text = '';
-    if (file.name.endsWith('.pdf')) {
-      // Use vision model to extract text
+    if (file.name.toLowerCase().endsWith('.pdf')) {
       const { b64, mime } = await readFileAsB64(file);
-      const r = await apiFetch('/api/finance/document', { method: 'POST', body: { imageBase64: b64, mimeType: mime } });
+      const r = await apiFetch('/api/finance/statement/pdf', { method: 'POST', body: { imageBase64: b64, mimeType: mime } });
       showUploadProgress('uz-statement', false);
-      if (!r.ok) { toast('Could not read PDF — try pasting the text instead'); return; }
-      const extracted = await r.json();
-      toast('PDF read — if it looks off, try pasting the CSV text');
-      text = JSON.stringify(extracted);
-    } else {
-      text = await file.text();
+      if (!r.ok) {
+        const err = await r.json().catch(() => ({}));
+        showUploadResult('uz-statement', 'Could not read PDF — try exporting as CSV from your banking app', 'err');
+        return;
+      }
+      const result = await r.json();
+      if (result.added > 0) {
+        showUploadResult('uz-statement', `✓ ${result.added} transactions imported (${result.total} total)`, 'ok');
+      } else {
+        showUploadResult('uz-statement', 'No transactions found in this PDF — try exporting as CSV from your banking app', 'info');
+      }
+      await loadAll();
+      return;
     }
+    const text = await file.text();
     await importText(text);
   }
 
   async function importText(text) {
+    clearUploadResult('uz-statement');
     showUploadProgress('uz-statement', true);
     const r = await apiFetch('/api/finance/statement', { method: 'POST', body: { text } });
     showUploadProgress('uz-statement', false);
     if (r.ok) {
       const result = await r.json();
-      toast(`✓ ${result.added} new transactions added (${result.total} total)`);
+      if (result.added > 0) {
+        showUploadResult('uz-statement', `✓ ${result.added} new transactions imported (${result.total} total)`, 'ok');
+      } else {
+        showUploadResult('uz-statement', `No new transactions found — ${result.total} already in your account`, 'info');
+      }
       await loadAll();
     } else {
       const err = await r.json().catch(() => ({}));
-      toast('Import failed: ' + (err.error || 'unknown error'));
+      showUploadResult('uz-statement', 'Import failed: ' + (err.error || 'unknown error'), 'err');
     }
   }
 
@@ -1338,13 +1368,21 @@
       if (!fr.ok) continue;
       const { base64, mimeType } = await fr.json();
       if (qrSessionType === 'statement') {
-        // Send to statement importer
+        clearUploadResult('uz-statement');
         showUploadProgress('uz-statement', true);
-        const sr = await apiFetch('/api/finance/statement', { method: 'POST', body: { text: `[image upload: ${f.filename}]` } }).catch(() => null);
-        // Actually send it through the document extractor first to get text, then import
-        const dr = await apiFetch('/api/finance/document', { method: 'POST', body: { imageBase64: base64, mimeType } });
+        const dr = await apiFetch('/api/finance/statement/pdf', { method: 'POST', body: { imageBase64: base64, mimeType } });
         showUploadProgress('uz-statement', false);
-        if (dr.ok) { toast('📱 Statement received from phone — Q is reading it'); await loadAll(); }
+        if (dr.ok) {
+          const result = await dr.json();
+          if (result.added > 0) {
+            showUploadResult('uz-statement', `✓ ${result.added} transactions received from phone (${result.total} total)`, 'ok');
+          } else {
+            showUploadResult('uz-statement', 'Phone image received — no new transactions found', 'info');
+          }
+          await loadAll();
+        } else {
+          showUploadResult('uz-statement', 'Could not read the statement image from your phone', 'err');
+        }
       } else {
         // Send to document extractor
         showUploadProgress('uz-doc', true);

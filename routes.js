@@ -849,6 +849,7 @@ router.post('/writer/starter', requirePerson, express.json({ limit: '32kb' }), a
 // Body: { message: "..." } (preferred — uses server memory)
 //   OR: { messages: [...] } (legacy — full history sent each time)
 router.post('/chat', requirePerson, express.json({ limit: '24mb' }), async (req, res) => {
+  try {
     const person = req.person; // attached by requirePerson — { id, name, intro, addedAt }
     const newMessage = req.body?.message;
     const messagesArray = req.body?.messages;
@@ -945,6 +946,10 @@ router.post('/chat', requirePerson, express.json({ limit: '24mb' }), async (req,
     return res.status(400).json({
         error: 'Body must include either { message: "..." } or { messages: [...] }',
     });
+  } catch (err) {
+    console.error('[/chat] unhandled error:', err.message, err.stack?.slice(0, 400));
+    if (!res.headersSent) res.status(500).json({ error: 'internal error', reply: null });
+  }
 });
 
 // GET Q's memory for the calling person. Each person has their own file —
@@ -1414,6 +1419,19 @@ router.post('/api/finance/statement', requirePerson, express.json({ limit: '2mb'
         res.json(result);
     } catch (e) {
         console.error('[finance] import error', e);
+        res.status(500).json({ error: e.message });
+    }
+});
+
+// Import statement directly from a PDF or photo via vision model
+router.post('/api/finance/statement/pdf', requirePerson, express.json({ limit: '25mb' }), async (req, res) => {
+    const { imageBase64, mimeType } = req.body || {};
+    if (!imageBase64) return res.status(400).json({ error: 'imageBase64 required' });
+    try {
+        const result = await qFinance.importStatementFromImage(req.person.email, imageBase64, mimeType || 'application/pdf');
+        res.json(result);
+    } catch (e) {
+        console.error('[finance] statement/pdf error', e);
         res.status(500).json({ error: e.message });
     }
 });

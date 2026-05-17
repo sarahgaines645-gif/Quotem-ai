@@ -247,6 +247,37 @@ Return STRICT JSON only — no markdown fences:
 }
 If you cannot read the document, return { "error": "Cannot read document" }.`;
 
+const STATEMENT_IMAGE_PROMPT = `You are reading a bank statement document. Extract EVERY transaction you can see.
+Return them as plain CSV with a header row and one transaction per line:
+date,description,amount
+
+Rules:
+- date: YYYY-MM-DD format
+- description: exact text from the statement
+- amount: NEGATIVE number for money leaving the account (payments/debits), POSITIVE for money coming in (credits/income)
+- Do NOT include balance columns, opening/closing balance totals, or header/footer rows
+- If multiple pages are visible, extract ALL of them
+- Return ONLY the CSV. No explanation, no markdown.`;
+
+async function importStatementFromImage(email, imageBase64, mimeType = 'application/pdf') {
+    const raw = cleanModelOutput(await togetherChat({
+        model:      Q_CONFIG.visionModel,
+        max_tokens: 8000,
+        messages: [{
+            role: 'user',
+            content: [
+                { type: 'text',      text: STATEMENT_IMAGE_PROMPT },
+                { type: 'image_url', image_url: { url: `data:${mimeType};base64,${imageBase64}` } },
+            ],
+        }],
+    }));
+    if (!raw || raw.trim().length < 20) {
+        return { added: 0, total: 0 };
+    }
+    return importStatement(email, raw);
+}
+
+
 async function extractDocument(imageBase64, mimeType = 'image/jpeg') {
     const raw = cleanModelOutput(await togetherChat({
         model:      Q_CONFIG.visionModel,
@@ -513,6 +544,7 @@ module.exports = {
 
     // Documents / vision
     extractDocument,
+    importStatementFromImage,
 
     // Assignments
     assignMerchant,
