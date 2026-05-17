@@ -95,23 +95,31 @@ function saveProblems(email, problems) {
 
 // ── Statement parsing ─────────────────────────────────────────────
 
-const PARSE_SYSTEM = `You are a bank statement parser. The user will give you raw text copied from a bank statement or a CSV export. Extract every transaction into a JSON array.
+const PARSE_SYSTEM = `You are a bank statement parser. The user will give you raw text extracted from a bank statement PDF or a CSV export. Extract every transaction into a JSON array.
 
 Each transaction object:
 {
   "date":        "YYYY-MM-DD",
   "description": "exact merchant/payee text from the statement",
-  "amount":      number (NEGATIVE for money leaving = debits/payments. POSITIVE for money coming in = credits/income),
+  "amount":      number (NEGATIVE for money leaving = debits/payments/money-out. POSITIVE for money coming in = credits/income/money-in),
   "merchant":    "cleaned merchant name (e.g. 'McDonald\\'s', 'Netflix', 'HMRC')"
 }
 
-Rules:
+MONZO STATEMENT LAYOUT: Columns are Date | Description | Money out | Money in | Balance.
+- "Money out" column = NEGATIVE amount (money leaving the account).
+- "Money in" column = POSITIVE amount (money coming into the account).
+- The Balance column is a running total — NOT a transaction amount. Ignore it.
+- Skip rows labelled "Opening balance" and "Closing balance" — those are summaries, not transactions.
+
+GENERAL RULES:
 - Parse ALL transactions — do not skip, summarise, or truncate.
-- If the statement shows debit/credit in separate columns, debit = negative amount.
-- Ignore header rows, balance rows, and running totals.
-- Dates: convert to YYYY-MM-DD. If year is missing, use the most recent plausible year.
+- Amounts may have £ signs, commas, or spaces — strip them and parse as plain numbers (e.g. "£1,234.56" → 1234.56).
+- UK date formats: "02 Feb 2026" → "2026-02-02". "02/02/2026" → "2026-02-02". "02-02-2026" → "2026-02-02". If year is missing use the most recent plausible year.
+- When a row has a value only in the "Money out" column and nothing in "Money in", the amount is NEGATIVE.
+- When a row has a value only in the "Money in" column and nothing in "Money out", the amount is POSITIVE.
+- Ignore column headers, footer/legal text, account summary rows, and running totals.
 - If you cannot parse a line, skip it silently.
-- Return ONLY a JSON array. No markdown, no commentary.`;
+- Return ONLY a JSON array. No markdown, no commentary, no explanation.`;
 
 async function parseChunk(chunk, idx, total) {
     if (idx === 0) console.log(`[finance] chunk 1 text sample: ${chunk.slice(0, 500).replace(/\n/g, '↵')}`);
@@ -136,7 +144,9 @@ async function parseChunk(chunk, idx, total) {
 }
 
 async function parseStatementText(rawText) {
-    const text = rawText.slice(0, 40000);
+    // Strip £ signs before chunking — reduces AI confusion on amounts.
+    // "£1,234.56" becomes "1,234.56"; commas in numbers handled by the prompt.
+    const text = rawText.replace(/£/g, '').slice(0, 40000);
     // Chunk into ~10K pieces with 200-char overlap so we don't split mid-transaction.
     // Each chunk produces ≤4K output tokens — well within Together AI limits.
     // Chunks run in parallel so total time ≈ slowest single chunk, not sum.
