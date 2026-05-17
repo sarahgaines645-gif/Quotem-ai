@@ -115,16 +115,21 @@ Rules:
 async function parseStatementText(rawText) {
     const raw = cleanModelOutput(await togetherChat({
         model:      Q_CONFIG.model,
-        max_tokens: 8000,
+        max_tokens: 32000,
         messages: [
             { role: 'system', content: PARSE_SYSTEM },
             { role: 'user',   content: rawText.slice(0, 40000) },
         ],
     }));
+    console.log(`[finance] parseStatementText raw response: ${raw.length} chars, first 400: ${raw.slice(0, 400).replace(/\n/g, '↵')}`);
     try {
         const m = raw.match(/\[[\s\S]*\]/);
-        return m ? JSON.parse(m[0]) : [];
-    } catch {
+        if (!m) { console.log('[finance] parseStatementText: no JSON array found in response'); return []; }
+        const parsed = JSON.parse(m[0]);
+        console.log(`[finance] parseStatementText: parsed ${parsed.length} transactions`);
+        return parsed;
+    } catch (e) {
+        console.log(`[finance] parseStatementText JSON.parse failed: ${e.message}`);
         return [];
     }
 }
