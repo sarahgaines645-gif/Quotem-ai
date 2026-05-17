@@ -259,7 +259,7 @@ Rules:
 - If multiple pages are visible, extract ALL of them
 - Return ONLY the CSV. No explanation, no markdown.`;
 
-async function importStatementFromImage(email, imageBase64, mimeType = 'application/pdf') {
+async function importStatementFromImage(email, imageBase64, mimeType) {
     const dataUrl = `data:${mimeType};base64,${imageBase64}`;
     const raw = cleanModelOutput(await togetherChat({
         model:      Q_CONFIG.visionModel,
@@ -274,6 +274,23 @@ async function importStatementFromImage(email, imageBase64, mimeType = 'applicat
     }));
     if (!raw || raw.trim().length < 20) return { added: 0, total: 0 };
     return importStatement(email, raw);
+}
+
+// PDFs → pdf-parse for text extraction. Images → vision model.
+// Together AI vision does not accept application/pdf — only JPEG/PNG/WebP.
+async function importStatementFromFile(email, fileBase64, mimeType) {
+    if (mimeType === 'application/pdf') {
+        const pdfParse = require('pdf-parse');
+        const buffer = Buffer.from(fileBase64, 'base64');
+        const data = await pdfParse(buffer);
+        const text = (data.text || '').trim();
+        if (text.length < 20) {
+            return { added: 0, total: 0, hint: 'Could not extract text from this PDF — try exporting as CSV from your bank, or take a photo and scan from phone' };
+        }
+        return importStatement(email, text);
+    }
+    // Actual image (JPEG, PNG, WebP, etc.)
+    return importStatementFromImage(email, fileBase64, mimeType || 'image/jpeg');
 }
 
 
@@ -544,6 +561,7 @@ module.exports = {
     // Documents / vision
     extractDocument,
     importStatementFromImage,
+    importStatementFromFile,
 
     // Assignments
     assignMerchant,

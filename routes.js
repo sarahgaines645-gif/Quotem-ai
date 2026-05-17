@@ -1431,12 +1431,13 @@ router.post('/api/finance/statement', requirePerson, express.json({ limit: '2mb'
     }
 });
 
-// Import statement directly from a PDF or photo via vision model
+// Import statement from a file — PDFs use pdf-parse (text extraction),
+// images (JPEG/PNG/WebP) use vision. Together AI vision rejects application/pdf.
 router.post('/api/finance/statement/pdf', requirePerson, express.json({ limit: '25mb' }), async (req, res) => {
     const { imageBase64, mimeType } = req.body || {};
     if (!imageBase64) return res.status(400).json({ error: 'imageBase64 required' });
     try {
-        const result = await qFinance.importStatementFromImage(req.person.email, imageBase64, mimeType || 'application/pdf');
+        const result = await qFinance.importStatementFromFile(req.person.email, imageBase64, mimeType || 'application/pdf');
         res.json(result);
     } catch (e) {
         console.error('[finance] statement/pdf error', e);
