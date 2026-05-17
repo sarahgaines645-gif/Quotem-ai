@@ -262,12 +262,17 @@ Rules:
 async function importStatementFromImage(email, imageBase64, mimeType = 'application/pdf') {
     // PDFs: extract text with pdf-parse (better than vision for text-based bank PDFs)
     if (mimeType === 'application/pdf' || mimeType === 'application/octet-stream') {
-        const pdfParse = require('pdf-parse');
-        const buffer = Buffer.from(imageBase64, 'base64');
-        const parsed = await pdfParse(buffer);
-        const text = (parsed.text || '').trim();
-        if (text.length < 20) return { added: 0, total: 0 };
-        return importStatement(email, text);
+        try {
+            const pdfParse = require('pdf-parse');
+            const buffer = Buffer.from(imageBase64, 'base64');
+            const parsed = await pdfParse(buffer);
+            const text = (parsed.text || '').trim();
+            if (text.length < 20) return { added: 0, total: 0 };
+            return importStatement(email, text);
+        } catch (pdfErr) {
+            console.error('[finance] pdf-parse failed:', pdfErr.message);
+            return { added: 0, total: 0, hint: 'Could not read PDF text — try exporting as CSV from your banking app' };
+        }
     }
 
     // Images (camera photo, JPEG/PNG from phone) — use vision model

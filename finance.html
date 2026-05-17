@@ -1060,10 +1060,13 @@
       const result = await r.json();
       if (result.added > 0) {
         showUploadResult('uz-statement', `✓ ${result.added} transactions imported (${result.total} total)`, 'ok');
+        await loadAll();
+      } else if (result.hint) {
+        showUploadResult('uz-statement', result.hint, 'info');
       } else {
-        showUploadResult('uz-statement', 'No transactions found in this PDF — try exporting as CSV from your banking app', 'info');
+        showUploadResult('uz-statement', 'No new transactions found — they may already be imported, or try exporting as CSV', 'info');
+        await loadAll();
       }
-      await loadAll();
       return;
     }
     const text = await file.text();
