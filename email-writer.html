@@ -311,6 +311,17 @@
 <div class="toast" id="toast"></div>
 
 <script>
+async function apiFetch(url, opts = {}) {
+  const token = window.getQToken ? window.getQToken() : null;
+  const headers = { ...(opts.headers || {}) };
+  if (token) headers['Authorization'] = 'Bearer ' + token;
+  if (opts.body && typeof opts.body === 'object' && !(opts.body instanceof FormData)) {
+    headers['Content-Type'] = 'application/json';
+    opts = { ...opts, body: JSON.stringify(opts.body) };
+  }
+  return fetch(url, { ...opts, headers });
+}
+
 const $paste     = document.getElementById('paste-area');
 const $readBtn   = document.getElementById('read-btn');
 const $readStat  = document.getElementById('read-status');
@@ -483,31 +494,20 @@ const $chatThread = document.getElementById('chat-thread');
 const $chatInput  = document.getElementById('chat-input');
 const $chatSend   = document.getElementById('chat-send');
 const $chatTyping = document.getElementById('chat-typing');
-let chatHistory = [];
 
 async function showChatCard() {
   if ($chatCard.classList.contains('show')) return;
   $chatCard.classList.add('show');
-  // Fire a kickoff so Q opens the chat by leading — his read + first proposed move,
-  // not by asking Sarah what she wants. The kickoff message itself isn't rendered.
   $chatTyping.classList.add('show');
   try {
-    const res = await fetch('/email-writer/chat', {
+    const kickoff = `[EMAIL TO HANDLE]\n${currentText || ''}\n\n---\nOpen this in Phase 1. Run the research sweep first (web_search for rules, deadlines, recent ombudsman rulings, similar cases), then give me the diagnosis: what's happening, why I'm right, the rules in my favour, the gaps in the facts, what they're likely to come back with. Ask me ONE question to fill the most important gap. NO DRAFTING — Phase 1 is diagnosis only. Use 'I've' not 'I could'.`;
+    const res = await apiFetch('/api/chat', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        emailText: currentText || '',
-        history: [],
-        // The /email-writer/chat endpoint doesn't currently honour silentUser,
-        // but the email writer's history is page-local (not persisted to a
-        // Thread), so the kickoff naturally disappears on reload.
-        message: "Open this in Phase 1. Run the research sweep first (web_search for rules, deadlines, recent ombudsman rulings, similar cases), then give me the diagnosis: what's happening, why I'm right, the rules in my favour, the gaps in the facts, what they're likely to come back with. Ask me ONE question to fill the most important gap. NO DRAFTING — Phase 1 is diagnosis only. Use 'I've' not 'I could'.",
-      }),
+      body: { message: kickoff, surface: 'email-writer' },
     });
     const json = await res.json();
     if (!res.ok) throw new Error(json.error || 'HTTP ' + res.status);
     appendChatMsg('q', json.reply);
-    chatHistory.push({ role: 'assistant', content: json.reply });
   } catch (e) {
     appendChatMsg('q', '⚠️ Something went wrong on the kickoff: ' + (e.message || 'unknown') + '. Type below to talk to me anyway.');
   } finally {
@@ -595,26 +595,19 @@ async function sendChatMessage() {
   const text = $chatInput.value.trim();
   if (!text) return;
   appendChatMsg('user', text);
-  chatHistory.push({ role: 'user', content: text });
   $chatInput.value = '';
   $chatInput.style.height = 'auto';
   $chatSend.disabled = true;
   $chatTyping.classList.add('show');
 
   try {
-    const res = await fetch('/email-writer/chat', {
+    const res = await apiFetch('/api/chat', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        emailText: currentText || '',
-        history: chatHistory.slice(0, -1),  // already have current user msg in chatHistory; the route adds it itself
-        message: text,
-      }),
+      body: { message: text, surface: 'email-writer' },
     });
     const json = await res.json();
     if (!res.ok) throw new Error(json.error || 'HTTP ' + res.status);
     appendChatMsg('q', json.reply);
-    chatHistory.push({ role: 'assistant', content: json.reply });
   } catch (e) {
     appendChatMsg('q', '⚠️ ' + (e.message || 'Something went wrong'));
   } finally {
@@ -648,13 +641,14 @@ $apsBtn.addEventListener('click', async () => {
   $apsBtn.disabled = true;
   $apsStatus.innerHTML = '<span class="dot"></span>Q is reading it properly…';
   try {
-    const res = await fetch('/email-writer/advice', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ text: currentText }),
+    const apsMsg = `[EMAIL TO HANDLE]\n${currentText.trim()}\n\n---\nI've been sent this email and I don't know how to deal with it. Can you read it, work out what's actually going on, and tell me what to do? Find the angle if there is one — what they're not telling me, what I might have missed, deadlines I should know about, anything in their small print that helps me. Then give me a step-by-step plan.`;
+    const res = await apiFetch('/api/chat', {
+      method: 'POST',
+      body: { message: apsMsg, surface: 'email-writer', mode: 'aps' },
     });
     const json = await res.json();
     if (!res.ok) throw new Error(json.error || 'Failed');
-    $adviceBody.innerHTML = (window.marked ? window.marked.parse(json.advice) : escapeHtml(json.advice).replace(/\n/g, '<br>'));
+    $adviceBody.innerHTML = (window.marked ? window.marked.parse(json.reply) : escapeHtml(json.reply).replace(/\n/g, '<br>'));
     $adviceCard.classList.add('show');
     $apsStatus.textContent = '';
     $adviceCard.scrollIntoView({ behavior: 'smooth', block: 'start' });

@@ -1233,17 +1233,24 @@
   document.addEventListener('mouseup', () => { dragging = false; });
 
   // Coach actions
-  document.getElementById('btn-advice').addEventListener('click', getAdvice);
+  document.getElementById('btn-advice').addEventListener('click', () => {
+    if (!graphData || !graphData.summary.transaction_count) {
+      qSay('Import a bank statement first and I\'ll give you the full picture.');
+      return;
+    }
+    sendToQ('Give me a full honest picture of my finances. Look at everything — subscriptions, biggest leaks, any urgent debts, and anything I might qualify for in terms of discounts or benefits.');
+  });
   document.getElementById('btn-subs-check').addEventListener('click', () => {
-    const subs = subscriptions.slice(0, 5);
-    if (!subs.length) { qSay('Import a bank statement first and I\'ll scan for subscriptions you might have forgotten about.'); return; }
-    qSay('Your top subscriptions:\n' + subs.map(s => `• ${s.merchant} — £${fmt(s.amount)}/mo (£${fmt(s.total_paid)} total paid)`).join('\n') + '\n\nWant me to flag any of these as something to cancel?');
+    if (!subscriptions.length) { sendToQ('Scan my transactions and tell me what subscriptions or recurring charges I\'ve got.'); return; }
+    const subList = subscriptions.slice(0, 8).map(s => `${s.merchant} £${fmt(s.amount)}/mo (${s.count} payments, £${fmt(s.total_paid)} total)`).join('\n');
+    sendToQ(`Here are my subscriptions:\n${subList}\n\nWhich ones should I be questioning? Are any of these something I could get cheaper or cancel?`);
   });
   document.getElementById('btn-help-debt').addEventListener('click', () => {
     if (!problems.length) {
-      qSay('Drop in a debt letter or bill photo first and I\'ll read it — then I can draft the response for you.');
+      sendToQ('I need help with a debt or bill. What do I do first?');
     } else {
-      qSay('Which one do I write about? Click "Help me with this" on the problem below.');
+      const topProb = problems[0];
+      sendToQ(`I need help with "${topProb.title}"${topProb.provider ? ' from ' + topProb.provider : ''}${topProb.amount ? ' — £' + fmt(topProb.amount) : ''}. Can you draft a letter or email I can send them?`);
     }
   });
 
@@ -1275,15 +1282,6 @@
     if (!r || !r.ok) { qSay('Something went wrong — try again in a moment.'); return; }
     const data = await r.json();
     qSay(data.reply || data.message || 'I had trouble with that — try asking again.');
-  }
-
-  async function getAdvice() {
-    qSay('Let me look at everything…', true);
-    const r = await apiFetch('/api/finance/advice', { method: 'POST' });
-    if (!r.ok) { qSay('Something went wrong — try again in a moment.'); return; }
-    const data = await r.json();
-    qSay(data.advice || 'No advice generated.');
-    toast('Q has reviewed your finances');
   }
 
   function qSay(msg, thinking = false) {
