@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>Q — Upload Document</title>
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #e8e8e8; --text: #1a1a1a;
+      --text-muted: rgba(0,0,0,0.45); --text-faint: rgba(0,0,0,0.28);
+      --accent: #e91e63;
+      --neu-raised: 8px 8px 22px #ababab, -6px -6px 16px #ffffff;
+      --neu-inset:  inset 4px 4px 10px #ababab, inset -3px -3px 8px #ffffff;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body {
+      background: var(--bg); color: var(--text);
+      font-family: 'Space Grotesk', system-ui, sans-serif;
+      min-height: 100vh; -webkit-font-smoothing: antialiased;
+    }
+    body { padding: 32px 20px 60px; display: flex; flex-direction: column; align-items: center; }
+
+    .logo { font-size: 32px; font-weight: 700; margin-bottom: 6px; }
+    .logo span { color: var(--accent); }
+    .session-label {
+      font-size: 14px; color: var(--text-muted); margin-bottom: 32px; text-align: center;
+    }
+
+    .upload-area {
+      width: 100%; max-width: 380px; border-radius: 20px;
+      background: var(--bg); box-shadow: var(--neu-raised);
+      padding: 28px 24px; display: flex; flex-direction: column;
+      align-items: center; gap: 18px;
+    }
+
+    .upload-icon { font-size: 48px; line-height: 1; }
+    .upload-title { font-size: 18px; font-weight: 700; text-align: center; }
+    .upload-sub   { font-size: 13px; color: var(--text-muted); text-align: center; line-height: 1.5; }
+
+    .btn-row { display: flex; flex-direction: column; gap: 10px; width: 100%; }
+
+    .upload-btn {
+      display: flex; align-items: center; justify-content: center; gap: 10px;
+      width: 100%; padding: 16px 20px; border: none; border-radius: 14px;
+      font-family: 'Space Grotesk', sans-serif; font-size: 15px; font-weight: 600;
+      cursor: pointer; transition: box-shadow 0.15s; position: relative; overflow: hidden;
+    }
+    .upload-btn input[type=file] {
+      position: absolute; inset: 0; opacity: 0; cursor: pointer; font-size: 0;
+    }
+    .btn-camera  { background: var(--accent); color: white; box-shadow: 0 4px 16px rgba(233,30,99,0.35); }
+    .btn-gallery { background: var(--bg); color: var(--text); box-shadow: var(--neu-raised); }
+    .btn-file    { background: var(--bg); color: var(--text); box-shadow: var(--neu-raised); }
+
+    .progress-wrap { width: 100%; display: none; flex-direction: column; gap: 8px; align-items: center; }
+    .progress-wrap.show { display: flex; }
+    .progress-bar-track { width: 100%; height: 6px; border-radius: 3px; background: var(--bg); box-shadow: var(--neu-inset); }
+    .progress-bar-fill  { height: 100%; border-radius: 3px; background: var(--accent); width: 0%; transition: width 0.3s; }
+    .progress-label { font-size: 12px; color: var(--text-muted); }
+
+    .success-wrap { display: none; flex-direction: column; align-items: center; gap: 10px; }
+    .success-wrap.show { display: flex; }
+    .success-icon { font-size: 52px; }
+    .success-title { font-size: 18px; font-weight: 700; }
+    .success-sub   { font-size: 13px; color: var(--text-muted); text-align: center; }
+    .upload-another {
+      margin-top: 6px; border: none; cursor: pointer; font-family: inherit;
+      font-size: 13px; color: var(--accent); background: transparent; text-decoration: underline;
+    }
+
+    .error-msg {
+      width: 100%; max-width: 380px; padding: 12px 16px;
+      background: rgba(239,68,68,0.08); color: #b91c1c;
+      border-radius: 10px; font-size: 13px; display: none; text-align: center;
+    }
+    .error-msg.show { display: block; }
+
+    .expired-wrap { text-align: center; }
+    .expired-wrap .exp-icon { font-size: 48px; margin-bottom: 12px; }
+    .expired-wrap h2 { font-size: 20px; font-weight: 700; margin-bottom: 8px; }
+    .expired-wrap p  { font-size: 13px; color: var(--text-muted); }
+
+    .loading-wrap { text-align: center; padding-top: 60px; }
+    .loading-wrap p { font-size: 14px; color: var(--text-muted); margin-top: 12px; }
+  </style>
+</head>
+<body>
+
+  <div class="logo">Q<span>.</span></div>
+  <div class="session-label" id="session-label">Loading…</div>
+
+  <div class="loading-wrap" id="loading-wrap">
+    <p>Checking upload link…</p>
+  </div>
+
+  <div class="expired-wrap" style="display:none" id="expired-wrap">
+    <div class="exp-icon">⏱️</div>
+    <h2>This link has expired</h2>
+    <p>Go back to your Q session and generate a new QR code.</p>
+  </div>
+
+  <div class="upload-area" style="display:none" id="upload-area">
+    <div class="upload-icon" id="upload-icon">📄</div>
+    <div class="upload-title" id="upload-title">Upload your document</div>
+    <div class="upload-sub" id="upload-sub">Take a photo, choose from your gallery, or pick a file</div>
+
+    <div class="btn-row" id="btn-row">
+      <button class="upload-btn btn-camera">
+        📷 Take a photo
+        <input type="file" accept="image/*" capture="environment" id="input-camera" />
+      </button>
+      <button class="upload-btn btn-gallery">
+        🖼️ Choose from gallery
+        <input type="file" accept="image/*" id="input-gallery" />
+      </button>
+      <button class="upload-btn btn-file">
+        📁 Choose a file
+        <input type="file" accept="image/*,.pdf,.csv,.txt,.doc,.docx" id="input-file" />
+      </button>
+    </div>
+
+    <div class="progress-wrap" id="progress-wrap">
+      <div class="progress-bar-track"><div class="progress-bar-fill" id="progress-fill"></div></div>
+      <div class="progress-label" id="progress-label">Uploading…</div>
+    </div>
+
+    <div class="success-wrap" id="success-wrap">
+      <div class="success-icon">✅</div>
+      <div class="success-title">Done!</div>
+      <div class="success-sub" id="success-sub">Your document has been sent. You can close this page.</div>
+      <button class="upload-another" id="upload-another">Upload another</button>
+    </div>
+  </div>
+
+  <div class="error-msg" id="error-msg"></div>
+
+  <script>
+  (() => {
+    'use strict';
+
+    const token = location.pathname.split('/').pop();
+    let sessionId = null;
+
+    const loadingWrap  = document.getElementById('loading-wrap');
+    const expiredWrap  = document.getElementById('expired-wrap');
+    const uploadArea   = document.getElementById('upload-area');
+    const sessionLabel = document.getElementById('session-label');
+    const btnRow       = document.getElementById('btn-row');
+    const progressWrap = document.getElementById('progress-wrap');
+    const progressFill = document.getElementById('progress-fill');
+    const progressLabel= document.getElementById('progress-label');
+    const successWrap  = document.getElementById('success-wrap');
+    const successSub   = document.getElementById('success-sub');
+    const errorMsg     = document.getElementById('error-msg');
+
+    // Customise icon + copy based on session meta
+    function applyMeta(meta) {
+      const icon  = document.getElementById('upload-icon');
+      const title = document.getElementById('upload-title');
+      const sub   = document.getElementById('upload-sub');
+      if (meta && meta.type === 'statement') {
+        icon.textContent  = '🏦';
+        title.textContent = 'Upload bank statement';
+        sub.textContent   = 'Take a photo of your statement, or choose a PDF/CSV file';
+      } else if (meta && meta.type === 'document') {
+        icon.textContent  = '📄';
+        title.textContent = 'Upload bill or letter';
+        sub.textContent   = 'Take a photo of the document or choose a file';
+      }
+    }
+
+    // Load session info
+    fetch('/api/doc-drop/by-token/' + token)
+      .then(r => r.ok ? r.json() : null)
+      .then(data => {
+        loadingWrap.style.display = 'none';
+        if (!data || !data.session) {
+          expiredWrap.style.display = '';
+          sessionLabel.textContent = 'Link not found';
+          return;
+        }
+        sessionId = data.session.id;
+        sessionLabel.textContent = data.session.label;
+        applyMeta(data.session.meta);
+        uploadArea.style.display = '';
+      })
+      .catch(() => {
+        loadingWrap.style.display = 'none';
+        expiredWrap.style.display = '';
+      });
+
+    // Wire all three input buttons to the same upload handler
+    ['input-camera','input-gallery','input-file'].forEach(id => {
+      document.getElementById(id).addEventListener('change', e => {
+        const file = e.target.files[0];
+        if (file) uploadFile(file);
+        e.target.value = '';
+      });
+    });
+
+    function showError(msg) {
+      errorMsg.textContent = msg;
+      errorMsg.classList.add('show');
+      setTimeout(() => errorMsg.classList.remove('show'), 6000);
+    }
+
+    async function uploadFile(file) {
+      if (!sessionId) { showError('Session not ready — try reloading'); return; }
+
+      // Switch to progress view
+      btnRow.style.display = 'none';
+      progressWrap.classList.add('show');
+      successWrap.classList.remove('show');
+      progressFill.style.width = '0%';
+      progressLabel.textContent = 'Uploading…';
+
+      const form = new FormData();
+      form.append('files', file, file.name);
+
+      // XHR so we get upload progress
+      const xhr = new XMLHttpRequest();
+      xhr.open('POST', '/api/doc-drop/upload/' + token);
+
+      xhr.upload.onprogress = e => {
+        if (e.lengthComputable) {
+          const pct = Math.round(e.loaded / e.total * 100);
+          progressFill.style.width = pct + '%';
+          progressLabel.textContent = pct < 100 ? `Uploading… ${pct}%` : 'Processing…';
+        }
+      };
+
+      xhr.onload = () => {
+        progressWrap.classList.remove('show');
+        if (xhr.status === 200) {
+          successWrap.classList.add('show');
+          successSub.textContent = 'Your document has been sent. You can close this page.';
+        } else {
+          btnRow.style.display = '';
+          let msg = 'Upload failed — please try again';
+          try { const j = JSON.parse(xhr.responseText); msg = j.error || msg; } catch {}
+          showError(msg);
+        }
+      };
+
+      xhr.onerror = () => {
+        progressWrap.classList.remove('show');
+        btnRow.style.display = '';
+        showError('Connection error — check your internet and try again');
+      };
+
+      xhr.send(form);
+    }
+
+    document.getElementById('upload-another').addEventListener('click', () => {
+      successWrap.classList.remove('show');
+      btnRow.style.display = '';
+    });
+
+  })();
+  </script>
+</body>
+</html>

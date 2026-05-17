@@ -11,6 +11,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/qrcode@1/build/qrcode.min.js"></script>
   <style>
     :root {
       --bg: #e8e8e8; --text: #1a1a1a;
@@ -368,14 +369,14 @@
     <div class="upload-zone" id="uz-statement" tabindex="0">
       <div class="uz-icon">🏦</div>
       <div class="uz-title">Drop your bank statement</div>
-      <div class="uz-sub">CSV or PDF • or <button class="paste-btn" id="paste-btn" type="button">paste text</button></div>
+      <div class="uz-sub">CSV or PDF • or <button class="paste-btn" id="paste-btn" type="button">paste text</button> • or <button class="paste-btn" id="qr-statement-btn" type="button">📱 scan from phone</button></div>
       <div class="uz-progress">Q is reading your statement…</div>
       <input type="file" id="file-statement" accept=".csv,.pdf,.txt" />
     </div>
     <div class="upload-zone" id="uz-doc" tabindex="0">
       <div class="uz-icon">📄</div>
       <div class="uz-title">Drop a bill or debt letter</div>
-      <div class="uz-sub">Photo, PDF, or any document</div>
+      <div class="uz-sub">Photo, PDF, or any document • or <button class="paste-btn" id="qr-doc-btn" type="button">📱 scan from phone</button></div>
       <div class="uz-progress">Q is reading the document…</div>
       <input type="file" id="file-doc" accept="image/*,.pdf" />
     </div>
@@ -516,6 +517,22 @@
     <div class="modal-actions">
       <button class="cancel" id="paste-cancel">Cancel</button>
       <button class="save" id="paste-confirm">Import</button>
+    </div>
+  </div>
+</div>
+
+<!-- QR CODE MODAL -->
+<div class="modal-bg" id="qr-modal">
+  <div class="modal" style="max-width:340px;text-align:center">
+    <h3 id="qr-modal-title">Scan to upload from phone</h3>
+    <p style="font-size:12px;color:var(--text-muted);margin-bottom:16px" id="qr-modal-sub">Open your camera app and point it at this code</p>
+    <div id="qr-code-wrap" style="display:flex;justify-content:center;margin-bottom:16px">
+      <canvas id="qr-canvas" width="200" height="200" style="border-radius:12px;box-shadow:var(--neu-raised-sm)"></canvas>
+    </div>
+    <div style="font-size:11px;color:var(--text-muted);margin-bottom:6px" id="qr-status">Waiting for upload…</div>
+    <div style="font-size:11px;color:var(--text-faint);margin-bottom:16px">Link expires in 30 minutes</div>
+    <div class="modal-actions" style="justify-content:center">
+      <button class="cancel" id="qr-close">Close</button>
     </div>
   </div>
 </div>
@@ -1251,6 +1268,95 @@
     el.classList.add('show');
     if (toastTimer) clearTimeout(toastTimer);
     toastTimer = setTimeout(() => el.classList.remove('show'), dur);
+  }
+
+  // ── QR doc drop ───────────────────────────────────────────────────────────
+  let qrPollTimer   = null;
+  let qrSessionId   = null;
+  let qrSessionType = null; // 'statement' | 'document'
+  let qrKnownFiles  = new Set();
+
+  document.getElementById('qr-statement-btn').addEventListener('click', e => { e.stopPropagation(); openQrModal('statement'); });
+  document.getElementById('qr-doc-btn').addEventListener('click',       e => { e.stopPropagation(); openQrModal('document'); });
+  document.getElementById('qr-close').addEventListener('click', closeQrModal);
+  document.getElementById('qr-modal').addEventListener('click', e => { if (e.target.id === 'qr-modal') closeQrModal(); });
+
+  async function openQrModal(type) {
+    qrSessionType = type;
+    const label = type === 'statement' ? 'Bank statement upload' : 'Bill / letter upload';
+    document.getElementById('qr-modal-title').textContent = type === 'statement' ? 'Scan to send your statement' : 'Scan to send a bill or letter';
+    document.getElementById('qr-status').textContent = 'Waiting for upload…';
+    document.getElementById('qr-modal').classList.add('show');
+
+    const r = await apiFetch('/api/doc-drop/sessions', { method: 'POST', body: { label, meta: { type } } });
+    if (!r.ok) { toast('Could not create upload link'); closeQrModal(); return; }
+    const { session } = await r.json();
+    qrSessionId = session.id;
+    qrKnownFiles = new Set(session.files.map(f => f.id));
+
+    // Generate QR code onto the canvas
+    const uploadUrl = location.origin + '/doc-drop/' + session.token;
+    QRCode.toCanvas(document.getElementById('qr-canvas'), uploadUrl, { width: 200, margin: 1, color: { dark: '#1a1a1a', light: '#e8e8e8' } });
+
+    // Start polling
+    qrPollTimer = setInterval(() => pollQrSession(), 3000);
+  }
+
+  async function pollQrSession() {
+    if (!qrSessionId) return;
+    const r = await apiFetch('/api/doc-drop/sessions/' + qrSessionId);
+    if (!r.ok) return;
+    const { session } = await r.json();
+    const newFiles = session.files.filter(f => !qrKnownFiles.has(f.id));
+    if (!newFiles.length) return;
+
+    // New file arrived — process it
+    newFiles.forEach(f => qrKnownFiles.add(f.id));
+    document.getElementById('qr-status').textContent = `✓ ${newFiles.length} file received — processing…`;
+
+    for (const f of newFiles) {
+      const fr = await apiFetch('/api/doc-drop/sessions/' + qrSessionId + '/files/' + f.id);
+      if (!fr.ok) continue;
+      const { base64, mimeType } = await fr.json();
+      if (qrSessionType === 'statement') {
+        // Send to statement importer
+        showUploadProgress('uz-statement', true);
+        const sr = await apiFetch('/api/finance/statement', { method: 'POST', body: { text: `[image upload: ${f.filename}]` } }).catch(() => null);
+        // Actually send it through the document extractor first to get text, then import
+        const dr = await apiFetch('/api/finance/document', { method: 'POST', body: { imageBase64: base64, mimeType } });
+        showUploadProgress('uz-statement', false);
+        if (dr.ok) { toast('📱 Statement received from phone — Q is reading it'); await loadAll(); }
+      } else {
+        // Send to document extractor
+        showUploadProgress('uz-doc', true);
+        const dr = await apiFetch('/api/finance/document', { method: 'POST', body: { imageBase64: base64, mimeType } });
+        showUploadProgress('uz-doc', false);
+        if (dr.ok) {
+          const extracted = await dr.json();
+          if (!extracted.error) {
+            const prob = await apiFetch('/api/finance/problems', {
+              method: 'POST',
+              body: {
+                type: extracted.type === 'bill' ? 'bill' : 'debt',
+                title: extracted.headline || (extracted.provider + ' document'),
+                provider: extracted.provider, amount: extracted.amount_gbp,
+                dueDate: extracted.due_date, urgency: extracted.urgency || 'medium',
+              },
+            });
+            if (prob.ok) { const p = await prob.json(); problems.unshift(p); renderProblems(); }
+            toast('📱 Document received and read from phone ✓');
+          }
+        }
+      }
+    }
+    document.getElementById('qr-status').textContent = '✓ Done — scan again to add more';
+  }
+
+  function closeQrModal() {
+    document.getElementById('qr-modal').classList.remove('show');
+    if (qrPollTimer) { clearInterval(qrPollTimer); qrPollTimer = null; }
+    if (qrSessionId) { apiFetch('/api/doc-drop/sessions/' + qrSessionId, { method: 'DELETE' }).catch(() => {}); }
+    qrSessionId = null;
   }
 
   // ── Init ──────────────────────────────────────────────────────────────────

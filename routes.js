@@ -1339,6 +1339,55 @@ router.post('/email-writer/reply', express.json({ limit: '256kb' }), async (req,
     }
 });
 
+// ── DOC DROP — QR-code document upload ────────────────────────────────
+// Shared plugin. Desktop creates a session → QR → phone uploads → desktop polls.
+const docDrop = require('./plugins/doc-drop');
+const multer  = require('multer');
+const os      = require('os');
+const docDropUpload = multer({ dest: os.tmpdir(), limits: { fileSize: 25 * 1024 * 1024 } });
+
+// Mobile upload page (public — no auth, token = auth)
+router.get('/doc-drop/:token', (req, res) => {
+    res.sendFile(path.join(__dirname, 'doc-drop-mobile.html'));
+});
+
+// Session info by token (public — mobile page calls this on load)
+router.get('/api/doc-drop/by-token/:token', (req, res) => {
+    const session = docDrop.getSessionByToken(req.params.token);
+    if (!session) return res.status(404).json({ error: 'Invalid or expired link' });
+    res.json({ session });
+});
+
+// Upload by token (public — mobile page calls this)
+router.post('/api/doc-drop/upload/:token', docDropUpload.array('files', 10), docDrop.makeUploadHandler());
+
+// Create a session (authenticated)
+router.post('/api/doc-drop/sessions', requirePerson, express.json({ limit: '4kb' }), (req, res) => {
+    const { label, meta } = req.body || {};
+    const session = docDrop.createSession(label || 'Upload', req.person.email, { meta: meta || {} });
+    res.json({ session });
+});
+
+// Poll for uploaded files (authenticated)
+router.get('/api/doc-drop/sessions/:id', requirePerson, (req, res) => {
+    const session = docDrop.getSession(req.params.id, req.person.email);
+    if (!session) return res.status(404).json({ error: 'Session not found' });
+    res.json({ session });
+});
+
+// Read a file from a session as base64 (authenticated — for processing)
+router.get('/api/doc-drop/sessions/:id/files/:fileId', requirePerson, (req, res) => {
+    const file = docDrop.readFileAsBase64(req.params.id, req.params.fileId, req.person.email);
+    if (!file) return res.status(404).json({ error: 'File not found' });
+    res.json(file);
+});
+
+// Delete a session + its files (authenticated)
+router.delete('/api/doc-drop/sessions/:id', requirePerson, (req, res) => {
+    const result = docDrop.deleteSession(req.params.id, req.person.email);
+    res.json(result);
+});
+
 // ── FINANCE — personal finance engine ─────────────────────────────────
 // All routes require sign-in. Data is scoped to req.person.email — no
 // cross-user bleed is possible. Bank statement data is GDPR-sensitive.
