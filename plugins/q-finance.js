@@ -26,14 +26,15 @@ const { userDataPath }   = require('./user-data');
 const { cleanModelOutput } = require('./cjk-filter');
 
 // Call Together AI via plain fetch — same pattern as q-email-writer.js
-async function togetherChat({ model, messages, temperature = 0, max_tokens = 4000 }) {
+// Pass extra = { response_format, ... } for JSON mode etc.
+async function togetherChat({ model, messages, temperature = 0, max_tokens = 4000, ...extra }) {
     const res = await fetch(`${Q_CONFIG.baseURL}/chat/completions`, {
         method: 'POST',
         headers: {
             'Authorization': `Bearer ${Q_CONFIG.apiKey}`,
             'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ model, messages, temperature, max_tokens }),
+        body: JSON.stringify({ model, messages, temperature, max_tokens, ...extra }),
     });
     if (!res.ok) {
         const err = await res.text();
@@ -95,37 +96,35 @@ function saveProblems(email, problems) {
 
 // ── Statement parsing ─────────────────────────────────────────────
 
-const PARSE_SYSTEM = `You are a bank statement parser. The user will give you raw text extracted from a bank statement PDF or a CSV export. Extract every transaction into a JSON array.
+const PARSE_SYSTEM = `You are a bank statement parser. Extract every transaction from the raw text and return them as a JSON object.
 
-Each transaction object:
-{
-  "date":        "YYYY-MM-DD",
-  "description": "exact merchant/payee text from the statement",
-  "amount":      number (NEGATIVE for money leaving = debits/payments/money-out. POSITIVE for money coming in = credits/income/money-in),
-  "merchant":    "cleaned merchant name (e.g. 'McDonald\\'s', 'Netflix', 'HMRC')"
-}
+REQUIRED OUTPUT FORMAT — return ONLY this JSON object, nothing else:
+{"rows": [{"date":"YYYY-MM-DD","description":"payee text","amount":number,"merchant":"clean name"}, ...]}
 
-MONZO STATEMENT LAYOUT: Columns are Date | Description | Money out | Money in | Balance.
-- "Money out" column = NEGATIVE amount (money leaving the account).
-- "Money in" column = POSITIVE amount (money coming into the account).
-- The Balance column is a running total — NOT a transaction amount. Ignore it.
-- Skip rows labelled "Opening balance" and "Closing balance" — those are summaries, not transactions.
+amount is NEGATIVE for money leaving (debits / money-out). POSITIVE for money coming in (credits / money-in).
 
-GENERAL RULES:
-- Parse ALL transactions — do not skip, summarise, or truncate.
-- Amounts may have £ signs, commas, or spaces — strip them and parse as plain numbers (e.g. "£1,234.56" → 1234.56).
-- UK date formats: "02 Feb 2026" → "2026-02-02". "02/02/2026" → "2026-02-02". "02-02-2026" → "2026-02-02". If year is missing use the most recent plausible year.
-- When a row has a value only in the "Money out" column and nothing in "Money in", the amount is NEGATIVE.
-- When a row has a value only in the "Money in" column and nothing in "Money out", the amount is POSITIVE.
-- Ignore column headers, footer/legal text, account summary rows, and running totals.
-- If you cannot parse a line, skip it silently.
-- Return ONLY a JSON array. No markdown, no commentary, no explanation.`;
+MONZO STATEMENT LAYOUT: columns are Date | Description | Money out | Money in | Balance.
+- Value in "Money out" column → NEGATIVE amount.
+- Value in "Money in" column → POSITIVE amount.
+- Balance column = running total, NOT a transaction. Ignore it entirely.
+- Skip "Opening balance" and "Closing balance" rows.
+
+UK DATE FORMATS: "02 Feb 2026" → "2026-02-02". "02/02/2026" → "2026-02-02". If year missing, use most recent plausible year.
+AMOUNTS: numbers may have commas (1,234.56 → 1234.56). Strip any currency symbols already removed by pre-processing.
+SKIP: column headers, page headers/footers, legal text, account summary rows, running totals.
+INCLUDE: every real payment/transfer/income row, even small ones.
+
+Return ONLY the JSON object. No explanation, no markdown, no commentary.`;
 
 async function parseChunk(chunk, idx, total) {
     if (idx === 0) console.log(`[finance] chunk 1 text sample: ${chunk.slice(0, 500).replace(/\n/g, '↵')}`);
+    // response_format: json_object forces V4 Pro to output JSON only — prevents it
+    // narrating the task back to itself instead of producing the array.
+    // Wrapped in {"rows":[...]} because json_object mode requires an object root.
     const raw = cleanModelOutput(await togetherChat({
-        model:      Q_CONFIG.model,
-        max_tokens: 4000,
+        model:           Q_CONFIG.model,
+        max_tokens:      4000,
+        response_format: { type: 'json_object' },
         messages: [
             { role: 'system', content: PARSE_SYSTEM },
             { role: 'user',   content: chunk },
@@ -133,13 +132,25 @@ async function parseChunk(chunk, idx, total) {
     }));
     console.log(`[finance] chunk ${idx + 1}/${total} model reply (first 300): ${raw.slice(0, 300).replace(/\n/g, '↵')}`);
     try {
-        const m = raw.match(/\[[\s\S]*\]/);
-        const rows = m ? JSON.parse(m[0]) : [];
+        // Primary: parse the json_object wrapper {"rows":[...]}
+        const obj = JSON.parse(raw);
+        const rows = Array.isArray(obj.rows) ? obj.rows
+                   : Array.isArray(obj.transactions) ? obj.transactions
+                   : Array.isArray(obj) ? obj
+                   : [];
         console.log(`[finance] chunk ${idx + 1}/${total}: ${rows.length} transactions`);
         return rows;
     } catch {
-        console.log(`[finance] chunk ${idx + 1}/${total}: parse failed — raw: ${raw.slice(0, 200)}`);
-        return [];
+        // Fallback: model ignored JSON mode — try extracting array from prose
+        try {
+            const m = raw.match(/\[[\s\S]*\]/);
+            const rows = m ? JSON.parse(m[0]) : [];
+            console.log(`[finance] chunk ${idx + 1}/${total}: fallback extracted ${rows.length} transactions`);
+            return rows;
+        } catch {
+            console.log(`[finance] chunk ${idx + 1}/${total}: parse failed — raw: ${raw.slice(0, 200)}`);
+            return [];
+        }
     }
 }
 
