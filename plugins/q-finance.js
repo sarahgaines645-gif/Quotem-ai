@@ -112,26 +112,43 @@ Rules:
 - If you cannot parse a line, skip it silently.
 - Return ONLY a JSON array. No markdown, no commentary.`;
 
-async function parseStatementText(rawText) {
+async function parseChunk(chunk, idx, total) {
     const raw = cleanModelOutput(await togetherChat({
         model:      Q_CONFIG.model,
-        max_tokens: 32000,
+        max_tokens: 4000,
         messages: [
             { role: 'system', content: PARSE_SYSTEM },
-            { role: 'user',   content: rawText.slice(0, 40000) },
+            { role: 'user',   content: chunk },
         ],
     }));
-    console.log(`[finance] parseStatementText raw response: ${raw.length} chars, first 400: ${raw.slice(0, 400).replace(/\n/g, '↵')}`);
     try {
         const m = raw.match(/\[[\s\S]*\]/);
-        if (!m) { console.log('[finance] parseStatementText: no JSON array found in response'); return []; }
-        const parsed = JSON.parse(m[0]);
-        console.log(`[finance] parseStatementText: parsed ${parsed.length} transactions`);
-        return parsed;
-    } catch (e) {
-        console.log(`[finance] parseStatementText JSON.parse failed: ${e.message}`);
+        const rows = m ? JSON.parse(m[0]) : [];
+        console.log(`[finance] chunk ${idx + 1}/${total}: ${rows.length} transactions`);
+        return rows;
+    } catch {
+        console.log(`[finance] chunk ${idx + 1}/${total}: parse failed — raw: ${raw.slice(0, 200)}`);
         return [];
     }
+}
+
+async function parseStatementText(rawText) {
+    const text = rawText.slice(0, 40000);
+    // Chunk into ~10K pieces with 200-char overlap so we don't split mid-transaction.
+    // Each chunk produces ≤4K output tokens — well within Together AI limits.
+    // Chunks run in parallel so total time ≈ slowest single chunk, not sum.
+    const CHUNK = 10000;
+    const OVERLAP = 200;
+    const chunks = [];
+    for (let i = 0; i < text.length; i += CHUNK - OVERLAP) {
+        chunks.push(text.slice(i, i + CHUNK));
+        if (i + CHUNK >= text.length) break;
+    }
+    console.log(`[finance] parseStatementText: ${chunks.length} chunk(s), ${text.length} chars total`);
+    const results = await Promise.all(chunks.map((c, i) => parseChunk(c, i, chunks.length)));
+    const all = results.flat();
+    console.log(`[finance] parseStatementText: ${all.length} total transactions`);
+    return all;
 }
 
 const CATEGORISE_SYSTEM = `You are a personal finance categoriser. Given a list of bank transactions, assign a category to each one.
