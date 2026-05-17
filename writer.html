@@ -601,6 +601,7 @@
       font-size: 12px; color: var(--text); line-height: 1.5;
       display: grid; grid-template-columns: 1fr 1fr; gap: 0 16px;
     }
+    .brief-col { min-width: 0; }
     .brief-board.board-mode .brief-board-body {
       display: flex; flex-direction: column; grid-template-columns: unset;
     }
@@ -1117,13 +1118,20 @@
 
       const esc = s => (s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 
+      // documentType comes from Q's brief. If he omits it, fall back to the
+      // uploaded file's name (extension stripped, separators spaced) rather
+      // than the bare generic "Your Assignment".
+      const fileFallback = (sourceState.name || '')
+        .replace(/\.[a-z0-9]+$/i, '').replace(/[._-]+/g, ' ').trim();
+      const docType = data.documentType || fileFallback || 'Your Assignment';
+
       // Left column: document type + "it's asking you to" bullets
       const asks = (data.asksYouTo || data.markedSections && data.markedSections.map(s => s.name) || []);
       const askItems = asks.map(a => `<li>${esc(a)}</li>`).join('');
-      const leftHtml = `
-        <div class="brief-doctype">${esc(data.documentType || 'Your Assignment')}</div>
+      const leftHtml = `<div class="brief-col">
+        <div class="brief-doctype">${esc(docType)}</div>
         <div class="brief-asks-label">It's asking you to:</div>
-        <ul class="brief-asks-list">${askItems}</ul>`;
+        <ul class="brief-asks-list">${askItems}</ul></div>`;
 
       // Right column: what you're producing + grade chips
       const gb = data.gradeBands || {};
@@ -1133,10 +1141,10 @@
         ${gb.low ? `<span class="brief-grade-chip low">⚠️ ${esc(gb.low)}</span>` : ''}
       </div>` : '';
       const producing = data.youreProducing || data.whatItWants || '';
-      const rightHtml = `
+      const rightHtml = `<div class="brief-col">
         <div class="brief-producing-label">You're producing:</div>
         <div class="brief-producing-text">${esc(producing)}</div>
-        ${gradeHtml}`;
+        ${gradeHtml}</div>`;
 
       body.innerHTML = leftHtml + rightHtml;
       board.classList.remove('hidden');
@@ -1211,7 +1219,7 @@
       try {
         const reply = await qWriterChat(
           'I\'ve given you my task above. Read the whole thing, work out what it\'s really asking (the task is often buried after headers and tables), and build my brief.',
-          12000, true
+          12000, false
         );
         const { data: b } = parseQBlock(reply, 'writer-brief');
         if (!b) throw new Error('no brief block');
