@@ -612,7 +612,10 @@ async function chat(messages, options = {}) {
 
             // No tool calls → Q's done. Capture the draft and exit the loop.
             if (!useTools || !callsRequested || callsRequested.length === 0) {
-                draftReply = message?.content || '';
+                // V4 Pro sometimes puts the full reply in message.reasoning instead
+                // of message.content (thinking-mode quirk on Together AI). Fall back
+                // to the reasoning field so the response isn't lost.
+                draftReply = message?.content || message?.reasoning_content || message?.reasoning || '';
                 // If the model returned empty content with no tool call, log
                 // the diagnostic context and surface one of Q's friendly
                 // rotating messages instead of leaving the chat empty.
@@ -620,7 +623,7 @@ async function chat(messages, options = {}) {
                     console.warn('[q-chat] empty reply from model. iteration=' + iteration
                         + ' finish_reason=' + (choice?.finish_reason || 'unknown')
                         + ' has_message=' + !!message
-                        + ' has_reasoning=' + !!message?.reasoning_content
+                        + ' has_reasoning=' + !!(message?.reasoning_content || message?.reasoning)
                         + ' raw_choice=' + JSON.stringify(choice).substring(0, 500));
                     draftReply = pickFriendlyError();
                 }

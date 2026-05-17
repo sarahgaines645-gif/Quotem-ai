@@ -40,7 +40,8 @@ async function togetherChat({ model, messages, temperature = 0, max_tokens = 400
         throw new Error(`Together AI ${res.status}: ${err.slice(0, 300)}`);
     }
     const json = await res.json();
-    return json.choices?.[0]?.message?.content || '';
+    const msg = json.choices?.[0]?.message || {};
+    return msg.content || msg.reasoning_content || msg.reasoning || '';
 }
 
 // ── File helpers ──────────────────────────────────────────────────
@@ -113,6 +114,7 @@ Rules:
 - Return ONLY a JSON array. No markdown, no commentary.`;
 
 async function parseChunk(chunk, idx, total) {
+    if (idx === 0) console.log(`[finance] chunk 1 text sample: ${chunk.slice(0, 500).replace(/\n/g, '↵')}`);
     const raw = cleanModelOutput(await togetherChat({
         model:      Q_CONFIG.model,
         max_tokens: 4000,
@@ -121,6 +123,7 @@ async function parseChunk(chunk, idx, total) {
             { role: 'user',   content: chunk },
         ],
     }));
+    console.log(`[finance] chunk ${idx + 1}/${total} model reply (first 300): ${raw.slice(0, 300).replace(/\n/g, '↵')}`);
     try {
         const m = raw.match(/\[[\s\S]*\]/);
         const rows = m ? JSON.parse(m[0]) : [];
