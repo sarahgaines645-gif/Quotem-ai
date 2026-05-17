@@ -517,6 +517,35 @@ const TOOL_DEFINITIONS = [
             },
         },
     },
+    // ── Finance ────────────────────────────────────────────────────
+    {
+        type: 'function',
+        function: {
+            name: 'read_finance',
+            description: "Read the user's complete financial picture from the Finance page — spending summary, top categories, subscriptions, open debt/bill problems, and recent transactions. Call this whenever the user mentions money, bills, subscriptions, spending, debt, or asks anything about their finances. Returns real numbers from their uploaded bank statements.",
+            parameters: { type: 'object', properties: {} },
+        },
+    },
+    {
+        type: 'function',
+        function: {
+            name: 'add_finance_problem',
+            description: "Add a debt, disputed bill, or financial problem to the user's Finance page problem queue. Use this when the user mentions a bill they can't pay, a dispute with a company, a missed payment, or anything they need to actively deal with. Shows up on /finance under their debt queue.",
+            parameters: {
+                type: 'object',
+                properties: {
+                    title:    { type: 'string', description: 'Short description, e.g. "Council Tax arrears — £340"' },
+                    provider: { type: 'string', description: 'Company or creditor name' },
+                    amount:   { type: 'number', description: 'Amount owed in £, if known' },
+                    dueDate:  { type: 'string', description: 'Due date as YYYY-MM-DD if there is a deadline' },
+                    type:     { type: 'string', enum: ['debt', 'dispute', 'bill', 'subscription', 'other'] },
+                    urgency:  { type: 'string', enum: ['urgent', 'high', 'medium', 'low'], description: 'urgent = bailiffs/cut-off. high = final notice. medium = due soon. low = watch.' },
+                    notes:    { type: 'string', description: 'Extra context' },
+                },
+                required: ['title'],
+            },
+        },
+    },
     // ── Life admin: calendar + tasks ──────────────────────────────
     {
         type: 'function',
@@ -836,6 +865,8 @@ async function executeTool(name, argsRaw, personId, personEmail) {
         case 'read_thread':          return readThreadTool(args, personEmail);
         case 'add_email_to_thread':  return addEmailToThreadTool(args, personEmail);
         case 'add_note_to_thread':   return addNoteToThreadTool(args, personEmail);
+        case 'read_finance':         return readFinanceTool(personEmail);
+        case 'add_finance_problem':  return addFinanceProblemTool(args, personEmail);
         // Life — calendar + tasks
         case 'add_event':            return addEventTool(args, personEmail);
         case 'list_events':          return listEventsTool(args, personEmail);
@@ -1149,6 +1180,61 @@ function addNoteToThreadTool({ threadId, content, kind } = {}, personEmail) {
     };
 }
 
+// ── Finance ──────────────────────────────────────────────────────────────
+
+const qFinance = require('./q-finance');
+
+function readFinanceTool(personEmail) {
+    if (!personEmail) return { error: 'Cannot read finance without a signed-in user.' };
+    try {
+        const txns = qFinance.getTransactions(personEmail);
+        if (!txns.length) {
+            return {
+                hasData: false,
+                instruction_for_q: 'No transactions loaded yet. Tell the user to upload a bank statement (PDF or CSV) on the Finance page first — go to /finance and use the upload strip at the top.',
+            };
+        }
+        const graph = qFinance.getSpendingGraphData(personEmail);
+        const problems = qFinance.getProblemQueue(personEmail);
+        const recent = txns.slice().reverse().slice(0, 30);
+        return {
+            hasData: true,
+            summary: graph.summary,
+            by_category: graph.by_category,
+            subscriptions: graph.subscriptions.slice(0, 15),
+            openProblems: problems.slice(0, 10),
+            recentTransactions: recent,
+            instruction_for_q: "You now have the user's full financial picture. Speak specifically — name real merchants, real amounts, real categories. If there are open problems, lead with the urgent/high ones.",
+        };
+    } catch (e) {
+        return { error: 'Could not read finance data: ' + e.message };
+    }
+}
+
+function addFinanceProblemTool({ title, provider, amount, dueDate, type, urgency, notes } = {}, personEmail) {
+    if (!personEmail) return { error: 'Cannot add a problem without a signed-in user.' };
+    if (!title) return { error: 'title is required' };
+    try {
+        const problem = qFinance.addProblem(personEmail, {
+            title,
+            provider: provider || null,
+            amount:   amount != null ? parseFloat(amount) : null,
+            dueDate:  dueDate || null,
+            type:     type || 'debt',
+            urgency:  urgency || 'medium',
+            notes:    notes || null,
+        });
+        return {
+            ok: true,
+            id: problem.id,
+            title: problem.title,
+            instruction_for_q: `Problem "${problem.title}" added to the Finance page debt queue. Tell the user it's saved and visible on /finance. Ask if they want you to draft a letter or plan next steps.`,
+        };
+    } catch (e) {
+        return { error: 'Could not add problem: ' + e.message };
+    }
+}
+
 // ── Life — calendar + tasks ─────────────────────────────────────────────
 
 function addEventTool({ title, date, time, location, notes, category } = {}, personEmail) {
@@ -1303,6 +1389,9 @@ const ALWAYS_ON = new Set([
     // to one (anywhere — main chat, email writer, inside a Thread).
     'list_threads', 'read_thread', 'save_situation',
     'add_email_to_thread', 'add_note_to_thread',
+    // Finance tools — always available so Q can read and update the finance
+    // data store from any page, not just when on /finance.
+    'read_finance', 'add_finance_problem',
     // Life tools (add_event / list_events / add_task / list_tasks /
     // complete_task / update_life_context) are trigger-gated below — only
     // attached when the user's message clearly asks for them. Keeping them
