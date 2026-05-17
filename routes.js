@@ -964,8 +964,15 @@ router.post('/chat', requirePerson, express.json({ limit: '24mb' }), async (req,
             { role: 'user', content: userMemoryContent },
         ];
         appendMessage(person.id, 'user', userMemoryContent, surface);
+        if (surface === 'writer') {
+            console.log('[/chat writer] IN msg=' + effectiveMessage.length + ' chars, images=' + images.length + ', reasoning=' + (reasoningEffort || 'off') + ', history=' + history.length);
+        }
         const result = await chat(messagesForQ, chatOptions);
         if (result.reply) appendMessage(person.id, 'assistant', result.reply, surface);
+        if (surface === 'writer') {
+            const r = result.reply || '';
+            console.log('[/chat writer] OUT reply=' + r.length + ' chars, hasBriefBlock=' + /```writer-brief/.test(r) + ', upstreamStatus=' + (result.upstreamStatus || 'ok') + ', first 200: ' + r.slice(0, 200).replace(/\n/g, ' '));
+        }
         return res.json(result);
     }
 
@@ -1026,14 +1033,17 @@ router.post('/extract-text', requirePerson, express.json({ limit: '24mb' }), asy
     const mimeType = match[1];
     const buffer = Buffer.from(match[2], 'base64');
     const lowerName = String(name).toLowerCase();
+    console.log('[extract-text] received name="' + name + '" mime=' + mimeType + ' bytes=' + buffer.length);
 
     try {
         // PDF
         if (mimeType === 'application/pdf' || lowerName.endsWith('.pdf')) {
             const pdfParse = require('pdf-parse');
             const data = await pdfParse(buffer);
+            const pdfText = (data.text || '').trim();
+            console.log('[extract-text] pdf "' + name + '" → ' + pdfText.length + ' chars, ' + (data.numpages || 0) + ' pages, first 300: ' + pdfText.slice(0, 300).replace(/\n/g, ' '));
             return res.json({
-                text: (data.text || '').trim(),
+                text: pdfText,
                 pages: data.numpages || 0,
                 name,
                 kind: 'pdf',
@@ -1046,8 +1056,10 @@ router.post('/extract-text', requirePerson, express.json({ limit: '24mb' }), asy
         ) {
             const mammoth = require('mammoth');
             const result = await mammoth.extractRawText({ buffer });
+            const docxText = (result.value || '').trim();
+            console.log('[extract-text] docx "' + name + '" → ' + docxText.length + ' chars, first 300: ' + docxText.slice(0, 300).replace(/\n/g, ' '));
             return res.json({
-                text: (result.value || '').trim(),
+                text: docxText,
                 name,
                 kind: 'docx',
             });
