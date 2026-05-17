@@ -220,7 +220,7 @@
 
     /* ── Floating coach card ─────────────────────────────────────────────── */
     .coach-card {
-      position: fixed; right: 28px; bottom: 20px;
+      position: fixed; right: 28px; top: 50%; transform: translateY(-50%);
       width: 210px; min-height: 100px;
       background: var(--bg); border-radius: 18px;
       box-shadow: 10px 10px 28px #ababab, -8px -8px 20px #ffffff;
@@ -568,8 +568,8 @@
 
     /* ── Brief Board (Q's whiteboard) ──────────────────────────────────── */
     .brief-board {
-      position: fixed; right: 28px; top: 14px;
-      width: 284px; max-height: calc(52vh - 20px);
+      position: fixed; left: 50%; top: 88px; transform: translateX(-50%);
+      width: min(540px, calc(100vw - 32px)); max-height: 220px;
       background: var(--bg); border-radius: 18px;
       box-shadow: 10px 10px 28px #ababab, -8px -8px 20px #ffffff;
       display: flex; flex-direction: column; z-index: 101;
@@ -577,11 +577,13 @@
     }
     .brief-board.hidden { display: none; }
     .brief-board.minimised { max-height: 40px; }
+    .brief-board.dragged { transform: none; }
     .brief-board-head {
       display: flex; align-items: center; gap: 8px;
-      padding: 10px 14px 8px; flex-shrink: 0;
-      cursor: pointer; user-select: none;
+      padding: 9px 14px 7px; flex-shrink: 0;
+      cursor: grab; user-select: none;
     }
+    .brief-board-head:active { cursor: grabbing; }
     .brief-board-badge {
       font-size: 10px; font-weight: 700; text-transform: uppercase;
       letter-spacing: 0.07em; color: var(--accent); flex: 1;
@@ -593,34 +595,36 @@
     }
     .brief-board-head:hover .brief-board-tog { color: var(--text); }
     .brief-board-body {
-      padding: 0 14px 12px; overflow-y: auto;
+      padding: 0 16px 12px; overflow-y: auto;
       scrollbar-width: none; -ms-overflow-style: none;
       font-family: 'Space Grotesk', sans-serif;
       font-size: 12px; color: var(--text); line-height: 1.5;
+      display: grid; grid-template-columns: 1fr 1fr; gap: 0 20px;
     }
     .brief-board-body::-webkit-scrollbar { display: none; }
-    .brief-board-body h1, .brief-board-body h2 {
-      font-size: 11px; font-weight: 700; text-transform: uppercase;
-      letter-spacing: 0.05em; color: var(--text-muted); margin: 8px 0 3px;
+    /* left column: what it is + asks */
+    .brief-col-left { grid-column: 1; }
+    /* right column: producing + grades */
+    .brief-col-right { grid-column: 2; padding-top: 1px; }
+    .brief-doctype {
+      font-size: 13px; font-weight: 700; color: var(--text);
+      margin-bottom: 6px; line-height: 1.3;
     }
-    .brief-board-body h3 { font-size: 12px; font-weight: 600; color: var(--text); margin: 6px 0 3px; }
-    .brief-board-body p { margin: 0 0 5px; }
-    .brief-board-body ul, .brief-board-body ol { padding-left: 14px; margin: 0 0 5px; }
-    .brief-board-body li { margin-bottom: 2px; }
-    .brief-board-body strong { font-weight: 600; }
-    .brief-board-body em { color: var(--text-muted); font-style: italic; }
-    .brief-board-body hr { border: none; border-top: 1px solid rgba(0,0,0,0.07); margin: 7px 0; }
-    /* section list */
-    .brief-sections { display: flex; flex-direction: column; gap: 4px; margin: 5px 0; }
-    .brief-sec {
-      display: grid; grid-template-columns: 18px 1fr; gap: 5px; align-items: start;
-      padding: 5px 7px; border-radius: 7px; background: rgba(0,0,0,0.03);
+    .brief-asks-label {
+      font-size: 10px; font-weight: 700; text-transform: uppercase;
+      letter-spacing: 0.06em; color: var(--text-muted); margin-bottom: 4px;
     }
-    .brief-sec-n { font-size: 10px; font-weight: 700; color: var(--accent); margin-top: 1px; }
-    .brief-sec-name { font-size: 11px; font-weight: 600; color: var(--text); }
-    .brief-sec-desc { font-size: 10px; color: var(--text-muted); line-height: 1.4; margin-top: 1px; }
+    .brief-asks-list { margin: 0 0 0 12px; padding: 0; list-style: disc; }
+    .brief-asks-list li { font-size: 11px; color: var(--text); margin-bottom: 2px; line-height: 1.4; }
+    .brief-producing-label {
+      font-size: 10px; font-weight: 700; text-transform: uppercase;
+      letter-spacing: 0.06em; color: var(--text-muted); margin-bottom: 4px;
+    }
+    .brief-producing-text {
+      font-size: 11px; color: var(--text); line-height: 1.45; margin-bottom: 8px;
+    }
     /* grade chips */
-    .brief-grades { display: flex; gap: 4px; flex-wrap: wrap; margin-top: 6px; }
+    .brief-grades { display: flex; gap: 4px; flex-wrap: wrap; }
     .brief-grade-chip { font-size: 10px; font-weight: 600; padding: 2px 7px; border-radius: 7px; }
     .brief-grade-chip.top { background: rgba(40,167,69,0.12); color: #28a745; }
     .brief-grade-chip.mid { background: rgba(255,165,0,0.12);  color: #e6a817; }
@@ -632,8 +636,10 @@
       .paper::after { left: 22px; }
       .doc-title { font-size: 22px; }
       .doc-body { font-size: 15px; line-height: 28px; }
-      .coach-card { right: 10px; bottom: 14px; top: auto; transform: none; width: 180px; }
-      .brief-board { right: 10px; top: 10px; width: 180px; max-height: 38vh; }
+      .coach-card { right: 10px; top: auto; bottom: 14px; transform: none; width: 180px; }
+      .brief-board { width: calc(100vw - 20px); top: 70px; max-height: 200px; }
+      .brief-board-body { grid-template-columns: 1fr; }
+      .brief-col-right { grid-column: 1; }
       .setup-strip { padding: 14px 16px; }
     }
   </style>
@@ -933,12 +939,40 @@
       setupStrip.classList.toggle('hidden');
     });
 
-    // Brief board minimize / expand
-    document.getElementById('brief-board-head').addEventListener('click', () => {
-      const board = document.getElementById('brief-board');
-      const tog   = document.getElementById('brief-board-tog');
-      board.classList.toggle('minimised');
-      tog.textContent = board.classList.contains('minimised') ? '+' : '−';
+    // Brief board: minimize / expand on header click + drag to reposition
+    const briefBoardEl  = document.getElementById('brief-board');
+    const briefBoardHead = document.getElementById('brief-board-head');
+    const briefBoardTog  = document.getElementById('brief-board-tog');
+    let bbDrag = { on: false, ox: 0, oy: 0, bx: 0, by: 0 };
+
+    briefBoardHead.addEventListener('click', e => {
+      if (bbDrag.moved) { bbDrag.moved = false; return; } // suppress click after drag
+      briefBoardEl.classList.toggle('minimised');
+      briefBoardTog.textContent = briefBoardEl.classList.contains('minimised') ? '+' : '−';
+    });
+
+    briefBoardHead.addEventListener('mousedown', e => {
+      const rect = briefBoardEl.getBoundingClientRect();
+      // Convert any CSS transform/right to left+top before dragging
+      briefBoardEl.style.left   = rect.left + 'px';
+      briefBoardEl.style.top    = rect.top  + 'px';
+      briefBoardEl.style.right  = 'auto';
+      briefBoardEl.classList.add('dragged');
+      bbDrag = { on: true, moved: false, ox: e.clientX, oy: e.clientY, bx: rect.left, by: rect.top };
+      document.body.style.userSelect = 'none';
+    });
+
+    document.addEventListener('mousemove', e => {
+      if (!bbDrag.on) return;
+      const dx = e.clientX - bbDrag.ox;
+      const dy = e.clientY - bbDrag.oy;
+      if (Math.abs(dx) > 3 || Math.abs(dy) > 3) bbDrag.moved = true;
+      briefBoardEl.style.left = (bbDrag.bx + dx) + 'px';
+      briefBoardEl.style.top  = (bbDrag.by + dy) + 'px';
+    });
+
+    document.addEventListener('mouseup', () => {
+      if (bbDrag.on) { bbDrag.on = false; document.body.style.userSelect = ''; }
     });
 
     // ── Coach card rendering ───────────────────────────────────────────────
@@ -1045,49 +1079,63 @@
       } catch (_) {}
     }
 
-    // Populate Q's brief board — his whiteboard that stays visible while the
-    // student writes. Prose is Q's plain-English explanation (rendered as
-    // markdown); data is the structured writer-brief JSON.
-    function setBrief(prose, data) {
+    // Populate Q's brief board — structured JSON only, no Q chat prose.
+    // Two-column landscape layout: left = what it is + asks; right = producing + grades.
+    function setBrief(data) {
       const body  = document.getElementById('brief-board-body');
       const board = document.getElementById('brief-board');
-      let html = '';
 
-      if (prose) {
-        html += window.marked
-          ? window.marked.parse(prose)
-          : `<p>${prose.replace(/\n/g, '<br>')}</p>`;
-      }
+      const esc = s => (s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 
-      const secs = (data && data.markedSections) || [];
-      if (secs.length) {
-        html += '<hr><div class="brief-sections">';
-        secs.forEach((s, i) => {
-          html += `<div class="brief-sec">
-            <span class="brief-sec-n">${i + 1}</span>
-            <div>
-              <div class="brief-sec-name">${s.name || ''}</div>
-              <div class="brief-sec-desc">${s.description || ''}</div>
-            </div>
-          </div>`;
-        });
-        html += '</div>';
-      }
+      // Left column: document type + "it's asking you to" bullets
+      const asks = (data.asksYouTo || data.markedSections && data.markedSections.map(s => s.name) || []);
+      const askItems = asks.map(a => `<li>${esc(a)}</li>`).join('');
+      const leftHtml = `
+        <div class="brief-doctype">${esc(data.documentType || 'Your Assignment')}</div>
+        <div class="brief-asks-label">It's asking you to:</div>
+        <ul class="brief-asks-list">${askItems}</ul>`;
 
-      const gb = data && data.gradeBands;
-      if (gb && (gb.top || gb.mid || gb.low)) {
-        html += '<div class="brief-grades">';
-        if (gb.top) html += `<span class="brief-grade-chip top">🏆 ${gb.top}</span>`;
-        if (gb.mid) html += `<span class="brief-grade-chip mid">✅ ${gb.mid}</span>`;
-        if (gb.low) html += `<span class="brief-grade-chip low">⚠️ ${gb.low}</span>`;
-        html += '</div>';
-      }
+      // Right column: what you're producing + grade chips
+      const gb = data.gradeBands || {};
+      const gradeHtml = (gb.top || gb.mid || gb.low) ? `<div class="brief-grades">
+        ${gb.top ? `<span class="brief-grade-chip top">🏆 ${esc(gb.top)}</span>` : ''}
+        ${gb.mid ? `<span class="brief-grade-chip mid">✅ ${esc(gb.mid)}</span>` : ''}
+        ${gb.low ? `<span class="brief-grade-chip low">⚠️ ${esc(gb.low)}</span>` : ''}
+      </div>` : '';
+      const producing = data.youreProducing || data.whatItWants || '';
+      const rightHtml = `
+        <div class="brief-producing-label">You're producing:</div>
+        <div class="brief-producing-text">${esc(producing)}</div>
+        ${gradeHtml}`;
 
-      body.innerHTML = html;
+      body.innerHTML = `<div class="brief-col-left">${leftHtml}</div><div class="brief-col-right">${rightHtml}</div>`;
       board.classList.remove('hidden');
     }
 
-    // ── After source loaded: brief + first question ────────────────────────
+    // Show the prerequisites check in the coach card after brief is built.
+    // Prereqs come from the brief JSON (things to do before writing starts).
+    // "Yes, let's go" kicks off the first coaching question.
+    function showPrerequisites(b) {
+      const prereqs = b.prerequisites || [];
+      let msg = '';
+      if (prereqs.length) {
+        msg = 'Before we start — have you:\n' + prereqs.map(p => '• ' + p).join('\n');
+      } else {
+        msg = 'Got the brief. Ready when you are.';
+      }
+      setCoach({
+        msg,
+        section: b.documentType || 'YOUR BRIEF',
+        actions: [{
+          label: 'Yes, let\'s go →',
+          primary: true,
+          onClick: () => askNextQuestion(),
+        }],
+        inputVisible: false,
+      });
+    }
+
+    // ── After source loaded: build brief board + prereq check ─────────────
     async function runBrief(taskText) {
       setCoach({ msg: 'Reading your task…', thinking: true, inputVisible: false });
 
@@ -1096,12 +1144,12 @@
           'I\'ve given you my task above. Read the whole thing, work out what it\'s really asking (the task is often buried after headers and tables), and build my brief.',
           12000
         );
-        const { prose, data: b } = parseQBlock(reply, 'writer-brief');
+        const { data: b } = parseQBlock(reply, 'writer-brief');
         if (!b) throw new Error('no brief block');
 
-        state.analysis = { task: b.whatItWants || '', gradeBands: b.gradeBands || null };
+        state.analysis = { task: b.whatItWants || b.youreProducing || '', gradeBands: b.gradeBands || null };
         state.brief = b;
-        state.taskSummary = b.whatItWants || b.summary || '';
+        state.taskSummary = b.youreProducing || b.whatItWants || b.summary || '';
         state.teachersBrief = b.teachersBrief || '';
 
         saveTutor({
@@ -1112,11 +1160,8 @@
           gradeBands: b.gradeBands || null,
         });
 
-        // Put Q's brief on the whiteboard — prose + structured sections + grade tips
-        setBrief(prose, b);
-
-        // Coaching starts immediately — no "I'm ready" button needed
-        await askNextQuestion();
+        setBrief(b);
+        showPrerequisites(b);
 
       } catch (e) {
         setCoach({ msg: 'Couldn\'t read that — try pasting the task as text.' });
@@ -1348,33 +1393,46 @@
       }
     }
 
-    function insertTextIntoDoc(text, countAsQWords) {
-      const current = (docBody.textContent || '').trim();
-      const newContent = current ? current + '\n\n' + text : text;
-      docBody.textContent = newContent;
-      wordEl.textContent = countWords() + ' words';
-      if (countAsQWords) {
-        const added = text.trim().split(/\s+/).filter(Boolean).length;
-        state.qWordsWritten += added;
+    // Append Q's text directly onto the paper as a new paragraph in accent
+    // colour so the student can see what Q contributed vs what they wrote.
+    function insertQText(text, countAsQWords) {
+      const esc = s => s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+      const p = document.createElement('p');
+      p.style.cssText = 'color:var(--accent);font-style:italic;margin:0;';
+      p.setAttribute('data-q', 'true');
+      p.innerHTML = esc(text);
+      if (!docBody.textContent.trim() && !docBody.innerHTML.trim()) {
+        docBody.innerHTML = '';
       }
-      // Move cursor to end
+      docBody.appendChild(p);
+      if (countAsQWords) {
+        state.qWordsWritten += text.trim().split(/\s+/).filter(Boolean).length;
+      }
+      wordEl.textContent = countWords() + ' words';
+      // Move cursor after inserted text
       const range = document.createRange();
       const sel = window.getSelection();
-      range.selectNodeContents(docBody);
-      range.collapse(false);
+      range.setStartAfter(p);
+      range.collapse(true);
       sel.removeAllRanges();
       sel.addRange(range);
+      docBody.focus();
+    }
+
+    // Legacy helper still used by "Keep mine" and word-swap paths
+    function insertTextIntoDoc(text, countAsQWords) {
+      insertQText(text, countAsQWords);
     }
 
     function insertReframe(text, sectionName, sectionTextForGrade) {
-      insertTextIntoDoc(text, false);
+      insertQText(text, false);
       if (sectionName) markAndInsertGradeBand(sectionName, sectionTextForGrade || text);
       state.pendingReframe = null;
       askNextQuestion();
     }
 
     function insertTextAtEnd(text) {
-      insertTextIntoDoc(text, false);
+      insertQText(text, false);
     }
 
     // ── Free chat with Q (existing /chat endpoint) ─────────────────────────

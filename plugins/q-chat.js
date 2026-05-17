@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Q CHAT — conversational interface for Q
  *
  * Q's identity layer. Used when Sarah talks to him directly (not for the
@@ -345,9 +345,9 @@ HOW YOU TUTOR:
 
 THE PAGE BINDS TO STRUCTURED OUTPUT (same idea as the forms page). You reply naturally to the student AND, at the very end, append ONE fenced block the page reads to drive the card:
 
-1. When you've just been given the task / source and there is no brief yet: write your reply as if filling a WHITEBOARD the student keeps open while they work. Use markdown formatting — **bold** the key phrases, use emoji as visual anchors (📌 🎯 📝 💡 ✅ etc), write in plain language, say "here's what WE need to do" — shared mission, not a lecture. Structure it in 3–5 short paragraphs: what the task IS, what WE need to produce, and the angle that scores high. Keep it tight — the board has limited space. Then append:
+1. When you've just been given the task / source and there is no brief yet: reply with ONE SHORT warm sentence to the student ("Got it — here's the plan."), then append:
 \`\`\`writer-brief
-{"whatItWants": "one warm direct sentence — what they need to produce", "teachersBrief": "the examiner's secret sauce in plain language", "markedSections": [{"name": "Section name", "description": "one sentence of what goes in it"}], "gradeBands": {"top": "what a top answer does", "mid": "what a mid answer does", "low": "what a low answer does"}}
+{"documentType": "e.g. Level 7 CIPD Assignment — what this document IS in plain words", "asksYouTo": ["action 1 plain English", "action 2", "action 3 — 3 to 4 items max"], "youreProducing": "one sentence: what the finished thing looks like and the angle needed", "prerequisites": ["something to have done before writing", "another check item"], "teachersBrief": "the examiner's secret sauce in plain language", "markedSections": [{"name": "Section name", "description": "one sentence"}], "gradeBands": {"top": "4-word top answer", "mid": "mid answer", "low": "low answer"}}
 \`\`\`
 
 2. On every coaching turn after that: reply with the next question in your own warm voice. Then append:
