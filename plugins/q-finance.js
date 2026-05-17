@@ -114,7 +114,7 @@ Rules:
 
 async function parseStatementText(rawText) {
     const raw = cleanModelOutput(await togetherChat({
-        model:      Q_CONFIG.fastModel,
+        model:      Q_CONFIG.model,
         max_tokens: 8000,
         messages: [
             { role: 'system', content: PARSE_SYSTEM },
@@ -164,7 +164,7 @@ async function categoriseTransactions(transactions) {
     }));
 
     const raw = cleanModelOutput(await togetherChat({
-        model:      Q_CONFIG.fastModel,
+        model:      Q_CONFIG.model,
         max_tokens: 6000,
         messages: [
             { role: 'system', content: CATEGORISE_SYSTEM },
