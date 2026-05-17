@@ -260,6 +260,17 @@ Rules:
 - Return ONLY the CSV. No explanation, no markdown.`;
 
 async function importStatementFromImage(email, imageBase64, mimeType = 'application/pdf') {
+    // PDFs: extract text with pdf-parse (better than vision for text-based bank PDFs)
+    if (mimeType === 'application/pdf' || mimeType === 'application/octet-stream') {
+        const pdfParse = require('pdf-parse');
+        const buffer = Buffer.from(imageBase64, 'base64');
+        const parsed = await pdfParse(buffer);
+        const text = (parsed.text || '').trim();
+        if (text.length < 20) return { added: 0, total: 0 };
+        return importStatement(email, text);
+    }
+
+    // Images (camera photo, JPEG/PNG from phone) — use vision model
     const raw = cleanModelOutput(await togetherChat({
         model:      Q_CONFIG.visionModel,
         max_tokens: 8000,
@@ -271,9 +282,7 @@ async function importStatementFromImage(email, imageBase64, mimeType = 'applicat
             ],
         }],
     }));
-    if (!raw || raw.trim().length < 20) {
-        return { added: 0, total: 0 };
-    }
+    if (!raw || raw.trim().length < 20) return { added: 0, total: 0 };
     return importStatement(email, raw);
 }
 
