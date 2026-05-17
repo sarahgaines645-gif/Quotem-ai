@@ -928,9 +928,33 @@ router.post('/chat', requirePerson, express.json({ limit: '24mb' }), async (req,
         // Tell Q the current moment so he can locate himself in time
         const now = new Date();
         const nowStr = now.toISOString().slice(0, 16).replace('T', ' ');
+        // Build a read-only digest of other page threads so Q has cross-page
+        // visibility without bleeding them into the active conversation.
+        // Max 5 messages per other surface, truncated to 300 chars each.
+        const otherSurfaceMap = {};
+        for (const m of allMessages) {
+            const s = m.surface || 'chat';
+            if (s === surface) continue;
+            if (!otherSurfaceMap[s]) otherSurfaceMap[s] = [];
+            otherSurfaceMap[s].push(m);
+        }
+        const otherEntries = Object.entries(otherSurfaceMap);
+        let crossRef = '';
+        if (otherEntries.length > 0) {
+            const lines = otherEntries.map(([s, msgs]) => {
+                const recent = msgs.slice(-5).map(m => {
+                    const ts = m.timestamp ? m.timestamp.slice(0, 16).replace('T', ' ') : '?';
+                    const who = m.role === 'user' ? person.name : 'Q';
+                    const text = (m.content || '').slice(0, 300).replace(/\n/g, ' ');
+                    return `  [${ts}] ${who}: ${text}${m.content.length > 300 ? '…' : ''}`;
+                }).join('\n');
+                return `[${s.toUpperCase()} PAGE]\n${recent}`;
+            }).join('\n\n');
+            crossRef = `\n\n--- YOUR OTHER CONVERSATIONS (read-only reference — don't continue these threads here, but you can mention them if relevant) ---\n${lines}\n--- END REFERENCE ---`;
+        }
         history.unshift({
             role: 'system',
-            content: `It is now ${nowStr} (UTC). You're talking to ${person.name}. The history below shows previous turns between you two with their timestamps — note any gaps between sessions and respond as someone who has had time pass, not as if every turn just happened.`,
+            content: `It is now ${nowStr} (UTC). You're talking to ${person.name}. The history below shows previous turns between you two with their timestamps — note any gaps between sessions and respond as someone who has had time pass, not as if every turn just happened.${crossRef}`,
         });
         const userMemoryContent = images.length > 0
             ? newMessage + `\n[${person.name} attached ${images.length} image${images.length > 1 ? 's' : ''}]`
