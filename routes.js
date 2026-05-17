@@ -285,6 +285,11 @@ router.get('/writer', (req, res) => {
     res.sendFile(path.join(__dirname, 'writer.html'));
 });
 
+// Q's personal finance page.
+router.get('/finance', (req, res) => {
+    res.sendFile(path.join(__dirname, 'finance.html'));
+});
+
 // Q's plotter — PDF AcroForm field parser. Reads the real field structure from
 // a PDF (no vision needed). Client-side PDF.js does the parsing and rendering;
 // this route just serves the page.
@@ -1331,6 +1336,119 @@ router.post('/email-writer/reply', express.json({ limit: '256kb' }), async (req,
         res.json(reply);
     } catch (e) {
         res.status(500).json({ error: e.message || 'Reply failed' });
+    }
+});
+
+// ── FINANCE — personal finance engine ─────────────────────────────────
+// All routes require sign-in. Data is scoped to req.person.email — no
+// cross-user bleed is possible. Bank statement data is GDPR-sensitive.
+const qFinance = require('./plugins/q-finance');
+
+// GET transactions + graph data
+router.get('/api/finance/transactions', requirePerson, (req, res) => {
+    res.json(qFinance.getTransactions(req.person.email));
+});
+
+router.get('/api/finance/graph', requirePerson, (req, res) => {
+    res.json(qFinance.getSpendingGraphData(req.person.email));
+});
+
+router.get('/api/finance/subscriptions', requirePerson, (req, res) => {
+    res.json(qFinance.detectSubscriptions(req.person.email));
+});
+
+// Import statement text (paste or extracted from PDF)
+router.post('/api/finance/statement', requirePerson, express.json({ limit: '2mb' }), async (req, res) => {
+    const { text } = req.body || {};
+    if (!text) return res.status(400).json({ error: 'text required' });
+    try {
+        const result = await qFinance.importStatement(req.person.email, text);
+        res.json(result);
+    } catch (e) {
+        console.error('[finance] import error', e);
+        res.status(500).json({ error: e.message });
+    }
+});
+
+// Extract data from a bill/letter image (base64)
+router.post('/api/finance/document', requirePerson, express.json({ limit: '10mb' }), async (req, res) => {
+    const { imageBase64, mimeType } = req.body || {};
+    if (!imageBase64) return res.status(400).json({ error: 'imageBase64 required' });
+    try {
+        const extracted = await qFinance.extractDocument(imageBase64, mimeType || 'image/jpeg');
+        res.json(extracted);
+    } catch (e) {
+        console.error('[finance] extract error', e);
+        res.status(500).json({ error: e.message });
+    }
+});
+
+// Update a single transaction (category, bucket, flagged, merchant)
+router.patch('/api/finance/transactions/:id', requirePerson, express.json({ limit: '64kb' }), (req, res) => {
+    const updated = qFinance.updateTransaction(req.person.email, req.params.id, req.body || {});
+    if (!updated) return res.status(404).json({ error: 'Transaction not found' });
+    res.json(updated);
+});
+
+// Delete all transactions (start fresh)
+router.delete('/api/finance/transactions', requirePerson, (req, res) => {
+    qFinance.deleteTransactions(req.person.email);
+    res.json({ ok: true });
+});
+
+// Merchant assignment
+router.post('/api/finance/assign', requirePerson, express.json({ limit: '64kb' }), (req, res) => {
+    const { merchant, label } = req.body || {};
+    if (!merchant) return res.status(400).json({ error: 'merchant required' });
+    const result = qFinance.assignMerchant(req.person.email, merchant, label || null);
+    res.json(result);
+});
+
+router.get('/api/finance/assignments', requirePerson, (req, res) => {
+    res.json(qFinance.getAssignments(req.person.email));
+});
+
+// Problem queue
+router.get('/api/finance/problems', requirePerson, (req, res) => {
+    res.json(qFinance.getProblemQueue(req.person.email));
+});
+
+router.post('/api/finance/problems', requirePerson, express.json({ limit: '256kb' }), (req, res) => {
+    const problem = qFinance.addProblem(req.person.email, req.body || {});
+    res.json(problem);
+});
+
+router.patch('/api/finance/problems/:id', requirePerson, express.json({ limit: '256kb' }), (req, res) => {
+    const updated = qFinance.updateProblem(req.person.email, req.params.id, req.body || {});
+    if (!updated) return res.status(404).json({ error: 'Problem not found' });
+    res.json(updated);
+});
+
+router.post('/api/finance/problems/:id/documents', requirePerson, express.json({ limit: '10mb' }), async (req, res) => {
+    const { imageBase64, mimeType, filename } = req.body || {};
+    if (!imageBase64) return res.status(400).json({ error: 'imageBase64 required' });
+    try {
+        const extracted = await qFinance.extractDocument(imageBase64, mimeType || 'image/jpeg');
+        const updated = qFinance.addDocumentToProblem(req.person.email, req.params.id, {
+            filename:      filename || 'document',
+            extracted,
+        });
+        if (!updated) return res.status(404).json({ error: 'Problem not found' });
+        res.json(updated);
+    } catch (e) {
+        console.error('[finance] doc attach error', e);
+        res.status(500).json({ error: e.message });
+    }
+});
+
+// Q advice (APS mode — full picture review)
+router.post('/api/finance/advice', requirePerson, async (req, res) => {
+    try {
+        const advice = await qFinance.getAdvice(req.person.email);
+        res.json({ advice });
+    } catch (e) {
+        console.error('[finance] advice error', e);
+        res.status(500).json({ error: e.message });
     }
 });
 

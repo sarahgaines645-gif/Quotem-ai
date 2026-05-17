@@ -1,0 +1,1262 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <script src="/q-auth.js?v=4"></script>
+  <meta charset="UTF-8">
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+  <link rel="apple-touch-icon" sizes="180x180" href="/favicon-180.png" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>Q — Finance</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
+  <style>
+    :root {
+      --bg: #e8e8e8; --text: #1a1a1a;
+      --text-muted: rgba(0,0,0,0.42); --text-faint: rgba(0,0,0,0.26);
+      --accent: #e91e63; --accent-soft: rgba(233,30,99,0.10);
+      --green: #22c55e; --green-soft: rgba(34,197,94,0.10);
+      --amber: #f59e0b; --amber-soft: rgba(245,158,11,0.10);
+      --red: #ef4444; --red-soft: rgba(239,68,68,0.10);
+      --neu-raised: 10px 10px 28px #ababab, -8px -8px 20px #ffffff, inset 0 1px 0 rgba(255,255,255,0.5);
+      --neu-raised-sm: 6px 6px 16px #ababab, -5px -5px 12px #ffffff;
+      --neu-raised-xs: 3px 3px 8px #ababab, -2px -2px 6px #ffffff;
+      --neu-inset: inset 5px 5px 14px #ababab, inset -4px -4px 10px #ffffff;
+      --neu-inset-sm: inset 3px 3px 8px #ababab, inset -2px -2px 6px #ffffff;
+      --neu-inset-xs: inset 2px 2px 5px #ababab, inset -1px -1px 4px #ffffff;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Space Grotesk', -apple-system, sans-serif;
+      background: var(--bg); color: var(--text);
+      font-size: 15px; line-height: 1.55; min-height: 100vh;
+      padding: 28px 16px 120px; -webkit-font-smoothing: antialiased;
+    }
+    .wrap { max-width: 880px; margin: 0 auto; }
+
+    /* ── Header ── */
+    header { display: flex; align-items: center; gap: 12px; margin-bottom: 28px; }
+    .logo-mark { display: inline-flex; align-items: baseline; }
+    .logo-mark .q { font-size: 26px; font-weight: 700; line-height: 1; letter-spacing: -0.05em; }
+    .logo-mark .dot { width: 7px; height: 7px; background: var(--accent); border-radius: 50%; display: inline-block; margin-left: 3px; align-self: flex-end; margin-bottom: 3px; }
+    h1 { font-size: 19px; font-weight: 700; letter-spacing: -0.03em; }
+    .header-sub { font-size: 11px; color: var(--text-muted); margin-left: 2px; }
+    .back-link { margin-left: auto; font-size: 12px; color: var(--text-muted); text-decoration: none; }
+    .back-link:hover { color: var(--text); }
+
+    /* ── Upload strip ── */
+    .upload-strip {
+      display: grid; grid-template-columns: 1fr 1fr; gap: 14px;
+      margin-bottom: 20px;
+    }
+    .upload-zone {
+      border-radius: 14px; padding: 18px 20px;
+      background: var(--bg); box-shadow: var(--neu-inset-sm);
+      cursor: pointer; transition: box-shadow 0.15s;
+      display: flex; flex-direction: column; align-items: center;
+      gap: 8px; text-align: center; min-height: 90px; justify-content: center;
+      position: relative; overflow: hidden;
+    }
+    .upload-zone.drag-over { box-shadow: var(--neu-inset), 0 0 0 2px var(--accent); }
+    .upload-zone input[type=file] { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+    .upload-zone .uz-icon { font-size: 24px; line-height: 1; }
+    .upload-zone .uz-title { font-size: 13px; font-weight: 600; color: var(--text); }
+    .upload-zone .uz-sub   { font-size: 11px; color: var(--text-muted); }
+    .upload-zone .uz-progress { font-size: 11px; color: var(--accent); display: none; }
+    .upload-zone.loading .uz-progress { display: block; }
+    .upload-zone.loading .uz-icon,
+    .upload-zone.loading .uz-title,
+    .upload-zone.loading .uz-sub { opacity: 0.4; }
+
+    /* Paste-text modal trigger */
+    .paste-btn {
+      border: none; background: transparent; cursor: pointer;
+      font-family: inherit; font-size: 11px; color: var(--accent);
+      text-decoration: underline; padding: 0; margin-top: 2px;
+    }
+
+    /* ── Summary bar ── */
+    .summary-bar {
+      display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px;
+      margin-bottom: 20px;
+    }
+    .stat-box {
+      background: var(--bg); border-radius: 12px;
+      box-shadow: var(--neu-inset-sm); padding: 14px 16px;
+    }
+    .stat-box .sb-label { font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-muted); margin-bottom: 4px; font-weight: 600; }
+    .stat-box .sb-val   { font-size: 20px; font-weight: 700; color: var(--text); letter-spacing: -0.04em; }
+    .stat-box .sb-val.neg { color: var(--red); }
+    .stat-box .sb-val.pos { color: var(--green); }
+
+    /* ── Graphs row ── */
+    .graphs-row {
+      display: grid; grid-template-columns: 1fr 1fr; gap: 14px;
+      margin-bottom: 20px;
+    }
+    .graph-card {
+      background: var(--bg); border-radius: 16px;
+      box-shadow: var(--neu-raised-sm); padding: 18px 20px;
+    }
+    .graph-card h3 { font-size: 13px; font-weight: 600; color: var(--text); margin-bottom: 14px; }
+    .chart-wrap { position: relative; height: 220px; }
+    .chart-empty { font-size: 12px; color: var(--text-muted); text-align: center; padding-top: 40px; }
+
+    /* ── Section cards ── */
+    .section-card {
+      background: var(--bg); border-radius: 16px;
+      box-shadow: var(--neu-raised-sm); padding: 18px 20px;
+      margin-bottom: 16px;
+    }
+    .section-header {
+      display: flex; align-items: center; justify-content: space-between;
+      margin-bottom: 14px;
+    }
+    .section-header h3 { font-size: 13px; font-weight: 600; }
+    .section-header .badge { font-size: 10px; padding: 3px 8px; border-radius: 20px; font-weight: 600; }
+    .badge-red   { background: var(--red-soft);   color: var(--red);   }
+    .badge-amber { background: var(--amber-soft);  color: var(--amber); }
+    .badge-green { background: var(--green-soft);  color: var(--green); }
+
+    .sec-btn {
+      border: none; cursor: pointer; font-family: inherit;
+      font-size: 11px; font-weight: 600; padding: 6px 14px;
+      border-radius: 20px; background: var(--bg); color: var(--text);
+      box-shadow: var(--neu-raised-xs); transition: box-shadow 0.15s;
+    }
+    .sec-btn:hover { box-shadow: var(--neu-raised-sm); }
+    .sec-btn:active { box-shadow: var(--neu-inset-xs); }
+    .sec-btn.accent { color: var(--accent); }
+
+    /* ── Subscriptions ── */
+    .sub-list { display: flex; flex-direction: column; gap: 8px; }
+    .sub-row {
+      display: flex; align-items: center; gap: 10px;
+      padding: 10px 12px; border-radius: 10px;
+      background: var(--bg); box-shadow: var(--neu-raised-xs);
+    }
+    .sub-row .sr-name { flex: 1; font-size: 13px; font-weight: 500; }
+    .sub-row .sr-amt  { font-size: 13px; font-weight: 700; color: var(--red); }
+    .sub-row .sr-freq { font-size: 10px; color: var(--text-muted); }
+    .sub-row .sr-total { font-size: 10px; color: var(--text-faint); }
+    .sub-row .sr-flag {
+      border: none; cursor: pointer; font-family: inherit; font-size: 11px;
+      padding: 4px 10px; border-radius: 14px; background: var(--bg);
+      color: var(--text-muted); box-shadow: var(--neu-raised-xs);
+    }
+    .sub-row .sr-flag:hover { color: var(--accent); }
+
+    /* ── Problem queue ── */
+    .problem-list { display: flex; flex-direction: column; gap: 10px; }
+    .problem-card {
+      border-radius: 12px; padding: 14px 16px;
+      background: var(--bg); box-shadow: var(--neu-raised-xs);
+    }
+    .problem-card .pc-top { display: flex; align-items: flex-start; gap: 10px; margin-bottom: 6px; }
+    .problem-card .pc-icon { font-size: 20px; line-height: 1; flex-shrink: 0; margin-top: 1px; }
+    .problem-card .pc-title { font-size: 13px; font-weight: 600; flex: 1; }
+    .problem-card .pc-provider { font-size: 11px; color: var(--text-muted); margin-top: 1px; }
+    .problem-card .pc-meta { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+    .problem-card .pc-amount { font-size: 12px; font-weight: 700; color: var(--red); }
+    .problem-card .pc-due { font-size: 11px; color: var(--text-muted); }
+    .problem-card .pc-actions { display: flex; gap: 6px; margin-top: 10px; flex-wrap: wrap; }
+    .pc-btn {
+      border: none; cursor: pointer; font-family: inherit; font-size: 11px; font-weight: 600;
+      padding: 5px 12px; border-radius: 14px; background: var(--bg); color: var(--text);
+      box-shadow: var(--neu-raised-xs); transition: box-shadow 0.15s;
+    }
+    .pc-btn:hover { box-shadow: var(--neu-raised-sm); }
+    .pc-btn.primary { color: var(--accent); }
+    .pc-btn.resolve { color: var(--green); }
+    .urgency-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; align-self: center; }
+    .urg-urgent { background: var(--red); }
+    .urg-high   { background: var(--amber); }
+    .urg-medium { background: #3b82f6; }
+    .urg-low    { background: var(--green); }
+
+    /* ── Transaction list ── */
+    .txn-controls {
+      display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; align-items: center;
+    }
+    .txn-search {
+      flex: 1; min-width: 180px; border: none; outline: none; font-family: inherit;
+      font-size: 13px; color: var(--text); background: var(--bg);
+      padding: 8px 14px; border-radius: 10px; box-shadow: var(--neu-inset-sm);
+    }
+    .txn-search::placeholder { color: var(--text-faint); }
+    .cat-filter {
+      border: none; outline: none; font-family: inherit; font-size: 12px;
+      background: var(--bg); color: var(--text);
+      padding: 8px 12px; border-radius: 10px; box-shadow: var(--neu-inset-sm); cursor: pointer;
+    }
+    .txn-list { display: flex; flex-direction: column; gap: 4px; }
+    .txn-row {
+      display: grid; grid-template-columns: 80px 1fr auto auto auto;
+      align-items: center; gap: 8px; padding: 8px 10px;
+      border-radius: 8px; transition: background 0.1s;
+    }
+    .txn-row:hover { background: rgba(0,0,0,0.03); }
+    .txn-date { font-size: 11px; color: var(--text-muted); }
+    .txn-desc { font-size: 12px; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .txn-bucket { font-size: 10px; color: var(--text-muted); padding: 2px 7px; border-radius: 10px; background: rgba(0,0,0,0.05); cursor: pointer; white-space: nowrap; }
+    .txn-bucket:hover { color: var(--accent); }
+    .txn-cat {
+      font-size: 10px; padding: 2px 8px; border-radius: 10px; cursor: pointer;
+      font-weight: 600; white-space: nowrap;
+    }
+    .txn-amount { font-size: 13px; font-weight: 700; text-align: right; white-space: nowrap; }
+    .txn-amount.debit  { color: var(--red); }
+    .txn-amount.credit { color: var(--green); }
+    .txn-flagged { opacity: 0.5; }
+    .txn-flag-btn { font-size: 13px; cursor: pointer; opacity: 0.3; border: none; background: transparent; padding: 0; }
+    .txn-flag-btn:hover { opacity: 1; }
+    .txn-row.flagged .txn-flag-btn { opacity: 1; color: var(--accent); }
+    .txn-empty { font-size: 12px; color: var(--text-muted); padding: 20px 0; text-align: center; }
+    .show-more-btn {
+      width: 100%; border: none; background: transparent; cursor: pointer;
+      font-family: inherit; font-size: 12px; color: var(--text-muted);
+      padding: 12px 0; text-align: center;
+    }
+    .show-more-btn:hover { color: var(--text); }
+
+    /* Category colour chips */
+    .cat-food_groceries  { background: rgba(34,197,94,0.12);  color: #15803d; }
+    .cat-food_dining     { background: rgba(249,115,22,0.12);  color: #c2410c; }
+    .cat-transport       { background: rgba(59,130,246,0.12);  color: #1d4ed8; }
+    .cat-subscriptions   { background: rgba(168,85,247,0.12);  color: #7e22ce; }
+    .cat-utilities       { background: rgba(6,182,212,0.12);   color: #0e7490; }
+    .cat-housing         { background: rgba(120,113,108,0.12); color: #57534e; }
+    .cat-shopping        { background: rgba(251,146,60,0.12);  color: #ea580c; }
+    .cat-health          { background: rgba(233,30,99,0.12);   color: #be185d; }
+    .cat-children        { background: rgba(234,179,8,0.12);   color: #a16207; }
+    .cat-holidays        { background: rgba(14,165,233,0.12);  color: #0369a1; }
+    .cat-savings_transfer{ background: rgba(132,204,22,0.12);  color: #4d7c0f; }
+    .cat-income          { background: rgba(34,197,94,0.15);   color: #166534; }
+    .cat-fees_charges    { background: rgba(239,68,68,0.12);   color: #b91c1c; }
+    .cat-other           { background: rgba(0,0,0,0.06);       color: #6b7280; }
+
+    /* ── Q Coach card (draggable, fixed) ── */
+    .coach-card {
+      position: fixed; right: 22px; top: 50%; transform: translateY(-50%);
+      width: 210px; background: var(--bg); border-radius: 18px;
+      box-shadow: 10px 10px 28px #ababab, -8px -8px 20px #ffffff;
+      padding: 14px 16px; display: flex; flex-direction: column;
+      cursor: default; z-index: 100; user-select: none;
+    }
+    .coach-card .q-logo { font-weight: 700; font-size: 20px; line-height: 1; margin-bottom: 4px; }
+    .coach-card .q-logo .dot { color: var(--accent); }
+    .coach-card .q-section { font-size: 10px; color: var(--accent); text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 6px; font-weight: 600; }
+    .coach-card .q-msg {
+      font-size: 12px; color: var(--text-muted); line-height: 1.45;
+      max-height: 240px; overflow-y: auto; margin-bottom: 10px; flex: 1;
+      scrollbar-width: none; -ms-overflow-style: none; white-space: pre-wrap;
+    }
+    .coach-card .q-msg::-webkit-scrollbar { display: none; }
+    .coach-card .q-msg.thinking { font-style: italic; color: var(--text-faint); }
+    .coach-card .q-actions { display: flex; flex-direction: column; gap: 6px; margin-bottom: 8px; }
+    .coach-card .q-actions.hidden { display: none; }
+    .q-btn {
+      padding: 6px 10px; border: none; border-radius: 12px;
+      font-family: 'Space Grotesk', sans-serif; font-size: 11px; font-weight: 500;
+      background: var(--bg); color: var(--text); cursor: pointer;
+      box-shadow: var(--neu-raised-xs); transition: box-shadow 0.15s; text-align: left;
+    }
+    .q-btn:hover { box-shadow: var(--neu-raised-sm); }
+    .q-btn:active { box-shadow: var(--neu-inset-sm); }
+    .q-btn.primary { color: var(--accent); }
+    .coach-card input.coach-input {
+      width: 100%; border: none; outline: none;
+      background: transparent; padding: 4px 0 5px;
+      border-bottom: 1px solid rgba(0,0,0,0.10);
+      font-family: 'Space Grotesk', sans-serif; font-size: 12px; color: var(--text);
+      transition: border-color 0.2s;
+    }
+    .coach-card input.coach-input:focus { border-bottom-color: var(--accent); }
+    .coach-card input.coach-input::placeholder { color: var(--text-faint); font-style: italic; }
+    .drag-handle {
+      width: 28px; height: 4px; border-radius: 2px;
+      background: rgba(0,0,0,0.12); margin: 0 auto 10px; cursor: grab;
+    }
+    .drag-handle:active { cursor: grabbing; }
+
+    /* ── Modals ── */
+    .modal-bg {
+      display: none; position: fixed; inset: 0;
+      background: transparent; z-index: 200;
+      align-items: center; justify-content: center; padding: 20px;
+    }
+    .modal-bg.show { display: flex; }
+    .modal {
+      background: var(--bg); border-radius: 18px; padding: 24px;
+      box-shadow: var(--neu-raised); width: 100%; max-width: 520px;
+    }
+    .modal h3 { font-size: 16px; font-weight: 700; margin-bottom: 14px; }
+    .modal label { display: block; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; color: var(--text-faint); margin-bottom: 6px; }
+    .modal input, .modal textarea, .modal select {
+      width: 100%; border: none; outline: none; font-family: inherit;
+      font-size: 14px; color: var(--text); background: var(--bg);
+      padding: 10px 14px; border-radius: 10px;
+      box-shadow: var(--neu-inset-sm); margin-bottom: 14px;
+    }
+    .modal textarea { resize: vertical; min-height: 120px; line-height: 1.5; }
+    .modal-actions { display: flex; gap: 10px; justify-content: flex-end; }
+    .modal-actions button {
+      border: none; cursor: pointer; font-family: inherit;
+      font-size: 13px; font-weight: 600; padding: 10px 20px; border-radius: 10px;
+    }
+    .modal-actions .cancel { background: var(--bg); color: var(--text-muted); box-shadow: var(--neu-raised-sm); }
+    .modal-actions .save   { background: var(--accent); color: white; box-shadow: var(--neu-raised-sm); }
+    .modal-actions .save:disabled { opacity: 0.5; cursor: default; }
+
+    /* ── Assign label popup ── */
+    .assign-popup {
+      display: none; position: fixed; z-index: 300;
+      background: var(--bg); border-radius: 14px;
+      box-shadow: var(--neu-raised); padding: 14px 16px; min-width: 220px;
+    }
+    .assign-popup.show { display: block; }
+    .assign-popup label { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-faint); margin-bottom: 6px; display: block; }
+    .assign-popup input {
+      width: 100%; border: none; outline: none; font-family: inherit;
+      font-size: 13px; color: var(--text); background: var(--bg);
+      padding: 8px 10px; border-radius: 8px; box-shadow: var(--neu-inset-sm);
+      margin-bottom: 8px;
+    }
+    .assign-popup .ap-presets { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 10px; }
+    .assign-popup .ap-chip {
+      border: none; cursor: pointer; font-family: inherit; font-size: 11px;
+      padding: 4px 10px; border-radius: 10px; background: var(--bg); color: var(--text);
+      box-shadow: var(--neu-raised-xs);
+    }
+    .assign-popup .ap-chip:hover { color: var(--accent); }
+    .assign-popup .ap-actions { display: flex; gap: 6px; justify-content: flex-end; }
+
+    /* ── Toast ── */
+    .toast {
+      position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
+      background: var(--text); color: white; font-size: 13px; font-weight: 600;
+      padding: 10px 20px; border-radius: 20px; z-index: 999;
+      opacity: 0; transition: opacity 0.25s; pointer-events: none;
+    }
+    .toast.show { opacity: 1; }
+
+    /* ── Responsive ── */
+    @media (max-width: 680px) {
+      .upload-strip  { grid-template-columns: 1fr; }
+      .summary-bar   { grid-template-columns: 1fr 1fr; }
+      .graphs-row    { grid-template-columns: 1fr; }
+      .txn-row       { grid-template-columns: 70px 1fr auto auto; }
+      .txn-row .txn-cat { display: none; }
+      .coach-card    { right: 10px; bottom: 14px; top: auto; transform: none; width: 185px; }
+    }
+  </style>
+</head>
+<body>
+
+<div class="wrap">
+
+  <header>
+    <div class="logo-mark"><span class="q">Q</span><span class="dot"></span></div>
+    <h1>Finance</h1>
+    <span class="header-sub">Your money, sorted</span>
+    <a class="back-link" href="/">← Home</a>
+  </header>
+
+  <!-- UPLOAD STRIP -->
+  <div class="upload-strip">
+    <div class="upload-zone" id="uz-statement" tabindex="0">
+      <div class="uz-icon">🏦</div>
+      <div class="uz-title">Drop your bank statement</div>
+      <div class="uz-sub">CSV or PDF • or <button class="paste-btn" id="paste-btn" type="button">paste text</button></div>
+      <div class="uz-progress">Q is reading your statement…</div>
+      <input type="file" id="file-statement" accept=".csv,.pdf,.txt" />
+    </div>
+    <div class="upload-zone" id="uz-doc" tabindex="0">
+      <div class="uz-icon">📄</div>
+      <div class="uz-title">Drop a bill or debt letter</div>
+      <div class="uz-sub">Photo, PDF, or any document</div>
+      <div class="uz-progress">Q is reading the document…</div>
+      <input type="file" id="file-doc" accept="image/*,.pdf" />
+    </div>
+  </div>
+
+  <!-- SUMMARY BAR -->
+  <div class="summary-bar" id="summary-bar">
+    <div class="stat-box">
+      <div class="sb-label">Total spending</div>
+      <div class="sb-val" id="stat-spend">—</div>
+    </div>
+    <div class="stat-box">
+      <div class="sb-label">Total income</div>
+      <div class="sb-val pos" id="stat-income">—</div>
+    </div>
+    <div class="stat-box">
+      <div class="sb-label">Net</div>
+      <div class="sb-val" id="stat-net">—</div>
+    </div>
+    <div class="stat-box">
+      <div class="sb-label">Transactions</div>
+      <div class="sb-val" id="stat-count">—</div>
+    </div>
+  </div>
+
+  <!-- GRAPHS -->
+  <div class="graphs-row">
+    <div class="graph-card">
+      <h3>Where your money goes</h3>
+      <div class="chart-wrap">
+        <canvas id="chart-category"></canvas>
+        <div class="chart-empty hidden" id="chart-cat-empty">Import a statement to see your spending breakdown</div>
+      </div>
+    </div>
+    <div class="graph-card">
+      <h3>Spending by person / bucket</h3>
+      <div class="chart-wrap">
+        <canvas id="chart-bucket"></canvas>
+        <div class="chart-empty hidden" id="chart-bucket-empty">Tag transactions to people or buckets to see them here</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- SUBSCRIPTIONS -->
+  <div class="section-card" id="subs-card">
+    <div class="section-header">
+      <h3>💳 Subscriptions & recurring charges</h3>
+      <span class="badge badge-amber" id="subs-badge"></span>
+    </div>
+    <div class="sub-list" id="sub-list">
+      <div class="txn-empty">No recurring charges detected yet — import a statement first</div>
+    </div>
+  </div>
+
+  <!-- PROBLEM QUEUE -->
+  <div class="section-card" id="problems-card">
+    <div class="section-header">
+      <h3>🚨 Problems & debts</h3>
+      <div style="display:flex;gap:8px;align-items:center">
+        <span class="badge badge-red" id="problems-badge" style="display:none"></span>
+        <button class="sec-btn accent" id="add-problem-btn">+ Add</button>
+      </div>
+    </div>
+    <div class="problem-list" id="problem-list">
+      <div class="txn-empty">No problems logged — drag in a debt letter or bill to start</div>
+    </div>
+  </div>
+
+  <!-- TRANSACTION LIST -->
+  <div class="section-card">
+    <div class="section-header">
+      <h3>📋 Transactions</h3>
+      <button class="sec-btn" id="clear-txns-btn" style="color:var(--red)">Clear all</button>
+    </div>
+    <div class="txn-controls">
+      <input class="txn-search" type="search" placeholder="Search…" id="txn-search" />
+      <select class="cat-filter" id="cat-filter">
+        <option value="">All categories</option>
+        <option value="food_groceries">Food – groceries</option>
+        <option value="food_dining">Food – dining</option>
+        <option value="transport">Transport</option>
+        <option value="subscriptions">Subscriptions</option>
+        <option value="utilities">Utilities</option>
+        <option value="housing">Housing</option>
+        <option value="shopping">Shopping</option>
+        <option value="health">Health</option>
+        <option value="children">Children</option>
+        <option value="holidays">Holidays</option>
+        <option value="savings_transfer">Savings / transfer</option>
+        <option value="income">Income</option>
+        <option value="fees_charges">Fees &amp; charges</option>
+        <option value="other">Other</option>
+      </select>
+    </div>
+    <div class="txn-list" id="txn-list">
+      <div class="txn-empty" id="txn-empty-msg">No transactions yet — import a bank statement above</div>
+    </div>
+    <button class="show-more-btn hidden" id="show-more-btn">Show more transactions</button>
+  </div>
+
+</div><!-- .wrap -->
+
+<!-- Q COACH CARD -->
+<div class="coach-card" id="coach-card">
+  <div class="drag-handle" id="drag-handle"></div>
+  <div class="q-logo">Q<span class="dot">.</span></div>
+  <div class="q-section" id="coach-section">Finance</div>
+  <div class="q-msg" id="coach-msg">Drop in your statement and I'll tell you where your money is going — and what to do about it.</div>
+  <div class="q-actions" id="coach-actions">
+    <button class="q-btn primary" id="btn-advice">🔍 Get my full picture</button>
+    <button class="q-btn" id="btn-subs-check">📱 Check my subscriptions</button>
+    <button class="q-btn" id="btn-help-debt">✉️ Write a letter for me</button>
+  </div>
+  <input class="coach-input" id="coach-input" type="text" placeholder="Ask Q…" autocomplete="off" />
+</div>
+
+<!-- TOAST -->
+<div class="toast" id="toast"></div>
+
+<!-- ASSIGN-TO-BUCKET POPUP -->
+<div class="assign-popup" id="assign-popup">
+  <label>Assign to person / bucket</label>
+  <div class="ap-presets" id="ap-presets"></div>
+  <input type="text" id="ap-input" placeholder="Type a name…" autocomplete="off" />
+  <div class="ap-actions">
+    <button class="q-btn" id="ap-cancel">Cancel</button>
+    <button class="q-btn primary" id="ap-save">Save</button>
+    <button class="q-btn" id="ap-remove" style="color:var(--red)">Remove</button>
+  </div>
+</div>
+
+<!-- PASTE STATEMENT MODAL -->
+<div class="modal-bg" id="paste-modal">
+  <div class="modal">
+    <h3>Paste your bank statement</h3>
+    <label>Statement text (CSV rows or plain copy-paste from online banking)</label>
+    <textarea id="paste-text" placeholder="Date, Description, Amount&#10;01/04/2026, TESCO STORES, -45.30&#10;02/04/2026, WAGES IN, 1800.00&#10;…"></textarea>
+    <div class="modal-actions">
+      <button class="cancel" id="paste-cancel">Cancel</button>
+      <button class="save" id="paste-confirm">Import</button>
+    </div>
+  </div>
+</div>
+
+<!-- ADD PROBLEM MODAL -->
+<div class="modal-bg" id="add-problem-modal">
+  <div class="modal">
+    <h3>Add a problem or debt</h3>
+    <label>What is it?</label>
+    <select id="prob-type">
+      <option value="debt">Debt / arrears</option>
+      <option value="bill">Overdue bill</option>
+      <option value="dispute">Dispute / complaint</option>
+      <option value="subscription">Subscription to cancel</option>
+      <option value="other">Other</option>
+    </select>
+    <label>Title</label>
+    <input type="text" id="prob-title" placeholder="e.g. EDF energy bill July, HMRC self assessment…" />
+    <label>Provider / company</label>
+    <input type="text" id="prob-provider" placeholder="e.g. British Gas, Vodafone…" />
+    <label>Amount owed (£)</label>
+    <input type="number" id="prob-amount" placeholder="0.00" step="0.01" />
+    <label>Due date</label>
+    <input type="date" id="prob-due" />
+    <div class="modal-actions">
+      <button class="cancel" id="prob-cancel">Cancel</button>
+      <button class="save" id="prob-confirm">Add problem</button>
+    </div>
+  </div>
+</div>
+
+<script>
+(() => {
+  'use strict';
+
+  // ── State ──────────────────────────────────────────────────────────────────
+  let transactions  = [];
+  let graphData     = null;
+  let problems      = [];
+  let subscriptions = [];
+  let coachHistory  = [];
+  let shownCount    = 40;
+  let activeFilter  = '';
+  let searchQuery   = '';
+  let assignTarget  = null; // { txnId, merchant }
+  let chartCat      = null;
+  let chartBucket   = null;
+
+  const CAT_LABELS = {
+    food_groceries: 'Groceries', food_dining: 'Dining out', transport: 'Transport',
+    subscriptions: 'Subscriptions', utilities: 'Utilities', housing: 'Housing',
+    shopping: 'Shopping', health: 'Health', children: 'Children',
+    holidays: 'Holidays', savings_transfer: 'Savings', income: 'Income',
+    fees_charges: 'Fees', other: 'Other',
+  };
+  const CAT_COLORS = [
+    '#22c55e','#f97316','#3b82f6','#a855f7','#06b6d4',
+    '#78716c','#fb923c','#e91e63','#eab308','#0ea5e9',
+    '#84cc16','#10b981','#ef4444','#9ca3af',
+  ];
+  const URGENCY_ICON = { urgent: '🚨', high: '⚠️', medium: '📋', low: '📌' };
+
+  // ── Auth helper (q-auth.js exposes window.getQToken) ─────────────────────
+  async function apiFetch(url, opts = {}) {
+    const token = window.getQToken ? window.getQToken() : null;
+    const headers = { ...(opts.headers || {}) };
+    if (token) headers['Authorization'] = 'Bearer ' + token;
+    if (opts.body && typeof opts.body === 'object' && !(opts.body instanceof FormData)) {
+      headers['Content-Type'] = 'application/json';
+      opts = { ...opts, body: JSON.stringify(opts.body) };
+    }
+    const r = await fetch(url, { ...opts, headers });
+    return r;
+  }
+
+  // ── Load data ─────────────────────────────────────────────────────────────
+  async function loadAll() {
+    const [txRes, grRes, prRes, subRes] = await Promise.all([
+      apiFetch('/api/finance/transactions'),
+      apiFetch('/api/finance/graph'),
+      apiFetch('/api/finance/problems'),
+      apiFetch('/api/finance/subscriptions'),
+    ]);
+    if (txRes.ok)  transactions  = await txRes.json();
+    if (grRes.ok)  graphData     = await grRes.json();
+    if (prRes.ok)  problems      = await prRes.json();
+    if (subRes.ok) subscriptions = await subRes.json();
+    renderAll();
+  }
+
+  function renderAll() {
+    renderSummary();
+    renderCharts();
+    renderSubscriptions();
+    renderProblems();
+    renderTransactions();
+  }
+
+  // ── Summary bar ───────────────────────────────────────────────────────────
+  function renderSummary() {
+    if (!graphData) return;
+    const s = graphData.summary;
+    document.getElementById('stat-spend').textContent  = '£' + fmt(s.total_spend);
+    document.getElementById('stat-income').textContent = '£' + fmt(s.total_income);
+    const netEl = document.getElementById('stat-net');
+    netEl.textContent = (s.net >= 0 ? '+' : '') + '£' + fmt(Math.abs(s.net));
+    netEl.className = 'sb-val ' + (s.net >= 0 ? 'pos' : 'neg');
+    document.getElementById('stat-count').textContent = s.transaction_count;
+  }
+
+  function fmt(n) { return Number(n || 0).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ','); }
+
+  // ── Charts ────────────────────────────────────────────────────────────────
+  function renderCharts() {
+    renderCategoryChart();
+    renderBucketChart();
+  }
+
+  function renderCategoryChart() {
+    const canvas = document.getElementById('chart-category');
+    const empty  = document.getElementById('chart-cat-empty');
+    if (!graphData || !Object.keys(graphData.by_category).length) {
+      canvas.style.display = 'none';
+      empty.classList.remove('hidden');
+      return;
+    }
+    empty.classList.add('hidden');
+    canvas.style.display = '';
+    const labels = Object.keys(graphData.by_category).map(k => CAT_LABELS[k] || k);
+    const values = Object.values(graphData.by_category);
+    if (chartCat) chartCat.destroy();
+    chartCat = new Chart(canvas, {
+      type: 'doughnut',
+      data: {
+        labels,
+        datasets: [{ data: values, backgroundColor: CAT_COLORS.slice(0, labels.length), borderWidth: 0, hoverOffset: 6 }],
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false, cutout: '58%',
+        plugins: {
+          legend: { position: 'right', labels: { font: { family: 'Space Grotesk', size: 10 }, boxWidth: 10, padding: 8, color: '#1a1a1a' } },
+          tooltip: { callbacks: { label: ctx => ` £${fmt(ctx.parsed)}` } },
+        },
+      },
+    });
+  }
+
+  function renderBucketChart() {
+    const canvas = document.getElementById('chart-bucket');
+    const empty  = document.getElementById('chart-bucket-empty');
+    if (!graphData || !Object.keys(graphData.by_bucket).length) {
+      canvas.style.display = 'none';
+      empty.classList.remove('hidden');
+      return;
+    }
+    empty.classList.add('hidden');
+    canvas.style.display = '';
+    const labels = Object.keys(graphData.by_bucket);
+    const values = Object.values(graphData.by_bucket);
+    const colors = ['#e91e63','#3b82f6','#f59e0b','#22c55e','#a855f7','#06b6d4','#f97316'];
+    if (chartBucket) chartBucket.destroy();
+    chartBucket = new Chart(canvas, {
+      type: 'bar',
+      data: {
+        labels,
+        datasets: [{ data: values, backgroundColor: colors.slice(0, labels.length), borderRadius: 6, borderWidth: 0 }],
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false, indexAxis: 'y',
+        plugins: {
+          legend: { display: false },
+          tooltip: { callbacks: { label: ctx => ` £${fmt(ctx.parsed.x)}` } },
+        },
+        scales: {
+          x: { grid: { display: false }, ticks: { callback: v => '£' + v, font: { family: 'Space Grotesk', size: 10 } } },
+          y: { grid: { display: false }, ticks: { font: { family: 'Space Grotesk', size: 11 } } },
+        },
+      },
+    });
+  }
+
+  // ── Subscriptions ─────────────────────────────────────────────────────────
+  function renderSubscriptions() {
+    const list  = document.getElementById('sub-list');
+    const badge = document.getElementById('subs-badge');
+    if (!subscriptions.length) {
+      list.innerHTML = '<div class="txn-empty">No recurring charges detected yet — import a statement first</div>';
+      badge.textContent = '';
+      return;
+    }
+    badge.textContent = subscriptions.length + ' found';
+    list.innerHTML = subscriptions.map(s => `
+      <div class="sub-row">
+        <span class="sr-name">${esc(s.merchant)}</span>
+        <span class="sr-amt">£${fmt(s.amount)}</span>
+        <span class="sr-freq">/mo</span>
+        <span class="sr-total">£${fmt(s.total_paid)} total</span>
+        <button class="sr-flag" onclick="flagSubscription('${esc(s.merchant)}')">flag it</button>
+      </div>
+    `).join('');
+  }
+
+  window.flagSubscription = function(merchant) {
+    openAddProblemModal({ type: 'subscription', title: 'Cancel: ' + merchant, provider: merchant });
+  };
+
+  // ── Problems ──────────────────────────────────────────────────────────────
+  function renderProblems() {
+    const list  = document.getElementById('problem-list');
+    const badge = document.getElementById('problems-badge');
+    if (!problems.length) {
+      list.innerHTML = '<div class="txn-empty">No problems logged — drag in a debt letter or bill to start</div>';
+      badge.style.display = 'none';
+      return;
+    }
+    badge.style.display = '';
+    badge.textContent = problems.filter(p => p.urgency === 'urgent' || p.urgency === 'high').length + ' urgent';
+    list.innerHTML = problems.map(p => {
+      const urg = p.urgency || 'low';
+      return `
+        <div class="problem-card" id="prob-${p.id}">
+          <div class="pc-top">
+            <span class="pc-icon">${URGENCY_ICON[urg] || '📋'}</span>
+            <div style="flex:1">
+              <div class="pc-title">${esc(p.title)}</div>
+              ${p.provider ? `<div class="pc-provider">${esc(p.provider)}</div>` : ''}
+            </div>
+            <span class="urgency-dot urg-${urg}"></span>
+          </div>
+          <div class="pc-meta">
+            ${p.amount ? `<span class="pc-amount">£${fmt(p.amount)}</span>` : ''}
+            ${p.dueDate ? `<span class="pc-due">Due ${p.dueDate}</span>` : ''}
+            ${p.documents && p.documents.length ? `<span class="badge badge-amber">${p.documents.length} doc${p.documents.length>1?'s':''}</span>` : ''}
+          </div>
+          <div class="pc-actions">
+            <button class="pc-btn primary" onclick="helpWithProblem('${p.id}')">✉️ Help me with this</button>
+            <button class="pc-btn" onclick="addDocToProblem('${p.id}')">📎 Add document</button>
+            <button class="pc-btn resolve" onclick="resolveProblem('${p.id}')">✓ Resolved</button>
+          </div>
+        </div>
+      `;
+    }).join('');
+  }
+
+  window.resolveProblem = async function(id) {
+    await apiFetch('/api/finance/problems/' + id, { method: 'PATCH', body: { status: 'resolved' } });
+    problems = problems.filter(p => p.id !== id);
+    renderProblems();
+    toast('Marked as resolved ✓');
+  };
+
+  window.helpWithProblem = function(id) {
+    const p = problems.find(x => x.id === id);
+    if (!p) return;
+    // Pre-fill the Q coach card with context about this problem
+    const coachMsg = document.getElementById('coach-msg');
+    const coachInput = document.getElementById('coach-input');
+    coachMsg.textContent = `I'll help you sort out "${p.title}"${p.provider ? ' with ' + p.provider : ''}${p.amount ? ' (£' + fmt(p.amount) + ')' : ''}. Tell me what's happened and I'll write the letter or email for you.`;
+    coachInput.focus();
+    coachHistory.push({ role: 'system', content: `User needs help with: ${p.title}. Provider: ${p.provider || 'unknown'}. Amount: £${p.amount || '?'}. Type: ${p.type}. Any documents: ${p.documents?.length || 0}. Draft a letter/email for them to send.` });
+  };
+
+  window.addDocToProblem = function(id) {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = 'image/*,.pdf';
+    input.onchange = async (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      const { b64, mime } = await readFileAsB64(file);
+      showUploadProgress('uz-doc', true);
+      const r = await apiFetch('/api/finance/problems/' + id + '/documents', {
+        method: 'POST',
+        body: { imageBase64: b64, mimeType: mime, filename: file.name },
+      });
+      showUploadProgress('uz-doc', false);
+      if (r.ok) {
+        const updated = await r.json();
+        const idx = problems.findIndex(p => p.id === id);
+        if (idx !== -1) problems[idx] = updated;
+        renderProblems();
+        toast('Document added and read ✓');
+      } else {
+        toast('Could not read document — try a clearer photo');
+      }
+    };
+    input.click();
+  };
+
+  // ── Transactions ──────────────────────────────────────────────────────────
+  function filteredTxns() {
+    let txns = [...transactions];
+    if (activeFilter) txns = txns.filter(t => t.category === activeFilter);
+    if (searchQuery) {
+      const q = searchQuery.toLowerCase();
+      txns = txns.filter(t =>
+        (t.description || '').toLowerCase().includes(q) ||
+        (t.merchant || '').toLowerCase().includes(q) ||
+        (t.bucket || '').toLowerCase().includes(q)
+      );
+    }
+    return txns;
+  }
+
+  function renderTransactions() {
+    const list     = document.getElementById('txn-list');
+    const emptyMsg = document.getElementById('txn-empty-msg');
+    const moreBtn  = document.getElementById('show-more-btn');
+    const txns     = filteredTxns();
+
+    if (!txns.length) {
+      list.innerHTML = '';
+      emptyMsg.style.display = '';
+      moreBtn.classList.add('hidden');
+      return;
+    }
+    emptyMsg.style.display = 'none';
+    const shown = txns.slice(0, shownCount);
+    list.innerHTML = shown.map(t => txnRow(t)).join('');
+    if (txns.length > shownCount) {
+      moreBtn.classList.remove('hidden');
+      moreBtn.textContent = `Show more (${txns.length - shownCount} remaining)`;
+    } else {
+      moreBtn.classList.add('hidden');
+    }
+  }
+
+  function txnRow(t) {
+    const amt = parseFloat(t.amount) || 0;
+    const amtClass = amt >= 0 ? 'credit' : 'debit';
+    const amtStr   = (amt >= 0 ? '+£' : '-£') + fmt(Math.abs(amt));
+    const catClass = 'txn-cat cat-' + (t.category || 'other');
+    const catLabel = CAT_LABELS[t.category] || t.category || 'Other';
+    const bucketTxt = t.bucket ? `<span class="txn-bucket" data-txn="${t.id}" data-merchant="${esc(t.merchant || t.description)}">${esc(t.bucket)}</span>` :
+      `<span class="txn-bucket" data-txn="${t.id}" data-merchant="${esc(t.merchant || t.description)}" style="opacity:0.4">+ label</span>`;
+    return `
+      <div class="txn-row${t.flagged ? ' flagged' : ''}" id="txn-${t.id}">
+        <span class="txn-date">${t.date || ''}</span>
+        <span class="txn-desc" title="${esc(t.description)}">${esc(t.merchant || t.description)}</span>
+        ${bucketTxt}
+        <span class="${catClass}" onclick="pickCategory('${t.id}', event)" title="Change category">${catLabel}</span>
+        <span class="txn-amount ${amtClass}">${amtStr}</span>
+      </div>
+    `;
+  }
+
+  window.pickCategory = function(id, e) {
+    e.stopPropagation();
+    const select = document.createElement('select');
+    select.className = 'cat-filter';
+    select.style.cssText = 'position:fixed;z-index:400;font-size:12px;';
+    select.innerHTML = Object.entries(CAT_LABELS).map(([v, l]) => `<option value="${v}">${l}</option>`).join('');
+    const txn = transactions.find(t => t.id === id);
+    if (txn) select.value = txn.category || 'other';
+    const rect = e.target.getBoundingClientRect();
+    select.style.top  = (rect.bottom + 4) + 'px';
+    select.style.left = rect.left + 'px';
+    document.body.appendChild(select);
+    select.focus();
+    const remove = () => select.remove();
+    select.onchange = async () => {
+      await apiFetch('/api/finance/transactions/' + id, { method: 'PATCH', body: { category: select.value } });
+      const t = transactions.find(x => x.id === id);
+      if (t) t.category = select.value;
+      remove();
+      renderTransactions();
+      reloadGraph();
+    };
+    select.onblur = remove;
+  };
+
+  // Assign-to-bucket popup
+  document.getElementById('txn-list').addEventListener('click', function(e) {
+    const el = e.target.closest('[data-txn]');
+    if (!el) return;
+    openAssignPopup(el.dataset.txn, el.dataset.merchant, e.clientX, e.clientY);
+  });
+
+  function openAssignPopup(txnId, merchant, x, y) {
+    assignTarget = { txnId, merchant };
+    const popup = document.getElementById('assign-popup');
+    const input = document.getElementById('ap-input');
+    const presets = document.getElementById('ap-presets');
+
+    // Suggest existing buckets
+    const buckets = [...new Set(transactions.map(t => t.bucket).filter(Boolean))];
+    presets.innerHTML = buckets.map(b => `<button class="ap-chip" onclick="document.getElementById('ap-input').value='${esc(b)}'">${esc(b)}</button>`).join('');
+
+    const txn = transactions.find(t => t.id === txnId);
+    input.value = txn?.bucket || '';
+
+    popup.style.cssText = `display:block;top:${Math.min(y, window.innerHeight-200)}px;left:${Math.min(x, window.innerWidth-240)}px;`;
+    input.focus();
+  }
+
+  document.getElementById('ap-cancel').addEventListener('click', () => {
+    document.getElementById('assign-popup').style.display = 'none';
+    assignTarget = null;
+  });
+
+  document.getElementById('ap-remove').addEventListener('click', async () => {
+    if (!assignTarget) return;
+    await apiFetch('/api/finance/assign', { method: 'POST', body: { merchant: assignTarget.merchant, label: null } });
+    document.getElementById('assign-popup').style.display = 'none';
+    await reloadTransactions();
+    reloadGraph();
+  });
+
+  document.getElementById('ap-save').addEventListener('click', async () => {
+    if (!assignTarget) return;
+    const label = document.getElementById('ap-input').value.trim();
+    if (!label) return;
+    await apiFetch('/api/finance/assign', { method: 'POST', body: { merchant: assignTarget.merchant, label } });
+    document.getElementById('assign-popup').style.display = 'none';
+    toast(`Tagged "${assignTarget.merchant}" → ${label}`);
+    await reloadTransactions();
+    reloadGraph();
+    assignTarget = null;
+  });
+
+  // Filters + search
+  document.getElementById('txn-search').addEventListener('input', e => {
+    searchQuery = e.target.value;
+    shownCount = 40;
+    renderTransactions();
+  });
+  document.getElementById('cat-filter').addEventListener('change', e => {
+    activeFilter = e.target.value;
+    shownCount = 40;
+    renderTransactions();
+  });
+  document.getElementById('show-more-btn').addEventListener('click', () => {
+    shownCount += 80;
+    renderTransactions();
+  });
+
+  // Clear all
+  document.getElementById('clear-txns-btn').addEventListener('click', async () => {
+    if (!confirm('Delete all transactions? This cannot be undone.')) return;
+    await apiFetch('/api/finance/transactions', { method: 'DELETE' });
+    transactions = []; graphData = null; subscriptions = [];
+    renderAll();
+    toast('Transactions cleared');
+  });
+
+  // ── Reload helpers ────────────────────────────────────────────────────────
+  async function reloadTransactions() {
+    const r = await apiFetch('/api/finance/transactions');
+    if (r.ok) transactions = await r.json();
+    renderTransactions();
+  }
+
+  async function reloadGraph() {
+    const [gr, sub] = await Promise.all([
+      apiFetch('/api/finance/graph'),
+      apiFetch('/api/finance/subscriptions'),
+    ]);
+    if (gr.ok)  graphData     = await gr.json();
+    if (sub.ok) subscriptions = await sub.json();
+    renderSummary();
+    renderCharts();
+    renderSubscriptions();
+  }
+
+  // ── Upload: statement ─────────────────────────────────────────────────────
+  const fileStatement = document.getElementById('file-statement');
+  const uzStatement   = document.getElementById('uz-statement');
+
+  fileStatement.addEventListener('change', async e => {
+    const file = e.target.files[0];
+    if (!file) return;
+    await handleStatementFile(file);
+    e.target.value = '';
+  });
+
+  async function handleStatementFile(file) {
+    showUploadProgress('uz-statement', true);
+    let text = '';
+    if (file.name.endsWith('.pdf')) {
+      // Use vision model to extract text
+      const { b64, mime } = await readFileAsB64(file);
+      const r = await apiFetch('/api/finance/document', { method: 'POST', body: { imageBase64: b64, mimeType: mime } });
+      showUploadProgress('uz-statement', false);
+      if (!r.ok) { toast('Could not read PDF — try pasting the text instead'); return; }
+      const extracted = await r.json();
+      toast('PDF read — if it looks off, try pasting the CSV text');
+      text = JSON.stringify(extracted);
+    } else {
+      text = await file.text();
+    }
+    await importText(text);
+  }
+
+  async function importText(text) {
+    showUploadProgress('uz-statement', true);
+    const r = await apiFetch('/api/finance/statement', { method: 'POST', body: { text } });
+    showUploadProgress('uz-statement', false);
+    if (r.ok) {
+      const result = await r.json();
+      toast(`✓ ${result.added} new transactions added (${result.total} total)`);
+      await loadAll();
+    } else {
+      const err = await r.json().catch(() => ({}));
+      toast('Import failed: ' + (err.error || 'unknown error'));
+    }
+  }
+
+  // Drag and drop
+  ['dragover','dragenter'].forEach(ev => uzStatement.addEventListener(ev, e => { e.preventDefault(); uzStatement.classList.add('drag-over'); }));
+  ['dragleave','dragend'].forEach(ev  => uzStatement.addEventListener(ev,  e => uzStatement.classList.remove('drag-over')));
+  uzStatement.addEventListener('drop', async e => {
+    e.preventDefault();
+    uzStatement.classList.remove('drag-over');
+    const file = e.dataTransfer.files[0];
+    if (file) await handleStatementFile(file);
+  });
+
+  // Paste modal
+  document.getElementById('paste-btn').addEventListener('click', e => {
+    e.stopPropagation();
+    document.getElementById('paste-modal').classList.add('show');
+  });
+  document.getElementById('paste-cancel').addEventListener('click', () => document.getElementById('paste-modal').classList.remove('show'));
+  document.getElementById('paste-modal').addEventListener('click', e => { if (e.target.id === 'paste-modal') e.currentTarget.classList.remove('show'); });
+  document.getElementById('paste-confirm').addEventListener('click', async () => {
+    const text = document.getElementById('paste-text').value.trim();
+    if (!text) return;
+    document.getElementById('paste-modal').classList.remove('show');
+    document.getElementById('paste-text').value = '';
+    await importText(text);
+  });
+
+  // ── Upload: bill/letter document ──────────────────────────────────────────
+  const fileDoc = document.getElementById('file-doc');
+  const uzDoc   = document.getElementById('uz-doc');
+
+  fileDoc.addEventListener('change', async e => {
+    const file = e.target.files[0];
+    if (!file) return;
+    await handleDocFile(file);
+    e.target.value = '';
+  });
+
+  async function handleDocFile(file) {
+    showUploadProgress('uz-doc', true);
+    const { b64, mime } = await readFileAsB64(file);
+    const r = await apiFetch('/api/finance/document', { method: 'POST', body: { imageBase64: b64, mimeType: mime } });
+    showUploadProgress('uz-doc', false);
+    if (!r.ok) { toast('Could not read document'); return; }
+    const extracted = await r.json();
+    if (extracted.error) { toast('Q could not read that document — try a clearer photo'); return; }
+
+    // Auto-create a problem from the extracted document
+    const prob = await apiFetch('/api/finance/problems', {
+      method: 'POST',
+      body: {
+        type:     extracted.type === 'bill' ? 'bill' : extracted.type === 'debt_letter' ? 'debt' : 'other',
+        title:    extracted.headline || (extracted.provider + ' document'),
+        provider: extracted.provider,
+        amount:   extracted.amount_gbp,
+        dueDate:  extracted.due_date,
+        urgency:  extracted.urgency || 'medium',
+        notes:    extracted.notes,
+      },
+    });
+    if (prob.ok) {
+      const newProb = await prob.json();
+      // Attach the document to the new problem
+      await apiFetch('/api/finance/problems/' + newProb.id + '/documents', {
+        method: 'POST',
+        body: { imageBase64: b64, mimeType: mime, filename: file.name },
+      });
+      problems.unshift(newProb);
+      renderProblems();
+      toast('📄 Document read and added to problems queue');
+    }
+  }
+
+  ['dragover','dragenter'].forEach(ev => uzDoc.addEventListener(ev, e => { e.preventDefault(); uzDoc.classList.add('drag-over'); }));
+  ['dragleave','dragend'].forEach(ev  => uzDoc.addEventListener(ev,  e => uzDoc.classList.remove('drag-over')));
+  uzDoc.addEventListener('drop', async e => {
+    e.preventDefault();
+    uzDoc.classList.remove('drag-over');
+    const file = e.dataTransfer.files[0];
+    if (file) await handleDocFile(file);
+  });
+
+  // ── Add problem modal ─────────────────────────────────────────────────────
+  document.getElementById('add-problem-btn').addEventListener('click', () => openAddProblemModal({}));
+  document.getElementById('prob-cancel').addEventListener('click', () => document.getElementById('add-problem-modal').classList.remove('show'));
+  document.getElementById('add-problem-modal').addEventListener('click', e => { if (e.target.id === 'add-problem-modal') e.currentTarget.classList.remove('show'); });
+
+  function openAddProblemModal(prefill = {}) {
+    if (prefill.type)     document.getElementById('prob-type').value     = prefill.type;
+    if (prefill.title)    document.getElementById('prob-title').value    = prefill.title;
+    if (prefill.provider) document.getElementById('prob-provider').value = prefill.provider;
+    document.getElementById('add-problem-modal').classList.add('show');
+    document.getElementById('prob-title').focus();
+  }
+  window.openAddProblemModal = openAddProblemModal;
+
+  document.getElementById('prob-confirm').addEventListener('click', async () => {
+    const title = document.getElementById('prob-title').value.trim();
+    if (!title) { document.getElementById('prob-title').focus(); return; }
+    const r = await apiFetch('/api/finance/problems', {
+      method: 'POST',
+      body: {
+        type:     document.getElementById('prob-type').value,
+        title,
+        provider: document.getElementById('prob-provider').value.trim() || null,
+        amount:   parseFloat(document.getElementById('prob-amount').value) || null,
+        dueDate:  document.getElementById('prob-due').value || null,
+      },
+    });
+    if (r.ok) {
+      const p = await r.json();
+      problems.unshift(p);
+      renderProblems();
+      document.getElementById('add-problem-modal').classList.remove('show');
+      ['prob-title','prob-provider','prob-amount','prob-due'].forEach(id => document.getElementById(id).value = '');
+      toast('Problem added');
+    }
+  });
+
+  // ── Q Coach card ──────────────────────────────────────────────────────────
+  const coachCard    = document.getElementById('coach-card');
+  const coachMsg     = document.getElementById('coach-msg');
+  const coachInput   = document.getElementById('coach-input');
+  const coachActions = document.getElementById('coach-actions');
+  const dragHandle   = document.getElementById('drag-handle');
+
+  // Draggable
+  let dragging = false, dragOffX = 0, dragOffY = 0;
+  dragHandle.addEventListener('mousedown', e => {
+    dragging = true;
+    dragOffX = e.clientX - coachCard.getBoundingClientRect().left;
+    dragOffY = e.clientY - coachCard.getBoundingClientRect().top;
+    coachCard.style.transform = 'none';
+    e.preventDefault();
+  });
+  document.addEventListener('mousemove', e => {
+    if (!dragging) return;
+    coachCard.style.left = (e.clientX - dragOffX) + 'px';
+    coachCard.style.top  = (e.clientY - dragOffY) + 'px';
+    coachCard.style.right = 'auto';
+  });
+  document.addEventListener('mouseup', () => { dragging = false; });
+
+  // Coach actions
+  document.getElementById('btn-advice').addEventListener('click', getAdvice);
+  document.getElementById('btn-subs-check').addEventListener('click', () => {
+    const subs = subscriptions.slice(0, 5);
+    if (!subs.length) { qSay('Import a bank statement first and I\'ll scan for subscriptions you might have forgotten about.'); return; }
+    qSay('Your top subscriptions:\n' + subs.map(s => `• ${s.merchant} — £${fmt(s.amount)}/mo (£${fmt(s.total_paid)} total paid)`).join('\n') + '\n\nWant me to flag any of these as something to cancel?');
+  });
+  document.getElementById('btn-help-debt').addEventListener('click', () => {
+    if (!problems.length) {
+      qSay('Drop in a debt letter or bill photo first and I\'ll read it — then I can draft the response for you.');
+    } else {
+      qSay('Which one do I write about? Click "Help me with this" on the problem below.');
+    }
+  });
+
+  // Chat input
+  coachInput.addEventListener('keydown', async e => {
+    if (e.key !== 'Enter') return;
+    const msg = coachInput.value.trim();
+    if (!msg) return;
+    coachInput.value = '';
+    await sendToQ(msg);
+  });
+
+  async function sendToQ(userMsg) {
+    coachHistory.push({ role: 'user', content: userMsg });
+    qSay('…', true);
+
+    // Build context about the user's finances
+    const finContext = graphData ? `User's spending summary: total spend £${fmt(graphData.summary.total_spend)}, income £${fmt(graphData.summary.total_income)}, net £${fmt(graphData.summary.net)}. Top categories: ${Object.entries(graphData.by_category||{}).slice(0,5).map(([k,v])=>`${k}:£${fmt(v)}`).join(', ')}. Open problems: ${problems.length}.` : '';
+
+    const r = await apiFetch('/api/chat', {
+      method: 'POST',
+      body: {
+        message:     userMsg,
+        history:     coachHistory.slice(-8),
+        systemExtra: 'You are Q helping the user manage their personal finances. Be specific, practical, and human. ' + finContext,
+      },
+    }).catch(() => null);
+
+    if (!r || !r.ok) { qSay('Something went wrong — try again in a moment.'); return; }
+    const data = await r.json();
+    const reply = data.reply || data.message || 'I had trouble with that — try asking again.';
+    coachHistory.push({ role: 'assistant', content: reply });
+    qSay(reply);
+  }
+
+  async function getAdvice() {
+    qSay('Let me look at everything…', true);
+    const r = await apiFetch('/api/finance/advice', { method: 'POST' });
+    if (!r.ok) { qSay('Something went wrong — try again in a moment.'); return; }
+    const data = await r.json();
+    qSay(data.advice || 'No advice generated.');
+    toast('Q has reviewed your finances');
+  }
+
+  function qSay(msg, thinking = false) {
+    coachMsg.textContent = msg;
+    coachMsg.className = 'q-msg' + (thinking ? ' thinking' : '');
+    coachMsg.scrollTop = 0;
+  }
+
+  // ── Utility ───────────────────────────────────────────────────────────────
+  function showUploadProgress(id, on) {
+    document.getElementById(id).classList.toggle('loading', on);
+  }
+
+  function readFileAsB64(file) {
+    return new Promise((res, rej) => {
+      const fr = new FileReader();
+      fr.onload  = e => res({ b64: e.target.result.split(',')[1], mime: file.type || 'application/octet-stream' });
+      fr.onerror = rej;
+      fr.readAsDataURL(file);
+    });
+  }
+
+  function esc(s) {
+    return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+  }
+
+  let toastTimer = null;
+  function toast(msg, dur = 3000) {
+    const el = document.getElementById('toast');
+    el.textContent = msg;
+    el.classList.add('show');
+    if (toastTimer) clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => el.classList.remove('show'), dur);
+  }
+
+  // ── Init ──────────────────────────────────────────────────────────────────
+  loadAll();
+
+})();
+</script>
+</body>
+</html>
