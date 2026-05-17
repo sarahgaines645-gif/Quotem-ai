@@ -21,14 +21,8 @@ const Q_CONFIG = {
   // Previous: Qwen/Qwen3.6-Plus (Apr 2026)
   // Previous: Qwen2.5-VL-72B-Instruct (retired from Together, Apr 2026)
   visionModel: 'moonshotai/Kimi-K2.5',
-  // Fast model for utility tasks where top-tier reasoning isn't needed —
-  // form-field extraction, simple JSON shaping, lightweight transforms.
-  // DeepSeek V3 on Together AI: V4 Pro's predecessor, sharper at sentence-
-  // level reasoning than 70B-class models while still much faster than V4 Pro.
-  // Q's main brain stays on V4 Pro.
-  // Previous: 'meta-llama/Llama-3.3-70B-Instruct-Turbo' (too shallow on form
-  // fill — kept dropping values in wrong fields).
-  fastModel: 'deepseek-ai/DeepSeek-V3',
+  // fastModel retired — V3 was removed. All utility tasks now use V4-Pro.
+  fastModel: 'deepseek-ai/DeepSeek-V4-Pro',
   temperature: 0.0,
   maxTokens: 4000,
   // Voice cloning — set after deploying q-lab/voice-cloning-space/ to a HF Space.
