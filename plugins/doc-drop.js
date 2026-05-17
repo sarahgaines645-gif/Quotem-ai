@@ -166,72 +166,39 @@ function safeSession(s) {
 }
 
 
-// ── Upload handler ────────────────────────────────────────────────────────
+// ── Upload handler (base64 JSON — no multer dep) ──────────────────────────
 
 /**
- * Build an Express route handler for  POST /doc-drop/:token
- * Pass in a configured multer instance — the consuming app controls
- * file size limits and storage location.
+ * Handle a base64 upload POST from the mobile page.
+ * Body: { base64, mimeType, filename }
+ * Files are kept in-memory on the session object — no disk write needed
+ * because the finance page reads them straight back as base64 via readFileAsBase64().
  *
  * Usage in routes.js:
- *   const multer = require('multer');
- *   const upload = multer({ dest: os.tmpdir() });
- *   const { makeUploadHandler } = require('./doc-drop');
- *   router.post('/doc-drop/:token', upload.array('files', 10), makeUploadHandler());
+ *   router.post('/api/doc-drop/upload/:token', express.json({ limit: '25mb' }), (req, res) => {
+ *       docDrop.handleBase64Upload(req.params.token, req.body, res);
+ *   });
  */
-function makeUploadHandler(opts = {}) {
-    const storageRoot = getStorageRoot(opts);
-    fs.mkdirSync(storageRoot, { recursive: true });
+function handleBase64Upload(token, body, res) {
+    const session = getSessionByToken(token);
+    if (!session) return res.status(404).json({ error: 'Invalid or expired upload link' });
 
-    return async function uploadHandler(req, res) {
-        const token   = req.params.token;
-        const session = getSessionByToken(token); // safe view only
-        if (!session) return res.status(404).json({ error: 'Invalid or expired upload link' });
+    const fullSession = sessions.get(session.id);
+    if (!fullSession) return res.status(404).json({ error: 'Session expired' });
 
-        const fullSession = sessions.get(session.id); // need mutable ref
-        if (!fullSession) return res.status(404).json({ error: 'Session expired' });
+    const { base64, mimeType, filename } = body || {};
+    if (!base64) return res.status(400).json({ error: 'base64 required' });
 
-        const files = req.files || (req.file ? [req.file] : []);
-        if (!files.length) return res.status(400).json({ error: 'No files received' });
-
-        const sessionDir = path.join(storageRoot, session.id);
-        fs.mkdirSync(sessionDir, { recursive: true });
-
-        const saved = [];
-        for (const f of files) {
-            const ext      = path.extname(f.originalname || '').toLowerCase().slice(0, 8) || '';
-            const safeName = crypto.randomBytes(10).toString('hex') + ext;
-            const dest     = path.join(sessionDir, safeName);
-
-            try {
-                if (f.path) {
-                    // multer disk storage — move from tmp to session dir
-                    fs.renameSync(f.path, dest);
-                } else if (f.buffer) {
-                    // multer memory storage — write buffer
-                    fs.writeFileSync(dest, f.buffer);
-                } else {
-                    continue;
-                }
-            } catch (e) {
-                console.error('[doc-drop] file save error:', e.message);
-                continue;
-            }
-
-            const fileEntry = {
-                id:         newId(),
-                filename:   f.originalname || safeName,
-                mimeType:   f.mimetype || 'application/octet-stream',
-                sizeBytes:  f.size || 0,
-                filePath:   dest,
-                uploadedAt: new Date().toISOString(),
-            };
-            fullSession.files.push(fileEntry);
-            saved.push({ id: fileEntry.id, filename: fileEntry.filename });
-        }
-
-        res.json({ ok: true, uploaded: saved.length, files: saved });
+    const fileEntry = {
+        id:         newId(),
+        filename:   String(filename || 'upload').slice(0, 200),
+        mimeType:   String(mimeType || 'application/octet-stream'),
+        sizeBytes:  Math.round(base64.length * 0.75), // approx decoded size
+        base64,     // stored in-memory — no disk needed
+        uploadedAt: new Date().toISOString(),
     };
+    fullSession.files.push(fileEntry);
+    return res.json({ ok: true, uploaded: 1, files: [{ id: fileEntry.id, filename: fileEntry.filename }] });
 }
 
 
@@ -253,9 +220,8 @@ function readFileAsBase64(sessionId, fileId, ownerEmail) {
     if (s.ownerEmail !== String(ownerEmail || '').toLowerCase().trim()) return null;
     const f = s.files.find(x => x.id === fileId);
     if (!f) return null;
-    if (!fs.existsSync(f.filePath)) return null;
     return {
-        base64:   fs.readFileSync(f.filePath).toString('base64'),
+        base64:   f.base64,
         mimeType: f.mimeType,
         filename: f.filename,
     };
@@ -268,6 +234,6 @@ module.exports = {
     getSession,
     listSessions,
     deleteSession,
-    makeUploadHandler,
+    handleBase64Upload,
     readFileAsBase64,
 };

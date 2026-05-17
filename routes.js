@@ -1342,9 +1342,6 @@ router.post('/email-writer/reply', express.json({ limit: '256kb' }), async (req,
 // ── DOC DROP — QR-code document upload ────────────────────────────────
 // Shared plugin. Desktop creates a session → QR → phone uploads → desktop polls.
 const docDrop = require('./plugins/doc-drop');
-const multer  = require('multer');
-const os      = require('os');
-const docDropUpload = multer({ dest: os.tmpdir(), limits: { fileSize: 25 * 1024 * 1024 } });
 
 // Mobile upload page (public — no auth, token = auth)
 router.get('/doc-drop/:token', (req, res) => {
@@ -1358,8 +1355,10 @@ router.get('/api/doc-drop/by-token/:token', (req, res) => {
     res.json({ session });
 });
 
-// Upload by token (public — mobile page calls this)
-router.post('/api/doc-drop/upload/:token', docDropUpload.array('files', 10), docDrop.makeUploadHandler());
+// Upload by token — base64 JSON body, no multipart dep
+router.post('/api/doc-drop/upload/:token', express.json({ limit: '25mb' }), (req, res) => {
+    docDrop.handleBase64Upload(req.params.token, req.body || {}, res);
+});
 
 // Create a session (authenticated)
 router.post('/api/doc-drop/sessions', requirePerson, express.json({ limit: '4kb' }), (req, res) => {
