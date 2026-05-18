@@ -13,10 +13,60 @@
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
-const { Document, Packer, Paragraph, HeadingLevel, TextRun } = require('docx');
+const { Document, Packer, Paragraph, HeadingLevel, TextRun, ImageRun, AlignmentType } = require('docx');
 const { userDataPath, userDir, USER_BASE_DIR } = require('./user-data');
 
 const FILE_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
+
+// ── Image embedding helpers ──────────────────────────────────────
+// docx@9 requires an explicit image `type`. Sniff it from the buffer's
+// magic bytes rather than trusting a caller-supplied mime — the buffer
+// is the source of truth (a Street View JPEG, a Brave thumbnail, etc).
+function imageTypeFromBuffer(buf) {
+    if (!Buffer.isBuffer(buf) || buf.length < 4) return null;
+    if (buf[0] === 0x89 && buf[1] === 0x50 && buf[2] === 0x4e && buf[3] === 0x47) return 'png';
+    if (buf[0] === 0xff && buf[1] === 0xd8 && buf[2] === 0xff) return 'jpg';
+    if (buf[0] === 0x47 && buf[1] === 0x49 && buf[2] === 0x46) return 'gif';
+    if (buf[0] === 0x42 && buf[1] === 0x4d) return 'bmp';
+    return null; // unsupported (svg/webp/etc) — caller writes a text fallback
+}
+
+// Cheap intrinsic-size read for the two formats we actually get (PNG,
+// JPEG). No new dependency. Returns {w,h} or null — null falls back to
+// a sensible default so a doc never fails to build over a sizing miss.
+function imageDimensions(buf, type) {
+    try {
+        if (type === 'png' && buf.length >= 24) {
+            return { w: buf.readUInt32BE(16), h: buf.readUInt32BE(20) };
+        }
+        if (type === 'jpg') {
+            let off = 2;
+            while (off + 9 < buf.length) {
+                if (buf[off] !== 0xff) { off++; continue; }
+                const marker = buf[off + 1];
+                // SOF0..SOF15 (excluding DHT/DAC/RST) carry frame dimensions
+                if (marker >= 0xc0 && marker <= 0xcf &&
+                    marker !== 0xc4 && marker !== 0xc8 && marker !== 0xcc) {
+                    return { h: buf.readUInt16BE(off + 5), w: buf.readUInt16BE(off + 7) };
+                }
+                off += 2 + buf.readUInt16BE(off + 2);
+            }
+        }
+    } catch { /* fall through to default */ }
+    return null;
+}
+
+// Fit an image to a max width (and a max height so a tall capture can't
+// run off the page), preserving aspect ratio. Pixels → docx points.
+function fitImage(buf, type) {
+    const MAX_W = 460, MAX_H = 620, DEFAULT = { width: 460, height: 345 };
+    const dim = imageDimensions(buf, type);
+    if (!dim || !dim.w || !dim.h) return DEFAULT;
+    let { w, h } = dim;
+    if (w > MAX_W) { h = Math.round(h * (MAX_W / w)); w = MAX_W; }
+    if (h > MAX_H) { w = Math.round(w * (MAX_H / h)); h = MAX_H; }
+    return { width: w, height: h };
+}
 
 function safeFilenameStem(s) {
     return String(s || 'document')
@@ -56,8 +106,17 @@ function pruneOldFiles(personEmail) {
 
 /**
  * Produce a .docx and return { token, filename } scoped to one user.
+ *
+ * `images` is OPTIONAL and backward-compatible: existing callers pass
+ * { title, content } and get exactly the same text-only document as
+ * before. When provided, `images` is an array of
+ *   { buffer:Buffer, caption?:string }
+ * appended after the body — each picture centred, fitted to the page,
+ * with its caption (source/provenance) in small italics underneath.
+ * One bad image never fails the doc — it degrades to a text line so an
+ * evidence pack still builds.
  */
-async function createDocx({ title, content }, personEmail) {
+async function createDocx({ title, content, images = [] }, personEmail) {
     if (!title || typeof title !== 'string') throw new Error('title (string) is required');
     if (!content || typeof content !== 'string') throw new Error('content (string) is required');
     if (!personEmail) throw new Error('personEmail required — generated docs must belong to a user');
@@ -81,6 +140,49 @@ async function createDocx({ title, content }, personEmail) {
             runs.push(new TextRun(line));
         });
         paragraphs.push(new Paragraph({ children: runs, spacing: { after: 200 } }));
+    }
+
+    // Optional image appendix — evidence pictures with provenance captions.
+    const imgs = Array.isArray(images) ? images : [];
+    for (const img of imgs) {
+        const caption = (img && typeof img.caption === 'string') ? img.caption.trim() : '';
+        const buf = img && img.buffer;
+        const type = imageTypeFromBuffer(buf);
+        if (!buf || !type) {
+            // Couldn't embed (missing/unsupported format) — keep the
+            // provenance in the doc so the evidence trail isn't lost.
+            paragraphs.push(new Paragraph({
+                spacing: { before: 200, after: 80 },
+                children: [new TextRun({
+                    text: `[Image could not be embedded${caption ? ' — ' + caption : ''}]`,
+                    italics: true,
+                })],
+            }));
+            continue;
+        }
+        try {
+            const { width, height } = fitImage(buf, type);
+            paragraphs.push(new Paragraph({
+                alignment: AlignmentType.CENTER,
+                spacing: { before: 240, after: 60 },
+                children: [new ImageRun({ type, data: buf, transformation: { width, height } })],
+            }));
+            if (caption) {
+                paragraphs.push(new Paragraph({
+                    alignment: AlignmentType.CENTER,
+                    spacing: { after: 200 },
+                    children: [new TextRun({ text: caption, italics: true, size: 18 })],
+                }));
+            }
+        } catch (e) {
+            paragraphs.push(new Paragraph({
+                spacing: { before: 200, after: 80 },
+                children: [new TextRun({
+                    text: `[Image could not be embedded${caption ? ' — ' + caption : ''}]`,
+                    italics: true,
+                })],
+            }));
+        }
     }
 
     const doc = new Document({

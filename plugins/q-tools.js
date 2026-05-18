@@ -25,7 +25,7 @@ const path = require('path');
 const { Q_CONFIG } = require('../config');
 const { addFact, searchFacts, listFacts } = require('../facts');
 const { getTutorPath } = require('../memory');
-const { createDocx, stashFile } = require('./doc-creator');
+const { createDocx, stashFile, resolveToken } = require('./doc-creator');
 const { cleanModelOutput } = require('./cjk-filter');
 const docEditor = require('./q-doc-editor');
 const qImageGen = require('./q-image-gen');
@@ -122,6 +122,67 @@ const TOOL_DEFINITIONS = [
     {
         type: 'function',
         function: {
+            name: 'search_images',
+            description: 'Search the live web for PHOTOS / pictures of a real place, object, sign or thing. Use this when the user wants to FIND a real image that exists online (e.g. "find a photo of the signage on Brick Lane", "pictures of that junction") — NOT to invent or draw one (that is generate_image). Returns real results with a thumbnail and the page they came from. Good for research and evidence gathering. After showing them, you can file chosen ones onto a case Thread with add_file_to_thread.',
+            parameters: {
+                type: 'object',
+                properties: {
+                    query: {
+                        type: 'string',
+                        description: 'What to find a picture of — natural language, e.g. "Brick Lane bus gate restriction sign", "Hanbury Street junction looking west".',
+                    },
+                    count: {
+                        type: 'integer',
+                        description: 'Number of images to return (1-10). Default 6.',
+                        minimum: 1,
+                        maximum: 10,
+                    },
+                },
+                required: ['query'],
+            },
+        },
+    },
+    {
+        type: 'function',
+        function: {
+            name: 'street_view',
+            description: 'Fetch a street-level photo of a specific road / junction / address so you and the user can SEE the road layout and signage — built for fighting parking & moving-traffic tickets (e.g. was the restriction clearly signed?). IMPORTANT and you must say this to the user: this returns the CURRENT view of that location, not how it looked on a past date — it corroborates the general signage/layout, it is not dated proof of a specific day. Returns a downloadable image you can show and then file onto the case Thread with add_file_to_thread. If the road-imagery service is not switched on yet, you will get a clear error — relay it plainly and carry on with the rest of the case.',
+            parameters: {
+                type: 'object',
+                properties: {
+                    location: {
+                        type: 'string',
+                        description: 'An address or place to look at, e.g. "Brick Lane, London E1 6QL" or "junction of Brick Lane and Hanbury Street, London". Either this OR lat+lng is required.',
+                    },
+                    lat: { type: 'number', description: 'Latitude (use with lng instead of location for a precise point).' },
+                    lng: { type: 'number', description: 'Longitude (use with lat).' },
+                    heading: { type: 'integer', description: 'Compass direction the camera faces, 0-359 (0=N, 90=E, 180=S, 270=W). Optional — omit to let it auto-face the road.' },
+                    pitch: { type: 'integer', description: 'Up/down angle -90..90. 0 = level (default). Use +10..20 to catch a high-mounted sign.' },
+                },
+            },
+        },
+    },
+    {
+        type: 'function',
+        function: {
+            name: 'add_file_to_thread',
+            description: 'Put a file (a photo you found with search_images, a Street View image, a document you created, or any image/PDF at a URL) INTO a case Thread, so it lives in that case\'s folder alongside the notes and emails. Use this to assemble an evidence case. Pass EITHER `token` (from a previous search_images/street_view/create_document result) OR `url` (a direct http/https link to the image/file). Always include a short `note` describing what the file is and where it came from — provenance matters for evidence.',
+            parameters: {
+                type: 'object',
+                properties: {
+                    threadId: { type: 'string', description: 'The Thread/case id to attach the file to (from save_situation or list_threads).' },
+                    token:    { type: 'string', description: 'A download token from a previous tool result (street_view, create_document, search-derived). Use this OR url.' },
+                    url:      { type: 'string', description: 'A direct http(s) URL to an image or PDF to fetch and file. Use this OR token.' },
+                    filename: { type: 'string', description: 'What to name the file in the case, e.g. "brick-lane-signage-1.jpg". Keep the right extension.' },
+                    note:     { type: 'string', description: 'One line on what this is and its source, e.g. "Street View of Brick Lane / Hanbury St junction (current imagery, fetched today)". Saved as a provenance note on the Thread.' },
+                },
+                required: ['threadId', 'filename'],
+            },
+        },
+    },
+    {
+        type: 'function',
+        function: {
             name: 'calculator',
             description: 'Evaluate a maths expression accurately. Use this whenever you need to compute numbers — LLMs are bad at arithmetic. Supports +, -, *, /, %, parentheses, decimals, and "X% of Y" phrasing.',
             parameters: {
@@ -211,7 +272,7 @@ const TOOL_DEFINITIONS = [
         type: 'function',
         function: {
             name: 'create_document',
-            description: 'Write a Word (.docx) document on the user\'s behalf and return a download link. Use this whenever the user asks for a letter, complaint, formal email, contract, brief, or any other writing they\'ll want to save or send. Compose the full body yourself in the `content` field — the user will see it as a real Word file. Don\'t use this for short replies or notes; just write those in chat.',
+            description: 'Write a Word (.docx) document on the user\'s behalf and return a download link. Use this whenever the user asks for a letter, complaint, formal email, contract, brief, evidence pack, or any other writing they\'ll want to save or send. Compose the full body yourself in the `content` field — the user will see it as a real Word file. You can also embed images (Street View shots, photos you found) by passing `image_sources` — they appear after the body with their source captions, ideal for a ticket-appeal evidence pack. Don\'t use this for short replies or notes; just write those in chat.',
             parameters: {
                 type: 'object',
                 properties: {
@@ -222,6 +283,18 @@ const TOOL_DEFINITIONS = [
                     content: {
                         type: 'string',
                         description: 'Full body of the document in plain text. Use blank lines between paragraphs. Single newlines become line breaks within a paragraph.',
+                    },
+                    image_sources: {
+                        type: 'array',
+                        description: 'Optional. Images to embed after the body. Each item: { token } from a previous street_view/search-derived/create result, OR { url } a direct http(s) image link, plus a short `caption` stating what it is and its source (shown in italics under the picture — keep provenance honest for evidence).',
+                        items: {
+                            type: 'object',
+                            properties: {
+                                token:   { type: 'string', description: 'Download token from a previous tool result.' },
+                                url:     { type: 'string', description: 'Direct http(s) image URL.' },
+                                caption: { type: 'string', description: 'Provenance caption, e.g. "Street View, Brick Lane at Hanbury St — current imagery, fetched 18 May 2026".' },
+                            },
+                        },
                     },
                 },
                 required: ['title', 'content'],
@@ -701,6 +774,196 @@ async function webSearch({ query, count = 5 }) {
 }
 
 /**
+ * search_images — Brave image search. Same key + auth as web_search.
+ * User-facing errors stay generic (no provider name — house rule).
+ */
+async function searchImages({ query, count = 6 }) {
+    const apiKey = process.env.BRAVE_SEARCH_KEY;
+    if (!apiKey) {
+        return {
+            error: 'image search unavailable',
+            instruction_for_q: "Image search isn't switched on yet. Tell the user plainly, don't name any provider, and carry on with the rest of what they asked.",
+        };
+    }
+    if (!query || typeof query !== 'string') {
+        return { error: 'Query string required' };
+    }
+    const safeCount = Math.min(Math.max(parseInt(count) || 6, 1), 10);
+    const url = `https://api.search.brave.com/res/v1/images/search?q=${encodeURIComponent(query)}&count=${safeCount}&country=gb&search_lang=en&safesearch=strict`;
+    try {
+        const response = await fetch(url, {
+            headers: {
+                'Accept': 'application/json',
+                'Accept-Encoding': 'gzip',
+                'X-Subscription-Token': apiKey,
+            },
+        });
+        if (!response.ok) {
+            console.warn(`[search_images] HTTP ${response.status}`);
+            return { error: 'image search unavailable', instruction_for_q: "The image search didn't come back. Tell the user plainly (no provider names) and offer to try a different wording." };
+        }
+        const data = await response.json();
+        const results = (data.results || []).slice(0, safeCount).map(r => ({
+            title: r.title || '',
+            thumbnail: r.thumbnail?.src || '',
+            image: r.properties?.url || r.thumbnail?.src || '',
+            sourcePage: r.url || '',
+        })).filter(r => r.image);
+        return {
+            query,
+            results,
+            count: results.length,
+            instruction_for_q: results.length
+                ? 'Show the user these as inline markdown images (![title](image)) with the source page linked under each. Then, if this is for a case/dispute, offer to file the relevant ones onto the Thread with add_file_to_thread so they live in the case.'
+                : 'No images found for that query. Say so plainly and suggest a more specific wording.',
+        };
+    } catch (err) {
+        console.warn('[search_images] error:', err.message);
+        return { error: 'image search unavailable', instruction_for_q: "Image search hit a problem. Tell the user plainly without naming any provider." };
+    }
+}
+
+/**
+ * Fetch a remote image/PDF as a Buffer for filing/embedding. Locked to
+ * http(s), capped at 12 MB so a hostile URL can't exhaust memory.
+ */
+async function fetchRemoteBinary(url) {
+    if (!/^https?:\/\//i.test(String(url || ''))) {
+        return { error: 'Only http(s) URLs can be fetched.' };
+    }
+    try {
+        const res = await fetch(url, { redirect: 'follow' });
+        if (!res.ok) return { error: `Could not fetch the file (HTTP ${res.status}).` };
+        const len = parseInt(res.headers.get('content-length') || '0', 10);
+        if (len && len > 12 * 1024 * 1024) return { error: 'That file is too large (over 12 MB).' };
+        const ab = await res.arrayBuffer();
+        const buf = Buffer.from(ab);
+        if (buf.length > 12 * 1024 * 1024) return { error: 'That file is too large (over 12 MB).' };
+        const mimeType = (res.headers.get('content-type') || 'application/octet-stream').split(';')[0].trim();
+        return { buffer: buf, mimeType };
+    } catch (e) {
+        return { error: 'Could not fetch the file: ' + e.message };
+    }
+}
+
+/**
+ * street_view — Google Street View Static API. Key lives in the
+ * quotem-ai deployment env (GOOGLE_MAPS_KEY); the Quotem tools-and-keys
+ * page only registers/tracks it. Honest limitation, surfaced to Q: the
+ * Static API returns CURRENT imagery only — there is no past-date
+ * parameter, so this corroborates signage/layout, it is not dated proof
+ * of a specific day. Metadata is checked first (free) so we never stash
+ * a "no imagery here" grey tile.
+ */
+async function streetView({ location, lat, lng, heading, pitch } = {}, personEmail) {
+    const apiKey = process.env.GOOGLE_MAPS_KEY;
+    if (!apiKey) {
+        return {
+            error: 'road imagery not enabled',
+            instruction_for_q: "The road-imagery feature isn't switched on yet (it needs a key adding on the tools-and-keys page). Tell the user plainly, don't name any provider, and keep going with the rest of the case — the photos can be added once it's enabled.",
+        };
+    }
+    if (!personEmail) return { error: 'Cannot fetch imagery without a signed-in user.' };
+    const hasLatLng = Number.isFinite(Number(lat)) && Number.isFinite(Number(lng));
+    if (!location && !hasLatLng) {
+        return { error: 'Give either a location (address/place) or lat + lng.' };
+    }
+    const loc = hasLatLng ? `${Number(lat)},${Number(lng)}` : String(location);
+    const locParam = `location=${encodeURIComponent(loc)}`;
+    try {
+        // 1. Free metadata check — does Street View imagery exist here?
+        const metaRes = await fetch(`https://maps.googleapis.com/maps/api/streetview/metadata?${locParam}&key=${apiKey}`);
+        const meta = await metaRes.json().catch(() => ({}));
+        if (meta.status !== 'OK') {
+            return {
+                error: 'no street imagery',
+                detail: meta.status || 'unknown',
+                instruction_for_q: "There's no street-level imagery for that exact spot. Tell the user, and suggest trying a nearby address or the junction by name.",
+            };
+        }
+        // 2. Fetch the actual view.
+        const params = [
+            'size=640x640',
+            locParam,
+            heading != null ? `heading=${parseInt(heading)}` : '',
+            `pitch=${pitch != null ? parseInt(pitch) : 0}`,
+            'fov=80',
+            `key=${apiKey}`,
+        ].filter(Boolean).join('&');
+        const imgRes = await fetch(`https://maps.googleapis.com/maps/api/streetview?${params}`);
+        if (!imgRes.ok) {
+            console.warn(`[street_view] image HTTP ${imgRes.status}`);
+            return { error: 'road imagery unavailable', instruction_for_q: "Couldn't pull the street image just now. Tell the user plainly (no provider names) and offer to retry." };
+        }
+        const buf = Buffer.from(await imgRes.arrayBuffer());
+        const label = (hasLatLng ? `streetview-${lat}-${lng}` : `streetview-${loc}`).slice(0, 60);
+        const stashed = stashFile(buf, 'jpg', label, personEmail);
+        const dlUrl = '/download/' + stashed.token;
+        const capturedDate = meta.date ? ` Imagery captured around ${meta.date}.` : '';
+        return {
+            ok: true,
+            filename: stashed.filename,
+            token: stashed.token,
+            downloadUrl: dlUrl,
+            location: loc,
+            captured: meta.date || null,
+            instruction_for_q: `Show the image inline: ![Street view of ${loc}](${dlUrl}). State clearly this is the CURRENT view of that location (not how it looked on a past date) — it shows the general signage/road layout.${capturedDate} Then offer to file it onto the case Thread with add_file_to_thread (token: ${stashed.token}) so it's in the case, and remind the user the dated proof for a specific day would need the council's own records.`,
+        };
+    } catch (err) {
+        console.warn('[street_view] error:', err.message);
+        return { error: 'road imagery unavailable', instruction_for_q: "The road-imagery lookup hit a problem. Tell the user plainly without naming any provider." };
+    }
+}
+
+/**
+ * add_file_to_thread — put a file into a case Thread's folder. Source is
+ * EITHER a per-user download token (resolved only inside this user's own
+ * generated dir — no cross-user reach) OR a fetched http(s) URL. The
+ * Thread is ownership-checked first, exactly like the other thread tools.
+ */
+async function addFileToThread({ threadId, token, url, filename, note } = {}, personEmail) {
+    if (!threadId) return { error: 'threadId is required' };
+    if (!filename) return { error: 'filename is required' };
+    if (!token && !url) return { error: 'Give either a token or a url for the file.' };
+    if (!personEmail) return { error: 'Cannot mutate a thread without a signed-in user.' };
+
+    // Ownership check — only the owner can attach to a Thread.
+    const owned = qThreads.readThread(threadId, personEmail);
+    if (!owned) return { error: 'Thread not found: ' + threadId };
+
+    let buf, mimeType = 'application/octet-stream';
+    if (token) {
+        const resolved = resolveToken(token, personEmail); // per-user scoped
+        if (!resolved) return { error: 'That file token is not valid for you (or has expired).' };
+        try { buf = fs.readFileSync(resolved.fullPath); }
+        catch { return { error: 'Could not read that stored file.' }; }
+    } else {
+        const fetched = await fetchRemoteBinary(url);
+        if (fetched.error) return { error: fetched.error };
+        buf = fetched.buffer;
+        mimeType = fetched.mimeType || mimeType;
+    }
+
+    const safeName = String(filename).replace(/[\\/]/g, '_').slice(0, 200) || 'file';
+    const updated = qThreads.addFile(
+        threadId,
+        { filename: safeName, mimeType, base64: buf.toString('base64') },
+        personEmail,
+    );
+    if (!updated) return { error: 'Could not add the file to the Thread.' };
+    if (note && String(note).trim()) {
+        qThreads.addNote(threadId, { content: String(note).trim(), kind: 'evidence' }, personEmail);
+    }
+    return {
+        ok: true,
+        threadId: updated.id,
+        filename: safeName,
+        fileCount: (updated.files || []).length,
+        instruction_for_q: 'Filed onto the case Thread. Confirm briefly what was added and that it lives in the case folder now, then propose the next concrete move on the case.',
+    };
+}
+
+/**
  * calculator — safe arithmetic eval with "X% of Y" handling.
  * Validates input is math-only before evaluating.
  */
@@ -856,6 +1119,9 @@ async function executeTool(name, argsRaw, personId, personEmail) {
 
     switch (name) {
         case 'web_search':       return await webSearch(args);
+        case 'search_images':    return await searchImages(args);
+        case 'street_view':      return await streetView(args, personEmail);
+        case 'add_file_to_thread': return await addFileToThread(args, personEmail);
         case 'calculator':       return calculator(args);
         case 'current_datetime': return currentDatetime(args);
         case 'analyze_document': return await analyzeDocument(args);
@@ -948,18 +1214,42 @@ function trimParagraphs(paragraphs) {
  * create_document — generate a .docx file and return a download link.
  * Q embeds the link in his reply so the user can click and save the file.
  */
-async function createDocument({ title, content } = {}, personEmail) {
+async function createDocument({ title, content, image_sources } = {}, personEmail) {
     if (!title || typeof title !== 'string') return { error: 'title (string) is required' };
     if (!content || typeof content !== 'string') return { error: 'content (string) is required' };
     if (!personEmail) return { error: 'Cannot create a document without a signed-in user.' };
     try {
-        const result = await createDocx({ title, content }, personEmail);
+        // Resolve any evidence images to buffers. A source that can't be
+        // resolved is skipped (not fatal) — the doc still builds, and
+        // doc-creator writes a "[Image could not be embedded]" line so the
+        // provenance trail isn't silently lost.
+        const images = [];
+        const srcs = Array.isArray(image_sources) ? image_sources.slice(0, 20) : [];
+        for (const s of srcs) {
+            if (!s || (!s.token && !s.url)) continue;
+            const caption = typeof s.caption === 'string' ? s.caption : '';
+            if (s.token) {
+                const r = resolveToken(s.token, personEmail); // per-user scoped
+                if (!r) { images.push({ buffer: null, caption: caption || 'source unavailable' }); continue; }
+                try { images.push({ buffer: fs.readFileSync(r.fullPath), caption }); }
+                catch { images.push({ buffer: null, caption: caption || 'source unreadable' }); }
+            } else {
+                const f = await fetchRemoteBinary(s.url);
+                images.push(f.error ? { buffer: null, caption: caption || 'source unavailable' }
+                                    : { buffer: f.buffer, caption });
+            }
+        }
+        const result = await createDocx({ title, content, images }, personEmail);
+        const embedded = images.filter(i => i.buffer).length;
         return {
             ok: true,
             filename: result.filename,
             sizeBytes: result.sizeBytes,
+            imagesEmbedded: embedded,
             downloadUrl: '/download/' + result.token,
-            instruction_for_q: 'Tell the user the document is ready and give them this exact markdown link to download it: [Download ' + result.filename + '](' + '/download/' + result.token + '). Mention briefly what you put in the document, but do NOT paste the full body — they\'ll get it in the file.',
+            instruction_for_q: 'Tell the user the document is ready and give them this exact markdown link to download it: [Download ' + result.filename + '](' + '/download/' + result.token + ').'
+                + (srcs.length ? ` ${embedded} of ${srcs.length} image(s) embedded with their source captions.` : '')
+                + ' Mention briefly what you put in the document, but do NOT paste the full body — they\'ll get it in the file. If this is a case, offer to file the document onto the Thread with add_file_to_thread (use its download token).',
         };
     } catch (e) {
         return { error: e.message || 'Could not create document.' };
@@ -1433,7 +1723,7 @@ const ALWAYS_ON = new Set([
     // every turn so he can correlate to a saved case whenever Sarah refers
     // to one (anywhere — main chat, email writer, inside a Thread).
     'list_threads', 'read_thread', 'save_situation',
-    'add_email_to_thread', 'add_note_to_thread',
+    'add_email_to_thread', 'add_note_to_thread', 'add_file_to_thread',
     // Finance tools — always available so Q can read and update the finance
     // data store from any page, not just when on /finance.
     'read_finance', 'add_finance_problem',
@@ -1454,6 +1744,18 @@ const TRIGGERS = {
         /\bwhat'?s (the latest|new on)\b/i,
         /\bup-?to-?date\b/i,
         /\bonline\b/i,
+    ],
+    search_images: [
+        /\b(find|get|fetch|look up|search( for)?|show me|need|want|grab)\b[^.?!]{0,40}\b(photo|photos|picture|pictures|image|images|pic|pics|shot|snap)\b/i,
+        /\b(photo|photos|picture|pictures|image|images|pics?) of\b/i,
+        /\breal (photo|picture|image)\b/i,
+        /\bwhat does\b[^.?!]{0,40}\blook like\b/i,
+    ],
+    street_view: [
+        /\bstreet ?view\b/i,
+        /\b(road|street|junction|signage|signs?|bus gate|restricted (street|route)|yellow lines?|loading bay|box junction)\b[^.?!]{0,30}\b(look|view|imagery|photo|picture|see|signed)\b/i,
+        /\b(drove|driving|drive) (down|through|along|into)\b/i,
+        /\b(parking|pcn|penalty charge|bus gate|moving[- ]traffic|tribunal|appeal|ticket|fine|contravention|ncp)\b/i,
     ],
     calculator: [
         /\bcalculate\b/i,
