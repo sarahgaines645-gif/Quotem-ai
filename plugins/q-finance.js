@@ -28,14 +28,27 @@ const { cleanModelOutput } = require('./cjk-filter');
 // Call Together AI via plain fetch — same pattern as q-email-writer.js
 // Pass extra = { response_format, ... } for JSON mode etc.
 async function togetherChat({ model, messages, temperature = 0, max_tokens = 4000, ...extra }) {
-    const res = await fetch(`${Q_CONFIG.baseURL}/chat/completions`, {
-        method: 'POST',
-        headers: {
-            'Authorization': `Bearer ${Q_CONFIG.apiKey}`,
-            'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ model, messages, temperature, max_tokens, ...extra }),
-    });
+    // Hard 90s timeout. Without this, a hung Together AI connection makes the
+    // whole request hang forever and the UI sits on "reading…" indefinitely.
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 90_000);
+    let res;
+    try {
+        res = await fetch(`${Q_CONFIG.baseURL}/chat/completions`, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${Q_CONFIG.apiKey}`,
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ model, messages, temperature, max_tokens, ...extra }),
+            signal: ctrl.signal,
+        });
+    } catch (e) {
+        if (e.name === 'AbortError') throw new Error('Together AI timed out after 90s — the statement was not read');
+        throw e;
+    } finally {
+        clearTimeout(timer);
+    }
     if (!res.ok) {
         const err = await res.text();
         throw new Error(`Together AI ${res.status}: ${err.slice(0, 300)}`);
