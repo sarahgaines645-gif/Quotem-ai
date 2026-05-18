@@ -96,25 +96,15 @@ function saveProblems(email, problems) {
 
 // ── Statement parsing ─────────────────────────────────────────────
 
-const PARSE_SYSTEM = `You are a bank statement parser. Extract every transaction from the raw text and return them as a JSON object.
+// Sarah's prompt. The old robotic "You are a parser, return ONLY JSON"
+// version made V4 push back by narrating. This asks normally — the same
+// way it already works in chat — and the assistant prefill enforces the
+// shape. Do NOT re-add response_format here (documented V4 trap).
+const PARSE_SYSTEM = `Here's a bank statement. Pull out every transaction — date, description, amount, and a cleaned-up merchant name. Format it as JSON with a rows array.
 
-REQUIRED OUTPUT FORMAT — return ONLY this JSON object, nothing else:
-{"rows": [{"date":"YYYY-MM-DD","description":"payee text","amount":number,"merchant":"clean name"}, ...]}
+Include every transaction exactly as it appears. Do not skip, merge, summarise, or guess. If you can't read a line clearly, flag it — don't invent it.
 
-amount is NEGATIVE for money leaving (debits / money-out). POSITIVE for money coming in (credits / money-in).
-
-MONZO STATEMENT LAYOUT: columns are Date | Description | Money out | Money in | Balance.
-- Value in "Money out" column → NEGATIVE amount.
-- Value in "Money in" column → POSITIVE amount.
-- Balance column = running total, NOT a transaction. Ignore it entirely.
-- Skip "Opening balance" and "Closing balance" rows.
-
-UK DATE FORMATS: "02 Feb 2026" → "2026-02-02". "02/02/2026" → "2026-02-02". If year missing, use most recent plausible year.
-AMOUNTS: numbers may have commas (1,234.56 → 1234.56). Strip any currency symbols already removed by pre-processing.
-SKIP: column headers, page headers/footers, legal text, account summary rows, running totals.
-INCLUDE: every real payment/transfer/income row, even small ones.
-
-Return ONLY the JSON object. No explanation, no markdown, no commentary.`;
+Amount is negative for money out, positive for money in. UK date formats. Skip opening/closing balance rows and headers.`;
 
 async function parseChunk(chunk, idx, total) {
     if (idx === 0) console.log(`[finance] chunk 1 text sample: ${chunk.slice(0, 500).replace(/\n/g, '↵')}`);
@@ -131,7 +121,7 @@ async function parseChunk(chunk, idx, total) {
         max_tokens: 6000,
         messages: [
             { role: 'system',    content: PARSE_SYSTEM },
-            { role: 'user',      content: `${chunk}\n\nReturn ONLY the JSON object now — no explanation, no markdown.` },
+            { role: 'user',      content: chunk },
             { role: 'assistant', content: PREFILL },
         ],
     }));
