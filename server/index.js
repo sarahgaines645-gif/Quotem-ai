@@ -175,6 +175,14 @@ app.get('/q-auth.js', (req, res) => {
     res.sendFile(path.join(ROOT, 'q-auth.js'));
 });
 
+// Public NFC tag landing page — standalone, NO auth (people who tap the
+// tag aren't signed-in users). Reusable; today it shows a birthday.
+// Registered before the auth gate so tapping the tag just opens it.
+app.get('/tags', (req, res) => {
+    res.setHeader('Cache-Control', 'no-store');
+    res.sendFile(path.join(ROOT, 'tags.html'));
+});
+
 // Favicon — Q with pink dot. Multiple sizes for desktop + mobile + home-screen.
 //   /favicon.svg          → modern browsers (scalable)
 //   /favicon.ico          → fallback for older browsers (just the SVG)
@@ -222,6 +230,7 @@ const PUBLIC_PATHS = new Set([
     '/manifest.webmanifest',
     '/sw.js',                // service worker must be public — browser fetches it pre-auth
     '/trace-widget.js', '/looking-glass-widget.js',
+    '/tags',                 // public NFC tag landing page — recipients aren't signed-in users
     '/login', '/signup', '/logout',
     '/forgot-password', '/reset-password',
 ]);

@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>🎉</title>
+<meta name="robots" content="noindex" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@500;700;800&family=Quicksand:wght@500;600&display=swap" rel="stylesheet" />
+
+<!-- ──────────────────────────────────────────────────────────────
+     TAG PAGE — reusable NFC landing page (named generically so it
+     can be repurposed). Tonight's content: Deana's birthday.
+     To repurpose later, just change the CONFIG block below.
+     Standalone & public: NO q-auth.js, no sign-in. Served at /tags.
+─────────────────────────────────────────────────────────────── -->
+<script>
+  /* ===== CONFIG — the only thing to change to reuse this page ===== */
+  window.TAG_CONFIG = {
+    // The headline, shown letter-by-letter in birthday colours.
+    heading: "Happy Birthday Deana",
+    // A warm line under the photo. Leave "" to hide it.
+    subline: "Hope your day is as wonderful as you are 🎂",
+    // The picture. Replaced with a baked-in data URL (data:image/...;base64,..)
+    // so it works on any phone with zero server. null = show placeholder.
+    imageDataUrl: null,
+    // Falling confetti on/off.
+    confetti: true
+  };
+</script>
+
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  body{
+    background:#ffffff;color:#222;
+    font-family:'Quicksand',-apple-system,BlinkMacSystemFont,sans-serif;
+    min-height:100svh;display:flex;flex-direction:column;
+    align-items:center;justify-content:center;
+    padding:max(24px,env(safe-area-inset-top)) 20px max(24px,env(safe-area-inset-bottom));
+    text-align:center;overflow-x:hidden;
+  }
+  .wrap{width:min(560px,100%);display:flex;flex-direction:column;align-items:center;gap:26px;z-index:2}
+
+  /* Photo */
+  .photo-frame{
+    width:min(340px,78vw);aspect-ratio:1/1;border-radius:28px;overflow:hidden;
+    box-shadow:0 18px 50px rgba(0,0,0,0.16);background:#f3f3f3;
+    animation:pop .7s cubic-bezier(.18,.89,.32,1.28) both;
+  }
+  .photo-frame img{width:100%;height:100%;object-fit:cover;display:block}
+  .placeholder{
+    width:100%;height:100%;display:flex;flex-direction:column;
+    align-items:center;justify-content:center;gap:10px;
+    background:linear-gradient(135deg,#fff0f6,#eef6ff);
+    color:#b4b4c4;font-size:15px;font-weight:600;
+  }
+  .placeholder .big{font-size:60px}
+
+  /* Headline — each letter its own colour, gentle wave */
+  h1{
+    font-family:'Baloo 2',cursive;font-weight:800;line-height:1.08;
+    font-size:clamp(34px,9vw,60px);letter-spacing:.5px;
+    display:flex;flex-wrap:wrap;justify-content:center;gap:0 .02em;
+  }
+  h1 .word{display:inline-flex;white-space:nowrap}
+  h1 .ltr{
+    display:inline-block;
+    animation:wave 2.6s ease-in-out infinite;
+    text-shadow:0 2px 0 rgba(0,0,0,0.05);
+  }
+  .subline{font-size:clamp(15px,4.4vw,19px);color:#555;font-weight:600;max-width:30ch}
+
+  @keyframes pop{0%{opacity:0;transform:scale(.7) translateY(20px)}100%{opacity:1;transform:none}}
+  @keyframes wave{0%,100%{transform:translateY(0) rotate(0)}25%{transform:translateY(-9px) rotate(-3deg)}60%{transform:translateY(2px) rotate(2deg)}}
+  @media (prefers-reduced-motion:reduce){.ltr{animation:none}.photo-frame{animation:none}}
+
+  /* Confetti */
+  .confetti{position:fixed;inset:0;pointer-events:none;overflow:hidden;z-index:1}
+  .confetti i{
+    position:absolute;top:-12vh;width:10px;height:14px;border-radius:2px;opacity:.9;
+    animation:fall linear infinite;
+  }
+  @keyframes fall{
+    0%{transform:translateY(-12vh) rotate(0)}
+    100%{transform:translateY(115vh) rotate(720deg)}
+  }
+
+  /* Setup panel — hidden unless ?setup is in the URL. Deana never sees it. */
+  .setup{
+    display:none;position:fixed;left:0;right:0;bottom:0;z-index:5;
+    background:#fafafa;border-top:1px solid #eee;
+    padding:18px 18px max(18px,env(safe-area-inset-bottom));
+    font-family:'Quicksand',sans-serif;text-align:left;
+    box-shadow:0 -8px 30px rgba(0,0,0,.08);
+  }
+  body.show-setup .setup{display:block}
+  .setup h2{font-size:14px;color:#333;margin-bottom:6px;font-weight:700}
+  .setup p{font-size:13px;color:#666;line-height:1.5;margin-bottom:10px}
+  .setup .url{
+    display:flex;gap:8px;align-items:center;margin-bottom:12px;
+  }
+  .setup .url input{
+    flex:1;font:inherit;font-size:13px;padding:11px 12px;border:1px solid #ddd;
+    border-radius:10px;background:#fff;color:#333;min-width:0;
+  }
+  .setup button{
+    font:inherit;font-weight:700;font-size:13px;border:none;cursor:pointer;
+    padding:11px 14px;border-radius:10px;background:#222;color:#fff;white-space:nowrap;
+  }
+  .setup button:active{transform:translateY(1px)}
+  .setup .nfc-btn{background:#e91e63;width:100%;margin-bottom:10px;padding:13px}
+  .setup .status{font-size:12.5px;color:#2e7d32;min-height:16px;margin-bottom:4px}
+  .setup .status.err{color:#c62828}
+  .setup .tip{font-size:12px;color:#888;line-height:1.5}
+</style>
+</head>
+<body>
+
+  <div class="confetti" id="confetti" aria-hidden="true"></div>
+
+  <main class="wrap">
+    <div class="photo-frame" id="frame"></div>
+    <h1 id="heading" aria-label=""></h1>
+    <p class="subline" id="subline"></p>
+  </main>
+
+  <!-- Setup (Sarah only) — open this page with ?setup to see it -->
+  <section class="setup" id="setup">
+    <h2>📲 Hook this up to your NFC tag</h2>
+    <p>This page lives at the link below. Write that link to your NFC tag and tapping it opens this page.</p>
+    <div class="url">
+      <input id="pageUrl" type="text" readonly />
+      <button id="copyBtn" type="button">Copy</button>
+    </div>
+    <button class="nfc-btn" id="nfcBtn" type="button">📲 Write link to NFC tag</button>
+    <div class="status" id="nfcStatus"></div>
+    <p class="tip" id="nfcTip"></p>
+  </section>
+
+<script>
+(function () {
+  var C = window.TAG_CONFIG || {};
+
+  // ---- Photo ----
+  var frame = document.getElementById('frame');
+  if (C.imageDataUrl) {
+    var img = document.createElement('img');
+    img.src = C.imageDataUrl;
+    img.alt = '';
+    frame.appendChild(img);
+  } else {
+    frame.innerHTML =
+      '<div class="placeholder"><span class="big">🎂</span><span>photo goes here</span></div>';
+  }
+
+  // ---- Headline: per-letter birthday colours + staggered wave ----
+  var palette = ['#ff3b6b','#ff8c1a','#ffc400','#36c275','#1ea7ff','#8a5cff','#ff52c8'];
+  var h1 = document.getElementById('heading');
+  var text = String(C.heading || '');
+  h1.setAttribute('aria-label', text);
+  var words = text.split(' ');
+  var i = 0;
+  words.forEach(function (w, wi) {
+    var wEl = document.createElement('span');
+    wEl.className = 'word';
+    for (var c = 0; c < w.length; c++) {
+      var s = document.createElement('span');
+      s.className = 'ltr';
+      s.textContent = w[c];
+      s.style.color = palette[i % palette.length];
+      s.style.animationDelay = (i * 0.06) + 's';
+      wEl.appendChild(s);
+      i++;
+    }
+    h1.appendChild(wEl);
+    if (wi < words.length - 1) {
+      var sp = document.createElement('span');
+      sp.className = 'ltr';
+      sp.innerHTML = '&nbsp;';
+      h1.appendChild(sp);
+      i++;
+    }
+  });
+
+  // ---- Subline ----
+  var sub = document.getElementById('subline');
+  if (C.subline) sub.textContent = C.subline; else sub.style.display = 'none';
+
+  // ---- Confetti ----
+  if (C.confetti !== false) {
+    var box = document.getElementById('confetti');
+    for (var n = 0; n < 36; n++) {
+      var p = document.createElement('i');
+      p.style.left = Math.random() * 100 + 'vw';
+      p.style.background = palette[n % palette.length];
+      p.style.animationDuration = (4.5 + Math.random() * 4) + 's';
+      p.style.animationDelay = (-Math.random() * 8) + 's';
+      p.style.transform = 'scale(' + (0.6 + Math.random() * 0.9) + ')';
+      box.appendChild(p);
+    }
+  }
+
+  // ---- Setup panel (Sarah only) ----
+  var loc = location;
+  var isSetup = /(\?|&)setup\b/.test(loc.search) || /setup/.test(loc.hash);
+  if (isSetup) document.body.classList.add('show-setup');
+
+  var cleanUrl = loc.origin + loc.pathname; // no ?setup in the tag link
+  var urlInput = document.getElementById('pageUrl');
+  urlInput.value = cleanUrl;
+
+  document.getElementById('copyBtn').addEventListener('click', function () {
+    urlInput.select();
+    navigator.clipboard && navigator.clipboard.writeText(cleanUrl);
+    var b = this; b.textContent = 'Copied'; setTimeout(function(){ b.textContent = 'Copy'; }, 1500);
+  });
+
+  var nfcBtn = document.getElementById('nfcBtn');
+  var nfcStatus = document.getElementById('nfcStatus');
+  var nfcTip = document.getElementById('nfcTip');
+
+  if ('NDEFReader' in window) {
+    nfcTip.textContent = 'Tap the button, then hold your phone against the NFC tag until it confirms.';
+    nfcBtn.addEventListener('click', async function () {
+      nfcStatus.className = 'status';
+      nfcStatus.textContent = 'Hold your phone to the tag…';
+      try {
+        var w = new NDEFReader();
+        await w.write({ records: [{ recordType: 'url', data: cleanUrl }] });
+        nfcStatus.textContent = '✅ Done — tapping that tag now opens this page.';
+      } catch (e) {
+        nfcStatus.className = 'status err';
+        nfcStatus.textContent = 'Couldn’t write the tag (' + (e.name || 'error') + '). Try again, or use the app method below.';
+      }
+    });
+  } else {
+    nfcBtn.textContent = '📲 NFC writing isn’t available on this phone';
+    nfcBtn.disabled = true;
+    nfcBtn.style.opacity = .55;
+    nfcTip.innerHTML = 'On iPhone: open the free <b>NFC Tools</b> app → <b>Write</b> → <b>Add a record</b> → <b>URL/URI</b> → paste the link above → <b>Write</b> → hold the tag to your phone. (Web NFC only works in Chrome on Android.)';
+  }
+})();
+</script>
+</body>
+</html>
