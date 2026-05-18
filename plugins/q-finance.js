@@ -118,53 +118,44 @@ Return ONLY the JSON object. No explanation, no markdown, no commentary.`;
 
 async function parseChunk(chunk, idx, total) {
     if (idx === 0) console.log(`[finance] chunk 1 text sample: ${chunk.slice(0, 500).replace(/\n/g, '↵')}`);
-    // DeepSeek V4 Pro is a thinking model: with response_format:json_object it
-    // pushes its chain-of-thought into reasoning_content and leaves `content`
-    // empty, so togetherChat falls back to returning the narration ("We are
-    // asked to parse a bank statement…") and zero rows come back. The
-    // documented rule for this model is NO response_format — let it answer
-    // naturally and extract the JSON from the text (the approach already
-    // proven in q-translator.js). PARSE_SYSTEM already demands a bare object.
+    // DeepSeek V4 Pro is a thinking model. Dropping response_format alone was
+    // NOT enough — confirmed live: it just narrates ("We are asked to parse a
+    // bank statement…") and never emits the JSON inside its token budget, so
+    // every chunk returned 0. The reliable fix is an assistant PREFILL: we
+    // start its reply for it with `{"rows": [` so it physically cannot
+    // narrate — it has to continue valid JSON. The API returns only the
+    // continuation, so we glue the prefill back on before parsing.
+    const PREFILL = '{"rows": [';
     const raw = cleanModelOutput(await togetherChat({
         model:      Q_CONFIG.model,
-        max_tokens: 4000,
+        max_tokens: 6000,
         messages: [
-            { role: 'system', content: PARSE_SYSTEM },
-            { role: 'user',   content: `${chunk}\n\nReturn ONLY the JSON object now — no explanation, no markdown.` },
+            { role: 'system',    content: PARSE_SYSTEM },
+            { role: 'user',      content: `${chunk}\n\nReturn ONLY the JSON object now — no explanation, no markdown.` },
+            { role: 'assistant', content: PREFILL },
         ],
     }));
     console.log(`[finance] chunk ${idx + 1}/${total} model reply (first 300): ${raw.slice(0, 300).replace(/\n/g, '↵')}`);
-    // Robust extraction (mirrors q-translator.js): the model may answer with
-    // pure JSON, fenced JSON, or JSON wrapped in a sentence of prose. Pull the
-    // rows out of whichever shape comes back instead of trusting JSON mode.
+
     const rowsFrom = (v) => Array.isArray(v?.rows) ? v.rows
                           : Array.isArray(v?.transactions) ? v.transactions
                           : Array.isArray(v) ? v
                           : null;
+    const tryRows = (s) => { try { return rowsFrom(JSON.parse(s)); } catch { return null; } };
+
     const cleaned = raw.replace(/```(?:json)?\s*/gi, '').replace(/```/g, '').trim();
-    // 1. Whole reply parses as JSON
-    try {
-        const rows = rowsFrom(JSON.parse(cleaned));
-        if (rows) { console.log(`[finance] chunk ${idx + 1}/${total}: ${rows.length} transactions`); return rows; }
-    } catch { /* not pure JSON — extract below */ }
-    // 2. First {...} object (PARSE_SYSTEM asks for {"rows":[...]})
-    const objM = cleaned.match(/\{[\s\S]*\}/);
-    if (objM) {
-        try {
-            const rows = rowsFrom(JSON.parse(objM[0]));
-            if (rows) { console.log(`[finance] chunk ${idx + 1}/${total}: extracted ${rows.length} transactions`); return rows; }
-        } catch { /* try array next */ }
-    }
-    // 3. First [...] array
-    const arrM = cleaned.match(/\[[\s\S]*\]/);
-    if (arrM) {
-        try {
-            const rows = JSON.parse(arrM[0]);
-            if (Array.isArray(rows)) { console.log(`[finance] chunk ${idx + 1}/${total}: array-extracted ${rows.length} transactions`); return rows; }
-        } catch { /* nothing usable */ }
-    }
-    console.log(`[finance] chunk ${idx + 1}/${total}: parse failed — raw: ${raw.slice(0, 200)}`);
-    return [];
+    // 1. Reply is already whole valid JSON (model returned/echoed the full
+    //    object or a bare array, ignoring the prefill).
+    let rows = tryRows(cleaned);
+    // 2. Prefill continuation — the reply is everything AFTER `{"rows": [`,
+    //    so glue it back on. (Checked AFTER 1 so a full object isn't nested.)
+    if (!rows) rows = tryRows(PREFILL + cleaned);
+    // 3. JSON embedded in prose — first {...}, then first [...].
+    if (!rows) { const m = cleaned.match(/\{[\s\S]*\}/); if (m) rows = tryRows(m[0]); }
+    if (!rows) { const m = cleaned.match(/\[[\s\S]*\]/); if (m) { try { const x = JSON.parse(m[0]); if (Array.isArray(x)) rows = x; } catch { /* none */ } } }
+    rows = rows || [];
+    console.log(`[finance] chunk ${idx + 1}/${total}: ${rows.length} transactions${rows.length ? '' : ' — parse failed, raw: ' + raw.slice(0, 160).replace(/\n/g, '↵')}`);
+    return rows;
 }
 
 async function parseStatementText(rawText) {
