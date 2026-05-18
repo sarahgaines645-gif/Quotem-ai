@@ -2316,53 +2316,10 @@ if (launcherBtn && launcher) {
 }
 </script>
 
-<script>
-// ── Push notification setup ────────────────────────────────────────────────
-(async function setupPush() {
-  if (!('serviceWorker' in navigator) || !('PushManager' in window) || !('Notification' in window)) return;
-  try {
-    const reg = await navigator.serviceWorker.register('/sw.js');
-    await navigator.serviceWorker.ready;
-
-    // Already subscribed — check if it's still saved on the server
-    let sub = await reg.pushManager.getSubscription();
-    if (sub) {
-      // Re-save in case the server lost it (e.g. after a redeploy)
-      await fetch('/push/subscribe', {
-        method: 'POST', credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(sub),
-      }).catch(() => {});
-      console.log('[Q] push already active');
-      return;
-    }
-
-    // Ask for permission FIRST — this shows the browser prompt immediately,
-    // before touching the server. Without this, a server error silently
-    // swallows the prompt and nothing ever asks the user.
-    const permission = await Notification.requestPermission();
-    if (permission !== 'granted') { console.log('[Q] push permission denied'); return; }
-
-    // Get VAPID public key from server
-    const keyRes = await fetch('/push/vapid-public-key', { credentials: 'include' });
-    if (!keyRes.ok) { console.warn('[Q] push: server returned', keyRes.status); return; }
-    const { key } = await keyRes.json();
-
-    // Subscribe
-    sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: key });
-
-    // Save on server
-    await fetch('/push/subscribe', {
-      method: 'POST', credentials: 'include',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(sub),
-    });
-    console.log('[Q] push notifications active');
-  } catch (e) {
-    console.warn('[Q] push setup error:', e.name, e.message);
-  }
-})();
-</script>
+<!-- Push notification setup moved site-wide to /q-auth.js as a
+     gesture-driven bell. The old auto-on-load version that lived here
+     only ran on /chat and was silently throttled by browsers because
+     it requested permission without a user gesture (DEV_QUEUE #9). -->
 
 </body>
 </html>

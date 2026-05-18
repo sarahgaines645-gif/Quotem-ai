@@ -377,3 +377,166 @@
         bootCheck();
     }
 })();
+
+/* ─────────────────────────────────────────────────────────────
+ * Q PUSH BELL — site-wide notification opt-in.
+ *
+ * Lives here because /q-auth.js is the one script every page loads,
+ * so push gets a single home with zero per-page wiring.
+ *
+ * Why a bell, not an auto-prompt: browsers throttle/deny
+ * Notification.requestPermission() that isn't tied to a user
+ * gesture — silently, so the user simply never sees a prompt.
+ * This was previously an auto-on-load IIFE in chat.html ONLY;
+ * that is the bug this replaces. Permission is now requested on a
+ * deliberate bell click, and the bell shows/persists state.
+ *
+ * Style: STYLE.md tokens, hardcoded (injected code can't assume a
+ * page declares the :root vars — same approach as the auth card
+ * above). Accent #e91e63 is used ONLY on the small "on" dot — a
+ * sanctioned attention indicator — never the button itself.
+ * ───────────────────────────────────────────────────────────── */
+(function qPushBell() {
+    if (!('serviceWorker' in navigator) || !('PushManager' in window) || !('Notification' in window)) return;
+
+    // Push API wants the VAPID key as bytes; a raw base64 string is not
+    // reliable across browsers.
+    function urlBase64ToUint8Array(base64String) {
+        const padding = '='.repeat((4 - base64String.length % 4) % 4);
+        const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+        const raw = atob(base64);
+        const out = new Uint8Array(raw.length);
+        for (let i = 0; i < raw.length; i++) out[i] = raw.charCodeAt(i);
+        return out;
+    }
+
+    const SVG_BELL = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>';
+
+    let btn, reg;
+
+    function injectStyle() {
+        if (document.getElementById('q-bell-style')) return;
+        const s = document.createElement('style');
+        s.id = 'q-bell-style';
+        s.textContent = `
+          #q-bell {
+            position: fixed; top: 14px; right: 14px; z-index: 99990;
+            width: 44px; height: 44px; border: none; border-radius: 50%;
+            background: #e8e8e8; color: #1a1a1a; padding: 0;
+            box-shadow: 6px 6px 16px #ababab, -5px -5px 12px #ffffff;
+            display: inline-flex; align-items: center; justify-content: center;
+            cursor: pointer; transition: box-shadow 0.12s;
+            font-family: 'Space Grotesk', -apple-system, BlinkMacSystemFont, sans-serif;
+          }
+          #q-bell:hover  { box-shadow: 4px 4px 10px #ababab, -3px -3px 8px #ffffff; }
+          #q-bell:active { box-shadow: inset 3px 3px 8px #ababab, inset -2px -2px 6px #ffffff; }
+          #q-bell svg { width: 20px; height: 20px; }
+          #q-bell.q-bell-blocked { color: rgba(0,0,0,0.30); cursor: default; }
+          #q-bell .q-bell-dot {
+            position: absolute; top: 8px; right: 8px;
+            width: 9px; height: 9px; border-radius: 50%;
+            background: #e91e63; display: none;
+            box-shadow: 0 0 0 2px #e8e8e8;
+          }
+          #q-bell.q-bell-on .q-bell-dot { display: block; }
+          @media (max-width: 600px) { #q-bell { width: 40px; height: 40px; top: 10px; right: 10px; } }
+        `;
+        document.head.appendChild(s);
+    }
+
+    function setState(state) {
+        if (!btn) return;
+        btn.classList.remove('q-bell-on', 'q-bell-blocked');
+        if (state === 'on') {
+            btn.classList.add('q-bell-on');
+            btn.title = 'Notifications are on — Q can reach you here.';
+        } else if (state === 'blocked') {
+            btn.classList.add('q-bell-blocked');
+            btn.title = 'Notifications are blocked in your browser. Turn them on in this site’s settings → Notifications → Allow, then reload.';
+        } else {
+            btn.title = 'Turn on notifications so Q can reach you.';
+        }
+    }
+
+    function mountBtn() {
+        if (document.getElementById('q-bell')) return;
+        injectStyle();
+        btn = document.createElement('button');
+        btn.id = 'q-bell';
+        btn.type = 'button';
+        btn.setAttribute('aria-label', 'Notifications');
+        btn.innerHTML = SVG_BELL + '<span class="q-bell-dot"></span>';
+        document.body.appendChild(btn);
+        btn.addEventListener('click', onClick);
+    }
+
+    async function saveSub(sub) {
+        return fetch('/push/subscribe', {
+            method: 'POST', credentials: 'include',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(sub),
+        });
+    }
+
+    async function subscribe() {
+        const permission = await Notification.requestPermission();
+        if (permission !== 'granted') {
+            setState(Notification.permission === 'denied' ? 'blocked' : 'off');
+            return;
+        }
+        const keyRes = await fetch('/push/vapid-public-key', { credentials: 'include' });
+        if (!keyRes.ok) { setState('off'); return; }
+        const { key } = await keyRes.json();
+        const sub = await reg.pushManager.subscribe({
+            userVisibleOnly: true,
+            applicationServerKey: urlBase64ToUint8Array(key),
+        });
+        await saveSub(sub);
+        setState('on');
+    }
+
+    async function onClick() {
+        if (Notification.permission === 'denied') { setState('blocked'); return; }
+        try {
+            const existing = await reg.pushManager.getSubscription();
+            if (existing) { await saveSub(existing).catch(() => {}); setState('on'); return; }
+            await subscribe();
+        } catch (e) {
+            console.warn('[Q] bell:', e.name, e.message);
+            setState('off');
+        }
+    }
+
+    async function init() {
+        // /push/* is auth-gated — only mount once there's a signed-in user,
+        // else the endpoints 401 and the bell is dead UI.
+        try {
+            const r = await fetch('/whoami', { credentials: 'include', cache: 'no-store' });
+            const d = await r.json();
+            if (!d || !d.person) return;
+        } catch { return; }
+
+        try {
+            reg = await navigator.serviceWorker.register('/sw.js');
+            await navigator.serviceWorker.ready;
+        } catch (e) {
+            console.warn('[Q] sw register failed:', e.message);
+            return;
+        }
+        mountBtn();
+        if (Notification.permission === 'denied') { setState('blocked'); return; }
+        const existing = await reg.pushManager.getSubscription();
+        if (existing) {
+            setState('on');
+            saveSub(existing).catch(() => {}); // heal server copy after a redeploy
+        } else {
+            setState('off');
+        }
+    }
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', init, { once: true });
+    } else {
+        init();
+    }
+})();

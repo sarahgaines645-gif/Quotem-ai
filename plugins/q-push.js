@@ -22,7 +22,33 @@ function getWebPush() {
 
 // ── VAPID keys ───────────────────────────────────────────────────
 
-const VAPID_SUBJECT = 'mailto:sarah@quotem.app';
+// The VAPID "subject" is a contact the push service can reach if there's
+// a problem. web-push requires it to be a mailto: or https: URL. It used
+// to be hardcoded to a dead address (sarah@quotem.app) and VAPID_EMAIL
+// was ignored entirely — so notifications went out under a mailbox that
+// doesn't exist. Now: read VAPID_EMAIL from env, accept either
+// "mailto:you@domain" or a bare "you@domain", and refuse known-dead
+// addresses loudly rather than silently using one.
+const DEAD_CONTACTS = ['sarah@quotem.app', 'sarah@quotem.co.uk'];
+
+function resolveVapidSubject() {
+    const v = (process.env.VAPID_EMAIL || '').trim();
+    if (v) {
+        if (/^https?:\/\//i.test(v)) return v;
+        const bare = v.replace(/^mailto:/i, '').trim();
+        if (bare && DEAD_CONTACTS.includes(bare.toLowerCase())) {
+            console.warn(`[q-push] VAPID_EMAIL is a known-dead address (${bare}) — update it in Railway env to a real mailbox. Using a generic system contact for now.`);
+        } else if (bare) {
+            return 'mailto:' + bare;
+        }
+    } else {
+        console.warn('[q-push] VAPID_EMAIL not set — set it in Railway env to mailto:you@domain. Using a generic system contact for now.');
+    }
+    // Syntactically-valid system/role address on the app's own domain —
+    // never a real personal inbox we don't own. Push still works; this is
+    // only a fallback when VAPID_EMAIL is missing or dead.
+    return 'mailto:push@quotem-ai.co.uk';
+}
 
 function getVapidKeys() {
     const pub  = process.env.VAPID_PUBLIC_KEY;
@@ -66,7 +92,11 @@ function ensureVapid() {
     if (_vapidInitialised) return;
     const webpush = getWebPush();
     const keys = getVapidKeys();
-    webpush.setVapidDetails(VAPID_SUBJECT, keys.publicKey, keys.privateKey);
+    const subject = resolveVapidSubject();
+    webpush.setVapidDetails(subject, keys.publicKey, keys.privateKey);
+    // Ground truth in the deploy log — not the Railway UI, which can show
+    // a different value than the container actually resolved.
+    console.log(`[q-push] VAPID contact in use: ${subject}`);
     _vapidInitialised = true;
 }
 
