@@ -2314,41 +2314,48 @@ if (launcherBtn && launcher) {
 
 <script>
 // ── Push notification setup ────────────────────────────────────────────────
-// Registers the service worker and subscribes to push so Q can reach you
-// when you're not on the page — reminders, calendar alerts, anything arranged.
 (async function setupPush() {
-  if (!('serviceWorker' in navigator) || !('PushManager' in window)) return;
+  if (!('serviceWorker' in navigator) || !('PushManager' in window) || !('Notification' in window)) return;
   try {
     const reg = await navigator.serviceWorker.register('/sw.js');
-    // Wait for the SW to be ready before subscribing
     await navigator.serviceWorker.ready;
 
-    // Check if already subscribed
+    // Already subscribed — check if it's still saved on the server
     let sub = await reg.pushManager.getSubscription();
-    if (sub) return; // already set up — nothing to do
+    if (sub) {
+      // Re-save in case the server lost it (e.g. after a redeploy)
+      await fetch('/push/subscribe', {
+        method: 'POST', credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(sub),
+      }).catch(() => {});
+      console.log('[Q] push already active');
+      return;
+    }
 
-    // Ask the server for the public VAPID key
+    // Ask for permission FIRST — this shows the browser prompt immediately,
+    // before touching the server. Without this, a server error silently
+    // swallows the prompt and nothing ever asks the user.
+    const permission = await Notification.requestPermission();
+    if (permission !== 'granted') { console.log('[Q] push permission denied'); return; }
+
+    // Get VAPID public key from server
     const keyRes = await fetch('/push/vapid-public-key', { credentials: 'include' });
-    if (!keyRes.ok) return;
+    if (!keyRes.ok) { console.warn('[Q] push: server returned', keyRes.status); return; }
     const { key } = await keyRes.json();
 
-    // Request permission + subscribe (triggers browser permission prompt)
-    sub = await reg.pushManager.subscribe({
-      userVisibleOnly: true,
-      applicationServerKey: key,
-    });
+    // Subscribe
+    sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: key });
 
-    // Save subscription on the server
+    // Save on server
     await fetch('/push/subscribe', {
-      method: 'POST',
-      credentials: 'include',
+      method: 'POST', credentials: 'include',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(sub),
     });
     console.log('[Q] push notifications active');
   } catch (e) {
-    // Permission denied or browser doesn't support — silently ignore
-    if (e.name !== 'NotAllowedError') console.warn('[Q] push setup:', e.message);
+    console.warn('[Q] push setup error:', e.name, e.message);
   }
 })();
 </script>
