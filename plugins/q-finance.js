@@ -118,40 +118,53 @@ Return ONLY the JSON object. No explanation, no markdown, no commentary.`;
 
 async function parseChunk(chunk, idx, total) {
     if (idx === 0) console.log(`[finance] chunk 1 text sample: ${chunk.slice(0, 500).replace(/\n/g, '↵')}`);
-    // response_format: json_object forces V4 Pro to output JSON only — prevents it
-    // narrating the task back to itself instead of producing the array.
-    // Wrapped in {"rows":[...]} because json_object mode requires an object root.
+    // DeepSeek V4 Pro is a thinking model: with response_format:json_object it
+    // pushes its chain-of-thought into reasoning_content and leaves `content`
+    // empty, so togetherChat falls back to returning the narration ("We are
+    // asked to parse a bank statement…") and zero rows come back. The
+    // documented rule for this model is NO response_format — let it answer
+    // naturally and extract the JSON from the text (the approach already
+    // proven in q-translator.js). PARSE_SYSTEM already demands a bare object.
     const raw = cleanModelOutput(await togetherChat({
-        model:           Q_CONFIG.model,
-        max_tokens:      4000,
-        response_format: { type: 'json_object' },
+        model:      Q_CONFIG.model,
+        max_tokens: 4000,
         messages: [
             { role: 'system', content: PARSE_SYSTEM },
-            { role: 'user',   content: chunk },
+            { role: 'user',   content: `${chunk}\n\nReturn ONLY the JSON object now — no explanation, no markdown.` },
         ],
     }));
     console.log(`[finance] chunk ${idx + 1}/${total} model reply (first 300): ${raw.slice(0, 300).replace(/\n/g, '↵')}`);
+    // Robust extraction (mirrors q-translator.js): the model may answer with
+    // pure JSON, fenced JSON, or JSON wrapped in a sentence of prose. Pull the
+    // rows out of whichever shape comes back instead of trusting JSON mode.
+    const rowsFrom = (v) => Array.isArray(v?.rows) ? v.rows
+                          : Array.isArray(v?.transactions) ? v.transactions
+                          : Array.isArray(v) ? v
+                          : null;
+    const cleaned = raw.replace(/```(?:json)?\s*/gi, '').replace(/```/g, '').trim();
+    // 1. Whole reply parses as JSON
     try {
-        // Primary: parse the json_object wrapper {"rows":[...]}
-        const obj = JSON.parse(raw);
-        const rows = Array.isArray(obj.rows) ? obj.rows
-                   : Array.isArray(obj.transactions) ? obj.transactions
-                   : Array.isArray(obj) ? obj
-                   : [];
-        console.log(`[finance] chunk ${idx + 1}/${total}: ${rows.length} transactions`);
-        return rows;
-    } catch {
-        // Fallback: model ignored JSON mode — try extracting array from prose
+        const rows = rowsFrom(JSON.parse(cleaned));
+        if (rows) { console.log(`[finance] chunk ${idx + 1}/${total}: ${rows.length} transactions`); return rows; }
+    } catch { /* not pure JSON — extract below */ }
+    // 2. First {...} object (PARSE_SYSTEM asks for {"rows":[...]})
+    const objM = cleaned.match(/\{[\s\S]*\}/);
+    if (objM) {
         try {
-            const m = raw.match(/\[[\s\S]*\]/);
-            const rows = m ? JSON.parse(m[0]) : [];
-            console.log(`[finance] chunk ${idx + 1}/${total}: fallback extracted ${rows.length} transactions`);
-            return rows;
-        } catch {
-            console.log(`[finance] chunk ${idx + 1}/${total}: parse failed — raw: ${raw.slice(0, 200)}`);
-            return [];
-        }
+            const rows = rowsFrom(JSON.parse(objM[0]));
+            if (rows) { console.log(`[finance] chunk ${idx + 1}/${total}: extracted ${rows.length} transactions`); return rows; }
+        } catch { /* try array next */ }
     }
+    // 3. First [...] array
+    const arrM = cleaned.match(/\[[\s\S]*\]/);
+    if (arrM) {
+        try {
+            const rows = JSON.parse(arrM[0]);
+            if (Array.isArray(rows)) { console.log(`[finance] chunk ${idx + 1}/${total}: array-extracted ${rows.length} transactions`); return rows; }
+        } catch { /* nothing usable */ }
+    }
+    console.log(`[finance] chunk ${idx + 1}/${total}: parse failed — raw: ${raw.slice(0, 200)}`);
+    return [];
 }
 
 async function parseStatementText(rawText) {
