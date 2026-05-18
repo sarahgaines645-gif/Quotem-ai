@@ -173,8 +173,42 @@
     img.alt = '';
     frame.appendChild(img);
   } else {
-    frame.innerHTML =
-      '<div class="placeholder"><span class="big">🎂</span><span>photo goes here</span></div>';
+    // Bespoke afternoon-tea gift voucher (no photo needed; swapped out
+    // automatically if imageDataUrl is ever set). Elegant + copyright-safe.
+    frame.innerHTML = [
+'<svg viewBox="0 0 620 400" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Afternoon Tea for Two at Pennyhill Park gift voucher" style="width:100%;height:auto;display:block;font-family:Georgia,&quot;Times New Roman&quot;,serif">',
+  '<rect x="6" y="6" width="608" height="388" rx="16" fill="#fffdf6" stroke="#d8b25a" stroke-width="2"/>',
+  '<rect x="18" y="18" width="584" height="364" rx="10" fill="none" stroke="#ecdcae" stroke-width="1"/>',
+  // corner flourishes
+  '<g stroke="#d8b25a" stroke-width="1.5" fill="none" opacity="0.8">',
+    '<path d="M34 56 Q34 34 56 34"/><path d="M586 56 Q586 34 564 34"/>',
+    '<path d="M34 344 Q34 366 56 366"/><path d="M586 344 Q586 366 564 366"/>',
+  '</g>',
+  '<text x="310" y="66" text-anchor="middle" fill="#b8902f" font-size="17" letter-spacing="6">GIFT VOUCHER</text>',
+  // tea illustration
+  '<g fill="none" stroke="#c8a24a" stroke-width="2.4" stroke-linecap="round">',
+    // teapot
+    '<ellipse cx="232" cy="186" rx="48" ry="39"/>',
+    '<path d="M186 176 Q156 168 150 196"/>',
+    '<path d="M280 168 Q310 184 280 210"/>',
+    '<ellipse cx="232" cy="148" rx="22" ry="8"/>',
+    '<circle cx="232" cy="134" r="5" fill="#c8a24a"/>',
+    '<path d="M210 224 Q232 232 254 224"/>',
+    // cup + saucer
+    '<path d="M356 176 Q356 210 388 210 Q420 210 420 176"/>',
+    '<ellipse cx="388" cy="176" rx="34" ry="9"/>',
+    '<path d="M420 184 Q442 188 434 206 Q430 212 420 210"/>',
+    '<ellipse cx="388" cy="224" rx="46" ry="9"/>',
+    // steam
+    '<path d="M372 150 Q364 140 372 130 Q380 120 372 110" opacity="0.7"/>',
+    '<path d="M404 150 Q396 140 404 130 Q412 120 404 110" opacity="0.7"/>',
+  '</g>',
+  '<text x="310" y="300" text-anchor="middle" fill="#3a3a3a" font-size="34" font-weight="600">Afternoon Tea for Two</text>',
+  '<text x="310" y="330" text-anchor="middle" fill="#b8902f" font-size="15" letter-spacing="5">PENNYHILL PARK</text>',
+  '<line x1="232" y1="350" x2="388" y2="350" stroke="#e6d5a6" stroke-width="1"/>',
+  '<text x="310" y="376" text-anchor="middle" fill="#b8902f" font-size="16" font-style="italic">♥  Happy Birthday, Deana  ♥</text>',
+'</svg>'
+    ].join('');
   }
 
   // ---- Headline: per-letter birthday colours + staggered wave ----
