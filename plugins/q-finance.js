@@ -214,6 +214,13 @@ async function categoriseTransactions(transactions) {
  */
 async function importStatement(email, rawText) {
     const parsed = await parseStatementText(rawText);
+    return saveRows(email, parsed);
+}
+
+// Categorise + apply merchant assignments + dedup against existing + save.
+// Shared by the text path (parseStatementText → rows) and the image path
+// (csvToRows → rows). Returns { added, total }.
+async function saveRows(email, parsed) {
     if (!parsed.length) return { added: 0, total: 0 };
 
     // Stamp each parsed row with an id before categorising
@@ -278,6 +285,40 @@ Rules:
 - If multiple pages are visible, extract ALL of them
 - Return ONLY the CSV. No explanation, no markdown.`;
 
+// Deterministic CSV → rows. The vision model already returns clean
+// `date,description,amount` CSV — re-feeding that through a second model to
+// "parse" it was the redundant call that doubled per-page latency and made
+// pages blow the timeout. Parsing it here is instant and never times out.
+// Robust to commas inside descriptions (date is the first field, amount the
+// trailing number) and to UK date drift (DD/MM/YYYY → YYYY-MM-DD).
+function csvToRows(csv) {
+    const clean = String(csv || '').replace(/```(?:csv)?/gi, '').trim();
+    const out = [];
+    for (const line of clean.split(/\r?\n/)) {
+        const l = line.trim();
+        if (!l || /^"?date"?\s*,/i.test(l)) continue;          // blank or header row
+        const amtM = l.match(/(-?\d[\d,]*(?:\.\d+)?)\s*$/);     // trailing number
+        if (!amtM) continue;
+        const amount = parseFloat(amtM[1].replace(/,/g, ''));
+        if (Number.isNaN(amount)) continue;
+        let date = null;
+        let m = l.match(/(\d{4})-(\d{1,2})-(\d{1,2})/);
+        if (m) date = `${m[1]}-${m[2].padStart(2, '0')}-${m[3].padStart(2, '0')}`;
+        if (!date) {
+            m = l.match(/(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2,4})/);
+            if (m) { let y = m[3]; if (y.length === 2) y = '20' + y;
+                date = `${y}-${m[2].padStart(2, '0')}-${m[1].padStart(2, '0')}`; }
+        }
+        if (!date) continue;
+        let desc = l.slice(0, amtM.index)              // drop trailing amount
+                    .replace(/^[^,]*,/, '')            // drop leading date field
+                    .replace(/^[\s,"]+|[\s,"]+$/g, '') // trim quotes/commas/space
+                    .trim();
+        out.push({ date, description: desc, merchant: desc, amount });
+    }
+    return out;
+}
+
 async function importStatementFromImage(email, imageBase64, mimeType) {
     const dataUrl = `data:${mimeType};base64,${imageBase64}`;
     const raw = cleanModelOutput(await togetherChat({
@@ -292,7 +333,9 @@ async function importStatementFromImage(email, imageBase64, mimeType) {
         }],
     }));
     if (!raw || raw.trim().length < 20) return { added: 0, total: 0 };
-    return importStatement(email, raw);
+    const rows = csvToRows(raw);
+    console.log(`[finance] importStatementFromImage: vision ${raw.length} chars → ${rows.length} rows (no re-parse)`);
+    return saveRows(email, rows);
 }
 
 // PDFs → pdf-parse for text extraction. Images → vision model.

@@ -1056,6 +1056,7 @@
         const pdf = await pdfjsLib.getDocument({ data: buf }).promise;
         const pageCount = pdf.numPages;
         let totalAdded = 0, lastTotal = 0;
+        const failed = [];
         for (let p = 1; p <= pageCount; p++) {
           const page = await pdf.getPage(p);
           const viewport = page.getViewport({ scale: 2.0 });
@@ -1065,21 +1066,31 @@
           await page.render({ canvasContext: canvas.getContext('2d'), viewport }).promise;
           const dataUrl = canvas.toDataURL('image/jpeg', 0.9);
           const b64 = dataUrl.split(',')[1];
-          const r = await apiFetch('/api/finance/statement/pdf', { method: 'POST', body: { imageBase64: b64, mimeType: 'image/jpeg' } });
-          if (r.ok) {
-            const result = await r.json();
-            totalAdded += result.added || 0;
-            lastTotal = result.total || lastTotal;
+          // Try each page up to twice. A page that still fails is RECORDED,
+          // never silently dropped — a partial import must not look complete.
+          let ok = false;
+          for (let attempt = 0; attempt < 2 && !ok; attempt++) {
+            try {
+              const r = await apiFetch('/api/finance/statement/pdf', { method: 'POST', body: { imageBase64: b64, mimeType: 'image/jpeg' } });
+              if (r.ok) {
+                const result = await r.json();
+                totalAdded += result.added || 0;
+                lastTotal = result.total || lastTotal;
+                ok = true;
+              }
+            } catch (e) { /* retry once */ }
           }
+          if (!ok) failed.push(p);
         }
         showUploadProgress('uz-statement', false);
-        if (totalAdded > 0) {
+        if (failed.length) {
+          showUploadResult('uz-statement', `✓ ${totalAdded} imported (${lastTotal} total) — but page(s) ${failed.join(', ')} of ${pageCount} didn't read. Upload the same PDF again to retry just those.`, 'err');
+        } else if (totalAdded > 0) {
           showUploadResult('uz-statement', `✓ ${totalAdded} transactions imported from ${pageCount} page(s) (${lastTotal} total)`, 'ok');
-          await loadAll();
         } else {
           showUploadResult('uz-statement', 'No new transactions found — they may already be imported', 'info');
-          await loadAll();
         }
+        await loadAll();
       } catch (err) {
         showUploadProgress('uz-statement', false);
         showUploadResult('uz-statement', 'Could not read this PDF — try exporting as CSV from your bank app', 'err');
