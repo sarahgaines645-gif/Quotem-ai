@@ -81,7 +81,7 @@
     text-shadow:0 2px 0 rgba(0,0,0,0.05);
   }
   .subline{font-size:clamp(15px,4.4vw,19px);color:#555;font-weight:600;max-width:30ch}
-  .quote{font-family:'Caveat',cursive;font-size:clamp(22px,6.5vw,31px);line-height:1.25;color:#5a4632;max-width:22ch;margin:2px 0}
+  .qline{font-family:'Caveat',cursive;font-size:clamp(23px,6.8vw,32px);line-height:1.3;color:#b8902f;max-width:24ch;margin:8px auto}
 
   @keyframes pop{0%{opacity:0;transform:scale(.7) translateY(20px)}100%{opacity:1;transform:none}}
   @keyframes wave{0%,100%{transform:translateY(0) rotate(0)}25%{transform:translateY(-9px) rotate(-3deg)}60%{transform:translateY(2px) rotate(2deg)}}
@@ -132,8 +132,9 @@
   <div class="confetti" id="confetti" aria-hidden="true"></div>
 
   <main class="wrap">
+    <p class="qline qtop" id="quoteTop"></p>
     <div class="photo-frame" id="frame"></div>
-    <p class="quote" id="quote"></p>
+    <p class="qline qbot" id="quoteBot"></p>
     <h1 id="heading" aria-label=""></h1>
     <p class="subline" id="subline"></p>
   </main>
@@ -260,9 +261,9 @@
   var sub = document.getElementById('subline');
   if (C.subline) sub.textContent = C.subline; else sub.style.display = 'none';
 
-  var qEl = document.getElementById('quote');
+  var qEl=document.getElementById('quote'),qTop=document.getElementById('quoteTop'),qBot=document.getElementById('quoteBot');
   var qL = Array.isArray(C.quote) ? C.quote : (C.quote ? [C.quote] : []);
-  if (qL.length) { qEl.innerHTML = qL.map(function(t){ return String(t).replace(/&/g,'&amp;').replace(/</g,'&lt;'); }).join('<br>'); } else { qEl.style.display = 'none'; }
+  var esc=function(t){return String(t).replace(/&/g,'&amp;').replace(/</g,'&lt;');}; if(qL[0]&&qTop)qTop.innerHTML=esc(qL[0]); if(qL[1]&&qBot)qBot.innerHTML=esc(qL[1]); if(qEl)qEl.style.display='none';
 
   // ---- Confetti ----
   if (C.confetti !== false) {
