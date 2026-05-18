@@ -106,26 +106,19 @@ Include every transaction exactly as it appears. Do not skip, merge, summarise, 
 
 Amount is negative for money out, positive for money in. UK date formats. Skip opening/closing balance rows and headers.`;
 
-async function parseChunk(chunk, idx, total) {
-    if (idx === 0) console.log(`[finance] chunk 1 text sample: ${chunk.slice(0, 500).replace(/\n/g, '↵')}`);
-    // DeepSeek V4 Pro is a thinking model. Dropping response_format alone was
-    // NOT enough — confirmed live: it just narrates ("We are asked to parse a
-    // bank statement…") and never emits the JSON inside its token budget, so
-    // every chunk returned 0. The reliable fix is an assistant PREFILL: we
-    // start its reply for it with `{"rows": [` so it physically cannot
-    // narrate — it has to continue valid JSON. The API returns only the
-    // continuation, so we glue the prefill back on before parsing.
-    const PREFILL = '{"rows": [';
+async function parseStatementText(rawText) {
+    const text = rawText.replace(/£/g, '').slice(0, 30000);
+    console.log(`[finance] parseStatementText: ${text.length} chars, first 300: ${text.slice(0, 300).replace(/\n/g, '↵')}`);
+
     const raw = cleanModelOutput(await togetherChat({
         model:      Q_CONFIG.model,
-        max_tokens: 6000,
+        max_tokens: 8000,
         messages: [
-            { role: 'system',    content: PARSE_SYSTEM },
-            { role: 'user',      content: chunk },
-            { role: 'assistant', content: PREFILL },
+            { role: 'system', content: PARSE_SYSTEM },
+            { role: 'user',   content: text },
         ],
     }));
-    console.log(`[finance] chunk ${idx + 1}/${total} model reply (first 300): ${raw.slice(0, 300).replace(/\n/g, '↵')}`);
+    console.log(`[finance] model reply (first 300): ${raw.slice(0, 300).replace(/\n/g, '↵')}`);
 
     const rowsFrom = (v) => Array.isArray(v?.rows) ? v.rows
                           : Array.isArray(v?.transactions) ? v.transactions
@@ -134,39 +127,12 @@ async function parseChunk(chunk, idx, total) {
     const tryRows = (s) => { try { return rowsFrom(JSON.parse(s)); } catch { return null; } };
 
     const cleaned = raw.replace(/```(?:json)?\s*/gi, '').replace(/```/g, '').trim();
-    // 1. Reply is already whole valid JSON (model returned/echoed the full
-    //    object or a bare array, ignoring the prefill).
     let rows = tryRows(cleaned);
-    // 2. Prefill continuation — the reply is everything AFTER `{"rows": [`,
-    //    so glue it back on. (Checked AFTER 1 so a full object isn't nested.)
-    if (!rows) rows = tryRows(PREFILL + cleaned);
-    // 3. JSON embedded in prose — first {...}, then first [...].
     if (!rows) { const m = cleaned.match(/\{[\s\S]*\}/); if (m) rows = tryRows(m[0]); }
     if (!rows) { const m = cleaned.match(/\[[\s\S]*\]/); if (m) { try { const x = JSON.parse(m[0]); if (Array.isArray(x)) rows = x; } catch { /* none */ } } }
     rows = rows || [];
-    console.log(`[finance] chunk ${idx + 1}/${total}: ${rows.length} transactions${rows.length ? '' : ' — parse failed, raw: ' + raw.slice(0, 160).replace(/\n/g, '↵')}`);
+    console.log(`[finance] parseStatementText: ${rows.length} transactions${rows.length ? '' : ' — parse failed, raw: ' + raw.slice(0, 200).replace(/\n/g, '↵')}`);
     return rows;
-}
-
-async function parseStatementText(rawText) {
-    // Strip £ signs before chunking — reduces AI confusion on amounts.
-    // "£1,234.56" becomes "1,234.56"; commas in numbers handled by the prompt.
-    const text = rawText.replace(/£/g, '').slice(0, 40000);
-    // Chunk into ~10K pieces with 200-char overlap so we don't split mid-transaction.
-    // Each chunk produces ≤4K output tokens — well within Together AI limits.
-    // Chunks run in parallel so total time ≈ slowest single chunk, not sum.
-    const CHUNK = 10000;
-    const OVERLAP = 200;
-    const chunks = [];
-    for (let i = 0; i < text.length; i += CHUNK - OVERLAP) {
-        chunks.push(text.slice(i, i + CHUNK));
-        if (i + CHUNK >= text.length) break;
-    }
-    console.log(`[finance] parseStatementText: ${chunks.length} chunk(s), ${text.length} chars total`);
-    const results = await Promise.all(chunks.map((c, i) => parseChunk(c, i, chunks.length)));
-    const all = results.flat();
-    console.log(`[finance] parseStatementText: ${all.length} total transactions`);
-    return all;
 }
 
 const CATEGORISE_SYSTEM = `You are a personal finance categoriser. Given a list of bank transactions, assign a category to each one.
@@ -261,7 +227,7 @@ async function importStatement(email, rawText) {
 }
 
 function dedupKey(t) {
-    return `${t.date}|${t.amount}|${merchantKey(t.merchant || t.description)}`;
+    return `${t.date}|${Number(t.amount).toFixed(2)}|${merchantKey(t.merchant || t.description)}`;
 }
 
 function merchantKey(name) {

@@ -12,6 +12,8 @@
   <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/qrcode@1/build/qrcode.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+  <script>pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';</script>
   <style>
     :root {
       --bg: #e8e8e8; --text: #1a1a1a;
@@ -1048,23 +1050,39 @@
     clearUploadResult('uz-statement');
     showUploadProgress('uz-statement', true);
     if (file.name.toLowerCase().endsWith('.pdf')) {
-      const { b64, mime } = await readFileAsB64(file);
-      const r = await apiFetch('/api/finance/statement/pdf', { method: 'POST', body: { imageBase64: b64, mimeType: mime } });
-      showUploadProgress('uz-statement', false);
-      if (!r.ok) {
-        const err = await r.json().catch(() => ({}));
-        showUploadResult('uz-statement', err.error || 'Import failed — please try again', 'err');
-        return;
-      }
-      const result = await r.json();
-      if (result.added > 0) {
-        showUploadResult('uz-statement', `✓ ${result.added} transactions imported (${result.total} total)`, 'ok');
-        await loadAll();
-      } else if (result.hint) {
-        showUploadResult('uz-statement', result.hint, 'info');
-      } else {
-        showUploadResult('uz-statement', 'No new transactions found — they may already be imported, or try exporting as CSV', 'info');
-        await loadAll();
+      try {
+        // Render each PDF page to JPEG and send through Q's vision model — same path as Q chat
+        const buf = await file.arrayBuffer();
+        const pdf = await pdfjsLib.getDocument({ data: buf }).promise;
+        const pageCount = pdf.numPages;
+        let totalAdded = 0, lastTotal = 0;
+        for (let p = 1; p <= pageCount; p++) {
+          const page = await pdf.getPage(p);
+          const viewport = page.getViewport({ scale: 2.0 });
+          const canvas = document.createElement('canvas');
+          canvas.width = viewport.width;
+          canvas.height = viewport.height;
+          await page.render({ canvasContext: canvas.getContext('2d'), viewport }).promise;
+          const dataUrl = canvas.toDataURL('image/jpeg', 0.9);
+          const b64 = dataUrl.split(',')[1];
+          const r = await apiFetch('/api/finance/statement/pdf', { method: 'POST', body: { imageBase64: b64, mimeType: 'image/jpeg' } });
+          if (r.ok) {
+            const result = await r.json();
+            totalAdded += result.added || 0;
+            lastTotal = result.total || lastTotal;
+          }
+        }
+        showUploadProgress('uz-statement', false);
+        if (totalAdded > 0) {
+          showUploadResult('uz-statement', `✓ ${totalAdded} transactions imported from ${pageCount} page(s) (${lastTotal} total)`, 'ok');
+          await loadAll();
+        } else {
+          showUploadResult('uz-statement', 'No new transactions found — they may already be imported', 'info');
+          await loadAll();
+        }
+      } catch (err) {
+        showUploadProgress('uz-statement', false);
+        showUploadResult('uz-statement', 'Could not read this PDF — try exporting as CSV from your bank app', 'err');
       }
       return;
     }
