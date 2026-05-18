@@ -70,7 +70,7 @@
   /* Headline — each letter its own colour, gentle wave */
   h1{
     font-family:'Baloo 2',cursive;font-weight:800;line-height:1.08;
-    font-size:clamp(34px,9vw,60px);letter-spacing:.5px;
+    font-size:clamp(42px,13vw,84px);letter-spacing:.5px;
     display:flex;flex-wrap:wrap;justify-content:center;gap:0 .02em;
   }
   h1 .word{display:inline-flex;white-space:nowrap}
@@ -176,37 +176,46 @@
     // Bespoke afternoon-tea gift voucher (no photo needed; swapped out
     // automatically if imageDataUrl is ever set). Elegant + copyright-safe.
     frame.innerHTML = [
-'<svg viewBox="0 0 620 400" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Afternoon Tea for Two at Pennyhill Park gift voucher" style="width:100%;height:auto;display:block;font-family:Georgia,&quot;Times New Roman&quot;,serif">',
-  '<rect x="6" y="6" width="608" height="388" rx="16" fill="#fffdf6" stroke="#d8b25a" stroke-width="2"/>',
-  '<rect x="18" y="18" width="584" height="364" rx="10" fill="none" stroke="#ecdcae" stroke-width="1"/>',
+'<svg viewBox="0 0 620 430" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Pennyhill Park — Afternoon Tea for Two — Happy Birthday Deana" style="width:100%;height:auto;display:block;font-family:Georgia,&quot;Times New Roman&quot;,serif">',
+  '<rect x="6" y="6" width="608" height="418" rx="16" fill="#fffdf6" stroke="#d8b25a" stroke-width="2"/>',
+  '<rect x="18" y="18" width="584" height="394" rx="10" fill="none" stroke="#ecdcae" stroke-width="1"/>',
   // corner flourishes
   '<g stroke="#d8b25a" stroke-width="1.5" fill="none" opacity="0.8">',
-    '<path d="M34 56 Q34 34 56 34"/><path d="M586 56 Q586 34 564 34"/>',
-    '<path d="M34 344 Q34 366 56 366"/><path d="M586 344 Q586 366 564 366"/>',
+    '<path d="M34 58 Q34 34 58 34"/><path d="M586 58 Q586 34 562 34"/>',
+    '<path d="M34 372 Q34 396 58 396"/><path d="M586 372 Q586 396 562 396"/>',
   '</g>',
-  '<text x="310" y="66" text-anchor="middle" fill="#b8902f" font-size="17" letter-spacing="6">GIFT VOUCHER</text>',
-  // tea illustration
-  '<g fill="none" stroke="#c8a24a" stroke-width="2.4" stroke-linecap="round">',
-    // teapot
-    '<ellipse cx="232" cy="186" rx="48" ry="39"/>',
-    '<path d="M186 176 Q156 168 150 196"/>',
-    '<path d="M280 168 Q310 184 280 210"/>',
-    '<ellipse cx="232" cy="148" rx="22" ry="8"/>',
-    '<circle cx="232" cy="134" r="5" fill="#c8a24a"/>',
-    '<path d="M210 224 Q232 232 254 224"/>',
-    // cup + saucer
-    '<path d="M356 176 Q356 210 388 210 Q420 210 420 176"/>',
-    '<ellipse cx="388" cy="176" rx="34" ry="9"/>',
-    '<path d="M420 184 Q442 188 434 206 Q430 212 420 210"/>',
-    '<ellipse cx="388" cy="224" rx="46" ry="9"/>',
-    // steam
-    '<path d="M372 150 Q364 140 372 130 Q380 120 372 110" opacity="0.7"/>',
-    '<path d="M404 150 Q396 140 404 130 Q412 120 404 110" opacity="0.7"/>',
+  // Pennyhill Park — big, across the top
+  '<text x="310" y="78" text-anchor="middle" fill="#b8902f" font-size="44" font-weight="700">Pennyhill Park</text>',
+  '<line x1="220" y1="96" x2="400" y2="96" stroke="#e6d5a6" stroke-width="1"/>',
+  // Bear & piglet having tea — simple gold sketch (inspired, not the real characters)
+  '<g fill="#fffdf6" stroke="#c8a24a" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">',
+    // bear
+    '<ellipse cx="222" cy="262" rx="50" ry="46"/>',
+    '<circle cx="222" cy="186" r="34"/>',
+    '<circle cx="200" cy="162" r="12"/><circle cx="244" cy="162" r="12"/>',
+    '<ellipse cx="222" cy="198" rx="13" ry="10"/>',
+    '<path d="M250 266 Q282 264 288 282"/>',
+    // piglet
+    '<ellipse cx="408" cy="278" rx="33" ry="33"/>',
+    '<circle cx="408" cy="222" r="25"/>',
+    '<path d="M392 204 Q386 178 402 200"/>',
+    '<path d="M424 204 Q430 178 414 200"/>',
+    '<ellipse cx="408" cy="230" rx="9" ry="7"/>',
+    '<path d="M376 284 Q360 282 356 296"/>',
+    // teapot + cups + steam between them
+    '<path d="M300 316 Q300 334 318 334 Q336 334 336 316"/>',
+    '<ellipse cx="318" cy="316" rx="20" ry="6"/>',
+    '<path d="M300 322 Q286 320 286 332"/>',
+    '<path d="M336 321 Q350 324 344 336"/>',
+    '<path d="M276 302 Q276 316 290 316 Q304 316 304 302"/><ellipse cx="290" cy="302" rx="14" ry="4"/>',
+    '<path d="M348 302 Q348 316 362 316 Q376 316 376 302"/><ellipse cx="362" cy="302" rx="14" ry="4"/>',
+    '<path d="M318 300 Q312 292 318 284 Q324 276 318 268" opacity="0.65"/>',
   '</g>',
-  '<text x="310" y="300" text-anchor="middle" fill="#3a3a3a" font-size="34" font-weight="600">Afternoon Tea for Two</text>',
-  '<text x="310" y="330" text-anchor="middle" fill="#b8902f" font-size="15" letter-spacing="5">PENNYHILL PARK</text>',
-  '<line x1="232" y1="350" x2="388" y2="350" stroke="#e6d5a6" stroke-width="1"/>',
-  '<text x="310" y="376" text-anchor="middle" fill="#b8902f" font-size="16" font-style="italic">♥  Happy Birthday, Deana  ♥</text>',
+  // soft brown faces (not gold rings)
+  '<circle cx="214" cy="182" r="2.6" fill="#7a5a1f"/><circle cx="230" cy="182" r="2.6" fill="#7a5a1f"/><circle cx="222" cy="196" r="2.8" fill="#7a5a1f"/>',
+  '<circle cx="403" cy="220" r="1.7" fill="#7a5a1f"/><circle cx="413" cy="220" r="1.7" fill="#7a5a1f"/><circle cx="404" cy="231" r="1.7" fill="#7a5a1f"/><circle cx="412" cy="231" r="1.7" fill="#7a5a1f"/>',
+  '<text x="310" y="374" text-anchor="middle" fill="#3a3a3a" font-size="30" font-weight="600">Afternoon Tea for Two</text>',
+  '<text x="310" y="408" text-anchor="middle" fill="#b8902f" font-size="21" font-style="italic">♥  Happy Birthday, Deana  ♥</text>',
 '</svg>'
     ].join('');
   }
