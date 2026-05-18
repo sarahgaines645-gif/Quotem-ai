@@ -7,7 +7,7 @@
 <meta name="robots" content="noindex" />
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-<link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@500;700;800&family=Quicksand:wght@500;600&display=swap" rel="stylesheet" />
+<link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@500;700;800&family=Quicksand:wght@500;600&family=Caveat:wght@500;600;700&display=swap" rel="stylesheet" />
 
 <!-- ──────────────────────────────────────────────────────────────
      TAG PAGE — reusable NFC landing page (named generically so it
@@ -176,13 +176,13 @@
     // Bespoke afternoon-tea gift voucher (no photo needed; swapped out
     // automatically if imageDataUrl is ever set). Elegant + copyright-safe.
     frame.innerHTML = [
-'<svg viewBox="0 0 620 430" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Pennyhill Park — Afternoon Tea for Two — Happy Birthday Deana" style="width:100%;height:auto;display:block;font-family:Georgia,&quot;Times New Roman&quot;,serif">',
-  '<rect x="6" y="6" width="608" height="418" rx="16" fill="#fffdf6" stroke="#d8b25a" stroke-width="2"/>',
-  '<rect x="18" y="18" width="584" height="394" rx="10" fill="none" stroke="#ecdcae" stroke-width="1"/>',
+'<svg viewBox="0 0 620 540" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Pennyhill Park — Afternoon Tea for Two — Happy Birthday Deana" style="width:100%;height:auto;display:block;font-family:Georgia,&quot;Times New Roman&quot;,serif">',
+  '<rect x="6" y="6" width="608" height="528" rx="16" fill="#fffdf6" stroke="#d8b25a" stroke-width="2"/>',
+  '<rect x="18" y="18" width="584" height="504" rx="10" fill="none" stroke="#ecdcae" stroke-width="1"/>',
   // corner flourishes
   '<g stroke="#d8b25a" stroke-width="1.5" fill="none" opacity="0.8">',
     '<path d="M34 58 Q34 34 58 34"/><path d="M586 58 Q586 34 562 34"/>',
-    '<path d="M34 372 Q34 396 58 396"/><path d="M586 372 Q586 396 562 396"/>',
+    '<path d="M34 482 Q34 506 58 506"/><path d="M586 482 Q586 506 562 506"/>',
   '</g>',
   // Pennyhill Park — big, across the top
   '<text x="310" y="78" text-anchor="middle" fill="#b8902f" font-size="44" font-weight="700">Pennyhill Park</text>',
@@ -214,8 +214,12 @@
   // soft brown faces (not gold rings)
   '<circle cx="214" cy="182" r="2.6" fill="#7a5a1f"/><circle cx="230" cy="182" r="2.6" fill="#7a5a1f"/><circle cx="222" cy="196" r="2.8" fill="#7a5a1f"/>',
   '<circle cx="403" cy="220" r="1.7" fill="#7a5a1f"/><circle cx="413" cy="220" r="1.7" fill="#7a5a1f"/><circle cx="404" cy="231" r="1.7" fill="#7a5a1f"/><circle cx="412" cy="231" r="1.7" fill="#7a5a1f"/>',
-  '<text x="310" y="374" text-anchor="middle" fill="#3a3a3a" font-size="30" font-weight="600">Afternoon Tea for Two</text>',
-  '<text x="310" y="408" text-anchor="middle" fill="#b8902f" font-size="21" font-style="italic">♥  Happy Birthday, Deana  ♥</text>',
+  // the line she wants — set in handwriting (Caveat)
+  '<text x="310" y="392" text-anchor="middle" fill="#4a4a4a" font-family="Caveat, cursive" font-size="33">Pooh, how do you spell ‘love’?</text>',
+  '<text x="310" y="432" text-anchor="middle" fill="#4a4a4a" font-family="Caveat, cursive" font-size="33">You don’t spell it … you feel it.</text>',
+  '<line x1="232" y1="462" x2="388" y2="462" stroke="#e6d5a6" stroke-width="1"/>',
+  '<text x="310" y="490" text-anchor="middle" fill="#3a3a3a" font-size="28" font-weight="600">Afternoon Tea for Two</text>',
+  '<text x="310" y="514" text-anchor="middle" fill="#b8902f" font-size="16" font-style="italic">♥  Happy Birthday, Deana  ♥</text>',
 '</svg>'
     ].join('');
   }
