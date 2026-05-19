@@ -207,12 +207,120 @@ async function categoriseTransactions(transactions) {
 }
 
 
+// ── Deterministic bank-CSV parser ─────────────────────────────────
+// A real bank CSV is already structured. Sending it to the AI to "parse"
+// is what hangs/times out. This reads the HEADER ROW and maps columns by
+// name so it works across UK bank formats — and never picks the Balance
+// column as the amount (the trap a naive last-number parser falls into).
+
+// Split one CSV line, honouring "quoted, fields" that contain commas.
+function splitCsvLine(line) {
+    const out = []; let cur = '', inQ = false;
+    for (let i = 0; i < line.length; i++) {
+        const c = line[i];
+        if (inQ) {
+            if (c === '"') { if (line[i + 1] === '"') { cur += '"'; i++; } else inQ = false; }
+            else cur += c;
+        } else if (c === '"') inQ = true;
+        else if (c === ',') { out.push(cur); cur = ''; }
+        else cur += c;
+    }
+    out.push(cur);
+    return out.map(s => s.trim());
+}
+
+// UK-first date normaliser → YYYY-MM-DD. Handles ISO, DD/MM/YYYY,
+// DD-MM-YY and "01 May 2026".
+function normDate(s) {
+    s = String(s || '').trim();
+    let m = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+    if (m) return `${m[1]}-${m[2].padStart(2, '0')}-${m[3].padStart(2, '0')}`;
+    m = s.match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2,4})/);
+    if (m) { let y = m[3]; if (y.length === 2) y = '20' + y;
+        return `${y}-${m[2].padStart(2, '0')}-${m[1].padStart(2, '0')}`; }
+    m = s.match(/^(\d{1,2})\s+([A-Za-z]{3,})\s+(\d{2,4})/);
+    if (m) {
+        const mo = { jan:1,feb:2,mar:3,apr:4,may:5,jun:6,jul:7,aug:8,sep:9,oct:10,nov:11,dec:12 }[m[2].slice(0, 3).toLowerCase()];
+        if (mo) { let y = m[3]; if (y.length === 2) y = '20' + y;
+            return `${y}-${String(mo).padStart(2, '0')}-${m[1].padStart(2, '0')}`; }
+    }
+    return null;
+}
+
+// "£1,234.56" → 1234.56 ; "(12.34)" → -12.34
+function parseAmount(s) {
+    if (s == null) return null;
+    let str = String(s).trim().replace(/[£$€,]/g, '');
+    if (!str) return null;
+    let neg = false;
+    if (/^\(.*\)$/.test(str)) { neg = true; str = str.slice(1, -1); }
+    const n = parseFloat(str);
+    if (Number.isNaN(n)) return null;
+    return neg ? -Math.abs(n) : n;
+}
+
+// Returns rows[] for a recognisable bank CSV, or null if it isn't one
+// (caller then falls back to the AI parser for freeform/pasted text).
+function parseCsvStatement(text) {
+    const lines = String(text || '').replace(/```(?:csv)?/gi, '').split(/\r?\n/).filter(l => l.trim());
+    if (lines.length < 2) return null;
+
+    let headerIdx = -1, cols = null;
+    for (let i = 0; i < Math.min(lines.length, 15); i++) {
+        const c = splitCsvLine(lines[i]).map(h => h.toLowerCase());
+        const hasDate = c.some(h => /date/.test(h));
+        const hasAmt  = c.some(h => /amount|debit|credit|paid\s*(in|out)|money\s*(in|out)|withdrawn|deposit|value/.test(h));
+        if (hasDate && hasAmt) { headerIdx = i; cols = c; break; }
+    }
+    if (headerIdx === -1) return null;
+
+    const idxDate   = cols.findIndex(h => /date/.test(h));
+    const idxAmt    = cols.findIndex(h => /^amount|^value|amount\s*\(/.test(h));   // single signed col — never "balance"
+    const idxDebit  = cols.findIndex(h => /debit|paid\s*out|money\s*out|withdrawn/.test(h));
+    const idxCredit = cols.findIndex(h => /credit|paid\s*in|money\s*in|deposit/.test(h));
+    const idxDesc   = cols.findIndex(h => /description|details|narrative|reference|counter\s*party|payee|particulars|memo|name/.test(h));
+
+    const hasSingle = idxAmt !== -1;
+    const hasSplit  = idxDebit !== -1 && idxCredit !== -1;
+    if (idxDate === -1 || (!hasSingle && !hasSplit)) return null;
+
+    const rows = [];
+    for (let i = headerIdx + 1; i < lines.length; i++) {
+        const f = splitCsvLine(lines[i]);
+        const date = normDate(f[idxDate]);
+        if (!date) continue;
+        let amount;
+        if (hasSingle) {
+            amount = parseAmount(f[idxAmt]);
+        } else {
+            const dr = parseAmount(f[idxDebit]);
+            const cr = parseAmount(f[idxCredit]);
+            if (cr != null && cr !== 0) amount = Math.abs(cr);
+            else if (dr != null && dr !== 0) amount = -Math.abs(dr);
+        }
+        if (amount == null || Number.isNaN(amount)) continue;
+        const desc = (idxDesc !== -1 && f[idxDesc] ? f[idxDesc]
+            : f.filter((_, j) => ![idxDate, idxAmt, idxDebit, idxCredit].includes(j)).join(' ')).trim();
+        rows.push({ date, description: desc, merchant: desc, amount });
+    }
+    return rows.length ? rows : null;
+}
+
+
 /**
  * Parse + categorise raw statement text, merge with existing user transactions
  * (deduplication by date+merchant+amount), and save.
  * Returns { added, total } counts.
+ *
+ * A recognisable bank CSV is parsed deterministically (no AI, no hang).
+ * Only freeform/pasted text that isn't CSV falls back to the AI parser.
  */
 async function importStatement(email, rawText) {
+    const csvRows = parseCsvStatement(rawText);
+    if (csvRows && csvRows.length) {
+        console.log(`[finance] importStatement: ${csvRows.length} rows via deterministic CSV parser (no AI)`);
+        return saveRows(email, csvRows);
+    }
     const parsed = await parseStatementText(rawText);
     return saveRows(email, parsed);
 }
