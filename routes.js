@@ -1520,13 +1520,21 @@ router.post('/api/finance/statement/pdf', requirePerson, express.json({ limit: '
     if (!imageBase64) return res.status(400).json({ error: 'imageBase64 required' });
     console.log(`[finance] statement file import — ${req.person.email} — mimeType:${mimeType}`);
     try {
-        const result = await qFinance.importStatementFromFile(req.person.email, imageBase64, mimeType || 'application/pdf');
-        console.log(`[finance] statement file done — added:${result.added} total:${result.total}`);
-        res.json(result);
+        // Multi-page PDFs take minutes — run in the background so the upload
+        // request can't time out and falsely report failure. The page polls
+        // /api/finance/statement/job for progress and the result.
+        const job = qFinance.startImportJob(req.person.email, imageBase64, mimeType || 'application/pdf');
+        res.status(202).json(job);
     } catch (e) {
-        console.error('[finance] statement/pdf error', e);
+        console.error('[finance] statement/pdf start error', e);
         res.status(500).json({ error: e.message });
     }
+});
+
+// Poll the background import job. Returns { status:'running'|'done'|'error',
+// phase, pagesDone, pagesTotal, added, total, hint, error } or {status:'idle'}.
+router.get('/api/finance/statement/job', requirePerson, (req, res) => {
+    res.json(qFinance.getImportJob(req.person.email) || { status: 'idle' });
 });
 
 // Extract data from a bill/letter image (base64)

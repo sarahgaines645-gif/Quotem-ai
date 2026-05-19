@@ -598,7 +598,7 @@ async function importStatementFromImage(email, imageBase64, mimeType) {
 // stitch. Any range that fails is reported, never silently dropped.
 const PDF_CHUNK_PAGES = 4;
 
-async function pdfToCsvChunked(fileBase64) {
+async function pdfToCsvChunked(fileBase64, onProgress) {
     const { PDFDocument } = require('pdf-lib');
     const src = await PDFDocument.load(Buffer.from(fileBase64, 'base64'), { ignoreEncryption: true });
     const pageCount = src.getPageCount();
@@ -609,7 +609,9 @@ async function pdfToCsvChunked(fileBase64) {
 
     // Small statement → one call, no added latency.
     if (pageCount <= PDF_CHUNK_PAGES) {
-        return { csv: await readChunk(fileBase64), failed: [], pageCount };
+        const csvOne = await readChunk(fileBase64);
+        try { onProgress && onProgress(pageCount, pageCount); } catch {}
+        return { csv: csvOne, failed: [], pageCount };
     }
 
     let csv = '';
@@ -628,6 +630,7 @@ async function pdfToCsvChunked(fileBase64) {
             console.error(`[finance] PDF chunk pages ${label} failed: ${e.message}`);
             failed.push(label);
         }
+        try { onProgress && onProgress(end, pageCount); } catch {}
     }
     return { csv, failed, pageCount };
 }
@@ -637,7 +640,7 @@ async function pdfToCsvChunked(fileBase64) {
 // (fragmented/collapsed) and the single-call version (truncated at ~300
 // rows). For everyone, any size, any device — no "go export CSV" ask.
 // Images → vision model as before.
-async function importStatementFromFile(email, fileBase64, mimeType) {
+async function importStatementFromFile(email, fileBase64, mimeType, onProgress) {
     if (mimeType === 'application/pdf') {
         const total = getTransactions(email).length;
         if (!process.env.GEMINI_API_KEY) {
@@ -645,7 +648,7 @@ async function importStatementFromFile(email, fileBase64, mimeType) {
         }
         let chunked;
         try {
-            chunked = await pdfToCsvChunked(fileBase64);
+            chunked = await pdfToCsvChunked(fileBase64, onProgress);
         } catch (e) {
             console.error('[finance] PDF→Gemini failed:', e.message);
             return { added: 0, total, hint: 'Could not read this PDF — try uploading it again, or a clearer copy.' };
@@ -663,6 +666,76 @@ async function importStatementFromFile(email, fileBase64, mimeType) {
     }
     // Actual image (JPEG, PNG, WebP, etc.)
     return importStatementFromImage(email, fileBase64, mimeType || 'image/jpeg');
+}
+
+
+// ── Async import job ──────────────────────────────────────────────
+// A multi-page PDF takes minutes (sequential Gemini reads + categorise).
+// That outlives the HTTP request — the browser/proxy times out and shows a
+// false "couldn't read it" while the server is in fact still working and
+// succeeds. So the upload starts a background job and returns at once; the
+// page polls this record for progress. Persisted per-user on the volume so
+// it survives a page refresh or a device switch (a phone user does both).
+const IMPORT_JOB = 'import-job.json';
+const IMPORT_STALE_MS = 25 * 60 * 1000;
+
+function getImportJob(email) {
+    const j = loadJSON(finPath(email, IMPORT_JOB), null);
+    if (j && j.status === 'running'
+        && Date.now() - Date.parse(j.updatedAt || j.createdAt || 0) > IMPORT_STALE_MS) {
+        const stale = { ...j, status: 'error', phase: 'error',
+            error: 'The import stopped unexpectedly. Please try uploading again.',
+            updatedAt: new Date().toISOString() };
+        saveJSON(finPath(email, IMPORT_JOB), stale);
+        return stale;
+    }
+    return j;
+}
+
+function _setImportJob(email, patch) {
+    const cur = loadJSON(finPath(email, IMPORT_JOB), {}) || {};
+    const next = { ...cur, ...patch, updatedAt: new Date().toISOString() };
+    saveJSON(finPath(email, IMPORT_JOB), next);
+    return next;
+}
+
+// Starts the import in the background and returns immediately. The job
+// record is the single source of truth the page polls — same fire-and-
+// forget philosophy as the scheduler's worker.
+function startImportJob(email, fileBase64, mimeType) {
+    const id = 'imp' + Date.now().toString(36);
+    _setImportJob(email, {
+        id, status: 'running', phase: 'reading',
+        pagesDone: 0, pagesTotal: 0,
+        added: 0, total: getTransactions(email).length,
+        hint: null, error: null,
+        createdAt: new Date().toISOString(),
+    });
+
+    (async () => {
+        try {
+            const onProgress = (done, totalPages) => {
+                _setImportJob(email, {
+                    pagesDone: done, pagesTotal: totalPages,
+                    phase: (totalPages && done >= totalPages) ? 'saving' : 'reading',
+                });
+            };
+            const result = await importStatementFromFile(email, fileBase64, mimeType, onProgress);
+            _setImportJob(email, {
+                status: 'done', phase: 'done',
+                added: result.added || 0,
+                total: result.total != null ? result.total : getTransactions(email).length,
+                hint: result.hint || null,
+            });
+            console.log(`[finance] import job ${id} done — added:${result.added} total:${result.total}`);
+        } catch (e) {
+            console.error(`[finance] import job ${id} failed:`, e.message);
+            _setImportJob(email, { status: 'error', phase: 'error',
+                error: e.message || 'Import failed' });
+        }
+    })();
+
+    return { jobId: id, status: 'running' };
 }
 
 
@@ -970,6 +1043,8 @@ module.exports = {
     extractDocument,
     importStatementFromImage,
     importStatementFromFile,
+    startImportJob,
+    getImportJob,
 
     // Assignments
     assignMerchant,

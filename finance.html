@@ -1068,29 +1068,52 @@
     showUploadProgress('uz-statement', true);
     if (file.name.toLowerCase().endsWith('.pdf')) {
       try {
-        // Whole PDF → one server call → Gemini reads all pages natively.
-        // No per-page render loop: that under-read dense pages, collapsed
-        // dates and hit rate limits (188 txns crammed into 4 days).
+        // A multi-page PDF takes minutes (Gemini reads all pages natively,
+        // sequentially, then categorises). That outlived the HTTP request
+        // and the browser/proxy timed out — showing a false "couldn't read
+        // it" while the server was actually still working and succeeding.
+        // So: start a background job, then poll it for live progress.
         const { b64 } = await readFileAsB64(file);
         const r = await apiFetch('/api/finance/statement/pdf', { method: 'POST', body: { imageBase64: b64, mimeType: 'application/pdf' } });
-        showUploadProgress('uz-statement', false);
         if (!r.ok) {
           const e = await r.json().catch(() => ({}));
-          showUploadResult('uz-statement', e.error || 'Could not read this PDF — export it as CSV from your bank app and upload that', 'err');
+          showUploadProgress('uz-statement', false);
+          showUploadResult('uz-statement', e.error || 'Could not start reading this PDF — please try again', 'err');
           return;
         }
-        const result = await r.json();
-        if (result.added > 0) {
-          showUploadResult('uz-statement', `✓ ${result.added} transactions imported (${result.total} total)`, 'ok');
-        } else if (result.hint) {
-          showUploadResult('uz-statement', result.hint, 'info');
-        } else {
-          showUploadResult('uz-statement', 'No new transactions found — they may already be imported', 'info');
-        }
-        await loadAll();
+        const startedAt = Date.now();
+        const poll = async () => {
+          let j = null;
+          try { j = await (await apiFetch('/api/finance/statement/job', { method: 'GET' })).json(); } catch {}
+          if (j && j.status === 'running') {
+            if (Date.now() - startedAt > 25 * 60 * 1000) {
+              showUploadProgress('uz-statement', false);
+              showUploadResult('uz-statement', 'Still working on it — check back in a minute and refresh the page.', 'info');
+              return;
+            }
+            const msg = (j.phase === 'saving')
+              ? 'Sorting and categorising your transactions…'
+              : (j.pagesTotal ? `Reading your statement — page ${j.pagesDone} of ${j.pagesTotal}…` : 'Reading your statement…');
+            showUploadResult('uz-statement', msg, 'info');
+            return setTimeout(poll, 3000);
+          }
+          showUploadProgress('uz-statement', false);
+          if (j && j.status === 'done') {
+            if (j.added > 0) showUploadResult('uz-statement', `✓ ${j.added} transactions imported (${j.total} total)`, 'ok');
+            else if (j.hint) showUploadResult('uz-statement', j.hint, 'info');
+            else showUploadResult('uz-statement', 'No new transactions found — they may already be imported', 'info');
+            await loadAll();
+          } else if (j && j.status === 'error') {
+            showUploadResult('uz-statement', j.error || 'Could not read this PDF — please try again', 'err');
+          } else {
+            showUploadResult('uz-statement', 'Could not read this PDF — please try again', 'err');
+          }
+        };
+        showUploadResult('uz-statement', 'Reading your statement…', 'info');
+        setTimeout(poll, 2500);
       } catch (err) {
         showUploadProgress('uz-statement', false);
-        showUploadResult('uz-statement', 'Could not read this PDF — export it as CSV from your bank app and upload that', 'err');
+        showUploadResult('uz-statement', 'Could not start the upload — please try again', 'err');
       }
       return;
     }
