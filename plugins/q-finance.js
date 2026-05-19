@@ -507,6 +507,16 @@ Rules:
 - date: YYYY-MM-DD format
 - description: exact text from the statement
 - amount: NEGATIVE number for money leaving the account (payments/debits), POSITIVE for money coming in (credits/income)
+- The amount is ONLY the money value of that one transaction. It is NEVER the
+  running balance, an account number, a sort code, a payment reference, a
+  customer/NI number, or a date or year. Those belong in the description, not
+  the amount.
+- Write the amount as a plain decimal only — e.g. -45.20 or 1200.00 or 0.05.
+  Never glue any other digits (a year like 2026, a reference) onto it.
+- description and amount are SEPARATE comma-separated fields. Keep every
+  reference/year/number inside the description field; the third field must be
+  the money value alone.
+- If a line has no clear single money amount, skip that line entirely.
 - Do NOT include balance columns, opening/closing balance totals, or header/footer rows
 - If multiple pages are visible, extract ALL of them
 - Return ONLY the CSV. No explanation, no markdown.`;
@@ -523,10 +533,27 @@ function csvToRows(csv) {
     for (const line of clean.split(/\r?\n/)) {
         const l = line.trim();
         if (!l || /^"?date"?\s*,/i.test(l)) continue;          // blank or header row
-        const amtM = l.match(/(-?\d[\d,]*(?:\.\d+)?)\s*$/);     // trailing number
-        if (!amtM) continue;
-        const amount = parseFloat(amtM[1].replace(/,/g, ''));
-        if (Number.isNaN(amount)) continue;
+
+        // Amount = the LAST comma-separated field, validated as a clean money
+        // token. The old "last number anywhere on the line" grabbed reference
+        // numbers and the statement year when they sat next to the amount —
+        // a DWP reference read as £3.7tn, "Interest …2026" as £20,260.05.
+        const fields = splitCsvLine(l);
+        let amount = null;
+        if (fields.length >= 3) {
+            const tok = fields[fields.length - 1].replace(/[£$€\s]/g, '');
+            if (/^-?\d{1,3}(,\d{3})*(\.\d{1,2})?$|^-?\d{1,9}(\.\d{1,2})?$/.test(tok)) {
+                amount = parseFloat(tok.replace(/,/g, ''));
+            }
+        }
+        if (amount === null) {                                  // non-CSV freeform fallback
+            const amtM = l.match(/(-?\d[\d,]*(?:\.\d+)?)\s*$/);
+            if (amtM) {
+                const v = parseFloat(amtM[1].replace(/,/g, ''));
+                if (!Number.isNaN(v) && Math.abs(v) <= 99999999) amount = v;
+            }
+        }
+        if (amount === null || Number.isNaN(amount)) continue;
         let date = null;
         let m = l.match(/(\d{4})-(\d{1,2})-(\d{1,2})/);
         if (m) date = `${m[1]}-${m[2].padStart(2, '0')}-${m[3].padStart(2, '0')}`;
@@ -536,10 +563,16 @@ function csvToRows(csv) {
                 date = `${y}-${m[2].padStart(2, '0')}-${m[1].padStart(2, '0')}`; }
         }
         if (!date) continue;
-        let desc = l.slice(0, amtM.index)              // drop trailing amount
-                    .replace(/^[^,]*,/, '')            // drop leading date field
-                    .replace(/^[\s,"]+|[\s,"]+$/g, '') // trim quotes/commas/space
+        let desc;
+        if (fields.length >= 3) {
+            // everything between the date (field 0) and the amount (last field)
+            desc = fields.slice(1, -1).join(' ').replace(/^[\s,"]+|[\s,"]+$/g, '').trim();
+        } else {
+            desc = l.replace(/^[^,]*,/, '')                       // drop leading date field
+                    .replace(/-?\d[\d,]*(?:\.\d+)?\s*$/, '')      // drop trailing amount
+                    .replace(/^[\s,"]+|[\s,"]+$/g, '')
                     .trim();
+        }
         out.push({ date, description: desc, merchant: desc, amount });
     }
     return out;
@@ -678,9 +711,40 @@ function assignMerchant(email, merchant, label) {
 }
 
 
+// One-shot, idempotent data repair. Imports made before the parser was
+// hardened stored rows where a reference number or the statement year was
+// read as the amount (a DWP reference as £3.7tn; "Interest …2026" as
+// £20,260.05). One such row wrecks every total. Remove the provably-
+// impossible rows — but back the whole file up first so nothing is ever
+// truly lost, and log every removal. Idempotent: once clean it does nothing.
+function isCorruptAmount(t) {
+    if (!Number.isFinite(t.amount)) return true;
+    if (Math.abs(t.amount) > MAX_TXN_AMOUNT) return true;
+    // The year-prefix transcription bug: a genuine interest credit is pennies
+    // or a few pounds — tens of thousands means the year was mashed onto it.
+    if (Math.abs(t.amount) >= 1000 && /\binterest\b/i.test(String(t.description || ''))) return true;
+    return false;
+}
+
+function repairTransactions(email) {
+    const txns = getTransactions(email);
+    const corrupt = txns.filter(isCorruptAmount);
+    if (!corrupt.length) return { removed: 0 };
+    const bak = `transactions.corrupt-backup-${Date.now()}.json`;
+    saveJSON(finPath(email, bak), txns);                 // full backup BEFORE mutating
+    for (const t of corrupt) {
+        console.warn(`[finance] repair removed corrupt row — ${t.date} ${t.amount} "${String(t.description || '').slice(0, 40)}"`);
+    }
+    const clean = txns.filter(t => !isCorruptAmount(t));
+    saveTransactions(email, clean);
+    console.warn(`[finance] repair: removed ${corrupt.length} corrupt rows; backup=${bak}; ${clean.length} remain`);
+    return { removed: corrupt.length, backup: bak };
+}
+
 // ── Spending graphs ───────────────────────────────────────────────
 
 function getSpendingGraphData(email) {
+    repairTransactions(email);   // clean any pre-hardening poison before totals
     const all = getTransactions(email);
     // Data imported before the guard above contains rows where a balance or
     // reference number was stored as the amount (the £-trillions total on the
