@@ -1501,9 +1501,21 @@ router.post('/api/finance/statement', requirePerson, express.json({ limit: '2mb'
     }
 });
 
-// Import statement from a file — PDFs use pdf-parse (text extraction),
-// images (JPEG/PNG/WebP) use vision. Together AI vision rejects application/pdf.
-router.post('/api/finance/statement/pdf', requirePerson, express.json({ limit: '25mb' }), async (req, res) => {
+// Import statement from a file. Whole PDF → Gemini (reads multi-page PDFs
+// natively); images → vision. Limit is generous: a scanned multi-month
+// statement PDF is large, and this is the user's OWN data behind
+// requirePerson. The 413 handler turns "too big" into a clear, honest
+// message instead of a mystery failure (CSV export stays the exact path
+// for very large statements).
+router.post('/api/finance/statement/pdf', requirePerson, express.json({ limit: '50mb' }),
+    (err, req, res, next) => {
+        if (err && err.type === 'entity.too.large') {
+            return res.status(413).json({ error: 'That PDF is too large to read directly. Export your statement as CSV from your banking app and upload that — it imports exactly and instantly.' });
+        }
+        if (err) return next(err);
+        next();
+    },
+    async (req, res) => {
     const { imageBase64, mimeType } = req.body || {};
     if (!imageBase64) return res.status(400).json({ error: 'imageBase64 required' });
     console.log(`[finance] statement file import — ${req.person.email} — mimeType:${mimeType}`);

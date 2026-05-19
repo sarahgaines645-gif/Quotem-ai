@@ -1058,7 +1058,8 @@
         const r = await apiFetch('/api/finance/statement/pdf', { method: 'POST', body: { imageBase64: b64, mimeType: 'application/pdf' } });
         showUploadProgress('uz-statement', false);
         if (!r.ok) {
-          showUploadResult('uz-statement', 'Could not read this PDF — export it as CSV from your bank app and upload that', 'err');
+          const e = await r.json().catch(() => ({}));
+          showUploadResult('uz-statement', e.error || 'Could not read this PDF — export it as CSV from your bank app and upload that', 'err');
           return;
         }
         const result = await r.json();
