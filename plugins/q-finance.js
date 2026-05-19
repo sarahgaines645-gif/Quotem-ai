@@ -58,6 +58,64 @@ async function togetherChat({ model, messages, temperature = 0, max_tokens = 400
     return msg.content || msg.reasoning_content || msg.reasoning || '';
 }
 
+// Real Gemini vision via REST — mirrors the proven call in the surveying
+// app (server/services/ai.js). No SDK/dependency. 90s hard timeout like
+// togetherChat so it can never hang. Returns the model's text, or throws.
+async function geminiVision({ prompt, base64, mimeType = 'image/jpeg', maxTokens = 8192 }) {
+    const key = process.env.GEMINI_API_KEY;
+    if (!key) throw new Error('GEMINI_API_KEY not configured');
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 90_000);
+    let res;
+    try {
+        res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${key}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                contents: [{ parts: [
+                    { text: prompt },
+                    { inline_data: { mime_type: mimeType, data: base64 } },
+                ] }],
+                generationConfig: { temperature: 0.0, maxOutputTokens: maxTokens },
+            }),
+            signal: ctrl.signal,
+        });
+    } catch (e) {
+        if (e.name === 'AbortError') throw new Error('Gemini timed out after 90s');
+        throw e;
+    } finally {
+        clearTimeout(timer);
+    }
+    if (!res.ok) throw new Error(`Gemini ${res.status}: ${(await res.text()).slice(0, 300)}`);
+    const json = await res.json();
+    const parts = json?.candidates?.[0]?.content?.parts;
+    return Array.isArray(parts) ? parts.map(p => p.text || '').join('').trim() : '';
+}
+
+// One vision entry point. Real Gemini when GEMINI_API_KEY is set (it reads
+// documents/statements far better than Kimi), with Kimi-via-Together as the
+// automatic fallback so reliability can only improve, never regress.
+// Fully reversible: unset GEMINI_API_KEY → straight back to Kimi.
+async function visionRead({ prompt, base64, mimeType = 'image/jpeg', maxTokens = 8000 }) {
+    if (process.env.GEMINI_API_KEY) {
+        try {
+            const out = await geminiVision({ prompt, base64, mimeType, maxTokens });
+            if (out && out.trim()) { console.log('[finance] vision via Gemini'); return cleanModelOutput(out); }
+            console.warn('[finance] vision: Gemini returned empty → Kimi fallback');
+        } catch (e) {
+            console.warn(`[finance] vision: Gemini failed (${e.message}) → Kimi fallback`);
+        }
+    }
+    return cleanModelOutput(await togetherChat({
+        model:      Q_CONFIG.visionModel,
+        max_tokens: maxTokens,
+        messages: [{ role: 'user', content: [
+            { type: 'text',      text: prompt },
+            { type: 'image_url', image_url: { url: `data:${mimeType};base64,${base64}` } },
+        ] }],
+    }));
+}
+
 // ── File helpers ──────────────────────────────────────────────────
 
 function finPath(email, filename) {
@@ -428,18 +486,12 @@ function csvToRows(csv) {
 }
 
 async function importStatementFromImage(email, imageBase64, mimeType) {
-    const dataUrl = `data:${mimeType};base64,${imageBase64}`;
-    const raw = cleanModelOutput(await togetherChat({
-        model:      Q_CONFIG.visionModel,
-        max_tokens: 8000,
-        messages: [{
-            role: 'user',
-            content: [
-                { type: 'text',      text: STATEMENT_IMAGE_PROMPT },
-                { type: 'image_url', image_url: { url: dataUrl } },
-            ],
-        }],
-    }));
+    const raw = await visionRead({
+        prompt:   STATEMENT_IMAGE_PROMPT,
+        base64:   imageBase64,
+        mimeType: mimeType || 'image/jpeg',
+        maxTokens: 8000,
+    });
     if (!raw || raw.trim().length < 20) return { added: 0, total: 0 };
     const rows = csvToRows(raw);
     console.log(`[finance] importStatementFromImage: vision ${raw.length} chars → ${rows.length} rows (no re-parse)`);
@@ -466,17 +518,12 @@ async function importStatementFromFile(email, fileBase64, mimeType) {
 
 
 async function extractDocument(imageBase64, mimeType = 'image/jpeg') {
-    const raw = cleanModelOutput(await togetherChat({
-        model:      Q_CONFIG.visionModel,
-        max_tokens: 1000,
-        messages: [{
-            role: 'user',
-            content: [
-                { type: 'text',      text: BILL_PROMPT },
-                { type: 'image_url', image_url: { url: `data:${mimeType};base64,${imageBase64}` } },
-            ],
-        }],
-    }));
+    const raw = await visionRead({
+        prompt:    BILL_PROMPT,
+        base64:    imageBase64,
+        mimeType,
+        maxTokens: 1200,
+    });
     try {
         const m = raw.match(/\{[\s\S]*\}/);
         return m ? JSON.parse(m[0]) : { error: 'Parse failed' };
