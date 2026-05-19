@@ -92,15 +92,21 @@
 
   /* Files / evidence */
   .files-list { display: flex; flex-direction: column; gap: 8px; margin-bottom: 10px; }
-  .file-card { background: var(--bg); border-radius: 12px; padding: 10px 14px; box-shadow: var(--neu-raised-sm); display: flex; align-items: center; gap: 12px; }
+  .file-card { background: var(--bg); border-radius: 12px; padding: 10px 14px; box-shadow: var(--neu-raised-sm); transition: box-shadow 0.15s; }
+  .file-card:hover { box-shadow: var(--neu-raised); }
+  .file-card.expanded { box-shadow: var(--neu-inset-sm); }
+  .file-head { display: flex; align-items: center; gap: 12px; cursor: pointer; }
   .file-icon { font-size: 20px; flex-shrink: 0; }
   .file-meta { flex: 1; min-width: 0; }
   .file-name { font-size: 13px; font-weight: 600; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .file-card.expanded .file-name { white-space: normal; }
   .file-sub  { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
+  .file-body { display: none; padding-top: 12px; margin-top: 10px; }
+  .file-card.expanded .file-body { display: block; }
+  .file-preview { max-width: 100%; max-height: 320px; border-radius: 10px; box-shadow: var(--neu-inset-xs); display: block; margin-bottom: 10px; }
   .file-actions { display: flex; gap: 6px; flex-shrink: 0; }
-  .file-actions a, .file-actions button { font-size: 11px; font-weight: 600; padding: 5px 10px; border-radius: 8px; box-shadow: var(--neu-raised-sm); border: none; cursor: pointer; background: var(--bg); color: var(--text-muted); font-family: inherit; text-decoration: none; }
+  .file-actions a, .file-actions button { font-size: 11px; font-weight: 600; padding: 6px 12px; border-radius: 8px; box-shadow: var(--neu-raised-sm); border: none; cursor: pointer; background: var(--bg); color: var(--text-muted); font-family: inherit; text-decoration: none; }
   .file-actions a:hover, .file-actions button:hover { color: var(--accent); }
-  .file-thumb { width: 48px; height: 48px; border-radius: 8px; object-fit: cover; box-shadow: var(--neu-inset-xs); }
 
   .upload-drop {
     border: 2px dashed var(--shadow-dark); border-radius: 12px;
@@ -530,24 +536,36 @@ function renderFiles() {
     card.className = 'file-card';
     const isImage = (f.mimeType || '').startsWith('image/');
     const url = '/api/threads/' + threadId + '/files/' + encodeURIComponent(f.filename);
-    const icon = isImage ? '' : (
+    const icon = isImage ? '🖼️' : (
       f.mimeType?.includes('pdf')   ? '📄' :
       f.mimeType?.includes('word')  ? '📝' :
+      f.mimeType?.includes('rtf')   ? '📝' :
       f.mimeType?.includes('audio') ? '🔊' :
       f.mimeType?.includes('video') ? '🎬' :
-      f.mimeType?.includes('sheet') ? '📊' : '📎'
+      f.mimeType?.includes('sheet') ? '📊' :
+      f.mimeType?.includes('text')  ? '📃' : '📎'
     );
+    const sizeKb = (f.size / 1024).toFixed(0);
     card.innerHTML = `
-      ${isImage ? `<img class="file-thumb" src="${url}" alt="">` : `<div class="file-icon">${icon}</div>`}
-      <div class="file-meta">
-        <div class="file-name">${escapeHtml(f.filename)}</div>
-        <div class="file-sub">${(f.size / 1024).toFixed(0)} KB · ${escapeHtml(f.mimeType || '')} · ${fmtAgo(f.uploadedAt)}</div>
+      <div class="file-head">
+        <span class="file-icon">${icon}</span>
+        <div class="file-meta">
+          <div class="file-name">${escapeHtml(f.filename)}</div>
+          <div class="file-sub">${sizeKb} KB · ${escapeHtml(f.mimeType || 'unknown')} · ${fmtAgo(f.uploadedAt)}</div>
+        </div>
       </div>
-      <div class="file-actions">
-        <a href="${url}" target="_blank" rel="noopener">Open</a>
-        <button data-name="${escapeHtml(f.filename)}" class="del-file">Delete</button>
+      <div class="file-body">
+        ${isImage ? `<img class="file-preview" src="${url}" alt="">` : ''}
+        <div class="file-actions">
+          <a href="${url}" target="_blank" rel="noopener">Open</a>
+          <button data-name="${escapeHtml(f.filename)}" class="del-file">Delete</button>
+        </div>
       </div>`;
+    card.querySelector('.file-head').addEventListener('click', () => {
+      card.classList.toggle('expanded');
+    });
     card.querySelector('.del-file').addEventListener('click', async (ev) => {
+      ev.stopPropagation();
       if (!confirm('Delete ' + f.filename + '?')) return;
       const r = await fetch(url, { method: 'DELETE' });
       if (r.ok) { thread = await r.json(); renderFiles(); }
