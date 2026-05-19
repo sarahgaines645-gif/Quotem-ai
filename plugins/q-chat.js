@@ -565,7 +565,7 @@ async function chat(messages, options = {}) {
 
     try {
         for (let iteration = 0; iteration < MAX_TOOL_ITERATIONS; iteration++) {
-            const response = await fetch(`${Q_CONFIG.baseURL}/chat/completions`, {
+            const reqInit = {
                 method: 'POST',
                 headers: {
                     'Authorization': `Bearer ${Q_CONFIG.apiKey}`,
@@ -593,18 +593,38 @@ async function chat(messages, options = {}) {
                     }),
                     messages: conversation,
                 }),
-            });
+            };
 
-            if (!response.ok) {
-                const errText = await response.text();
-                console.warn('[q-chat] upstream HTTP ' + response.status + ' — ' + errText.substring(0, 500));
+            // The model endpoint flaps with transient 429/503 (and the odd
+            // network reset). Those clear within a second or two — so retry a
+            // few times with short backoff BEFORE falling back to Q's friendly
+            // error. A momentary blip used to spam the user with an error
+            // every turn; now only a genuine, sustained outage surfaces the
+            // friendly note (the error bank itself is deliberately untouched).
+            const RETRYABLE = new Set([429, 500, 502, 503, 504]);
+            let response = null;
+            for (let attempt = 0; attempt < 3; attempt++) {
+                try {
+                    response = await fetch(`${Q_CONFIG.baseURL}/chat/completions`, reqInit);
+                    if (response.ok || !RETRYABLE.has(response.status)) break;
+                    console.warn('[q-chat] upstream HTTP ' + response.status + ' — retry ' + (attempt + 1) + '/2');
+                } catch (netErr) {
+                    response = null;
+                    console.warn('[q-chat] upstream network error (attempt ' + (attempt + 1) + '): ' + netErr.message);
+                }
+                if (attempt < 2) await new Promise(r => setTimeout(r, 700 * (attempt + 1) + Math.floor(Math.random() * 300)));
+            }
+
+            if (!response || !response.ok) {
+                const errText = response ? await response.text() : 'network error (no response)';
+                console.warn('[q-chat] upstream failed after retries — HTTP ' + (response ? response.status : 'net') + ' — ' + errText.substring(0, 500));
                 return {
                     reply: pickFriendlyError(),
                     durationMs: Date.now() - startTime,
                     tokensIn: totalTokensIn,
                     tokensOut: totalTokensOut,
                     toolCalls,
-                    upstreamStatus: response.status,
+                    upstreamStatus: response ? response.status : 0,
                 };
             }
 
