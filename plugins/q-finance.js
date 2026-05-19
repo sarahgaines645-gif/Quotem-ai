@@ -756,21 +756,6 @@ function getSpendingGraphData(email) {
         if (!ok) console.warn(`[finance] excluded impossible stored row from totals — ${t.date} ${t.amount} "${String(t.description || '').slice(0, 40)}"`);
         return ok;
     });
-    // ── TEMP DIAGNOSTIC (strip after one read) ──────────────────────
-    // Answers in one log line: does data persist across redeploy (allN),
-    // did the £1M guard eat real income (exclPos + their descs), and is
-    // £72 a real figure or a sign/parse bug (posN vs negN, rawPos vs sanePos).
-    try {
-        const pos = all.filter(t => Number.isFinite(t.amount) && t.amount > 0);
-        const neg = all.filter(t => Number.isFinite(t.amount) && t.amount < 0);
-        const exclPos = pos.filter(t => Math.abs(t.amount) > MAX_TXN_AMOUNT);
-        const sum = a => a.reduce((s, t) => s + t.amount, 0);
-        console.log(`[finance][DIAG] allN=${all.length} posN=${pos.length} negN=${neg.length} rawPos=${sum(pos).toFixed(2)} sanePos=${sum(pos.filter(t => Math.abs(t.amount) <= MAX_TXN_AMOUNT)).toFixed(2)} excludedPosN=${exclPos.length}`);
-        for (const t of exclPos.slice(0, 8)) console.log(`[finance][DIAG] excluded+ ${t.date} ${t.amount} "${String(t.description || '').slice(0, 40)}"`);
-        for (const t of [...pos].sort((a, b) => b.amount - a.amount).slice(0, 6)) console.log(`[finance][DIAG] top+ ${t.date} ${t.amount} "${String(t.description || '').slice(0, 40)}"`);
-    } catch (e) { console.warn('[finance][DIAG] failed', e.message); }
-    // ────────────────────────────────────────────────────────────────
-
     const debits    = txns.filter(t => t.amount < 0); // outgoings only
 
     // Graph 1: category breakdown
