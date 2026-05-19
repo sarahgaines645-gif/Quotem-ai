@@ -88,7 +88,11 @@ async function geminiVision({ prompt, base64, mimeType = 'image/jpeg', maxTokens
     }
     if (!res.ok) throw new Error(`Gemini ${res.status}: ${(await res.text()).slice(0, 300)}`);
     const json = await res.json();
-    const parts = json?.candidates?.[0]?.content?.parts;
+    const cand = json?.candidates?.[0];
+    if (cand?.finishReason === 'MAX_TOKENS') {
+        console.warn('[finance] Gemini hit MAX_TOKENS — output truncated; very large statement may be incomplete (CSV export is exact)');
+    }
+    const parts = cand?.content?.parts;
     return Array.isArray(parts) ? parts.map(p => p.text || '').join('').trim() : '';
 }
 
@@ -498,19 +502,36 @@ async function importStatementFromImage(email, imageBase64, mimeType) {
     return saveRows(email, rows);
 }
 
-// PDFs → pdf-parse for text extraction. Images → vision model.
-// Together AI vision does not accept application/pdf — only JPEG/PNG/WebP.
+// PDF → whole document sent to Gemini in ONE call. Gemini reads multi-page
+// PDFs natively, so this replaces the old per-page-image loop that under-read
+// dense pages, collapsed dates and got rate-limited (188 txns crammed into 4
+// days). No Kimi fallback for PDF — Together vision rejects application/pdf;
+// if Gemini can't do it we say so honestly and point at CSV export (exact).
+// Images → vision model as before.
 async function importStatementFromFile(email, fileBase64, mimeType) {
     if (mimeType === 'application/pdf') {
-        const pdfParse = require('pdf-parse');
-        const buffer = Buffer.from(fileBase64, 'base64');
-        const data = await pdfParse(buffer);
-        const text = (data.text || '').trim();
-        console.log(`[finance] pdf-parse extracted ${text.length} chars, first 300: ${text.slice(0, 300).replace(/\n/g, '↵')}`);
-        if (text.length < 20) {
-            return { added: 0, total: 0, hint: 'Could not extract text from this PDF — try exporting as CSV from your bank, or take a photo and scan from phone' };
+        const total = getTransactions(email).length;
+        if (!process.env.GEMINI_API_KEY) {
+            return { added: 0, total, hint: 'PDF reading is unavailable right now — export your statement as CSV from your banking app and upload that.' };
         }
-        return importStatement(email, text);
+        let raw;
+        try {
+            raw = cleanModelOutput(await geminiVision({
+                prompt:    STATEMENT_IMAGE_PROMPT,
+                base64:    fileBase64,
+                mimeType:  'application/pdf',
+                maxTokens: 8192,   // Gemini 2.0 Flash output ceiling (proven value)
+            }));
+        } catch (e) {
+            console.error('[finance] PDF→Gemini failed:', e.message);
+            return { added: 0, total, hint: 'Could not read this PDF. Export your statement as CSV from your banking app and upload that — it is faster and exact.' };
+        }
+        const rows = csvToRows(raw);
+        console.log(`[finance] PDF→Gemini single call: ${raw.length} chars → ${rows.length} rows (all pages, no per-page loop)`);
+        if (!rows.length) {
+            return { added: 0, total, hint: 'Could not read transactions from this PDF — export it as CSV from your banking app and upload that.' };
+        }
+        return saveRows(email, rows);
     }
     // Actual image (JPEG, PNG, WebP, etc.)
     return importStatementFromImage(email, fileBase64, mimeType || 'image/jpeg');
