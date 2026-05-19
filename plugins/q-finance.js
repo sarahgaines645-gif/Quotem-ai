@@ -319,20 +319,47 @@ function splitCsvLine(line) {
     return out.map(s => s.trim());
 }
 
-// UK-first date normaliser → YYYY-MM-DD. Handles ISO, DD/MM/YYYY,
-// DD-MM-YY and "01 May 2026".
+// Date normaliser → YYYY-MM-DD. ISO is unambiguous. D/M/Y vs M/D/Y is not:
+// these are UK statements so UK (day-first) is preferred — BUT a past
+// transaction cannot be months in the future, so if the UK reading lands
+// absurdly ahead while the US reading is sane, the source was day/month
+// swapped and the US reading is taken. A small future grace is allowed
+// because statements legitimately list scheduled items a few weeks out.
+const DATE_FUTURE_GRACE_MS = 45 * 24 * 60 * 60 * 1000;
+
+function _ymd(y, mo, d) {
+    return `${y}-${String(mo).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+}
+
 function normDate(s) {
     s = String(s || '').trim();
-    let m = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
-    if (m) return `${m[1]}-${m[2].padStart(2, '0')}-${m[3].padStart(2, '0')}`;
-    m = s.match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2,4})/);
-    if (m) { let y = m[3]; if (y.length === 2) y = '20' + y;
-        return `${y}-${m[2].padStart(2, '0')}-${m[1].padStart(2, '0')}`; }
-    m = s.match(/^(\d{1,2})\s+([A-Za-z]{3,})\s+(\d{2,4})/);
+
+    // ISO YYYY-MM-DD or YYYY/MM/DD — unambiguous.
+    let m = s.match(/(\d{4})[-\/.](\d{1,2})[-\/.](\d{1,2})/);
+    if (m) {
+        const mo = +m[2], d = +m[3];
+        if (mo >= 1 && mo <= 12 && d >= 1 && d <= 31) return _ymd(+m[1], mo, d);
+    }
+
+    // D/M/Y or M/D/Y — ambiguous. Build both valid readings.
+    m = s.match(/(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2,4})/);
+    if (m) {
+        let y = m[3]; if (y.length === 2) y = '20' + y; y = +y;
+        const a = +m[1], b = +m[2];
+        const uk = (a >= 1 && a <= 31 && b >= 1 && b <= 12) ? _ymd(y, b, a) : null; // a=day  b=month
+        const us = (a >= 1 && a <= 12 && b >= 1 && b <= 31) ? _ymd(y, a, b) : null; // a=month b=day
+        const tooFuture = d => d && (Date.parse(d) - Date.now()) > DATE_FUTURE_GRACE_MS;
+        if (uk && !tooFuture(uk)) return uk;
+        if (us && !tooFuture(us)) return us;
+        return uk || us || null;
+    }
+
+    // "01 May 2026" / "1 May 26"
+    m = s.match(/(\d{1,2})\s+([A-Za-z]{3,})\s+(\d{2,4})/);
     if (m) {
         const mo = { jan:1,feb:2,mar:3,apr:4,may:5,jun:6,jul:7,aug:8,sep:9,oct:10,nov:11,dec:12 }[m[2].slice(0, 3).toLowerCase()];
         if (mo) { let y = m[3]; if (y.length === 2) y = '20' + y;
-            return `${y}-${String(mo).padStart(2, '0')}-${m[1].padStart(2, '0')}`; }
+            return _ymd(+y, mo, +m[1]); }
     }
     return null;
 }
@@ -554,14 +581,11 @@ function csvToRows(csv) {
             }
         }
         if (amount === null || Number.isNaN(amount)) continue;
-        let date = null;
-        let m = l.match(/(\d{4})-(\d{1,2})-(\d{1,2})/);
-        if (m) date = `${m[1]}-${m[2].padStart(2, '0')}-${m[3].padStart(2, '0')}`;
-        if (!date) {
-            m = l.match(/(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2,4})/);
-            if (m) { let y = m[3]; if (y.length === 2) y = '20' + y;
-                date = `${y}-${m[2].padStart(2, '0')}-${m[1].padStart(2, '0')}`; }
-        }
+        // Date from field 0 (consistent with amount = last field). Whole-line
+        // fallback only for non-CSV/malformed input. normDate auto-corrects a
+        // day/month-swapped read that would otherwise land in the future.
+        let date = (fields.length >= 3) ? normDate(fields[0]) : null;
+        if (!date) date = normDate(l);
         if (!date) continue;
         let desc;
         if (fields.length >= 3) {
@@ -799,19 +823,50 @@ function isCorruptAmount(t) {
     return false;
 }
 
+// A stored date that sits months in the future is a day/month-swapped read
+// (a past transaction can't be ahead of today). If swapping the month/day
+// yields a sane non-future date, that was the true date. Only ever touches
+// a provably-future date — good dates are left exactly as they are.
+function fixFutureDate(d) {
+    if (!d || typeof d !== 'string') return d;
+    const t = Date.parse(d);
+    if (!Number.isFinite(t) || (t - Date.now()) <= DATE_FUTURE_GRACE_MS) return d;
+    const m = /^(\d{4})-(\d{1,2})-(\d{1,2})$/.exec(d);
+    if (!m) return d;
+    const mo = +m[2], day = +m[3];
+    if (day >= 1 && day <= 12) {                       // swap only yields a valid month
+        const swapped = `${m[1]}-${String(day).padStart(2, '0')}-${String(mo).padStart(2, '0')}`;
+        const st = Date.parse(swapped);
+        if (Number.isFinite(st) && (st - Date.now()) <= DATE_FUTURE_GRACE_MS) return swapped;
+    }
+    return d;   // can't safely recover — leave as-is rather than guess
+}
+
 function repairTransactions(email) {
     const txns = getTransactions(email);
+    if (!txns.length) return { removed: 0, dateFixed: 0 };
+
     const corrupt = txns.filter(isCorruptAmount);
-    if (!corrupt.length) return { removed: 0 };
+    let dateFixed = 0;
+    const repaired = txns.filter(t => !isCorruptAmount(t)).map(t => {
+        const fixed = fixFutureDate(t.date);
+        if (fixed !== t.date) { dateFixed++; return { ...t, date: fixed }; }
+        return t;
+    });
+
+    // Nothing to do → no write, no backup. Keeps this idempotent on every
+    // graph load (it runs there).
+    if (!corrupt.length && !dateFixed) return { removed: 0, dateFixed: 0 };
+
     const bak = `transactions.corrupt-backup-${Date.now()}.json`;
     saveJSON(finPath(email, bak), txns);                 // full backup BEFORE mutating
     for (const t of corrupt) {
         console.warn(`[finance] repair removed corrupt row — ${t.date} ${t.amount} "${String(t.description || '').slice(0, 40)}"`);
     }
-    const clean = txns.filter(t => !isCorruptAmount(t));
-    saveTransactions(email, clean);
-    console.warn(`[finance] repair: removed ${corrupt.length} corrupt rows; backup=${bak}; ${clean.length} remain`);
-    return { removed: corrupt.length, backup: bak };
+    saveTransactions(email, repaired);
+    const ds = repaired.map(t => t.date).filter(Boolean).sort();
+    console.warn(`[finance] repair: removed ${corrupt.length} corrupt, fixed ${dateFixed} future dates; range ${ds[0]}..${ds[ds.length - 1]}; backup=${bak}; ${repaired.length} remain`);
+    return { removed: corrupt.length, dateFixed, backup: bak };
 }
 
 // ── Spending graphs ───────────────────────────────────────────────
