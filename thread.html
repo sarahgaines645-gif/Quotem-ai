@@ -151,6 +151,8 @@
   .chat-send { border: none; cursor: pointer; background: var(--accent); color: white; font-family: inherit; font-size: 14px; font-weight: 700; padding: 12px 22px; border-radius: 12px; box-shadow: var(--neu-raised-sm); flex-shrink: 0; }
   .chat-send:hover:not(:disabled) { opacity: 0.9; }
   .chat-send:disabled { opacity: 0.5; cursor: not-allowed; }
+  .chat-deep { border: none; cursor: pointer; background: var(--bg); color: var(--text-muted); font-family: inherit; font-size: 13px; font-weight: 600; padding: 12px 14px; border-radius: 12px; box-shadow: var(--neu-raised-sm); flex-shrink: 0; }
+  .chat-deep.on { color: var(--accent); box-shadow: var(--neu-inset-sm); }
   .chat-typing { font-size: 12px; color: var(--text-muted); padding: 4px 0; font-style: italic; display: none; }
   .chat-typing.show { display: block; }
   /* Clickable option buttons under a Q message */
@@ -252,6 +254,7 @@
     <div class="chat-typing" id="chat-typing">Q is thinking…</div>
     <div class="chat-input-row">
       <textarea id="chat-input" rows="1" placeholder="Talk to Q about this case — he sees everything in this thread…"></textarea>
+      <button class="chat-deep" id="chat-deep" type="button" title="Deep think — Q reasons at maximum for a big or complex case. Slower, but sharper. Off = normal (still full reasoning).">🧠 Deep</button>
       <button class="chat-send" id="chat-send">Send</button>
     </div>
   </div>
@@ -305,7 +308,15 @@ const $aeCancel = document.getElementById('ae-cancel');
 const $chatThread = document.getElementById('chat-thread');
 const $chatInput  = document.getElementById('chat-input');
 const $chatSend   = document.getElementById('chat-send');
+const $chatDeep   = document.getElementById('chat-deep');
 const $chatTyping = document.getElementById('chat-typing');
+
+// Deep = ask Q to reason at 'max' on this case (default is already 'high').
+let deepMode = false;
+$chatDeep.addEventListener('click', () => {
+  deepMode = !deepMode;
+  $chatDeep.classList.toggle('on', deepMode);
+});
 
 function escapeHtml(s) {
   return String(s == null ? '' : s)
@@ -922,7 +933,7 @@ async function sendMessage() {
     const res = await fetch('/api/threads/' + threadId + '/chat', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ message: text }),
+      body: JSON.stringify({ message: text, ...(deepMode && { reasoningEffort: 'max' }) }),
     });
     const json = await res.json();
     if (!res.ok) throw new Error(json.error || 'HTTP ' + res.status);

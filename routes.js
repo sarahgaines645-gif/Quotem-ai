@@ -1894,7 +1894,12 @@ router.post('/api/threads/:id/chat', requirePerson, express.json({ limit: '256kb
     }
 
     try {
-        const qOpts = { useTools: true, mode: 'aps', surface: 'thread', person: req.person };
+        // Reasoning: 'high' by default — the same the main chat runs on (Q
+        // on no-think is too shallow, and a case is the LAST place he should
+        // think less). The page can request 'max' for a big case (the Deep
+        // toggle) — deepest reasoning when it's worth the extra time.
+        const tEffort = (req.body?.reasoningEffort === 'max') ? 'max' : 'high';
+        const qOpts = { useTools: true, mode: 'aps', surface: 'thread', person: req.person, reasoningEffort: tEffort };
         if (visionImages.length) qOpts.images = visionImages;
         const result = await qChat(messages, qOpts);
         if (result.error || !result.reply) {
