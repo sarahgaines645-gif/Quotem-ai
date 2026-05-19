@@ -869,6 +869,79 @@ function repairTransactions(email) {
     return { removed: corrupt.length, dateFixed, backup: bak };
 }
 
+// Independent fact-check pass on Q's case-mode replies. Uses Gemini (a
+// different vendor, different model) so it's not Q rubber-stamping Q —
+// which is the whole reason his self-verifier can't catch his own
+// errors. Extracts every specific factual claim Q made (statute, case
+// number, date, figure, multiplier, named official, named policy) and
+// labels each verified / incorrect / unverifiable — and is explicitly
+// instructed that "unverifiable" is the right answer when in doubt,
+// never to guess "verified". Returns { checks: [...] }; never throws.
+const CASE_VERIFIER_PROMPT = `You are a strict, independent citation checker for a UK legal / council-tax dispute. You receive an AI assistant's draft reply to a user, plus the case material the assistant was working from. Your ONE job is to extract every specific FACTUAL claim the draft asserts and check it.
+
+CHECK ONLY (ignore opinion, strategy and tone):
+- Statute citations (Act + section / schedule)
+- Case reference numbers (Ombudsman, court decisions)
+- Specific dates, and any date differences / durations / "X days" / "Y times longer" the draft computes
+- Specific figures of money, percentages, multipliers, day-counts
+- Specific named officials / bodies and the actions attributed to them
+- Named external policies / charters / standards (e.g. a council's customer charter)
+
+For each, return ONE of:
+- "verified" — confident it is correct (matches the case material, or matches reliable knowledge of UK law)
+- "incorrect" — confident it is wrong (contradicts the case material; or the cite/figure is demonstrably wrong; or arithmetic is wrong — give the correct number in the note)
+- "unverifiable" — you cannot confirm it from the case material or your own reliable knowledge. THIS IS THE CORRECT ANSWER WHEN UNSURE. Never guess "verified". A real verification means you actually know.
+
+RULES — hard:
+- A specific case reference number (e.g. "LGSCO 20 012 892") is "verified" ONLY if you know that exact decision exists AND concerns what is claimed. Otherwise "unverifiable".
+- A statute section must be a real section that actually says what is claimed.
+- For day-counts and multipliers, recompute from the dates the draft itself uses; show the calculation in the note.
+- Do not include verifications of vague claims, opinions, or strategy. Only specific, checkable facts.
+- Be sparing with "verified" — when in doubt, "unverifiable".
+
+OUTPUT — STRICT JSON ONLY, no prose around it:
+{ "checks": [ { "claim": "<short verbatim fragment>", "status": "verified|incorrect|unverifiable", "note": "<one short line>" } ] }
+
+If there are no specific factual claims to check, return { "checks": [] }.`;
+
+async function verifyCaseReply({ userMessage, draftReply, caseContext } = {}) {
+    if (!process.env.GEMINI_API_KEY) return { checks: [], error: 'no-key' };
+    if (!draftReply || typeof draftReply !== 'string' || draftReply.trim().length < 20) {
+        return { checks: [] };
+    }
+    const prompt = `${CASE_VERIFIER_PROMPT}
+
+--- USER QUESTION ---
+${String(userMessage || '').slice(0, 3000)}
+
+--- DRAFT REPLY (the AI's answer — check this) ---
+${draftReply.slice(0, 12000)}
+
+--- CASE MATERIAL (what the AI was working from) ---
+${String(caseContext || '(none provided)').slice(0, 30000)}`;
+    try {
+        const raw = await geminiText(prompt, { maxTokens: 4096 });
+        const m = String(raw || '').match(/\{[\s\S]*\}/);
+        if (!m) return { checks: [] };
+        const parsed = JSON.parse(m[0]);
+        const ok = new Set(['verified', 'incorrect', 'unverifiable']);
+        const checks = Array.isArray(parsed.checks)
+            ? parsed.checks
+                .filter(c => c && typeof c.claim === 'string' && ok.has(c.status))
+                .map(c => ({
+                    claim:  String(c.claim).slice(0, 240),
+                    status: c.status,
+                    note:   String(c.note || '').slice(0, 400),
+                }))
+                .slice(0, 20)
+            : [];
+        return { checks };
+    } catch (e) {
+        console.warn('[verify] verifyCaseReply failed:', e.message);
+        return { checks: [], error: e.message };
+    }
+}
+
 // ── Spending graphs ───────────────────────────────────────────────
 
 function getSpendingGraphData(email) {
@@ -1097,6 +1170,7 @@ module.exports = {
 
     // Documents / vision
     extractDocument,
+    verifyCaseReply,
     importStatementFromImage,
     importStatementFromFile,
     startImportJob,

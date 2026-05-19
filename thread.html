@@ -146,6 +146,11 @@
   .chat-bubble.q strong { font-weight: 700; }
   .chat-bubble.q a { color: var(--accent); text-decoration: underline; }
   .chat-bubble.q code { font-family: monospace; font-size: 13px; background: var(--accent-soft); padding: 1px 5px; border-radius: 4px; }
+  .chat-checks { margin: -4px 0 14px 56px; padding: 10px 14px; border-radius: 12px; background: var(--bg); box-shadow: var(--neu-inset-sm); font-size: 13px; color: var(--text-muted); }
+  .chat-checks-head { font-weight: 600; color: var(--text); margin-bottom: 6px; }
+  .chat-check { padding: 4px 0; line-height: 1.45; }
+  .chat-check.chk-incorrect { color: var(--accent); font-weight: 600; }
+  .chat-check.chk-unverifiable { color: var(--text-muted); }
   .chat-input-row { display: flex; gap: 10px; align-items: flex-end; }
   .chat-input-row textarea { flex: 1; border: none; outline: none; resize: none; font-family: inherit; font-size: 14px; color: var(--text); background: var(--bg); padding: 12px 16px; border-radius: 12px; box-shadow: var(--neu-inset-sm); line-height: 1.5; min-height: 44px; max-height: 120px; }
   .chat-send { border: none; cursor: pointer; background: var(--accent); color: white; font-family: inherit; font-size: 14px; font-weight: 700; padding: 12px 22px; border-radius: 12px; box-shadow: var(--neu-raised-sm); flex-shrink: 0; }
@@ -693,7 +698,7 @@ document.querySelectorAll('.remind-option').forEach(opt => {
   });
 });
 
-function appendChatMsg(role, content) {
+function appendChatMsg(role, content, meta = {}) {
   const msgEl = document.createElement('div');
   msgEl.className = 'chat-msg ' + (role === 'q' ? 'q' : 'user');
   const avatar = document.createElement('div');
@@ -765,6 +770,29 @@ function appendChatMsg(role, content) {
     $chatThread.appendChild(optsEl);
   }
 
+  // Gemini cite-check panel — shows next to Q's reply when the response
+  // included a `checks` array. Verified count sits quietly in the header;
+  // the ones that matter are the "incorrect" and "unverifiable" flags.
+  if (role === 'q' && Array.isArray(meta.checks) && meta.checks.length > 0) {
+    const v = meta.checks.filter(c => c.status === 'verified').length;
+    const x = meta.checks.filter(c => c.status === 'incorrect').length;
+    const u = meta.checks.filter(c => c.status === 'unverifiable').length;
+    const panel = document.createElement('div');
+    panel.className = 'chat-checks';
+    const head = document.createElement('div');
+    head.className = 'chat-checks-head';
+    head.textContent = `🛡️ Gemini check — ${v} verified · ${x} flagged · ${u} unverifiable`;
+    panel.appendChild(head);
+    meta.checks.filter(c => c.status !== 'verified').forEach(c => {
+      const row = document.createElement('div');
+      row.className = 'chat-check chk-' + c.status;
+      const icon = c.status === 'incorrect' ? '⚠️' : '❓';
+      row.textContent = `${icon} "${c.claim}" — ${c.note}`;
+      panel.appendChild(row);
+    });
+    $chatThread.appendChild(panel);
+  }
+
   $chatThread.scrollTop = $chatThread.scrollHeight;
 }
 
@@ -817,7 +845,7 @@ async function pingQOnUpdate(what) {
       }),
     });
     const json = await res.json();
-    if (res.ok) appendChatMsg('q', json.reply);
+    if (res.ok) appendChatMsg('q', json.reply, { checks: json.checks });
   } catch { /* silent fail */ }
   finally { $chatTyping.classList.remove('show'); }
 }
@@ -837,7 +865,7 @@ async function autoKickoff() {
     });
     const json = await res.json();
     if (!res.ok) throw new Error(json.error || 'HTTP ' + res.status);
-    appendChatMsg('q', json.reply);
+    appendChatMsg('q', json.reply, { checks: json.checks });
   } catch (e) {
     appendChatMsg('q', '⚠️ Kickoff failed: ' + (e.message || 'unknown') + '. Type below and I\'ll pick it up.');
   } finally {
@@ -937,7 +965,7 @@ async function sendMessage() {
     });
     const json = await res.json();
     if (!res.ok) throw new Error(json.error || 'HTTP ' + res.status);
-    appendChatMsg('q', json.reply);
+    appendChatMsg('q', json.reply, { checks: json.checks });
   } catch (e) {
     appendChatMsg('q', '⚠️ ' + (e.message || 'Something went wrong'));
   } finally {
