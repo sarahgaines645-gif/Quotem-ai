@@ -46,6 +46,10 @@
   .summary-input:focus { box-shadow: var(--neu-inset-xs); border-radius: 8px; padding: 6px 10px; margin: 0 -10px; }
 
   .section-label { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; color: var(--text-faint); margin: 22px 4px 10px; }
+  .section-label.collapsible { display: flex; align-items: center; gap: 8px; cursor: pointer; user-select: none; }
+  .section-label.collapsible:hover { color: var(--text-muted); }
+  .section-chev { font-size: 9px; color: var(--text-faint); transition: transform 0.15s; display: inline-block; }
+  .section-label.collapsed .section-chev { transform: rotate(-90deg); }
 
   /* Email cards */
   .email-list { display: flex; flex-direction: column; gap: 10px; }
@@ -378,6 +382,23 @@ $noteInput.addEventListener('keydown', (e) => {
     e.preventDefault();
     saveCaseNote($noteInput.value);
   }
+});
+
+// Section-level collapse: click a header (Correspondence / Files /
+// Notes) to fold its list. Default is expanded. Each header has a small
+// chevron that rotates when collapsed.
+document.querySelectorAll('.section-label').forEach(label => {
+  const next = label.nextElementSibling;
+  if (!next || !next.matches || !next.matches('.email-list, .files-list, .notes-list')) return;
+  label.classList.add('collapsible');
+  const chev = document.createElement('span');
+  chev.className = 'section-chev';
+  chev.textContent = '▼';
+  label.appendChild(chev);
+  label.addEventListener('click', () => {
+    const collapsed = label.classList.toggle('collapsed');
+    next.style.display = collapsed ? 'none' : '';
+  });
 });
 
 // Paste anywhere on the drop zone — if the clipboard is text only (no
