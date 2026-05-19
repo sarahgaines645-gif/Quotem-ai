@@ -100,24 +100,54 @@ async function geminiVision({ prompt, base64, mimeType = 'image/jpeg', maxTokens
 // documents/statements far better than Kimi), with Kimi-via-Together as the
 // automatic fallback so reliability can only improve, never regress.
 // Fully reversible: unset GEMINI_API_KEY → straight back to Kimi.
-async function visionRead({ prompt, base64, mimeType = 'image/jpeg', maxTokens = 8000 }) {
-    if (process.env.GEMINI_API_KEY) {
-        try {
-            const out = await geminiVision({ prompt, base64, mimeType, maxTokens });
-            if (out && out.trim()) { console.log('[finance] vision via Gemini'); return cleanModelOutput(out); }
-            console.warn('[finance] vision: Gemini returned empty → Kimi fallback');
-        } catch (e) {
-            console.warn(`[finance] vision: Gemini failed (${e.message}) → Kimi fallback`);
-        }
+// Text-only Gemini call (categorisation, freeform-text parsing). Same
+// transport/timeout/parse as geminiVision — just no image. This is how
+// the WHOLE finance import runs on Gemini; Together is never touched
+// until Q (chat) sees the finished data.
+async function geminiText(prompt, { maxTokens = 8000 } = {}) {
+    const key = process.env.GEMINI_API_KEY;
+    if (!key) throw new Error('GEMINI_API_KEY not configured');
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 90_000);
+    let res;
+    try {
+        res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${key}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                contents: [{ parts: [{ text: prompt }] }],
+                generationConfig: { temperature: 0.0, maxOutputTokens: maxTokens },
+            }),
+            signal: ctrl.signal,
+        });
+    } catch (e) {
+        if (e.name === 'AbortError') throw new Error('Gemini timed out after 90s');
+        throw e;
+    } finally {
+        clearTimeout(timer);
     }
-    return cleanModelOutput(await togetherChat({
-        model:      Q_CONFIG.visionModel,
-        max_tokens: maxTokens,
-        messages: [{ role: 'user', content: [
-            { type: 'text',      text: prompt },
-            { type: 'image_url', image_url: { url: `data:${mimeType};base64,${base64}` } },
-        ] }],
-    }));
+    if (!res.ok) throw new Error(`Gemini ${res.status}: ${(await res.text()).slice(0, 300)}`);
+    const json = await res.json();
+    const cand = json?.candidates?.[0];
+    if (cand?.finishReason === 'MAX_TOKENS') console.warn('[finance] Gemini text MAX_TOKENS — output truncated');
+    const parts = cand?.content?.parts;
+    return Array.isArray(parts) ? parts.map(p => p.text || '').join('').trim() : '';
+}
+
+// Finance vision is Gemini ONLY — never Together/Kimi. Customer bank
+// documents must not leave to Together (GDPR), and Gemini does the job.
+// On failure return '' so callers degrade to an honest "couldn't read"
+// message — never silently route bank data elsewhere.
+async function visionRead({ prompt, base64, mimeType = 'image/jpeg', maxTokens = 8000 }) {
+    if (!process.env.GEMINI_API_KEY) return '';
+    try {
+        const out = await geminiVision({ prompt, base64, mimeType, maxTokens });
+        if (out && out.trim()) { console.log('[finance] vision via Gemini'); return cleanModelOutput(out); }
+        console.warn('[finance] vision: Gemini returned empty');
+    } catch (e) {
+        console.warn(`[finance] vision: Gemini failed (${e.message})`);
+    }
+    return '';
 }
 
 // ── File helpers ──────────────────────────────────────────────────
@@ -185,14 +215,12 @@ async function parseStatementText(rawText) {
     const text = rawText.replace(/£/g, '').slice(0, 30000);
     console.log(`[finance] parseStatementText: ${text.length} chars, first 300: ${text.slice(0, 300).replace(/\n/g, '↵')}`);
 
-    const raw = cleanModelOutput(await togetherChat({
-        model:      Q_CONFIG.model,
-        max_tokens: 8000,
-        messages: [
-            { role: 'system', content: PARSE_SYSTEM },
-            { role: 'user',   content: text },
-        ],
-    }));
+    let raw = '';
+    try {
+        raw = cleanModelOutput(await geminiText(`${PARSE_SYSTEM}\n\n${text}`, { maxTokens: 8192 }));
+    } catch (e) {
+        console.warn(`[finance] parseStatementText Gemini failed (${e.message}) — 0 rows`);
+    }
     console.log(`[finance] model reply (first 300): ${raw.slice(0, 300).replace(/\n/g, '↵')}`);
 
     const rowsFrom = (v) => Array.isArray(v?.rows) ? v.rows
@@ -241,7 +269,7 @@ async function categoriseTransactions(transactions) {
     // 90s timeout and the throw discarded the WHOLE import. Small batches
     // each finish fast, and a failed batch only loses that batch's
     // categories (left as 'other'), never the transactions themselves.
-    const BATCH = 60;
+    const BATCH = 120;   // Gemini is fast & reliable — bigger batches, far fewer calls
     const catMap = {};
 
     for (let i = 0; i < transactions.length; i += BATCH) {
@@ -253,14 +281,7 @@ async function categoriseTransactions(transactions) {
             amount:      t.amount,
         }));
         try {
-            const raw = cleanModelOutput(await togetherChat({
-                model:      Q_CONFIG.model,
-                max_tokens: 4000,
-                messages: [
-                    { role: 'system', content: CATEGORISE_SYSTEM },
-                    { role: 'user',   content: JSON.stringify(input) },
-                ],
-            }));
+            const raw = cleanModelOutput(await geminiText(`${CATEGORISE_SYSTEM}\n\n${JSON.stringify(input)}`, { maxTokens: 8000 }));
             const m = raw.match(/\[[\s\S]*\]/);
             for (const c of (m ? JSON.parse(m[0]) : [])) catMap[c.id] = c;
         } catch (e) {
