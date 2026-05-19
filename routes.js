@@ -1480,20 +1480,61 @@ const qFinance = require('./plugins/q-finance');
 // result is cached too, so an unreadable file isn't re-read every turn.
 const _threadDocCache = new Map();
 
-// RTF is markup, not text — reading it as UTF-8 gives megabytes of
-// {\rtf1\fonttbl...} control codes. Strip it to the actual prose so Q
-// reads the letter, not font tables (the cause of him confabulating).
+// RTF is markup, not text. A naive regex strip drowns in font tables and
+// megabytes of embedded-object hex (the 2.6M-char "extracted" garbage that
+// was being fed to Q every case turn — the real cause of his confabulating).
+// This is a proper depth-aware parser: it skips ignorable (\*) destinations
+// and binary/table groups entirely (incl. nested), decodes \'hh and \uN,
+// honours \bin, turns \par into newlines. Proven on the real council .rtf
+// files (2.6M chars of markup -> ~5k chars of the actual letter). If it
+// still can't get clean prose it returns '' so Q gets an honest "couldn't
+// read it" — he is NEVER handed raw markup again.
+const _RTF_SKIP = new Set(['fonttbl','colortbl','stylesheet','info','pict','object','objdata','data','themedata','colorschememapping','latentstyles','datastore','rsidtbl','generator','listtable','listoverridetable','revtbl','xmlnstbl','mmathPr','wgrffmtfilter','filetbl','fldinst','shppict','nonshppict','blipuid','pgptbl','xe','tc','bkmkstart','bkmkend','template','operator','company','hlinkbase','panose','falt','do','shp','sp','sn','sv','svb','header','footer','headerl','headerr','footerl','footerr','headerf','footerf','ftnsep','aftnsep','ftnsepc']);
 function rtfToText(rtf) {
-    if (!/^\s*\{\\rtf/i.test(rtf)) return rtf;            // not RTF — leave alone
-    let s = rtf;
-    // Drop ignorable / non-text groups (font, colour, style, metadata, pictures)
-    s = s.replace(/\{\\\*?\\(fonttbl|colortbl|stylesheet|info|pict|object|themedata|colorschememapping|latentstyles|datastore|rsidtbl|generator|xmlnstbl)[^{}]*(?:\{[^{}]*\}[^{}]*)*\}/gi, '');
-    s = s.replace(/\\'([0-9a-fA-F]{2})/g, (_, h) => String.fromCharCode(parseInt(h, 16)));
-    s = s.replace(/\\u(-?\d+)\??/g, (_, n) => { let c = parseInt(n, 10); if (c < 0) c += 65536; return String.fromCharCode(c); });
-    s = s.replace(/\\(par|line|sect|page)\b/g, '\n').replace(/\\tab\b/g, '\t');
-    s = s.replace(/\\[a-zA-Z]+-?\d* ?/g, '');             // remaining control words
-    s = s.replace(/\\[^a-zA-Z]/g, '').replace(/[{}]/g, '');
-    return s.replace(/\r/g, '').replace(/[ \t]+\n/g, '\n').replace(/\n{3,}/g, '\n\n').trim();
+    if (!rtf || !/\{\\rtf/i.test(rtf)) return rtf;        // not RTF — leave alone
+    const s = String(rtf);
+    const n = s.length;
+    const stack = [];
+    let i = 0, out = '', curSkip = false, ucskip = 1, pendingUc = 0;
+    const emit = (ch) => { if (curSkip) return; if (pendingUc > 0) { pendingUc--; return; } out += ch; };
+    while (i < n) {
+        const c = s[i];
+        if (c === '{') { stack.push({ skip: curSkip, ucskip }); i++; continue; }
+        if (c === '}') { const st = stack.pop(); if (st) { curSkip = st.skip; ucskip = st.ucskip; } pendingUc = 0; i++; continue; }
+        if (c === '\\') {
+            const nx = s[i + 1];
+            if (nx === "'") { const code = parseInt(s.substr(i + 2, 2), 16); if (!isNaN(code)) emit(code >= 32 || code === 9 || code === 10 || code === 13 ? String.fromCharCode(code) : ''); i += 4; continue; }
+            if (nx === '\\' || nx === '{' || nx === '}') { emit(nx); i += 2; continue; }
+            if (nx === '*') { curSkip = true; i += 2; continue; }
+            if (nx === '\n' || nx === '\r') { emit('\n'); i += 2; continue; }
+            if (nx === '~') { emit(' '); i += 2; continue; }
+            if (nx === '-' || nx === '_') { i += 2; continue; }
+            let j = i + 1, word = '';
+            while (j < n && /[a-zA-Z]/.test(s[j])) { word += s[j]; j++; }
+            let num = '';
+            if (s[j] === '-') { num += '-'; j++; }
+            while (j < n && /[0-9]/.test(s[j])) { num += s[j]; j++; }
+            if (s[j] === ' ') j++;
+            const N = num === '' ? null : parseInt(num, 10);
+            if (_RTF_SKIP.has(word)) { curSkip = true; i = j; continue; }
+            switch (word) {
+                case 'par': case 'line': case 'sect': case 'page': case 'cell': case 'row': emit('\n'); break;
+                case 'tab': emit('\t'); break;
+                case 'uc': ucskip = (N == null ? 1 : N); break;
+                case 'u': if (N != null) { const code = N < 0 ? N + 65536 : N; if (code >= 32) emit(String.fromCharCode(code)); pendingUc = ucskip; } break;
+                case 'bin': if (N && N > 0) j += N; break;
+                default: break;
+            }
+            i = j; continue;
+        }
+        if (c === '\r' || c === '\n') { i++; continue; }
+        emit(c); i++;
+    }
+    out = out.replace(/[ \t]+\n/g, '\n').replace(/\n{3,}/g, '\n\n').replace(/[ \t]{2,}/g, ' ').trim();
+    // If it STILL smells of markup or is implausibly huge for a letter, the
+    // parse failed — return '' so the honest "couldn't read it" path fires.
+    if (out.length > 300000 || /\\rtf|\\fonttbl|\\colortbl|metroBlob|\{\\\*/.test(out)) return '';
+    return out;
 }
 
 // True if a string is mostly non-printable — i.e. it's binary (a .doc/.docx

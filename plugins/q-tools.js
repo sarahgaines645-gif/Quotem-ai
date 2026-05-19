@@ -1741,8 +1741,17 @@ const ALWAYS_ON = new Set([
 // the user happened to say "search", so case advice came from stale memory
 // (the "not clever" suggestions). On the advocate surface these are always
 // offered so Q can actually do the job he's told to do.
+// calculator + current_datetime are in here for a hard reason: a case is
+// full of dates, durations, multipliers and money. LLMs cannot do arithmetic
+// reliably (this is THE classic failure — "20 ÷ 7 = 2.9" style nonsense, or
+// a balance read as £3.7tn). Trigger-gating the calculator meant that in a
+// Thread, where the maths actually matters and gets put in front of a
+// council, Q was doing it in his head and getting it wrong. On the advocate
+// surface these are always available so every number is computed, not
+// guessed — and current_datetime anchors "how long ago / to today".
 const ADVOCATE_TOOLS = new Set([
     'web_search', 'search_images', 'street_view', 'create_document',
+    'calculator', 'current_datetime',
 ]);
 
 const TRIGGERS = {
