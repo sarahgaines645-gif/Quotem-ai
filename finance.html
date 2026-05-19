@@ -1410,7 +1410,11 @@
     qrKnownFiles = new Set(session.files.map(f => f.id));
 
     // Generate QR code onto the canvas
-    const uploadUrl = location.origin + '/doc-drop/' + session.token;
+    // Strip the "www." prefix from the QR URL — Railway only has a valid
+    // cert for the apex (quotem-ai.co.uk); a "www." URL on the phone hits
+    // a "not private" warning and the upload doesn't load. Force the QR
+    // onto the apex so the camera-scan path works either way Sarah's on.
+    const uploadUrl = location.origin.replace(/\/\/www\./i, '//') + '/doc-drop/' + session.token;
     QRCode.toCanvas(document.getElementById('qr-canvas'), uploadUrl, { width: 200, margin: 1, color: { dark: '#1a1a1a', light: '#e8e8e8' } });
 
     // Start polling
