@@ -830,17 +830,6 @@ function getSpendingGraphData(email) {
         return ok;
     });
 
-    // ── TEMP DIAGNOSTIC (verify clean re-import; strip after one read) ──
-    try {
-        const pos = txns.filter(t => t.amount > 0);
-        const neg = txns.filter(t => t.amount < 0);
-        const sum = a => a.reduce((s, t) => s + t.amount, 0);
-        const dates = txns.map(t => t.date).filter(Boolean).sort();
-        console.log(`[finance][DIAG2] n=${txns.length} pos=${pos.length} neg=${neg.length} income=${sum(pos).toFixed(2)} spend=${Math.abs(sum(neg)).toFixed(2)} range=${dates[0]}..${dates[dates.length - 1]}`);
-        for (const t of [...pos].sort((a, b) => b.amount - a.amount).slice(0, 6)) console.log(`[finance][DIAG2] top+ ${t.date} ${t.amount} "${String(t.description || '').slice(0, 40)}"`);
-        for (const t of [...neg].sort((a, b) => a.amount - b.amount).slice(0, 6)) console.log(`[finance][DIAG2] top- ${t.date} ${t.amount} "${String(t.description || '').slice(0, 40)}"`);
-    } catch (e) { console.warn('[finance][DIAG2] failed', e.message); }
-    // ───────────────────────────────────────────────────────────────────
     const debits    = txns.filter(t => t.amount < 0); // outgoings only
 
     // Graph 1: category breakdown
