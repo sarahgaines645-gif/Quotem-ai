@@ -237,29 +237,36 @@ Return ONLY the JSON array.`;
 async function categoriseTransactions(transactions) {
     if (!transactions.length) return transactions;
 
-    const input = transactions.map(t => ({
-        id:          t.id,
-        description: t.description,
-        merchant:    t.merchant,
-        amount:      t.amount,
-    }));
-
-    const raw = cleanModelOutput(await togetherChat({
-        model:      Q_CONFIG.model,
-        max_tokens: 6000,
-        messages: [
-            { role: 'system', content: CATEGORISE_SYSTEM },
-            { role: 'user',   content: JSON.stringify(input) },
-        ],
-    }));
-    let categories = [];
-    try {
-        const m = raw.match(/\[[\s\S]*\]/);
-        categories = m ? JSON.parse(m[0]) : [];
-    } catch { /* */ }
-
+    // Batch — one giant call over a 3-month statement (565 txns) blew the
+    // 90s timeout and the throw discarded the WHOLE import. Small batches
+    // each finish fast, and a failed batch only loses that batch's
+    // categories (left as 'other'), never the transactions themselves.
+    const BATCH = 60;
     const catMap = {};
-    for (const c of categories) catMap[c.id] = c;
+
+    for (let i = 0; i < transactions.length; i += BATCH) {
+        const slice = transactions.slice(i, i + BATCH);
+        const input = slice.map(t => ({
+            id:          t.id,
+            description: t.description,
+            merchant:    t.merchant,
+            amount:      t.amount,
+        }));
+        try {
+            const raw = cleanModelOutput(await togetherChat({
+                model:      Q_CONFIG.model,
+                max_tokens: 4000,
+                messages: [
+                    { role: 'system', content: CATEGORISE_SYSTEM },
+                    { role: 'user',   content: JSON.stringify(input) },
+                ],
+            }));
+            const m = raw.match(/\[[\s\S]*\]/);
+            for (const c of (m ? JSON.parse(m[0]) : [])) catMap[c.id] = c;
+        } catch (e) {
+            console.warn(`[finance] categorise batch ${i}-${i + slice.length} failed (${e.message}) — those rows stay 'other'`);
+        }
+    }
 
     return transactions.map(t => ({
         ...t,
@@ -395,7 +402,16 @@ async function saveRows(email, parsed) {
 
     // Stamp each parsed row with an id before categorising
     const stamped = parsed.map(t => ({ ...t, id: uid(), bucket: null, flagged: false }));
-    const categorised = await categoriseTransactions(stamped);
+    // Defence in depth: categorisation must NEVER lose a successfully-read
+    // statement. If it fails wholesale, save the rows uncategorised — the
+    // user can re-categorise, but they never lose their transactions.
+    let categorised;
+    try {
+        categorised = await categoriseTransactions(stamped);
+    } catch (e) {
+        console.warn(`[finance] categorisation failed wholesale (${e.message}) — saving ${stamped.length} rows as 'other'`);
+        categorised = stamped.map(t => ({ ...t, category: 'other', recurring: false }));
+    }
 
     // Apply existing merchant assignments
     const assignments = getAssignments(email);
@@ -439,7 +455,8 @@ Return STRICT JSON only — no markdown fences:
   "reference":   "account or reference number if visible, else null",
   "urgency":     "low" | "medium" | "high" | "urgent",
   "headline":    "one short sentence describing what this document is and what action is needed",
-  "notes":       "any important extra detail (payment plan offers, discount schemes mentioned, etc.) or null"
+  "notes":       "any important extra detail (payment plan offers, discount schemes mentioned, etc.) or null",
+  "full_text":   "the COMPLETE verbatim text of the document — every line, every figure, every date, every name and reference number, exactly as written. Do NOT summarise, shorten or omit anything. This is what Q reads to help with the matter."
 }
 If you cannot read the document, return { "error": "Cannot read document" }.`;
 
@@ -582,7 +599,7 @@ async function extractDocument(imageBase64, mimeType = 'image/jpeg') {
         prompt:    BILL_PROMPT,
         base64:    imageBase64,
         mimeType,
-        maxTokens: 1200,
+        maxTokens: 8192,   // was 1200 — that GUARANTEED a full letter could not be transcribed
     });
     try {
         const m = raw.match(/\{[\s\S]*\}/);
