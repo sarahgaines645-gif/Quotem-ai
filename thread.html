@@ -151,6 +151,11 @@
   .chat-check { padding: 4px 0; line-height: 1.45; }
   .chat-check.chk-incorrect { color: var(--accent); font-weight: 600; }
   .chat-check.chk-unverifiable { color: var(--text-muted); }
+  .note-input { display: flex; flex-direction: column; gap: 8px; margin-top: 12px; }
+  .note-input textarea { width: 100%; border: none; outline: none; resize: vertical; font-family: inherit; font-size: 14px; color: var(--text); background: var(--bg); padding: 12px 14px; border-radius: 12px; box-shadow: var(--neu-inset-sm); line-height: 1.55; min-height: 80px; }
+  .note-save-btn { align-self: flex-end; border: none; cursor: pointer; background: var(--bg); color: var(--text); font-family: inherit; font-size: 13px; font-weight: 700; padding: 10px 18px; border-radius: 11px; box-shadow: var(--neu-raised-sm); transition: color 0.15s; }
+  .note-save-btn:hover { color: var(--accent); }
+  .note-save-btn:disabled { opacity: 0.5; cursor: not-allowed; }
   .chat-input-row { display: flex; gap: 10px; align-items: flex-end; }
   .chat-input-row textarea { flex: 1; border: none; outline: none; resize: none; font-family: inherit; font-size: 14px; color: var(--text); background: var(--bg); padding: 12px 16px; border-radius: 12px; box-shadow: var(--neu-inset-sm); line-height: 1.5; min-height: 44px; max-height: 120px; }
   .chat-send { border: none; cursor: pointer; background: var(--accent); color: white; font-family: inherit; font-size: 14px; font-weight: 700; padding: 12px 22px; border-radius: 12px; box-shadow: var(--neu-raised-sm); flex-shrink: 0; }
@@ -251,6 +256,10 @@
     Drop files here or click to upload — photos, PDFs, screenshots, anything
     <div class="upload-status" id="upload-status"></div>
   </div>
+  <div class="note-input" id="note-input-wrap">
+    <textarea id="note-input" placeholder="Or paste / type a note here — phone-call notes, a thought, a quote, scrappy lines. It lands on the case timeline and Q reads it. (Ctrl+Enter to save)"></textarea>
+    <button id="note-save-btn" class="note-save-btn" type="button">💾 Save note</button>
+  </div>
 
   <div class="section-label">💬 Q on the case</div>
   <div class="chat-card">
@@ -321,6 +330,62 @@ let deepMode = false;
 $chatDeep.addEventListener('click', () => {
   deepMode = !deepMode;
   $chatDeep.classList.toggle('on', deepMode);
+});
+
+// Save a pasted/typed note onto the case timeline. The textarea sits next
+// to the file drop zone; the drop zone itself also accepts pasted text
+// (no file in clipboard => save as note). Lands on the case alongside
+// files and emails; Q reads it as part of the case material next turn.
+const $noteInput = document.getElementById('note-input');
+const $noteSaveBtn = document.getElementById('note-save-btn');
+async function saveCaseNote(content) {
+  const text = String(content || '').trim();
+  if (!text) return;
+  $noteSaveBtn.disabled = true;
+  try {
+    const res = await fetch('/api/threads/' + threadId + '/notes', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ content: text }),
+    });
+    if (!res.ok) {
+      const e = await res.json().catch(() => ({}));
+      alert(e.error || 'Could not save note');
+      return;
+    }
+    const updated = await res.json();
+    thread.notes = updated.notes || [];
+    renderNotes();
+    $noteInput.value = '';
+    $noteInput.style.height = 'auto';
+    pingQOnUpdate('a note');
+  } catch (err) {
+    alert('Could not save note: ' + (err.message || 'unknown error'));
+  } finally {
+    $noteSaveBtn.disabled = false;
+  }
+}
+$noteSaveBtn.addEventListener('click', () => saveCaseNote($noteInput.value));
+$noteInput.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+    e.preventDefault();
+    saveCaseNote($noteInput.value);
+  }
+});
+
+// Paste anywhere on the drop zone — if the clipboard is text only (no
+// file attached), save it as a case note. Files keep going through the
+// existing upload path.
+document.getElementById('upload-drop').addEventListener('paste', (e) => {
+  const items = e.clipboardData && e.clipboardData.items;
+  if (!items) return;
+  let hasFile = false;
+  for (const it of items) { if (it.kind === 'file') { hasFile = true; break; } }
+  if (hasFile) return;
+  const text = e.clipboardData.getData('text');
+  if (!text || !text.trim()) return;
+  e.preventDefault();
+  saveCaseNote(text);
 });
 
 function escapeHtml(s) {

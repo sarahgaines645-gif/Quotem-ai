@@ -1817,6 +1817,21 @@ router.post('/api/threads/:id/files', requirePerson, express.json({ limit: '50mb
     res.json({ ...updated, savedAs: 'file' });
 });
 
+// Notes — paste / type anything onto a case: phone-call notes, a thought,
+// scrappy lines, a quote. Lands on the case timeline beside emails and
+// files and Q reads it as part of the case material on the next turn.
+router.post('/api/threads/:id/notes', requirePerson, express.json({ limit: '256kb' }), (req, res) => {
+    if (!readOwnedThread(req, res)) return;
+    const content = String(req.body?.content || '').trim();
+    if (!content) return res.status(400).json({ error: 'content required' });
+    const kind = (typeof req.body?.kind === 'string' && req.body.kind.trim())
+        ? req.body.kind.trim().slice(0, 24)
+        : 'note';
+    const updated = qThreads.addNote(req.params.id, { content, kind }, req.person.email);
+    if (!updated) return res.status(400).json({ error: 'Could not save note (thread not found)' });
+    res.json(updated);
+});
+
 router.get('/api/threads/:id/files/:filename', requirePerson, (req, res) => {
     if (!readOwnedThread(req, res)) return;
     const file = qThreads.readFile(req.params.id, req.params.filename, req.person.email);
