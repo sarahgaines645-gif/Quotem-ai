@@ -1473,6 +1473,13 @@ router.delete('/api/doc-drop/sessions/:id', requirePerson, (req, res) => {
 // cross-user bleed is possible. Bank statement data is GDPR-sensitive.
 const qFinance = require('./plugins/q-finance');
 
+// Extracted text of a thread's PDF/doc, keyed `${threadId}:${filename}`.
+// Reading a PDF via Gemini is slow; doing it on EVERY case turn (kickoff +
+// every message) made the synchronous thread-chat request run minutes long
+// and the browser gave up ("Failed to fetch"). Extract once, reuse. Empty
+// result is cached too, so an unreadable file isn't re-read every turn.
+const _threadDocCache = new Map();
+
 // GET transactions + graph data
 router.get('/api/finance/transactions', requirePerson, (req, res) => {
     res.json(qFinance.getTransactions(req.person.email));
@@ -1872,16 +1879,23 @@ router.post('/api/threads/:id/chat', requirePerson, express.json({ limit: '256kb
     if (docFiles.length && wantContent) {
         for (const f of docFiles) {
             try {
-                const file = qThreads.readFile(t.id, f.filename, req.person.email);
-                if (!file || !file.buffer) continue;
-                let text = '';
-                if (/pdf/i.test(f.mimeType || '') || /\.pdf$/i.test(f.filename || '')) {
-                    const ex = await qFinance.extractDocument(file.buffer.toString('base64'), 'application/pdf');
-                    text = (ex && (ex.full_text || ex.raw || (!ex.error && JSON.stringify(ex)))) || '';
+                const cacheKey = `${t.id}:${f.filename}`;
+                let text;
+                if (_threadDocCache.has(cacheKey)) {
+                    text = _threadDocCache.get(cacheKey);          // already read once — no Gemini call
                 } else {
-                    text = file.buffer.toString('utf8');
+                    const file = qThreads.readFile(t.id, f.filename, req.person.email);
+                    if (!file || !file.buffer) continue;
+                    if (/pdf/i.test(f.mimeType || '') || /\.pdf$/i.test(f.filename || '')) {
+                        const ex = await qFinance.extractDocument(file.buffer.toString('base64'), 'application/pdf');
+                        text = (ex && (ex.full_text || ex.raw || (!ex.error && JSON.stringify(ex)))) || '';
+                    } else {
+                        text = file.buffer.toString('utf8');
+                    }
+                    text = String(text || '').trim();
+                    _threadDocCache.set(cacheKey, text);           // cache hit OR miss — read at most once
+                    console.log(`[threads] extracted "${f.filename}" (${text.length} chars) — cached`);
                 }
-                text = String(text || '').trim();
                 const MAXC = 14000;
                 const block = text
                     ? `CONTENT OF ATTACHED FILE "${f.filename}":\n${text.length > MAXC ? text.slice(0, MAXC) + '\n…[truncated]' : text}`
