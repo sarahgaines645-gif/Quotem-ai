@@ -26,6 +26,10 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 const bcrypt = require('bcryptjs');
+// emailSlug is the per-user storage key. Registration MUST be unique on the
+// slug, not the raw email, or two different emails (a.b@x / a-b@x) collide
+// into one user directory and one user reads/wipes another's data.
+const { emailSlug } = require('./plugins/user-data');
 
 const VOLUME_DIR = process.env.RAILWAY_VOLUME_MOUNT_PATH
     || (fs.existsSync('/data') ? '/data' : null);
@@ -87,7 +91,8 @@ async function addPerson({ id, name, email, intro, password }) {
     const people = loadPeople();
     const cleanEmail = normaliseEmail(email);
     if (people.find(p => p.id === id)) throw new Error(`person id "${id}" already exists`);
-    if (people.find(p => normaliseEmail(p.email) === cleanEmail)) throw new Error(`email "${cleanEmail}" already in use`);
+    const newSlug = emailSlug(cleanEmail);
+    if (people.find(p => emailSlug(p.email) === newSlug)) throw new Error(`email "${cleanEmail}" collides with an existing account's storage key`);
 
     const rawPassword = password && password.length >= 8
         ? password
@@ -259,7 +264,7 @@ async function signupPerson({ name, email, password }) {
         throw new Error('Password must be at least 8 characters.');
     }
     const people = loadPeople();
-    if (people.find(p => normaliseEmail(p.email) === cleanEmail)) {
+    if (people.find(p => emailSlug(p.email) === emailSlug(cleanEmail))) {
         throw new Error('An account with this email already exists. Try signing in instead.');
     }
     const id = generateUniqueId(cleanEmail);
