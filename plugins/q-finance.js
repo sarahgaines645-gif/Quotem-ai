@@ -502,36 +502,75 @@ async function importStatementFromImage(email, imageBase64, mimeType) {
     return saveRows(email, rows);
 }
 
-// PDF → whole document sent to Gemini in ONE call. Gemini reads multi-page
-// PDFs natively, so this replaces the old per-page-image loop that under-read
-// dense pages, collapsed dates and got rate-limited (188 txns crammed into 4
-// days). No Kimi fallback for PDF — Together vision rejects application/pdf;
-// if Gemini can't do it we say so honestly and point at CSV export (exact).
+// Gemini 2.0 Flash caps OUTPUT at ~8192 tokens (~300 CSV rows). A 3-month
+// statement has more, so one call truncates. Split the PDF into small page
+// ranges so each call stays well under the ceiling, read them sequentially
+// (sequential = no rate-limit storm, unlike the old per-page loop), then
+// stitch. Any range that fails is reported, never silently dropped.
+const PDF_CHUNK_PAGES = 4;
+
+async function pdfToCsvChunked(fileBase64) {
+    const { PDFDocument } = require('pdf-lib');
+    const src = await PDFDocument.load(Buffer.from(fileBase64, 'base64'), { ignoreEncryption: true });
+    const pageCount = src.getPageCount();
+
+    const readChunk = (b64) => geminiVision({
+        prompt: STATEMENT_IMAGE_PROMPT, base64: b64, mimeType: 'application/pdf', maxTokens: 8192,
+    }).then(cleanModelOutput);
+
+    // Small statement → one call, no added latency.
+    if (pageCount <= PDF_CHUNK_PAGES) {
+        return { csv: await readChunk(fileBase64), failed: [], pageCount };
+    }
+
+    let csv = '';
+    const failed = [];
+    for (let start = 0; start < pageCount; start += PDF_CHUNK_PAGES) {
+        const end = Math.min(start + PDF_CHUNK_PAGES, pageCount);
+        const label = `${start + 1}-${end}`;
+        try {
+            const sub = await PDFDocument.create();
+            const idxs = Array.from({ length: end - start }, (_, k) => start + k);
+            (await sub.copyPages(src, idxs)).forEach(p => sub.addPage(p));
+            const subB64 = Buffer.from(await sub.save()).toString('base64');
+            csv += '\n' + await readChunk(subB64);
+            console.log(`[finance] PDF chunk pages ${label}/${pageCount} read`);
+        } catch (e) {
+            console.error(`[finance] PDF chunk pages ${label} failed: ${e.message}`);
+            failed.push(label);
+        }
+    }
+    return { csv, failed, pageCount };
+}
+
+// PDF → split into page-range chunks, each read by Gemini (reads PDFs
+// natively), stitched and de-duped. Replaces the old per-page-image loop
+// (fragmented/collapsed) and the single-call version (truncated at ~300
+// rows). For everyone, any size, any device — no "go export CSV" ask.
 // Images → vision model as before.
 async function importStatementFromFile(email, fileBase64, mimeType) {
     if (mimeType === 'application/pdf') {
         const total = getTransactions(email).length;
         if (!process.env.GEMINI_API_KEY) {
-            return { added: 0, total, hint: 'PDF reading is unavailable right now — export your statement as CSV from your banking app and upload that.' };
+            return { added: 0, total, hint: 'PDF reading is temporarily unavailable — please try again shortly.' };
         }
-        let raw;
+        let chunked;
         try {
-            raw = cleanModelOutput(await geminiVision({
-                prompt:    STATEMENT_IMAGE_PROMPT,
-                base64:    fileBase64,
-                mimeType:  'application/pdf',
-                maxTokens: 8192,   // Gemini 2.0 Flash output ceiling (proven value)
-            }));
+            chunked = await pdfToCsvChunked(fileBase64);
         } catch (e) {
             console.error('[finance] PDF→Gemini failed:', e.message);
-            return { added: 0, total, hint: 'Could not read this PDF. Export your statement as CSV from your banking app and upload that — it is faster and exact.' };
+            return { added: 0, total, hint: 'Could not read this PDF — try uploading it again, or a clearer copy.' };
         }
-        const rows = csvToRows(raw);
-        console.log(`[finance] PDF→Gemini single call: ${raw.length} chars → ${rows.length} rows (all pages, no per-page loop)`);
+        const rows = csvToRows(chunked.csv);
+        console.log(`[finance] PDF→Gemini chunked: ${chunked.pageCount} pages → ${rows.length} rows; failed: ${chunked.failed.join(', ') || 'none'}`);
         if (!rows.length) {
-            return { added: 0, total, hint: 'Could not read transactions from this PDF — export it as CSV from your banking app and upload that.' };
+            return { added: 0, total, hint: 'Could not read transactions from this PDF — try uploading a clearer copy.' };
         }
-        return saveRows(email, rows);
+        const result = await saveRows(email, rows);
+        if (chunked.failed.length) {
+            result.hint = `Imported ${result.added} transactions, but page(s) ${chunked.failed.join(', ')} of ${chunked.pageCount} couldn't be read — upload the same PDF again to retry those.`;
+        }
+        return result;
     }
     // Actual image (JPEG, PNG, WebP, etc.)
     return importStatementFromImage(email, fileBase64, mimeType || 'image/jpeg');
