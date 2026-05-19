@@ -418,8 +418,26 @@ async function importStatement(email, rawText) {
 // Categorise + apply merchant assignments + dedup against existing + save.
 // Shared by the text path (parseStatementText → rows) and the image path
 // (csvToRows → rows). Returns { added, total }.
+// A single personal transaction is never this large. A bigger "amount" is
+// the running balance or a reference/account number the reader mistook for
+// the transaction value — one such row poisons every total (the £-trillions
+// income bug). Used to reject poison at the only point every import path
+// funnels through, and to keep already-poisoned stored data out of the totals.
+const MAX_TXN_AMOUNT = 1000000;
+
 async function saveRows(email, parsed) {
     if (!parsed.length) return { added: 0, total: 0 };
+
+    // Drop impossible amounts BEFORE anything is persisted. This is the single
+    // chokepoint every import path (text, CSV, image, PDF) passes through, so
+    // corruption can never reach the store from here on.
+    const sane = parsed.filter(t => {
+        const ok = Number.isFinite(t.amount) && Math.abs(t.amount) <= MAX_TXN_AMOUNT;
+        if (!ok) console.warn(`[finance] dropped impossible row at import — ${t.date} ${t.amount} "${String(t.description || '').slice(0, 40)}"`);
+        return ok;
+    });
+    if (!sane.length) return { added: 0, total: 0 };
+    parsed = sane;
 
     // Stamp each parsed row with an id before categorising
     const stamped = parsed.map(t => ({ ...t, id: uid(), bucket: null, flagged: false }));
@@ -663,7 +681,17 @@ function assignMerchant(email, merchant, label) {
 // ── Spending graphs ───────────────────────────────────────────────
 
 function getSpendingGraphData(email) {
-    const txns      = getTransactions(email);
+    const all = getTransactions(email);
+    // Data imported before the guard above contains rows where a balance or
+    // reference number was stored as the amount (the £-trillions total on the
+    // page). Until those rows are cleaned from the store, exclude impossible
+    // amounts from every figure so what the user sees is real. Each one is
+    // logged so the exact poison rows show up in the live log for cleanup.
+    const txns = all.filter(t => {
+        const ok = Number.isFinite(t.amount) && Math.abs(t.amount) <= MAX_TXN_AMOUNT;
+        if (!ok) console.warn(`[finance] excluded impossible stored row from totals — ${t.date} ${t.amount} "${String(t.description || '').slice(0, 40)}"`);
+        return ok;
+    });
     const debits    = txns.filter(t => t.amount < 0); // outgoings only
 
     // Graph 1: category breakdown
