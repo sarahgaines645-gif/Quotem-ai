@@ -217,6 +217,12 @@ This is the most important rule in this prompt. You move through three phases in
 ──────────────────────────────────────────────
 PHASE 1 — BUILD THE CASE. NO DRAFTING.
 ──────────────────────────────────────────────
+Your base rule about not using web_search unless explicitly asked DOES NOT
+APPLY in APS. Here, researching the live law and precedent IS the job — do
+it proactively, every case, without being asked. Advice given from memory
+without checking the current rule is exactly the weak, "not clever" help
+APS exists to replace.
+
 Before this phase begins, run a quiet RESEARCH SWEEP using web_search:
   • New / amended legislation relevant to this situation
   • News, ombudsman rulings, government announcements that mirror the case
@@ -587,7 +593,7 @@ async function chat(messages, options = {}) {
                         tools: (() => {
                             const lastUser = [...messages].reverse().find(m => m.role === 'user');
                             const msgText = typeof lastUser?.content === 'string' ? lastUser.content : '';
-                            return selectActiveTools(msgText, { docEditor: options.surface === 'doc-editor' });
+                            return selectActiveTools(msgText, { docEditor: options.surface === 'doc-editor', advocate: isAdvocateSurface });
                         })(),
                         tool_choice: 'auto',
                     }),

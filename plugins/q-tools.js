@@ -1735,6 +1735,16 @@ const ALWAYS_ON = new Set([
     // and hit Together's rate limit. One tool per turn, max.
 ]);
 
+// In APS / case (Thread) mode the research + evidence tools are NOT optional
+// extras — the prompt explicitly tells Q to research the law/precedent and
+// build an evidence bundle. Trigger-gating them meant Q only researched if
+// the user happened to say "search", so case advice came from stale memory
+// (the "not clever" suggestions). On the advocate surface these are always
+// offered so Q can actually do the job he's told to do.
+const ADVOCATE_TOOLS = new Set([
+    'web_search', 'search_images', 'street_view', 'create_document',
+]);
+
 const TRIGGERS = {
     web_search: [
         /\blook( it)? up\b/i,
@@ -1864,6 +1874,9 @@ function selectActiveTools(userMessage, options = {}) {
         if (ALWAYS_ON.has(name)) return true;
         // Doc-editor page: all doc-editor tools always on
         if (options.docEditor && DOC_EDITOR_TOOLS.has(name)) return true;
+        // APS / case mode: research + evidence tools always on (the prompt
+        // tells Q to research and build the bundle — he must have the tools).
+        if (options.advocate && ADVOCATE_TOOLS.has(name)) return true;
         const triggers = TRIGGERS[name];
         if (!triggers) return false;
         return triggers.some(rx => rx.test(msg));
