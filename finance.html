@@ -829,7 +829,7 @@
     input.onchange = async (e) => {
       const file = e.target.files[0];
       if (!file) return;
-      const { b64, mime } = await readFileAsB64(file);
+      const { b64, mime } = await fileToVisionB64(file);
       showUploadProgress('uz-doc', true);
       const r = await apiFetch('/api/finance/problems/' + id + '/documents', {
         method: 'POST',
@@ -1158,7 +1158,7 @@
 
   async function handleDocFile(file) {
     showUploadProgress('uz-doc', true);
-    const { b64, mime } = await readFileAsB64(file);
+    const { b64, mime } = await fileToVisionB64(file);
     const r = await apiFetch('/api/finance/document', { method: 'POST', body: { imageBase64: b64, mimeType: mime } });
     showUploadProgress('uz-doc', false);
     if (!r.ok) { toast('Could not read document'); return; }
@@ -1331,6 +1331,26 @@
       fr.onerror = rej;
       fr.readAsDataURL(file);
     });
+  }
+
+  // Vision models cannot read application/pdf. For document uploads (debt
+  // letters, bills, court notices — almost always PDFs) render page 1 to JPEG
+  // first, same proven PDF.js path the statement upload uses. Non-PDF files
+  // pass straight through. Single chokepoint so every document upload path
+  // reads PDFs correctly. (Statements use their own multi-page renderer.)
+  async function fileToVisionB64(file) {
+    if (file.name && file.name.toLowerCase().endsWith('.pdf')) {
+      const buf = await file.arrayBuffer();
+      const pdf = await pdfjsLib.getDocument({ data: buf }).promise;
+      const page = await pdf.getPage(1);
+      const viewport = page.getViewport({ scale: 2.0 });
+      const canvas = document.createElement('canvas');
+      canvas.width = viewport.width;
+      canvas.height = viewport.height;
+      await page.render({ canvasContext: canvas.getContext('2d'), viewport }).promise;
+      return { b64: canvas.toDataURL('image/jpeg', 0.9).split(',')[1], mime: 'image/jpeg' };
+    }
+    return readFileAsB64(file);
   }
 
   function esc(s) {
