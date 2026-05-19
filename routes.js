@@ -1838,11 +1838,17 @@ router.post('/api/threads/:id/chat', requirePerson, express.json({ limit: '256kb
     // (options.images → vision model). Non-image turns stay text+tools so the
     // case-research tooling (web_search, list_threads) keeps working — that's
     // why this is scoped to add-ping / referential turns, not every turn.
-    const imageFiles = (t.files || []).filter(f => (f.mimeType || '').startsWith('image/'));
+    const allFiles  = t.files || [];
+    const imageFiles = allFiles.filter(f => (f.mimeType || '').startsWith('image/'));
+    const docFiles   = allFiles.filter(f =>
+        /pdf|text\/|rfc822|word|officedocument|msword/i.test(f.mimeType || '')
+        || /\.(pdf|txt|eml|md|csv|docx?)$/i.test(f.filename || ''));
     const isAddPing = /I've just added .+ to the case/i.test(message);
-    const refersToImage = /\b(image|images|photo|photos|picture|pictured|pic|pics|screenshot|scan|scanned|see|look|shows?|attached)\b/i.test(message);
+    const refersToFile = /\b(image|images|photo|photos|picture|pictured|pic|pics|screenshot|scan|scanned|see|look|shows?|attached|attachment|document|doc|letter|email|e-?mail|pdf|file|says?|read|content|in it|whats? in)\b/i.test(message);
+    const wantContent = isAddPing || refersToFile;
+
     const visionImages = [];
-    if (imageFiles.length && (isAddPing || refersToImage)) {
+    if (imageFiles.length && wantContent) {
         for (const f of imageFiles) {
             try {
                 const file = qThreads.readFile(t.id, f.filename, req.person.email);
@@ -1853,6 +1859,36 @@ router.post('/api/threads/:id/chat', requirePerson, express.json({ limit: '256kb
                 }
             } catch (e) {
                 console.warn('[threads] could not read image for vision: ' + f.filename + ' — ' + e.message);
+            }
+        }
+    }
+
+    // Q is a text model — a PDF/doc attached to the case is invisible to him
+    // unless its content is extracted and handed over. Without this he
+    // correctly but uselessly says "I can't read PDFs". Reuses the proven
+    // finance Gemini document reader (reads PDFs natively). Scoped to
+    // add-ping / referential turns, same as images, so normal tool turns
+    // aren't slowed.
+    if (docFiles.length && wantContent) {
+        for (const f of docFiles) {
+            try {
+                const file = qThreads.readFile(t.id, f.filename, req.person.email);
+                if (!file || !file.buffer) continue;
+                let text = '';
+                if (/pdf/i.test(f.mimeType || '') || /\.pdf$/i.test(f.filename || '')) {
+                    const ex = await qFinance.extractDocument(file.buffer.toString('base64'), 'application/pdf');
+                    text = (ex && (ex.full_text || ex.raw || (!ex.error && JSON.stringify(ex)))) || '';
+                } else {
+                    text = file.buffer.toString('utf8');
+                }
+                text = String(text || '').trim();
+                const MAXC = 14000;
+                const block = text
+                    ? `CONTENT OF ATTACHED FILE "${f.filename}":\n${text.length > MAXC ? text.slice(0, MAXC) + '\n…[truncated]' : text}`
+                    : `(The attached file "${f.filename}" could not be read automatically.)`;
+                messages.splice(messages.length - 1, 0, { role: 'user', content: block });
+            } catch (e) {
+                console.warn('[threads] doc extract failed: ' + f.filename + ' — ' + e.message);
             }
         }
     }
