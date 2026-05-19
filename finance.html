@@ -811,13 +811,30 @@
     toast('Marked as resolved ✓');
   };
 
+  // Holds the verbatim text of the document for the problem the user is
+  // getting help with, so Q READS it every turn — deterministic, not
+  // dependent on him choosing to call a tool. Persists through the
+  // back-and-forth of drafting; replaced when another problem is picked.
+  let activeProblemContext = '';
+
   window.helpWithProblem = function(id) {
     const p = problems.find(x => x.id === id);
     if (!p) return;
     const coachMsg  = document.getElementById('coach-msg');
     const coachInput = document.getElementById('coach-input');
-    coachMsg.textContent = `I'll help you sort out "${p.title}"${p.provider ? ' with ' + p.provider : ''}${p.amount ? ' (£' + fmt(p.amount) + ')' : ''}. Tell me what's happened and I'll write the letter or email for you.`;
-    // Pre-fill the input so the user just hits enter when ready
+    const docText = (p.documents || [])
+      .map(d => d.extracted?.full_text || d.extracted?.notes || d.extracted?.headline || '')
+      .filter(Boolean).join('\n\n---\n\n');
+    activeProblemContext =
+      `[The user needs help with this problem: "${p.title}"${p.provider ? ' — ' + p.provider : ''}${p.amount ? ' — £' + fmt(p.amount) : ''}${p.dueDate ? ' — due ' + p.dueDate : ''}.`
+      + (p.notes ? `\nNotes: ${p.notes}` : '')
+      + (docText
+          ? `\nThe uploaded document says, verbatim:\n"""\n${docText.slice(0, 12000)}\n"""`
+          : `\n(No document text was captured for this one — ask the user for the key details before drafting.)`)
+      + `]`;
+    coachMsg.textContent = docText
+      ? `I've read the document for "${p.title}". Tell me how you want to handle it and I'll write it.`
+      : `I'll help with "${p.title}". Tell me what's happened and I'll write the letter or email.`;
     coachInput.value = `Help me write a letter/email about "${p.title}"${p.provider ? ' to ' + p.provider : ''}${p.amount ? ' — £' + fmt(p.amount) + ' owed' : ''}.`;
     coachInput.focus();
   };
@@ -1283,7 +1300,7 @@
     const r = await apiFetch('/chat', {
       method: 'POST',
       body: {
-        message: finContext + userMsg,
+        message: finContext + (activeProblemContext ? activeProblemContext + '\n\n' : '') + userMsg,
         surface: 'finance',
       },
     }).catch(() => null);
