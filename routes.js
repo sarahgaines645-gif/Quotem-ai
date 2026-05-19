@@ -1480,6 +1480,37 @@ const qFinance = require('./plugins/q-finance');
 // result is cached too, so an unreadable file isn't re-read every turn.
 const _threadDocCache = new Map();
 
+// RTF is markup, not text — reading it as UTF-8 gives megabytes of
+// {\rtf1\fonttbl...} control codes. Strip it to the actual prose so Q
+// reads the letter, not font tables (the cause of him confabulating).
+function rtfToText(rtf) {
+    if (!/^\s*\{\\rtf/i.test(rtf)) return rtf;            // not RTF — leave alone
+    let s = rtf;
+    // Drop ignorable / non-text groups (font, colour, style, metadata, pictures)
+    s = s.replace(/\{\\\*?\\(fonttbl|colortbl|stylesheet|info|pict|object|themedata|colorschememapping|latentstyles|datastore|rsidtbl|generator|xmlnstbl)[^{}]*(?:\{[^{}]*\}[^{}]*)*\}/gi, '');
+    s = s.replace(/\\'([0-9a-fA-F]{2})/g, (_, h) => String.fromCharCode(parseInt(h, 16)));
+    s = s.replace(/\\u(-?\d+)\??/g, (_, n) => { let c = parseInt(n, 10); if (c < 0) c += 65536; return String.fromCharCode(c); });
+    s = s.replace(/\\(par|line|sect|page)\b/g, '\n').replace(/\\tab\b/g, '\t');
+    s = s.replace(/\\[a-zA-Z]+-?\d* ?/g, '');             // remaining control words
+    s = s.replace(/\\[^a-zA-Z]/g, '').replace(/[{}]/g, '');
+    return s.replace(/\r/g, '').replace(/[ \t]+\n/g, '\n').replace(/\n{3,}/g, '\n\n').trim();
+}
+
+// True if a string is mostly non-printable — i.e. it's binary (a .doc/.docx
+// zip, an image) decoded as text. Q must NEVER be handed this; garbage in =
+// hallucinations out. Better an honest "couldn't read it" than nonsense.
+function looksBinary(s) {
+    if (!s) return false;
+    const sample = s.slice(0, 4000);
+    let bad = 0;
+    for (let i = 0; i < sample.length; i++) {
+        const c = sample.charCodeAt(i);
+        if (c === 9 || c === 10 || c === 13) continue;
+        if (c < 32 || c === 0xFFFD) bad++;
+    }
+    return sample.length > 0 && bad / sample.length > 0.15;
+}
+
 // GET transactions + graph data
 router.get('/api/finance/transactions', requirePerson, (req, res) => {
     res.json(qFinance.getTransactions(req.person.email));
@@ -1888,11 +1919,20 @@ router.post('/api/threads/:id/chat', requirePerson, express.json({ limit: '256kb
                     if (!file || !file.buffer) continue;
                     if (/pdf/i.test(f.mimeType || '') || /\.pdf$/i.test(f.filename || '')) {
                         const ex = await qFinance.extractDocument(file.buffer.toString('base64'), 'application/pdf');
-                        text = (ex && (ex.full_text || ex.raw || (!ex.error && JSON.stringify(ex)))) || '';
+                        text = (ex && (ex.full_text || ex.raw)) || '';   // never JSON-dump the bill schema at Q
+                    } else if (/\.rtf$/i.test(f.filename || '') || /rtf/i.test(f.mimeType || '')) {
+                        text = rtfToText(file.buffer.toString('utf8'));
                     } else {
                         text = file.buffer.toString('utf8');
                     }
                     text = String(text || '').trim();
+                    // Guard: never feed Q binary/garbage (a .doc/.docx zip, a
+                    // mangled read). Garbage in = confabulation out. Honest
+                    // empty → he gets a clean "couldn't read it" note instead.
+                    if (looksBinary(text)) {
+                        console.warn(`[threads] "${f.filename}" decoded as binary/garbage — not feeding it to Q`);
+                        text = '';
+                    }
                     _threadDocCache.set(cacheKey, text);           // cache hit OR miss — read at most once
                     console.log(`[threads] extracted "${f.filename}" (${text.length} chars) — cached`);
                 }
