@@ -22,7 +22,7 @@ const { chat } = require('./plugins/q-chat');
 const { stats: ragStats } = require('./plugins/q-rag');
 const { speakAsVoice } = require('./plugins/q-voice-clone');
 const { runAgent } = require('./plugins/q-agent');
-const { analyzeDocument } = require('./plugins/q-tools');
+const { analyzeDocument, webSearch } = require('./plugins/q-tools');
 const { generateImage } = require('./plugins/q-image-gen');
 const { vectoriseImage } = require('./plugins/q-graphics');
 const { generateMusic } = require('./plugins/q-music');
@@ -2188,6 +2188,36 @@ router.delete('/life/tasks/:id', requirePerson, (req, res) => {
     const ok = qLife.deleteTask(req.params.id, req.person.email);
     if (!ok) return res.status(404).json({ error: 'Not found' });
     res.json({ ok: true });
+});
+
+// Search the web for a contact's phone + email by name. Used by the
+// "Schedule Call" form on the chat tasks drawer — Sarah types "B&Q" and the
+// bar tries to fill phone/email for her. Best-effort: a regex sweep over the
+// Brave snippet text; the user can still type or paste manually.
+router.post('/life/contact-search', requirePerson, express.json({ limit: '4kb' }), async (req, res) => {
+    const name = String(req.body?.name || '').trim();
+    if (!name) return res.status(400).json({ error: 'name required' });
+    if (name.length > 100) return res.status(400).json({ error: 'name too long' });
+    try {
+        const search = await webSearch({ query: `${name} contact phone number UK`, count: 5 });
+        if (search.error) return res.json({ phone: null, email: null, results: [], error: search.error });
+        const text = (search.results || []).map(r => `${r.title || ''} ${r.snippet || ''}`).join(' ');
+        // UK phone regex: optional +44 or 0, then 9-10 digits with optional spaces/dashes.
+        // Match common formats: 0800 123 4567, 020 1234 5678, +44 20 1234 5678, 0345-1234567.
+        const phoneRe = /(\+44\s?\d(?:[\s-]?\d){9}|0\d(?:[\s-]?\d){9,10})/g;
+        const phoneMatches = text.match(phoneRe) || [];
+        const phone = phoneMatches.length ? phoneMatches[0].replace(/\s+/g, ' ').trim() : null;
+        // Email regex — strip obvious junk like example@example.com / noreply@.
+        const emailRe = /\b([A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,})\b/g;
+        const emailMatches = (text.match(emailRe) || []).filter(e =>
+            !/^(noreply|no-reply|donotreply|example|test|admin)@/i.test(e) &&
+            !/example\.(com|org|co\.uk)$/i.test(e)
+        );
+        const email = emailMatches.length ? emailMatches[0] : null;
+        res.json({ phone, email, results: (search.results || []).slice(0, 3) });
+    } catch (err) {
+        res.json({ phone: null, email: null, results: [], error: err.message });
+    }
 });
 
 router.get('/life/categories', requirePerson, (req, res) => {

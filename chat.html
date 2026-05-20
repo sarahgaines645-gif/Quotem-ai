@@ -16,6 +16,9 @@
 <!-- Markdown renderer for Q's replies (so #, **, lists, > etc. render properly
      instead of showing as raw text). marked v12 is ~30KB; loaded once, cached. -->
 <script src="https://cdn.jsdelivr.net/npm/marked@12.0.0/marked.min.js"></script>
+<!-- QR code generator for the Tasks drawer's "Schedule Call" button — desktop
+     users scan a QR with their phone to dial / open WhatsApp. ~15KB. -->
+<script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
 <!-- PDF.js — used as a fallback when pdf-parse can't extract text from a
      scanned PDF. We render each page to an image client-side and hand the
      images to Q's vision model so he can OCR them. Only loaded when
@@ -900,6 +903,256 @@
   .tool-tile svg { width: 15px; height: 15px; flex-shrink: 0; }
   /* wrapper so the popup sits relative to the button */
   .tools-btn-wrap { position: relative; }
+
+  /* ── Tasks drawer ──────────────────────────────────────────────────────
+     Slides in from the right when the header's checklist icon is clicked.
+     Holds the mini month calendar + categorised task list + add-task form +
+     Schedule Call / WhatsApp QR. Same neumorphic palette as the page. */
+  .tasks-backdrop {
+    position: fixed; inset: 0; z-index: 90;
+    background: rgba(20, 20, 20, 0.18);
+    opacity: 0; pointer-events: none;
+    transition: opacity 0.2s ease;
+  }
+  .tasks-backdrop.open { opacity: 1; pointer-events: auto; }
+  .tasks-drawer {
+    position: fixed; top: 0; right: 0; bottom: 0;
+    width: min(460px, 100vw);
+    background: var(--bg);
+    z-index: 95;
+    transform: translateX(100%);
+    transition: transform 0.25s ease;
+    display: flex; flex-direction: column;
+    box-shadow: -8px 0 28px rgba(0,0,0,0.12);
+  }
+  .tasks-drawer.open { transform: translateX(0); }
+  .tasks-drawer .td-head {
+    padding: 18px 22px 12px;
+    display: flex; align-items: center; justify-content: space-between;
+    border-bottom: 1px solid rgba(0,0,0,0.05);
+    flex-shrink: 0;
+  }
+  .tasks-drawer .td-title {
+    font-size: 18px; font-weight: 700; color: var(--text);
+    display: flex; align-items: center; gap: 8px;
+  }
+  .tasks-drawer .td-title .dot { width: 8px; height: 8px; background: var(--accent); border-radius: 50%; display: inline-block; }
+  .tasks-drawer .td-body {
+    flex: 1; overflow-y: auto;
+    padding: 16px 22px 32px;
+    display: flex; flex-direction: column; gap: 16px;
+  }
+  .tasks-drawer .td-section-title {
+    font-size: 11px; font-weight: 700; color: var(--text-muted);
+    text-transform: uppercase; letter-spacing: 0.08em;
+    margin-bottom: 6px;
+  }
+
+  /* Mini month calendar inside the drawer */
+  .mini-cal {
+    background: var(--bg);
+    border-radius: 14px;
+    box-shadow: var(--neu-inset-sm);
+    padding: 12px;
+  }
+  .mini-cal-head {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 8px;
+  }
+  .mini-cal-title { font-size: 13px; font-weight: 700; color: var(--text); }
+  .mini-cal-nav {
+    background: var(--bg); border: none; cursor: pointer;
+    width: 26px; height: 26px; border-radius: 8px;
+    box-shadow: var(--neu-raised-sm);
+    color: var(--text-muted);
+    display: inline-flex; align-items: center; justify-content: center;
+  }
+  .mini-cal-nav:active { box-shadow: var(--neu-inset-xs); }
+  .mini-cal-grid {
+    display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px;
+  }
+  .mini-cal-dn {
+    text-align: center; font-size: 9px; font-weight: 700;
+    color: var(--text-faint); padding: 4px 0;
+  }
+  .mini-cal-cell {
+    aspect-ratio: 1 / 1;
+    border-radius: 6px;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    font-size: 11px; font-weight: 600; color: var(--text);
+    cursor: pointer;
+    position: relative;
+    background: var(--bg);
+  }
+  .mini-cal-cell.muted { color: var(--text-faint); }
+  .mini-cal-cell.today { color: var(--accent); font-weight: 700; box-shadow: var(--neu-inset-xs); }
+  .mini-cal-cell.has { font-weight: 700; }
+  .mini-cal-cell .dots {
+    position: absolute; bottom: 3px; display: flex; gap: 2px;
+  }
+  .mini-cal-cell .dots span {
+    width: 4px; height: 4px; border-radius: 50%;
+  }
+
+  /* Category pill row */
+  .cat-row {
+    display: flex; gap: 6px; flex-wrap: wrap;
+  }
+  .cat-pill {
+    background: var(--bg);
+    border: none; cursor: pointer;
+    padding: 5px 10px; border-radius: 999px;
+    font-size: 11px; font-weight: 700;
+    color: var(--text);
+    box-shadow: var(--neu-raised-sm);
+    display: inline-flex; align-items: center; gap: 6px;
+    font-family: inherit;
+  }
+  .cat-pill.on { box-shadow: var(--neu-inset-xs); }
+  .cat-pill .swatch { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+  .cat-pill.add { color: var(--text-muted); }
+
+  /* Task row */
+  .task-row {
+    background: var(--bg);
+    border-radius: 12px;
+    box-shadow: var(--neu-raised-sm);
+    padding: 10px 12px;
+    display: flex; flex-direction: column; gap: 6px;
+    border-left: 4px solid var(--accent);
+  }
+  .task-row.done { opacity: 0.5; }
+  .task-row.done .task-title { text-decoration: line-through; }
+  .task-head {
+    display: flex; align-items: center; gap: 10px;
+    cursor: pointer;
+  }
+  .task-checkbox {
+    width: 18px; height: 18px; flex-shrink: 0;
+    border-radius: 6px;
+    background: var(--bg);
+    box-shadow: var(--neu-inset-xs);
+    display: inline-flex; align-items: center; justify-content: center;
+    cursor: pointer;
+  }
+  .task-checkbox.on { box-shadow: var(--neu-raised-sm); color: var(--accent); }
+  .task-title { flex: 1; font-size: 13px; font-weight: 600; color: var(--text); }
+  .task-meta { font-size: 10px; color: var(--text-muted); display: flex; gap: 8px; flex-wrap: wrap; }
+  .task-meta .pill {
+    background: var(--bg); padding: 2px 7px; border-radius: 6px;
+    box-shadow: var(--neu-inset-xs);
+  }
+  .task-body { display: none; padding-top: 8px; border-top: 1px solid rgba(0,0,0,0.06); }
+  .task-row.expanded .task-body { display: flex; flex-direction: column; gap: 10px; }
+  .subtask-row {
+    display: flex; align-items: center; gap: 8px;
+    padding: 4px 0;
+    font-size: 12px;
+  }
+  .subtask-row .task-checkbox { width: 14px; height: 14px; }
+  .subtask-row.done span { text-decoration: line-through; color: var(--text-muted); }
+  .subtask-add {
+    display: flex; gap: 6px; margin-top: 4px;
+  }
+  .subtask-add input {
+    flex: 1;
+    background: var(--bg); border: none;
+    box-shadow: var(--neu-inset-xs);
+    border-radius: 8px;
+    padding: 6px 10px;
+    font-size: 12px; color: var(--text);
+    font-family: inherit; outline: none;
+  }
+
+  /* Add-task form */
+  .add-task-card {
+    background: var(--bg);
+    border-radius: 14px;
+    box-shadow: var(--neu-inset-sm);
+    padding: 14px;
+    display: flex; flex-direction: column; gap: 10px;
+  }
+  .add-task-card input, .add-task-card select, .add-task-card textarea {
+    background: var(--bg); border: none;
+    box-shadow: var(--neu-inset-xs);
+    border-radius: 10px;
+    padding: 9px 12px;
+    font-size: 13px; color: var(--text);
+    font-family: inherit; outline: none;
+    width: 100%;
+  }
+  .add-task-card textarea { min-height: 60px; resize: vertical; }
+  .add-task-card .row { display: flex; gap: 8px; }
+  .add-task-card .row > * { flex: 1; min-width: 0; }
+  .add-task-card .actions { display: flex; gap: 8px; justify-content: flex-end; }
+  .pill-btn {
+    background: var(--bg); border: none; cursor: pointer;
+    padding: 8px 16px; border-radius: 10px;
+    box-shadow: var(--neu-raised-sm);
+    font-size: 12px; font-weight: 700; color: var(--text);
+    font-family: inherit;
+    display: inline-flex; align-items: center; gap: 6px;
+  }
+  .pill-btn:active { box-shadow: var(--neu-inset-xs); }
+  .pill-btn.primary { color: var(--accent); }
+  .pill-btn.danger { color: #e74c3c; }
+  .pill-btn.small { padding: 5px 10px; font-size: 11px; }
+
+  /* Contact search row */
+  .contact-search {
+    display: flex; gap: 6px; align-items: stretch;
+  }
+  .contact-search input { flex: 1; }
+  .contact-search button { flex-shrink: 0; }
+
+  /* Call/WhatsApp QR modal */
+  .call-modal {
+    position: fixed; inset: 0; z-index: 110;
+    background: rgba(0,0,0,0.45);
+    display: none;
+    align-items: center; justify-content: center;
+    padding: 20px;
+  }
+  .call-modal.open { display: flex; }
+  .call-modal .card {
+    background: var(--bg);
+    border-radius: 18px;
+    box-shadow: var(--neu-raised);
+    padding: 22px;
+    max-width: 360px; width: 100%;
+    text-align: center;
+  }
+  .call-modal .card h3 {
+    font-size: 16px; font-weight: 800; color: var(--text);
+    margin-bottom: 4px;
+  }
+  .call-modal .card .num {
+    font-size: 13px; color: var(--text-muted); margin-bottom: 14px;
+  }
+  .call-modal .qr-tabs {
+    display: flex; gap: 6px; justify-content: center; margin-bottom: 14px;
+  }
+  .call-modal .qr-img {
+    width: 220px; height: 220px;
+    border-radius: 12px;
+    box-shadow: var(--neu-raised-sm);
+    margin: 0 auto 12px;
+    background: white;
+  }
+  .call-modal .hint {
+    font-size: 11px; color: var(--text-faint);
+    margin-bottom: 14px;
+  }
+  .call-modal .wa-msg {
+    background: var(--bg); border: none;
+    box-shadow: var(--neu-inset-xs);
+    border-radius: 10px;
+    padding: 9px 12px;
+    font-size: 12px; color: var(--text);
+    font-family: inherit; outline: none;
+    width: 100%; margin-bottom: 12px;
+  }
+  .call-modal .row { display: flex; gap: 8px; justify-content: center; }
 </style>
 </head>
 <body>
@@ -933,6 +1186,9 @@
         </div>
       </div>
     </div>
+    <button class="icon-btn" id="tasks-btn" aria-label="Tasks &amp; calendar" title="Tasks &amp; calendar">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+    </button>
     <div class="tools-btn-wrap">
       <button class="icon-btn" id="tools-launcher-btn" aria-label="Tools" title="Tools">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
@@ -2320,6 +2576,550 @@ if (launcherBtn && launcher) {
      gesture-driven bell. The old auto-on-load version that lived here
      only ran on /chat and was silently throttled by browsers because
      it requested permission without a user gesture (DEV_QUEUE #9). -->
+
+<!-- ── Tasks & Calendar drawer ─────────────────────────────────────────
+     Mounted on every chat session. Opens from the tick icon in the header.
+     Backend: /api/life/tasks + /api/life/categories + /api/life/contact-search.
+     Pink default; pick any of the 14 palette colours per category.
+     "Schedule Call" produces a tel: QR (scan with phone to dial) +
+     wa.me QR (scan to open WhatsApp with a pre-typed message). -->
+<div class="tasks-backdrop" id="tasks-backdrop"></div>
+<aside class="tasks-drawer" id="tasks-drawer" aria-hidden="true">
+  <div class="td-head">
+    <div class="td-title"><span>Tasks</span><span class="dot"></span></div>
+    <div style="display:flex;gap:6px;">
+      <button class="icon-btn" id="tasks-add-btn" aria-label="Add task" title="Add task">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+      </button>
+      <button class="icon-btn" id="tasks-close-btn" aria-label="Close" title="Close">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+  </div>
+  <div class="td-body">
+    <!-- Mini month calendar -->
+    <div>
+      <div class="mini-cal" id="mini-cal">
+        <div class="mini-cal-head">
+          <button class="mini-cal-nav" id="mc-prev" aria-label="Previous month">‹</button>
+          <div class="mini-cal-title" id="mc-title">—</div>
+          <button class="mini-cal-nav" id="mc-next" aria-label="Next month">›</button>
+        </div>
+        <div class="mini-cal-grid" id="mc-grid"></div>
+      </div>
+    </div>
+
+    <!-- Add-task form (hidden until + clicked) -->
+    <div class="add-task-card" id="add-task-card" style="display:none;">
+      <input type="text" id="at-title" placeholder="What needs doing?" maxlength="200">
+      <div class="row">
+        <select id="at-category">
+          <option value="">No category</option>
+        </select>
+        <input type="date" id="at-due">
+      </div>
+      <div class="row">
+        <input type="datetime-local" id="at-alert" title="Alert me at...">
+        <select id="at-priority">
+          <option value="low">Low</option>
+          <option value="med" selected>Medium</option>
+          <option value="high">High</option>
+        </select>
+      </div>
+      <div class="td-section-title" style="margin-top:4px;">Schedule call (optional)</div>
+      <div class="contact-search">
+        <input type="text" id="at-contact-name" placeholder="Who to call (e.g. B&amp;Q)" maxlength="100">
+        <button class="pill-btn small" id="at-contact-find">Find</button>
+      </div>
+      <div class="row">
+        <input type="tel" id="at-contact-phone" placeholder="Phone" maxlength="40">
+        <input type="email" id="at-contact-email" placeholder="Email" maxlength="120">
+      </div>
+      <textarea id="at-notes" placeholder="Notes (optional)" maxlength="2000"></textarea>
+      <div class="actions">
+        <button class="pill-btn" id="at-cancel">Cancel</button>
+        <button class="pill-btn primary" id="at-save">Save task</button>
+      </div>
+    </div>
+
+    <!-- Categories -->
+    <div>
+      <div class="td-section-title">Categories</div>
+      <div class="cat-row" id="cat-row"></div>
+    </div>
+
+    <!-- Task list -->
+    <div>
+      <div class="td-section-title" id="tasks-list-title">Tasks</div>
+      <div id="tasks-list" style="display:flex;flex-direction:column;gap:8px;"></div>
+    </div>
+  </div>
+</aside>
+
+<!-- Schedule Call modal — tel: QR + wa.me QR -->
+<div class="call-modal" id="call-modal">
+  <div class="card">
+    <h3 id="cm-name">—</h3>
+    <div class="num" id="cm-num">—</div>
+    <div class="qr-tabs">
+      <button class="pill-btn small" id="cm-tab-call">Call</button>
+      <button class="pill-btn small" id="cm-tab-wa">WhatsApp</button>
+    </div>
+    <img class="qr-img" id="cm-qr" alt="QR code">
+    <textarea class="wa-msg" id="cm-wa-msg" placeholder="WhatsApp message (edit before scanning)" style="display:none;">Hi, I'm calling about </textarea>
+    <div class="hint" id="cm-hint">Scan with your phone — it'll dial the number.</div>
+    <div class="row">
+      <a class="pill-btn" id="cm-tel-link" href="#">Or tap to dial</a>
+      <button class="pill-btn" id="cm-close">Close</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ── Tasks drawer + mini calendar + Schedule Call modal ──────────────────
+(function () {
+  const $ = (id) => document.getElementById(id);
+  const drawer   = $('tasks-drawer');
+  const backdrop = $('tasks-backdrop');
+  const openBtn  = $('tasks-btn');
+  const closeBtn = $('tasks-close-btn');
+  const addBtn   = $('tasks-add-btn');
+  const addCard  = $('add-task-card');
+  const PINK = '#e91e63';
+
+  const state = {
+    categories: [],
+    tasks: [],
+    events: [],
+    calYear: new Date().getFullYear(),
+    calMonth: new Date().getMonth(),
+    activeCat: 'all',  // 'all' | category slug
+    selectedDate: null,
+    alertTimers: [],   // in-page setTimeout ids for scheduled browser notifications
+  };
+
+  function escapeHtml(s) {
+    return String(s == null ? '' : s)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+  }
+
+  // ── API helpers ──────────────────────────────────────────────────────
+  async function api(path, opts) {
+    const res = await fetch('/api' + path, {
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'same-origin',
+      ...opts,
+    });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    return res.json();
+  }
+
+  async function loadAll() {
+    try {
+      const [cats, tasks, events] = await Promise.all([
+        api('/life/categories'),
+        api('/life/tasks'),
+        api('/life/events'),
+      ]);
+      state.categories = Array.isArray(cats) ? cats : [];
+      state.tasks = Array.isArray(tasks) ? tasks : [];
+      state.events = Array.isArray(events) ? events : [];
+      renderCategories();
+      renderTasks();
+      renderCalendar();
+      scheduleAlerts();
+    } catch (e) {
+      console.warn('Tasks load failed', e);
+    }
+  }
+
+  // ── Categories ───────────────────────────────────────────────────────
+  function renderCategories() {
+    const row = $('cat-row');
+    row.innerHTML = '';
+    const all = document.createElement('button');
+    all.className = 'cat-pill' + (state.activeCat === 'all' ? ' on' : '');
+    all.innerHTML = '<span class="swatch" style="background:' + PINK + '"></span> All';
+    all.onclick = () => { state.activeCat = 'all'; renderCategories(); renderTasks(); };
+    row.appendChild(all);
+    state.categories.forEach(c => {
+      const p = document.createElement('button');
+      p.className = 'cat-pill' + (state.activeCat === c.slug ? ' on' : '');
+      p.innerHTML = '<span class="swatch" style="background:' + (c.color || PINK) + '"></span> ' + escapeHtml(c.name);
+      p.onclick = () => { state.activeCat = c.slug; renderCategories(); renderTasks(); };
+      row.appendChild(p);
+    });
+    const add = document.createElement('button');
+    add.className = 'cat-pill add';
+    add.textContent = '+ Sub-header';
+    add.onclick = async () => {
+      const name = prompt('New sub-header (e.g. Work, Personal, Business):');
+      if (!name || !name.trim()) return;
+      try {
+        const cat = await api('/life/categories', { method: 'POST', body: JSON.stringify({ name: name.trim(), color: PINK }) });
+        state.categories.push(cat);
+        state.activeCat = cat.slug;
+        renderCategories(); renderTasks();
+        // also refresh the dropdown in the add-task form
+        fillCategorySelect();
+      } catch (e) { alert('Could not add: ' + e.message); }
+    };
+    row.appendChild(add);
+
+    // Colour-change for the active category — long-press / right-click swatch
+    row.querySelectorAll('.cat-pill').forEach((pill, i) => {
+      if (i === 0) return;  // skip "All"
+      const cat = state.categories[i - 1];
+      if (!cat) return;
+      pill.oncontextmenu = (e) => {
+        e.preventDefault();
+        const picker = document.createElement('div');
+        picker.style.cssText = 'position:fixed;background:var(--bg);border-radius:10px;box-shadow:var(--neu-raised);padding:8px;z-index:200;display:flex;gap:4px;flex-wrap:wrap;max-width:200px;';
+        picker.style.left = e.clientX + 'px';
+        picker.style.top  = e.clientY + 'px';
+        const PALETTE = ['#e91e63','#a78bfa','#635bff','#4285f4','#60a5fa','#06b6d4','#34d399','#34a853','#2ecc71','#fbbf24','#f39c12','#d97757','#e74c3c','#f87171','#95a5a6'];
+        PALETTE.forEach(c => {
+          const sw = document.createElement('div');
+          sw.style.cssText = 'width:20px;height:20px;border-radius:50%;cursor:pointer;background:' + c + ';';
+          sw.onclick = async () => {
+            await api('/life/categories/' + cat.slug, { method: 'PATCH', body: JSON.stringify({ color: c }) });
+            cat.color = c;
+            picker.remove();
+            renderCategories();
+            renderTasks();
+          };
+          picker.appendChild(sw);
+        });
+        document.body.appendChild(picker);
+        setTimeout(() => {
+          const close = (ev) => { if (!picker.contains(ev.target)) { picker.remove(); document.removeEventListener('click', close); } };
+          document.addEventListener('click', close);
+        }, 0);
+      };
+    });
+  }
+
+  function fillCategorySelect() {
+    const sel = $('at-category');
+    if (!sel) return;
+    const cur = sel.value;
+    sel.innerHTML = '<option value="">No category</option>';
+    state.categories.forEach(c => {
+      const o = document.createElement('option');
+      o.value = c.slug; o.textContent = c.name;
+      sel.appendChild(o);
+    });
+    if (cur) sel.value = cur;
+    else if (state.activeCat !== 'all') sel.value = state.activeCat;
+  }
+
+  // ── Tasks ─────────────────────────────────────────────────────────────
+  function renderTasks() {
+    const list = $('tasks-list');
+    list.innerHTML = '';
+    let visible = state.tasks.slice();
+    if (state.activeCat !== 'all') visible = visible.filter(t => t.category === state.activeCat);
+    if (state.selectedDate) visible = visible.filter(t => t.due === state.selectedDate);
+    $('tasks-list-title').textContent = state.selectedDate ? `Tasks for ${state.selectedDate}` : 'Tasks';
+    if (visible.length === 0) {
+      list.innerHTML = '<div style="font-size:12px;color:var(--text-muted);padding:8px 0;">Nothing here. Tap + to add one.</div>';
+      return;
+    }
+    visible.forEach(t => list.appendChild(renderTaskRow(t)));
+  }
+
+  function renderTaskRow(t) {
+    const row = document.createElement('div');
+    row.className = 'task-row' + (t.done ? ' done' : '');
+    row.style.borderLeftColor = t.color || PINK;
+    const subOpen = (t.subtasks || []).filter(s => !s.done).length;
+    const subTotal = (t.subtasks || []).length;
+    const dueLabel = t.due ? formatDue(t.due) : '';
+    const alertLabel = t.alertAt ? '⏰ ' + formatAlert(t.alertAt) : '';
+    const contactLabel = t.contact && (t.contact.name || t.contact.phone) ? '📞 ' + escapeHtml(t.contact.name || t.contact.phone) : '';
+    row.innerHTML = `
+      <div class="task-head">
+        <div class="task-checkbox ${t.done ? 'on' : ''}" data-act="toggle">${t.done ? '✓' : ''}</div>
+        <div class="task-title">${escapeHtml(t.title)}</div>
+        <div class="task-meta">
+          ${dueLabel ? `<span class="pill">${dueLabel}</span>` : ''}
+          ${subTotal ? `<span class="pill">${subTotal - subOpen}/${subTotal}</span>` : ''}
+        </div>
+      </div>
+      <div class="task-meta" style="margin-left:28px;">
+        ${alertLabel ? `<span>${alertLabel}</span>` : ''}
+        ${contactLabel ? `<span>${contactLabel}</span>` : ''}
+      </div>
+      <div class="task-body">
+        <div class="subtasks"></div>
+        <div class="subtask-add">
+          <input type="text" placeholder="Add sub-step..." maxlength="200">
+          <button class="pill-btn small" data-act="add-sub">Add</button>
+        </div>
+        ${t.contact && t.contact.phone ? `
+          <div style="display:flex;gap:6px;margin-top:4px;">
+            <button class="pill-btn small primary" data-act="call">Call now</button>
+            <button class="pill-btn small" data-act="wa">WhatsApp</button>
+          </div>` : ''}
+        <div style="display:flex;gap:6px;justify-content:flex-end;">
+          <button class="pill-btn small danger" data-act="del">Delete</button>
+        </div>
+      </div>`;
+    // Wire subtasks
+    const subWrap = row.querySelector('.subtasks');
+    (t.subtasks || []).forEach((s, i) => {
+      const sr = document.createElement('div');
+      sr.className = 'subtask-row' + (s.done ? ' done' : '');
+      sr.innerHTML = `<div class="task-checkbox ${s.done ? 'on' : ''}">${s.done ? '✓' : ''}</div><span>${escapeHtml(s.text)}</span>`;
+      sr.querySelector('.task-checkbox').onclick = async (e) => {
+        e.stopPropagation();
+        const subs = (t.subtasks || []).map((x, j) => j === i ? { ...x, done: !x.done } : x);
+        await updateTask(t.id, { subtasks: subs });
+      };
+      subWrap.appendChild(sr);
+    });
+    // Wire actions
+    row.querySelector('.task-head').addEventListener('click', (e) => {
+      if (e.target.closest('[data-act="toggle"]')) {
+        updateTask(t.id, { done: !t.done });
+        return;
+      }
+      row.classList.toggle('expanded');
+    });
+    row.querySelectorAll('[data-act]').forEach(el => {
+      const act = el.dataset.act;
+      el.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        if (act === 'add-sub') {
+          const inp = row.querySelector('.subtask-add input');
+          const text = (inp.value || '').trim();
+          if (!text) return;
+          const subs = [...(t.subtasks || []), { text, done: false }];
+          await updateTask(t.id, { subtasks: subs });
+        } else if (act === 'del') {
+          if (!confirm('Delete this task?')) return;
+          await fetch('/api/life/tasks/' + t.id, { method: 'DELETE', credentials: 'same-origin' });
+          state.tasks = state.tasks.filter(x => x.id !== t.id);
+          renderTasks(); renderCalendar();
+        } else if (act === 'call') {
+          openCallModal(t.contact, 'call');
+        } else if (act === 'wa') {
+          openCallModal(t.contact, 'wa', t);
+        }
+      });
+    });
+    return row;
+  }
+
+  function formatDue(iso) {
+    const d = new Date(iso + 'T00:00:00');
+    const today = new Date(); today.setHours(0,0,0,0);
+    const diff = Math.round((d - today) / 86400000);
+    if (diff === 0) return 'Today';
+    if (diff === 1) return 'Tomorrow';
+    if (diff === -1) return 'Yesterday';
+    if (diff < 0) return `${-diff}d ago`;
+    if (diff < 7) return `In ${diff}d`;
+    return iso.slice(5);  // MM-DD
+  }
+  function formatAlert(iso) {
+    const d = new Date(iso);
+    return d.toLocaleString('en-GB', { day:'2-digit', month:'short', hour:'2-digit', minute:'2-digit' });
+  }
+
+  async function updateTask(id, patch) {
+    const updated = await api('/life/tasks/' + id, { method: 'PATCH', body: JSON.stringify(patch) });
+    const idx = state.tasks.findIndex(t => t.id === id);
+    if (idx >= 0) state.tasks[idx] = updated;
+    renderTasks(); renderCalendar();
+    if ('alertAt' in patch || 'done' in patch) scheduleAlerts();
+    return updated;
+  }
+
+  // ── Calendar ─────────────────────────────────────────────────────────
+  function renderCalendar() {
+    const grid = $('mc-grid');
+    grid.innerHTML = '';
+    const monthNames = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+    $('mc-title').textContent = `${monthNames[state.calMonth]} ${state.calYear}`;
+    ['M','T','W','T','F','S','S'].forEach(d => {
+      const el = document.createElement('div');
+      el.className = 'mini-cal-dn';
+      el.textContent = d;
+      grid.appendChild(el);
+    });
+    const first = new Date(state.calYear, state.calMonth, 1);
+    let leading = first.getDay() - 1;
+    if (leading < 0) leading = 6;
+    const daysInMonth = new Date(state.calYear, state.calMonth + 1, 0).getDate();
+    const todayIso = new Date().toISOString().slice(0, 10);
+    const prevMonth = new Date(state.calYear, state.calMonth, 0).getDate();
+    for (let i = leading - 1; i >= 0; i--) {
+      const cell = document.createElement('div');
+      cell.className = 'mini-cal-cell muted';
+      cell.textContent = prevMonth - i;
+      grid.appendChild(cell);
+    }
+    for (let d = 1; d <= daysInMonth; d++) {
+      const iso = `${state.calYear}-${String(state.calMonth + 1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+      const cell = document.createElement('div');
+      cell.className = 'mini-cal-cell' + (iso === todayIso ? ' today' : '') + (state.selectedDate === iso ? ' has' : '');
+      const tasksOn = state.tasks.filter(t => t.due === iso && !t.done);
+      const eventsOn = state.events.filter(e => e.date === iso);
+      let dots = '';
+      if (tasksOn.length || eventsOn.length) {
+        cell.classList.add('has');
+        const colors = [...new Set([...tasksOn.map(t => t.color || PINK), ...eventsOn.map(e => e.color || PINK)])].slice(0, 3);
+        dots = '<div class="dots">' + colors.map(c => `<span style="background:${c}"></span>`).join('') + '</div>';
+      }
+      cell.innerHTML = `<span>${d}</span>${dots}`;
+      cell.onclick = () => {
+        state.selectedDate = state.selectedDate === iso ? null : iso;
+        renderCalendar(); renderTasks();
+      };
+      grid.appendChild(cell);
+    }
+    const total = leading + daysInMonth;
+    const trailing = (7 - (total % 7)) % 7;
+    for (let i = 1; i <= trailing; i++) {
+      const cell = document.createElement('div');
+      cell.className = 'mini-cal-cell muted';
+      cell.textContent = i;
+      grid.appendChild(cell);
+    }
+  }
+  $('mc-prev').onclick = () => { state.calMonth--; if (state.calMonth < 0) { state.calMonth = 11; state.calYear--; } renderCalendar(); };
+  $('mc-next').onclick = () => { state.calMonth++; if (state.calMonth > 11) { state.calMonth = 0; state.calYear++; } renderCalendar(); };
+
+  // ── Add task form ────────────────────────────────────────────────────
+  addBtn.onclick = () => {
+    addCard.style.display = addCard.style.display === 'none' ? 'flex' : 'none';
+    if (addCard.style.display !== 'none') { fillCategorySelect(); $('at-title').focus(); }
+  };
+  $('at-cancel').onclick = () => {
+    addCard.style.display = 'none';
+    clearForm();
+  };
+  $('at-save').onclick = async () => {
+    const title = $('at-title').value.trim();
+    if (!title) { $('at-title').focus(); return; }
+    const payload = {
+      title,
+      category: $('at-category').value || null,
+      due: $('at-due').value || null,
+      priority: $('at-priority').value,
+      alertAt: $('at-alert').value || null,
+      contact: {
+        name:  $('at-contact-name').value.trim() || null,
+        phone: $('at-contact-phone').value.trim() || null,
+        email: $('at-contact-email').value.trim() || null,
+      },
+      notes: $('at-notes').value.trim() || null,
+    };
+    try {
+      const t = await api('/life/tasks', { method: 'POST', body: JSON.stringify(payload) });
+      state.tasks.push(t);
+      addCard.style.display = 'none';
+      clearForm();
+      renderTasks(); renderCalendar();
+      scheduleAlerts();
+    } catch (e) { alert('Could not save: ' + e.message); }
+  };
+  $('at-contact-find').onclick = async () => {
+    const name = $('at-contact-name').value.trim();
+    if (!name) return;
+    const btn = $('at-contact-find');
+    const old = btn.textContent; btn.textContent = '...';
+    try {
+      const r = await api('/life/contact-search', { method: 'POST', body: JSON.stringify({ name }) });
+      if (r.phone) $('at-contact-phone').value = r.phone;
+      if (r.email) $('at-contact-email').value = r.email;
+      if (!r.phone && !r.email) btn.textContent = 'Nothing found';
+    } catch (e) { btn.textContent = 'Search failed'; }
+    setTimeout(() => { btn.textContent = old; }, 1800);
+  };
+
+  function clearForm() {
+    ['at-title','at-due','at-alert','at-contact-name','at-contact-phone','at-contact-email','at-notes'].forEach(id => $(id).value = '');
+    $('at-priority').value = 'med';
+  }
+
+  // ── Drawer open/close ───────────────────────────────────────────────
+  function open()  { drawer.classList.add('open'); backdrop.classList.add('open'); drawer.setAttribute('aria-hidden','false'); loadAll(); }
+  function close() { drawer.classList.remove('open'); backdrop.classList.remove('open'); drawer.setAttribute('aria-hidden','true'); }
+  openBtn.onclick  = open;
+  closeBtn.onclick = close;
+  backdrop.onclick = close;
+
+  // ── Schedule Call modal ─────────────────────────────────────────────
+  const callModal = $('call-modal');
+  function openCallModal(contact, mode, task) {
+    if (!contact || !contact.phone) { alert('No phone number on this contact.'); return; }
+    const phone = contact.phone.replace(/\s+/g, '');
+    $('cm-name').textContent = contact.name || 'Call';
+    $('cm-num').textContent  = contact.phone;
+    $('cm-tel-link').href    = `tel:${phone}`;
+    callModal.classList.add('open');
+    if (mode === 'wa') showWaTab(phone, task);
+    else showCallTab(phone);
+  }
+  function showCallTab(phone) {
+    $('cm-tab-call').classList.add('on'); $('cm-tab-wa').classList.remove('on');
+    $('cm-wa-msg').style.display = 'none';
+    $('cm-hint').textContent = "Scan with your phone to dial. (Or tap below to call from this device.)";
+    QRCode.toDataURL(`tel:${phone}`, { width: 400, margin: 1 }).then(url => $('cm-qr').src = url);
+  }
+  function showWaTab(phone, task) {
+    $('cm-tab-wa').classList.add('on'); $('cm-tab-call').classList.remove('on');
+    const msgEl = $('cm-wa-msg');
+    msgEl.style.display = 'block';
+    if (task && task.title && msgEl.value.trim() === 'Hi, I\'m calling about') {
+      msgEl.value = `Hi, I'm getting in touch about ${task.title}.`;
+    }
+    const update = () => {
+      const waPhone = phone.replace(/^\+/, '').replace(/^00/, '');
+      const url = `https://wa.me/${waPhone}?text=${encodeURIComponent(msgEl.value || '')}`;
+      QRCode.toDataURL(url, { width: 400, margin: 1 }).then(u => $('cm-qr').src = u);
+      $('cm-hint').textContent = "Scan to open WhatsApp on your phone with this message ready.";
+    };
+    update();
+    msgEl.oninput = update;
+  }
+  $('cm-tab-call').onclick = () => { const p = $('cm-num').textContent.replace(/\s+/g,''); showCallTab(p); };
+  $('cm-tab-wa').onclick   = () => { const p = $('cm-num').textContent.replace(/\s+/g,''); showWaTab(p); };
+  $('cm-close').onclick    = () => callModal.classList.remove('open');
+  callModal.onclick = (e) => { if (e.target === callModal) callModal.classList.remove('open'); };
+
+  // ── Alert scheduling (in-page browser Notifications) ────────────────
+  // Real PWA push for closed-app alerts uses the existing /q-push
+  // pipeline; this fires while the chat tab is open which covers most of
+  // her live workflow. Permission is requested only when she sets an alert.
+  function scheduleAlerts() {
+    state.alertTimers.forEach(id => clearTimeout(id));
+    state.alertTimers = [];
+    if (!('Notification' in window)) return;
+    const now = Date.now();
+    state.tasks.forEach(t => {
+      if (t.done || !t.alertAt) return;
+      const ms = new Date(t.alertAt).getTime() - now;
+      if (ms < 0 || ms > 2147483000) return;  // skip past, and >24d (setTimeout overflow)
+      const id = setTimeout(() => {
+        if (Notification.permission === 'granted') {
+          new Notification('Q reminder', { body: t.title, icon: '/favicon-180.png' });
+        }
+      }, ms);
+      state.alertTimers.push(id);
+    });
+  }
+  // Request permission the first time the user picks an alertAt
+  $('at-alert').addEventListener('change', () => {
+    if ($('at-alert').value && 'Notification' in window && Notification.permission === 'default') {
+      Notification.requestPermission();
+    }
+  });
+})();
+</script>
 
 </body>
 </html>

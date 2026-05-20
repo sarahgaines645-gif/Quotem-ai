@@ -674,7 +674,7 @@ const TOOL_DEFINITIONS = [
         type: 'function',
         function: {
             name: 'add_task',
-            description: 'Add a to-do task to the user\'s task list on the /life page. Use this for "remind me to…", "I need to…", or anything actionable with no specific time.',
+            description: 'Add a to-do task to the user\'s task list (visible on /life and on the Tasks drawer in the main chat). Use this for "remind me to…", "I need to…", or anything actionable. Break bigger jobs into a checklist with subtasks. Set alertAt when the user mentions a time they want reminding. Set contact when the task is "call X".',
             parameters: {
                 type: 'object',
                 properties: {
@@ -683,6 +683,21 @@ const TOOL_DEFINITIONS = [
                     priority: { type: 'string', enum: ['low', 'med', 'high'], description: 'Priority. Default med.' },
                     notes:    { type: 'string', description: 'Extra info, optional.' },
                     category: { type: 'string', description: 'Category slug from the user\'s pill row. Defaults are "work", "kids", "home", "health", "money" — they may have added more. Pick the fit: "Bring PE kit" → "kids", "Pay invoice" → "money". Optional.' },
+                    subtasks: {
+                        type: 'array',
+                        description: 'Sub-checklist for the task. Use when the user describes a multi-step job. Each subtask is { text }.',
+                        items: { type: 'object', properties: { text: { type: 'string' } }, required: ['text'] },
+                    },
+                    alertAt: { type: 'string', description: 'When to remind the user — ISO datetime e.g. "2026-05-20T14:30:00". Optional. Only set if the user said when.' },
+                    contact: {
+                        type: 'object',
+                        description: 'Person or business to call. Set when task is "call X" or "ring Y". Phone format flexible.',
+                        properties: {
+                            name:  { type: 'string' },
+                            phone: { type: 'string' },
+                            email: { type: 'string' },
+                        },
+                    },
                 },
                 required: ['title'],
             },
@@ -1598,15 +1613,18 @@ function listEventsTool({ from, to } = {}, personEmail) {
     };
 }
 
-function addTaskTool({ title, due, priority, notes, category } = {}, personEmail) {
+function addTaskTool({ title, due, priority, notes, category, subtasks, alertAt, contact } = {}, personEmail) {
     if (!personEmail) return { error: 'Cannot add a task without a signed-in user.' };
     if (!title) return { error: 'title is required' };
     try {
-        const task = qLife.addTask({ title, due, priority, notes, category, source: 'chat' }, personEmail);
+        const task = qLife.addTask(
+            { title, due, priority, notes, category, subtasks, alertAt, contact, source: 'chat' },
+            personEmail
+        );
         return {
             ok: true,
             task,
-            instruction_for_q: 'Task added. One short confirming line — title (and due date if there is one).',
+            instruction_for_q: 'Task added. One short confirming line — title (and due date if there is one). If subtasks/alert/contact were set, mention them briefly.',
         };
     } catch (e) { return { error: e.message }; }
 }
@@ -1897,6 +1915,8 @@ module.exports = {
     executeTool,
     analyzeDocument,
     selectActiveTools,
+    // Direct callers for routes that want to use a tool without going via Q
+    webSearch,
     // Q voice override controls — used by /q-voice/* routes
     setQVoiceFromBuffer,
     clearQVoice,

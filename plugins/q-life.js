@@ -35,10 +35,14 @@ const path = require('path');
 const crypto = require('crypto');
 const { userDataPath } = require('./user-data');
 
+// Quotem pink (#e91e63) is the default for tasks that aren't categorised.
+// Kept first so it's the natural "start" colour the picker lands on.
 const TAG_COLOURS = [
+    '#e91e63',
     '#a78bfa', '#635bff', '#4285f4', '#60a5fa', '#06b6d4', '#34d399', '#34a853',
     '#2ecc71', '#fbbf24', '#f39c12', '#d97757', '#e74c3c', '#f87171', '#95a5a6',
 ];
+const DEFAULT_TASK_COLOUR = '#e91e63';
 
 // Starter categories — first time a user opens /life they see these five.
 // They can rename, recolour, delete, or add more from the pill row.
@@ -264,6 +268,38 @@ function listTasks(ownerEmail, { status } = {}) {
     });
 }
 
+function normalSubtasks(arr) {
+    if (!Array.isArray(arr)) return [];
+    return arr
+        .map(s => {
+            const text = String(s?.text || '').trim().slice(0, 200);
+            if (!text) return null;
+            return {
+                id: s?.id || newId(),
+                text,
+                done: !!s?.done,
+            };
+        })
+        .filter(Boolean)
+        .slice(0, 50);
+}
+
+function normalAlertAt(v) {
+    if (!v) return null;
+    const d = new Date(v);
+    if (isNaN(d.getTime())) return null;
+    return d.toISOString();
+}
+
+function normalContact(c) {
+    if (!c || typeof c !== 'object') return null;
+    const name = c.name ? String(c.name).trim().slice(0, 100) : null;
+    const phone = c.phone ? String(c.phone).trim().slice(0, 40) : null;
+    const email = c.email ? String(c.email).trim().slice(0, 120) : null;
+    if (!name && !phone && !email) return null;
+    return { name, phone, email };
+}
+
 function addTask(payload, ownerEmail) {
     if (!ownerEmail) throw new Error('ownerEmail required');
     const title = String(payload?.title || '').trim();
@@ -278,9 +314,12 @@ function addTask(payload, ownerEmail) {
         priority: ['low', 'med', 'high'].includes(payload?.priority) ? payload.priority : 'med',
         notes: payload?.notes ? String(payload.notes).trim() : null,
         source: payload?.source ? String(payload.source).slice(0, 32) : 'manual',
-        color: explicit || colorForCategory(category, ownerEmail),
+        color: explicit || colorForCategory(category, ownerEmail) || DEFAULT_TASK_COLOUR,
         category,
         prepFor: payload?.prepFor ? String(payload.prepFor).trim().slice(0, 200) : null,
+        subtasks: normalSubtasks(payload?.subtasks),
+        alertAt: normalAlertAt(payload?.alertAt),
+        contact: normalContact(payload?.contact),
         done: false,
         doneAt: null,
         createdAt: new Date().toISOString(),
@@ -311,6 +350,15 @@ function updateTask(id, patch, ownerEmail) {
     }
     if ('prepFor' in patch) {
         next.prepFor = patch.prepFor ? String(patch.prepFor).trim().slice(0, 200) : null;
+    }
+    if ('subtasks' in patch) {
+        next.subtasks = normalSubtasks(patch.subtasks);
+    }
+    if ('alertAt' in patch) {
+        next.alertAt = patch.alertAt === null ? null : (normalAlertAt(patch.alertAt) || cur.alertAt);
+    }
+    if ('contact' in patch) {
+        next.contact = patch.contact === null ? null : normalContact(patch.contact);
     }
     if ('done' in patch) {
         next.done = !!patch.done;
@@ -362,6 +410,7 @@ function addBatch({ events = [], tasks = [] } = {}, ownerEmail) {
 
 module.exports = {
     TAG_COLOURS,
+    DEFAULT_TASK_COLOUR,
     STARTER_CATEGORIES,
     listEvents, addEvent, updateEvent, deleteEvent,
     listTasks, addTask, updateTask, deleteTask,
