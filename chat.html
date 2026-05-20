@@ -3301,11 +3301,29 @@ if (launcherBtn && launcher) {
     if (mode === 'wa') showWaTab(phone, task);
     else showCallTab(phone);
   }
+  // Set the QR image src — or hide the img and show the hint if the QR
+  // library didn't load. Previously a CDN miss left a broken-image icon
+  // (with the alt text) sitting in the middle of the modal.
+  function setQrSrc(text, fallbackHint) {
+    const img = $('cm-qr');
+    if (typeof QRCode === 'undefined' || !QRCode.toDataURL) {
+      img.style.display = 'none';
+      $('cm-hint').textContent = "QR generator didn't load — refresh the page, or just tap the dial button below.";
+      return;
+    }
+    img.style.display = '';
+    QRCode.toDataURL(text, { width: 400, margin: 1 })
+      .then(url => { img.src = url; })
+      .catch(() => {
+        img.style.display = 'none';
+        $('cm-hint').textContent = "Could not draw the QR — refresh the page, or just tap the dial button below.";
+      });
+    if (fallbackHint) $('cm-hint').textContent = fallbackHint;
+  }
   function showCallTab(phone) {
     $('cm-tab-call').classList.add('on'); $('cm-tab-wa').classList.remove('on');
     $('cm-wa-msg').style.display = 'none';
-    $('cm-hint').textContent = "Scan with your phone to dial. (Or tap below to call from this device.)";
-    QRCode.toDataURL(`tel:${phone}`, { width: 400, margin: 1 }).then(url => $('cm-qr').src = url);
+    setQrSrc(`tel:${phone}`, "Scan with your phone to dial. (Or tap below to call from this device.)");
   }
   function showWaTab(phone, task) {
     $('cm-tab-wa').classList.add('on'); $('cm-tab-call').classList.remove('on');
@@ -3317,8 +3335,7 @@ if (launcherBtn && launcher) {
     const update = () => {
       const waPhone = phone.replace(/^\+/, '').replace(/^00/, '');
       const url = `https://wa.me/${waPhone}?text=${encodeURIComponent(msgEl.value || '')}`;
-      QRCode.toDataURL(url, { width: 400, margin: 1 }).then(u => $('cm-qr').src = u);
-      $('cm-hint').textContent = "Scan to open WhatsApp on your phone with this message ready.";
+      setQrSrc(url, "Scan to open WhatsApp on your phone with this message ready.");
     };
     update();
     msgEl.oninput = update;

@@ -84,7 +84,10 @@ async function checkUser(email) {
             await pushToUser(email, {
                 title: 'Q reminder',
                 body,
-                url: '/chat',
+                // Tapping the reminder lands on /life — the task list page —
+                // not the chat. Hard-coding /chat sent her to Q on every
+                // reminder tap.
+                url: '/life',
                 icon: '/favicon-192.png',
             });
             t.alertedAt = new Date().toISOString();
