@@ -2761,25 +2761,54 @@ if (launcherBtn && launcher) {
     return res.json();
   }
 
-  async function loadAll() {
+  // Like api() but never throws — returns { ok, status, data, body } so a
+  // failed call can't take the whole card down with it. One 401 used to abort
+  // Promise.all and leave the calendar at "—" forever.
+  async function tryLoad(path) {
     try {
-      const [cats, tasks, events] = await Promise.all([
-        api('/life/categories'),
-        api('/life/tasks'),
-        api('/life/events'),
-      ]);
-      state.categories = Array.isArray(cats) ? cats : [];
-      state.tasks = Array.isArray(tasks) ? tasks : [];
-      state.events = Array.isArray(events) ? events : [];
-      renderStats();
-      renderCategories();
-      renderTasks();
-      renderCalendar();
-      scheduleAlerts();
+      const res = await fetch('/api' + path, {
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'same-origin',
+      });
+      if (!res.ok) {
+        const body = await res.text().catch(() => '');
+        return { ok: false, status: res.status, body };
+      }
+      return { ok: true, data: await res.json() };
     } catch (e) {
-      console.warn('Tasks load failed', e);
-      $('tasks-list').innerHTML = '<div style="font-size:11px;color:#e74c3c;padding:6px 0;">Could not load tasks. Refresh in a sec — Railway may still be redeploying.</div>';
+      return { ok: false, status: 0, body: e.message };
     }
+  }
+  function loadFailMsg(r) {
+    if (r.status === 401) return 'Sign in required — sign in to load this.';
+    if (r.status === 404) return 'Route not deployed yet.';
+    if (r.status === 0)   return 'Network error.';
+    return 'Server error (HTTP ' + r.status + ').';
+  }
+
+  async function loadAll() {
+    const [catsR, tasksR, eventsR] = await Promise.all([
+      tryLoad('/life/categories'),
+      tryLoad('/life/tasks'),
+      tryLoad('/life/events'),
+    ]);
+    state.categories = catsR.ok   && Array.isArray(catsR.data)   ? catsR.data   : [];
+    state.tasks      = tasksR.ok  && Array.isArray(tasksR.data)  ? tasksR.data  : [];
+    state.events     = eventsR.ok && Array.isArray(eventsR.data) ? eventsR.data : [];
+    renderStats();
+    renderCategories();
+    renderCalendar();    // always — doesn't depend on the API succeeding
+    renderTasks();
+    if (!tasksR.ok) {
+      $('tasks-list').innerHTML = '<div style="font-size:11px;color:#e74c3c;padding:6px 0;">' + loadFailMsg(tasksR) + '</div>';
+    }
+    if (!catsR.ok) {
+      console.warn('categories load failed:', catsR.status, catsR.body);
+    }
+    if (!eventsR.ok) {
+      console.warn('events load failed:', eventsR.status, eventsR.body);
+    }
+    scheduleAlerts();
   }
 
   function renderStats() {
