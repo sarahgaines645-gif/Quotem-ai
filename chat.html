@@ -17,8 +17,10 @@
      instead of showing as raw text). marked v12 is ~30KB; loaded once, cached. -->
 <script src="https://cdn.jsdelivr.net/npm/marked@12.0.0/marked.min.js"></script>
 <!-- QR code generator for the Tasks drawer's "Schedule Call" button — desktop
-     users scan a QR with their phone to dial / open WhatsApp. ~15KB. -->
-<script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
+     users scan a QR with their phone to dial / open WhatsApp. Self-hosted
+     (qrcode-generator by Kazuhiko Arase, ~56KB) — jsdelivr's path for
+     node-qrcode was 404ing and leaving a broken-image icon in the modal. -->
+<script src="/qrcode.min.js"></script>
 <!-- PDF.js — used as a fallback when pdf-parse can't extract text from a
      scanned PDF. We render each page to an image client-side and hand the
      images to Q's vision model so he can OCR them. Only loaded when
@@ -3301,24 +3303,29 @@ if (launcherBtn && launcher) {
     if (mode === 'wa') showWaTab(phone, task);
     else showCallTab(phone);
   }
-  // Set the QR image src — or hide the img and show the hint if the QR
-  // library didn't load. Previously a CDN miss left a broken-image icon
-  // (with the alt text) sitting in the middle of the modal.
+  // Set the QR image src — synchronous via qrcode-generator (Kazuhiko
+  // Arase). API: qrcode(typeNumber=0 auto, errorLevel) → addData → make →
+  // createDataURL(cellSize, margin). Different from node-qrcode's promise
+  // API. If the lib didn't load (typeof check), hide the img and show a
+  // useful hint instead of leaving a broken-image icon.
   function setQrSrc(text, fallbackHint) {
     const img = $('cm-qr');
-    if (typeof QRCode === 'undefined' || !QRCode.toDataURL) {
+    if (typeof qrcode !== 'function') {
       img.style.display = 'none';
       $('cm-hint').textContent = "QR generator didn't load — refresh the page, or just tap the dial button below.";
       return;
     }
-    img.style.display = '';
-    QRCode.toDataURL(text, { width: 400, margin: 1 })
-      .then(url => { img.src = url; })
-      .catch(() => {
-        img.style.display = 'none';
-        $('cm-hint').textContent = "Could not draw the QR — refresh the page, or just tap the dial button below.";
-      });
-    if (fallbackHint) $('cm-hint').textContent = fallbackHint;
+    try {
+      const qr = qrcode(0, 'M');
+      qr.addData(text);
+      qr.make();
+      img.src = qr.createDataURL(8, 0);   // 8 px/module, no extra margin (white bg from CSS)
+      img.style.display = '';
+      if (fallbackHint) $('cm-hint').textContent = fallbackHint;
+    } catch (e) {
+      img.style.display = 'none';
+      $('cm-hint').textContent = "Could not draw the QR — refresh the page, or just tap the dial button below.";
+    }
   }
   function showCallTab(phone) {
     $('cm-tab-call').classList.add('on'); $('cm-tab-wa').classList.remove('on');

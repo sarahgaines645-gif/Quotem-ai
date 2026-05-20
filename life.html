@@ -11,7 +11,10 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
-<script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
+<!-- Self-hosted qrcode lib (qrcode-generator by Kazuhiko Arase) — the
+     jsdelivr CDN path for node-qrcode was 404ing and leaving a broken-
+     image icon in the Schedule Call QR modal. -->
+<script src="/qrcode.min.js"></script>
 <style>
   :root {
     --bg: #e8e8e8;
@@ -1946,11 +1949,31 @@ function openCallModal(contact, mode, task) {
   if (mode === 'wa') showWaTab(phone, task);
   else showCallTab(phone);
 }
+// Synchronous QR via qrcode-generator (Kazuhiko Arase). If the lib didn't
+// load, hide the img and surface a useful hint instead of a broken icon.
+function setCmQrSrc(text, hint) {
+  const img = $('cm-qr');
+  if (typeof qrcode !== 'function') {
+    img.style.display = 'none';
+    $('cm-hint').textContent = "QR generator didn't load — refresh the page, or just tap the dial button below.";
+    return;
+  }
+  try {
+    const qr = qrcode(0, 'M');
+    qr.addData(text);
+    qr.make();
+    img.src = qr.createDataURL(8, 0);
+    img.style.display = '';
+    if (hint) $('cm-hint').textContent = hint;
+  } catch (e) {
+    img.style.display = 'none';
+    $('cm-hint').textContent = "Could not draw the QR — refresh the page, or just tap the dial button below.";
+  }
+}
 function showCallTab(phone) {
   $('cm-tab-call').classList.add('on'); $('cm-tab-wa').classList.remove('on');
   $('cm-wa-msg').style.display = 'none';
-  $('cm-hint').textContent = "Scan with your phone to dial. (Or tap below to call from this device.)";
-  QRCode.toDataURL('tel:' + phone, { width: 400, margin: 1 }).then(url => $('cm-qr').src = url);
+  setCmQrSrc('tel:' + phone, "Scan with your phone to dial. (Or tap below to call from this device.)");
 }
 function showWaTab(phone, task) {
   $('cm-tab-wa').classList.add('on'); $('cm-tab-call').classList.remove('on');
@@ -1962,8 +1985,7 @@ function showWaTab(phone, task) {
   const update = () => {
     const waPhone = phone.replace(/^\+/, '').replace(/^00/, '');
     const url = 'https://wa.me/' + waPhone + '?text=' + encodeURIComponent(msgEl.value || '');
-    QRCode.toDataURL(url, { width: 400, margin: 1 }).then(u => $('cm-qr').src = u);
-    $('cm-hint').textContent = "Scan to open WhatsApp on your phone with this message ready.";
+    setCmQrSrc(url, "Scan to open WhatsApp on your phone with this message ready.");
   };
   update();
   msgEl.oninput = update;

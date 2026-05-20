@@ -164,6 +164,11 @@ app.use('/widgets', express.static(path.join(ROOT, 'widgets')));
 // tags continue to resolve (trace-widget.js, looking-glass-widget.js).
 app.get('/trace-widget.js', (req, res) => res.sendFile(path.join(ROOT, 'trace-widget.js')));
 app.get('/looking-glass-widget.js', (req, res) => res.sendFile(path.join(ROOT, 'looking-glass-widget.js')));
+// Self-hosted qrcode lib (Kazuhiko Arase qrcode-generator, ~56KB). The
+// previous jsdelivr CDN path for node-qrcode was returning 404 — that's why
+// the Schedule Call QR modal was rendering a broken-image icon. Hosted from
+// this app, no third-party dep.
+app.get('/qrcode.min.js', (req, res) => res.sendFile(path.join(ROOT, 'qrcode.min.js')));
 app.get('/sw.js', (req, res) => {
     // Service worker must not be cached — browser needs the latest version every load.
     res.setHeader('Cache-Control', 'no-store, must-revalidate');
