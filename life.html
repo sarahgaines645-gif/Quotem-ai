@@ -11,6 +11,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
 <style>
   :root {
     --bg: #e8e8e8;
@@ -426,6 +427,146 @@
     flex: 0 0 auto;
   }
   .dot-picker .dp-sw:hover { border-color: var(--text); }
+
+  /* ── FeatureTracker-style stat strip ──────────────────────────────
+     Big raised tiles with bright top-border colour accents (Dashboard
+     FeatureTrackerTab pattern). Clicking a filterable tile applies its
+     filter to the task list. */
+  .life-stats {
+    display: flex; gap: 12px; margin-bottom: 20px;
+    flex-wrap: wrap;
+  }
+  .life-stat {
+    flex: 1 1 130px; min-width: 130px;
+    background: var(--bg); border-radius: 14px;
+    box-shadow: var(--neu-raised-sm);
+    border: 1px solid rgba(0,0,0,0.06);
+    border-top: 3px solid var(--accent);
+    padding: 16px 20px;
+    cursor: default;
+    transition: box-shadow 0.15s;
+  }
+  .life-stat.clickable { cursor: pointer; }
+  .life-stat.clickable:hover { box-shadow: var(--neu-raised); }
+  .life-stat.on { box-shadow: var(--neu-inset-sm); }
+  .life-stat .v {
+    font-size: 28px; font-weight: 900; line-height: 1;
+  }
+  .life-stat .l {
+    font-size: 10px; font-weight: 800; color: var(--text-muted);
+    text-transform: uppercase; letter-spacing: 0.08em; margin-top: 6px;
+  }
+
+  /* Pills shown on a task row (alert / contact) */
+  .task-pills { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 4px; }
+  .task-pills .pill {
+    font-size: 10px; font-weight: 700;
+    background: var(--bg); padding: 2px 7px; border-radius: 6px;
+    box-shadow: var(--neu-inset-xs);
+    color: var(--text-muted);
+    display: inline-flex; align-items: center; gap: 3px;
+  }
+  .task-pills .pill.alert { color: #f39c12; }
+  .task-pills .pill.contact { color: #4285f4; }
+
+  /* Sub-checklist inside an expanded task */
+  .subtasks { display: flex; flex-direction: column; gap: 4px; margin-top: 6px; }
+  .subtask-row {
+    display: flex; align-items: center; gap: 8px;
+    padding: 4px 2px; font-size: 12px;
+  }
+  .subtask-row .sub-cb {
+    -webkit-appearance: none; appearance: none;
+    width: 14px; height: 14px; flex: 0 0 auto;
+    border-radius: 4px; background: var(--bg);
+    box-shadow: var(--neu-inset-xs);
+    cursor: pointer; position: relative; padding: 0; border: none;
+  }
+  .subtask-row .sub-cb.on { box-shadow: var(--neu-inset-sm); }
+  .subtask-row .sub-cb.on::after {
+    content: '✓'; position: absolute; inset: 0;
+    display: flex; align-items: center; justify-content: center;
+    color: var(--accent); font-size: 10px; font-weight: 700;
+  }
+  .subtask-row.done span { text-decoration: line-through; color: var(--text-muted); }
+  .subtask-row .sub-del {
+    background: none; box-shadow: none; padding: 0 4px;
+    font-size: 13px; color: var(--text-faint);
+    border: none; cursor: pointer;
+  }
+  .subtask-row .sub-del:hover { color: #ef4444; }
+  .subtask-add { display: flex; gap: 6px; margin-top: 4px; }
+  .subtask-add input {
+    flex: 1; padding: 5px 9px; border-radius: 7px;
+    background: var(--bg); border: none;
+    box-shadow: var(--neu-inset-xs);
+    font-size: 11px; margin: 0;
+  }
+  .subtask-add button { padding: 4px 10px; font-size: 11px; }
+
+  /* Contact-search row (Find button next to a text input) */
+  .contact-search { display: flex; gap: 8px; align-items: stretch; }
+  .contact-search input { flex: 1; margin: 0; }
+  .contact-search button { flex-shrink: 0; padding: 8px 14px; font-size: 12px; }
+
+  /* Schedule Call button on a task row */
+  .schedule-call-btn {
+    background: var(--bg); border: none; cursor: pointer;
+    box-shadow: var(--neu-raised-sm);
+    padding: 6px 12px; border-radius: 8px;
+    font-size: 11px; font-weight: 800; color: var(--text);
+    font-family: inherit;
+    display: inline-flex; align-items: center; gap: 5px;
+    margin-top: 6px;
+  }
+  .schedule-call-btn:active { box-shadow: var(--neu-inset-xs); }
+  .schedule-call-btn:hover { color: var(--accent); }
+
+  /* Call / WhatsApp QR modal — transparent overlay per neumorphic rule */
+  .call-modal {
+    position: fixed; inset: 0; z-index: 110;
+    background: transparent;
+    display: none;
+    align-items: center; justify-content: center;
+    padding: 20px;
+  }
+  .call-modal.open { display: flex; }
+  .call-modal .card {
+    background: var(--bg);
+    border-radius: 18px;
+    box-shadow: var(--neu-raised);
+    padding: 22px;
+    max-width: 360px; width: 100%;
+    text-align: center;
+  }
+  .call-modal .card h3 { font-size: 16px; font-weight: 800; color: var(--text); margin-bottom: 4px; }
+  .call-modal .card .num { font-size: 13px; color: var(--text-muted); margin-bottom: 14px; }
+  .call-modal .qr-tabs { display: flex; gap: 6px; justify-content: center; margin-bottom: 14px; }
+  .call-modal .qr-tabs button.on { box-shadow: var(--neu-inset-xs); color: var(--accent); }
+  .call-modal .qr-img {
+    width: 220px; height: 220px;
+    border-radius: 12px; box-shadow: var(--neu-raised-sm);
+    margin: 0 auto 12px; background: white;
+  }
+  .call-modal .hint { font-size: 11px; color: var(--text-faint); margin-bottom: 14px; }
+  .call-modal .wa-msg {
+    background: var(--bg); border: none;
+    box-shadow: var(--neu-inset-xs);
+    border-radius: 10px; padding: 9px 12px;
+    font-size: 12px; color: var(--text);
+    font-family: inherit; outline: none;
+    width: 100%; margin-bottom: 12px;
+  }
+  .call-modal .row { display: flex; gap: 8px; justify-content: center; }
+  .call-modal .pill-btn {
+    background: var(--bg); border: none; cursor: pointer;
+    padding: 8px 16px; border-radius: 10px;
+    box-shadow: var(--neu-raised-sm);
+    font-size: 12px; font-weight: 700; color: var(--text);
+    font-family: inherit; text-decoration: none;
+    display: inline-flex; align-items: center; gap: 5px;
+  }
+  .call-modal .pill-btn:active { box-shadow: var(--neu-inset-xs); }
 </style>
 </head>
 <body>
@@ -440,6 +581,27 @@
     <span class="tagline">Calendar · Tasks · Photos in, dates out</span>
     <a class="back-link" href="/tools">← All tools</a>
   </header>
+
+  <!-- FEATURETRACKER STAT STRIP — bright top-border colour accents.
+       "Open" is the click-to-filter tile (toggles taskFilter open/done). -->
+  <div class="life-stats">
+    <div class="life-stat clickable" id="ls-open" style="border-top-color:#e91e63;">
+      <div class="v" id="ls-open-v" style="color:#e91e63;">0</div>
+      <div class="l">Open</div>
+    </div>
+    <div class="life-stat" style="border-top-color:#f39c12;">
+      <div class="v" id="ls-due-v" style="color:#f39c12;">0</div>
+      <div class="l">Due 7d</div>
+    </div>
+    <div class="life-stat clickable" id="ls-done" style="border-top-color:#2ecc71;">
+      <div class="v" id="ls-done-v" style="color:#2ecc71;">0</div>
+      <div class="l">Done</div>
+    </div>
+    <div class="life-stat" style="border-top-color:#a78bfa;">
+      <div class="v" id="ls-cats-v" style="color:#a78bfa;">0</div>
+      <div class="l">Sub-headers</div>
+    </div>
+  </div>
 
   <!-- CATEGORY PILLS — full width above the grid -->
   <div class="card">
@@ -570,16 +732,64 @@
     <input type="text" id="m-location">
     <label>Notes</label>
     <textarea id="m-notes"></textarea>
-    <label>Category</label>
+    <label>Sub-header</label>
     <select id="m-category">
-      <option value="">— Uncategorised —</option>
+      <option value="">— No sub-header —</option>
     </select>
-    <label>Tag colour <span style="font-size: 11px; color: var(--text-muted); font-weight: 400;">(overrides category colour)</span></label>
+    <label>Tag colour <span style="font-size: 11px; color: var(--text-muted); font-weight: 400;">(overrides sub-header colour)</span></label>
     <div class="swatches" id="m-swatches"></div>
+
+    <!-- Task-only extras: alert time, contact (with Find), sub-checklist.
+         The whole block hides when the modal is editing an event. -->
+    <div id="m-task-extras">
+      <label>Alert me at <span style="font-size: 11px; color: var(--text-muted); font-weight: 400;">(optional)</span></label>
+      <input type="datetime-local" id="m-alert">
+
+      <label>Schedule call <span style="font-size: 11px; color: var(--text-muted); font-weight: 400;">(optional — auto-search the number)</span></label>
+      <div class="contact-search">
+        <input type="text" id="m-contact-name" placeholder="Who to call (e.g. B&amp;Q)" maxlength="100">
+        <button id="m-contact-find" class="small">Find</button>
+      </div>
+      <div class="row">
+        <div>
+          <input type="tel" id="m-contact-phone" placeholder="Phone" maxlength="40">
+        </div>
+        <div>
+          <input type="email" id="m-contact-email" placeholder="Email" maxlength="120">
+        </div>
+      </div>
+
+      <label>Sub-list <span style="font-size: 11px; color: var(--text-muted); font-weight: 400;">(things to tick off inside this task)</span></label>
+      <div class="subtasks" id="m-subtasks"></div>
+      <div class="subtask-add">
+        <input type="text" id="m-subtask-new" placeholder="Add a sub-step..." maxlength="200">
+        <button id="m-subtask-add" class="small">Add</button>
+      </div>
+    </div>
+
     <div class="modal-actions">
       <button id="m-save">Save</button>
       <button id="m-delete" class="danger" style="display: none;">Delete</button>
       <button id="m-cancel">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<!-- Schedule Call modal — tel: QR + wa.me QR. Transparent overlay (neumorphic rule). -->
+<div class="call-modal" id="call-modal">
+  <div class="card">
+    <h3 id="cm-name">—</h3>
+    <div class="num" id="cm-num">—</div>
+    <div class="qr-tabs">
+      <button class="pill-btn" id="cm-tab-call">Call</button>
+      <button class="pill-btn" id="cm-tab-wa">WhatsApp</button>
+    </div>
+    <img class="qr-img" id="cm-qr" alt="QR code">
+    <textarea class="wa-msg" id="cm-wa-msg" placeholder="WhatsApp message (edit before scanning)" style="display:none;">Hi, I'm calling about </textarea>
+    <div class="hint" id="cm-hint">Scan with your phone — it'll dial the number.</div>
+    <div class="row">
+      <a class="pill-btn" id="cm-tel-link" href="#">Or tap to dial</a>
+      <button class="pill-btn" id="cm-close">Close</button>
     </div>
   </div>
 </div>
@@ -661,6 +871,8 @@ async function loadTasks() {
   const r = await fetch('/life/tasks');
   state.tasks = await r.json();
   renderTasks();
+  renderLifeStats();
+  scheduleLifeAlerts();
 }
 async function loadCategories() {
   try {
@@ -669,6 +881,24 @@ async function loadCategories() {
     state.categories = Array.isArray(data) ? data : [];
   } catch { state.categories = []; }
   renderCategoryPills();
+  renderLifeStats();
+}
+
+function renderLifeStats() {
+  const tasks = state.tasks || [];
+  const open = tasks.filter(t => !t.done).length;
+  const done = tasks.filter(t =>  t.done).length;
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  const todayIso = today.toISOString().slice(0, 10);
+  const in7 = new Date(today.getTime() + 7 * 86400000).toISOString().slice(0, 10);
+  const due = tasks.filter(t => !t.done && t.due && t.due >= todayIso && t.due <= in7).length;
+  $('ls-open-v').textContent = open;
+  $('ls-due-v').textContent  = due;
+  $('ls-done-v').textContent = done;
+  $('ls-cats-v').textContent = (state.categories || []).length;
+  // Active-filter highlight
+  $('ls-open').classList.toggle('on', state.taskFilter === 'open');
+  $('ls-done').classList.toggle('on', state.taskFilter === 'done');
 }
 
 function renderCategoryPills() {
@@ -906,7 +1136,13 @@ function renderTaskGroup(list, items, type) {
     if (t.priority === 'high') meta.push('High priority');
     if (t.priority === 'low')  meta.push('Low priority');
     if (t.notes) meta.push(escape(t.notes));
-    const hasDetail = meta.length > 0;
+
+    const subtasks = Array.isArray(t.subtasks) ? t.subtasks : [];
+    const subOpen  = subtasks.filter(s => !s.done).length;
+    const subTotal = subtasks.length;
+    const hasContact  = t.contact && (t.contact.phone || t.contact.email);
+    const hasAlert    = !!t.alertAt;
+    const hasDetail = meta.length > 0 || subTotal > 0 || hasContact || hasAlert;
 
     const titleRow = document.createElement('div');
     titleRow.className = 'title-row';
@@ -922,15 +1158,97 @@ function renderTaskGroup(list, items, type) {
     }
     body.appendChild(titleRow);
 
+    // Pills strip — alert, contact, subtask progress (always visible if present)
+    if (hasAlert || hasContact || subTotal) {
+      const pills = document.createElement('div');
+      pills.className = 'task-pills';
+      if (hasAlert) {
+        const p = document.createElement('span');
+        p.className = 'pill alert';
+        p.textContent = '⏰ ' + fmtAlert(t.alertAt);
+        pills.appendChild(p);
+      }
+      if (hasContact) {
+        const p = document.createElement('span');
+        p.className = 'pill contact';
+        p.textContent = '📞 ' + (t.contact.name || t.contact.phone || t.contact.email);
+        pills.appendChild(p);
+      }
+      if (subTotal) {
+        const p = document.createElement('span');
+        p.className = 'pill';
+        p.textContent = `☑ ${subTotal - subOpen}/${subTotal}`;
+        pills.appendChild(p);
+      }
+      body.appendChild(pills);
+    }
+
     const detail = document.createElement('div');
     detail.className = 'row-detail';
     detail.style.display = 'none';
-    if (hasDetail) {
+    if (meta.length > 0) {
       detail.innerHTML = `<div class="meta">${meta.join(' · ')}</div>`;
     }
+
+    // Sub-checklist inside the expanded detail — tick items off in place
+    if (subTotal > 0) {
+      const subWrap = document.createElement('div');
+      subWrap.className = 'subtasks';
+      subtasks.forEach((s, i) => {
+        const sr = document.createElement('div');
+        sr.className = 'subtask-row' + (s.done ? ' done' : '');
+        const scb = document.createElement('button');
+        scb.type = 'button';
+        scb.className = 'sub-cb' + (s.done ? ' on' : '');
+        scb.addEventListener('click', async (e) => {
+          e.stopPropagation();
+          const next = subtasks.map((x, j) => j === i ? { ...x, done: !x.done } : x);
+          await fetch('/life/tasks/' + t.id, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ subtasks: next }),
+          });
+          await loadTasks();
+        });
+        const txt = document.createElement('span');
+        txt.style.flex = '1';
+        txt.textContent = s.text;
+        sr.appendChild(scb);
+        sr.appendChild(txt);
+        subWrap.appendChild(sr);
+      });
+      detail.appendChild(subWrap);
+    }
+
+    // Schedule Call button — only when there's a phone number to dial
+    if (hasContact && t.contact.phone) {
+      const callBtn = document.createElement('button');
+      callBtn.type = 'button';
+      callBtn.className = 'schedule-call-btn';
+      callBtn.textContent = '📞 Schedule call';
+      callBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        openCallModal(t.contact, 'call', t);
+      });
+      detail.appendChild(callBtn);
+
+      const waBtn = document.createElement('button');
+      waBtn.type = 'button';
+      waBtn.className = 'schedule-call-btn';
+      waBtn.style.marginLeft = '6px';
+      waBtn.textContent = '💬 WhatsApp';
+      waBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        openCallModal(t.contact, 'wa', t);
+      });
+      detail.appendChild(waBtn);
+    }
+
     const editLink = document.createElement('button');
     editLink.className = 'small edit-link';
     editLink.textContent = 'Edit';
+    editLink.style.marginTop = '6px';
+    editLink.style.marginLeft = '6px';
     editLink.addEventListener('click', (e) => { e.stopPropagation(); openEdit('task', t); });
     detail.appendChild(editLink);
     body.appendChild(detail);
@@ -954,6 +1272,13 @@ function renderTaskGroup(list, items, type) {
 
     list.appendChild(row);
   });
+}
+
+function fmtAlert(iso) {
+  try {
+    const d = new Date(iso);
+    return d.toLocaleString('en-GB', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
+  } catch { return iso; }
 }
 
 async function deleteTaskItem(t) {
@@ -1207,7 +1532,26 @@ $('cal-today').addEventListener('click', () => {
 
 // ── Task filter ─────────────────────────────────────────────────
 
-$('task-filter-open').addEventListener('click', () => { state.taskFilter = 'open'; renderTasks(); });
+$('task-filter-open').addEventListener('click', () => {
+  state.taskFilter = state.taskFilter === 'open' ? 'done' : 'open';
+  $('task-filter-open').textContent = state.taskFilter === 'open' ? 'Open' : 'Done';
+  renderTasks();
+  renderLifeStats();
+});
+
+// Stat-strip tiles: clicking Open or Done filters the task list to match.
+$('ls-open').addEventListener('click', () => {
+  state.taskFilter = 'open';
+  $('task-filter-open').textContent = 'Open';
+  renderTasks();
+  renderLifeStats();
+});
+$('ls-done').addEventListener('click', () => {
+  state.taskFilter = 'done';
+  $('task-filter-open').textContent = 'Done';
+  renderTasks();
+  renderLifeStats();
+});
 
 async function toggleTaskDone(t) {
   const r = await fetch('/life/tasks/' + t.id, {
@@ -1224,7 +1568,7 @@ $('manual-event').addEventListener('click', () => openNew('event', new Date().to
 $('manual-task').addEventListener('click',  () => openNew('task'));
 
 function openNew(kind, dateIso) {
-  state.modal = { mode: 'new', kind, item: null, color: null, category: null };
+  state.modal = { mode: 'new', kind, item: null, color: null, category: null, subtasks: [] };
   $('modal-title').textContent = kind === 'event' ? 'New event' : 'New task';
   $('m-title').value = '';
   $('m-date').value = dateIso || '';
@@ -1232,6 +1576,11 @@ function openNew(kind, dateIso) {
   $('m-location').value = '';
   $('m-notes').value = '';
   $('m-priority').value = 'med';
+  $('m-alert').value = '';
+  $('m-contact-name').value = '';
+  $('m-contact-phone').value = '';
+  $('m-contact-email').value = '';
+  renderModalSubtasks();
   populateCategorySelect(null);
   setSwatches(null);
   showModalFor(kind);
@@ -1241,7 +1590,12 @@ function openNew(kind, dateIso) {
 }
 
 function openEdit(kind, item) {
-  state.modal = { mode: 'edit', kind, item, color: item.color || null, category: item.category || null };
+  state.modal = {
+    mode: 'edit', kind, item,
+    color: item.color || null,
+    category: item.category || null,
+    subtasks: Array.isArray(item.subtasks) ? item.subtasks.slice() : [],
+  };
   $('modal-title').textContent = (kind === 'event' ? 'Edit event' : 'Edit task');
   $('m-title').value = item.title;
   $('m-date').value = kind === 'event' ? item.date : (item.due || '');
@@ -1249,12 +1603,51 @@ function openEdit(kind, item) {
   $('m-location').value = kind === 'event' ? (item.location || '') : '';
   $('m-notes').value = item.notes || '';
   if (kind === 'task') $('m-priority').value = item.priority || 'med';
+  // Task extras (no-op for events — the block is hidden anyway)
+  $('m-alert').value = item.alertAt ? item.alertAt.slice(0, 16) : '';
+  $('m-contact-name').value  = item.contact?.name  || '';
+  $('m-contact-phone').value = item.contact?.phone || '';
+  $('m-contact-email').value = item.contact?.email || '';
+  renderModalSubtasks();
   populateCategorySelect(item.category || null);
   setSwatches(item.color || null);
   showModalFor(kind);
   $('m-delete').style.display = 'inline-block';
   $('modal').classList.add('show');
   $('m-title').focus();
+}
+
+function renderModalSubtasks() {
+  const wrap = $('m-subtasks');
+  wrap.innerHTML = '';
+  (state.modal.subtasks || []).forEach((s, i) => {
+    const row = document.createElement('div');
+    row.className = 'subtask-row' + (s.done ? ' done' : '');
+    const cb = document.createElement('button');
+    cb.type = 'button';
+    cb.className = 'sub-cb' + (s.done ? ' on' : '');
+    cb.title = s.done ? 'Mark not done' : 'Mark done';
+    cb.addEventListener('click', () => {
+      state.modal.subtasks[i] = { ...s, done: !s.done };
+      renderModalSubtasks();
+    });
+    const txt = document.createElement('span');
+    txt.style.flex = '1';
+    txt.textContent = s.text;
+    const del = document.createElement('button');
+    del.type = 'button';
+    del.className = 'sub-del';
+    del.textContent = '×';
+    del.title = 'Remove';
+    del.addEventListener('click', () => {
+      state.modal.subtasks.splice(i, 1);
+      renderModalSubtasks();
+    });
+    row.appendChild(cb);
+    row.appendChild(txt);
+    row.appendChild(del);
+    wrap.appendChild(row);
+  });
 }
 
 function populateCategorySelect(currentSlug) {
@@ -1282,12 +1675,14 @@ function showModalFor(kind) {
     $('m-priority-wrap').style.display = 'none';
     $('m-location-label').style.display = 'block';
     $('m-location').style.display = 'block';
+    $('m-task-extras').style.display = 'none';
   } else {
     $('m-date-label').textContent = 'Due (optional)';
     $('m-time-wrap').style.display = 'none';
     $('m-priority-wrap').style.display = 'block';
     $('m-location-label').style.display = 'none';
     $('m-location').style.display = 'none';
+    $('m-task-extras').style.display = 'block';
   }
 }
 
@@ -1331,6 +1726,11 @@ $('m-save').addEventListener('click', async () => {
     else await fetch('/life/events/' + item.id, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
     await loadEvents();
   } else {
+    const alertVal = $('m-alert').value;
+    const cName  = $('m-contact-name').value.trim();
+    const cPhone = $('m-contact-phone').value.trim();
+    const cEmail = $('m-contact-email').value.trim();
+    const hasContact = cName || cPhone || cEmail;
     const payload = {
       title,
       due: dateVal || null,
@@ -1338,6 +1738,14 @@ $('m-save').addEventListener('click', async () => {
       notes: $('m-notes').value.trim() || null,
       color,
       category,
+      alertAt: alertVal ? new Date(alertVal).toISOString() : null,
+      contact: hasContact
+        ? { name: cName || null, phone: cPhone || null, email: cEmail || null }
+        : null,
+      subtasks: (state.modal.subtasks || []).map(s => ({
+        text: String(s.text || '').slice(0, 200),
+        done: !!s.done,
+      })),
     };
     if (mode === 'new') await fetch('/life/tasks', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
     else await fetch('/life/tasks/' + item.id, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
@@ -1353,6 +1761,120 @@ $('m-delete').addEventListener('click', async () => {
   await fetch(path + item.id, { method: 'DELETE' });
   $('modal').classList.remove('show');
   if (kind === 'event') await loadEvents(); else await loadTasks();
+});
+
+// ── Sub-list add (in modal) ─────────────────────────────────────
+$('m-subtask-add').addEventListener('click', () => addSubFromInput());
+$('m-subtask-new').addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); addSubFromInput(); } });
+function addSubFromInput() {
+  const inp = $('m-subtask-new');
+  const text = (inp.value || '').trim();
+  if (!text) return;
+  state.modal.subtasks = state.modal.subtasks || [];
+  state.modal.subtasks.push({ text, done: false });
+  inp.value = '';
+  renderModalSubtasks();
+}
+
+// ── Find button — Brave web search for phone / email ────────────
+$('m-contact-find').addEventListener('click', async () => {
+  const name = $('m-contact-name').value.trim();
+  if (!name) return;
+  const btn = $('m-contact-find');
+  const old = btn.textContent; btn.textContent = '...';
+  try {
+    const res = await fetch('/life/contact-search', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'same-origin',
+      body: JSON.stringify({ name }),
+    });
+    if (!res.ok) {
+      console.warn('contact-search HTTP', res.status);
+      btn.textContent = res.status === 404 ? 'Route not live' : ('HTTP ' + res.status);
+    } else {
+      const r = await res.json();
+      if (r.error) {
+        console.warn('contact-search error:', r.error);
+        btn.textContent = /BRAVE/i.test(r.error) ? 'Search not configured' : 'Search error';
+      } else {
+        if (r.phone) $('m-contact-phone').value = r.phone;
+        if (r.email) $('m-contact-email').value = r.email;
+        if (!r.phone && !r.email) btn.textContent = 'Nothing found';
+      }
+    }
+  } catch (e) {
+    console.warn('contact-search threw:', e);
+    btn.textContent = 'Network error';
+  }
+  setTimeout(() => { btn.textContent = old; }, 2400);
+});
+
+// ── Schedule Call modal (tel: QR + wa.me QR) ────────────────────
+const callModal = $('call-modal');
+function openCallModal(contact, mode, task) {
+  if (!contact || !contact.phone) { alert('No phone number on this contact.'); return; }
+  const phone = contact.phone.replace(/\s+/g, '');
+  $('cm-name').textContent = contact.name || 'Call';
+  $('cm-num').textContent  = contact.phone;
+  $('cm-tel-link').href    = 'tel:' + phone;
+  callModal.classList.add('open');
+  if (mode === 'wa') showWaTab(phone, task);
+  else showCallTab(phone);
+}
+function showCallTab(phone) {
+  $('cm-tab-call').classList.add('on'); $('cm-tab-wa').classList.remove('on');
+  $('cm-wa-msg').style.display = 'none';
+  $('cm-hint').textContent = "Scan with your phone to dial. (Or tap below to call from this device.)";
+  QRCode.toDataURL('tel:' + phone, { width: 400, margin: 1 }).then(url => $('cm-qr').src = url);
+}
+function showWaTab(phone, task) {
+  $('cm-tab-wa').classList.add('on'); $('cm-tab-call').classList.remove('on');
+  const msgEl = $('cm-wa-msg');
+  msgEl.style.display = 'block';
+  if (task && task.title && msgEl.value.trim() === "Hi, I'm calling about") {
+    msgEl.value = "Hi, I'm getting in touch about " + task.title + '.';
+  }
+  const update = () => {
+    const waPhone = phone.replace(/^\+/, '').replace(/^00/, '');
+    const url = 'https://wa.me/' + waPhone + '?text=' + encodeURIComponent(msgEl.value || '');
+    QRCode.toDataURL(url, { width: 400, margin: 1 }).then(u => $('cm-qr').src = u);
+    $('cm-hint').textContent = "Scan to open WhatsApp on your phone with this message ready.";
+  };
+  update();
+  msgEl.oninput = update;
+}
+$('cm-tab-call').addEventListener('click', () => { const p = $('cm-num').textContent.replace(/\s+/g, ''); showCallTab(p); });
+$('cm-tab-wa').addEventListener('click',   () => { const p = $('cm-num').textContent.replace(/\s+/g, ''); showWaTab(p); });
+$('cm-close').addEventListener('click',    () => callModal.classList.remove('open'));
+callModal.addEventListener('click', (e) => { if (e.target === callModal) callModal.classList.remove('open'); });
+
+// ── In-page alert scheduler (browser Notifications while tab open).
+// Real PWA push for closed-app alerts uses the existing /q-push pipeline
+// from plugins/alert-scheduler.js — this in-page layer covers the case
+// where she's on /life right now and an alertAt arrives.
+let lifeAlertTimers = [];
+function scheduleLifeAlerts() {
+  lifeAlertTimers.forEach(id => clearTimeout(id));
+  lifeAlertTimers = [];
+  if (!('Notification' in window)) return;
+  const now = Date.now();
+  (state.tasks || []).forEach(t => {
+    if (t.done || !t.alertAt) return;
+    const ms = new Date(t.alertAt).getTime() - now;
+    if (ms < 0 || ms > 2147483000) return;  // skip past + >24d (setTimeout overflow)
+    const id = setTimeout(() => {
+      if (Notification.permission === 'granted') {
+        new Notification('Q reminder', { body: t.title, icon: '/favicon-180.png' });
+      }
+    }, ms);
+    lifeAlertTimers.push(id);
+  });
+}
+$('m-alert').addEventListener('change', () => {
+  if ($('m-alert').value && 'Notification' in window && Notification.permission === 'default') {
+    Notification.requestPermission();
+  }
 });
 
 
