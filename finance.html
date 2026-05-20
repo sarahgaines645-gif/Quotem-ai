@@ -873,8 +873,6 @@
   window.helpWithProblem = function(id) {
     const p = problems.find(x => x.id === id);
     if (!p) return;
-    const coachMsg  = document.getElementById('coach-msg');
-    const coachInput = document.getElementById('coach-input');
     const docText = (p.documents || [])
       .map(d => d.extracted?.full_text || d.extracted?.notes || d.extracted?.headline || '')
       .filter(Boolean).join('\n\n---\n\n');
@@ -885,11 +883,14 @@
           ? `\nThe uploaded document says, verbatim:\n"""\n${docText.slice(0, 12000)}\n"""`
           : `\n(No document text was captured for this one — ask the user for the key details before drafting.)`)
       + `]`;
-    coachMsg.textContent = docText
-      ? `I've read the document for "${p.title}". Tell me how you want to handle it and I'll write it.`
-      : `I'll help with "${p.title}". Tell me what's happened and I'll write the letter or email.`;
-    coachInput.value = `Help me write a letter/email about "${p.title}"${p.provider ? ' to ' + p.provider : ''}${p.amount ? ' — £' + fmt(p.amount) + ' owed' : ''}.`;
-    coachInput.focus();
+    // No more ugly prefilled draft in the input. Send Q straight in with
+    // APS mode + an explicit act-then-report instruction, so the FIRST
+    // thing he comes back with is a plan + a draft — not "what do you
+    // want to do?".
+    sendToQ(
+      `I'm taking this case on. Diagnose it: what's happening, what they're getting wrong, what the law/rule on my side is. Then give me the next 2–3 concrete moves in order. Then draft the email/letter to ${p.provider || 'them'}. ACT THEN REPORT — don't ask me what I want, tell me the plan and the draft, and I'll redirect you if I want different. Use web_search to verify any law you cite.`,
+      { mode: 'aps' }
+    );
   };
 
   window.addDocToProblem = function(id) {
@@ -1365,7 +1366,7 @@
     await sendToQ(msg);
   });
 
-  async function sendToQ(userMsg) {
+  async function sendToQ(userMsg, opts = {}) {
     qSay('…', true);
 
     // Prepend live finance state so Q can reference real numbers
@@ -1378,6 +1379,7 @@
       body: {
         message: finContext + (activeProblemContext ? activeProblemContext + '\n\n' : '') + userMsg,
         surface: 'finance',
+        ...(opts.mode === 'aps' && { mode: 'aps' }),    // help-me-with-this puts Q in advocate mode
       },
     }).catch(() => null);
 
