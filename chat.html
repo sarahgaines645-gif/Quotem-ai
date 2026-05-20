@@ -2718,6 +2718,23 @@ if (launcherBtn && launcher) {
       </div>
     </div>
 
+    <!-- Add-event form — opens when + is pressed while the Calendar tab
+         is active. Same neumorphic styling as add-task-card via the
+         shared .add-task-card class. Posts to /life/events. -->
+    <div class="add-task-card" id="add-event-card" style="display:none;">
+      <input type="text" id="ev-title" placeholder="Event name" maxlength="200">
+      <div class="row">
+        <input type="date" id="ev-date">
+        <input type="time" id="ev-time" title="Time (optional)">
+      </div>
+      <select id="ev-category"><option value="">No sub-header</option></select>
+      <textarea id="ev-notes" placeholder="Notes (optional)" maxlength="2000"></textarea>
+      <div class="actions">
+        <button class="pill-btn small" id="ev-cancel">Cancel</button>
+        <button class="pill-btn small primary" id="ev-save">Save</button>
+      </div>
+    </div>
+
     <!-- Tasks view: sub-headers + tasks list -->
     <div class="tc-view" id="view-tasks">
       <!-- Sub-headers (categories) -->
@@ -3143,10 +3160,70 @@ if (launcherBtn && launcher) {
   $('mc-prev').onclick = () => { state.calMonth--; if (state.calMonth < 0) { state.calMonth = 11; state.calYear--; } renderCalendar(); };
   $('mc-next').onclick = () => { state.calMonth++; if (state.calMonth > 11) { state.calMonth = 0; state.calYear++; } renderCalendar(); };
 
-  // ── Add task form ────────────────────────────────────────────────────
+  // ── Add task / event form ────────────────────────────────────────────
+  // + button is view-aware: in Calendar view it opens the event creator
+  // (title + date + time + category + notes → POST /life/events). In
+  // Tasks view it opens the existing task creator. Only one form is open
+  // at a time — toggling one closes the other.
+  const eventCard = $('add-event-card');
+  function todayIso() { return new Date().toISOString().slice(0, 10); }
+  function fillEventCategorySelect() {
+    const sel = $('ev-category');
+    const current = sel.value;
+    sel.innerHTML = '<option value="">No sub-header</option>';
+    state.categories.forEach(c => {
+      const opt = document.createElement('option');
+      opt.value = c.slug;
+      opt.textContent = c.name;
+      sel.appendChild(opt);
+    });
+    sel.value = current;
+  }
   addBtn.onclick = () => {
-    addCard.style.display = addCard.style.display === 'none' ? 'flex' : 'none';
-    if (addCard.style.display !== 'none') { fillCategorySelect(); $('at-title').focus(); }
+    const isCal = $('tab-cal').classList.contains('on');
+    if (isCal) {
+      const showing = eventCard.style.display !== 'none';
+      addCard.style.display = 'none';
+      eventCard.style.display = showing ? 'none' : 'flex';
+      if (!showing) {
+        $('ev-date').value = state.selectedDate || todayIso();
+        $('ev-time').value = '';
+        $('ev-title').value = '';
+        $('ev-notes').value = '';
+        fillEventCategorySelect();
+        $('ev-title').focus();
+      }
+    } else {
+      eventCard.style.display = 'none';
+      addCard.style.display = addCard.style.display === 'none' ? 'flex' : 'none';
+      if (addCard.style.display !== 'none') { fillCategorySelect(); $('at-title').focus(); }
+    }
+  };
+  $('ev-cancel').onclick = () => {
+    eventCard.style.display = 'none';
+    $('ev-title').value = '';
+    $('ev-time').value = '';
+    $('ev-notes').value = '';
+  };
+  $('ev-save').onclick = async () => {
+    const title = $('ev-title').value.trim();
+    if (!title) { $('ev-title').focus(); return; }
+    const payload = {
+      title,
+      date: $('ev-date').value || todayIso(),
+      time: $('ev-time').value || null,
+      category: $('ev-category').value || null,
+      notes: $('ev-notes').value.trim() || null,
+    };
+    try {
+      const ev = await api('/life/events', { method: 'POST', body: JSON.stringify(payload) });
+      state.events.push(ev);
+      eventCard.style.display = 'none';
+      $('ev-title').value = '';
+      $('ev-time').value = '';
+      $('ev-notes').value = '';
+      renderCalendar();
+    } catch (e) { alert('Could not save event: ' + e.message); }
   };
   $('at-cancel').onclick = () => {
     addCard.style.display = 'none';
