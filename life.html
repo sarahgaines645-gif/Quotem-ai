@@ -1185,12 +1185,13 @@ function renderTaskGroup(list, items, type) {
     titleEl.className = 'title';
     titleEl.textContent = t.title;
     titleRow.appendChild(titleEl);
-    if (meta.length > 0) {
-      const exp = document.createElement('span');
-      exp.className = 'row-expand';
-      exp.textContent = '▾';
-      titleRow.appendChild(exp);
-    }
+    // Always show the chevron — used to only appear when meta existed, but
+    // now Call / WhatsApp / Edit are hidden behind it too, so a task without
+    // due/priority/notes still needs a way to reveal them.
+    const exp = document.createElement('span');
+    exp.className = 'row-expand';
+    exp.textContent = '▾';
+    titleRow.appendChild(exp);
     body.appendChild(titleRow);
 
     // Pills strip — alert, contact, subtask progress (always visible if present)
@@ -1248,13 +1249,16 @@ function renderTaskGroup(list, items, type) {
       body.appendChild(subWrap);
     }
 
-    // Phone + WhatsApp + Edit — always on every task row.
+    // Phone + WhatsApp + Edit — HIDDEN until the user clicks the ▾ chevron.
+    // Sarah's brief: "the call etc buttons should only show when you press
+    // the drop down button." Toggle wired further down with the detail panel.
     // If the task has a phone number, Phone/WhatsApp open the QR modal.
     // If not, they drop into Edit with the contact section ready to fill
     // (use Find to auto-search the number from the name).
     const phone = t.contact && t.contact.phone;
     const actions = document.createElement('div');
     actions.className = 'task-actions';
+    actions.style.display = 'none';
 
     const callBtn = document.createElement('button');
     callBtn.type = 'button';
@@ -1297,13 +1301,16 @@ function renderTaskGroup(list, items, type) {
     }
     body.appendChild(detail);
 
-    if (meta.length > 0) {
-      titleRow.addEventListener('click', () => {
-        const open = detail.style.display === 'none';
-        detail.style.display = open ? 'block' : 'none';
-        titleRow.querySelector('.row-expand').textContent = open ? '▴' : '▾';
-      });
-    }
+    // Chevron toggles BOTH the detail panel (meta text) AND the actions row
+    // (Call / WhatsApp / Edit). One click reveals everything; click again to
+    // hide. Listener always attached, even when there's no meta — actions
+    // need the toggle regardless.
+    titleRow.addEventListener('click', () => {
+      const open = actions.style.display === 'none';
+      actions.style.display = open ? 'flex' : 'none';
+      if (meta.length > 0) detail.style.display = open ? 'block' : 'none';
+      titleRow.querySelector('.row-expand').textContent = open ? '▴' : '▾';
+    });
 
     row.appendChild(body);
 
