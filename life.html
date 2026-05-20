@@ -1249,6 +1249,43 @@ function renderTaskGroup(list, items, type) {
       body.appendChild(subWrap);
     }
 
+    // Add-subtask row — HIDDEN until the user clicks the ▾ chevron.
+    // Sarah's brief: "add sub should be in the drop down of the task and
+    // reminders." Lives between the subtask list and the action buttons
+    // (Call / WhatsApp / Edit). Type, Enter or click +, the row updates
+    // in place via the same PATCH endpoint used for ticking.
+    const subAdd = document.createElement('div');
+    subAdd.className = 'subtask-add';
+    subAdd.style.display = 'none';
+    const subInput = document.createElement('input');
+    subInput.type = 'text';
+    subInput.placeholder = 'Add a sub-step…';
+    subInput.maxLength = 200;
+    const subAddBtn = document.createElement('button');
+    subAddBtn.type = 'button';
+    subAddBtn.className = 'pill-btn small';
+    subAddBtn.textContent = '+';
+    const addSubFn = async () => {
+      const text = (subInput.value || '').trim();
+      if (!text) return;
+      subInput.value = '';
+      const next = [...subtasks, { text, done: false }];
+      await fetch('/life/tasks/' + t.id, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ subtasks: next }),
+      });
+      await loadTasks();
+    };
+    subAddBtn.addEventListener('click', (e) => { e.stopPropagation(); addSubFn(); });
+    subInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); addSubFn(); }
+    });
+    subInput.addEventListener('click', (e) => e.stopPropagation()); // don't trigger row toggle
+    subAdd.appendChild(subInput);
+    subAdd.appendChild(subAddBtn);
+    body.appendChild(subAdd);
+
     // Phone + WhatsApp + Edit — HIDDEN until the user clicks the ▾ chevron.
     // Sarah's brief: "the call etc buttons should only show when you press
     // the drop down button." Toggle wired further down with the detail panel.
@@ -1301,13 +1338,15 @@ function renderTaskGroup(list, items, type) {
     }
     body.appendChild(detail);
 
-    // Chevron toggles BOTH the detail panel (meta text) AND the actions row
-    // (Call / WhatsApp / Edit). One click reveals everything; click again to
-    // hide. Listener always attached, even when there's no meta — actions
-    // need the toggle regardless.
+    // Chevron toggles the actions row (Call / WhatsApp / Edit), the add-
+    // subtask row, AND the detail panel (meta text) — all in lockstep. One
+    // click reveals everything; click again to hide. Listener always
+    // attached, even when there's no meta — actions and add-sub still need
+    // the toggle.
     titleRow.addEventListener('click', () => {
       const open = actions.style.display === 'none';
       actions.style.display = open ? 'flex' : 'none';
+      subAdd.style.display  = open ? 'flex' : 'none';
       if (meta.length > 0) detail.style.display = open ? 'block' : 'none';
       titleRow.querySelector('.row-expand').textContent = open ? '▴' : '▾';
     });
