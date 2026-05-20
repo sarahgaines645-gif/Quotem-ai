@@ -2913,7 +2913,8 @@ if (launcherBtn && launcher) {
     }
   }
   function loadFailMsg(r) {
-    if (r.status === 401) return 'Sign in required — sign in to load this.';
+    // 401 is handled separately — we let q-auth.js's overlay take over
+    // instead of leaving a confusing diagnostic in the card body.
     if (r.status === 404) return 'Route not deployed yet.';
     if (r.status === 0)   return 'Network error.';
     return 'Server error (HTTP ' + r.status + ').';
@@ -2925,6 +2926,12 @@ if (launcherBtn && launcher) {
       tryLoad('/life/tasks'),
       tryLoad('/life/events'),
     ]);
+    // If ANY came back 401, the user isn't signed in — q-auth.js's overlay
+    // already handles that experience. Skip rendering anything in the card
+    // (previously we showed a "Sign in required" string here that confused
+    // users into thinking the card was the sign-in surface).
+    const any401 = [catsR, tasksR, eventsR].some(r => r.status === 401);
+    if (any401) return;
     state.categories = catsR.ok   && Array.isArray(catsR.data)   ? catsR.data   : [];
     state.tasks      = tasksR.ok  && Array.isArray(tasksR.data)  ? tasksR.data  : [];
     state.events     = eventsR.ok && Array.isArray(eventsR.data) ? eventsR.data : [];
