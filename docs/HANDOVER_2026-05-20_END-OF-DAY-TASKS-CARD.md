@@ -203,30 +203,76 @@ session doesn't make the same calls.
 
 ---
 
-## 7. Open list — priority order
+## 7. Known broken / needs verifying — check these FIRST next session
 
-**P0 — the next session must check first:**
-1. **Tasks card on `/chat`** — has Sarah seen the floating-card rebuild (`f7024dc`)? She has not as of context-clear. Wait for her to look. Do NOT freelance another rebuild before she has spoken.
-2. **Find button** — does it now show a non-generic error? If she still gets "Search failed", confirm `BRAVE_SEARCH_KEY` is set on Railway env (check via the api-tracker dashboard or Railway settings).
-3. **Push end-to-end** — has she tapped the bell to subscribe? Without that, push won't deliver no matter how good the scheduler is.
+This is the bugs / unverified-state list. Distinct from §8 (open builds). Every item here is either a known live problem or something that's been "fixed" without Sarah confirming on the deployed app.
 
-**P1 — clear builds she has named:**
-4. **RAG knowledge base** for both finance + main chat covering UK law / HR / debt / family law / employment / benefits / parking tickets. Pair with the existing Gemini cite-checker. **Disclaimer required, verbatim:** "this is in no way legal advice this is advice that is checked but could still be wrong"
-5. **Extend Gemini cite-checker to finance surface** — Q gives debt advice there too. The pattern lives in `routes.js` thread chat route (`verifyCaseReply`). Apply the same to finance `/chat` calls.
+### 7a. Security — cross-user data isolation (audit `docs/AUDIT_2026-05-19_USER-DATA-ISOLATION.md`)
 
-**P2 — bigger pieces she has flagged but parked:**
-6. **Debt-card redesign in FeatureTrackerTab style** (the BIG one). Company top-left, amount bottom-left, bright colours, button to open files, contact-details button, payment-plan calculator, debt age + accruing interest, glowing-chat fix.
-7. **Outbox / Ready-to-send tray on the case page** — Q recognises finished drafts and offers to add them; sits alongside emails/files/notes.
-8. **Thread-page reorganisation** — Sarah is driving this herself. Upload area split into 4: upload / QR / paste / write notes. DO NOT freelance. Wait for her.
+| Item | State | What's needed |
+|---|---|---|
+| **Fix 1a — slug-collision check at signup** | **SHIPPED 2026-05-19 (`4853f2c`).** `people.js:95` (`addPerson`) and `people.js:267` (`signupPerson`) reject any new email whose `emailSlug` matches an existing user. Verified in code. | None — closed. (Auto-memory `project_user_data_isolation_breach_2026_05_19.md` still says NOT shipped; that memory is stale and needs updating.) |
+| **Fix 1b — re-key storage from email-slug to `person.id` + migrate any pre-fix colliders** | **NOT shipped.** | Touches live financial data. Bring a plan, do NOT auto-merge. Sarah's call. |
+| **Email verification on signup** | **NOT in place.** Anyone can claim any email at registration; 1a only stops collisions, doesn't stop hostile-first-registration of a name that the rightful owner will later be forced to work around. | Standard double-opt-in flow (send token, verify before activating the account). |
+| **Audit Issue 3 — `safeId` collision potential** | Open. | See audit doc §3. |
+| **Audit Issue 4 — `/public-download` no TTL** | Open. Links don't expire. | Add expiry timestamp + check on download. |
+| **Audit Issue 5 — finance dedup double-count + silent data-loss** (`q-finance.js:238-255`) | Open. HIGH in the audit. | Dedup logic over-merges and silently drops transactions in some shapes. Read the audit §5 before touching. |
 
-**P3 — admin / infra:**
-9. SSL: add `www.quotem-ai.co.uk` in Railway dashboard.
-10. Audit fix 1b (re-key storage to person.id + migrate colliding accounts — her call, no auto-merge of financial data).
-11. Backlog: dedup Issue 5, download-TTL Issue 4, safeId Issue 3, email-writer requirePerson.
+### 7b. Finance — four in-progress items needing Sarah's signal (from morning handover §4)
+
+| Item | What's known | What's needed before code |
+|---|---|---|
+| **Label-click backfill** | Server backfills by `merchantKey` (lowercased + alphanumeric + first 30 chars). Unclear whether the unlabelled siblings' descriptions are *exactly* identical to the tagged one or vary (different branch codes / reference suffixes). | **One signal from Sarah:** identical, or varying? If varying, fix is a stem-match — but do NOT change `merchantKey` matching speculatively; over-merging unrelated merchants is a worse failure mode. |
+| **Bill upload "could not read"** | Last night logs showed zero `/api/finance/document` activity during Sarah's attempts. Coincided with a Railway-wide outage overnight. Railway is back now. | Sarah retries on the live page. If still failing, the current "Could not read document" toast is uninformative — add proper client-side error reporting in `handleDocFile` before tracing further. |
+| **Transactions search/filter "nothing happens"** | Code path checks out: `filteredTxns()` honours `searchQuery` + `activeFilter`, input handlers wire them. | Sarah tries once on the live deployed page; either confirms fixed or gives a concrete repro (what she typed, what she saw). |
+| **Date parsing repair (`a7abc12`)** | Auto-runs on next finance page load — field-based parser + day/month-swap recovery. | Sarah loads the finance page once for the repair to fire. |
+
+### 7c. Q inaccuracy — Gemini cite-checker NOT YET on finance surface
+
+**The hard lesson from yesterday's case work** (still load-bearing):
+- Q (`deepseek-ai/DeepSeek-V4-Pro` on Together AI) fabricated LGSCO case-number support, swapped PIP daily-living/mobility on SMI eligibility, framed announced-but-not-in-force April 2026 reforms as current duty, and produced wrong arithmetic on response-time comparisons.
+- Three root causes, all proven from file:line in the prior session:
+  1. **RTF council letters were UTF-8-decoded as 2.5M-char garbage** and fed as "case material." `looksBinary` didn't catch RTF (printable ASCII). Fixed `b369be5` — proper depth-aware RTF parser; returns `''` rather than markup if it still can't get clean text.
+  2. **Q didn't have `calculator` or `current_datetime` tools in case turns** so he did date diffs in his head. Both added to `ADVOCATE_TOOLS`. APS prompt now has a NUMBERS rule (never compute in your head; use tool or state raw figures + flag "needs checking").
+  3. **`q-verifier.js` is Q checking Q** — same model, no external grounding. Cannot catch fabrication structurally. Fixed `267be76` — **Gemini cite-checker** shipped on thread chat. Independent model. Returns `{checks: [...]}` with each claim labelled `verified` / `incorrect` / `unverifiable`. Anti-rubber-stamp prompt: "unverifiable" is correct when in doubt. Renders as "🛡️ Gemini check" panel.
+
+**Still owed:** **extend the cite-checker to the finance surface.** Q gives debt / benefits / law advice there too. `verifyCaseReply` in `plugins/q-finance.js` is reusable. Wire into `/chat` for `surface: 'finance'`. Render the same "🛡️ Gemini check" panel under finance replies. Same anti-rubber-stamp prompt.
+
+**Disclaimer required on every legal-flavoured surface (Sarah's verbatim):**
+
+> "this is in no way legal advice this is advice that is checked but could still be wrong"
+
+Persistent, prominent.
+
+### 7d. Tasks card (`f7024dc`) — open issues Sarah raised, not yet isolated as fixed
+
+| Issue | What was done | What's not verified |
+|---|---|---|
+| **"I cant even choose a catogary on it"** (verbatim, on the rejected `5d9cfcc`) | Chrome rebuilt as floating card. `fillCategorySelect()` at `chat.html:3066` is called when `+` is clicked; `state.categories` is populated in `loadAll()` on card open via `/api/life/categories`. | Whether the bug was the chrome or the wiring. If Sarah re-hits "can't choose a category" on `f7024dc`, isolate the bug before reshipping chrome. Don't assume the rebuild fixed it. |
+| **Find button on live Railway** ("I put CMS in the call and pressed find and it said searched failed") | Error reporting added at `chat.html:3097-3132` — surfaces 404 / `BRAVE_SEARCH_KEY` missing / network / `HTTP <n>` distinctly. | Whether `BRAVE_SEARCH_KEY` is actually set on Railway env. If Sarah now sees "Search not configured" instead of "Search failed", the env var is missing — set it in Railway dashboard. |
+| **Push end-to-end** (`3888344` alert-scheduler) | 60s tick in `plugins/alert-scheduler.js`, started from `server/index.js`. Locally smoke-tested — `alertedAt` stamps correctly. | Real PWA push delivery on closed app. Needs Sarah to (a) tap the gesture-driven bell to register a push subscription, (b) create task with `alertAt` 2 minutes ahead, (c) close the tab, (d) wait. Until that's done end-to-end, "push works" is unproven. Also: confirm `VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY` / `VAPID_EMAIL` are set on Railway. |
+| **Floating card itself** | Rebuilt as 320px draggable card; drag pattern from `finance.html:1329`; localStorage position persistence; FeatureTracker top-border colours; close/minimise/add icons on the head bar. | Whether Sarah agrees the rebuild matches her verbatim spec in §4. She has not opened it as of context-clear. |
 
 ---
 
-## 8. Files touched today (paths to read first)
+## 8. Open list — what to build next (priority order)
+
+**P1 — clear builds she has named:**
+1. **Extend Gemini cite-checker to finance surface** — pattern reusable, see §7c.
+2. **RAG knowledge base** for both finance + main chat covering UK law / HR / debt / family law / employment / benefits / parking tickets. Pair with the cite-checker (both layers; RAG grounds the draft, cite-checker verifies at reply time). Extend the existing `knowledge-source/` directory — don't invent a parallel system. Every entry: statute, plain-English summary, primary-source URL, last-verified date.
+
+**P2 — bigger pieces she has flagged but parked:**
+3. **Debt-card redesign in FeatureTrackerTab style** (the BIG one). Canon: `Quoteapp/client/src/pages/Dashboard.jsx:1089`. Company top-left, amount bottom-left, bright colours, open-files button, contact-details button, payment-plan calculator, debt age + accruing interest, "glowing-chat" over-applied-neumorphic fix.
+4. **Outbox / Ready-to-send tray on the case page** — Q recognises finished drafts and offers to add them; sits alongside emails/files/notes. Q assembles, never sends (APS rule).
+5. **Thread-page reorganisation** — Sarah is driving this herself. Upload area split into 4: upload / QR / paste / write notes. DO NOT freelance. Wait for her.
+
+**P3 — admin / infra:**
+6. SSL: add `www.quotem-ai.co.uk` in Railway dashboard.
+7. Audit fix 1b + 7a backlog (Issues 3/4/5 + email verification) — see §7a above.
+
+---
+
+## 9. Files touched today (paths to read first)
 
 | File | What changed |
 |---|---|
@@ -239,7 +285,7 @@ session doesn't make the same calls.
 
 ---
 
-## 9. Read these too before touching anything
+## 10. Read these too before touching anything
 
 - `docs/HANDOVER_2026-05-20_TASKS-CALENDAR-RAG.md` — this morning's handover (the starting brief that led to today's work). Still valid for the RAG piece and pipeline context.
 - `docs/HANDOVER_2026-05-19_FINANCE-GEMINI-AND-CONTRACT.md` — yesterday's pipeline context. Still valid.
@@ -248,6 +294,6 @@ session doesn't make the same calls.
 
 ---
 
-## 10. The one rule for tomorrow
+## 11. The one rule for tomorrow
 
 If she names a UX pattern she already has in her code (coach-card, contact-card, FeatureTracker, doc-drop QR) — **find the file, read the exact pattern, build against it.** Do not freelance a fresh shape and call it the same thing. Today's whole afternoon went sideways on this single point.
