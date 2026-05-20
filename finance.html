@@ -1318,22 +1318,39 @@
   const coachActions = document.getElementById('coach-actions');
   const dragHandle   = document.getElementById('drag-handle');
 
-  // Draggable
+  // Draggable. Two fixes here:
+  //  - Lock the card to its current rendered position BEFORE clearing the
+  //    transform/right offset. Previously the transform was cleared first
+  //    and the card snapped down by half its height before the first
+  //    mousemove caught up — that's the "jolt" Sarah felt on grab.
+  //  - Pointer events instead of mouse events, so touch/pen work too
+  //    (matters on the phone, which is the device most likely to need
+  //    a quick reposition).
   let dragging = false, dragOffX = 0, dragOffY = 0;
-  dragHandle.addEventListener('mousedown', e => {
-    dragging = true;
-    dragOffX = e.clientX - coachCard.getBoundingClientRect().left;
-    dragOffY = e.clientY - coachCard.getBoundingClientRect().top;
+  function startCoachDrag(e) {
+    const rect = coachCard.getBoundingClientRect();
+    coachCard.style.left = rect.left + 'px';
+    coachCard.style.top  = rect.top + 'px';
+    coachCard.style.right = 'auto';
     coachCard.style.transform = 'none';
+    dragOffX = e.clientX - rect.left;
+    dragOffY = e.clientY - rect.top;
+    dragging = true;
+    if (dragHandle.setPointerCapture && e.pointerId != null) {
+      try { dragHandle.setPointerCapture(e.pointerId); } catch {}
+    }
     e.preventDefault();
-  });
-  document.addEventListener('mousemove', e => {
+  }
+  function moveCoachDrag(e) {
     if (!dragging) return;
     coachCard.style.left = (e.clientX - dragOffX) + 'px';
     coachCard.style.top  = (e.clientY - dragOffY) + 'px';
-    coachCard.style.right = 'auto';
-  });
-  document.addEventListener('mouseup', () => { dragging = false; });
+  }
+  function endCoachDrag() { dragging = false; }
+  dragHandle.addEventListener('pointerdown', startCoachDrag);
+  document.addEventListener('pointermove', moveCoachDrag);
+  document.addEventListener('pointerup',   endCoachDrag);
+  document.addEventListener('pointercancel', endCoachDrag);
 
   // Coach actions
   document.getElementById('btn-advice').addEventListener('click', () => {
