@@ -1014,6 +1014,19 @@ function sortObj(obj) {
 
 // ── Problem queue ─────────────────────────────────────────────────
 
+// Resolved-but-recoverable. Resolve only sets status='resolved'; it never
+// deletes. This returns the resolved set so the page can show them again
+// and the user can un-resolve anything that got hidden by a misclick.
+function getResolvedProblems(email) {
+    return getProblems(email)
+        .filter(p => p.status === 'resolved')
+        .sort((a, b) => {
+            const aT = Date.parse(a.resolvedAt || a.updatedAt || a.createdAt || 0);
+            const bT = Date.parse(b.resolvedAt || b.updatedAt || b.createdAt || 0);
+            return bT - aT;          // most recently resolved first
+        });
+}
+
 function getProblemQueue(email) {
     return getProblems(email)
         .filter(p => p.status !== 'resolved')
@@ -1188,6 +1201,7 @@ module.exports = {
 
     // Problem queue
     getProblemQueue,
+    getResolvedProblems,
     addProblem,
     updateProblem,
     addDocumentToProblem,

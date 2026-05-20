@@ -183,6 +183,9 @@
     .pc-btn:hover { box-shadow: var(--neu-raised-sm); }
     .pc-btn.primary { color: var(--accent); }
     .pc-btn.resolve { color: var(--green); }
+    .pc-pill { font-size: 10px; font-weight: 700; padding: 3px 9px; border-radius: 8px; box-shadow: var(--neu-inset-xs); white-space: nowrap; letter-spacing: 0.02em; }
+    .pc-pill-open { color: var(--text-muted); }
+    .pc-pill-resolved { color: var(--green); }
     .urgency-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; align-self: center; }
     .urg-urgent { background: var(--red); }
     .urg-high   { background: var(--amber); }
@@ -464,6 +467,7 @@
       <h3>🚨 Problems & debts</h3>
       <div style="display:flex;gap:8px;align-items:center">
         <span class="badge badge-red" id="problems-badge" style="display:none"></span>
+        <button class="sec-btn" id="show-resolved-btn" type="button" onclick="toggleResolvedView()">Show resolved</button>
         <button class="sec-btn accent" id="add-problem-btn">+ Add</button>
       </div>
     </div>
@@ -766,18 +770,39 @@
   };
 
   // ── Problems ──────────────────────────────────────────────────────────────
+  // Switching state: which list are we showing right now. Defaults to
+  // active. The "Show resolved" header button flips between the two.
+  let showingResolved = false;
+  let resolvedProblems = [];
+
   function renderProblems() {
-    const list  = document.getElementById('problem-list');
-    const badge = document.getElementById('problems-badge');
-    if (!problems.length) {
-      list.innerHTML = '<div class="txn-empty">No problems logged — drag in a debt letter or bill to start</div>';
-      badge.style.display = 'none';
+    const list      = document.getElementById('problem-list');
+    const badge     = document.getElementById('problems-badge');
+    const toggleBtn = document.getElementById('show-resolved-btn');
+    const items     = showingResolved ? resolvedProblems : problems;
+    if (toggleBtn) toggleBtn.textContent = showingResolved ? '↶ Back to active' : 'Show resolved';
+    badge.style.display = (!showingResolved && problems.length) ? '' : 'none';
+    if (!showingResolved && problems.length) {
+      badge.textContent = problems.filter(p => p.urgency === 'urgent' || p.urgency === 'high').length + ' urgent';
+    }
+    if (!items.length) {
+      list.innerHTML = showingResolved
+        ? '<div class="txn-empty">No resolved items yet.</div>'
+        : '<div class="txn-empty">No problems logged — drag in a debt letter or bill to start</div>';
       return;
     }
-    badge.style.display = '';
-    badge.textContent = problems.filter(p => p.urgency === 'urgent' || p.urgency === 'high').length + ' urgent';
-    list.innerHTML = problems.map(p => {
+    list.innerHTML = items.map(p => {
       const urg = p.urgency || 'low';
+      const statusPill = showingResolved
+        ? '<span class="pc-pill pc-pill-resolved">✓ Resolved</span>'
+        : '<span class="pc-pill pc-pill-open">● Open</span>';
+      const actions = showingResolved
+        ? `<button class="pc-btn" onclick="unresolveProblem('${p.id}')">↶ Unresolve</button>`
+        : `
+            <button class="pc-btn primary" onclick="helpWithProblem('${p.id}')">✉️ Help me with this</button>
+            <button class="pc-btn" onclick="addDocToProblem('${p.id}')">📎 Add document</button>
+            <button class="pc-btn resolve" onclick="resolveProblem('${p.id}')">✓ Mark resolved</button>
+          `;
       return `
         <div class="problem-card" id="prob-${p.id}">
           <div class="pc-top">
@@ -789,14 +814,13 @@
             <span class="urgency-dot urg-${urg}"></span>
           </div>
           <div class="pc-meta">
+            ${statusPill}
             ${p.amount ? `<span class="pc-amount">£${fmt(p.amount)}</span>` : ''}
             ${p.dueDate ? `<span class="pc-due">Due ${p.dueDate}</span>` : ''}
             ${p.documents && p.documents.length ? `<span class="badge badge-amber">${p.documents.length} doc${p.documents.length>1?'s':''}</span>` : ''}
           </div>
           <div class="pc-actions">
-            <button class="pc-btn primary" onclick="helpWithProblem('${p.id}')">✉️ Help me with this</button>
-            <button class="pc-btn" onclick="addDocToProblem('${p.id}')">📎 Add document</button>
-            <button class="pc-btn resolve" onclick="resolveProblem('${p.id}')">✓ Resolved</button>
+            ${actions}
           </div>
         </div>
       `;
@@ -804,10 +828,40 @@
   }
 
   window.resolveProblem = async function(id) {
+    // Confirm so a misclick doesn't silently hide things (the exact thing
+    // that lost two of Sarah's items the first time). The Show Resolved
+    // toggle is the recovery path if she still wants to bring something back.
+    if (!confirm('Mark this as resolved? It will be moved out of the active list. You can bring it back via the "Show resolved" button.')) return;
     await apiFetch('/api/finance/problems/' + id, { method: 'PATCH', body: { status: 'resolved' } });
     problems = problems.filter(p => p.id !== id);
+    resolvedProblems = [];   // invalidate cache so next "Show resolved" re-fetches
     renderProblems();
     toast('Marked as resolved ✓');
+  };
+
+  window.unresolveProblem = async function(id) {
+    await apiFetch('/api/finance/problems/' + id, { method: 'PATCH', body: { status: 'open' } });
+    resolvedProblems = resolvedProblems.filter(p => p.id !== id);
+    // Re-fetch the active list so the recovered item appears there next time
+    try {
+      const r = await apiFetch('/api/finance/problems');
+      if (r.ok) problems = await r.json();
+    } catch {}
+    renderProblems();
+    toast('Moved back to active ↶');
+  };
+
+  window.toggleResolvedView = async function() {
+    if (!showingResolved) {
+      const r = await apiFetch('/api/finance/problems/resolved');
+      resolvedProblems = r.ok ? await r.json() : [];
+      showingResolved = true;
+    } else {
+      const r = await apiFetch('/api/finance/problems');
+      if (r.ok) problems = await r.json();
+      showingResolved = false;
+    }
+    renderProblems();
   };
 
   // Holds the verbatim text of the document for the problem the user is

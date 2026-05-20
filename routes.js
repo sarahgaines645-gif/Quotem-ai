@@ -1672,6 +1672,13 @@ router.patch('/api/finance/problems/:id', requirePerson, express.json({ limit: '
     res.json(updated);
 });
 
+// Resolved problems — the standard GET filters them out (active queue only),
+// but the data persists; this lets the page show them and un-resolve any
+// that got hidden by a misclick.
+router.get('/api/finance/problems/resolved', requirePerson, (req, res) => {
+    res.json(qFinance.getResolvedProblems(req.person.email));
+});
+
 router.post('/api/finance/problems/:id/documents', requirePerson, express.json({ limit: '10mb' }), async (req, res) => {
     const { imageBase64, mimeType, filename } = req.body || {};
     if (!imageBase64) return res.status(400).json({ error: 'imageBase64 required' });
