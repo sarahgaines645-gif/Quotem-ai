@@ -562,6 +562,35 @@
     font-size: 11px; margin: 0;
   }
   .subtask-add button { padding: 4px 10px; font-size: 11px; }
+  /* The wrapper holds .subtask-add (input + plus) AND .sub-channels (three
+     little call/wa/email pickers + target input). Same toggle as the
+     actions row — hidden until the user taps the ▾ chevron. */
+  .subtask-add-wrap {
+    flex-direction: column; gap: 6px; margin-top: 6px;
+  }
+  .sub-channels {
+    display: flex; gap: 6px; align-items: center;
+    flex-wrap: wrap;
+  }
+  .sub-ch {
+    width: 30px; height: 28px;
+    background: var(--bg); border: none; cursor: pointer;
+    box-shadow: var(--neu-raised-sm);
+    border-radius: 8px;
+    font-size: 14px; line-height: 1;
+    display: inline-flex; align-items: center; justify-content: center;
+    color: var(--text);
+  }
+  .sub-ch.on { box-shadow: var(--neu-inset-sm); }
+  .sub-ch:active { box-shadow: var(--neu-inset-xs); }
+  .sub-target {
+    flex: 1; min-width: 100px;
+    padding: 5px 9px; border-radius: 7px;
+    background: var(--bg); border: none;
+    box-shadow: var(--neu-inset-xs);
+    font-size: 11px; margin: 0;
+    color: var(--text); font-family: inherit; outline: none;
+  }
 
   /* Contact-search row (Find button next to a text input) */
   .contact-search { display: flex; gap: 8px; align-items: stretch; }
@@ -1158,11 +1187,16 @@ function renderTaskGroup(list, items, type) {
     const rowColor = t.color || (cat && cat.color) || '#e91e63';
     row.style.borderTopColor = rowColor;
 
-    // Checkbox
+    // Checkbox — use 'click' instead of 'change' for more reliable firing on
+    // appearance:none styled checkboxes, and stopPropagation so the click
+    // can't bubble into anything else. Sarah reported the box wouldn't tick.
     const cb = document.createElement('input');
     cb.type = 'checkbox';
     cb.checked = !!t.done;
-    cb.addEventListener('change', () => toggleTaskDone(t));
+    cb.addEventListener('click', (e) => {
+      e.stopPropagation();
+      toggleTaskDone(t);
+    });
     row.appendChild(cb);
 
     // Body — title row + collapsible detail
@@ -1247,19 +1281,40 @@ function renderTaskGroup(list, items, type) {
         txt.textContent = s.text;
         sr.appendChild(scb);
         sr.appendChild(txt);
+        // Channel action — small icon to the right of subtask text. Tap to
+        // fire tel: / wa.me / mailto: using the saved target.
+        if (s.channel === 'call' || s.channel === 'wa' || s.channel === 'email') {
+          const cBtn = document.createElement('button');
+          cBtn.type = 'button';
+          cBtn.className = 'sub-ch sub-ch-action';
+          cBtn.textContent = s.channel === 'call' ? '📞' : s.channel === 'wa' ? '💬' : '✉️';
+          cBtn.title = s.channel === 'call' ? 'Call' : s.channel === 'wa' ? 'WhatsApp' : 'Email';
+          cBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            if (!s.target) { openEdit('task', t); return; }
+            if (s.channel === 'call' || s.channel === 'wa') {
+              openCallModal({ phone: s.target, name: s.text }, s.channel === 'wa' ? 'wa' : 'call', t);
+            } else {
+              window.location.href = 'mailto:' + encodeURIComponent(s.target);
+            }
+          });
+          sr.appendChild(cBtn);
+        }
         subWrap.appendChild(sr);
       });
       body.appendChild(subWrap);
     }
 
-    // Add-subtask row — HIDDEN until the user clicks the ▾ chevron.
-    // Sarah's brief: "add sub should be in the drop down of the task and
-    // reminders." Lives between the subtask list and the action buttons
-    // (Call / WhatsApp / Edit). Type, Enter or click +, the row updates
-    // in place via the same PATCH endpoint used for ticking.
+    // Add-subtask block — HIDDEN until the user clicks the ▾ chevron.
+    // Two rows: the text input + plus button on top, the three schedule
+    // pickers (📞 Call, 💬 WhatsApp, ✉️ Email) below. Tapping a picker
+    // marks the subtask channel and reveals a phone/email target input.
+    const subAddWrap = document.createElement('div');
+    subAddWrap.className = 'subtask-add-wrap';
+    subAddWrap.style.display = 'none';
+
     const subAdd = document.createElement('div');
     subAdd.className = 'subtask-add';
-    subAdd.style.display = 'none';
     const subInput = document.createElement('input');
     subInput.type = 'text';
     subInput.placeholder = 'Add a sub-step…';
@@ -1268,26 +1323,96 @@ function renderTaskGroup(list, items, type) {
     subAddBtn.type = 'button';
     subAddBtn.className = 'pill-btn small';
     subAddBtn.textContent = '+';
+    subAdd.appendChild(subInput);
+    subAdd.appendChild(subAddBtn);
+    subAddWrap.appendChild(subAdd);
+
+    // Channel picker row — three buttons. None selected by default
+    // (= plain subtask, no schedule).
+    const channels = document.createElement('div');
+    channels.className = 'sub-channels';
+    let selectedChannel = null;
+    const targetInput = document.createElement('input');
+    targetInput.type = 'tel';
+    targetInput.placeholder = 'Phone';
+    targetInput.style.display = 'none';
+    targetInput.className = 'sub-target';
+    const channelDefs = [
+      { ch: 'call',  label: '📞', title: 'Call', placeholder: 'Phone', type: 'tel' },
+      { ch: 'wa',    label: '💬', title: 'WhatsApp', placeholder: 'Phone', type: 'tel' },
+      { ch: 'email', label: '✉️', title: 'Email', placeholder: 'Email address', type: 'email' },
+    ];
+    const chBtns = {};
+    channelDefs.forEach(def => {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'sub-ch';
+      b.textContent = def.label;
+      b.title = def.title;
+      b.addEventListener('click', (e) => {
+        e.stopPropagation();
+        // Toggle: clicking the active one clears it.
+        if (selectedChannel === def.ch) {
+          selectedChannel = null;
+          chBtns[def.ch].classList.remove('on');
+          targetInput.style.display = 'none';
+          targetInput.value = '';
+        } else {
+          selectedChannel = def.ch;
+          Object.keys(chBtns).forEach(k => chBtns[k].classList.toggle('on', k === def.ch));
+          targetInput.type = def.type;
+          targetInput.placeholder = def.placeholder;
+          targetInput.style.display = '';
+          targetInput.focus();
+        }
+      });
+      channels.appendChild(b);
+      chBtns[def.ch] = b;
+    });
+    targetInput.addEventListener('click', (e) => e.stopPropagation());
+    channels.appendChild(targetInput);
+    subAddWrap.appendChild(channels);
+
     const addSubFn = async () => {
       const text = (subInput.value || '').trim();
       if (!text) return;
+      const sub = { text, done: false };
+      if (selectedChannel) {
+        sub.channel = selectedChannel;
+        const target = (targetInput.value || '').trim();
+        if (target) sub.target = target;
+      }
       subInput.value = '';
-      const next = [...subtasks, { text, done: false }];
-      await fetch('/life/tasks/' + t.id, {
+      targetInput.value = '';
+      const next = [...subtasks, sub];
+      const r = await fetch('/life/tasks/' + t.id, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ subtasks: next }),
       });
+      if (!r.ok) {
+        const body = await r.text().catch(() => '');
+        console.warn('[add-sub] PATCH failed:', r.status, body);
+        alert(`Couldn't add sub-step: HTTP ${r.status}.`);
+        return;
+      }
+      // Reset channel selection after a successful add.
+      if (selectedChannel) {
+        chBtns[selectedChannel].classList.remove('on');
+        selectedChannel = null;
+        targetInput.style.display = 'none';
+      }
       await loadTasks();
     };
     subAddBtn.addEventListener('click', (e) => { e.stopPropagation(); addSubFn(); });
     subInput.addEventListener('keydown', (e) => {
       if (e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); addSubFn(); }
     });
+    targetInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); addSubFn(); }
+    });
     subInput.addEventListener('click', (e) => e.stopPropagation()); // don't trigger row toggle
-    subAdd.appendChild(subInput);
-    subAdd.appendChild(subAddBtn);
-    body.appendChild(subAdd);
+    body.appendChild(subAddWrap);
 
     // Phone + WhatsApp + Edit — HIDDEN until the user clicks the ▾ chevron.
     // Sarah's brief: "the call etc buttons should only show when you press
@@ -1342,14 +1467,13 @@ function renderTaskGroup(list, items, type) {
     body.appendChild(detail);
 
     // Chevron toggles the actions row (Call / WhatsApp / Edit), the add-
-    // subtask row, AND the detail panel (meta text) — all in lockstep. One
-    // click reveals everything; click again to hide. Listener always
-    // attached, even when there's no meta — actions and add-sub still need
-    // the toggle.
+    // subtask block (input + channel pickers), AND the detail panel (meta
+    // text) — all in lockstep. One click reveals everything; click again
+    // to hide.
     titleRow.addEventListener('click', () => {
       const open = actions.style.display === 'none';
-      actions.style.display = open ? 'flex' : 'none';
-      subAdd.style.display  = open ? 'flex' : 'none';
+      actions.style.display    = open ? 'flex'  : 'none';
+      subAddWrap.style.display = open ? 'flex'  : 'none';
       if (meta.length > 0) detail.style.display = open ? 'block' : 'none';
       titleRow.querySelector('.row-expand').textContent = open ? '▴' : '▾';
     });
@@ -1628,12 +1752,24 @@ $('cal-today').addEventListener('click', () => {
 $('task-filter-open').addEventListener('click', () => { state.taskFilter = 'open'; renderTasks(); });
 
 async function toggleTaskDone(t) {
-  const r = await fetch('/life/tasks/' + t.id, {
-    method: 'PATCH',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ done: !t.done }),
-  });
-  if (r.ok) await loadTasks();
+  try {
+    const r = await fetch('/life/tasks/' + t.id, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ done: !t.done }),
+    });
+    if (r.ok) {
+      await loadTasks();
+    } else {
+      // Surface the real reason instead of silently reverting on next render.
+      const body = await r.text().catch(() => '');
+      console.warn('[task tick] PATCH failed:', r.status, body);
+      alert(`Couldn't tick: HTTP ${r.status}. ${r.status === 401 ? 'Sign in again.' : 'See console.'}`);
+    }
+  } catch (e) {
+    console.warn('[task tick] network error:', e);
+    alert("Couldn't tick — network error.");
+  }
 }
 
 // ── Modal (new + edit) ──────────────────────────────────────────

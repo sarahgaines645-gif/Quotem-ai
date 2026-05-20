@@ -270,15 +270,27 @@ function listTasks(ownerEmail, { status } = {}) {
 
 function normalSubtasks(arr) {
     if (!Array.isArray(arr)) return [];
+    const VALID_CHANNELS = new Set(['call', 'wa', 'email']);
     return arr
         .map(s => {
             const text = String(s?.text || '').trim().slice(0, 200);
             if (!text) return null;
-            return {
+            const out = {
                 id: s?.id || newId(),
                 text,
                 done: !!s?.done,
             };
+            // Optional channel + target: each subtask can be flagged as a
+            // call / whatsapp / email so the UI can render an action button
+            // for it. Server-side this is a passthrough — validated but not
+            // sent anywhere by us. Unknown channels are dropped.
+            const channel = s?.channel ? String(s.channel).toLowerCase() : null;
+            if (channel && VALID_CHANNELS.has(channel)) {
+                out.channel = channel;
+                const target = String(s?.target || '').trim().slice(0, 200);
+                if (target) out.target = target;
+            }
+            return out;
         })
         .filter(Boolean)
         .slice(0, 50);
