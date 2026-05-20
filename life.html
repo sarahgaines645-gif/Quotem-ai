@@ -233,20 +233,27 @@
     border-left: 3px solid var(--text-muted);
   }
 
-  /* Task list */
+  /* Task list — FeatureTracker raised-tile style: each task is a raised
+     card with a bright top-border colour (the task's category/colour) and
+     a big bold title. Pattern from Dashboard.jsx:1170 (topStats). */
   .task-row {
-    display: flex; gap: 10px; align-items: flex-start;
-    padding: 6px 8px;
-    background: var(--bg); border-radius: 4px;
+    display: flex; gap: 12px; align-items: flex-start;
+    padding: 14px 16px;
+    background: var(--bg);
+    border-radius: 14px;
     box-shadow: var(--neu-raised-sm);
-    margin-bottom: 4px;
-    border-left: 4px solid transparent;
+    border: 1px solid rgba(0,0,0,0.06);
+    border-top: 3px solid var(--accent);
+    margin-bottom: 10px;
+    transition: box-shadow 0.15s;
   }
+  .task-row:hover { box-shadow: var(--neu-raised); }
+  .task-row.done { opacity: 0.55; }
   .task-row input[type=checkbox] {
     -webkit-appearance: none; appearance: none;
-    width: 20px; height: 20px; flex: 0 0 auto; margin: 2px 0 0;
+    width: 22px; height: 22px; flex: 0 0 auto; margin: 2px 0 0;
     padding: 0; background: var(--bg); border: none;
-    border-radius: 6px; box-shadow: var(--neu-inset-xs);
+    border-radius: 7px; box-shadow: var(--neu-inset-xs);
     cursor: pointer; position: relative;
   }
   .task-row input[type=checkbox]:checked {
@@ -255,17 +262,35 @@
   .task-row input[type=checkbox]:checked::after {
     content: '✓'; position: absolute; inset: 0;
     display: flex; align-items: center; justify-content: center;
-    color: var(--accent); font-size: 13px; font-weight: 700;
+    color: var(--accent); font-size: 14px; font-weight: 700;
     font-family: inherit;
   }
   .task-row .body { flex: 1; min-width: 0; }
-  .task-row .title { font-size: 14px; font-weight: 500; }
+  .task-row .title { font-size: 15px; font-weight: 700; color: var(--text); }
   .task-row.done .title { text-decoration: line-through; color: var(--text-muted); }
   .task-row .meta { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
   .task-row .colour-dot {
     width: 10px; height: 10px; border-radius: 50%;
     display: inline-block; margin-right: 4px; vertical-align: middle;
   }
+
+  /* Contact action row — Phone + WhatsApp buttons always visible on the
+     task row when a phone number is set. They open the QR modal. */
+  .task-actions {
+    display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px;
+  }
+  .task-actions .act-btn {
+    background: var(--bg); border: none; cursor: pointer;
+    padding: 8px 14px; border-radius: 10px;
+    box-shadow: var(--neu-raised-sm);
+    font-size: 12px; font-weight: 700; color: var(--text);
+    font-family: inherit;
+    display: inline-flex; align-items: center; gap: 6px;
+  }
+  .task-actions .act-btn:active { box-shadow: var(--neu-inset-xs); }
+  .task-actions .act-btn:hover { color: var(--accent); }
+  .task-actions .act-btn.phone   { border-top: 2px solid #4285f4; }
+  .task-actions .act-btn.whatsapp{ border-top: 2px solid #25d366; }
 
   /* Modal */
   /* Modal overlay — neumorphic pages use NO overlay (no dark tint, no blur).
@@ -428,35 +453,6 @@
   }
   .dot-picker .dp-sw:hover { border-color: var(--text); }
 
-  /* ── FeatureTracker-style stat strip ──────────────────────────────
-     Big raised tiles with bright top-border colour accents (Dashboard
-     FeatureTrackerTab pattern). Clicking a filterable tile applies its
-     filter to the task list. */
-  .life-stats {
-    display: flex; gap: 12px; margin-bottom: 20px;
-    flex-wrap: wrap;
-  }
-  .life-stat {
-    flex: 1 1 130px; min-width: 130px;
-    background: var(--bg); border-radius: 14px;
-    box-shadow: var(--neu-raised-sm);
-    border: 1px solid rgba(0,0,0,0.06);
-    border-top: 3px solid var(--accent);
-    padding: 16px 20px;
-    cursor: default;
-    transition: box-shadow 0.15s;
-  }
-  .life-stat.clickable { cursor: pointer; }
-  .life-stat.clickable:hover { box-shadow: var(--neu-raised); }
-  .life-stat.on { box-shadow: var(--neu-inset-sm); }
-  .life-stat .v {
-    font-size: 28px; font-weight: 900; line-height: 1;
-  }
-  .life-stat .l {
-    font-size: 10px; font-weight: 800; color: var(--text-muted);
-    text-transform: uppercase; letter-spacing: 0.08em; margin-top: 6px;
-  }
-
   /* Pills shown on a task row (alert / contact) */
   .task-pills { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 4px; }
   .task-pills .pill {
@@ -581,27 +577,6 @@
     <span class="tagline">Calendar · Tasks · Photos in, dates out</span>
     <a class="back-link" href="/tools">← All tools</a>
   </header>
-
-  <!-- FEATURETRACKER STAT STRIP — bright top-border colour accents.
-       "Open" is the click-to-filter tile (toggles taskFilter open/done). -->
-  <div class="life-stats">
-    <div class="life-stat clickable" id="ls-open" style="border-top-color:#e91e63;">
-      <div class="v" id="ls-open-v" style="color:#e91e63;">0</div>
-      <div class="l">Open</div>
-    </div>
-    <div class="life-stat" style="border-top-color:#f39c12;">
-      <div class="v" id="ls-due-v" style="color:#f39c12;">0</div>
-      <div class="l">Due 7d</div>
-    </div>
-    <div class="life-stat clickable" id="ls-done" style="border-top-color:#2ecc71;">
-      <div class="v" id="ls-done-v" style="color:#2ecc71;">0</div>
-      <div class="l">Done</div>
-    </div>
-    <div class="life-stat" style="border-top-color:#a78bfa;">
-      <div class="v" id="ls-cats-v" style="color:#a78bfa;">0</div>
-      <div class="l">Sub-headers</div>
-    </div>
-  </div>
 
   <!-- CATEGORY PILLS — full width above the grid -->
   <div class="card">
@@ -871,7 +846,6 @@ async function loadTasks() {
   const r = await fetch('/life/tasks');
   state.tasks = await r.json();
   renderTasks();
-  renderLifeStats();
   scheduleLifeAlerts();
 }
 async function loadCategories() {
@@ -881,24 +855,6 @@ async function loadCategories() {
     state.categories = Array.isArray(data) ? data : [];
   } catch { state.categories = []; }
   renderCategoryPills();
-  renderLifeStats();
-}
-
-function renderLifeStats() {
-  const tasks = state.tasks || [];
-  const open = tasks.filter(t => !t.done).length;
-  const done = tasks.filter(t =>  t.done).length;
-  const today = new Date(); today.setHours(0, 0, 0, 0);
-  const todayIso = today.toISOString().slice(0, 10);
-  const in7 = new Date(today.getTime() + 7 * 86400000).toISOString().slice(0, 10);
-  const due = tasks.filter(t => !t.done && t.due && t.due >= todayIso && t.due <= in7).length;
-  $('ls-open-v').textContent = open;
-  $('ls-due-v').textContent  = due;
-  $('ls-done-v').textContent = done;
-  $('ls-cats-v').textContent = (state.categories || []).length;
-  // Active-filter highlight
-  $('ls-open').classList.toggle('on', state.taskFilter === 'open');
-  $('ls-done').classList.toggle('on', state.taskFilter === 'done');
 }
 
 function renderCategoryPills() {
@@ -1116,8 +1072,8 @@ function renderTaskGroup(list, items, type) {
     const row = document.createElement('div');
     row.className = 'task-row' + (t.done ? ' done' : '');
     const cat = findCategory(t.category);
-    const rowColor = t.color || (cat && cat.color) || '#95a5a6';
-    row.style.borderLeftColor = rowColor;
+    const rowColor = t.color || (cat && cat.color) || '#e91e63';
+    row.style.borderTopColor = rowColor;
 
     // Checkbox
     const cb = document.createElement('input');
@@ -1142,7 +1098,6 @@ function renderTaskGroup(list, items, type) {
     const subTotal = subtasks.length;
     const hasContact  = t.contact && (t.contact.phone || t.contact.email);
     const hasAlert    = !!t.alertAt;
-    const hasDetail = meta.length > 0 || subTotal > 0 || hasContact || hasAlert;
 
     const titleRow = document.createElement('div');
     titleRow.className = 'title-row';
@@ -1150,7 +1105,7 @@ function renderTaskGroup(list, items, type) {
     titleEl.className = 'title';
     titleEl.textContent = t.title;
     titleRow.appendChild(titleEl);
-    if (hasDetail) {
+    if (meta.length > 0) {
       const exp = document.createElement('span');
       exp.className = 'row-expand';
       exp.textContent = '▾';
@@ -1183,14 +1138,7 @@ function renderTaskGroup(list, items, type) {
       body.appendChild(pills);
     }
 
-    const detail = document.createElement('div');
-    detail.className = 'row-detail';
-    detail.style.display = 'none';
-    if (meta.length > 0) {
-      detail.innerHTML = `<div class="meta">${meta.join(' · ')}</div>`;
-    }
-
-    // Sub-checklist inside the expanded detail — tick items off in place
+    // Sub-checklist — always visible on the row when subtasks exist
     if (subTotal > 0) {
       const subWrap = document.createElement('div');
       subWrap.className = 'subtasks';
@@ -1217,48 +1165,68 @@ function renderTaskGroup(list, items, type) {
         sr.appendChild(txt);
         subWrap.appendChild(sr);
       });
-      detail.appendChild(subWrap);
+      body.appendChild(subWrap);
     }
 
-    // Schedule Call button — only when there's a phone number to dial
+    // Phone + WhatsApp buttons — always visible on the row when there is
+    // a phone number. Each opens the QR modal (tel: / wa.me) for scan-to-
+    // phone handoff. Edit lives here too so you don't need to expand.
     if (hasContact && t.contact.phone) {
+      const actions = document.createElement('div');
+      actions.className = 'task-actions';
       const callBtn = document.createElement('button');
       callBtn.type = 'button';
-      callBtn.className = 'schedule-call-btn';
-      callBtn.textContent = '📞 Schedule call';
-      callBtn.addEventListener('click', (e) => {
-        e.stopPropagation();
-        openCallModal(t.contact, 'call', t);
-      });
-      detail.appendChild(callBtn);
+      callBtn.className = 'act-btn phone';
+      callBtn.innerHTML = '📞 Call';
+      callBtn.addEventListener('click', (e) => { e.stopPropagation(); openCallModal(t.contact, 'call', t); });
+      actions.appendChild(callBtn);
 
       const waBtn = document.createElement('button');
       waBtn.type = 'button';
-      waBtn.className = 'schedule-call-btn';
-      waBtn.style.marginLeft = '6px';
-      waBtn.textContent = '💬 WhatsApp';
-      waBtn.addEventListener('click', (e) => {
-        e.stopPropagation();
-        openCallModal(t.contact, 'wa', t);
-      });
-      detail.appendChild(waBtn);
+      waBtn.className = 'act-btn whatsapp';
+      waBtn.innerHTML = '💬 WhatsApp';
+      waBtn.addEventListener('click', (e) => { e.stopPropagation(); openCallModal(t.contact, 'wa', t); });
+      actions.appendChild(waBtn);
+
+      const editBtn = document.createElement('button');
+      editBtn.type = 'button';
+      editBtn.className = 'act-btn';
+      editBtn.textContent = 'Edit';
+      editBtn.addEventListener('click', (e) => { e.stopPropagation(); openEdit('task', t); });
+      actions.appendChild(editBtn);
+      body.appendChild(actions);
     }
 
-    const editLink = document.createElement('button');
-    editLink.className = 'small edit-link';
-    editLink.textContent = 'Edit';
-    editLink.style.marginTop = '6px';
-    editLink.style.marginLeft = '6px';
-    editLink.addEventListener('click', (e) => { e.stopPropagation(); openEdit('task', t); });
-    detail.appendChild(editLink);
+    // Detail panel — only used for notes / due / priority text (the bits
+    // you don't need to see at a glance). Click title to expand.
+    const detail = document.createElement('div');
+    detail.className = 'row-detail';
+    detail.style.display = 'none';
+    if (meta.length > 0) {
+      detail.innerHTML = `<div class="meta">${meta.join(' · ')}</div>`;
+    }
+    // If there's no contact-phone, surface Edit in the detail panel.
+    if (!(hasContact && t.contact.phone)) {
+      const editLink = document.createElement('button');
+      editLink.className = 'small edit-link';
+      editLink.textContent = 'Edit';
+      editLink.style.marginTop = '6px';
+      editLink.addEventListener('click', (e) => { e.stopPropagation(); openEdit('task', t); });
+      detail.appendChild(editLink);
+    }
     body.appendChild(detail);
 
-    if (hasDetail) {
+    const hasMetaDetail = meta.length > 0;
+    if (hasMetaDetail) {
       titleRow.addEventListener('click', () => {
         const open = detail.style.display === 'none';
         detail.style.display = open ? 'block' : 'none';
         titleRow.querySelector('.row-expand').textContent = open ? '▴' : '▾';
       });
+    } else if (!(hasContact && t.contact.phone)) {
+      // No detail, no contact — still need a way to reach Edit. Title-click opens edit.
+      titleRow.style.cursor = 'pointer';
+      titleRow.addEventListener('click', () => openEdit('task', t));
     }
 
     row.appendChild(body);
@@ -1532,26 +1500,7 @@ $('cal-today').addEventListener('click', () => {
 
 // ── Task filter ─────────────────────────────────────────────────
 
-$('task-filter-open').addEventListener('click', () => {
-  state.taskFilter = state.taskFilter === 'open' ? 'done' : 'open';
-  $('task-filter-open').textContent = state.taskFilter === 'open' ? 'Open' : 'Done';
-  renderTasks();
-  renderLifeStats();
-});
-
-// Stat-strip tiles: clicking Open or Done filters the task list to match.
-$('ls-open').addEventListener('click', () => {
-  state.taskFilter = 'open';
-  $('task-filter-open').textContent = 'Open';
-  renderTasks();
-  renderLifeStats();
-});
-$('ls-done').addEventListener('click', () => {
-  state.taskFilter = 'done';
-  $('task-filter-open').textContent = 'Done';
-  renderTasks();
-  renderLifeStats();
-});
+$('task-filter-open').addEventListener('click', () => { state.taskFilter = 'open'; renderTasks(); });
 
 async function toggleTaskDone(t) {
   const r = await fetch('/life/tasks/' + t.id, {
