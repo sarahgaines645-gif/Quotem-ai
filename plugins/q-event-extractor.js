@@ -152,7 +152,10 @@ async function extractLifeAdmin(rawText, opts = {}) {
             },
             body: JSON.stringify({
                 model: Q_CONFIG.fastModel || Q_CONFIG.model,
-                max_tokens: 4000,
+                // 4000 was tight — a long PDF can produce more JSON than fits,
+                // the output truncates mid-object, and JSON.parse fails with
+                // the opaque "model returned non-JSON". 8000 leaves room.
+                max_tokens: 8000,
                 temperature: 0.2,
                 messages: [
                     { role: 'system', content: SYSTEM_PROMPT },
@@ -178,13 +181,24 @@ async function extractLifeAdmin(rawText, opts = {}) {
         .replace(/<think>[\s\S]*$/i, '')
         .replace(/```json\s*/gi, '').replace(/```\s*/g, '').trim();
 
+    if (!raw) {
+        return { events: [], tasks: [], error: 'Q returned an empty reply — try again, or shorten the text.' };
+    }
+
     const objStart = raw.indexOf('{');
     const objEnd = raw.lastIndexOf('}');
     if (objStart !== -1 && objEnd > objStart) raw = raw.slice(objStart, objEnd + 1);
 
     let parsed;
     try { parsed = JSON.parse(raw); }
-    catch { return { events: [], tasks: [], error: 'model returned non-JSON' }; }
+    catch {
+        // Surface what Q actually said — empty/truncated/prose all looked
+        // identical before. The snippet lets Sarah (and us in logs) see
+        // exactly which case it was without firing up the debugger.
+        console.warn('[q-event-extractor] JSON.parse failed. Raw (first 500):', raw.slice(0, 500));
+        const snippet = raw.slice(0, 160).replace(/\s+/g, ' ').trim();
+        return { events: [], tasks: [], error: `Q didn't return JSON. Reply started: "${snippet}${raw.length > 160 ? '…' : ''}"` };
+    }
 
     const events = Array.isArray(parsed?.events) ? parsed.events : [];
     const tasks  = Array.isArray(parsed?.tasks)  ? parsed.tasks  : [];
@@ -253,7 +267,9 @@ async function extractFromImage(dataUrl, opts = {}) {
             },
             body: JSON.stringify({
                 model: Q_CONFIG.visionModel,
-                max_tokens: 4000,
+                // 4000 was tight — a packed screenshot can produce more JSON
+                // than fits and parse silently fails. 8000 leaves room.
+                max_tokens: 8000,
                 temperature: 0.2,
                 messages: [
                     { role: 'system', content: SYSTEM_PROMPT },
@@ -285,13 +301,21 @@ async function extractFromImage(dataUrl, opts = {}) {
         .replace(/<think>[\s\S]*$/i, '')
         .replace(/```json\s*/gi, '').replace(/```\s*/g, '').trim();
 
+    if (!raw) {
+        return { events: [], tasks: [], error: 'Q returned an empty reply — try a clearer image or shorter source.' };
+    }
+
     const imgObjStart = raw.indexOf('{');
     const imgObjEnd = raw.lastIndexOf('}');
     if (imgObjStart !== -1 && imgObjEnd > imgObjStart) raw = raw.slice(imgObjStart, imgObjEnd + 1);
 
     let parsed;
     try { parsed = JSON.parse(raw); }
-    catch { return { events: [], tasks: [], error: 'model returned non-JSON' }; }
+    catch {
+        console.warn('[q-event-extractor vision] JSON.parse failed. Raw (first 500):', raw.slice(0, 500));
+        const snippet = raw.slice(0, 160).replace(/\s+/g, ' ').trim();
+        return { events: [], tasks: [], error: `Q didn't return JSON. Reply started: "${snippet}${raw.length > 160 ? '…' : ''}"` };
+    }
 
     const events = Array.isArray(parsed?.events) ? parsed.events : [];
     const tasks  = Array.isArray(parsed?.tasks)  ? parsed.tasks  : [];

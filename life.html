@@ -232,6 +232,66 @@
     white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
     border-left: 3px solid var(--text-muted);
   }
+  .cal-more {
+    font-size: 10px; color: var(--text-muted);
+    cursor: pointer; padding: 1px 4px; border-radius: 4px;
+  }
+  .cal-more:hover { background: var(--neu-inset-xs); color: var(--text); }
+
+  /* Day-list popup — opened when the user taps "+N more" on a calendar cell.
+     Centred floating card listing every event for that day. Click any row
+     to edit; click outside / X to dismiss. Reuses .modal-bg behaviour
+     (click-outside-to-dismiss). */
+  .day-list-bg {
+    position: fixed; inset: 0; z-index: 6500;
+    background: transparent;
+    display: none; align-items: center; justify-content: center;
+  }
+  .day-list-bg.show { display: flex; }
+  .day-list-card {
+    width: min(360px, calc(100vw - 32px));
+    max-height: calc(100vh - 80px);
+    background: var(--bg); border-radius: 14px;
+    box-shadow: var(--neu-raised);
+    border-top: 3px solid var(--accent);
+    display: flex; flex-direction: column;
+    overflow: hidden;
+  }
+  .day-list-head {
+    padding: 12px 14px;
+    display: flex; align-items: center; justify-content: space-between;
+    border-bottom: 1px solid rgba(0,0,0,0.06);
+  }
+  .day-list-title { font-size: 13px; font-weight: 800; color: var(--text); }
+  .day-list-close {
+    width: 24px; height: 24px; border-radius: 6px;
+    background: var(--bg); border: none; cursor: pointer;
+    box-shadow: var(--neu-raised-sm);
+    display: inline-flex; align-items: center; justify-content: center;
+    color: var(--text-muted); font-size: 14px; font-family: inherit;
+  }
+  .day-list-body { padding: 10px 14px; overflow-y: auto; flex: 1; }
+  .day-list-row {
+    display: flex; align-items: center; gap: 8px;
+    padding: 8px 10px; margin-bottom: 6px;
+    background: var(--bg); border-radius: 8px;
+    box-shadow: var(--neu-raised-sm);
+    border-left: 3px solid var(--text-muted);
+    cursor: pointer;
+  }
+  .day-list-row:hover { box-shadow: var(--neu-inset-xs); }
+  .day-list-row .t  { flex: 1; font-size: 12px; font-weight: 700; color: var(--text); }
+  .day-list-row .tm { font-size: 10px; color: var(--text-muted); }
+  .day-list-foot {
+    padding: 10px 14px; border-top: 1px solid rgba(0,0,0,0.06);
+  }
+  .day-list-add {
+    width: 100%; padding: 8px; border-radius: 8px;
+    background: var(--bg); border: none; cursor: pointer;
+    box-shadow: var(--neu-raised-sm);
+    color: var(--text); font-size: 11px; font-weight: 700; font-family: inherit;
+  }
+  .day-list-add:active { box-shadow: var(--neu-inset-xs); }
 
   /* Task list — FeatureTracker raised-tile style: each task is a raised
      card with a bright top-border colour (the task's category/colour) and
@@ -679,6 +739,20 @@
   <button id="undo-toast-btn" class="small">Undo</button>
 </div>
 
+<!-- Day-list popup — full list of events for a single day, opened from +N more -->
+<div class="day-list-bg" id="day-list">
+  <div class="day-list-card">
+    <div class="day-list-head">
+      <div class="day-list-title" id="day-list-title">—</div>
+      <button class="day-list-close" id="day-list-close" aria-label="Close">×</button>
+    </div>
+    <div class="day-list-body" id="day-list-body"></div>
+    <div class="day-list-foot">
+      <button class="day-list-add" id="day-list-add">+ Add event for this day</button>
+    </div>
+  </div>
+</div>
+
 <!-- Edit modal -->
 <div class="modal-bg" id="modal">
   <div class="modal">
@@ -1024,9 +1098,15 @@ function renderCalendar() {
     });
     if (onDay.length > 3) {
       const more = document.createElement('div');
-      more.style.fontSize = '10px';
-      more.style.color = 'var(--text-muted)';
+      more.className = 'cal-more';
       more.textContent = `+${onDay.length - 3} more`;
+      // stopPropagation — without this, the cell's "new event" click would
+      // also fire and Sarah would land in the new-event form instead of
+      // seeing the hidden events.
+      more.addEventListener('click', (ev) => {
+        ev.stopPropagation();
+        openDayList(iso, onDay);
+      });
       cell.appendChild(more);
     }
     cell.addEventListener('click', () => openNew('event', iso));
@@ -1168,65 +1248,61 @@ function renderTaskGroup(list, items, type) {
       body.appendChild(subWrap);
     }
 
-    // Phone + WhatsApp buttons — always visible on the row when there is
-    // a phone number. Each opens the QR modal (tel: / wa.me) for scan-to-
-    // phone handoff. Edit lives here too so you don't need to expand.
-    if (hasContact && t.contact.phone) {
-      const actions = document.createElement('div');
-      actions.className = 'task-actions';
-      const callBtn = document.createElement('button');
-      callBtn.type = 'button';
-      callBtn.className = 'act-btn phone';
-      callBtn.innerHTML = '📞 Call';
-      callBtn.addEventListener('click', (e) => { e.stopPropagation(); openCallModal(t.contact, 'call', t); });
-      actions.appendChild(callBtn);
+    // Phone + WhatsApp + Edit — always on every task row.
+    // If the task has a phone number, Phone/WhatsApp open the QR modal.
+    // If not, they drop into Edit with the contact section ready to fill
+    // (use Find to auto-search the number from the name).
+    const phone = t.contact && t.contact.phone;
+    const actions = document.createElement('div');
+    actions.className = 'task-actions';
 
-      const waBtn = document.createElement('button');
-      waBtn.type = 'button';
-      waBtn.className = 'act-btn whatsapp';
-      waBtn.innerHTML = '💬 WhatsApp';
-      waBtn.addEventListener('click', (e) => { e.stopPropagation(); openCallModal(t.contact, 'wa', t); });
-      actions.appendChild(waBtn);
+    const callBtn = document.createElement('button');
+    callBtn.type = 'button';
+    callBtn.className = 'act-btn phone';
+    callBtn.innerHTML = '📞 Call';
+    callBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (phone) openCallModal(t.contact, 'call', t);
+      else openEditOnContact(t);
+    });
+    actions.appendChild(callBtn);
 
-      const editBtn = document.createElement('button');
-      editBtn.type = 'button';
-      editBtn.className = 'act-btn';
-      editBtn.textContent = 'Edit';
-      editBtn.addEventListener('click', (e) => { e.stopPropagation(); openEdit('task', t); });
-      actions.appendChild(editBtn);
-      body.appendChild(actions);
-    }
+    const waBtn = document.createElement('button');
+    waBtn.type = 'button';
+    waBtn.className = 'act-btn whatsapp';
+    waBtn.innerHTML = '💬 WhatsApp';
+    waBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (phone) openCallModal(t.contact, 'wa', t);
+      else openEditOnContact(t);
+    });
+    actions.appendChild(waBtn);
 
-    // Detail panel — only used for notes / due / priority text (the bits
-    // you don't need to see at a glance). Click title to expand.
+    const editBtn = document.createElement('button');
+    editBtn.type = 'button';
+    editBtn.className = 'act-btn';
+    editBtn.textContent = 'Edit';
+    editBtn.addEventListener('click', (e) => { e.stopPropagation(); openEdit('task', t); });
+    actions.appendChild(editBtn);
+    body.appendChild(actions);
+
+    // Detail panel — used for notes / due / priority text only. The
+    // task's actionable bits (sub-list, contact buttons) are always
+    // visible above so there's no hidden affordance.
     const detail = document.createElement('div');
     detail.className = 'row-detail';
     detail.style.display = 'none';
     if (meta.length > 0) {
       detail.innerHTML = `<div class="meta">${meta.join(' · ')}</div>`;
     }
-    // If there's no contact-phone, surface Edit in the detail panel.
-    if (!(hasContact && t.contact.phone)) {
-      const editLink = document.createElement('button');
-      editLink.className = 'small edit-link';
-      editLink.textContent = 'Edit';
-      editLink.style.marginTop = '6px';
-      editLink.addEventListener('click', (e) => { e.stopPropagation(); openEdit('task', t); });
-      detail.appendChild(editLink);
-    }
     body.appendChild(detail);
 
-    const hasMetaDetail = meta.length > 0;
-    if (hasMetaDetail) {
+    if (meta.length > 0) {
       titleRow.addEventListener('click', () => {
         const open = detail.style.display === 'none';
         detail.style.display = open ? 'block' : 'none';
         titleRow.querySelector('.row-expand').textContent = open ? '▴' : '▾';
       });
-    } else if (!(hasContact && t.contact.phone)) {
-      // No detail, no contact — still need a way to reach Edit. Title-click opens edit.
-      titleRow.style.cursor = 'pointer';
-      titleRow.addEventListener('click', () => openEdit('task', t));
     }
 
     row.appendChild(body);
@@ -1516,6 +1592,45 @@ async function toggleTaskDone(t) {
 $('manual-event').addEventListener('click', () => openNew('event', new Date().toISOString().slice(0,10)));
 $('manual-task').addEventListener('click',  () => openNew('task'));
 
+// Open a list of every event on a single day — answer to Sarah's "you can't
+// see when you have several in one day". The cell shows up to 3 pills + a
+// "+N more" label; clicking +N more opens this. Each row → openEdit. The
+// Add button → openNew on the same date.
+function openDayList(iso, events) {
+  const bg   = document.getElementById('day-list');
+  const body = document.getElementById('day-list-body');
+  const ttl  = document.getElementById('day-list-title');
+  if (!bg || !body || !ttl) return;
+  const d = new Date(iso + 'T00:00:00');
+  ttl.textContent = d.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' });
+  body.innerHTML = '';
+  // Time-then-title sort so the list reads chronologically.
+  const sorted = [...events].sort((a, b) => (a.time || '99:99').localeCompare(b.time || '99:99'));
+  sorted.forEach(e => {
+    const row = document.createElement('div');
+    row.className = 'day-list-row';
+    const cat = findCategory(e.category);
+    row.style.borderLeftColor = e.color || (cat && cat.color) || '#95a5a6';
+    row.innerHTML = `<div class="t"></div><div class="tm"></div>`;
+    row.querySelector('.t').textContent = e.title;
+    row.querySelector('.tm').textContent = e.time || '';
+    row.addEventListener('click', () => {
+      bg.classList.remove('show');
+      openEdit('event', e);
+    });
+    body.appendChild(row);
+  });
+  // Wire add + close + click-outside (idempotent — set every open so
+  // closing one and opening another doesn't accumulate listeners).
+  document.getElementById('day-list-add').onclick = () => {
+    bg.classList.remove('show');
+    openNew('event', iso);
+  };
+  document.getElementById('day-list-close').onclick = () => bg.classList.remove('show');
+  bg.onclick = (ev) => { if (ev.target === bg) bg.classList.remove('show'); };
+  bg.classList.add('show');
+}
+
 function openNew(kind, dateIso) {
   state.modal = { mode: 'new', kind, item: null, color: null, category: null, subtasks: [] };
   $('modal-title').textContent = kind === 'event' ? 'New event' : 'New task';
@@ -1564,6 +1679,20 @@ function openEdit(kind, item) {
   $('m-delete').style.display = 'inline-block';
   $('modal').classList.add('show');
   $('m-title').focus();
+}
+
+// Open the edit modal pre-focused on the contact-name field, with the task
+// title as the search starting point — so Phone/WhatsApp on a contact-less
+// task drops the user straight into "type a name, press Find, save".
+function openEditOnContact(item) {
+  openEdit('task', item);
+  // Pre-fill the search field if it's empty, then focus + select so she
+  // can either accept the task title as the search or just type her own.
+  setTimeout(() => {
+    const nameEl = $('m-contact-name');
+    if (nameEl && !nameEl.value.trim()) nameEl.value = item.title || '';
+    if (nameEl) { nameEl.focus(); nameEl.select(); }
+  }, 30);
 }
 
 function renderModalSubtasks() {

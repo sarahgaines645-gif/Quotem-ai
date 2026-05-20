@@ -978,6 +978,26 @@
   /* When card is collapsed to just the head bar */
   .tasks-card.min .tc-body { display: none; }
 
+  /* View tabs — Tasks | Calendar switcher inside the card body */
+  .tasks-card .tc-tabs {
+    display: flex; gap: 6px; padding: 2px;
+    background: var(--bg);
+    border-radius: 10px;
+    box-shadow: var(--neu-inset-sm);
+  }
+  .tasks-card .tc-tab {
+    flex: 1;
+    background: transparent; border: none; cursor: pointer;
+    padding: 6px 10px; border-radius: 8px;
+    font-family: inherit; font-size: 11px; font-weight: 800;
+    color: var(--text-muted);
+  }
+  .tasks-card .tc-tab.on {
+    background: var(--bg);
+    box-shadow: var(--neu-raised-sm);
+    color: var(--text);
+  }
+
   /* Mini month calendar inside the card */
   .mini-cal {
     background: var(--bg);
@@ -2645,14 +2665,24 @@ if (launcherBtn && launcher) {
       <div class="tc-stat" style="border-top-color:#a78bfa;"><div class="v" id="stat-cats">0</div><div class="l">Cats</div></div>
     </div>
 
-    <!-- Mini month calendar -->
-    <div class="mini-cal" id="mini-cal">
-      <div class="mini-cal-head">
-        <button class="mini-cal-nav" id="mc-prev" aria-label="Previous month">‹</button>
-        <div class="mini-cal-title" id="mc-title">—</div>
-        <button class="mini-cal-nav" id="mc-next" aria-label="Next month">›</button>
+    <!-- View tabs — switch between Tasks list and Calendar without
+         leaving the floating card. Sarah's brief: "once you're on calendar
+         there's no way back". -->
+    <div class="tc-tabs" id="tc-tabs">
+      <button class="tc-tab on" data-view="tasks" id="tab-tasks">Tasks</button>
+      <button class="tc-tab"     data-view="cal"   id="tab-cal">Calendar</button>
+    </div>
+
+    <!-- Calendar view -->
+    <div class="tc-view" id="view-cal" style="display:none;">
+      <div class="mini-cal" id="mini-cal">
+        <div class="mini-cal-head">
+          <button class="mini-cal-nav" id="mc-prev" aria-label="Previous month">‹</button>
+          <div class="mini-cal-title" id="mc-title">—</div>
+          <button class="mini-cal-nav" id="mc-next" aria-label="Next month">›</button>
+        </div>
+        <div class="mini-cal-grid" id="mc-grid"></div>
       </div>
-      <div class="mini-cal-grid" id="mc-grid"></div>
     </div>
 
     <!-- Add-task form (hidden until + clicked) -->
@@ -2686,16 +2716,19 @@ if (launcherBtn && launcher) {
       </div>
     </div>
 
-    <!-- Sub-headers (categories) -->
-    <div>
-      <div class="td-section-title">Sub-headers</div>
-      <div class="cat-row" id="cat-row"></div>
-    </div>
+    <!-- Tasks view: sub-headers + tasks list -->
+    <div class="tc-view" id="view-tasks">
+      <!-- Sub-headers (categories) -->
+      <div>
+        <div class="td-section-title">Sub-headers</div>
+        <div class="cat-row" id="cat-row"></div>
+      </div>
 
-    <!-- Task list -->
-    <div>
-      <div class="td-section-title" id="tasks-list-title">Tasks</div>
-      <div id="tasks-list" style="display:flex;flex-direction:column;gap:6px;"></div>
+      <!-- Task list -->
+      <div style="margin-top:10px;">
+        <div class="td-section-title" id="tasks-list-title">Tasks</div>
+        <div id="tasks-list" style="display:flex;flex-direction:column;gap:6px;"></div>
+      </div>
     </div>
   </div>
 </div>
@@ -2732,6 +2765,21 @@ if (launcherBtn && launcher) {
   const addCard  = $('add-task-card');
   const PINK = '#e91e63';
   const POS_KEY = 'q-tasks-card-pos-v1';
+  const VIEW_KEY = 'q-tasks-card-view-v1';
+
+  // ── View switcher: Tasks ↔ Calendar inside the same card ──
+  function setView(name) {
+    const v = (name === 'cal') ? 'cal' : 'tasks';
+    $('view-tasks').style.display = v === 'tasks' ? '' : 'none';
+    $('view-cal').style.display   = v === 'cal'   ? '' : 'none';
+    $('tab-tasks').classList.toggle('on', v === 'tasks');
+    $('tab-cal').classList.toggle('on',   v === 'cal');
+    try { localStorage.setItem(VIEW_KEY, v); } catch {}
+  }
+  $('tab-tasks').addEventListener('click', () => setView('tasks'));
+  $('tab-cal').addEventListener('click',   () => setView('cal'));
+  // Restore previously-selected view; default = tasks
+  try { setView(localStorage.getItem(VIEW_KEY) || 'tasks'); } catch { setView('tasks'); }
 
   const state = {
     categories: [],
@@ -2751,8 +2799,12 @@ if (launcherBtn && launcher) {
   }
 
   // ── API helpers ──────────────────────────────────────────────────────
+  // routes.js is mounted at '/' in server/index.js:259 (no /api prefix),
+  // matching life.html which also fetches bare '/life/tasks' etc.
+  // The earlier '/api' + path here meant every call 404'd as
+  // "Route not deployed yet" and nothing in the card worked.
   async function api(path, opts) {
-    const res = await fetch('/api' + path, {
+    const res = await fetch(path, {
       headers: { 'Content-Type': 'application/json' },
       credentials: 'same-origin',
       ...opts,
@@ -2766,7 +2818,7 @@ if (launcherBtn && launcher) {
   // Promise.all and leave the calendar at "—" forever.
   async function tryLoad(path) {
     try {
-      const res = await fetch('/api' + path, {
+      const res = await fetch(path, {
         headers: { 'Content-Type': 'application/json' },
         credentials: 'same-origin',
       });
@@ -2996,7 +3048,7 @@ if (launcherBtn && launcher) {
           await updateTask(t.id, { subtasks: subs });
         } else if (act === 'del') {
           if (!confirm('Delete this task?')) return;
-          await fetch('/api/life/tasks/' + t.id, { method: 'DELETE', credentials: 'same-origin' });
+          await fetch('/life/tasks/' + t.id, { method: 'DELETE', credentials: 'same-origin' });
           state.tasks = state.tasks.filter(x => x.id !== t.id);
           renderStats(); renderTasks(); renderCalendar();
         } else if (act === 'call') {
@@ -3131,7 +3183,7 @@ if (launcherBtn && launcher) {
     try {
       // Don't use api() helper — we want to see the real status code and body
       // on failure (e.g. 404 if the route isn't deployed yet, or {error:'BRAVE_SEARCH_KEY not configured'}).
-      const res = await fetch('/api/life/contact-search', {
+      const res = await fetch('/life/contact-search', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'same-origin',
