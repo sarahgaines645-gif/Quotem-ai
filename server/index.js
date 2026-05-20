@@ -276,6 +276,17 @@ app.use((err, req, res, next) => {
     res.status(500).json({ error: 'Server error', detail: process.env.NODE_ENV === 'development' ? err.message : undefined });
 });
 
+// ── Background workers ────────────────────────────────────────
+// Alert scheduler — fires push notifications for tasks whose alertAt
+// has arrived. Uses q-push's VAPID-backed send path. Per-user, tick
+// every 60s. Editing a task's alertAt re-arms the alert (q-life.js
+// clears alertedAt on time change).
+try {
+    require(path.join(ROOT, 'plugins', 'alert-scheduler.js')).start();
+} catch (e) {
+    console.warn('[Q] alert-scheduler failed to start:', e.message);
+}
+
 // ── Start ──────────────────────────────────────────────────────
 const httpServer = app.listen(PORT, () => {
     console.log(`[Q] 🟢 Listening on http://localhost:${PORT}`);

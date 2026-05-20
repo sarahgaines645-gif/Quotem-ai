@@ -319,6 +319,7 @@ function addTask(payload, ownerEmail) {
         prepFor: payload?.prepFor ? String(payload.prepFor).trim().slice(0, 200) : null,
         subtasks: normalSubtasks(payload?.subtasks),
         alertAt: normalAlertAt(payload?.alertAt),
+        alertedAt: null,  // set by alert-scheduler.js when the push fires
         contact: normalContact(payload?.contact),
         done: false,
         doneAt: null,
@@ -355,7 +356,11 @@ function updateTask(id, patch, ownerEmail) {
         next.subtasks = normalSubtasks(patch.subtasks);
     }
     if ('alertAt' in patch) {
-        next.alertAt = patch.alertAt === null ? null : (normalAlertAt(patch.alertAt) || cur.alertAt);
+        const newAlert = patch.alertAt === null ? null : (normalAlertAt(patch.alertAt) || cur.alertAt);
+        // If the alert time changed, re-arm: clear alertedAt so the scheduler
+        // fires again. Editing a task's reminder shouldn't be a silent no-op.
+        if (newAlert !== cur.alertAt) next.alertedAt = null;
+        next.alertAt = newAlert;
     }
     if ('contact' in patch) {
         next.contact = patch.contact === null ? null : normalContact(patch.contact);
