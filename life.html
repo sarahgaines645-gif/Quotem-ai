@@ -15,6 +15,9 @@
      jsdelivr CDN path for node-qrcode was 404ing and leaving a broken-
      image icon in the Schedule Call QR modal. -->
 <script src="/qrcode.min.js"></script>
+<!-- CustomSelect — drop-in replacement for native <select>. Native option
+     list can't be CSS-styled; this gives full neumorphic control. -->
+<script src="/cs.js"></script>
 <style>
   :root {
     --bg: #e8e8e8;
@@ -387,6 +390,53 @@
   .modal .row > * { flex: 1; }
   .modal-actions { display: flex; gap: 8px; margin-top: 18px; }
   .modal-actions button { flex: 1; }
+
+  /* CustomSelect — neumorphic dropdown matching the rest of the modal.
+     Used in place of native <select> so the open option list is styleable
+     (Chromium's native list is OS-rendered and can't be CSS'd). */
+  .custom-select { position: relative; display: block; width: 100%; }
+  .cs-trigger {
+    width: 100%; box-sizing: border-box;
+    background: var(--bg); border: none;
+    box-shadow: var(--neu-inset-sm);
+    border-radius: 9px;
+    padding: 10px 12px;
+    font-size: 13px; color: var(--text);
+    font-family: inherit; cursor: pointer;
+    display: flex; justify-content: space-between; align-items: center;
+    text-align: left; gap: 6px; outline: none;
+  }
+  .cs-trigger .cs-label { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .cs-trigger .cs-label.cs-placeholder { color: var(--text-muted); }
+  .cs-trigger .cs-chev { color: var(--text-muted); font-size: 10px; flex-shrink: 0; transition: transform 0.15s; }
+  .custom-select.open .cs-chev { transform: rotate(180deg); }
+  .cs-list {
+    position: absolute; top: calc(100% + 4px); left: 0; right: 0;
+    background: var(--bg);
+    border-radius: 11px;
+    box-shadow: var(--neu-raised);
+    z-index: 5000;
+    display: none;
+    max-height: 240px; overflow-y: auto;
+    padding: 5px;
+  }
+  .custom-select.open .cs-list { display: block; }
+  .cs-option {
+    display: block; width: 100%; box-sizing: border-box;
+    background: transparent; border: none; cursor: pointer;
+    padding: 8px 12px;
+    font-size: 13px; color: var(--text);
+    font-family: inherit;
+    text-align: left;
+    border-radius: 7px;
+  }
+  .cs-option:hover { background: rgba(0,0,0,0.05); }
+  .cs-option.on {
+    background: var(--bg);
+    box-shadow: var(--neu-inset-xs);
+    color: var(--accent);
+    font-weight: 700;
+  }
 
   .back-link { margin-left: auto; font-size: 12px; color: var(--text-muted); text-decoration: none; }
   .back-link:hover { color: var(--text); }
@@ -802,11 +852,7 @@
       </div>
       <div id="m-priority-wrap" style="display: none;">
         <label>Priority</label>
-        <select id="m-priority">
-          <option value="low">Low</option>
-          <option value="med" selected>Med</option>
-          <option value="high">High</option>
-        </select>
+        <div class="custom-select" id="m-priority" data-placeholder="Priority"></div>
       </div>
     </div>
     <label id="m-location-label">Location</label>
@@ -814,9 +860,7 @@
     <label>Notes</label>
     <textarea id="m-notes"></textarea>
     <label>Sub-header</label>
-    <select id="m-category">
-      <option value="">— No sub-header —</option>
-    </select>
+    <div class="custom-select" id="m-category" data-placeholder="— No sub-header —"></div>
     <label>Tag colour <span style="font-size: 11px; color: var(--text-muted); font-weight: 400;">(overrides sub-header colour)</span></label>
     <div class="swatches" id="m-swatches"></div>
 
@@ -896,6 +940,23 @@ const TAG_COLOURS = [
   '#2ecc71', '#fbbf24', '#f39c12', '#d97757', '#e74c3c', '#f87171', '#95a5a6',
 ];
 const $ = (id) => document.getElementById(id);
+
+// Initialise the two CustomSelects up-front so populateCategorySelect /
+// csGet / csSet calls don't NPE. Options for m-category fill when
+// categories load; m-priority's three options are static.
+if (window.CustomSelect) {
+  CustomSelect.attach('m-priority', [
+    { value: 'low',  label: 'Low' },
+    { value: 'med',  label: 'Med' },
+    { value: 'high', label: 'High' },
+  ]);
+  csSet('m-priority', 'med');
+  CustomSelect.attach('m-category', [{ value: '', label: '— Uncategorised —' }]);
+  // Selecting from the m-category dropdown updates state.modal.category.
+  csOnChange('m-category', (v) => {
+    if (typeof state !== 'undefined' && state.modal) state.modal.category = v || null;
+  });
+}
 
 const state = {
   events: [],
@@ -1824,7 +1885,7 @@ function openNew(kind, dateIso) {
   $('m-time').value = '';
   $('m-location').value = '';
   $('m-notes').value = '';
-  $('m-priority').value = 'med';
+  csSet('m-priority', 'med');
   $('m-alert').value = '';
   $('m-contact-name').value = '';
   $('m-contact-phone').value = '';
@@ -1851,7 +1912,7 @@ function openEdit(kind, item) {
   $('m-time').value = kind === 'event' ? (item.time || '') : '';
   $('m-location').value = kind === 'event' ? (item.location || '') : '';
   $('m-notes').value = item.notes || '';
-  if (kind === 'task') $('m-priority').value = item.priority || 'med';
+  if (kind === 'task') csSet('m-priority', item.priority || 'med');
   // Task extras (no-op for events — the block is hidden anyway)
   $('m-alert').value = item.alertAt ? item.alertAt.slice(0, 16) : '';
   $('m-contact-name').value  = item.contact?.name  || '';
@@ -1914,22 +1975,18 @@ function renderModalSubtasks() {
 }
 
 function populateCategorySelect(currentSlug) {
-  const sel = $('m-category');
-  sel.innerHTML = '<option value="">— Uncategorised —</option>';
-  state.categories.forEach(c => {
-    const opt = document.createElement('option');
-    opt.value = c.slug;
-    opt.textContent = c.name;
-    if (c.slug === currentSlug) opt.selected = true;
-    sel.appendChild(opt);
-  });
+  if (!window.csSetOptions) return;
+  const opts = [{ value: '', label: '— Uncategorised —' }]
+    .concat(state.categories.map(c => ({ value: c.slug, label: c.name })));
+  csSetOptions('m-category', opts);
+  csSet('m-category', currentSlug || '');
   state.modal.category = currentSlug || null;
 }
-document.addEventListener('change', (e) => {
-  if (e.target && e.target.id === 'm-category') {
-    state.modal.category = e.target.value || null;
-  }
-});
+// Selecting from the CustomSelect dropdown updates state.modal.category.
+if (window.csOnChange) {
+  // Wired once after attach (see init below). This block is a no-op now —
+  // onChange is set when the select is attached.
+}
 
 function showModalFor(kind) {
   if (kind === 'event') {
@@ -1997,7 +2054,7 @@ $('m-save').addEventListener('click', async () => {
     const payload = {
       title,
       due: dateVal || null,
-      priority: $('m-priority').value,
+      priority: csGet('m-priority') || 'med',
       notes: $('m-notes').value.trim() || null,
       color,
       category,

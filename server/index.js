@@ -169,6 +169,10 @@ app.get('/looking-glass-widget.js', (req, res) => res.sendFile(path.join(ROOT, '
 // the Schedule Call QR modal was rendering a broken-image icon. Hosted from
 // this app, no third-party dep.
 app.get('/qrcode.min.js', (req, res) => res.sendFile(path.join(ROOT, 'qrcode.min.js')));
+// CustomSelect — shared drop-in replacement for native <select> with full
+// CSS control. Used by both chat.html (floating tasks card) and life.html
+// (modal). Native select's open list can't be styled.
+app.get('/cs.js', (req, res) => res.sendFile(path.join(ROOT, 'cs.js')));
 app.get('/sw.js', (req, res) => {
     // Service worker must not be cached — browser needs the latest version every load.
     res.setHeader('Cache-Control', 'no-store, must-revalidate');
