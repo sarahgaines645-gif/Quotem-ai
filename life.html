@@ -264,11 +264,11 @@
     overflow: hidden;
   }
   .day-list-head {
-    padding: 12px 14px;
+    padding: 16px 16px 14px;
     display: flex; align-items: center; justify-content: space-between;
     border-bottom: 1px solid rgba(0,0,0,0.06);
   }
-  .day-list-title { font-size: 13px; font-weight: 800; color: var(--text); }
+  .day-list-title { font-size: 18px; font-weight: 800; color: var(--text); letter-spacing: -0.01em; }
   .day-list-close {
     width: 24px; height: 24px; border-radius: 6px;
     background: var(--bg); border: none; cursor: pointer;
@@ -276,26 +276,26 @@
     display: inline-flex; align-items: center; justify-content: center;
     color: var(--text-muted); font-size: 14px; font-family: inherit;
   }
-  .day-list-body { padding: 10px 14px; overflow-y: auto; flex: 1; }
+  .day-list-body { padding: 14px 16px; overflow-y: auto; flex: 1; }
   .day-list-row {
-    display: flex; align-items: center; gap: 8px;
-    padding: 8px 10px; margin-bottom: 6px;
-    background: var(--bg); border-radius: 8px;
+    display: flex; align-items: center; gap: 10px;
+    padding: 13px 15px; margin-bottom: 8px;
+    background: var(--bg); border-radius: 10px;
     box-shadow: var(--neu-raised-sm);
-    border-left: 3px solid var(--text-muted);
+    border-left: 4px solid var(--text-muted);
     cursor: pointer;
   }
   .day-list-row:hover { box-shadow: var(--neu-inset-xs); }
-  .day-list-row .t  { flex: 1; font-size: 12px; font-weight: 700; color: var(--text); }
-  .day-list-row .tm { font-size: 10px; color: var(--text-muted); }
+  .day-list-row .t  { flex: 1; font-size: 15px; font-weight: 700; color: var(--text); }
+  .day-list-row .tm { font-size: 12px; color: var(--text-muted); }
   .day-list-foot {
-    padding: 10px 14px; border-top: 1px solid rgba(0,0,0,0.06);
+    padding: 14px 16px; border-top: 1px solid rgba(0,0,0,0.06);
   }
   .day-list-add {
-    width: 100%; padding: 8px; border-radius: 8px;
+    width: 100%; padding: 13px; border-radius: 10px;
     background: var(--bg); border: none; cursor: pointer;
     box-shadow: var(--neu-raised-sm);
-    color: var(--text); font-size: 11px; font-weight: 700; font-family: inherit;
+    color: var(--text); font-size: 14px; font-weight: 700; font-family: inherit;
   }
   .day-list-add:active { box-shadow: var(--neu-inset-xs); }
 
@@ -371,10 +371,12 @@
   }
   .modal-bg.show { display: flex; }
   .modal {
-    background: var(--bg); border-radius: 18px;
+    background: var(--bg); border-radius: 14px;
     box-shadow: var(--neu-raised);
-    padding: 22px; max-width: 480px; width: 100%;
-    max-height: 90vh; overflow-y: auto;
+    border-top: 3px solid var(--accent);
+    padding: 18px;
+    width: min(360px, calc(100vw - 32px));
+    max-height: calc(100vh - 80px); overflow-y: auto;
   }
   .modal h3 {
     font-size: 13px; font-weight: 600; color: var(--text-muted);
