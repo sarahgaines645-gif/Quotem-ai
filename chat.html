@@ -2870,6 +2870,7 @@ if (launcherBtn && launcher) {
     calMonth: new Date().getMonth(),
     activeCat: 'all',  // 'all' | category slug
     selectedDate: null,
+    editingId: null,   // task id currently being edited via the add-task form
     alertTimers: [],   // in-page setTimeout ids for scheduled browser notifications
   };
 
@@ -2988,19 +2989,33 @@ if (launcherBtn && launcher) {
     });
     const add = document.createElement('button');
     add.className = 'cat-pill add';
-    add.textContent = '+';
-    add.title = 'New sub-header';
-    add.onclick = async () => {
-      const name = prompt('New sub-header (e.g. Work, Personal, Business):');
-      if (!name || !name.trim()) return;
-      try {
-        const cat = await api('/life/categories', { method: 'POST', body: JSON.stringify({ name: name.trim(), color: PINK }) });
-        state.categories.push(cat);
-        state.activeCat = cat.slug;
-        renderStats(); renderCategories(); renderTasks();
-        // also refresh the dropdown in the add-task form
-        fillCategorySelect();
-      } catch (e) { alert('Could not add: ' + e.message); }
+    add.textContent = '+ Sub-header';
+    add.title = 'Add a new sub-header (category)';
+    add.onclick = () => {
+      // Inline name field instead of prompt(): prompt() is silently blocked in
+      // installed PWAs and several mobile browsers, which is why this button
+      // appeared to "do nothing". The label now says what it makes, too.
+      if (row.querySelector('.cat-new-input')) { row.querySelector('.cat-new-input').focus(); return; }
+      const inp = document.createElement('input');
+      inp.type = 'text'; inp.maxLength = 40; inp.placeholder = 'Sub-header name…';
+      inp.className = 'cat-new-input';
+      inp.style.cssText = 'background:var(--bg);border:none;box-shadow:var(--neu-inset-xs);border-radius:10px;padding:4px 9px;font-size:10px;font-weight:700;color:var(--text);font-family:inherit;outline:none;width:120px;';
+      let done = false;
+      const commit = async () => {
+        if (done) return; done = true;
+        const name = inp.value.trim();
+        if (!name) { inp.remove(); return; }
+        try {
+          const cat = await api('/life/categories', { method: 'POST', body: JSON.stringify({ name, color: PINK }) });
+          state.categories.push(cat);
+          state.activeCat = cat.slug;
+          renderStats(); renderCategories(); renderTasks(); fillCategorySelect();
+        } catch (e) { alert('Could not add: ' + e.message); inp.remove(); }
+      };
+      inp.onkeydown = (e) => { if (e.key === 'Enter') commit(); else if (e.key === 'Escape') { done = true; inp.remove(); } };
+      inp.onblur = commit;
+      row.appendChild(inp);
+      inp.focus();
     };
     row.appendChild(add);
 
@@ -3096,6 +3111,7 @@ if (launcherBtn && launcher) {
             <button class="pill-btn small" data-act="wa">WhatsApp</button>
           </div>` : ''}
         <div style="display:flex;gap:6px;justify-content:flex-end;">
+          <button class="pill-btn small" data-act="edit">Edit</button>
           <button class="pill-btn small danger" data-act="del">Delete</button>
         </div>
       </div>`;
@@ -3139,10 +3155,33 @@ if (launcherBtn && launcher) {
           openCallModal(t.contact, 'call');
         } else if (act === 'wa') {
           openCallModal(t.contact, 'wa', t);
+        } else if (act === 'edit') {
+          openEditTask(t);
         }
       });
     });
     return row;
+  }
+
+  // Open the add-task form pre-filled with an existing task, in update mode.
+  function openEditTask(t) {
+    card.classList.remove('min');     // works even when collapsed to the head bar
+    setView('tasks');
+    eventCard.style.display = 'none';
+    state.editingId = t.id;
+    $('at-title').value = t.title || '';
+    $('at-due').value = t.due || '';
+    $('at-alert').value = t.alertAt ? String(t.alertAt).slice(0, 16) : '';
+    $('at-contact-name').value = t.contact?.name || '';
+    $('at-contact-phone').value = t.contact?.phone || '';
+    $('at-contact-email').value = t.contact?.email || '';
+    $('at-notes').value = t.notes || '';
+    fillCategorySelect();
+    csSet('at-category', t.category || '');
+    csSet('at-priority', t.priority || 'med');
+    $('at-save').textContent = 'Update';
+    addCard.style.display = 'flex';
+    $('at-title').focus();
   }
 
   function formatDue(iso) {
@@ -3241,6 +3280,7 @@ if (launcherBtn && launcher) {
     if (current) csSet('ev-category', current);
   }
   addBtn.onclick = () => {
+    card.classList.remove('min');     // expand if collapsed — the form lives in the body
     const isCal = $('tab-cal').classList.contains('on');
     if (isCal) {
       const showing = eventCard.style.display !== 'none';
@@ -3256,8 +3296,16 @@ if (launcherBtn && launcher) {
       }
     } else {
       eventCard.style.display = 'none';
-      addCard.style.display = addCard.style.display === 'none' ? 'flex' : 'none';
-      if (addCard.style.display !== 'none') { fillCategorySelect(); $('at-title').focus(); }
+      const showing = addCard.style.display !== 'none';
+      if (showing) {
+        addCard.style.display = 'none';
+        clearForm();                  // also clears edit mode + resets the Save label
+      } else {
+        clearForm();                  // start a fresh add, never inherit an edit
+        addCard.style.display = 'flex';
+        fillCategorySelect();
+        $('at-title').focus();
+      }
     }
   };
   $('ev-cancel').onclick = () => {
@@ -3307,8 +3355,14 @@ if (launcherBtn && launcher) {
       notes: $('at-notes').value.trim() || null,
     };
     try {
-      const t = await api('/life/tasks', { method: 'POST', body: JSON.stringify(payload) });
-      state.tasks.push(t);
+      if (state.editingId) {
+        const updated = await api('/life/tasks/' + state.editingId, { method: 'PATCH', body: JSON.stringify(payload) });
+        const idx = state.tasks.findIndex(x => x.id === state.editingId);
+        if (idx >= 0) state.tasks[idx] = updated;
+      } else {
+        const t = await api('/life/tasks', { method: 'POST', body: JSON.stringify(payload) });
+        state.tasks.push(t);
+      }
       addCard.style.display = 'none';
       clearForm();
       renderStats(); renderTasks(); renderCalendar();
@@ -3355,6 +3409,8 @@ if (launcherBtn && launcher) {
   function clearForm() {
     ['at-title','at-due','at-alert','at-contact-name','at-contact-phone','at-contact-email','at-notes'].forEach(id => $(id).value = '');
     csSet('at-priority', 'med');
+    state.editingId = null;
+    $('at-save').textContent = 'Save';
   }
 
   // ── Card open / close / minimise / drag ────────────────────────────
