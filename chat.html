@@ -2643,7 +2643,17 @@ function renderToolCalls(messageEl, toolCalls) {
   // technical detail underneath.
   const wrap = document.createElement('div');
   wrap.className = 'tool-calls';
-  const labels = toolCalls.map(c => TOOL_LABELS[c.name] || c.name);
+  // Reflect failures honestly — a search that errored or returned nothing must
+  // NOT show as "searched the web" (that's what made Q look like he'd looked
+  // something up when he hadn't).
+  const labels = toolCalls.map(c => {
+    const base = TOOL_LABELS[c.name] || c.name;
+    const r = c.result;
+    const failed = r && (r.error || (typeof r.count === 'number' && r.count === 0));
+    if (!failed) return base;
+    if (c.name === 'web_search') return "tried to search the web (couldn't reach it)";
+    return base + " (didn't work)";
+  });
   const unique = [...new Set(labels)];
   let summary;
   if (unique.length === 1) {

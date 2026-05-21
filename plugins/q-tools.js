@@ -755,12 +755,17 @@ const TOOL_DEFINITIONS = [
  * Requires: BRAVE_SEARCH_KEY from api.search.brave.com
  */
 async function webSearch({ query, count = 5 }) {
+    // When a search fails or returns nothing, Q must SAY SO — never answer from
+    // memory as if he'd searched. This note rides back with the error so the
+    // model is told exactly that (same pattern as search_images / street_view).
+    const FAIL_NOTE = "The web search did NOT return results. Tell the user plainly you couldn't look it up just now — do NOT answer from your own memory as if you had searched — and offer to try again.";
     const apiKey = process.env.BRAVE_SEARCH_KEY;
     if (!apiKey) {
-        return { error: 'BRAVE_SEARCH_KEY not configured' };
+        console.warn('[q-tools] web_search FAILED: BRAVE_SEARCH_KEY not configured');
+        return { error: 'BRAVE_SEARCH_KEY not configured', instruction_for_q: FAIL_NOTE };
     }
     if (!query || typeof query !== 'string') {
-        return { error: 'Query string required' };
+        return { error: 'Query string required', instruction_for_q: FAIL_NOTE };
     }
     const safeCount = Math.min(Math.max(parseInt(count) || 5, 1), 10);
     const url = `https://api.search.brave.com/res/v1/web/search?q=${encodeURIComponent(query)}&count=${safeCount}&country=gb&search_lang=en`;
@@ -774,7 +779,8 @@ async function webSearch({ query, count = 5 }) {
         });
         if (!response.ok) {
             const errText = await response.text();
-            return { error: `Brave Search HTTP ${response.status}: ${errText.substring(0, 200)}` };
+            console.warn(`[q-tools] web_search FAILED: Brave HTTP ${response.status} for "${query}" — ${errText.substring(0, 200)}`);
+            return { error: `Brave Search HTTP ${response.status}: ${errText.substring(0, 200)}`, instruction_for_q: FAIL_NOTE };
         }
         const data = await response.json();
         const results = (data.web?.results || []).slice(0, safeCount).map(r => ({
@@ -782,9 +788,15 @@ async function webSearch({ query, count = 5 }) {
             url: r.url,
             snippet: r.description,
         }));
+        if (results.length === 0) {
+            console.warn(`[q-tools] web_search: 0 results for "${query}"`);
+            return { query, results: [], count: 0, instruction_for_q: "The search returned NO results. Tell the user you couldn't find anything on that — do NOT fill the gap from your own memory." };
+        }
+        console.log(`[q-tools] web_search OK: ${results.length} result(s) for "${query}"`);
         return { query, results, count: results.length };
     } catch (err) {
-        return { error: err.message };
+        console.warn('[q-tools] web_search FAILED (network): ' + err.message);
+        return { error: err.message, instruction_for_q: FAIL_NOTE };
     }
 }
 
