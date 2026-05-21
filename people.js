@@ -287,6 +287,31 @@ function isApproved(person) {
 }
 
 /**
+ * The admin account's email. Q_ADMIN_EMAIL wins if set; otherwise it's the
+ * email of the seeded 'sarah' account. Admin is gated on this EMAIL — the
+ * real, password-verified login identity — never on a display name or id.
+ */
+function getAdminEmail() {
+    const env = normaliseEmail(process.env.Q_ADMIN_EMAIL || '');
+    if (env) return env;
+    const seeded = loadPeople().find(p => p.id === 'sarah');
+    return seeded ? normaliseEmail(seeded.email) : '';
+}
+
+/**
+ * Is this person the admin? True only when their email matches the admin
+ * email and the account is approved. A session can only belong to an email
+ * whose password was verified at login, so this ties admin to the owner's
+ * actual email + password — not just their name.
+ */
+function isAdmin(person) {
+    if (!person || !person.email) return false;
+    if (!isApproved(person)) return false;
+    const adminEmail = getAdminEmail();
+    return !!adminEmail && normaliseEmail(person.email) === adminEmail;
+}
+
+/**
  * Approve a pending account so the person can sign in. Returns the safe
  * person on success, null if no such id.
  */
@@ -321,6 +346,8 @@ module.exports = {
     signupPerson,
     isApproved,
     approvePerson,
+    isAdmin,
+    getAdminEmail,
     generateUniqueId,
     verifyLogin,
     getPerson,

@@ -111,9 +111,9 @@
       .then(r => r.json())
       .then(d => {
         if (!d.person) return;
-        if (d.person.id !== 'sarah') {
+        if (!d.isAdmin) {
           document.getElementById('content').innerHTML =
-            '<div class="deny"><h2>Forbidden</h2><p>The admin area is for Sarah only.</p></div>';
+            '<div class="deny"><h2>Forbidden</h2><p>The admin area is for the account owner only.</p></div>';
           return;
         }
         return fetch('/admin/tools-data', { credentials: 'include' }).then(r => r.json());

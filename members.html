@@ -126,6 +126,9 @@
       btn._resetTimer = setTimeout(reset, 3000);
     }
 
+    let myEmail = '';
+    const isMe = p => !!myEmail && !!p.email && p.email.toLowerCase() === myEmail;
+
     function setStatus(msg, isErr) {
       const el = document.getElementById('status');
       if (!el) return;
@@ -208,7 +211,7 @@
       } else {
         members.forEach(p => {
           const buttons = [];
-          if (p.id !== 'sarah') {
+          if (!isMe(p)) {
             const removeBtn = btn('Remove', 'danger', () => {
               armConfirm(removeBtn, 'Remove', async () => {
                 setStatus('');
@@ -220,7 +223,7 @@
             buttons.push(removeBtn);
           }
           mCard.appendChild(row(p, {
-            isYou: p.id === 'sarah',
+            isYou: isMe(p),
             metaText: p.approvedAt ? 'Approved ' + fmtDate(p.approvedAt) : (p.addedAt ? 'Joined ' + fmtDate(p.addedAt) : ''),
             buttons,
           }));
@@ -244,11 +247,12 @@
       .then(r => r.json())
       .then(d => {
         if (!d.person) return; // q-auth.js shows the sign-in overlay
-        if (d.person.id !== 'sarah') {
+        if (!d.isAdmin) {
           document.getElementById('content').innerHTML =
-            '<div class="deny"><h2>Forbidden</h2><p>The members area is for Sarah only.</p></div>';
+            '<div class="deny"><h2>Forbidden</h2><p>The members area is for the account owner only.</p></div>';
           return;
         }
+        myEmail = (d.person.email || '').toLowerCase();
         load();
       })
       .catch(() => {});

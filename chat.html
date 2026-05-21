@@ -1302,6 +1302,10 @@
     <button class="icon-btn" id="tasks-btn" aria-label="Tasks &amp; calendar" title="Tasks &amp; calendar">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
     </button>
+    <!-- Admin — hidden by default, revealed only for the admin account (see script below </header>) -->
+    <a class="icon-btn" id="admin-btn" href="/admin" aria-label="Admin" title="Admin" style="display:none">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+    </a>
     <div class="tools-btn-wrap">
       <button class="icon-btn" id="tools-launcher-btn" aria-label="Tools" title="Tools">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
@@ -1368,6 +1372,15 @@
     </button>
   </div>
 </header>
+<script>
+  // Reveal the Admin button only for the admin account. Real security is
+  // server-side (every admin route + the /admin page verify the session's
+  // email); this just hides the link for everyone else.
+  fetch('/whoami', { credentials: 'include', cache: 'no-store' })
+    .then(r => r.json())
+    .then(d => { if (d && d.isAdmin) { const b = document.getElementById('admin-btn'); if (b) b.style.display = ''; } })
+    .catch(() => {});
+</script>
 
 <div class="top-fade"></div>
 

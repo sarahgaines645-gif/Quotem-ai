@@ -45,7 +45,7 @@ const {
 startScheduler();
 const { loadMemory, clearMemory, appendMessage, getRecentMessages, getCircleSummary, getMemoryPath, getVoicePath, getDocPath, getTutorPath } = require('./memory');
 const { requirePerson, tryAttachPerson, setSessionCookie, clearSessionCookie } = require('./auth');
-const { listPeople, addPerson, signupPerson, isApproved, approvePerson, getPerson, getPersonByEmail, removePerson, verifyLogin, changePassword, rotatePassword, createResetToken, consumeResetToken } = require('./people');
+const { listPeople, addPerson, signupPerson, isApproved, approvePerson, isAdmin, getPerson, getPersonByEmail, removePerson, verifyLogin, changePassword, rotatePassword, createResetToken, consumeResetToken } = require('./people');
 const { sendMail, isConfigured: mailerConfigured } = require('./mailer');
 const { resolveToken: resolveGeneratedDoc, resolveTokenAcrossUsers } = require('./plugins/doc-creator');
 const { summarise: summariseCosts, getLogPath: costLogPath } = require('./cost-tracker');
@@ -96,7 +96,7 @@ router.get('/whoami', (req, res) => {
         const p = verifySessionCookie(req);
         if (p) req.person = p;
     }
-    res.json({ person: req.person || null });
+    res.json({ person: req.person || null, isAdmin: isAdmin(req.person) });
 });
 
 router.post('/change-password', requirePerson, express.json({ limit: '4kb' }), async (req, res) => {
@@ -186,7 +186,7 @@ router.get('/public-download/:token', (req, res) => {
 
 // Admin: add someone to the Circle (Sarah only)
 router.post('/circle/add', requirePerson, express.json({ limit: '4kb' }), async (req, res) => {
-    if (req.person.id !== 'sarah') return res.status(403).json({ error: 'Forbidden' });
+    if (!isAdmin(req.person)) return res.status(403).json({ error: 'Forbidden' });
     try {
         const { id, name, email, intro, password } = req.body || {};
         const result = await addPerson({ id, name, email, intro, password });
@@ -197,7 +197,7 @@ router.post('/circle/add', requirePerson, express.json({ limit: '4kb' }), async 
 });
 
 router.post('/circle/people/:id/rotate', requirePerson, async (req, res) => {
-    if (req.person.id !== 'sarah') return res.status(403).json({ error: 'Forbidden' });
+    if (!isAdmin(req.person)) return res.status(403).json({ error: 'Forbidden' });
     try {
         const newPassword = await rotatePassword(req.params.id);
         res.json({ id: req.params.id, password: newPassword });
@@ -1113,27 +1113,27 @@ router.post('/extract-text', requirePerson, express.json({ limit: '24mb' }), asy
 
 // ── Q's circle — admin endpoints (Sarah only) ──────────────────────────────
 router.get('/circle/people', requirePerson, (req, res) => {
-    if (req.person.id !== 'sarah') return res.status(403).json({ error: 'Forbidden' });
+    if (!isAdmin(req.person)) return res.status(403).json({ error: 'Forbidden' });
     res.json({ people: listPeople() });
 });
 
 router.delete('/circle/people/:id', requirePerson, (req, res) => {
-    if (req.person.id !== 'sarah') return res.status(403).json({ error: 'Forbidden' });
-    if (req.params.id === 'sarah') return res.status(400).json({ error: 'Cannot remove Sarah from her own circle.' });
+    if (!isAdmin(req.person)) return res.status(403).json({ error: 'Forbidden' });
+    if (isAdmin(getPerson(req.params.id))) return res.status(400).json({ error: 'Cannot remove the admin account.' });
     const ok = removePerson(req.params.id);
     res.json({ ok });
 });
 
 // How many accounts are waiting for approval (drives the admin badge).
 router.get('/circle/pending-count', requirePerson, (req, res) => {
-    if (req.person.id !== 'sarah') return res.status(403).json({ error: 'Forbidden' });
+    if (!isAdmin(req.person)) return res.status(403).json({ error: 'Forbidden' });
     const pending = listPeople().filter(p => p.approved === false).length;
     res.json({ pending });
 });
 
 // Approve a pending account so the person can sign in.
 router.post('/circle/people/:id/approve', requirePerson, (req, res) => {
-    if (req.person.id !== 'sarah') return res.status(403).json({ error: 'Forbidden' });
+    if (!isAdmin(req.person)) return res.status(403).json({ error: 'Forbidden' });
     const person = approvePerson(req.params.id);
     if (!person) return res.status(404).json({ error: 'Person not found' });
     res.json({ ok: true, person });
@@ -1141,8 +1141,8 @@ router.post('/circle/people/:id/approve', requirePerson, (req, res) => {
 
 // Reject a pending account — removes it entirely (same as Quotem's reject).
 router.post('/circle/people/:id/reject', requirePerson, (req, res) => {
-    if (req.person.id !== 'sarah') return res.status(403).json({ error: 'Forbidden' });
-    if (req.params.id === 'sarah') return res.status(400).json({ error: 'Cannot reject Sarah.' });
+    if (!isAdmin(req.person)) return res.status(403).json({ error: 'Forbidden' });
+    if (isAdmin(getPerson(req.params.id))) return res.status(400).json({ error: 'Cannot reject the admin account.' });
     const ok = removePerson(req.params.id);
     if (!ok) return res.status(404).json({ error: 'Person not found' });
     res.json({ ok: true });
@@ -1150,7 +1150,7 @@ router.post('/circle/people/:id/reject', requirePerson, (req, res) => {
 
 // ── Cost tracking — Sarah only ─────────────────────────────────────────────
 router.get('/admin/costs', requirePerson, (req, res) => {
-    if (req.person.id !== 'sarah') return res.status(403).json({ error: 'Forbidden' });
+    if (!isAdmin(req.person)) return res.status(403).json({ error: 'Forbidden' });
     const groupBy = req.query.groupBy || 'skill';
     const since = req.query.since;
     const until = req.query.until;
@@ -1182,7 +1182,7 @@ router.get('/admin/members', (req, res) => {
 // where available; static descriptions kept inline so the admin page
 // stays self-contained.
 router.get('/admin/tools-data', requirePerson, (req, res) => {
-    if (req.person.id !== 'sarah') return res.status(403).json({ error: 'Forbidden' });
+    if (!isAdmin(req.person)) return res.status(403).json({ error: 'Forbidden' });
     res.json({
         tools: [
             {
@@ -1817,7 +1817,7 @@ router.post('/api/threads/claim-legacy', requirePerson, (req, res) => {
     // boot migration already empties the legacy dir into Sarah, so this returns
     // { claimed: 0 } for everyone; the guard stops any future legacy data being
     // grabbed by a non-admin account.)
-    if (req.person.id !== 'sarah') return res.status(403).json({ error: 'Forbidden' });
+    if (!isAdmin(req.person)) return res.status(403).json({ error: 'Forbidden' });
     const result = qThreads.claimLegacyThreads(req.person.email);
     res.json(result);
 });
