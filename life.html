@@ -1379,7 +1379,16 @@ function renderTaskGroup(list, items, type) {
             if (s.channel === 'call' || s.channel === 'wa') {
               openCallModal({ phone: s.target, name: s.text }, s.channel === 'wa' ? 'wa' : 'call', t);
             } else {
-              window.location.href = 'mailto:' + encodeURIComponent(s.target);
+              // The address must NOT be percent-encoded — mailto:foo%40bar.com is
+              // rejected by most mail handlers, which is why "schedule email" did
+              // nothing. Address raw; only the subject is encoded. An <a> click is
+              // a more reliable mailto trigger than location.href in standalone PWAs.
+              const subj = encodeURIComponent(t.title || '');
+              const a = document.createElement('a');
+              a.href = 'mailto:' + s.target + (subj ? '?subject=' + subj : '');
+              document.body.appendChild(a);
+              a.click();
+              a.remove();
             }
           });
           sr.appendChild(cBtn);
