@@ -494,6 +494,12 @@
   }
   .title-row .title { flex: 1; font-size: 14px; font-weight: 700; color: var(--text); line-height: 1.3; }
   .row-expand { color: var(--text-muted); font-size: 11px; flex: 0 0 auto; user-select: none; }
+  .row-edit {
+    flex: 0 0 auto; background: none; border: none; cursor: pointer;
+    color: var(--text-muted); font-size: 13px; line-height: 1;
+    padding: 2px 5px; user-select: none;
+  }
+  .row-edit:hover { color: var(--text); }
   .row-detail { margin-top: 6px; }
   .row-detail .meta { font-size: 11px; color: var(--text-muted); line-height: 1.5; }
   .row-detail .edit-link { margin-top: 6px; font-size: 11px; }
@@ -1205,7 +1211,10 @@ function renderCalendar() {
       });
       cell.appendChild(more);
     }
-    cell.addEventListener('click', () => openNew('event', iso));
+    // Clicking a day opens the small day-list popup (that day's items + an
+    // "Add event for this day" button) rather than jumping straight into the
+    // big new-event modal. Add/edit only go full-size when actually chosen.
+    cell.addEventListener('click', () => openDayList(iso, onDay));
     grid.appendChild(cell);
   }
 
@@ -1286,9 +1295,20 @@ function renderTaskGroup(list, items, type) {
     titleEl.className = 'title';
     titleEl.textContent = t.title;
     titleRow.appendChild(titleEl);
-    // Always show the chevron — used to only appear when meta existed, but
-    // now Call / WhatsApp / Edit are hidden behind it too, so a task without
-    // due/priority/notes still needs a way to reveal them.
+
+    // Always-visible Edit — opens the full task editor (title/due/notes/priority/
+    // alert/contact/subtasks). Kept separate from the Call/WhatsApp *schedule*
+    // buttons behind the chevron, which read as "add a schedule", not edit.
+    const editIcon = document.createElement('button');
+    editIcon.type = 'button';
+    editIcon.className = 'row-edit';
+    editIcon.textContent = '✎';
+    editIcon.title = 'Edit task';
+    editIcon.addEventListener('click', (e) => { e.stopPropagation(); openEdit('task', t); });
+    titleRow.appendChild(editIcon);
+
+    // Always show the chevron — Call / WhatsApp (schedule) are revealed by it,
+    // so a task without due/priority/notes still needs a way to reveal them.
     const exp = document.createElement('span');
     exp.className = 'row-expand';
     exp.textContent = '▾';
@@ -1478,7 +1498,7 @@ function renderTaskGroup(list, items, type) {
     subInput.addEventListener('click', (e) => e.stopPropagation()); // don't trigger row toggle
     body.appendChild(subAddWrap);
 
-    // Phone + WhatsApp + Edit — HIDDEN until the user clicks the ▾ chevron.
+    // Phone + WhatsApp (schedule) — HIDDEN until the user clicks the ▾ chevron.
     // Sarah's brief: "the call etc buttons should only show when you press
     // the drop down button." Toggle wired further down with the detail panel.
     // If the task has a phone number, Phone/WhatsApp open the QR modal.
@@ -1511,12 +1531,8 @@ function renderTaskGroup(list, items, type) {
     });
     actions.appendChild(waBtn);
 
-    const editBtn = document.createElement('button');
-    editBtn.type = 'button';
-    editBtn.className = 'act-btn';
-    editBtn.textContent = 'Edit';
-    editBtn.addEventListener('click', (e) => { e.stopPropagation(); openEdit('task', t); });
-    actions.appendChild(editBtn);
+    // (Edit moved to an always-visible ✎ on the title row — the chevron now
+    // reveals only the Call / WhatsApp schedule actions.)
     body.appendChild(actions);
 
     // Detail panel — used for notes / due / priority text only. The
