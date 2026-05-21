@@ -60,6 +60,7 @@
     .tile .blurb { font-size: 12px; color: var(--text-muted); line-height: 1.45; }
     .tile .stat { font-size: 11px; color: var(--text-faint); margin-top: 2px;
                   text-transform: uppercase; letter-spacing: 0.5px; }
+    .tile .stat.badge { color: var(--accent); font-weight: 600; }
 
     .deny {
       max-width: 480px; margin: 80px auto; text-align: center;
@@ -86,7 +87,7 @@
       { href: '/admin/tools', icon: '🛠️', title: 'Tools', blurb: "Q's tools, what each one costs, where they're used.", stat: 'live' },
       { href: '/plotter', icon: '📋', title: 'Forms', blurb: 'Drop a PDF — Q reads every fillable field and helps you fill it out.', stat: 'live' },
       { href: '/admin/costs?groupBy=skill', icon: '💰', title: 'Costs', blurb: 'Spend by skill, model, person. JSON for now — UI coming.', stat: 'json only' },
-      { href: '/circle/people', icon: '👥', title: 'People', blurb: "Everyone in Q's circle. Add, remove, rotate passwords.", stat: 'json only' },
+      { href: '/admin/members', icon: '👥', title: 'Members', blurb: 'Approve new sign-ups, see everyone in Q’s circle, remove people.', stat: 'live', id: 'members' },
       { href: '#', icon: '🧠', title: 'Facts', blurb: "Q's long-term memory — what he's remembered.", stat: 'coming soon', disabled: true },
       { href: '#', icon: '💬', title: 'Chat threads', blurb: 'Per-person, per-surface conversation history.', stat: 'coming soon', disabled: true },
       { href: '#', icon: '⚡', title: 'Live activity', blurb: 'Who Q is talking to right now.', stat: 'coming soon', disabled: true },
@@ -102,6 +103,7 @@
         const a = document.createElement('a');
         a.className = 'tile' + (t.disabled ? ' disabled' : '');
         a.href = t.disabled ? '#' : t.href;
+        if (t.id) a.id = 'tile-' + t.id;
         a.innerHTML =
           '<div class="icon">' + t.icon + '</div>' +
           '<div class="title">' + escapeHtml(t.title) + '</div>' +
@@ -112,6 +114,26 @@
       const content = document.getElementById('content');
       content.innerHTML = '';
       content.appendChild(grid);
+      refreshPendingBadge();
+    }
+
+    // Show "N waiting" on the Members tile when sign-ups need approving.
+    function refreshPendingBadge() {
+      fetch('/circle/pending-count', { credentials: 'include' })
+        .then(r => r.ok ? r.json() : null)
+        .then(d => {
+          if (!d) return;
+          const stat = document.querySelector('#tile-members .stat');
+          if (!stat) return;
+          if (d.pending > 0) {
+            stat.textContent = d.pending + ' waiting';
+            stat.classList.add('badge');
+          } else {
+            stat.textContent = 'live';
+            stat.classList.remove('badge');
+          }
+        })
+        .catch(() => {});
     }
 
     // Sarah-only check via /whoami

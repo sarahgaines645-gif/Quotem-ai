@@ -85,8 +85,11 @@ function normaliseEmail(e) {
  * @param {string} args.email         - login identity
  * @param {string} [args.intro]       - one-line intro Q sees in his system context
  * @param {string} [args.password]    - if omitted, a strong random one is generated
+ * @param {boolean} [args.approved]   - whether the account is active immediately.
+ *                                       Admin-added people default TRUE; public
+ *                                       self-signup passes FALSE (needs approval).
  */
-async function addPerson({ id, name, email, intro, password }) {
+async function addPerson({ id, name, email, intro, password, approved = true }) {
     if (!id || !name || !email) throw new Error('id, name, email required');
     const people = loadPeople();
     const cleanEmail = normaliseEmail(email);
@@ -106,6 +109,7 @@ async function addPerson({ id, name, email, intro, password }) {
         email: cleanEmail,
         intro: intro || '',
         passwordHash,
+        approved: approved === true,
         addedAt: new Date().toISOString(),
     };
     people.push(person);
@@ -249,9 +253,9 @@ function generateUniqueId(email) {
  * the email, and creates the person. Returns the safe person record on
  * success. Throws on validation failure or duplicate email.
  *
- * No invite code, no admin approval — Sarah set this up for friends to
- * try Q without her in the loop. Tighten later if the URL gets shared
- * around in places it shouldn't.
+ * The account is created PENDING (approved:false) — Sarah approves it from
+ * the admin members page before the person can sign in. The login route is
+ * what enforces this; this function just creates the unapproved record.
  */
 async function signupPerson({ name, email, password }) {
     const cleanName = String(name || '').trim();
@@ -268,8 +272,33 @@ async function signupPerson({ name, email, password }) {
         throw new Error('An account with this email already exists. Try signing in instead.');
     }
     const id = generateUniqueId(cleanEmail);
-    const result = await addPerson({ id, name: cleanName, email: cleanEmail, password });
+    const result = await addPerson({ id, name: cleanName, email: cleanEmail, password, approved: false });
     return result.person;
+}
+
+/**
+ * Is this person allowed to sign in? Approved accounts only.
+ * Accounts created before approval existed have no `approved` field — they
+ * are grandfathered in (treated as approved) so this never locks out Sarah
+ * or anyone already in the circle. Only an explicit approved:false blocks.
+ */
+function isApproved(person) {
+    return !!person && person.approved !== false;
+}
+
+/**
+ * Approve a pending account so the person can sign in. Returns the safe
+ * person on success, null if no such id.
+ */
+function approvePerson(id) {
+    const people = loadPeople();
+    const person = people.find(p => p.id === id);
+    if (!person) return null;
+    person.approved = true;
+    person.approvedAt = new Date().toISOString();
+    savePeople(people);
+    const { passwordHash, ...safe } = person;
+    return safe;
 }
 
 /**
@@ -290,6 +319,8 @@ function migrateIfLegacy() {
 module.exports = {
     addPerson,
     signupPerson,
+    isApproved,
+    approvePerson,
     generateUniqueId,
     verifyLogin,
     getPerson,

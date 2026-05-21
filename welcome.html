@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+  <link rel="apple-touch-icon" sizes="180x180" href="/favicon-180.png" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>Q — Sign in</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    html, body { margin: 0; min-height: 100%; background: #e8e8e8;
+                 font-family: 'Space Grotesk', system-ui, sans-serif; }
+  </style>
+  <!--
+    Public landing. The whole app sits behind an auth gate, so a logged-out
+    visitor can't load any in-app page to trigger the sign-in / sign-up overlay.
+    This page is public purely to HOST that overlay (q-auth.js). It carries no
+    app content. Once signed in we send them into the app.
+  -->
+  <script>
+    // Already signed in? Skip the overlay, go straight to the app.
+    fetch('/whoami', { credentials: 'include', cache: 'no-store' })
+      .then(r => r.json())
+      .then(d => { if (d && d.person) location.replace('/chat'); })
+      .catch(() => {});
+  </script>
+  <script src="/q-auth.js"></script>
+</head>
+<body></body>
+</html>

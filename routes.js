@@ -45,7 +45,7 @@ const {
 startScheduler();
 const { loadMemory, clearMemory, appendMessage, getRecentMessages, getCircleSummary, getMemoryPath, getVoicePath, getDocPath, getTutorPath } = require('./memory');
 const { requirePerson, tryAttachPerson, setSessionCookie, clearSessionCookie } = require('./auth');
-const { listPeople, addPerson, signupPerson, getPerson, getPersonByEmail, removePerson, verifyLogin, changePassword, rotatePassword, createResetToken, consumeResetToken } = require('./people');
+const { listPeople, addPerson, signupPerson, isApproved, approvePerson, getPerson, getPersonByEmail, removePerson, verifyLogin, changePassword, rotatePassword, createResetToken, consumeResetToken } = require('./people');
 const { sendMail, isConfigured: mailerConfigured } = require('./mailer');
 const { resolveToken: resolveGeneratedDoc, resolveTokenAcrossUsers } = require('./plugins/doc-creator');
 const { summarise: summariseCosts, getLogPath: costLogPath } = require('./cost-tracker');
@@ -60,20 +60,26 @@ router.post('/login', express.json({ limit: '4kb' }), async (req, res) => {
         // Constant-time-ish: still wait roughly as long as a real bcrypt compare
         return res.status(401).json({ error: 'Email or password incorrect.' });
     }
+    // Account must be approved before it can sign in. Credentials are correct
+    // here (we don't leak approval state to wrong passwords) — the account is
+    // simply still waiting for Sarah to approve it.
+    if (!isApproved(person)) {
+        return res.status(403).json({ error: "Your account is waiting to be approved. You'll be able to sign in once it's been let in." });
+    }
     setSessionCookie(res, person.email);
     res.json({ ok: true, person });
 });
 
-// Public self-signup. No invite code, no approval — anyone can create an
-// account by giving a name, email, and 8+ char password. Auto-logs in on
-// success by setting the session cookie. Tighten this if the URL gets
-// shared in places it shouldn't.
+// Self-signup. Anyone can request an account, but it's created PENDING —
+// Sarah approves it from the admin members page before the person can sign
+// in. We deliberately do NOT set a session cookie here: a pending account
+// gets no access until approved. The client shows an "awaiting approval"
+// message on { pending: true }.
 router.post('/signup', express.json({ limit: '4kb' }), async (req, res) => {
     const { name, email, password } = req.body || {};
     try {
         const person = await signupPerson({ name, email, password });
-        setSessionCookie(res, person.email);
-        return res.json({ ok: true, person });
+        return res.json({ ok: true, pending: true, person });
     } catch (e) {
         return res.status(400).json({ error: e.message || 'Sign-up failed.' });
     }
@@ -1118,6 +1124,30 @@ router.delete('/circle/people/:id', requirePerson, (req, res) => {
     res.json({ ok });
 });
 
+// How many accounts are waiting for approval (drives the admin badge).
+router.get('/circle/pending-count', requirePerson, (req, res) => {
+    if (req.person.id !== 'sarah') return res.status(403).json({ error: 'Forbidden' });
+    const pending = listPeople().filter(p => p.approved === false).length;
+    res.json({ pending });
+});
+
+// Approve a pending account so the person can sign in.
+router.post('/circle/people/:id/approve', requirePerson, (req, res) => {
+    if (req.person.id !== 'sarah') return res.status(403).json({ error: 'Forbidden' });
+    const person = approvePerson(req.params.id);
+    if (!person) return res.status(404).json({ error: 'Person not found' });
+    res.json({ ok: true, person });
+});
+
+// Reject a pending account — removes it entirely (same as Quotem's reject).
+router.post('/circle/people/:id/reject', requirePerson, (req, res) => {
+    if (req.person.id !== 'sarah') return res.status(403).json({ error: 'Forbidden' });
+    if (req.params.id === 'sarah') return res.status(400).json({ error: 'Cannot reject Sarah.' });
+    const ok = removePerson(req.params.id);
+    if (!ok) return res.status(404).json({ error: 'Person not found' });
+    res.json({ ok: true });
+});
+
 // ── Cost tracking — Sarah only ─────────────────────────────────────────────
 router.get('/admin/costs', requirePerson, (req, res) => {
     if (req.person.id !== 'sarah') return res.status(403).json({ error: 'Forbidden' });
@@ -1140,6 +1170,11 @@ router.get('/admin', (req, res) => {
 // Admin · tools page (HTML). Data comes from /admin/tools-data below.
 router.get('/admin/tools', (req, res) => {
     res.sendFile(path.join(__dirname, 'admin-tools.html'));
+});
+
+// Admin · members page (HTML). Approve / reject sign-ups. Data via /circle/people.
+router.get('/admin/members', (req, res) => {
+    res.sendFile(path.join(__dirname, 'members.html'));
 });
 
 // Admin · tools metadata. Sarah-only. Lists every tool Q can call, its
@@ -1778,6 +1813,11 @@ router.delete('/api/threads/:id', requirePerson, (req, res) => {
 // owner-scoping and got locked to '__legacy__' on next read. This endpoint
 // claims every '__legacy__' Thread for the calling user. Run once.
 router.post('/api/threads/claim-legacy', requirePerson, (req, res) => {
+    // Admin-only — only Sarah can sweep legacy unowned Threads. (In practice the
+    // boot migration already empties the legacy dir into Sarah, so this returns
+    // { claimed: 0 } for everyone; the guard stops any future legacy data being
+    // grabbed by a non-admin account.)
+    if (req.person.id !== 'sarah') return res.status(403).json({ error: 'Forbidden' });
     const result = qThreads.claimLegacyThreads(req.person.email);
     res.json(result);
 });

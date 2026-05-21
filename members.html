@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <script src="/q-auth.js"></script>
+  <meta charset="UTF-8">
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+  <link rel="apple-touch-icon" sizes="180x180" href="/favicon-180.png" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>Q — Members</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #e8e8e8;
+      --text: #1a1a1a;
+      --text-muted: rgba(0,0,0,0.42);
+      --text-faint: rgba(0,0,0,0.26);
+      --accent: #e91e63;
+      --neu-raised:    10px 10px 28px #ababab, -8px -8px 20px #ffffff, inset 0 1px 0 rgba(255,255,255,0.5);
+      --neu-raised-sm: 6px 6px 16px #ababab, -5px -5px 12px #ffffff;
+      --neu-inset:     inset 5px 5px 14px #ababab, inset -4px -4px 10px #ffffff;
+      --neu-inset-sm:  inset 3px 3px 8px #ababab, inset -2px -2px 6px #ffffff;
+      --neu-inset-xs:  inset 3px 3px 8px #ababab, inset -2px -2px 6px #ffffff;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Space Grotesk', -apple-system, BlinkMacSystemFont, sans-serif;
+      background: var(--bg); color: var(--text);
+      font-size: 15px; line-height: 1.55;
+      min-height: 100vh; padding: 32px 40px 80px;
+      -webkit-font-smoothing: antialiased;
+    }
+    .wrap { max-width: 760px; margin: 0 auto; }
+    header { display: flex; align-items: baseline; gap: 14px; margin-bottom: 24px; flex-wrap: wrap; }
+    .logo-mark { display: inline-flex; align-items: baseline; }
+    .logo-mark .q { font-size: 28px; font-weight: 700; line-height: 1; letter-spacing: -0.05em; color: var(--text); }
+    .logo-mark .dot { width: 8px; height: 8px; background: var(--accent); border-radius: 50%; display: inline-block; margin-left: 4px; align-self: flex-end; margin-bottom: 4px; box-shadow: 0 1px 2px rgba(233,30,99,0.3); }
+    h1 { font-size: 22px; font-weight: 600; letter-spacing: -0.02em; }
+    .back { margin-left: auto; font-size: 13px; color: var(--text-muted); text-decoration: none; }
+    .back:hover { color: var(--accent); }
+
+    .card { background: var(--bg); border-radius: 10px; padding: 16px; box-shadow: var(--neu-raised); margin-bottom: 16px; }
+    .card h2 {
+      font-size: 13px; font-weight: 600;
+      color: var(--text-muted);
+      text-transform: uppercase; letter-spacing: 0.08em;
+      margin-bottom: 14px;
+      display: flex; align-items: center; gap: 10px;
+    }
+    .card h2 .count { margin-left: auto; font-size: 12px; font-weight: 500; color: var(--text-faint); }
+
+    button {
+      border: none; cursor: pointer;
+      background: var(--bg); color: var(--text);
+      font-family: inherit; font-size: 13px; font-weight: 600;
+      padding: 8px 16px; border-radius: 10px;
+      box-shadow: var(--neu-raised-sm);
+      transition: box-shadow 0.12s, color 0.12s;
+    }
+    button:hover:not(:disabled) { color: var(--accent); }
+    button:active:not(:disabled) { box-shadow: var(--neu-inset-xs); }
+    button:disabled { opacity: 0.5; cursor: not-allowed; }
+    button.small { padding: 6px 12px; font-size: 12px; font-weight: 500; }
+    button.danger:hover:not(:disabled) { color: #ef4444; }
+
+    .person-row {
+      display: flex; align-items: center; gap: 12px;
+      padding: 12px 14px; margin-bottom: 10px;
+      border-radius: 12px; box-shadow: var(--neu-inset-xs);
+    }
+    .person-row:last-child { margin-bottom: 0; }
+    .person-row .info { flex: 1; min-width: 0; }
+    .person-row .info .name { font-weight: 600; font-size: 15px; }
+    .person-row .info .name .you {
+      font-size: 10px; font-weight: 600; color: var(--accent);
+      text-transform: uppercase; letter-spacing: 0.06em; margin-left: 8px;
+    }
+    .person-row .info .email { font-size: 12px; color: var(--text-muted); word-break: break-all; }
+    .person-row .info .meta { font-size: 11px; color: var(--text-faint); margin-top: 1px; }
+    .person-row .acts { display: flex; gap: 8px; flex: 0 0 auto; }
+
+    .empty { color: var(--text-faint); font-size: 13px; text-align: center; padding: 14px; }
+    .status { font-size: 12px; color: var(--text-muted); min-height: 16px; margin-top: 4px; }
+    .status.err { color: #ef4444; }
+
+    .deny {
+      max-width: 480px; margin: 80px auto; text-align: center;
+      background: var(--bg); box-shadow: var(--neu-raised);
+      border-radius: 24px; padding: 40px 32px;
+    }
+    .deny h2 { font-size: 22px; margin-bottom: 8px; }
+    .deny p { color: var(--text-muted); font-size: 14px; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <span class="logo-mark"><span class="q">Q</span><span class="dot"></span></span>
+      <h1>Members</h1>
+      <a href="/admin" class="back">← Back to admin</a>
+    </header>
+
+    <div class="status" id="status"></div>
+    <div id="content"><div class="deny" id="loading"><h2>Loading…</h2></div></div>
+  </div>
+
+  <script>
+    function escapeHtml(s) {
+      return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+    }
+    function fmtDate(iso) {
+      if (!iso) return '';
+      const d = new Date(iso);
+      if (isNaN(d)) return '';
+      return d.toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' });
+    }
+
+    // Destructive actions get a two-tap confirm — blocking confirm() dialogs
+    // silently fail in installed PWAs, so never use them.
+    function armConfirm(btn, original, run) {
+      if (btn.dataset.armed === '1') { run(); return; }
+      btn.dataset.armed = '1';
+      btn.textContent = 'Tap to confirm';
+      const reset = () => { btn.dataset.armed = ''; btn.textContent = original; };
+      btn._resetTimer = setTimeout(reset, 3000);
+    }
+
+    function setStatus(msg, isErr) {
+      const el = document.getElementById('status');
+      if (!el) return;
+      el.textContent = msg || '';
+      el.classList.toggle('err', !!isErr);
+    }
+
+    async function api(method, url) {
+      const r = await fetch(url, { method, credentials: 'include' });
+      const data = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(data.error || (method + ' ' + url + ' failed'));
+      return data;
+    }
+
+    function row(p, opts) {
+      const wrap = document.createElement('div');
+      wrap.className = 'person-row';
+      const you = opts.isYou ? '<span class="you">you · admin</span>' : '';
+      const meta = opts.metaText ? '<div class="meta">' + escapeHtml(opts.metaText) + '</div>' : '';
+      wrap.innerHTML =
+        '<div class="info">' +
+          '<div class="name">' + escapeHtml(p.name || p.id) + you + '</div>' +
+          '<div class="email">' + escapeHtml(p.email || '') + '</div>' +
+          meta +
+        '</div>' +
+        '<div class="acts"></div>';
+      const acts = wrap.querySelector('.acts');
+      (opts.buttons || []).forEach(b => acts.appendChild(b));
+      return wrap;
+    }
+
+    function btn(label, cls, onClick) {
+      const b = document.createElement('button');
+      b.className = 'small' + (cls ? ' ' + cls : '');
+      b.textContent = label;
+      b.addEventListener('click', onClick);
+      return b;
+    }
+
+    function render(people) {
+      const content = document.getElementById('content');
+      content.innerHTML = '';
+
+      const pending = people.filter(p => p.approved === false);
+      const members = people.filter(p => p.approved !== false);
+
+      // ── Waiting for approval ──
+      const pCard = document.createElement('div');
+      pCard.className = 'card';
+      pCard.innerHTML = '<h2>Waiting for approval <span class="count">' + pending.length + '</span></h2>';
+      if (!pending.length) {
+        pCard.insertAdjacentHTML('beforeend', '<div class="empty">No one waiting. New sign-ups land here.</div>');
+      } else {
+        pending.forEach(p => {
+          const approveBtn = btn('Approve', '', async () => {
+            setStatus('');
+            approveBtn.disabled = true;
+            try { await api('POST', '/circle/people/' + encodeURIComponent(p.id) + '/approve'); setStatus(escapeHtml(p.name || p.id) + ' approved.'); await load(); }
+            catch (e) { approveBtn.disabled = false; setStatus(e.message, true); }
+          });
+          const rejectBtn = btn('Reject', 'danger', () => {
+            armConfirm(rejectBtn, 'Reject', async () => {
+              setStatus('');
+              rejectBtn.disabled = true;
+              try { await api('POST', '/circle/people/' + encodeURIComponent(p.id) + '/reject'); await load(); }
+              catch (e) { rejectBtn.disabled = false; setStatus(e.message, true); }
+            });
+          });
+          pCard.appendChild(row(p, { metaText: 'Signed up ' + fmtDate(p.addedAt), buttons: [approveBtn, rejectBtn] }));
+        });
+      }
+      content.appendChild(pCard);
+
+      // ── In Q's circle ──
+      const mCard = document.createElement('div');
+      mCard.className = 'card';
+      mCard.innerHTML = '<h2>In Q’s circle <span class="count">' + members.length + '</span></h2>';
+      if (!members.length) {
+        mCard.insertAdjacentHTML('beforeend', '<div class="empty">No members yet.</div>');
+      } else {
+        members.forEach(p => {
+          const buttons = [];
+          if (p.id !== 'sarah') {
+            const removeBtn = btn('Remove', 'danger', () => {
+              armConfirm(removeBtn, 'Remove', async () => {
+                setStatus('');
+                removeBtn.disabled = true;
+                try { await api('DELETE', '/circle/people/' + encodeURIComponent(p.id)); await load(); }
+                catch (e) { removeBtn.disabled = false; setStatus(e.message, true); }
+              });
+            });
+            buttons.push(removeBtn);
+          }
+          mCard.appendChild(row(p, {
+            isYou: p.id === 'sarah',
+            metaText: p.approvedAt ? 'Approved ' + fmtDate(p.approvedAt) : (p.addedAt ? 'Joined ' + fmtDate(p.addedAt) : ''),
+            buttons,
+          }));
+        });
+      }
+      content.appendChild(mCard);
+    }
+
+    async function load() {
+      try {
+        const data = await api('GET', '/circle/people');
+        render(data.people || []);
+      } catch (e) {
+        document.getElementById('content').innerHTML =
+          '<div class="deny"><h2>Couldn’t load</h2><p>' + escapeHtml(e.message) + '</p></div>';
+      }
+    }
+
+    // Sarah-only gate (mirrors admin.html)
+    fetch('/whoami', { credentials: 'include' })
+      .then(r => r.json())
+      .then(d => {
+        if (!d.person) return; // q-auth.js shows the sign-in overlay
+        if (d.person.id !== 'sarah') {
+          document.getElementById('content').innerHTML =
+            '<div class="deny"><h2>Forbidden</h2><p>The members area is for Sarah only.</p></div>';
+          return;
+        }
+        load();
+      })
+      .catch(() => {});
+  </script>
+</body>
+</html>

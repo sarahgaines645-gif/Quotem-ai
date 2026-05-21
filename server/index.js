@@ -192,6 +192,15 @@ app.get('/tags', (req, res) => {
     res.sendFile(path.join(ROOT, 'tags.html'));
 });
 
+// Public sign-in / sign-up landing. Every in-app page is behind the auth gate,
+// so a logged-out visitor can't load one to trigger the q-auth overlay. This
+// page is public ONLY to host that overlay — it has no app content. The gate
+// below redirects logged-out page navigations here.
+app.get('/welcome', (req, res) => {
+    res.setHeader('Cache-Control', 'no-store');
+    res.sendFile(path.join(ROOT, 'welcome.html'));
+});
+
 // Favicon — Q with pink dot. Multiple sizes for desktop + mobile + home-screen.
 //   /favicon.svg          → modern browsers (scalable)
 //   /favicon.ico          → fallback for older browsers (just the SVG)
@@ -240,6 +249,7 @@ const PUBLIC_PATHS = new Set([
     '/sw.js',                // service worker must be public — browser fetches it pre-auth
     '/trace-widget.js', '/looking-glass-widget.js',
     '/tags',                 // public NFC tag landing page — recipients aren't signed-in users
+    '/welcome',              // public sign-in / sign-up landing (hosts the auth overlay)
     '/login', '/signup', '/logout',
     '/forgot-password', '/reset-password',
 ]);
@@ -255,7 +265,18 @@ function isPublicPath(p) {
 
 app.use((req, res, next) => {
     if (isPublicPath(req.path)) return next();
-    return requirePerson(req, res, next);
+    const person = verifySessionCookie(req);
+    if (person) { req.person = person; return next(); }
+    // Unauthenticated. A top-level browser navigation (Sec-Fetch-Dest: document)
+    // gets the public /welcome page, which hosts the sign-in / sign-up overlay —
+    // otherwise a logged-out visitor just sees raw "Sign in required" JSON and
+    // can never reach a login or sign-up screen. Every other request (fetch,
+    // API call, asset) still gets the JSON 401 exactly as before. This redirect
+    // only ever sends a logged-out browser to a login screen; it exposes no data.
+    if (req.method === 'GET' && req.headers['sec-fetch-dest'] === 'document') {
+        return res.redirect(302, '/welcome');
+    }
+    return res.status(401).json({ error: 'Sign in required.' });
 });
 
 // ── Mount Q's existing router under root ───────────────────────

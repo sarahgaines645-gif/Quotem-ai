@@ -6,8 +6,9 @@
  * Two modes: sign in (default, returning users) or sign up (new users).
  * Submitting valid credentials sets the cookie and reloads the page.
  *
- * Sign-up takes name + email + password (no invite code, no admin
- * approval — anyone can create an account and start chatting with Q).
+ * Sign-up takes name + email + password. New accounts are created PENDING —
+ * the person sees an "awaiting approval" message and can't sign in until
+ * Sarah approves them from the admin members page.
  */
 (function () {
     function show() {
@@ -206,6 +207,19 @@
         const forgotPrompt = modeToggle.querySelector('.forgot-prompt');
         const forgotInfo = overlay.querySelector('.q-forgot-only');
 
+        // After a successful sign-up the account is pending approval. Replace the
+        // card with a calm confirmation so the person isn't bounced back to a
+        // sign-in form that would just reject them.
+        function showPending() {
+            card.innerHTML =
+                '<h1>Q<span class="dot">.</span></h1>' +
+                '<p class="q-mode-label">Almost there</p>' +
+                '<p class="q-info" style="margin-top:0">Thanks for signing up. Your account is waiting to be approved — you\'ll be able to sign in once you\'ve been let in.</p>' +
+                '<button class="q-submit" id="q-pending-ok">OK</button>';
+            const okBtn = card.querySelector('#q-pending-ok');
+            if (okBtn) okBtn.addEventListener('click', () => location.reload());
+        }
+
         function setMode(m) {
             const next = (m === 'signup' || m === 'forgot') ? m : 'signin';
             overlay.dataset.mode = next;
@@ -287,8 +301,13 @@
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({ name: n, email: e, password: p }),
                     });
-                    if (r.ok) { location.reload(); return; }
                     const data = await r.json().catch(() => ({}));
+                    if (r.ok) {
+                        // Account created but PENDING — no session was set. Show the
+                        // waiting message rather than reloading into a dead session.
+                        showPending();
+                        return;
+                    }
                     err.textContent = data.error || 'Sign-up failed.';
                 } catch (_) {
                     err.textContent = 'Network error — try again.';
