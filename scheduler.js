@@ -214,6 +214,15 @@ function workerTick() {
 
 function startScheduler() {
     if (workerHandle) return; // idempotent
+    // ⛔ EMERGENCY COST GUARD (2026-05-22): the scheduled-job worker fires
+    // runAgent unattended — a recurring job was draining the Together balance
+    // (money leaving while the app was untouched). The worker is now OFF by
+    // default. Re-enable ONLY after the runaway job is removed, by setting
+    // Q_SCHEDULER_ENABLED=true on Railway.
+    if (process.env.Q_SCHEDULER_ENABLED !== 'true') {
+        console.warn('[q/scheduler] ⛔ DISABLED by cost guard — set Q_SCHEDULER_ENABLED=true to re-enable. No scheduled jobs will run.');
+        return;
+    }
     workerHandle = setInterval(workerTick, POLL_MS);
     console.log('[q/scheduler] worker started — polling every', POLL_MS / 1000, 'sec');
 }
