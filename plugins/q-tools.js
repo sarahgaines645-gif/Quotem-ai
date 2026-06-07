@@ -1104,7 +1104,14 @@ async function analyzeDocument({ image_url, question }) {
         }
 
         const data = await response.json();
-        const content = cleanModelOutput(data.choices?.[0]?.message?.content || '', 'analyze-document');
+        const msg = data.choices?.[0]?.message || {};
+        // Thinking-mode quirk on Together (Kimi K2.5 / V4 Pro): the answer
+        // sometimes lands in reasoning_content/reasoning with content empty.
+        // Mirror the fallback in q-chat.js / q-finance.js.
+        const rawContent = (msg.content && msg.content.trim())
+            ? msg.content
+            : (msg.reasoning_content || msg.reasoning || '');
+        const content = cleanModelOutput(rawContent, 'analyze-document');
 
         // For form-detection prompts, try to parse JSON. Fall back to raw text.
         if (isFormQuestion) {

@@ -43,6 +43,7 @@ async function readStreamText(response) {
     const reader = response.body.getReader();
     const decoder = new TextDecoder();
     let text = '';
+    let reasoning = '';
     let buf = '';
     while (true) {
         const { done, value } = await reader.read();
@@ -57,10 +58,15 @@ async function readStreamText(response) {
                 const chunk = JSON.parse(s);
                 const delta = chunk.choices?.[0]?.delta;
                 if (delta?.content) text += delta.content;
+                // Thinking-mode quirk on Together AI: Kimi K2.5 / V4 Pro sometimes
+                // stream the answer as reasoning_content with content left empty.
+                // Mirror the fallback in q-chat.js / q-finance.js so it isn't lost.
+                if (delta?.reasoning_content) reasoning += delta.reasoning_content;
+                else if (delta?.reasoning) reasoning += delta.reasoning;
             } catch { /* ignore */ }
         }
     }
-    return text;
+    return (text && text.trim()) ? text : reasoning;
 }
 
 /**
@@ -139,7 +145,13 @@ ${infoText || '(none)'}`;
         raw = await readStreamText(response);
     } else {
         const data = await response.json();
-        raw = data.choices?.[0]?.message?.content || '';
+        const msg = data.choices?.[0]?.message || {};
+        // DeepSeek-V4-Pro thinking-mode quirk on Together: the answer sometimes
+        // lands in reasoning_content/reasoning with content left empty. Mirror the
+        // fallback already used in q-chat.js and q-finance.js.
+        raw = (msg.content && msg.content.trim())
+            ? msg.content
+            : (msg.reasoning_content || msg.reasoning || '');
     }
     raw = cleanModelOutput(raw, 'form-filler');
 
