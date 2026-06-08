@@ -2114,7 +2114,7 @@ router.post('/api/threads/:id/chat', requirePerson, express.json({ limit: '256kb
         /pdf|text\/|rfc822|word|officedocument|msword/i.test(f.mimeType || '')
         || /\.(pdf|txt|eml|md|csv|docx?)$/i.test(f.filename || ''));
     const isAddPing = /I've just added .+ to the case/i.test(message);
-    const refersToFile = /\b(image|images|photo|photos|picture|pictured|pic|pics|screenshot|scan|scanned|see|look|shows?|attached|attachment|document|doc|letter|email|e-?mail|pdf|file|says?|read|content|in it|whats? in)\b/i.test(message);
+    const refersToFile = /\b(image|images|photo|photos|picture|pictured|pic|pics|screenshot|scan|scanned|see|look|shows?|attached|attachment|document|doc|letter|email|e-?mail|pdf|file|says?|read|content|in it|whats? in|video|videos|footage|recording|clip|watch|frame|frames)\b/i.test(message);
     const wantContent = isAddPing || refersToFile;
 
     // Photos on a case: read each one to TEXT once (cached), then hand Q that text
@@ -2157,6 +2157,36 @@ router.post('/api/threads/:id/chat', requirePerson, express.json({ limit: '256kb
                 messages.splice(messages.length - 1, 0, { role: 'user', content: block });
             } catch (e) {
                 console.warn('[threads] photo read failed: ' + f.filename + ' — ' + e.message);
+            }
+        }
+    }
+
+    // Video files (CCTV, dashcam, enforcement footage) — Gemini watches and
+    // describes every detail (timestamps, plates, signs, actions) as plain
+    // text so Q can reason over it with the full thread context.
+    const videoFiles = allFiles.filter(f => (f.mimeType || '').startsWith('video/'));
+    if (videoFiles.length && wantContent) {
+        for (const f of videoFiles) {
+            try {
+                const cacheKey = `${t.id}:${f.filename}:video`;
+                let text;
+                if (_threadDocCache.has(cacheKey)) {
+                    text = _threadDocCache.get(cacheKey);
+                } else {
+                    const file = qThreads.readFile(t.id, f.filename, req.person.email);
+                    if (!file || !file.buffer) continue;
+                    const b64 = file.buffer.toString('base64');
+                    const mime = file.mimeType || 'video/mp4';
+                    text = await qFinance.extractVideo(b64, mime);
+                    _threadDocCache.set(cacheKey, text);
+                    console.log(`[threads] read video "${f.filename}" (${text.length} chars)`);
+                }
+                const block = text
+                    ? `CONTENT OF ATTACHED VIDEO "${f.filename}" (I've watched it for you):\n${text}`
+                    : `(The attached video "${f.filename}" could not be processed automatically.)`;
+                messages.splice(messages.length - 1, 0, { role: 'user', content: block });
+            } catch (e) {
+                console.warn('[threads] video read failed: ' + f.filename + ' — ' + e.message);
             }
         }
     }

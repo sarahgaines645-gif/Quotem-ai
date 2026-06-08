@@ -778,6 +778,34 @@ async function extractDocument(imageBase64, mimeType = 'image/jpeg') {
     }
 }
 
+// Describe video footage (CCTV, enforcement camera, dashcam) as plain text.
+// Gemini 2.5 Flash accepts video via inline_data for files up to ~20MB raw.
+// Returns a detailed plain-text description Q can reason over.
+async function extractVideo(base64, mimeType = 'video/mp4') {
+    const prompt = `This is enforcement camera, CCTV, or dashcam footage. Watch it and describe EVERYTHING you observe:
+- Every timestamp shown (exact date and time, frame by frame if they change)
+- Every vehicle registration plate — read every character exactly
+- Make, model, and colour of each vehicle
+- Every road sign and its EXACT wording
+- Road markings, bollards, restrictions
+- Actions: which vehicles enter/exit the zone, direction of travel, any stops
+- Pedestrians and their positions
+- Any camera reference numbers, GPS coordinates, or location overlays shown on screen
+- Any other on-screen text or graphics
+
+Be precise. Miss nothing. Lay it out clearly so a legal reader can follow the timeline.`;
+    try {
+        const text = await visionRead({ prompt, base64, mimeType, maxTokens: 4096 });
+        return text || '';
+    } catch (e) {
+        if (/too large|size|limit/i.test(e.message)) {
+            const mb = Math.round(base64.length * 0.75 / 1024 / 1024);
+            return `(Video is ~${mb}MB — too large for inline processing. Compress it below 20MB and re-upload, or describe the key moments in the chat.)`;
+        }
+        throw e;
+    }
+}
+
 
 // ── Merchant assignment ───────────────────────────────────────────
 
@@ -1183,6 +1211,7 @@ module.exports = {
 
     // Documents / vision
     extractDocument,
+    extractVideo,
     verifyCaseReply,
     importStatementFromImage,
     importStatementFromFile,
