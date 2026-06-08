@@ -707,6 +707,7 @@ async function chat(messages, options = {}) {
     ];
     const toolCalls = [];     // [{ name, args, result, durationMs }]
     let draftReply = null;    // Captured when the tool loop exits cleanly
+    let emptyRetries = 0;     // empty 200-OK responses → retry before the friendly note
     let totalTokensIn = 0;
     let totalTokensOut = 0;
     const startTime = Date.now();
@@ -856,20 +857,30 @@ async function chat(messages, options = {}) {
 
             // No tool calls → Q's done. Capture the draft and exit the loop.
             if (!useTools || !callsRequested || callsRequested.length === 0) {
-                // V4 Pro sometimes puts the full reply in message.reasoning instead
+                // V4 Pro/Flash sometimes put the reply in message.reasoning instead
                 // of message.content (thinking-mode quirk on Together AI). Fall back
                 // to the reasoning field so the response isn't lost.
-                draftReply = message?.content || message?.reasoning_content || message?.reasoning || '';
-                // If the model returned empty content with no tool call, log
-                // the diagnostic context and surface one of Q's friendly
-                // rotating messages instead of leaving the chat empty.
-                if (!draftReply.trim()) {
+                const candidate = message?.content || message?.reasoning_content || message?.reasoning || '';
+                if (!candidate.trim()) {
                     console.warn('[q-chat] empty reply from model. iteration=' + iteration
+                        + ' emptyRetries=' + emptyRetries
                         + ' finish_reason=' + (choice?.finish_reason || 'unknown')
                         + ' has_message=' + !!message
                         + ' has_reasoning=' + !!(message?.reasoning_content || message?.reasoning)
                         + ' raw_choice=' + JSON.stringify(choice).substring(0, 500));
+                    // V4-Flash intermittently returns an empty 200 OK. Retry the
+                    // call a couple of times before the friendly note, so a one-off
+                    // blank doesn't cost the user the whole turn ("every other
+                    // message" failures). draftReply stays null so the outer
+                    // fallbacks still apply if every retry is blank.
+                    if (emptyRetries < 2) {
+                        emptyRetries++;
+                        await new Promise(r => setTimeout(r, 400 * emptyRetries));
+                        continue;
+                    }
                     draftReply = pickFriendlyError();
+                } else {
+                    draftReply = candidate;
                 }
                 // Belt-and-braces: strip any stray CJK / DSML chars that
                 // slipped through without being parsed as a tool call.
