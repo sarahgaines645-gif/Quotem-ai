@@ -169,6 +169,12 @@ app.get('/looking-glass-widget.js', (req, res) => res.sendFile(path.join(ROOT, '
 // the Schedule Call QR modal was rendering a broken-image icon. Hosted from
 // this app, no third-party dep.
 app.get('/qrcode.min.js', (req, res) => res.sendFile(path.join(ROOT, 'qrcode.min.js')));
+// Self-hosted marked (markdown parser, v12). Q's replies on chat / thread /
+// email-writer / writer render through window.marked. The file was vendored
+// (commit 38c1008) but never given a route — so /marked.min.js 404'd and every
+// reply fell back to raw text: literal **asterisks**, no headings, flat black.
+// This route is what actually makes Q's formatting render.
+app.get('/marked.min.js', (req, res) => res.sendFile(path.join(ROOT, 'marked.min.js')));
 // CustomSelect — shared drop-in replacement for native <select> with full
 // CSS control. Used by both chat.html (floating tasks card) and life.html
 // (modal). Native select's open list can't be styled.
