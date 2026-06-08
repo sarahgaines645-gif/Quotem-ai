@@ -346,14 +346,15 @@ router.post('/forms/label', requirePerson, express.json({ limit: '32mb' }), asyn
 
 // POST /forms/extract
 // Body: { fields: [{name, type}], infoText, imageDataUrl? }
-// Returns: { values: { fieldName: value } }  — for the UI to populate the review form
+// Returns: { values: { fieldName: value }, ask: [{ field, question }] }
+//   values = confident fills; ask = fields Q couldn't fill → the UI asks the user.
 router.post('/forms/extract', requirePerson, express.json({ limit: '24mb' }), async (req, res) => {
     try {
         const { fields, infoText, imageDataUrl } = req.body || {};
         if (!fields || !fields.length) return res.status(400).json({ error: 'fields required' });
         if (!infoText && !imageDataUrl) return res.status(400).json({ error: 'infoText or imageDataUrl required' });
-        const values = await qFormFiller.extractFieldValues(fields, infoText || '', imageDataUrl || null);
-        res.json({ ok: true, values });
+        const { values, ask } = await qFormFiller.extractFieldValues(fields, infoText || '', imageDataUrl || null);
+        res.json({ ok: true, values, ask });
     } catch (e) {
         console.error('[forms/extract]', e.message);
         res.status(500).json({ error: e.message });

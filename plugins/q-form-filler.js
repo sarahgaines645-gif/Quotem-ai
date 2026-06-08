@@ -23,21 +23,36 @@ You receive:
 1. A list of PDF form fields. Each has a NAME, a TYPE, and CONTEXT — the actual surrounding form text (what comes above/before/after the blank space on the page). The context shows you what the form is really asking for.
 2. Information the user has provided (text, screenshot, or speech).
 
-Extract the value for every field you can confidently fill. Return a JSON object whose KEYS are the EXACT field names from the list (copy them verbatim, including spaces, ellipses, and odd casing) and whose VALUES are the strings to write into each field.
+Return a SINGLE JSON object with exactly two keys:
+{
+  "values": { "<exact field name>": "<value to write>", ... },
+  "ask":    [ { "field": "<exact field name>", "question": "<short plain-English question to the user>" }, ... ]
+}
 
-RULES — READ CAREFULLY:
-- USE THE CONTEXT, not just the name. A field named "as a contractual" with context "before: 'and then continues on from' | after: 'monthly tenancy'" is asking for the type of periodic tenancy (e.g. "periodic"), NOT the entire phrase.
-- A field name that looks like a sentence fragment is usually the LABEL just before the blank — read the after-context to see what kind of value goes there.
-- Match user info to fields by MEANING. "Tenant: Eleanor Hartley" maps to a field whose context shows it's asking for the tenant's name.
+"values" = ONLY the fields you can fill with HIGH CONFIDENCE directly from the information provided. Copy field names VERBATIM (including spaces, ellipses, odd casing).
+
+"ask" = every field the form needs that you could NOT fill — because the information doesn't contain it, or it's genuinely ambiguous which value belongs in that blank. For each, write a short, friendly question asking the user for exactly that piece of information.
+
+THE RULE THAT MATTERS MOST — NEVER MAKE ANYTHING UP:
+- Do NOT invent, guess, or assume a value. If the provided information does not clearly contain it, it goes in "ask", NOT in "values". A blank you asked about is RIGHT; a value you invented is WRONG and worse than blank.
+- Do NOT drop a name into a field just because the field mentions a role you happen to have a name for. If a clause is conditional or it is unclear WHICH person/value belongs in the blank (e.g. "appoint a lead tenant to manage the deposit, ___"), ASK — do not guess.
+- Never fabricate scheme names, reference numbers, addresses, account names, or dates. If it is not in the data, ASK.
+
+OTHER RULES:
+- USE THE CONTEXT, not just the name. A field named "as a contractual" with context "before: 'and then continues on from' | after: 'monthly tenancy'" wants the type of periodic tenancy (e.g. "periodic"), NOT the whole phrase.
+- A field name that looks like a sentence fragment is usually the LABEL just before the blank — read the after-context to see what value goes there.
+- Match user info to fields by MEANING. "Tenant: Eleanor Hartley" → the field whose context asks for the tenant's name.
+- RESOLVE ROLES TO THE ACTUAL VALUE: "deposit held by" / "payable to" / "the landlord" → the landlord's real name from the data, NOT the word "landlord".
 - Dates: format as DD/MM/YYYY unless the context suggests otherwise.
 - Checkboxes (type "checkbox"): value is "true" or "false".
-- If a field's context isn't clear and you don't have an obvious match, OMIT it. Never guess or fabricate. Half-filled correctly beats fully-filled with wrong values.
+- Do NOT ask about signature fields, and do NOT ask about a field you already put in "values".
 - Output a single JSON object. No prose. No markdown fences. Start with { and end with }.
 
 Example:
-Field: { name: "as a fixed term for", context: "before: 'a single tenancy that begins on [date]' | after: 'months and the rent is'" }
-User info: "Term: 12 months, starting 1st June 2026"
-→ output: { "as a fixed term for": "12" }   (NOT "12 months" — the word "months" is already in the form)`;
+Fields: "as a fixed term for" (text, context "before: 'a tenancy that begins on [date]' | after: 'months and the rent is'"); "deposit scheme name" (text)
+User info: "Term: 12 months, starting 1st June 2026. Landlord: Sterling Estate Group."
+→ { "values": { "as a fixed term for": "12" }, "ask": [ { "field": "deposit scheme name", "question": "Which deposit protection scheme is the deposit registered with?" } ] }
+("12" not "12 months" — the word "months" is already on the form; and the scheme name was NOT in the data, so ASK — never invent it.)`;
 
 async function readStreamText(response) {
     const reader = response.body.getReader();
@@ -171,12 +186,21 @@ ${infoText || '(none)'}`;
         throw new Error(`Q returned text instead of JSON: "${raw.slice(0, 120)}…"`);
     }
 
+    let parsed;
     try {
-        return JSON.parse(cleaned.slice(start, end + 1));
+        parsed = JSON.parse(cleaned.slice(start, end + 1));
     } catch (parseErr) {
         console.error('[q-form-filler] JSON parse failed. Raw:', raw.slice(0, 500));
         throw new Error('Q returned malformed JSON — try again.');
     }
+
+    // New shape: { values, ask }. Back-compat: a bare { field: value } object
+    // (no "values"/"ask" keys) is treated as values with nothing to ask.
+    const hasNewShape = parsed && typeof parsed === 'object' &&
+        (parsed.values !== undefined || parsed.ask !== undefined);
+    const values = hasNewShape ? (parsed.values || {}) : (parsed || {});
+    const ask = (hasNewShape && Array.isArray(parsed.ask)) ? parsed.ask : [];
+    return { values, ask };
 }
 
 /**
@@ -313,7 +337,7 @@ async function fillPdf(pdfBytes, values) {
  * @returns {Promise<{ filledBytes, values, results }>}
  */
 async function intakeAndFill({ pdfBytes, fields, infoText, imageDataUrl }) {
-    const values = await extractFieldValues(fields, infoText, imageDataUrl || null);
+    const { values } = await extractFieldValues(fields, infoText, imageDataUrl || null);
     const { filledBytes, results } = await fillPdf(pdfBytes, values);
     return { filledBytes, values, results };
 }

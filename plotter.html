@@ -274,6 +274,21 @@
     .fill-status.ok { color: #10b981; }
     .fill-status.err { color: var(--accent); }
 
+    /* Q's "I couldn't fill these — tell me" questions (ask, don't invent) */
+    .fill-questions { display: none; margin-top: 16px; }
+    .fill-questions.show { display: block; }
+    .fq-title { font-size: 13px; font-weight: 600; color: var(--text); margin-bottom: 10px; }
+    .fq-item { display: flex; flex-direction: column; gap: 6px; margin-bottom: 12px; }
+    .fq-q { font-size: 12px; color: var(--text-muted); }
+    .fq-input {
+      border: none; outline: none;
+      background: var(--bg); box-shadow: var(--neu-inset-sm);
+      border-radius: 8px; padding: 9px 12px;
+      font-family: 'Space Grotesk', sans-serif; font-size: 13px; color: var(--text);
+    }
+    .fq-item.fq-done .fq-q { color: var(--text-faint); text-decoration: line-through; }
+    .fq-item.fq-done .fq-input { box-shadow: var(--neu-inset-sm), 0 0 0 2px rgba(233,30,99,0.20); }
+
     /* Q coach card — same pattern as writer.html */
     .coach-card {
       position: fixed; right: 24px; top: 50%; transform: translateY(-50%);
@@ -381,6 +396,8 @@
         <button class="q-btn" id="download-docx-btn" type="button" style="display:none">Download Word (.docx)</button>
         <span class="fill-status" id="fill-status"></span>
       </div>
+
+      <div id="fill-questions" class="fill-questions"></div>
     </div>
   </div>
 
@@ -943,6 +960,47 @@
       });
     }
 
+    // Q couldn't confidently fill these — ask the user instead of guessing.
+    // Answering an item drops the value straight into the form.
+    function renderFillQuestions(ask) {
+      const box = document.getElementById('fill-questions');
+      if (!box) return;
+      box.innerHTML = '';
+      const items = (ask || []).filter(q =>
+        q && q.field && q.question && allFields.some(f => f.name === q.field));
+      if (!items.length) { box.classList.remove('show'); return; }
+      const title = document.createElement('div');
+      title.className = 'fq-title';
+      title.textContent = "A few I couldn't fill from what you gave me — tell me and I'll drop them in:";
+      box.appendChild(title);
+      for (const q of items) {
+        const row = document.createElement('div');
+        row.className = 'fq-item';
+        const qEl = document.createElement('div');
+        qEl.className = 'fq-q';
+        qEl.textContent = q.question;
+        const inp = document.createElement('input');
+        inp.type = 'text';
+        inp.className = 'fq-input';
+        inp.placeholder = 'Type the answer…';
+        const apply = async () => {
+          const v = inp.value.trim();
+          if (!v || row.classList.contains('fq-done')) return;
+          applyValues({ [q.field]: v });
+          await renderPage(currentPage);
+          flashFilledInputs({ [q.field]: v });
+          row.classList.add('fq-done');
+          inp.disabled = true;
+        };
+        inp.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); apply(); } });
+        inp.addEventListener('blur', apply);
+        row.appendChild(qEl);
+        row.appendChild(inp);
+        box.appendChild(row);
+      }
+      box.classList.add('show');
+    }
+
     // Screenshots — paperclip + drag-drop into the box + paste image
     function renderImageThumbs() {
       $imgsRow.innerHTML = '';
@@ -1063,8 +1121,12 @@
         applyValues(data.values || {});
         await renderPage(currentPage);
         flashFilledInputs(data.values || {});
+        renderFillQuestions(data.ask || []);
         const n = Object.keys(data.values || {}).length;
-        $fillStatus.textContent = '✓ Q filled ' + n + ' field' + (n === 1 ? '' : 's') + ' — download as PDF or open in Google Docs.';
+        const q = (data.ask || []).length;
+        $fillStatus.textContent = '✓ Q filled ' + n + ' field' + (n === 1 ? '' : 's')
+          + (q ? ' — ' + q + ' need' + (q === 1 ? 's' : '') + ' your answer below.'
+               : ' — download as PDF or open in Google Docs.');
         $fillStatus.className = 'fill-status ok';
         $downloadDocxBtn.style.display = '';
         document.getElementById('open-gdocs-btn').style.display = '';
