@@ -640,7 +640,7 @@ const TOOL_DEFINITIONS = [
         type: 'function',
         function: {
             name: 'send_notification',
-            description: "Send a push notification to the user's phone or browser. Use this to remind them of something, alert them to a calendar event or deadline, follow up on something they asked you to track, or send any message they want to receive when they're not looking at the screen. Only send if the user has explicitly asked for a reminder or notification, or if you're acting on a scheduled reminder you set up.",
+            description: "Send a push notification — a phone/browser PING ONLY. It does NOT save or add anything: not a task, not a calendar entry, not a list. It just buzzes the user's phone once. Use it ONLY when the user explicitly asks to be pinged/alerted, or when you're firing a scheduled reminder you set up earlier. NEVER use it to 'add a task', 'make a list', 'save a deadline' or 'track' something — those must be saved with add_task (for to-dos) or add_event (for dated things), or the user ends up with a ping and nothing on their list. If they want both, save it first AND then optionally ping.",
             parameters: {
                 type: 'object',
                 properties: {
@@ -690,7 +690,7 @@ const TOOL_DEFINITIONS = [
         type: 'function',
         function: {
             name: 'add_task',
-            description: 'Add a to-do task to the user\'s task list (visible on /life and on the Tasks drawer in the main chat). Use this for "remind me to…", "I need to…", or anything actionable. Break bigger jobs into a checklist with subtasks. Set alertAt when the user mentions a time they want reminding. Set contact when the task is "call X".',
+            description: 'Add a to-do task to the user\'s task list. This PERSISTS it and it shows on /life and on the Tasks drawer in the main chat — this is the ONLY tool that actually puts something on their list. This is THE tool for "add a task", "put X on my list", "make me a list of…", "save this deadline as a to-do", "remind me to…", "I need to…", or anything actionable. Call it ONCE PER TASK — three tasks = three add_task calls. NEVER use send_notification to add a task (that only pings, it saves nothing). Only add what the user actually named — do not invent extra tasks. Break a bigger job into subtasks. Set alertAt when they mention a time to be reminded. Set contact when the task is "call X". Pick the category the user asks for; if none, leave it default — do not guess "money"/etc.',
             parameters: {
                 type: 'object',
                 properties: {

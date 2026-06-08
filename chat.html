@@ -2544,6 +2544,10 @@ async function send() {
       const msgEl = renderMessage('q', data.reply);
       if (Array.isArray(data.toolCalls) && data.toolCalls.length > 0) {
         renderToolCalls(msgEl, data.toolCalls);
+        // If Q added/changed a task or event, surface it live in the drawer.
+        if (data.toolCalls.some(c => /task|event/i.test(c.name || '')) && typeof window.qLifeChanged === 'function') {
+          window.qLifeChanged();
+        }
       }
       if (data.verifier) {
         renderVerifier(msgEl, data.verifier);
@@ -3489,6 +3493,15 @@ if (launcherBtn && launcher) {
   }
   function close() { card.classList.remove('open'); }
   function toggleMin() { card.classList.toggle('min'); }
+
+  // Surface a task/event Q just created. Q can't open this drawer himself
+  // ("that's on your side") — so when the chat sees Q use a task/event tool it
+  // calls this: refresh the data, and pop the drawer open so the user SEES it
+  // land instead of having to reload /life.
+  window.qLifeChanged = function () {
+    if (card.classList.contains('open')) loadAll();
+    else open();   // open() already calls loadAll()
+  };
   openBtn.onclick  = () => card.classList.contains('open') ? close() : open();
   closeBtn.onclick = close;
   minBtn.onclick   = toggleMin;
