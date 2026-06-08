@@ -13,7 +13,11 @@
 const Q_CONFIG = {
   apiKey: process.env.TOGETHER_API_KEY,
   baseURL: 'https://api.together.xyz/v1',
-  model: 'deepseek-ai/DeepSeek-V4-Pro',
+  // V4-Flash (284B, 13B active) — much faster than V4-Pro (1.6T); both are on
+  // Together. Pro was timing out on every chat turn. Flash supports function
+  // calling + JSON mode, so tools still work. Reversible: change back to
+  // 'deepseek-ai/DeepSeek-V4-Pro' if Flash isn't enough.
+  model: 'deepseek-ai/DeepSeek-V4-Flash',
   // V4 Pro is text-only. When the chat carries an image attachment we
   // switch the call to a vision-capable model on the same Together key.
   // Kimi K2.5 (Moonshot AI) — strong on OCR / document reading / structured
@@ -21,8 +25,8 @@ const Q_CONFIG = {
   // Previous: Qwen/Qwen3.6-Plus (Apr 2026)
   // Previous: Qwen2.5-VL-72B-Instruct (retired from Together, Apr 2026)
   visionModel: 'moonshotai/Kimi-K2.5',
-  // fastModel retired — V3 was removed. All utility tasks now use V4-Pro.
-  fastModel: 'deepseek-ai/DeepSeek-V4-Pro',
+  // Utility tasks (extraction etc.) on V4-Flash too — faster, same Together key.
+  fastModel: 'deepseek-ai/DeepSeek-V4-Flash',
   temperature: 0.0,
   maxTokens: 4000,
   // Voice cloning — set after deploying q-lab/voice-cloning-space/ to a HF Space.

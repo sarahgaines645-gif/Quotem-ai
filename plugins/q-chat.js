@@ -493,6 +493,37 @@ function buildSystemMessage(mode, personId, surface) {
  *   Anything else (or undefined) leaves Q in default mode.
  * @returns {Promise<{reply: string|null, error?: string, durationMs, tokensIn?, tokensOut?, toolCalls?: Array, verifier?: {pass: boolean, issues: string[], durationMs: number}}>}
  */
+// Vision via Gemini 2.5-flash (REST, no SDK) — used for chat image turns.
+// Gemini is a true multimodal model and reliable; the Together vision model
+// (Kimi) was timing out and making Q say he "has no vision". Mirrors the
+// proven call in q-finance.js. Returns the answer text, or '' on miss.
+async function geminiVisionChat(prompt, base64, mimeType) {
+    const key = process.env.GEMINI_API_KEY;
+    if (!key) return '';
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 60_000);
+    try {
+        const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${key}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                contents: [{ parts: [
+                    { text: prompt },
+                    { inline_data: { mime_type: mimeType, data: base64 } },
+                ] }],
+                generationConfig: { temperature: 0.4, maxOutputTokens: 2000 },
+            }),
+            signal: ctrl.signal,
+        });
+        if (!res.ok) throw new Error(`Gemini ${res.status}: ${(await res.text()).slice(0, 200)}`);
+        const json = await res.json();
+        const parts = json?.candidates?.[0]?.content?.parts;
+        return Array.isArray(parts) ? parts.map(p => p.text || '').join('').trim() : '';
+    } finally {
+        clearTimeout(timer);
+    }
+}
+
 async function chat(messages, options = {}) {
     if (!Q_CONFIG.apiKey) {
         return { error: 'No TOGETHER_API_KEY configured', reply: null };
@@ -571,6 +602,35 @@ async function chat(messages, options = {}) {
     let totalTokensIn = 0;
     let totalTokensOut = 0;
     const startTime = Date.now();
+
+    // Vision is routed to Gemini (true multimodal, reliable) instead of the
+    // Together vision model, which was timing out and making Q say he "has no
+    // vision". If GEMINI_API_KEY isn't set or the call fails/returns empty, we
+    // fall through to the original Together vision path below — so this never
+    // makes vision worse, only better.
+    if (isVision && process.env.GEMINI_API_KEY) {
+        try {
+            const last = messages[messages.length - 1];
+            const userText = (typeof last?.content === 'string' && last.content.trim())
+                ? last.content
+                : 'What can you tell me about this image?';
+            const dm = /^data:([^;]+);base64,(.*)$/.exec(images[0].dataUrl || '');
+            if (dm) {
+                const answer = await geminiVisionChat(`${systemContent}\n\nUser: ${userText}`, dm[2], dm[1]);
+                if (answer && answer.trim()) {
+                    return {
+                        reply: cleanModelOutput(answer, 'chat-vision'),
+                        durationMs: Date.now() - startTime,
+                        tokensIn: 0,
+                        tokensOut: 0,
+                        toolCalls: [],
+                    };
+                }
+            }
+        } catch (e) {
+            console.warn('[q-chat] Gemini vision failed, falling back to Together: ' + e.message);
+        }
+    }
 
     try {
         for (let iteration = 0; iteration < MAX_TOOL_ITERATIONS; iteration++) {
