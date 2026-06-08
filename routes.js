@@ -2345,6 +2345,47 @@ Be direct. If it's ready, say so clearly. If not, list exactly what to fix.`;
     }
 });
 
+// Thread forms panel — step 1: Gemini reads the PDF and returns the field list.
+// Body: { pdfBase64: string }
+router.post('/api/threads/:id/form-scan', requirePerson, express.json({ limit: '20mb' }), async (req, res) => {
+    const t = readOwnedThread(req, res);
+    if (!t) return;
+    const { pdfBase64 } = req.body || {};
+    if (!pdfBase64) return res.status(400).json({ error: 'pdfBase64 required' });
+    try {
+        const fields = await qFinance.scanFormFields(pdfBase64);
+        if (!fields.length) return res.status(422).json({ error: 'No fillable fields found — is this a form?' });
+        res.json({ fields });
+    } catch (e) {
+        res.status(500).json({ error: e.message || 'Scan failed' });
+    }
+});
+
+// Thread forms panel — step 2: Q fills the fields from thread context.
+// Body: { fields: [{name, label, context, type}] }
+router.post('/api/threads/:id/form-fill', requirePerson, express.json({ limit: '128kb' }), async (req, res) => {
+    const t = readOwnedThread(req, res);
+    if (!t) return;
+    const fields = req.body?.fields;
+    if (!Array.isArray(fields) || !fields.length) return res.status(400).json({ error: 'fields array required' });
+
+    const infoText = [
+        t.title ? `Case: ${t.title}` : '',
+        (t.emails || []).map(e => {
+            const dir = e.type === 'in' ? 'Received' : e.type === 'draft' ? 'Draft' : 'Sent';
+            return `[${dir} — ${e.subject || ''}]\n${(e.body || '').slice(0, 1200)}`;
+        }).join('\n\n'),
+        (t.notes || []).map(n => n.text || '').join('\n'),
+    ].filter(Boolean).join('\n\n');
+
+    try {
+        const { values } = await qFormFiller.extractFieldValues(fields, infoText, null);
+        res.json({ values: values || {} });
+    } catch (e) {
+        res.status(500).json({ error: e.message || 'Fill failed' });
+    }
+});
+
 // Chat with Q about a pasted email — Q's persona + memory + APS overlay (mode:'aps').
 // Body: { emailText, history: [{role, content}], message }
 router.post('/email-writer/chat', requirePerson, express.json({ limit: '512kb' }), async (req, res) => {

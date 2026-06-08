@@ -206,9 +206,9 @@
   .draft-status { font-size: 12px; color: var(--text-muted); padding: 6px 4px 0 40px; font-style: italic; }
   /* ── Floating forms panel ───────────────────────────────────── */
   .forms-panel {
-    position: fixed; bottom: 0; right: 24px; z-index: 150;
+    position: fixed; top: 72px; right: 16px; z-index: 150;
     width: 360px; max-width: calc(100vw - 32px);
-    background: var(--bg); border-radius: 18px 18px 0 0;
+    background: var(--bg); border-radius: 18px;
     box-shadow: var(--neu-raised);
     display: flex; flex-direction: column;
     transition: max-height 0.25s ease;
@@ -217,8 +217,9 @@
   .forms-panel.open { max-height: 80vh; }
   .forms-bar {
     display: flex; align-items: center; gap: 10px; padding: 0 16px;
-    height: 44px; cursor: pointer; flex-shrink: 0; user-select: none;
+    height: 44px; cursor: grab; flex-shrink: 0; user-select: none;
   }
+  .forms-bar:active { cursor: grabbing; }
   .forms-bar-icon { font-size: 16px; }
   .forms-bar-label { flex: 1; font-size: 13px; font-weight: 700; letter-spacing: -0.01em; color: var(--text); }
   .forms-bar-chev { font-size: 10px; color: var(--text-muted); transition: transform 0.2s; }
@@ -370,15 +371,13 @@
     <div class="forms-bar" id="forms-bar">
       <span class="forms-bar-icon">📋</span>
       <span class="forms-bar-label">Forms</span>
-      <span class="forms-bar-chev">▲</span>
+      <span class="forms-bar-chev">▼</span>
     </div>
     <div class="forms-body" id="forms-body">
-      <select class="forms-select" id="forms-picker">
-        <option value="">— Pick a form —</option>
-        <option value="te9">TE9 — Statutory Declaration (didn't receive PCN documents)</option>
-        <option value="complaint">Formal Complaint Letter</option>
-        <option value="lba">Letter Before Action</option>
-      </select>
+      <div id="form-drop-zone" style="border:2px dashed var(--shadow-dark);border-radius:12px;padding:24px 16px;text-align:center;cursor:pointer;margin-bottom:12px;color:var(--text-muted);font-size:13px;font-weight:600;transition:border-color 0.15s,color 0.15s;">
+        📄 Drop a form PDF here<br><span style="font-size:11px;font-weight:400;margin-top:4px;display:block;">or click to choose a file</span>
+        <input type="file" id="form-file-input" accept=".pdf,application/pdf" style="display:none">
+      </div>
       <div id="form-fields"></div>
       <div id="forms-status" class="forms-status"></div>
     </div>
@@ -1212,178 +1211,219 @@ $chatInput.addEventListener('input', () => {
 
 loadThread();
 
-// ── Floating forms panel ─────────────────────────────────────────
+// ── Floating forms panel — proper form filler ────────────────────
 (function () {
-  const panel   = document.getElementById('forms-panel');
-  const bar     = document.getElementById('forms-bar');
-  const picker  = document.getElementById('forms-picker');
+  const panel    = document.getElementById('forms-panel');
+  const bar      = document.getElementById('forms-bar');
+  const dropZone = document.getElementById('form-drop-zone');
+  const fileInput = document.getElementById('form-file-input');
   const fieldsEl = document.getElementById('form-fields');
   const statusEl = document.getElementById('forms-status');
 
-  bar.addEventListener('click', () => {
-    panel.classList.toggle('open');
-  });
+  let _fields = [];       // [{name, label, context, type}] from the scan
+  let _formName = '';     // filename of the loaded form
+  let _step = 0;          // current field index in wizard
+  let _values = {};       // {index: value} answers from wizard
 
-  const FORMS = {
-    te9: {
-      label: 'TE9 — Statutory Declaration',
-      fields: [
-        { id: 'te9_name',    label: 'Full name',          type: 'input' },
-        { id: 'te9_addr',    label: 'Address',            type: 'textarea', rows: 3 },
-        { id: 'te9_vehicle', label: 'Vehicle registration', type: 'input' },
-        { id: 'te9_ref',     label: 'PCN / Council reference', type: 'input' },
-        { id: 'te9_council', label: 'Issuing council',    type: 'input' },
-        { id: 'te9_date',    label: 'Contravention date', type: 'input' },
-        { id: 'te9_ground',  label: 'Ground',             type: 'select',
-          options: [
-            'I did not receive the Penalty Charge Notice',
-            'I did not receive the Notice to Owner',
-            'I did not receive the Charge Certificate',
-            'I did not receive the Order for Recovery',
-          ]},
-        { id: 'te9_statement', label: 'Declaration statement', type: 'textarea', rows: 5 },
-      ],
-      defaults: {
-        te9_statement:
-          'I solemnly and sincerely declare that I am the registered keeper of the vehicle shown above. ' +
-          'I did not receive the document stated above. The first I knew of this matter was when I received ' +
-          'a Notice of Enforcement from the bailiff company. I make this solemn declaration conscientiously ' +
-          'believing it to be true.',
-        te9_ground: 'I did not receive the Notice to Owner',
-      },
-    },
-    complaint: {
-      label: 'Formal Complaint Letter',
-      fields: [
-        { id: 'cmp_to',      label: 'To (name / dept)',   type: 'input' },
-        { id: 'cmp_org',     label: 'Organisation',       type: 'input' },
-        { id: 'cmp_ref',     label: 'Your reference',     type: 'input' },
-        { id: 'cmp_subject', label: 'Subject',            type: 'input' },
-        { id: 'cmp_body',    label: 'Body of complaint',  type: 'textarea', rows: 8 },
-        { id: 'cmp_remedy',  label: 'Remedy you want',    type: 'textarea', rows: 3 },
-      ],
-      defaults: {},
-    },
-    lba: {
-      label: 'Letter Before Action',
-      fields: [
-        { id: 'lba_to',     label: 'To (name / dept)',    type: 'input' },
-        { id: 'lba_org',    label: 'Organisation',        type: 'input' },
-        { id: 'lba_claim',  label: 'Nature of claim',     type: 'textarea', rows: 4 },
-        { id: 'lba_amount', label: 'Amount claimed (£)',  type: 'input' },
-        { id: 'lba_deadline', label: 'Deadline (e.g. 14 days from today)', type: 'input' },
-        { id: 'lba_body',   label: 'Letter body',         type: 'textarea', rows: 8 },
-      ],
-      defaults: { lba_deadline: '14 days from the date of this letter' },
-    },
-  };
-
-  function renderForm(key) {
-    const spec = FORMS[key];
-    if (!spec) { fieldsEl.innerHTML = ''; return; }
-    let html = '';
-    spec.fields.forEach(f => {
-      const val = spec.defaults[f.id] || '';
-      if (f.type === 'textarea') {
-        html += `<div class="form-field"><label>${f.label}</label>` +
-          `<textarea id="${f.id}" rows="${f.rows || 4}">${val}</textarea></div>`;
-      } else if (f.type === 'select') {
-        const opts = f.options.map(o =>
-          `<option${o === val ? ' selected' : ''}>${o}</option>`).join('');
-        html += `<div class="form-field"><label>${f.label}</label>` +
-          `<select id="${f.id}">${opts}</select></div>`;
-      } else {
-        html += `<div class="form-field"><label>${f.label}</label>` +
-          `<input type="text" id="${f.id}" value="${val.replace(/"/g, '&quot;')}"></div>`;
-      }
-    });
-    html += `<div class="forms-actions">
-      <button class="forms-btn primary" id="forms-q-fill">Ask Q to fill</button>
-      <button class="forms-btn" id="forms-copy">Copy</button>
-      <button class="forms-btn" id="forms-download">Download</button>
-    </div>`;
-    fieldsEl.innerHTML = html;
-
-    document.getElementById('forms-q-fill').addEventListener('click', askQToFill);
-    document.getElementById('forms-copy').addEventListener('click', copyForm);
-    document.getElementById('forms-download').addEventListener('click', downloadForm);
+  // ── Drag to reposition ───────────────────────────────────────────
+  let _dragActive = false, _didDrag = false, _dox = 0, _doy = 0, _dsx = 0, _dsy = 0;
+  function startDrag(cx, cy) {
+    _dragActive = true; _didDrag = false;
+    _dsx = cx; _dsy = cy;
+    const r = panel.getBoundingClientRect();
+    _dox = cx - r.left; _doy = cy - r.top;
   }
+  function moveDrag(cx, cy) {
+    if (!_dragActive) return;
+    if (!_didDrag && Math.hypot(cx - _dsx, cy - _dsy) < 5) return;
+    if (!_didDrag) {
+      _didDrag = true;
+      panel.style.right = 'unset'; panel.style.bottom = 'unset';
+      const r = panel.getBoundingClientRect();
+      panel.style.left = r.left + 'px'; panel.style.top = r.top + 'px';
+    }
+    panel.style.left = (cx - _dox) + 'px';
+    panel.style.top  = (cy - _doy) + 'px';
+  }
+  function endDrag() {
+    if (_dragActive && !_didDrag) panel.classList.toggle('open');
+    _dragActive = false;
+  }
+  bar.addEventListener('mousedown', (e) => { startDrag(e.clientX, e.clientY); e.preventDefault(); });
+  document.addEventListener('mousemove', (e) => { moveDrag(e.clientX, e.clientY); });
+  document.addEventListener('mouseup', endDrag);
+  bar.addEventListener('touchstart', (e) => { const t = e.touches[0]; startDrag(t.clientX, t.clientY); e.preventDefault(); }, { passive: false });
+  document.addEventListener('touchmove', (e) => { if (!_dragActive) return; const t = e.touches[0]; moveDrag(t.clientX, t.clientY); e.preventDefault(); }, { passive: false });
+  document.addEventListener('touchend', endDrag);
 
-  picker.addEventListener('change', () => {
-    renderForm(picker.value);
-    statusEl.textContent = '';
-    if (picker.value) panel.classList.add('open');
+  // ── Drop zone ────────────────────────────────────────────────────
+  dropZone.addEventListener('click', () => fileInput.click());
+  dropZone.addEventListener('dragover', (e) => { e.preventDefault(); dropZone.style.borderColor = 'var(--accent)'; dropZone.style.color = 'var(--accent)'; });
+  dropZone.addEventListener('dragleave', () => { dropZone.style.borderColor = ''; dropZone.style.color = ''; });
+  dropZone.addEventListener('drop', (e) => {
+    e.preventDefault();
+    dropZone.style.borderColor = ''; dropZone.style.color = '';
+    const file = e.dataTransfer.files[0];
+    if (file) loadForm(file);
+  });
+  fileInput.addEventListener('change', () => {
+    if (fileInput.files[0]) loadForm(fileInput.files[0]);
+    fileInput.value = '';
   });
 
-  async function askQToFill() {
-    const key = picker.value;
-    const spec = FORMS[key];
-    if (!spec) return;
-    const btn = document.getElementById('forms-q-fill');
-    btn.disabled = true;
-    statusEl.textContent = 'Q is reading the case…';
-    const fieldList = spec.fields.map(f => f.id + ' (' + f.label + ')').join(', ');
-    const prompt = `Fill this ${spec.label} from everything you know about this case. ` +
-      `Return ONLY a JSON object with these keys: ${fieldList}. ` +
-      `Use empty string for anything you don't know. JSON only, no explanation.`;
+  async function loadForm(file) {
+    _formName = file.name.replace(/\.pdf$/i, '');
+    statusEl.textContent = '⏳ Reading form…';
+    fieldsEl.innerHTML = '';
+    panel.classList.add('open');
     try {
-      const res = await fetch('/api/threads/' + threadId + '/chat', {
+      const b64 = await fileToBase64(file);
+      const r = await fetch('/api/threads/' + threadId + '/form-scan', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: prompt, silentUser: true }),
+        body: JSON.stringify({ pdfBase64: b64 }),
       });
-      const json = await res.json();
-      if (!res.ok) throw new Error(json.error || 'HTTP ' + res.status);
-      const raw = (json.reply || '').trim();
-      const match = raw.match(/\{[\s\S]*\}/);
-      if (!match) throw new Error('Q didn\'t return a JSON object — try again');
-      const filled = JSON.parse(match[0]);
-      spec.fields.forEach(f => {
-        const el = document.getElementById(f.id);
-        if (el && filled[f.id]) el.value = filled[f.id];
-      });
-      statusEl.textContent = '✅ Q filled the form — check and edit before using.';
+      const data = await r.json();
+      if (!r.ok) throw new Error(data.error || 'Scan failed');
+      _fields = data.fields || [];
+      if (!_fields.length) { statusEl.textContent = '⚠️ No fillable fields found — is this a form?'; return; }
+      showReadyCTA();
     } catch (e) {
-      statusEl.textContent = '⚠️ ' + (e.message || 'Could not fill');
-    } finally {
-      btn.disabled = false;
+      statusEl.textContent = '⚠️ ' + (e.message || 'Could not read form');
     }
   }
 
-  function collectFormText() {
-    const key = picker.value;
-    const spec = FORMS[key];
-    if (!spec) return '';
-    const lines = [spec.label, '='.repeat(spec.label.length), ''];
-    spec.fields.forEach(f => {
-      const el = document.getElementById(f.id);
-      lines.push(f.label + ':');
-      lines.push((el ? el.value : '') || '');
+  function fileToBase64(file) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result.split(',')[1]);
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+  }
+
+  // ── Wizard — Ready CTA ───────────────────────────────────────────
+  function showReadyCTA() {
+    statusEl.textContent = '';
+    fieldsEl.innerHTML = `<div style="text-align:center;padding:20px 0 8px;">
+      <div style="font-size:13px;color:var(--text-muted);line-height:1.6;margin-bottom:18px;">
+        Found <b style="color:var(--text)">${_fields.length} fields</b> in this form.<br>
+        Q will ask you one question at a time.<br>
+        He'll fill what he knows — you confirm.
+      </div>
+      <button class="forms-btn primary" id="forms-start" style="width:100%;font-size:14px;">Let's go →</button>
+    </div>`;
+    document.getElementById('forms-start').addEventListener('click', async () => {
+      _step = 0; _values = {};
+      document.getElementById('forms-start').disabled = true;
+      statusEl.textContent = '⏳ Q is reading the case…';
+      try {
+        const r = await fetch('/api/threads/' + threadId + '/form-fill', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ fields: _fields }),
+        });
+        const data = await r.json();
+        if (r.ok && data.values) {
+          _fields.forEach((f, i) => { if (data.values[f.name]) _values[i] = data.values[f.name]; });
+        }
+      } catch {}
+      statusEl.textContent = '';
+      stepThroughForm();
+    });
+  }
+
+  // ── Wizard — step through fields ─────────────────────────────────
+  function stepThroughForm() {
+    if (_step >= _fields.length) { showComplete(); return; }
+    const f = _fields[_step];
+    const pre = _values[_step] || '';
+    const isLong = f.type === 'address' || f.type === 'textarea';
+    const pct = Math.round((_step / _fields.length) * 100);
+    const q = toQuestion(f.label || f.name);
+    const isLast = _step === _fields.length - 1;
+    fieldsEl.innerHTML = `
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:14px;">
+        <span style="font-size:11px;color:var(--text-muted);white-space:nowrap;">${_step + 1} / ${_fields.length}</span>
+        <div style="flex:1;height:3px;border-radius:2px;background:var(--shadow-dark);overflow:hidden;">
+          <div style="height:100%;width:${pct}%;background:var(--accent);border-radius:2px;transition:width 0.3s;"></div>
+        </div>
+      </div>
+      <div style="font-size:15px;font-weight:700;color:var(--text);line-height:1.4;margin-bottom:${f.context ? '4px' : '12px'};">${escapeHtml(q)}</div>
+      ${f.context ? `<div style="font-size:11px;color:var(--text-muted);margin-bottom:12px;font-style:italic;">${escapeHtml(f.context)}</div>` : ''}
+      ${isLong
+        ? `<textarea id="ff-step-in" rows="3" style="width:100%;box-sizing:border-box;border:none;outline:none;background:var(--bg);box-shadow:var(--neu-inset-sm);border-radius:10px;padding:10px 12px;font-family:inherit;font-size:14px;color:var(--text);resize:vertical;">${escapeHtml(pre)}</textarea>`
+        : `<input type="text" id="ff-step-in" value="${escapeHtml(pre)}" style="width:100%;box-sizing:border-box;border:none;outline:none;background:var(--bg);box-shadow:var(--neu-inset-sm);border-radius:10px;padding:10px 12px;font-family:inherit;font-size:14px;color:var(--text);">`}
+      <div class="forms-actions" style="margin-top:12px;">
+        ${_step > 0 ? `<button class="forms-btn" id="ff-back" style="flex:0;padding:10px 14px;">← Back</button>` : ''}
+        <button class="forms-btn" id="ff-skip" style="flex:0;padding:10px 14px;">Skip</button>
+        <button class="forms-btn primary" id="ff-next">${isLast ? 'Finish ✓' : 'Next →'}</button>
+      </div>`;
+    const inp = document.getElementById('ff-step-in');
+    inp.focus(); if (inp.select && !isLong && pre) inp.select();
+    function save(dir) {
+      _values[_step] = (document.getElementById('ff-step-in')?.value || '').trim();
+      _step = Math.max(0, _step + dir); stepThroughForm();
+    }
+    document.getElementById('ff-next').addEventListener('click', () => save(1));
+    document.getElementById('ff-skip').addEventListener('click', () => { _values[_step] = ''; _step++; stepThroughForm(); });
+    if (_step > 0) document.getElementById('ff-back').addEventListener('click', () => save(-1));
+    inp.addEventListener('keydown', (e) => { if (e.key === 'Enter' && !isLong) { e.preventDefault(); save(1); } });
+  }
+
+  function toQuestion(label) {
+    const l = label.trim();
+    if (l.endsWith('?')) return l;
+    const lc = l.charAt(0).toLowerCase() + l.slice(1);
+    return 'What\'s the ' + lc + '?';
+  }
+
+  function showComplete() {
+    const filled = Object.values(_values).filter(v => v).length;
+    statusEl.textContent = '';
+    fieldsEl.innerHTML = `<div style="text-align:center;padding:16px 0 4px;">
+      <div style="font-size:28px;margin-bottom:6px;">✅</div>
+      <div style="font-size:14px;font-weight:700;color:var(--text);margin-bottom:4px;">${filled} of ${_fields.length} filled</div>
+      <div style="font-size:12px;color:var(--text-muted);margin-bottom:18px;">Download the answers or copy and paste them.</div>
+      <div class="forms-actions" style="flex-wrap:wrap;">
+        <button class="forms-btn" id="ff-review">← Review</button>
+        <button class="forms-btn" id="ff-copy-done">Copy</button>
+        <button class="forms-btn primary" id="ff-dl-done">Download</button>
+      </div>
+    </div>`;
+    document.getElementById('ff-review').addEventListener('click', () => { _step = 0; stepThroughForm(); });
+    document.getElementById('ff-copy-done').addEventListener('click', copyForm);
+    document.getElementById('ff-dl-done').addEventListener('click', downloadForm);
+  }
+
+  // ── Collect + export ─────────────────────────────────────────────
+  function collectText() {
+    if (!_fields.length) return '';
+    const title = _formName || 'Form';
+    const lines = [title, '='.repeat(title.length), ''];
+    _fields.forEach((f, i) => {
+      lines.push((f.label || f.name) + ':');
+      lines.push(_values[i] || '');
       lines.push('');
     });
     return lines.join('\n');
   }
 
   function copyForm() {
-    const text = collectFormText();
+    const text = collectText();
     if (!text) return;
-    navigator.clipboard.writeText(text).then(() => {
-      statusEl.textContent = '✅ Copied to clipboard.';
-    }).catch(() => {
-      statusEl.textContent = '⚠️ Copy failed — select the text manually.';
-    });
+    navigator.clipboard.writeText(text)
+      .then(() => { statusEl.textContent = '✅ Copied.'; })
+      .catch(() => { statusEl.textContent = '⚠️ Copy failed.'; });
   }
 
   function downloadForm() {
-    const key = picker.value;
-    const spec = FORMS[key];
-    if (!spec) return;
-    const text = collectFormText();
+    const text = collectText();
+    if (!text) return;
     const blob = new Blob([text], { type: 'text/plain' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = spec.label.replace(/[^a-z0-9]+/gi, '-') + '.txt';
+    a.download = (_formName || 'form').replace(/[^a-z0-9]+/gi, '-') + '-filled.txt';
     a.click();
     URL.revokeObjectURL(url);
     statusEl.textContent = '✅ Downloaded.';

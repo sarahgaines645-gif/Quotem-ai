@@ -807,6 +807,30 @@ Be precise. Miss nothing. Lay it out clearly so a legal reader can follow the ti
 }
 
 
+// Read a form PDF and return the list of fillable fields.
+// Gemini identifies every blank, checkbox, or signature space and returns
+// a JSON array: [{name, label, context, type}] ready for extractFieldValues.
+async function scanFormFields(pdfBase64) {
+    const prompt = `This is a form that needs to be filled in. Identify every blank field, checkbox, and space where the user should write something.
+
+For each field return:
+- name: a camelCase key (e.g. fullName, dateOfBirth, vehicleRegistration)
+- label: a clear 2-6 word description of what goes in the field (e.g. "Full name", "Date of contravention")
+- context: the surrounding sentence or heading on the form (copy 5-10 words before/after the blank)
+- type: one of: text | date | checkbox | signature | address | number | textarea
+
+Return ONLY a valid JSON array of these objects. No explanation, no markdown fences.`;
+    try {
+        const raw = await visionRead({ prompt, base64: pdfBase64, mimeType: 'application/pdf', maxTokens: 4096 });
+        const match = (raw || '').match(/\[[\s\S]*\]/);
+        if (!match) return [];
+        return JSON.parse(match[0]);
+    } catch (e) {
+        console.warn('[finance] scanFormFields failed:', e.message);
+        return [];
+    }
+}
+
 // ── Merchant assignment ───────────────────────────────────────────
 
 /**
@@ -1212,6 +1236,7 @@ module.exports = {
     // Documents / vision
     extractDocument,
     extractVideo,
+    scanFormFields,
     verifyCaseReply,
     importStatementFromImage,
     importStatementFromFile,
