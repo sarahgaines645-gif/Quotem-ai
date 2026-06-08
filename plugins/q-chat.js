@@ -601,7 +601,13 @@ async function claudeThreadChat({ system, messages, tools, person, maxTokens, st
         if (prev && prev.role === m.role) prev.content += '\n\n' + m.content;
         else convo.push({ role: m.role, content: m.content });
     }
-    while (convo.length && convo[0].role !== 'user') convo.shift();
+    // Anthropic requires the first message to be 'user'. If the thread opens on
+    // an assistant turn (e.g. the kickoff diagnosis on a case with no emails or
+    // files), DON'T drop it — that throws away context and is part of the "he
+    // acts like we just started" feeling. Prepend a tiny user turn so it survives.
+    if (convo.length && convo[0].role === 'assistant') {
+        convo.unshift({ role: 'user', content: '(Continuing this case — here is where we got to.)' });
+    }
     if (!convo.length) return null;
 
     // Attach PDFs to the final user turn so Claude reads them NATIVELY — printed
@@ -684,13 +690,50 @@ async function claudeThreadChat({ system, messages, tools, person, maxTokens, st
             const callStart = Date.now();
             const result = await executeTool(tu.name, JSON.stringify(tu.input || {}), person?.id, person?.email);
             toolCalls.push({ name: tu.name, args: tu.input, result, durationMs: Date.now() - callStart });
-            resultBlocks.push({
-                type: 'tool_result',
-                tool_use_id: tu.id,
-                content: typeof result === 'string' ? result : JSON.stringify(result),
-            });
+            // Anthropic 400s on an EMPTY tool_result content block — exactly what a
+            // web_search miss or an action tool that returns nothing produces, and
+            // APS searches a lot. A single empty result kills the whole turn → the
+            // caller silently drops to V4 ("he went flat / started over"). Never
+            // send empty; flag genuine failures with is_error so Claude treats them
+            // as a failed tool instead of erroring the request.
+            let rc = typeof result === 'string' ? result : JSON.stringify(result);
+            if (!rc || !rc.trim()) rc = '(no result returned)';
+            const block = { type: 'tool_result', tool_use_id: tu.id, content: rc };
+            if (result && typeof result === 'object' && result.error) block.is_error = true;
+            resultBlocks.push(block);
         }
         convo.push({ role: 'user', content: resultBlocks });
+    }
+
+    // If the loop ran out of its 8 iterations while Claude still wanted tools, it
+    // would return empty here → the caller silently falls back to V4 (the "he
+    // started over / went flat" symptom). Instead, force ONE final answer with NO
+    // tools so Claude replies using what it has already gathered. This keeps the
+    // case on Claude instead of quietly handing it to the weaker model.
+    if (!reply || !reply.trim()) {
+        try {
+            const finalRes = await fetch('https://api.anthropic.com/v1/messages', {
+                method: 'POST',
+                headers: { 'x-api-key': key, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
+                body: JSON.stringify({
+                    model: 'claude-sonnet-4-6',
+                    max_tokens: maxTokens || 4096,
+                    system: [{ type: 'text', text: system, cache_control: { type: 'ephemeral' } }],
+                    messages: convo,
+                }),
+            });
+            if (finalRes.ok) {
+                const fd = await finalRes.json();
+                tokensIn += fd.usage?.input_tokens || 0;
+                tokensOut += fd.usage?.output_tokens || 0;
+                reply = (Array.isArray(fd.content) ? fd.content : [])
+                    .filter(b => b.type === 'text').map(b => b.text || '').join('');
+            } else {
+                console.warn('[q-chat] Claude final no-tools HTTP ' + finalRes.status + ': ' + (await finalRes.text()).slice(0, 200));
+            }
+        } catch (e) {
+            console.warn('[q-chat] Claude final no-tools call failed: ' + e.message);
+        }
     }
 
     if (!reply || !reply.trim()) return null;

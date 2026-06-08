@@ -2155,8 +2155,15 @@ router.post('/api/threads/:id/chat', requirePerson, express.json({ limit: '256kb
                     // of the text cache below). ~28MB cap — Anthropic's PDF limit is 32MB.
                     try {
                         const pf = qThreads.readFile(t.id, f.filename, req.person.email);
-                        if (pf && pf.buffer && pf.buffer.length < 28 * 1024 * 1024) {
+                        // 8MB raw cap. base64 inflates ~33% (8MB → ~11MB) and the
+                        // doc is re-sent on every tool-loop iteration alongside the
+                        // history + system prompt, so the old 28MB cap (~37MB base64)
+                        // blew past Anthropic's 32MB request limit and 400'd every
+                        // time → silent V4 fallback. 8MB keeps every request safe.
+                        if (pf && pf.buffer && pf.buffer.length < 8 * 1024 * 1024) {
                             pdfDocuments.push({ filename: f.filename, base64: pf.buffer.toString('base64'), mediaType: 'application/pdf' });
+                        } else if (pf && pf.buffer) {
+                            console.warn(`[threads] PDF "${f.filename}" is ${(pf.buffer.length/1024/1024).toFixed(1)}MB — too big to hand Claude directly; relying on the text transcript instead.`);
                         }
                     } catch (e) {
                         console.warn('[threads] PDF read for Claude failed: ' + f.filename + ' — ' + e.message);
