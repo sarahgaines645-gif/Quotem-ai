@@ -26,8 +26,9 @@ const Q_CONFIG = {
   // Previous: Qwen/Qwen3.6-Plus (Apr 2026)
   // Previous: Qwen2.5-VL-72B-Instruct (retired from Together, Apr 2026)
   visionModel: 'moonshotai/Kimi-K2.5',
-  // Utility tasks (extraction etc.) on V4-Flash too — faster, same Together key.
-  fastModel: 'deepseek-ai/DeepSeek-V4-Flash',
+  // Utility tasks (extraction etc.). V4-Flash was removed by Together 2026-06-09;
+  // using V4-Pro as fallback until a replacement fast model is confirmed available.
+  fastModel: 'deepseek-ai/DeepSeek-V4-Pro',
   temperature: 0.0,
   maxTokens: 4000,
   // Voice cloning — set after deploying q-lab/voice-cloning-space/ to a HF Space.
