@@ -1879,6 +1879,13 @@ router.post('/api/threads/:id/emails', requirePerson, express.json({ limit: '256
     res.json(updated);
 });
 
+router.delete('/api/threads/:id/emails/:emailId', requirePerson, (req, res) => {
+    if (!readOwnedThread(req, res)) return;
+    const updated = qThreads.removeEmail(req.params.id, req.params.emailId, req.person.email);
+    if (!updated) return res.status(404).json({ error: 'Not found' });
+    res.json(updated);
+});
+
 router.patch('/api/threads/:id', requirePerson, express.json({ limit: '32kb' }), (req, res) => {
     if (!readOwnedThread(req, res)) return;
     const updated = qThreads.updateThread(req.params.id, req.body || {}, req.person.email);

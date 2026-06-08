@@ -339,6 +339,15 @@ function addEmail(threadId, { type = 'in', from = '', to = '', date = '', subjec
 }
 
 
+function removeEmail(threadId, emailId, ownerEmail) {
+    const thread = readThread(threadId, ownerEmail);
+    if (!thread) return null;
+    const before = (thread.emails || []).length;
+    thread.emails = (thread.emails || []).filter(e => e.id !== emailId);
+    if (thread.emails.length === before) return null;
+    return writeThread(thread);
+}
+
 function appendChat(threadId, role, content, ownerEmail) {
     const thread = readThread(threadId, ownerEmail);
     if (!thread) return null;
@@ -463,6 +472,7 @@ module.exports = {
     readThread,
     createThread,
     addEmail,
+    removeEmail,
     addNote,
     addContact,
     updateContact,

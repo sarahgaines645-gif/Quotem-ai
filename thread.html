@@ -12,6 +12,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
 <script src="/marked.min.js"></script>
+<script src="/qrcode.min.js"></script>
 <style>
   :root {
     --bg: #e8e8e8; --text: #1a1a1a;
@@ -203,6 +204,56 @@
   .draft-btn.skip:hover, .draft-btn.save:hover { color: var(--accent); }
   .draft-btn:disabled { opacity: 0.4; cursor: default; }
   .draft-status { font-size: 12px; color: var(--text-muted); padding: 6px 4px 0 40px; font-style: italic; }
+  /* ── Floating forms panel ───────────────────────────────────── */
+  .forms-panel {
+    position: fixed; bottom: 0; right: 24px; z-index: 150;
+    width: 360px; max-width: calc(100vw - 32px);
+    background: var(--bg); border-radius: 18px 18px 0 0;
+    box-shadow: var(--neu-raised);
+    display: flex; flex-direction: column;
+    transition: max-height 0.25s ease;
+    max-height: 44px; overflow: hidden;
+  }
+  .forms-panel.open { max-height: 80vh; }
+  .forms-bar {
+    display: flex; align-items: center; gap: 10px; padding: 0 16px;
+    height: 44px; cursor: pointer; flex-shrink: 0; user-select: none;
+  }
+  .forms-bar-icon { font-size: 16px; }
+  .forms-bar-label { flex: 1; font-size: 13px; font-weight: 700; letter-spacing: -0.01em; color: var(--text); }
+  .forms-bar-chev { font-size: 10px; color: var(--text-muted); transition: transform 0.2s; }
+  .forms-panel.open .forms-bar-chev { transform: rotate(180deg); }
+  .forms-body {
+    flex: 1; overflow-y: auto; padding: 0 16px 20px;
+    scrollbar-width: thin; scrollbar-color: var(--shadow-dark) transparent;
+  }
+  .forms-select {
+    width: 100%; border: none; outline: none; font-family: inherit;
+    font-size: 13px; font-weight: 600; color: var(--text);
+    background: var(--bg); padding: 9px 12px; border-radius: 10px;
+    box-shadow: var(--neu-inset-sm); margin-bottom: 14px; cursor: pointer;
+  }
+  .form-field { margin-bottom: 11px; }
+  .form-field label { display: block; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-faint); margin-bottom: 4px; }
+  .form-field input, .form-field textarea, .form-field select {
+    width: 100%; border: none; outline: none; font-family: inherit;
+    font-size: 13px; color: var(--text); background: var(--bg);
+    padding: 8px 12px; border-radius: 10px; box-shadow: var(--neu-inset-sm);
+    resize: vertical;
+  }
+  .form-field textarea { min-height: 70px; line-height: 1.5; }
+  .forms-actions { display: flex; gap: 8px; margin-top: 14px; flex-wrap: wrap; }
+  .forms-btn {
+    flex: 1; border: none; cursor: pointer; font-family: inherit;
+    font-size: 13px; font-weight: 700; padding: 10px 14px;
+    border-radius: 11px; box-shadow: var(--neu-raised-sm);
+    background: var(--bg); color: var(--text);
+  }
+  .forms-btn.primary { background: var(--accent); color: white; box-shadow: var(--neu-raised-sm); }
+  .forms-btn:hover:not(:disabled) { opacity: 0.88; }
+  .forms-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+  .forms-status { font-size: 12px; color: var(--text-muted); margin-top: 8px; font-style: italic; }
+
   /* Save-until modal */
   .remind-modal-bg { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.35); z-index: 200; align-items: center; justify-content: center; padding: 20px; }
   .remind-modal-bg.show { display: flex; }
@@ -244,6 +295,7 @@
         <select id="ae-type">
           <option value="in">📥 Received</option>
           <option value="out">📤 Sent</option>
+          <option value="draft">📝 Draft / document</option>
         </select>
         <input type="text" id="ae-from" placeholder="From">
         <input type="text" id="ae-to"   placeholder="To">
@@ -310,6 +362,25 @@
         <button id="delete-cancel" style="border: none; cursor: pointer; font-family: inherit; font-size: 13px; font-weight: 600; padding: 10px 20px; border-radius: 10px; background: var(--bg); color: var(--text-muted); box-shadow: var(--neu-raised-sm);">Cancel</button>
         <button id="delete-confirm" style="border: none; cursor: pointer; font-family: inherit; font-size: 13px; font-weight: 700; padding: 10px 20px; border-radius: 10px; background: #c0392b; color: white; box-shadow: var(--neu-raised-sm);">Yes, delete</button>
       </div>
+    </div>
+  </div>
+
+  <!-- ── Floating forms panel ── -->
+  <div class="forms-panel" id="forms-panel">
+    <div class="forms-bar" id="forms-bar">
+      <span class="forms-bar-icon">📋</span>
+      <span class="forms-bar-label">Forms</span>
+      <span class="forms-bar-chev">▲</span>
+    </div>
+    <div class="forms-body" id="forms-body">
+      <select class="forms-select" id="forms-picker">
+        <option value="">— Pick a form —</option>
+        <option value="te9">TE9 — Statutory Declaration (didn't receive PCN documents)</option>
+        <option value="complaint">Formal Complaint Letter</option>
+        <option value="lba">Letter Before Action</option>
+      </select>
+      <div id="form-fields"></div>
+      <div id="forms-status" class="forms-status"></div>
     </div>
   </div>
 
@@ -499,7 +570,7 @@ function renderEmails() {
 
     const card = document.createElement('div');
     card.className = 'email-card';
-    const icon = e.type === 'in' ? '📥' : '📤';
+    const icon = e.type === 'in' ? '📥' : e.type === 'draft' ? '📝' : '📤';
 
     // Pick a title: subject > first non-empty line of body > "Email"
     const bodyText = (e.body || '').trim();
@@ -531,9 +602,18 @@ function renderEmails() {
       <div class="email-body">
         ${e.subject ? `<div class="subject">${escapeHtml(e.subject)}</div>` : ''}
         ${escapeHtml(e.body || '')}
+        <div class="file-actions" style="margin-top:10px;">
+          <button class="del-email">Delete</button>
+        </div>
       </div>`;
     card.querySelector('.email-head').addEventListener('click', () => {
       card.classList.toggle('expanded');
+    });
+    card.querySelector('.del-email').addEventListener('click', async (ev) => {
+      ev.stopPropagation();
+      if (!confirm('Delete this entry?')) return;
+      const r = await fetch(`/api/threads/${threadId}/emails/${e.id}`, { method: 'DELETE' });
+      if (r.ok) { thread = await r.json(); renderEmails(); }
     });
     $emailList.appendChild(card);
   });
@@ -1105,6 +1185,184 @@ $chatInput.addEventListener('input', () => {
 });
 
 loadThread();
+
+// ── Floating forms panel ─────────────────────────────────────────
+(function () {
+  const panel   = document.getElementById('forms-panel');
+  const bar     = document.getElementById('forms-bar');
+  const picker  = document.getElementById('forms-picker');
+  const fieldsEl = document.getElementById('form-fields');
+  const statusEl = document.getElementById('forms-status');
+
+  bar.addEventListener('click', () => {
+    panel.classList.toggle('open');
+  });
+
+  const FORMS = {
+    te9: {
+      label: 'TE9 — Statutory Declaration',
+      fields: [
+        { id: 'te9_name',    label: 'Full name',          type: 'input' },
+        { id: 'te9_addr',    label: 'Address',            type: 'textarea', rows: 3 },
+        { id: 'te9_vehicle', label: 'Vehicle registration', type: 'input' },
+        { id: 'te9_ref',     label: 'PCN / Council reference', type: 'input' },
+        { id: 'te9_council', label: 'Issuing council',    type: 'input' },
+        { id: 'te9_date',    label: 'Contravention date', type: 'input' },
+        { id: 'te9_ground',  label: 'Ground',             type: 'select',
+          options: [
+            'I did not receive the Penalty Charge Notice',
+            'I did not receive the Notice to Owner',
+            'I did not receive the Charge Certificate',
+            'I did not receive the Order for Recovery',
+          ]},
+        { id: 'te9_statement', label: 'Declaration statement', type: 'textarea', rows: 5 },
+      ],
+      defaults: {
+        te9_statement:
+          'I solemnly and sincerely declare that I am the registered keeper of the vehicle shown above. ' +
+          'I did not receive the document stated above. The first I knew of this matter was when I received ' +
+          'a Notice of Enforcement from the bailiff company. I make this solemn declaration conscientiously ' +
+          'believing it to be true.',
+        te9_ground: 'I did not receive the Notice to Owner',
+      },
+    },
+    complaint: {
+      label: 'Formal Complaint Letter',
+      fields: [
+        { id: 'cmp_to',      label: 'To (name / dept)',   type: 'input' },
+        { id: 'cmp_org',     label: 'Organisation',       type: 'input' },
+        { id: 'cmp_ref',     label: 'Your reference',     type: 'input' },
+        { id: 'cmp_subject', label: 'Subject',            type: 'input' },
+        { id: 'cmp_body',    label: 'Body of complaint',  type: 'textarea', rows: 8 },
+        { id: 'cmp_remedy',  label: 'Remedy you want',    type: 'textarea', rows: 3 },
+      ],
+      defaults: {},
+    },
+    lba: {
+      label: 'Letter Before Action',
+      fields: [
+        { id: 'lba_to',     label: 'To (name / dept)',    type: 'input' },
+        { id: 'lba_org',    label: 'Organisation',        type: 'input' },
+        { id: 'lba_claim',  label: 'Nature of claim',     type: 'textarea', rows: 4 },
+        { id: 'lba_amount', label: 'Amount claimed (£)',  type: 'input' },
+        { id: 'lba_deadline', label: 'Deadline (e.g. 14 days from today)', type: 'input' },
+        { id: 'lba_body',   label: 'Letter body',         type: 'textarea', rows: 8 },
+      ],
+      defaults: { lba_deadline: '14 days from the date of this letter' },
+    },
+  };
+
+  function renderForm(key) {
+    const spec = FORMS[key];
+    if (!spec) { fieldsEl.innerHTML = ''; return; }
+    let html = '';
+    spec.fields.forEach(f => {
+      const val = spec.defaults[f.id] || '';
+      if (f.type === 'textarea') {
+        html += `<div class="form-field"><label>${f.label}</label>` +
+          `<textarea id="${f.id}" rows="${f.rows || 4}">${val}</textarea></div>`;
+      } else if (f.type === 'select') {
+        const opts = f.options.map(o =>
+          `<option${o === val ? ' selected' : ''}>${o}</option>`).join('');
+        html += `<div class="form-field"><label>${f.label}</label>` +
+          `<select id="${f.id}">${opts}</select></div>`;
+      } else {
+        html += `<div class="form-field"><label>${f.label}</label>` +
+          `<input type="text" id="${f.id}" value="${val.replace(/"/g, '&quot;')}"></div>`;
+      }
+    });
+    html += `<div class="forms-actions">
+      <button class="forms-btn primary" id="forms-q-fill">Ask Q to fill</button>
+      <button class="forms-btn" id="forms-copy">Copy</button>
+      <button class="forms-btn" id="forms-download">Download</button>
+    </div>`;
+    fieldsEl.innerHTML = html;
+
+    document.getElementById('forms-q-fill').addEventListener('click', askQToFill);
+    document.getElementById('forms-copy').addEventListener('click', copyForm);
+    document.getElementById('forms-download').addEventListener('click', downloadForm);
+  }
+
+  picker.addEventListener('change', () => {
+    renderForm(picker.value);
+    statusEl.textContent = '';
+    if (picker.value) panel.classList.add('open');
+  });
+
+  async function askQToFill() {
+    const key = picker.value;
+    const spec = FORMS[key];
+    if (!spec) return;
+    const btn = document.getElementById('forms-q-fill');
+    btn.disabled = true;
+    statusEl.textContent = 'Q is reading the case…';
+    const fieldList = spec.fields.map(f => f.id + ' (' + f.label + ')').join(', ');
+    const prompt = `Fill this ${spec.label} from everything you know about this case. ` +
+      `Return ONLY a JSON object with these keys: ${fieldList}. ` +
+      `Use empty string for anything you don't know. JSON only, no explanation.`;
+    try {
+      const res = await fetch('/api/threads/' + threadId + '/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: prompt, silentUser: true }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || 'HTTP ' + res.status);
+      const raw = (json.reply || '').trim();
+      const match = raw.match(/\{[\s\S]*\}/);
+      if (!match) throw new Error('Q didn\'t return a JSON object — try again');
+      const filled = JSON.parse(match[0]);
+      spec.fields.forEach(f => {
+        const el = document.getElementById(f.id);
+        if (el && filled[f.id]) el.value = filled[f.id];
+      });
+      statusEl.textContent = '✅ Q filled the form — check and edit before using.';
+    } catch (e) {
+      statusEl.textContent = '⚠️ ' + (e.message || 'Could not fill');
+    } finally {
+      btn.disabled = false;
+    }
+  }
+
+  function collectFormText() {
+    const key = picker.value;
+    const spec = FORMS[key];
+    if (!spec) return '';
+    const lines = [spec.label, '='.repeat(spec.label.length), ''];
+    spec.fields.forEach(f => {
+      const el = document.getElementById(f.id);
+      lines.push(f.label + ':');
+      lines.push((el ? el.value : '') || '');
+      lines.push('');
+    });
+    return lines.join('\n');
+  }
+
+  function copyForm() {
+    const text = collectFormText();
+    if (!text) return;
+    navigator.clipboard.writeText(text).then(() => {
+      statusEl.textContent = '✅ Copied to clipboard.';
+    }).catch(() => {
+      statusEl.textContent = '⚠️ Copy failed — select the text manually.';
+    });
+  }
+
+  function downloadForm() {
+    const key = picker.value;
+    const spec = FORMS[key];
+    if (!spec) return;
+    const text = collectFormText();
+    const blob = new Blob([text], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = spec.label.replace(/[^a-z0-9]+/gi, '-') + '.txt';
+    a.click();
+    URL.revokeObjectURL(url);
+    statusEl.textContent = '✅ Downloaded.';
+  }
+})();
 
 // ── Outbox for this case (emails ready to send later) ──
 (function () {
