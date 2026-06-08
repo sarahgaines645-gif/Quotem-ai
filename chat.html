@@ -402,17 +402,36 @@
     margin: 16px 0;
   }
   .message.q .message-body table {
-    border-collapse: collapse;
-    margin: 8px 0;
+    border-collapse: separate;
+    border-spacing: 0;
+    width: 100%;
+    margin: 12px 0;
     font-size: 13px;
+    background: var(--bg);
+    border-radius: 12px;
+    overflow: hidden;
+    box-shadow: var(--neu-inset-sm);
   }
   .message.q .message-body th,
   .message.q .message-body td {
-    border: 1px solid var(--shadow-dark);
-    padding: 6px 10px;
+    padding: 9px 12px;
     text-align: left;
+    border: none;
+    border-bottom: 1px solid rgba(0,0,0,0.07);
+    vertical-align: top;
   }
-  .message.q .message-body th { background: rgba(0,0,0,0.03); font-weight: 600; }
+  .message.q .message-body thead th {
+    background: rgba(233,30,99,0.08);
+    color: var(--text);
+    font-weight: 700;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+  .message.q .message-body tbody tr:nth-child(even) td { background: rgba(0,0,0,0.025); }
+  .message.q .message-body tbody tr:last-child td { border-bottom: none; }
+  .message.q .message-body th:not(:last-child),
+  .message.q .message-body td:not(:last-child) { border-right: 1px solid rgba(0,0,0,0.05); }
 
   .typing { display: inline-flex; gap: 5px; padding: 4px 0; }
   .typing span { width: 7px; height: 7px; background: var(--text-faint); border-radius: 50%; animation: bounce 1.3s infinite ease-in-out; }
