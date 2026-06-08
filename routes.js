@@ -2068,34 +2068,10 @@ router.post('/api/threads/:id/chat', requirePerson, express.json({ limit: '256kb
         }
         qThreads.appendChat(t.id, 'assistant', polished, req.person.email);
 
-        // Independent Gemini fact-check on what Q just said. Different
-        // vendor / different model = not Q rubber-stamping Q (which is what
-        // his self-verifier does and why it can't catch his own errors).
-        // Flags surface alongside Q's reply; never gate it.
-        let checks = [];
-        try {
-            const docTexts = (t.files || []).map(f => {
-                const txt = _threadDocCache.get(`${t.id}:${f.filename}`);
-                if (!txt || txt.length < 40) return null;
-                return `--- file: ${f.filename} ---\n${txt}`;
-            }).filter(Boolean).join('\n\n');
-            const emailsText = (t.emails || []).map((e, i) => {
-                const dir = e.type === 'in' ? 'RECEIVED' : 'SENT';
-                const meta = [e.from && `from: ${e.from}`, e.to && `to: ${e.to}`, e.date && `date: ${e.date}`, e.subject && `subject: ${e.subject}`].filter(Boolean).join(' · ');
-                return `--- ${dir} #${i + 1}${meta ? ' (' + meta + ')' : ''} ---\n${e.body || ''}`;
-            }).join('\n\n');
-            const caseContext = [emailsText, docTexts].filter(Boolean).join('\n\n');
-            const vr = await qFinance.verifyCaseReply({ userMessage: message, draftReply: polished, caseContext });
-            checks = vr.checks || [];
-            if (checks.length) {
-                const v = checks.filter(c => c.status === 'verified').length;
-                const x = checks.filter(c => c.status === 'incorrect').length;
-                const u = checks.filter(c => c.status === 'unverifiable').length;
-                console.log(`[threads] gemini check — verified:${v} flagged:${x} unverifiable:${u}`);
-            }
-        } catch (e) {
-            console.warn('[threads] verify failed:', e.message);
-        }
+        // Gemini cite-check retired for threads: case replies now run on real
+        // Claude Sonnet 4.6, so the independent second-opinion pass is no longer
+        // needed — and it was an extra Gemini call + latency on every reply.
+        const checks = [];
 
         res.json({ reply: polished, checks });
     } catch (e) {

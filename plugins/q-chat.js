@@ -524,6 +524,103 @@ async function geminiVisionChat(prompt, base64, mimeType) {
     }
 }
 
+// Real Claude (Sonnet 4.6 — the model Quotem uses) for advocacy THREADS:
+// bailiffs, council-tax fines, disputes, where being wrong has consequences.
+// Anthropic Messages API via raw fetch (its shape differs from the
+// Together/OpenAI one chat() uses). Reuses Q's existing tools, translated to
+// Anthropic's schema, and runs the same tool loop. Returns the standard chat()
+// result shape, or null to fall back to the Together (V4-Flash) path.
+async function claudeThreadChat({ system, messages, tools, person, maxTokens, startTime }) {
+    const key = process.env.ANTHROPIC_API_KEY;
+    if (!key) return null;
+
+    // Q's tools (OpenAI function shape) → Anthropic tool schema.
+    const anthropicTools = (tools || [])
+        .filter(t => t && t.function && t.function.name)
+        .map(t => ({
+            name: t.function.name,
+            description: t.function.description || '',
+            input_schema: t.function.parameters || { type: 'object', properties: {} },
+        }));
+
+    // History → Anthropic messages (user/assistant text only). Merge
+    // consecutive same-role turns — Anthropic 400s on non-alternating roles.
+    let convo = [];
+    for (const m of messages) {
+        if (!m || (m.role !== 'user' && m.role !== 'assistant') || typeof m.content !== 'string') continue;
+        const prev = convo[convo.length - 1];
+        if (prev && prev.role === m.role) prev.content += '\n\n' + m.content;
+        else convo.push({ role: m.role, content: m.content });
+    }
+    while (convo.length && convo[0].role !== 'user') convo.shift();
+    if (!convo.length) return null;
+
+    const toolCalls = [];
+    let tokensIn = 0, tokensOut = 0, reply = '';
+
+    for (let i = 0; i < MAX_TOOL_ITERATIONS; i++) {
+        let res;
+        try {
+            res = await fetch('https://api.anthropic.com/v1/messages', {
+                method: 'POST',
+                headers: {
+                    'x-api-key': key,
+                    'anthropic-version': '2023-06-01',
+                    'content-type': 'application/json',
+                },
+                body: JSON.stringify({
+                    model: 'claude-sonnet-4-6',
+                    max_tokens: maxTokens || 4096,
+                    system,
+                    messages: convo,
+                    ...(anthropicTools.length && { tools: anthropicTools }),
+                }),
+            });
+        } catch (e) {
+            console.warn('[q-chat] Claude network error: ' + e.message);
+            return null;
+        }
+        if (!res.ok) {
+            console.warn('[q-chat] Claude HTTP ' + res.status + ': ' + (await res.text()).slice(0, 300));
+            return null;
+        }
+        const data = await res.json();
+        tokensIn += data.usage?.input_tokens || 0;
+        tokensOut += data.usage?.output_tokens || 0;
+        const content = Array.isArray(data.content) ? data.content : [];
+        const text = content.filter(b => b.type === 'text').map(b => b.text || '').join('');
+        const toolUses = content.filter(b => b.type === 'tool_use');
+
+        if (data.stop_reason !== 'tool_use' || !toolUses.length) {
+            reply = text;
+            break;
+        }
+        // Append the assistant turn (verbatim blocks) + the tool results.
+        convo.push({ role: 'assistant', content });
+        const resultBlocks = [];
+        for (const tu of toolUses) {
+            const callStart = Date.now();
+            const result = await executeTool(tu.name, JSON.stringify(tu.input || {}), person?.id, person?.email);
+            toolCalls.push({ name: tu.name, args: tu.input, result, durationMs: Date.now() - callStart });
+            resultBlocks.push({
+                type: 'tool_result',
+                tool_use_id: tu.id,
+                content: typeof result === 'string' ? result : JSON.stringify(result),
+            });
+        }
+        convo.push({ role: 'user', content: resultBlocks });
+    }
+
+    if (!reply || !reply.trim()) return null;
+    return {
+        reply: cleanModelOutput(reply, 'chat-claude'),
+        durationMs: Date.now() - startTime,
+        tokensIn,
+        tokensOut,
+        toolCalls,
+    };
+}
+
 async function chat(messages, options = {}) {
     if (!Q_CONFIG.apiKey) {
         return { error: 'No TOGETHER_API_KEY configured', reply: null };
@@ -630,6 +727,28 @@ async function chat(messages, options = {}) {
         } catch (e) {
             console.warn('[q-chat] Gemini vision failed, falling back to Together: ' + e.message);
         }
+    }
+
+    // Advocacy THREADS (bailiffs, council tax, disputes) run on REAL Claude
+    // Sonnet 4.6 — the model Quotem uses — when ANTHROPIC_API_KEY is set.
+    // Everything else stays on V4-Flash. Falls back to Together if Claude is
+    // unavailable or returns nothing, so threads never go dark.
+    if (options.surface === 'thread' && !isVision && useTools && process.env.ANTHROPIC_API_KEY) {
+        const lastUser = [...messages].reverse().find(m => m && m.role === 'user');
+        const msgText = (lastUser && typeof lastUser.content === 'string') ? lastUser.content : '';
+        const claudeResult = await claudeThreadChat({
+            system: systemContent,
+            messages: outboundMessages,
+            tools: selectActiveTools(msgText, { docEditor: false, advocate: true }),
+            person: options.person,
+            maxTokens,
+            startTime,
+        });
+        if (claudeResult) {
+            console.log('[q-chat] thread → Claude sonnet-4-6');
+            return claudeResult;
+        }
+        console.warn('[q-chat] thread → Claude unavailable, falling back to V4-Flash');
     }
 
     try {
