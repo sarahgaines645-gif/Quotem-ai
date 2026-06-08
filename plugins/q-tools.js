@@ -99,6 +99,22 @@ const TOOL_DEFINITIONS = [
     {
         type: 'function',
         function: {
+            name: 'send_email',
+            description: 'Send an email from the user\'s OWN connected email account (Gmail or SMTP). ONLY call this when the user has clearly told you to SEND an email (e.g. "email this to the council", "send that to john@x.com") — never to draft or preview. It goes out from their real address and lands in their Sent folder; it cannot be unsent, so the recipient, subject and body must be exactly what they asked for. If nothing is connected you get a not-connected error — then tell them to connect their email first.',
+            parameters: {
+                type: 'object',
+                properties: {
+                    to: { type: 'string', description: 'Recipient email address.' },
+                    subject: { type: 'string', description: 'The subject line.' },
+                    body: { type: 'string', description: 'The full plain-text body of the email.' },
+                },
+                required: ['to', 'subject', 'body'],
+            },
+        },
+    },
+    {
+        type: 'function',
+        function: {
             name: 'web_search',
             description: 'Search the live web for current information. Use this for news, facts, prices, or anything that may have changed since your training. Returns the most relevant results from across the web.',
             parameters: {
@@ -1139,6 +1155,30 @@ async function analyzeDocument({ image_url, question }) {
  * Execute a tool by name with its arguments. Always returns an object —
  * never throws. Errors are returned as { error: '...' } so Q sees them.
  */
+const qEmailAccounts = require('./q-email-accounts');
+
+// Send an email from the user's own connected account (Gmail/SMTP).
+async function sendEmailTool(args, personEmail) {
+    if (!personEmail) return { error: 'Cannot send email without a signed-in user.' };
+    const to = String(args.to || '').trim();
+    const subject = String(args.subject || '').trim();
+    const body = args.body || args.text || '';
+    if (!to || !subject) return { error: 'Need a recipient (to) and a subject to send an email.' };
+    try {
+        const from = await qEmailAccounts.sendEmail(personEmail, { to, subject, text: body });
+        return {
+            ok: true,
+            sentFrom: from || 'your connected account',
+            instruction_for_q: `Email sent to ${to} from the user's own account. Confirm briefly that it's sent — do not paste the whole email back.`,
+        };
+    } catch (e) {
+        if (e.code === 'not_connected') {
+            return { error: 'no_email_connected', instruction_for_q: 'No email account is connected yet. Tell the user to connect their email first (Connect email on the Tools page), then ask you to send again.' };
+        }
+        return { error: 'send_failed', instruction_for_q: 'The email could not be sent — the connection may need reconnecting. Tell the user briefly; do NOT retry automatically.' };
+    }
+}
+
 async function executeTool(name, argsRaw, personId, personEmail) {
     let args = argsRaw;
     if (typeof argsRaw === 'string') {
@@ -1192,6 +1232,7 @@ async function executeTool(name, argsRaw, personId, personEmail) {
         case 'list_tasks':           return listTasksTool(args, personEmail);
         case 'complete_task':        return completeTaskTool(args, personEmail);
         case 'update_life_context':  return updateLifeContextTool(args, personEmail);
+        case 'send_email':           return await sendEmailTool(args, personEmail);
         default:                 return { error: `Unknown tool: "${name}"` };
     }
 }
@@ -1792,6 +1833,13 @@ const ADVOCATE_TOOLS = new Set([
 ]);
 
 const TRIGGERS = {
+    send_email: [
+        /\bsend (an?|the|this|that|it)?\s*(e-?mail|message)\b/i,
+        /\b(e-?mail|send) (it|this|that|them|him|her)\b[^.?!]{0,40}\b(to|at)\b/i,
+        /\be-?mail (it|this|that|them|him|her)\b/i,
+        /\bfire (off|over) (an? )?e-?mail\b/i,
+        /\b(send|e-?mail)\b[^.?!]{0,40}@/i,
+    ],
     web_search: [
         /\blook( it)? up\b/i,
         /\bsearch( for| the web| online)?\b/i,

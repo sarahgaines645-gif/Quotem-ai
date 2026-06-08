@@ -67,6 +67,27 @@ function saveGmail(email, { address, refreshToken }) {
         updated_at: new Date().toISOString(),
     }, null, 2), 'utf8');
 }
+// SMTP provider (any host with an app password) — same store, provider:'smtp'.
+function saveSmtp(email, { address, host, port, user, pass }) {
+    fs.writeFileSync(accountFile(email), JSON.stringify({
+        provider: 'smtp',
+        email: address || user || '',
+        smtp_host: host,
+        smtp_port: parseInt(port, 10) || 587,
+        smtp_user: user,
+        smtp_pass: encrypt(pass),
+        updated_at: new Date().toISOString(),
+    }, null, 2), 'utf8');
+}
+// Verify the SMTP credentials, then store them. Throws if sign-in fails.
+async function connectSmtp(email, { address, host, port, user, pass }) {
+    const nodemailer = require('nodemailer');
+    const p = parseInt(port, 10) || 587;
+    const t = nodemailer.createTransport({ host, port: p, secure: p === 465, requireTLS: p === 587, auth: { user, pass } });
+    await t.verify();
+    saveSmtp(email, { address, host, port: p, user, pass });
+    return address || user;
+}
 function disconnect(email) {
     try { fs.rmSync(accountFile(email), { force: true }); } catch { /* nothing to remove */ }
 }
@@ -147,30 +168,48 @@ async function gmailAccessToken(refreshToken) {
 // Returns the from address. Throws Error with .code='not_connected' if none.
 async function sendEmail(email, { to, subject, text }) {
     const acct = getAccount(email);
-    if (!acct || acct.provider !== 'gmail') {
+    if (!acct) {
         const e = new Error('not_connected');
         e.code = 'not_connected';
         throw e;
     }
-    const access = await gmailAccessToken(decrypt(acct.refresh_token));
-    const from = acct.email || '';
-    const message = [
-        from ? `From: ${from}` : null,
-        `To: ${to}`,
-        `Subject: ${subject}`,
-        'MIME-Version: 1.0',
-        'Content-Type: text/plain; charset=UTF-8',
-        '',
-        text || '',
-    ].filter(v => v !== null).join('\r\n');
-    const raw = Buffer.from(message).toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
-    const gr = await fetch('https://gmail.googleapis.com/gmail/v1/users/me/messages/send', {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${access}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ raw }),
-    });
-    if (!gr.ok) throw new Error('gmail_send_failed: ' + (await gr.text()).slice(0, 200));
-    return from;
+    if (acct.provider === 'gmail') {
+        const access = await gmailAccessToken(decrypt(acct.refresh_token));
+        const from = acct.email || '';
+        const message = [
+            from ? `From: ${from}` : null,
+            `To: ${to}`,
+            `Subject: ${subject}`,
+            'MIME-Version: 1.0',
+            'Content-Type: text/plain; charset=UTF-8',
+            '',
+            text || '',
+        ].filter(v => v !== null).join('\r\n');
+        const raw = Buffer.from(message).toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+        const gr = await fetch('https://gmail.googleapis.com/gmail/v1/users/me/messages/send', {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${access}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ raw }),
+        });
+        if (!gr.ok) throw new Error('gmail_send_failed: ' + (await gr.text()).slice(0, 200));
+        return from;
+    }
+    if (acct.provider === 'smtp') {
+        const nodemailer = require('nodemailer');
+        const from = acct.email || acct.smtp_user || '';
+        const t = nodemailer.createTransport({
+            host: acct.smtp_host,
+            port: acct.smtp_port,
+            secure: acct.smtp_port === 465,
+            requireTLS: acct.smtp_port === 587,
+            auth: { user: acct.smtp_user, pass: decrypt(acct.smtp_pass) },
+        });
+        await t.sendMail({ from, to, subject, text: text || '' });
+        return from;
+    }
+    const e = new Error('not_connected');
+    e.code = 'not_connected';
+    throw e;
 }
 
-module.exports = { gmailConfigured, status, getAccount, disconnect, consentUrl, handleCallback, sendEmail };
+module.exports = { gmailConfigured, status, getAccount, disconnect, consentUrl, handleCallback, sendEmail, connectSmtp };

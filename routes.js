@@ -364,6 +364,19 @@ router.post('/email/send', requirePerson, express.json({ limit: '1mb' }), async 
     }
 });
 
+// Connect any other provider via SMTP + app password (the "add other providers"
+// path — same store, provider:'smtp'; send route already handles it).
+router.post('/email/smtp', requirePerson, express.json({ limit: '64kb' }), async (req, res) => {
+    const { host, port, user, pass, email } = req.body || {};
+    if (!host || !user || !pass) return res.status(400).json({ error: 'host, user and pass are required' });
+    try {
+        const addr = await qEmail.connectSmtp(req.person.email, { address: email, host, port, user, pass });
+        res.json({ ok: true, provider: 'smtp', email: addr });
+    } catch (e) {
+        res.status(400).json({ error: 'Could not sign in to that mail server — check the host, port and app password.' });
+    }
+});
+
 const qFormFiller = require('./plugins/q-form-filler');
 const { fillPdfForWord } = qFormFiller;
 const docEditor = require('./plugins/q-doc-editor');
