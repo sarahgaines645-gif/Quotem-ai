@@ -571,7 +571,13 @@ async function claudeThreadChat({ system, messages, tools, person, maxTokens, st
                 body: JSON.stringify({
                     model: 'claude-sonnet-4-6',
                     max_tokens: maxTokens || 4096,
-                    system,
+                    // Prompt caching (Claude path only). The persona + APS + thread
+                    // system prompt — and the tool defs, which render before system —
+                    // are large and identical on every call, so cache them: each
+                    // tool-loop iteration and follow-up turn within ~5 min then reads
+                    // that prefix at ~0.1x instead of full price. Big saving on the
+                    // pricier Claude path; no behaviour change.
+                    system: [{ type: 'text', text: system, cache_control: { type: 'ephemeral' } }],
                     messages: convo,
                     ...(anthropicTools.length && { tools: anthropicTools }),
                 }),
@@ -587,6 +593,11 @@ async function claudeThreadChat({ system, messages, tools, person, maxTokens, st
         const data = await res.json();
         tokensIn += data.usage?.input_tokens || 0;
         tokensOut += data.usage?.output_tokens || 0;
+        // Confirm prompt caching is actually hitting: read should be >0 from the
+        // 2nd call onward; if it stays 0, something in the prefix is changing.
+        const cr = data.usage?.cache_read_input_tokens || 0;
+        const cw = data.usage?.cache_creation_input_tokens || 0;
+        if (cr || cw) console.log(`[q-chat] claude cache — read:${cr} write:${cw}`);
         const content = Array.isArray(data.content) ? data.content : [];
         const text = content.filter(b => b.type === 'text').map(b => b.text || '').join('');
         const toolUses = content.filter(b => b.type === 'tool_use');
