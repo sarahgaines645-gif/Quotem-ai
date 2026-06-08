@@ -257,10 +257,10 @@
     color: var(--text-muted);
   }
 
-  /* Both Q and user bubbles cap at 78% so each sits centred with matching
-     empty gutter on the outer side. The avatar slot (52px) lives in the
-     INNER gutter; the outer gutter stays empty for visual balance. */
-  .message-content { flex: 1; min-width: 0; max-width: 78%; }
+  /* Bubbles use most of the row — only a small inner gutter for the avatar.
+     (Was capped at 78%, which left a big empty outer gutter = the "indented"
+     look.) */
+  .message-content { flex: 1; min-width: 0; max-width: 94%; }
 
   .message-meta { font-size: 11px; color: var(--text-faint); margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.08em; font-weight: 600; }
   .message.user .message-meta { text-align: right; }
@@ -1266,6 +1266,16 @@
     width: 100%; margin-bottom: 12px;
   }
   .call-modal .row { display: flex; gap: 8px; justify-content: center; }
+
+  /* Phones — stop the input bar crowding to one side (the wide footer padding
+     + buttons were squeezing the textarea), and let bubbles use the full row. */
+  @media (max-width: 600px) {
+    footer { padding: 12px 12px 14px; padding-bottom: max(14px, env(safe-area-inset-bottom, 14px)); }
+    .input-wrapper { padding: 10px 10px 10px 16px; gap: 8px; border-radius: 18px; }
+    .input-btn { width: 34px; height: 34px; }
+    .message { gap: 10px; margin-bottom: 18px; }
+    .message-content { max-width: 100%; }
+  }
 </style>
 </head>
 <body>

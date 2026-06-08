@@ -591,7 +591,12 @@ async function chat(messages, options = {}) {
                     // returning empty content; Q then said "I can see them but
                     // can't access them" — the same hallucination, different
                     // cause. K2.5 supports a normal JSON response.
-                    ...(!isVision && reasoningEffort && { reasoning_effort: reasoningEffort }),
+                    // Skip reasoning_effort when tools are in play: high reasoning +
+                    // function-calling on these models makes them reason in text and
+                    // stop emitting tool_calls (proven in Quoteapp, a40f304), and it's
+                    // a big part of the slow turns. Reasoning still applies to pure
+                    // text turns and the no-tools fallback below.
+                    ...(!isVision && !useTools && reasoningEffort && { reasoning_effort: reasoningEffort }),
                     ...(useTools && {
                         tools: (() => {
                             const lastUser = [...messages].reverse().find(m => m.role === 'user');
