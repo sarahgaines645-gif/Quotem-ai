@@ -1055,7 +1055,13 @@ async function chat(messages, options = {}) {
                     const finalData = await finalRes.json();
                     totalTokensIn += finalData.usage?.prompt_tokens || 0;
                     totalTokensOut += finalData.usage?.completion_tokens || 0;
-                    draftReply = finalData.choices?.[0]?.message?.content || '';
+                    // Same reasoning-leak fallback as the main reply path (above):
+                    // V4 in think mode sometimes puts the answer in reasoning_content
+                    // with content empty. Without this, a reasoned final answer comes
+                    // back blank → the "existential crisis" friendly error. This matters
+                    // now that Think is the default thinking level.
+                    const fm = finalData.choices?.[0]?.message;
+                    draftReply = (fm?.content || fm?.reasoning_content || fm?.reasoning || '');
                 }
             } catch (e) {
                 console.warn('[q-chat] final no-tools call failed:', e.message);
