@@ -1929,12 +1929,20 @@ const TRIGGERS = {
     ],
     add_task: [
         /\b(remind me|don'?t let me forget|i need to|i('ve)? got to|i have to|i must|got to)\b/i,
-        /\b(add|put)\b.*\b(to (my|the) (list|tasks?|todo|to-do))\b/i,
+        // "put it on the list", "add to my tasks", "stick it on the to-do",
+        // "pop that on my list", "chuck it on the task list" — on/to/in + a list word.
+        /\b(add|put|pop|stick|chuck|note)\b[^.?!]*\b(on|to|in)\b[^.?!]*\b(list|task|tasks|to-?do|to-?dos)\b/i,
+        // any reference to a task / to-do list at all
+        /\b(task|to-?do)[- ]?list\b/i,
+        /\bon (my|the) (list|tasks?|to-?dos?)\b/i,
+        // "add a task", "new task", "make a to-do", "task: call EDF"
+        /\b(add|new|make|create)\b[^.?!]*\b(task|to-?do)s?\b/i,
+        /\b(task|to-?do)s?\s*:/i,
         /\b(todo|to-do)\b.*\b(:|add)\b/i,
     ],
     list_tasks: [
-        /\b(what'?s|whats|show me|list)\b.*\b(on (my|the) list|my tasks?|my todos?|my to-?dos?|left to do|outstanding|on my plate)\b/i,
-        /\bwhat do i need to (do|get done)\b/i,
+        /\b(what'?s|whats|show me|list|see|check)\b.*\b(on (my|the) list|my tasks?|my todos?|my to-?dos?|to-?do list|task list|left to do|outstanding|on my plate)\b/i,
+        /\bwhat do i (need|have) to (do|get done)\b/i,
     ],
     complete_task: [
         /\b(i('ve)? )?(done|finished|completed?|sorted)\b.*\b(that|this|it|the|with)\b/i,
