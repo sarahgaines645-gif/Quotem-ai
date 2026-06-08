@@ -18,7 +18,7 @@ const { translateToSOR } = require('./plugins/q-translator');
 const { checkResults } = require('./plugins/q-checker');
 const { expandItem } = require('./plugins/q-expander');
 const { priceItem, priceItems } = require('./plugins/q-pricer');
-const { chat, claudeReadImage } = require('./plugins/q-chat');
+const { chat, claudeReadImage, claudeThreadChat } = require('./plugins/q-chat');
 const { stats: ragStats } = require('./plugins/q-rag');
 const { speakAsVoice } = require('./plugins/q-voice-clone');
 const { runAgent } = require('./plugins/q-agent');
@@ -2304,6 +2304,44 @@ router.post('/api/threads/:id/chat', requirePerson, express.json({ limit: '256kb
         res.json({ reply: polished, checks });
     } catch (e) {
         res.status(500).json({ error: e.message || 'Chat failed' });
+    }
+});
+
+// "Check this" — single focused Claude Sonnet review of a draft document.
+// No tool loop, no credit burn. Body: { document: '...text...' }
+// Claude reads the full case context + the document and gives a legal/quality check.
+router.post('/api/threads/:id/check', requirePerson, express.json({ limit: '128kb' }), async (req, res) => {
+    const t = readOwnedThread(req, res);
+    if (!t) return;
+    const doc = (req.body?.document || '').trim();
+    if (!doc) return res.status(400).json({ error: 'document required' });
+
+    const caseContext = [
+        t.title ? `Case: ${t.title}` : '',
+        (t.emails || []).map(e => `[${e.type === 'in' ? 'Received' : e.type === 'draft' ? 'Draft' : 'Sent'} — ${e.subject || ''}]\n${(e.body || '').slice(0, 800)}`).join('\n\n'),
+        (t.notes || []).map(n => n.text || '').join('\n'),
+    ].filter(Boolean).join('\n\n');
+
+    const system = `You are a careful legal and correspondence reviewer. The user is about to send the document below. Read the full case context, then review the document for:
+- Legal accuracy and strength of arguments
+- Anything missing that should be included
+- Tone — is it professional and firm without being inflammatory?
+- Any factual errors or unsupported claims
+- Whether it is ready to send or needs changes
+
+Be direct. If it's ready, say so clearly. If not, list exactly what to fix.`;
+
+    const messages = [
+        ...(caseContext ? [{ role: 'user', content: `CASE CONTEXT:\n${caseContext}` }, { role: 'assistant', content: 'Understood — I have the full case context.' }] : []),
+        { role: 'user', content: `Please check this document before I send it:\n\n${doc}` },
+    ];
+
+    try {
+        const result = await claudeThreadChat({ system, messages, tools: [], person: req.person, maxTokens: 2048, startTime: Date.now(), documents: [] });
+        if (!result || !result.reply) return res.status(500).json({ error: 'Claude did not respond' });
+        res.json({ review: result.reply });
+    } catch (e) {
+        res.status(500).json({ error: e.message || 'Check failed' });
     }
 });
 

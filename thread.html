@@ -608,11 +608,32 @@ function renderEmails() {
         ${e.subject ? `<div class="subject">${escapeHtml(e.subject)}</div>` : ''}
         ${escapeHtml(e.body || '')}
         <div class="file-actions" style="margin-top:10px;">
+          <button class="check-email">✓ Check this</button>
           <button class="del-email">Delete</button>
         </div>
       </div>`;
     card.querySelector('.email-head').addEventListener('click', () => {
       card.classList.toggle('expanded');
+    });
+    card.querySelector('.check-email').addEventListener('click', async (ev) => {
+      ev.stopPropagation();
+      const btn = ev.currentTarget;
+      btn.textContent = '⏳ Checking…';
+      btn.disabled = true;
+      try {
+        const r = await fetch(`/api/threads/${threadId}/check`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ document: (e.subject ? e.subject + '\n\n' : '') + (e.body || '') }),
+        });
+        const data = await r.json();
+        if (data.review) appendChatMsg('q', data.review);
+      } catch (err) {
+        appendChatMsg('q', 'Sorry — the document check failed. Try again.');
+      } finally {
+        btn.textContent = '✓ Check this';
+        btn.disabled = false;
+      }
     });
     card.querySelector('.del-email').addEventListener('click', async (ev) => {
       ev.stopPropagation();
