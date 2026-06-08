@@ -13,11 +13,12 @@
 const Q_CONFIG = {
   apiKey: process.env.TOGETHER_API_KEY,
   baseURL: 'https://api.together.xyz/v1',
-  // V4-Flash (284B, 13B active) — much faster than V4-Pro (1.6T); both are on
-  // Together. Pro was timing out on every chat turn. Flash supports function
-  // calling + JSON mode, so tools still work. Reversible: change back to
-  // 'deepseek-ai/DeepSeek-V4-Pro' if Flash isn't enough.
-  model: 'deepseek-ai/DeepSeek-V4-Flash',
+  // Main chat = V4-Pro. We tried V4-Flash for speed but it intermittently
+  // returned empty 200-OKs → "Q returned no reply" every other message. Pro's
+  // earlier timeouts were caused by reasoning_effort:'high' on tool turns,
+  // which is now removed in q-chat.js — so Pro is both fast and reliable here.
+  // (fastModel below stays on Flash for utility/extraction speed.)
+  model: 'deepseek-ai/DeepSeek-V4-Pro',
   // V4 Pro is text-only. When the chat carries an image attachment we
   // switch the call to a vision-capable model on the same Together key.
   // Kimi K2.5 (Moonshot AI) — strong on OCR / document reading / structured
