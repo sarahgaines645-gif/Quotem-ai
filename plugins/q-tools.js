@@ -1318,6 +1318,7 @@ async function createDocument({ title, content, image_sources } = {}, personEmai
         const embedded = images.filter(i => i.buffer).length;
         return {
             ok: true,
+            token: result.token,
             filename: result.filename,
             sizeBytes: result.sizeBytes,
             imagesEmbedded: embedded,

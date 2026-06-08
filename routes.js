@@ -2296,6 +2296,30 @@ router.post('/api/threads/:id/chat', requirePerson, express.json({ limit: '256kb
         }
         qThreads.appendChat(t.id, 'assistant', polished, req.person.email);
 
+        // Auto-file any document Q generated this turn to the thread's permanent storage.
+        // Railway's ephemeral fs means the /download/:token link breaks after each deploy.
+        // Saving to the thread immediately means the file survives — the user can download
+        // from the Files section even if the original token link is dead.
+        const { resolveToken: resolveGeneratedDoc } = require('./plugins/doc-creator');
+        for (const tc of (result.toolCalls || [])) {
+            if (tc.name === 'create_document' && tc.result?.ok && tc.result?.token && tc.result?.filename) {
+                try {
+                    const resolved = resolveGeneratedDoc(tc.result.token, req.person.email);
+                    if (resolved) {
+                        const buf = require('fs').readFileSync(resolved.fullPath);
+                        qThreads.addFile(t.id, {
+                            filename: tc.result.filename,
+                            mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+                            base64: buf.toString('base64'),
+                        }, req.person.email);
+                        console.log(`[threads] auto-filed doc "${tc.result.filename}" to thread ${t.id}`);
+                    }
+                } catch (e) {
+                    console.warn('[threads] auto-file doc failed:', e.message);
+                }
+            }
+        }
+
         // Gemini cite-check retired for threads: case replies now run on real
         // Claude Sonnet 4.6, so the independent second-opinion pass is no longer
         // needed — and it was an extra Gemini call + latency on every reply.
