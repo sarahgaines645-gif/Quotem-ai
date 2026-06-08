@@ -1596,19 +1596,19 @@ function blobToBase64(blob) {
   });
 }
 
-// Thinking-level picker — Quick / Think / Deep maps to 'low' / 'high' / 'max'.
-// The chosen level lives in localStorage so it persists across reloads, but
-// it expires after 2 hours of inactivity — so if Q hasn't been used for a
-// while he defaults back to Quick. That stops a forgotten 'Deep' from quietly
-// making every reply slow tomorrow.
+// Thinking-level picker — Quick / Think / Deep maps to 'off' / 'high' / 'max'.
+// DEFAULT is Think ('high', the middle level) — Q reasons by default. The chosen
+// level persists in localStorage across reloads; after 2 hours idle it falls
+// back to the Think default (not Quick), so a forgotten 'Deep' (max) can't
+// quietly make every reply slow tomorrow while Q still always reasons.
 const THINK_TIMEOUT_MS = 2 * 60 * 60 * 1000; // 2 hours
 const THINK_TS_KEY = THINK_KEY + '-ts';
 const $thinkBtns = document.querySelectorAll('.think-btn');
 function loadThinkingLevel() {
-  const saved = localStorage.getItem(THINK_KEY) || 'off';
+  const saved = localStorage.getItem(THINK_KEY) || 'high';
   const tsRaw = localStorage.getItem(THINK_TS_KEY);
   const ts = tsRaw ? parseInt(tsRaw, 10) : 0;
-  if (!ts || Date.now() - ts > THINK_TIMEOUT_MS) return 'off';
+  if (!ts || Date.now() - ts > THINK_TIMEOUT_MS) return 'high';
   return saved;
 }
 let thinkingLevel = loadThinkingLevel();
