@@ -321,6 +321,49 @@ router.post('/plotter/analyze', requirePerson, express.json({ limit: '24mb' }), 
     }
 });
 
+// ── Email: connect the user's Gmail + send "as yourself" (mirrors Quotem) ──
+const qEmail = require('./plugins/q-email-accounts');
+
+router.get('/email/status', requirePerson, (req, res) => {
+    res.json(qEmail.status(req.person.email));
+});
+
+router.get('/email/gmail/start', requirePerson, (req, res) => {
+    if (!qEmail.gmailConfigured()) {
+        return res.status(503).json({ error: 'Gmail isn\'t set up on the server yet (missing Google OAuth credentials).' });
+    }
+    res.json({ url: qEmail.consentUrl(req.person.email) });
+});
+
+// Google redirects here — NO requirePerson (the cookie won't ride the redirect;
+// identity is in the signed state instead).
+router.get('/email/gmail/callback', async (req, res) => {
+    const { code, state, error } = req.query;
+    if (error) return res.redirect('/tools?email=denied');
+    if (!code || !state) return res.redirect('/tools?email=error');
+    try {
+        await qEmail.handleCallback(code, state);
+        return res.redirect('/tools?email=connected');
+    } catch (e) {
+        console.error('[email] gmail callback:', e.message);
+        const q = e.message === 'no_refresh_token' ? 'noaccess' : (e.message === 'bad_state' ? 'badstate' : 'error');
+        return res.redirect('/tools?email=' + q);
+    }
+});
+
+router.post('/email/send', requirePerson, express.json({ limit: '1mb' }), async (req, res) => {
+    const { to, subject, text } = req.body || {};
+    if (!to || !subject) return res.status(400).json({ error: 'to and subject are required' });
+    try {
+        const from = await qEmail.sendEmail(req.person.email, { to, subject, text: text || '' });
+        res.json({ ok: true, sentFrom: from });
+    } catch (e) {
+        if (e.code === 'not_connected') return res.status(409).json({ error: 'No email connected — connect Gmail first.' });
+        console.error('[email] send:', e.message);
+        res.status(502).json({ error: 'Could not send — your Gmail connection may need reconnecting.' });
+    }
+});
+
 const qFormFiller = require('./plugins/q-form-filler');
 const { fillPdfForWord } = qFormFiller;
 const docEditor = require('./plugins/q-doc-editor');
