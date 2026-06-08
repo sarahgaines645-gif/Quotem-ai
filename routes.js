@@ -2117,15 +2117,24 @@ router.post('/api/threads/:id/chat', requirePerson, express.json({ limit: '256kb
     const refersToFile = /\b(image|images|photo|photos|picture|pictured|pic|pics|screenshot|scan|scanned|see|look|shows?|attached|attachment|document|doc|letter|email|e-?mail|pdf|file|says?|read|content|in it|whats? in)\b/i.test(message);
     const wantContent = isAddPing || refersToFile;
 
-    const visionImages = [];
+    // Photos: hand them to CLAUDE, which has its own reliable vision — far better
+    // than the Gemini/Kimi path, which depends on a Google key AND a Gemini model
+    // version that can change under us (the likely cause of "Q can't see the
+    // photo"). When Claude is the thread engine, the photo goes to Claude as an
+    // image block; the Gemini vision path is kept only as a fallback for when
+    // Claude isn't available.
+    const claudeAvailable = !!process.env.ANTHROPIC_API_KEY && process.env.QUOTEM_CLAUDE_THREADS !== '0';
+    const visionImages = [];   // Gemini/Kimi fallback only
+    const claudeImages = [];   // read natively by Claude
     if (imageFiles.length && wantContent) {
         for (const f of imageFiles) {
             try {
                 const file = qThreads.readFile(t.id, f.filename, req.person.email);
-                if (file && file.buffer) {
-                    visionImages.push({
-                        dataUrl: `data:${file.mimeType || 'image/jpeg'};base64,${file.buffer.toString('base64')}`,
-                    });
+                if (!file || !file.buffer) continue;
+                if (claudeAvailable && file.buffer.length < 8 * 1024 * 1024) {
+                    claudeImages.push({ filename: f.filename, base64: file.buffer.toString('base64'), mediaType: file.mimeType || 'image/jpeg' });
+                } else {
+                    visionImages.push({ dataUrl: `data:${file.mimeType || 'image/jpeg'};base64,${file.buffer.toString('base64')}` });
                 }
             } catch (e) {
                 console.warn('[threads] could not read image for vision: ' + f.filename + ' — ' + e.message);
@@ -2217,8 +2226,12 @@ router.post('/api/threads/:id/chat', requirePerson, express.json({ limit: '256kb
         // toggle) — deepest reasoning when it's worth the extra time.
         const tEffort = (req.body?.reasoningEffort === 'max') ? 'max' : 'high';
         const qOpts = { useTools: true, mode: 'aps', surface: 'thread', person: req.person, reasoningEffort: tEffort };
-        if (visionImages.length) qOpts.images = visionImages;
-        if (pdfDocuments.length) qOpts.documents = pdfDocuments;   // Claude reads these PDFs natively
+        if (visionImages.length) qOpts.images = visionImages;   // Gemini/Kimi fallback only (no Claude)
+        // Claude reads PDFs AND photos natively — one channel, sent as document /
+        // image blocks. Routed here (not options.images) so the turn stays on the
+        // Claude path instead of being intercepted by the Gemini vision route.
+        const claudeAttachments = [...pdfDocuments, ...claudeImages];
+        if (claudeAttachments.length) qOpts.documents = claudeAttachments;
         const result = await qChat(messages, qOpts);
         if (result.error || !result.reply) {
             return res.status(500).json({ error: result.error || 'No reply from Q' });

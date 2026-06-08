@@ -621,11 +621,19 @@ async function claudeThreadChat({ system, messages, tools, person, maxTokens, st
             if (typeof cur === 'string' && cur.trim()) blocks.push({ type: 'text', text: cur });
             else if (Array.isArray(cur)) blocks.push(...cur);
             for (const d of documents) {
-                if (d && d.base64) blocks.push({
-                    type: 'document',
-                    source: { type: 'base64', media_type: d.mediaType || 'application/pdf', data: d.base64 },
-                    ...(d.filename ? { title: String(d.filename).slice(0, 200) } : {}),
-                });
+                if (!d || !d.base64) continue;
+                const mt = d.mediaType || 'application/pdf';
+                if (mt.startsWith('image/')) {
+                    // Photos → image block. Claude reads every detail (PCN numbers,
+                    // dates, signatures) directly off the picture.
+                    blocks.push({ type: 'image', source: { type: 'base64', media_type: mt, data: d.base64 } });
+                } else {
+                    blocks.push({
+                        type: 'document',
+                        source: { type: 'base64', media_type: mt, data: d.base64 },
+                        ...(d.filename ? { title: String(d.filename).slice(0, 200) } : {}),
+                    });
+                }
             }
             convo[i].content = blocks;
             break;
