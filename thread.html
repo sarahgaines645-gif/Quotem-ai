@@ -284,6 +284,19 @@
     </div>
   </div>
 
+  <div class="section-label">📤 Outbox — emails ready to send</div>
+  <div id="outbox-list" style="margin-bottom: 12px;"></div>
+  <div style="background: var(--bg); box-shadow: var(--neu-raised-sm); border-radius: 14px; padding: 14px; display: flex; flex-direction: column; gap: 8px;">
+    <input type="text" id="ob-to" placeholder="Send to (email address)" style="border:none;outline:none;background:var(--bg);box-shadow:var(--neu-inset-sm);border-radius:10px;padding:10px 12px;font-family:inherit;font-size:14px;color:var(--text);">
+    <input type="text" id="ob-subject" placeholder="Subject" style="border:none;outline:none;background:var(--bg);box-shadow:var(--neu-inset-sm);border-radius:10px;padding:10px 12px;font-family:inherit;font-size:14px;color:var(--text);">
+    <textarea id="ob-body" placeholder="Write the email — send now, or save to send later…" style="border:none;outline:none;background:var(--bg);box-shadow:var(--neu-inset-sm);border-radius:10px;padding:10px 12px;font-family:inherit;font-size:14px;color:var(--text);min-height:90px;resize:vertical;"></textarea>
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+      <button id="ob-save-btn" class="note-save-btn" type="button">🕒 Save to outbox</button>
+      <button id="ob-send-btn" class="note-save-btn" type="button">📤 Send now</button>
+      <span id="outbox-status" style="font-size:12px;color:var(--text-muted);"></span>
+    </div>
+  </div>
+
   <div style="text-align: center; margin-top: 32px;">
     <button id="delete-thread-btn" style="background: transparent; border: none; cursor: pointer; font-family: inherit; font-size: 12px; color: var(--text-faint); padding: 8px 14px; border-radius: 8px;">🗑 Delete this Thread</button>
   </div>
@@ -1092,6 +1105,60 @@ $chatInput.addEventListener('input', () => {
 });
 
 loadThread();
+
+// ── Outbox for this case (emails ready to send later) ──
+(function () {
+  const obList = document.getElementById('outbox-list');
+  const obTo = document.getElementById('ob-to');
+  const obSubject = document.getElementById('ob-subject');
+  const obBody = document.getElementById('ob-body');
+  const obSave = document.getElementById('ob-save-btn');
+  const obSend = document.getElementById('ob-send-btn');
+  const obStatus = document.getElementById('outbox-status');
+  if (!obList) return;
+  const esc = (s) => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  const flash = (m) => { obStatus.textContent = m; setTimeout(() => { if (obStatus.textContent === m) obStatus.textContent = ''; }, 3000); };
+  async function load() {
+    try {
+      const r = await fetch('/email/outbox?threadId=' + encodeURIComponent(threadId));
+      const d = await r.json();
+      const items = d.outbox || [];
+      obList.innerHTML = '';
+      if (!items.length) { obList.innerHTML = '<div style="font-size:12px;color:var(--text-faint);">Nothing queued for this case yet.</div>'; return; }
+      items.forEach((it) => {
+        const row = document.createElement('div');
+        row.style.cssText = 'background:var(--bg);box-shadow:var(--neu-inset-sm);border-radius:10px;padding:10px 12px;margin-bottom:8px;';
+        row.innerHTML = '<div style="font-size:13px;"><b>' + esc(it.subject || '(no subject)') + '</b> &rarr; ' + esc(it.to || '(no recipient)') + '</div>';
+        const acts = document.createElement('div'); acts.style.cssText = 'margin-top:6px;display:flex;gap:8px;';
+        const send = document.createElement('button'); send.className = 'note-save-btn'; send.textContent = '📤 Send';
+        send.onclick = async () => { send.disabled = true; try { const rr = await fetch('/email/outbox/' + it.id + '/send', { method: 'POST' }); const dd = await rr.json(); if (!rr.ok) throw new Error(dd.error || 'Failed'); flash('Sent'); load(); } catch (e) { flash('Send failed: ' + e.message); send.disabled = false; } };
+        const del = document.createElement('button'); del.className = 'note-save-btn'; del.textContent = '🗑 Delete';
+        del.onclick = async () => { await fetch('/email/outbox/' + it.id, { method: 'DELETE' }); load(); };
+        acts.appendChild(send); acts.appendChild(del); row.appendChild(acts); obList.appendChild(row);
+      });
+    } catch (_) { /* ignore */ }
+  }
+  obSave.onclick = async () => {
+    if (!obSubject.value.trim() && !obBody.value.trim()) return flash('Nothing to save yet');
+    try {
+      const r = await fetch('/email/outbox', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ to: obTo.value.trim(), subject: obSubject.value, body: obBody.value, threadId }) });
+      if (!r.ok) throw new Error('Failed');
+      obTo.value = ''; obSubject.value = ''; obBody.value = ''; flash('Saved to outbox'); load();
+    } catch (_) { flash('Could not save'); }
+  };
+  obSend.onclick = async () => {
+    const to = obTo.value.trim();
+    if (!to) return flash('Add a recipient first');
+    obSend.disabled = true;
+    try {
+      const r = await fetch('/email/send', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ to, subject: obSubject.value, text: obBody.value }) });
+      const d = await r.json(); if (!r.ok) throw new Error(d.error || 'Failed');
+      obTo.value = ''; obSubject.value = ''; obBody.value = ''; flash('Sent to ' + to);
+    } catch (e) { flash('Send failed: ' + e.message); }
+    finally { obSend.disabled = false; }
+  };
+  load();
+})();
 </script>
 </body>
 </html>

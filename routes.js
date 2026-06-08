@@ -379,7 +379,9 @@ router.post('/email/smtp', requirePerson, express.json({ limit: '64kb' }), async
 
 // Outbox — emails saved to send later (used by email-writer + threads).
 router.get('/email/outbox', requirePerson, (req, res) => {
-    res.json({ outbox: qEmail.getOutbox(req.person.email) });
+    let outbox = qEmail.getOutbox(req.person.email);
+    if (req.query.threadId) outbox = outbox.filter(x => x.threadId === req.query.threadId);
+    res.json({ outbox });
 });
 router.post('/email/outbox', requirePerson, express.json({ limit: '1mb' }), (req, res) => {
     const { to, subject, body, threadId } = req.body || {};
