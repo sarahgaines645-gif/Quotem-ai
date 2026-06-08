@@ -216,6 +216,13 @@
     <a href="/chat" class="back-link">← back to Q</a>
   </header>
 
+  <!-- ── Email connection ── -->
+  <div class="card" id="email-connect-card" style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+    <span class="section-label" style="margin:0;">📧 Your email</span>
+    <span class="status" id="email-conn-status">Checking…</span>
+    <button class="btn-sm" id="email-connect-btn" style="display:none;">Connect Gmail</button>
+  </div>
+
   <!-- ── STEP 1: paste ── -->
   <div class="card" id="step-1-card">
     <div class="section-label">📥 Paste the email — or the whole thread</div>
@@ -283,6 +290,9 @@
   <!-- ── STEP 3: draft ── -->
   <div class="step-3" id="step-3">
     <div class="card reply-card show">
+      <div class="section-label">📧 To</div>
+      <input type="text" class="reply-subject" id="reply-to" placeholder="recipient@email.com" />
+
       <div class="section-label">📨 Subject</div>
       <input type="text" class="reply-subject" id="reply-subject" />
 
@@ -298,12 +308,20 @@
       </div>
 
       <div class="reply-actions">
+        <button class="btn-sm" id="send-now-btn">📤 Send now</button>
+        <button class="btn-sm" id="save-outbox-btn">🕒 Save to outbox</button>
         <button class="btn-sm" id="copy-btn">📋 Copy</button>
         <button class="btn-sm" id="copy-both-btn">📋 Copy subject + body</button>
         <button class="btn-sm" id="restart-btn">↩️ Start over</button>
         <span class="status" id="retone-status"></span>
       </div>
     </div>
+  </div>
+
+  <!-- ── OUTBOX ── -->
+  <div class="card" id="outbox-card" style="display:none;">
+    <div class="section-label" id="outbox">🕒 Outbox — saved to send later</div>
+    <div id="outbox-list"></div>
   </div>
 
 </div>
@@ -669,6 +687,86 @@ function escapeHtml(s) {
   return String(s == null ? '' : s)
     .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
+
+// ── Email: connect + send now + outbox ──
+(function () {
+  const $connStat = document.getElementById('email-conn-status');
+  const $connBtn  = document.getElementById('email-connect-btn');
+  const $to       = document.getElementById('reply-to');
+  const $sendNow  = document.getElementById('send-now-btn');
+  const $saveOut  = document.getElementById('save-outbox-btn');
+  const $obCard   = document.getElementById('outbox-card');
+  const $obList   = document.getElementById('outbox-list');
+
+  async function loadStatus() {
+    try {
+      const r = await apiFetch('/email/status'); const d = await r.json();
+      if (d.connected) { $connStat.textContent = '✓ Sending as ' + (d.email || d.provider); $connBtn.style.display = 'none'; }
+      else if (d.gmailAvailable) { $connStat.textContent = 'Not connected'; $connBtn.style.display = ''; }
+      else { $connStat.textContent = 'Email isn\'t set up on the server yet'; $connBtn.style.display = 'none'; }
+    } catch { $connStat.textContent = ''; }
+  }
+  if ($connBtn) $connBtn.addEventListener('click', async () => {
+    try { const r = await apiFetch('/email/gmail/start'); const d = await r.json(); if (d.url) location.href = d.url; else showToast(d.error || 'Could not start Gmail connect'); }
+    catch { showToast('Could not start Gmail connect'); }
+  });
+
+  // Returning from the Google OAuth round-trip
+  const ep = new URLSearchParams(location.search).get('email');
+  if (ep === 'connected') showToast('✓ Email connected');
+  else if (ep === 'denied') showToast('Connection cancelled');
+  else if (ep) showToast('Email connect failed (' + ep + ')');
+
+  if ($sendNow) $sendNow.addEventListener('click', async () => {
+    const to = ($to.value || '').trim();
+    if (!to) return showToast('Add a recipient (To) first');
+    $sendNow.disabled = true;
+    try {
+      const r = await apiFetch('/email/send', { method: 'POST', body: { to, subject: $rsubject.value, text: $rbody.value } });
+      const d = await r.json(); if (!r.ok) throw new Error(d.error || 'Failed');
+      showToast('✓ Sent to ' + to);
+    } catch (e) { showToast('Send failed: ' + e.message); }
+    finally { $sendNow.disabled = false; }
+  });
+
+  if ($saveOut) $saveOut.addEventListener('click', async () => {
+    if (!$rsubject.value.trim() && !$rbody.value.trim()) return showToast('Nothing to save yet');
+    try {
+      const r = await apiFetch('/email/outbox', { method: 'POST', body: { to: ($to.value || '').trim(), subject: $rsubject.value, body: $rbody.value } });
+      if (!r.ok) throw new Error('Failed');
+      showToast('🕒 Saved to outbox'); loadOutbox();
+    } catch { showToast('Could not save to outbox'); }
+  });
+
+  async function loadOutbox() {
+    try {
+      const r = await apiFetch('/email/outbox'); const d = await r.json();
+      const items = d.outbox || [];
+      if (!items.length) { $obCard.style.display = 'none'; $obList.innerHTML = ''; return; }
+      $obCard.style.display = '';
+      $obList.innerHTML = '';
+      items.forEach((it) => {
+        const row = document.createElement('div');
+        row.style.cssText = 'border-top:1px solid rgba(0,0,0,0.08);padding:10px 0;';
+        row.innerHTML = '<div style="font-size:13px;"><b>' + escapeHtml(it.subject || '(no subject)') + '</b> → ' + escapeHtml(it.to || '(no recipient)') + '</div>';
+        const acts = document.createElement('div'); acts.style.cssText = 'margin-top:6px;display:flex;gap:8px;';
+        const send = document.createElement('button'); send.className = 'btn-sm'; send.textContent = '📤 Send';
+        send.addEventListener('click', async () => {
+          send.disabled = true;
+          try { const rr = await apiFetch('/email/outbox/' + it.id + '/send', { method: 'POST' }); const dd = await rr.json(); if (!rr.ok) throw new Error(dd.error || 'Failed'); showToast('✓ Sent'); loadOutbox(); }
+          catch (e) { showToast('Send failed: ' + e.message); send.disabled = false; }
+        });
+        const del = document.createElement('button'); del.className = 'btn-sm'; del.textContent = '🗑️ Delete';
+        del.addEventListener('click', async () => { await apiFetch('/email/outbox/' + it.id, { method: 'DELETE' }); loadOutbox(); });
+        acts.appendChild(send); acts.appendChild(del); row.appendChild(acts);
+        $obList.appendChild(row);
+      });
+    } catch { /* ignore */ }
+  }
+
+  loadStatus();
+  loadOutbox();
+})();
 </script>
 </body>
 </html>

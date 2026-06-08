@@ -212,4 +212,49 @@ async function sendEmail(email, { to, subject, text }) {
     throw e;
 }
 
-module.exports = { gmailConfigured, status, getAccount, disconnect, consentUrl, handleCallback, sendEmail, connectSmtp };
+// ── Outbox: emails saved to send later (email-writer + threads) ───────────
+function outboxFile(email) {
+    return userDataPath(email, 'email/outbox.json');
+}
+function getOutbox(email) {
+    try {
+        const f = outboxFile(email);
+        if (!fs.existsSync(f)) return [];
+        const arr = JSON.parse(fs.readFileSync(f, 'utf8'));
+        return Array.isArray(arr) ? arr : [];
+    } catch { return []; }
+}
+function saveOutbox(email, arr) {
+    fs.writeFileSync(outboxFile(email), JSON.stringify(arr, null, 2), 'utf8');
+}
+function addToOutbox(email, { to, subject, body, threadId }) {
+    const arr = getOutbox(email);
+    const item = {
+        id: crypto.randomBytes(8).toString('hex'),
+        to: String(to || '').trim(),
+        subject: String(subject || '').trim(),
+        body: body || '',
+        threadId: threadId || null,
+        createdAt: new Date().toISOString(),
+    };
+    arr.push(item);
+    saveOutbox(email, arr);
+    return item;
+}
+function removeFromOutbox(email, id) {
+    saveOutbox(email, getOutbox(email).filter(x => x.id !== id));
+}
+// Send a queued email, then drop it from the outbox. Returns the from address.
+async function sendFromOutbox(email, id) {
+    const item = getOutbox(email).find(x => x.id === id);
+    if (!item) { const e = new Error('not_found'); e.code = 'not_found'; throw e; }
+    const from = await sendEmail(email, { to: item.to, subject: item.subject, text: item.body });
+    removeFromOutbox(email, id);
+    return from;
+}
+
+module.exports = {
+    gmailConfigured, status, getAccount, disconnect, consentUrl, handleCallback,
+    sendEmail, connectSmtp,
+    getOutbox, addToOutbox, removeFromOutbox, sendFromOutbox,
+};

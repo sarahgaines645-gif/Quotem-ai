@@ -339,15 +339,15 @@ router.get('/email/gmail/start', requirePerson, (req, res) => {
 // identity is in the signed state instead).
 router.get('/email/gmail/callback', async (req, res) => {
     const { code, state, error } = req.query;
-    if (error) return res.redirect('/tools?email=denied');
-    if (!code || !state) return res.redirect('/tools?email=error');
+    if (error) return res.redirect('/email-writer?email=denied');
+    if (!code || !state) return res.redirect('/email-writer?email=error');
     try {
         await qEmail.handleCallback(code, state);
-        return res.redirect('/tools?email=connected');
+        return res.redirect('/email-writer?email=connected');
     } catch (e) {
         console.error('[email] gmail callback:', e.message);
         const q = e.message === 'no_refresh_token' ? 'noaccess' : (e.message === 'bad_state' ? 'badstate' : 'error');
-        return res.redirect('/tools?email=' + q);
+        return res.redirect('/email-writer?email=' + q);
     }
 });
 
@@ -375,6 +375,31 @@ router.post('/email/smtp', requirePerson, express.json({ limit: '64kb' }), async
     } catch (e) {
         res.status(400).json({ error: 'Could not sign in to that mail server — check the host, port and app password.' });
     }
+});
+
+// Outbox — emails saved to send later (used by email-writer + threads).
+router.get('/email/outbox', requirePerson, (req, res) => {
+    res.json({ outbox: qEmail.getOutbox(req.person.email) });
+});
+router.post('/email/outbox', requirePerson, express.json({ limit: '1mb' }), (req, res) => {
+    const { to, subject, body, threadId } = req.body || {};
+    if (!subject && !body) return res.status(400).json({ error: 'Nothing to save.' });
+    res.json({ ok: true, item: qEmail.addToOutbox(req.person.email, { to, subject, body, threadId }) });
+});
+router.post('/email/outbox/:id/send', requirePerson, async (req, res) => {
+    try {
+        const from = await qEmail.sendFromOutbox(req.person.email, req.params.id);
+        res.json({ ok: true, sentFrom: from });
+    } catch (e) {
+        if (e.code === 'not_found') return res.status(404).json({ error: 'That email is no longer in your outbox.' });
+        if (e.code === 'not_connected') return res.status(409).json({ error: 'No email connected — connect Gmail first.' });
+        console.error('[email] outbox send:', e.message);
+        res.status(502).json({ error: 'Could not send — your email connection may need reconnecting.' });
+    }
+});
+router.delete('/email/outbox/:id', requirePerson, (req, res) => {
+    qEmail.removeFromOutbox(req.person.email, req.params.id);
+    res.json({ ok: true });
 });
 
 const qFormFiller = require('./plugins/q-form-filler');
