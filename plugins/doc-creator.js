@@ -129,17 +129,66 @@ async function createDocx({ title, content, images = [] }, personEmail) {
         heading: HeadingLevel.HEADING_1,
     }));
 
-    const blocks = content.split(/\n\s*\n/);
-    for (const block of blocks) {
-        const trimmed = block.trim();
-        if (!trimmed) continue;
-        const lines = trimmed.split('\n');
+    // Parse markdown-style content into properly formatted Word paragraphs.
+    // Handles: # / ## / ### headings, **bold**, *italic*, bullet lists, ---
+    const lines = content.split('\n');
+    let inList = false;
+    for (let i = 0; i < lines.length; i++) {
+        const raw = lines[i];
+        const trimmed = raw.trim();
+
+        // Horizontal rule → page-break-style spacer
+        if (/^---+$/.test(trimmed) || /^===+$/.test(trimmed)) {
+            paragraphs.push(new Paragraph({ text: '', spacing: { before: 200, after: 200 }, border: { bottom: { color: 'AAAAAA', style: 'single', size: 6, space: 2 } } }));
+            inList = false; continue;
+        }
+
+        // Headings
+        const h3 = trimmed.match(/^###\s+(.*)/);
+        const h2 = trimmed.match(/^##\s+(.*)/);
+        const h1 = trimmed.match(/^#\s+(.*)/);
+        if (h1) { paragraphs.push(new Paragraph({ text: h1[1], heading: HeadingLevel.HEADING_1, spacing: { before: 400, after: 120 } })); inList = false; continue; }
+        if (h2) { paragraphs.push(new Paragraph({ text: h2[1], heading: HeadingLevel.HEADING_2, spacing: { before: 280, after: 80 } })); inList = false; continue; }
+        if (h3) { paragraphs.push(new Paragraph({ text: h3[1], heading: HeadingLevel.HEADING_3, spacing: { before: 200, after: 60 } })); inList = false; continue; }
+
+        // Blank line — emit space if not already between sections
+        if (!trimmed) { inList = false; continue; }
+
+        // Bullet / numbered list item
+        const bullet = trimmed.match(/^[-*•]\s+(.*)/);
+        const numbered = trimmed.match(/^\d+\.\s+(.*)/);
+        if (bullet || numbered) {
+            const text = (bullet || numbered)[1];
+            paragraphs.push(new Paragraph({
+                children: parseInline(text),
+                bullet: bullet ? { level: 0 } : undefined,
+                numbering: numbered ? { reference: 'default-numbering', level: 0 } : undefined,
+                indent: { left: 360 },
+                spacing: { after: 60 },
+            }));
+            inList = true; continue;
+        }
+
+        // Normal paragraph — parse inline formatting
+        inList = false;
+        paragraphs.push(new Paragraph({ children: parseInline(trimmed), spacing: { after: 160 } }));
+    }
+
+    // ── Inline markdown parser (bold / italic / bold+italic) ─────────
+    function parseInline(text) {
         const runs = [];
-        lines.forEach((line, idx) => {
-            if (idx > 0) runs.push(new TextRun({ break: 1 }));
-            runs.push(new TextRun(line));
-        });
-        paragraphs.push(new Paragraph({ children: runs, spacing: { after: 200 } }));
+        // Pattern: ***bold+italic***, **bold**, *italic*, plain
+        const re = /(\*\*\*(.+?)\*\*\*|\*\*(.+?)\*\*|\*(.+?)\*)/g;
+        let last = 0, m;
+        while ((m = re.exec(text)) !== null) {
+            if (m.index > last) runs.push(new TextRun({ text: text.slice(last, m.index) }));
+            if (m[2]) runs.push(new TextRun({ text: m[2], bold: true, italics: true }));
+            else if (m[3]) runs.push(new TextRun({ text: m[3], bold: true }));
+            else if (m[4]) runs.push(new TextRun({ text: m[4], italics: true }));
+            last = m.index + m[0].length;
+        }
+        if (last < text.length) runs.push(new TextRun({ text: text.slice(last) }));
+        return runs.length ? runs : [new TextRun({ text })];
     }
 
     // Optional image appendix — evidence pictures with provenance captions.
