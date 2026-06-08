@@ -1201,4 +1201,38 @@ async function chat(messages, options = {}) {
     }
 }
 
-module.exports = { chat };
+// Single-image OCR/transcription via Claude — the fallback for when the Gemini
+// vision reader is down (e.g. a retired model). Used to read a photo attached to
+// a case into TEXT once, so Q can then reason over it with full history + tools
+// instead of re-reading the picture every turn (which made him loop). Returns the
+// full text, or '' on any miss so the caller can fall back further.
+async function claudeReadImage(base64, mimeType) {
+    const key = process.env.ANTHROPIC_API_KEY;
+    if (!key || !base64) return '';
+    try {
+        const res = await fetch('https://api.anthropic.com/v1/messages', {
+            method: 'POST',
+            headers: { 'x-api-key': key, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
+            body: JSON.stringify({
+                model: 'claude-sonnet-4-6',
+                max_tokens: 4000,
+                messages: [{
+                    role: 'user',
+                    content: [
+                        { type: 'text', text: 'Transcribe and describe EVERYTHING in this image — every line, number, date, name, reference number, heading and amount, exactly as written. It is an official or legal document; miss nothing. If there are several documents or pages in the picture, do each in turn.' },
+                        { type: 'image', source: { type: 'base64', media_type: mimeType || 'image/jpeg', data: base64 } },
+                    ],
+                }],
+            }),
+        });
+        if (!res.ok) { console.warn('[q-chat] claudeReadImage HTTP ' + res.status); return ''; }
+        const data = await res.json();
+        return (Array.isArray(data.content) ? data.content : [])
+            .filter(b => b.type === 'text').map(b => b.text || '').join('').trim();
+    } catch (e) {
+        console.warn('[q-chat] claudeReadImage failed: ' + e.message);
+        return '';
+    }
+}
+
+module.exports = { chat, claudeReadImage };

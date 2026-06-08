@@ -18,7 +18,7 @@ const { translateToSOR } = require('./plugins/q-translator');
 const { checkResults } = require('./plugins/q-checker');
 const { expandItem } = require('./plugins/q-expander');
 const { priceItem, priceItems } = require('./plugins/q-pricer');
-const { chat } = require('./plugins/q-chat');
+const { chat, claudeReadImage } = require('./plugins/q-chat');
 const { stats: ragStats } = require('./plugins/q-rag');
 const { speakAsVoice } = require('./plugins/q-voice-clone');
 const { runAgent } = require('./plugins/q-agent');
@@ -2117,27 +2117,46 @@ router.post('/api/threads/:id/chat', requirePerson, express.json({ limit: '256kb
     const refersToFile = /\b(image|images|photo|photos|picture|pictured|pic|pics|screenshot|scan|scanned|see|look|shows?|attached|attachment|document|doc|letter|email|e-?mail|pdf|file|says?|read|content|in it|whats? in)\b/i.test(message);
     const wantContent = isAddPing || refersToFile;
 
-    // Photos: hand them to CLAUDE, which has its own reliable vision — far better
-    // than the Gemini/Kimi path, which depends on a Google key AND a Gemini model
-    // version that can change under us (the likely cause of "Q can't see the
-    // photo"). When Claude is the thread engine, the photo goes to Claude as an
-    // image block; the Gemini vision path is kept only as a fallback for when
-    // Claude isn't available.
-    const claudeAvailable = !!process.env.ANTHROPIC_API_KEY && process.env.QUOTEM_CLAUDE_THREADS !== '0';
-    const visionImages = [];   // Gemini/Kimi fallback only
-    const claudeImages = [];   // read natively by Claude
+    // Photos on a case: read each one to TEXT once (cached), then hand Q that text
+    // as context so he reasons over it with the FULL thread history and his tools
+    // — exactly like a PDF. Reading the picture fresh on every turn (the old
+    // isolated "vision turn") is what made him re-describe the notice and lose the
+    // conversation, so he looped. Gemini reads it first (cheap, the model Sarah
+    // wants); if Gemini's down (e.g. a retired model) Claude reads it. Cached, so
+    // it's read at most once per photo no matter how many times she refers to it.
     if (imageFiles.length && wantContent) {
         for (const f of imageFiles) {
             try {
-                const file = qThreads.readFile(t.id, f.filename, req.person.email);
-                if (!file || !file.buffer) continue;
-                if (claudeAvailable && file.buffer.length < 8 * 1024 * 1024) {
-                    claudeImages.push({ filename: f.filename, base64: file.buffer.toString('base64'), mediaType: file.mimeType || 'image/jpeg' });
+                const cacheKey = `${t.id}:${f.filename}`;
+                let text;
+                if (_threadDocCache.has(cacheKey)) {
+                    text = _threadDocCache.get(cacheKey);
                 } else {
-                    visionImages.push({ dataUrl: `data:${file.mimeType || 'image/jpeg'};base64,${file.buffer.toString('base64')}` });
+                    const file = qThreads.readFile(t.id, f.filename, req.person.email);
+                    if (!file || !file.buffer) continue;
+                    const b64 = file.buffer.toString('base64');
+                    const mime = file.mimeType || 'image/jpeg';
+                    let extracted = '';
+                    try {
+                        const ex = await qFinance.extractDocument(b64, mime);   // Gemini (cheap) first
+                        extracted = (ex && (ex.full_text || ex.raw)) || '';
+                    } catch (e) {
+                        console.warn('[threads] Gemini photo read failed: ' + f.filename + ' — ' + e.message);
+                    }
+                    if (!extracted || !extracted.trim()) {
+                        extracted = await claudeReadImage(b64, mime);            // Claude fallback if Gemini's down
+                    }
+                    text = String(extracted || '').trim();
+                    _threadDocCache.set(cacheKey, text);
+                    console.log(`[threads] read photo "${f.filename}" (${text.length} chars)`);
                 }
+                const MAXC = 14000;
+                const block = text
+                    ? `CONTENT OF ATTACHED PHOTO "${f.filename}" (I've read it for you):\n${text.length > MAXC ? text.slice(0, MAXC) + '\n…[truncated]' : text}`
+                    : `(The attached photo "${f.filename}" could not be read — say so plainly; do not guess what it says.)`;
+                messages.splice(messages.length - 1, 0, { role: 'user', content: block });
             } catch (e) {
-                console.warn('[threads] could not read image for vision: ' + f.filename + ' — ' + e.message);
+                console.warn('[threads] photo read failed: ' + f.filename + ' — ' + e.message);
             }
         }
     }
@@ -2226,12 +2245,10 @@ router.post('/api/threads/:id/chat', requirePerson, express.json({ limit: '256kb
         // toggle) — deepest reasoning when it's worth the extra time.
         const tEffort = (req.body?.reasoningEffort === 'max') ? 'max' : 'high';
         const qOpts = { useTools: true, mode: 'aps', surface: 'thread', person: req.person, reasoningEffort: tEffort };
-        if (visionImages.length) qOpts.images = visionImages;   // Gemini/Kimi fallback only (no Claude)
-        // Claude reads PDFs AND photos natively — one channel, sent as document /
-        // image blocks. Routed here (not options.images) so the turn stays on the
-        // Claude path instead of being intercepted by the Gemini vision route.
-        const claudeAttachments = [...pdfDocuments, ...claudeImages];
-        if (claudeAttachments.length) qOpts.documents = claudeAttachments;
+        // Photos are now read to text above and spliced into `messages`, so the
+        // turn stays a normal history-aware Claude turn (no isolated vision call,
+        // no looping). PDFs are still handed to Claude natively to read directly.
+        if (pdfDocuments.length) qOpts.documents = pdfDocuments;
         const result = await qChat(messages, qOpts);
         if (result.error || !result.reply) {
             return res.status(500).json({ error: result.error || 'No reply from Q' });
