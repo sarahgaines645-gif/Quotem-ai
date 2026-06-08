@@ -140,7 +140,7 @@
 
   /* Chat surface */
   .chat-card { background: var(--bg); border-radius: 18px; padding: 18px 20px; box-shadow: var(--neu-raised); margin-top: 18px; }
-  .chat-thread { display: flex; flex-direction: column; gap: 12px; max-height: 600px; overflow-y: auto; padding: 16px; margin-bottom: 14px; background: var(--bg); border-radius: 14px; box-shadow: var(--neu-inset-sm); scrollbar-width: none; -ms-overflow-style: none; }
+  .chat-thread { display: flex; flex-direction: column; gap: 12px; max-height: 600px; overflow-y: auto; padding: 16px; margin-bottom: 14px; background: var(--bg); border-radius: 14px; box-shadow: var(--neu-inset-sm); scrollbar-width: none; -ms-overflow-style: none; overscroll-behavior: contain; }
   .chat-thread::-webkit-scrollbar { width: 0; height: 0; display: none; }
   .chat-msg { display: flex; gap: 10px; align-items: flex-start; }
   .chat-msg.user { flex-direction: row-reverse; }
@@ -232,14 +232,14 @@
     width: 100%; border: none; outline: none; font-family: inherit;
     font-size: 13px; font-weight: 600; color: var(--text);
     background: var(--bg); padding: 9px 12px; border-radius: 10px;
-    box-shadow: var(--neu-inset-sm); margin-bottom: 14px; cursor: pointer;
+    box-shadow: var(--neu-raised-sm); margin-bottom: 14px; cursor: pointer;
   }
   .form-field { margin-bottom: 11px; }
   .form-field label { display: block; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-faint); margin-bottom: 4px; }
   .form-field input, .form-field textarea, .form-field select {
     width: 100%; border: none; outline: none; font-family: inherit;
     font-size: 13px; color: var(--text); background: var(--bg);
-    padding: 8px 12px; border-radius: 10px; box-shadow: var(--neu-inset-sm);
+    padding: 8px 12px; border-radius: 10px; box-shadow: var(--neu-raised-sm);
     resize: vertical;
   }
   .form-field textarea { min-height: 70px; line-height: 1.5; }
@@ -340,9 +340,9 @@
   <div class="section-label">📤 Outbox — emails ready to send</div>
   <div id="outbox-list" style="margin-bottom: 12px;"></div>
   <div style="background: var(--bg); box-shadow: var(--neu-raised-sm); border-radius: 14px; padding: 14px; display: flex; flex-direction: column; gap: 8px;">
-    <input type="text" id="ob-to" placeholder="Send to (email address)" style="border:none;outline:none;background:var(--bg);box-shadow:var(--neu-inset-sm);border-radius:10px;padding:10px 12px;font-family:inherit;font-size:14px;color:var(--text);">
-    <input type="text" id="ob-subject" placeholder="Subject" style="border:none;outline:none;background:var(--bg);box-shadow:var(--neu-inset-sm);border-radius:10px;padding:10px 12px;font-family:inherit;font-size:14px;color:var(--text);">
-    <textarea id="ob-body" placeholder="Write the email — send now, or save to send later…" style="border:none;outline:none;background:var(--bg);box-shadow:var(--neu-inset-sm);border-radius:10px;padding:10px 12px;font-family:inherit;font-size:14px;color:var(--text);min-height:90px;resize:vertical;"></textarea>
+    <input type="text" id="ob-to" placeholder="Send to (email address)" style="border:none;outline:none;background:var(--bg);box-shadow:var(--neu-raised-sm);border-radius:10px;padding:10px 12px;font-family:inherit;font-size:14px;color:var(--text);">
+    <input type="text" id="ob-subject" placeholder="Subject" style="border:none;outline:none;background:var(--bg);box-shadow:var(--neu-raised-sm);border-radius:10px;padding:10px 12px;font-family:inherit;font-size:14px;color:var(--text);">
+    <textarea id="ob-body" placeholder="Write the email — send now, or save to send later…" style="border:none;outline:none;background:var(--bg);box-shadow:var(--neu-raised-sm);border-radius:10px;padding:10px 12px;font-family:inherit;font-size:14px;color:var(--text);min-height:90px;resize:vertical;"></textarea>
     <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
       <button id="ob-save-btn" class="note-save-btn" type="button">🕒 Save to outbox</button>
       <button id="ob-send-btn" class="note-save-btn" type="button">📤 Send now</button>
@@ -1351,8 +1351,8 @@ loadThread();
       <div style="font-size:15px;font-weight:700;color:var(--text);line-height:1.4;margin-bottom:${f.context ? '4px' : '12px'};">${escapeHtml(q)}</div>
       ${f.context ? `<div style="font-size:11px;color:var(--text-muted);margin-bottom:12px;font-style:italic;">${escapeHtml(f.context)}</div>` : ''}
       ${isLong
-        ? `<textarea id="ff-step-in" rows="3" style="width:100%;box-sizing:border-box;border:none;outline:none;background:var(--bg);box-shadow:var(--neu-inset-sm);border-radius:10px;padding:10px 12px;font-family:inherit;font-size:14px;color:var(--text);resize:vertical;">${escapeHtml(pre)}</textarea>`
-        : `<input type="text" id="ff-step-in" value="${escapeHtml(pre)}" style="width:100%;box-sizing:border-box;border:none;outline:none;background:var(--bg);box-shadow:var(--neu-inset-sm);border-radius:10px;padding:10px 12px;font-family:inherit;font-size:14px;color:var(--text);">`}
+        ? `<textarea id="ff-step-in" rows="3" style="width:100%;box-sizing:border-box;border:none;outline:none;background:var(--bg);box-shadow:var(--neu-raised-sm);border-radius:10px;padding:10px 12px;font-family:inherit;font-size:14px;color:var(--text);resize:vertical;">${escapeHtml(pre)}</textarea>`
+        : `<input type="text" id="ff-step-in" value="${escapeHtml(pre)}" style="width:100%;box-sizing:border-box;border:none;outline:none;background:var(--bg);box-shadow:var(--neu-raised-sm);border-radius:10px;padding:10px 12px;font-family:inherit;font-size:14px;color:var(--text);">`}
       <div class="forms-actions" style="margin-top:12px;">
         ${_step > 0 ? `<button class="forms-btn" id="ff-back" style="flex:0;padding:10px 14px;">← Back</button>` : ''}
         <button class="forms-btn" id="ff-skip" style="flex:0;padding:10px 14px;">Skip</button>
@@ -1451,7 +1451,7 @@ loadThread();
       if (!items.length) { obList.innerHTML = '<div style="font-size:12px;color:var(--text-faint);">Nothing queued for this case yet.</div>'; return; }
       items.forEach((it) => {
         const row = document.createElement('div');
-        row.style.cssText = 'background:var(--bg);box-shadow:var(--neu-inset-sm);border-radius:10px;padding:10px 12px;margin-bottom:8px;';
+        row.style.cssText = 'background:var(--bg);box-shadow:var(--neu-raised-sm);border-radius:10px;padding:10px 12px;margin-bottom:8px;';
         row.innerHTML = '<div style="font-size:13px;"><b>' + esc(it.subject || '(no subject)') + '</b> &rarr; ' + esc(it.to || '(no recipient)') + '</div>';
         const acts = document.createElement('div'); acts.style.cssText = 'margin-top:6px;display:flex;gap:8px;';
         const send = document.createElement('button'); send.className = 'note-save-btn'; send.textContent = '📤 Send';
