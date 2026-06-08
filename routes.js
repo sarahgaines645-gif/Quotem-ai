@@ -1962,6 +1962,52 @@ router.post('/api/threads/:id/notes', requirePerson, express.json({ limit: '256k
     res.json(updated);
 });
 
+// Contacts on a case — the people involved (council officer, landlord, the
+// other side's rep). The thread side panel shows these with a "Call now" QR
+// (tel:) and an email shortcut so the user can act straight from the case.
+router.get('/api/threads/:id/contacts', requirePerson, (req, res) => {
+    const t = readOwnedThread(req, res);
+    if (t) res.json(Array.isArray(t.contacts) ? t.contacts : []);
+});
+
+router.post('/api/threads/:id/contacts', requirePerson, express.json({ limit: '32kb' }), (req, res) => {
+    if (!readOwnedThread(req, res)) return;
+    const updated = qThreads.addContact(req.params.id, req.body || {}, req.person.email);
+    if (!updated) return res.status(400).json({ error: 'A contact needs at least a name, phone or email' });
+    res.json(updated);
+});
+
+router.patch('/api/threads/:id/contacts/:contactId', requirePerson, express.json({ limit: '32kb' }), (req, res) => {
+    if (!readOwnedThread(req, res)) return;
+    const updated = qThreads.updateContact(req.params.id, req.params.contactId, req.body || {}, req.person.email);
+    if (!updated) return res.status(404).json({ error: 'Contact not found' });
+    res.json(updated);
+});
+
+router.delete('/api/threads/:id/contacts/:contactId', requirePerson, (req, res) => {
+    if (!readOwnedThread(req, res)) return;
+    const updated = qThreads.removeContact(req.params.id, req.params.contactId, req.person.email);
+    if (!updated) return res.status(404).json({ error: 'Thread not found' });
+    res.json(updated);
+});
+
+// Key details / reference numbers on a case — glanceable label:value facts
+// (PCN ref, account no, claim ref) the user quotes on a call. Distinct from
+// the prose Case Notes section.
+router.post('/api/threads/:id/refs', requirePerson, express.json({ limit: '8kb' }), (req, res) => {
+    if (!readOwnedThread(req, res)) return;
+    const updated = qThreads.addRef(req.params.id, req.body || {}, req.person.email);
+    if (!updated) return res.status(400).json({ error: 'A key detail needs a label or value' });
+    res.json(updated);
+});
+
+router.delete('/api/threads/:id/refs/:refId', requirePerson, (req, res) => {
+    if (!readOwnedThread(req, res)) return;
+    const updated = qThreads.removeRef(req.params.id, req.params.refId, req.person.email);
+    if (!updated) return res.status(404).json({ error: 'Thread not found' });
+    res.json(updated);
+});
+
 router.get('/api/threads/:id/files/:filename', requirePerson, (req, res) => {
     if (!readOwnedThread(req, res)) return;
     const file = qThreads.readFile(req.params.id, req.params.filename, req.person.email);
@@ -2093,9 +2139,29 @@ router.post('/api/threads/:id/chat', requirePerson, express.json({ limit: '256kb
     // finance Gemini document reader (reads PDFs natively). Scoped to
     // add-ping / referential turns, same as images, so normal tool turns
     // aren't slowed.
+    // PDFs are handed to Claude to read NATIVELY — it reads printed/scanned legal
+    // docs, tables and figures directly, no Gemini key required. We ALSO keep a
+    // best-effort Gemini transcript when GEMINI_API_KEY is set (belt-and-braces:
+    // covers the V4 fallback path and any Claude PDF hiccup). A PDF we hand to
+    // Claude never gets a "couldn't read it" note — that would make Claude doubt
+    // the document it is holding.
+    const pdfDocuments = [];
     if (docFiles.length && wantContent) {
         for (const f of docFiles) {
+            const isPdf = /pdf/i.test(f.mimeType || '') || /\.pdf$/i.test(f.filename || '');
             try {
+                if (isPdf) {
+                    // Read the raw PDF for Claude every referential turn (independent
+                    // of the text cache below). ~28MB cap — Anthropic's PDF limit is 32MB.
+                    try {
+                        const pf = qThreads.readFile(t.id, f.filename, req.person.email);
+                        if (pf && pf.buffer && pf.buffer.length < 28 * 1024 * 1024) {
+                            pdfDocuments.push({ filename: f.filename, base64: pf.buffer.toString('base64'), mediaType: 'application/pdf' });
+                        }
+                    } catch (e) {
+                        console.warn('[threads] PDF read for Claude failed: ' + f.filename + ' — ' + e.message);
+                    }
+                }
                 const cacheKey = `${t.id}:${f.filename}`;
                 let text;
                 if (_threadDocCache.has(cacheKey)) {
@@ -2103,7 +2169,7 @@ router.post('/api/threads/:id/chat', requirePerson, express.json({ limit: '256kb
                 } else {
                     const file = qThreads.readFile(t.id, f.filename, req.person.email);
                     if (!file || !file.buffer) continue;
-                    if (/pdf/i.test(f.mimeType || '') || /\.pdf$/i.test(f.filename || '')) {
+                    if (isPdf) {
                         const ex = await qFinance.extractDocument(file.buffer.toString('base64'), 'application/pdf');
                         text = (ex && (ex.full_text || ex.raw)) || '';   // never JSON-dump the bill schema at Q
                     } else if (/\.rtf$/i.test(f.filename || '') || /rtf/i.test(f.mimeType || '')) {
@@ -2113,20 +2179,24 @@ router.post('/api/threads/:id/chat', requirePerson, express.json({ limit: '256kb
                     }
                     text = String(text || '').trim();
                     // Guard: never feed Q binary/garbage (a .doc/.docx zip, a
-                    // mangled read). Garbage in = confabulation out. Honest
-                    // empty → he gets a clean "couldn't read it" note instead.
+                    // mangled read). Garbage in = confabulation out.
                     if (looksBinary(text)) {
                         console.warn(`[threads] "${f.filename}" decoded as binary/garbage — not feeding it to Q`);
                         text = '';
                     }
                     _threadDocCache.set(cacheKey, text);           // cache hit OR miss — read at most once
-                    console.log(`[threads] extracted "${f.filename}" (${text.length} chars) — cached`);
+                    console.log(`[threads] extracted "${f.filename}" (${text.length} chars)${isPdf ? ' + handed PDF to Claude' : ''} — cached`);
                 }
                 const MAXC = 14000;
-                const block = text
-                    ? `CONTENT OF ATTACHED FILE "${f.filename}":\n${text.length > MAXC ? text.slice(0, MAXC) + '\n…[truncated]' : text}`
-                    : `(The attached file "${f.filename}" could not be read automatically.)`;
-                messages.splice(messages.length - 1, 0, { role: 'user', content: block });
+                let block = null;
+                if (text) {
+                    block = `CONTENT OF ATTACHED FILE "${f.filename}":\n${text.length > MAXC ? text.slice(0, MAXC) + '\n…[truncated]' : text}`;
+                } else if (!isPdf) {
+                    // Non-PDF we genuinely couldn't read. A PDF gets no note — Claude
+                    // is holding the file itself.
+                    block = `(The attached file "${f.filename}" could not be read automatically.)`;
+                }
+                if (block) messages.splice(messages.length - 1, 0, { role: 'user', content: block });
             } catch (e) {
                 console.warn('[threads] doc extract failed: ' + f.filename + ' — ' + e.message);
             }
@@ -2141,6 +2211,7 @@ router.post('/api/threads/:id/chat', requirePerson, express.json({ limit: '256kb
         const tEffort = (req.body?.reasoningEffort === 'max') ? 'max' : 'high';
         const qOpts = { useTools: true, mode: 'aps', surface: 'thread', person: req.person, reasoningEffort: tEffort };
         if (visionImages.length) qOpts.images = visionImages;
+        if (pdfDocuments.length) qOpts.documents = pdfDocuments;   // Claude reads these PDFs natively
         const result = await qChat(messages, qOpts);
         if (result.error || !result.reply) {
             return res.status(500).json({ error: result.error || 'No reply from Q' });

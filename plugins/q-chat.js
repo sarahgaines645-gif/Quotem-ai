@@ -579,7 +579,7 @@ async function geminiVisionChat(prompt, base64, mimeType) {
 // Together/OpenAI one chat() uses). Reuses Q's existing tools, translated to
 // Anthropic's schema, and runs the same tool loop. Returns the standard chat()
 // result shape, or null to fall back to the Together (V4-Flash) path.
-async function claudeThreadChat({ system, messages, tools, person, maxTokens, startTime }) {
+async function claudeThreadChat({ system, messages, tools, person, maxTokens, startTime, documents }) {
     const key = process.env.ANTHROPIC_API_KEY;
     if (!key) return null;
 
@@ -603,6 +603,28 @@ async function claudeThreadChat({ system, messages, tools, person, maxTokens, st
     }
     while (convo.length && convo[0].role !== 'user') convo.shift();
     if (!convo.length) return null;
+
+    // Attach PDFs to the final user turn so Claude reads them NATIVELY — printed
+    // or scanned legal docs, tables, figures — with no pre-extraction and no
+    // Gemini dependency. This is the real "Claude reads your document" path.
+    if (Array.isArray(documents) && documents.length) {
+        for (let i = convo.length - 1; i >= 0; i--) {
+            if (convo[i].role !== 'user') continue;
+            const blocks = [];
+            const cur = convo[i].content;
+            if (typeof cur === 'string' && cur.trim()) blocks.push({ type: 'text', text: cur });
+            else if (Array.isArray(cur)) blocks.push(...cur);
+            for (const d of documents) {
+                if (d && d.base64) blocks.push({
+                    type: 'document',
+                    source: { type: 'base64', media_type: d.mediaType || 'application/pdf', data: d.base64 },
+                    ...(d.filename ? { title: String(d.filename).slice(0, 200) } : {}),
+                });
+            }
+            convo[i].content = blocks;
+            break;
+        }
+    }
 
     const toolCalls = [];
     let tokensIn = 0, tokensOut = 0, reply = '';
@@ -808,6 +830,7 @@ async function chat(messages, options = {}) {
             person: options.person,
             maxTokens,
             startTime,
+            documents: Array.isArray(options.documents) ? options.documents : [],
         });
         if (claudeResult) {
             console.log('[q-chat] thread → Claude sonnet-4-6 (APS voice)');

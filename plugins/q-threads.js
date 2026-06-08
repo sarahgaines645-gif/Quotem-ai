@@ -160,6 +160,8 @@ function createThread({ title, summary = '', content = '', ownerEmail = '' } = {
         chatHistory: [],
         notes: [],
         files: [],
+        contacts: [],
+        refs: [],
     };
     // `content` is the case summary / analysis — NOT an email. Goes into notes.
     if (content && content.trim()) {
@@ -190,6 +192,75 @@ function addNote(threadId, { content, kind = 'note' } = {}, ownerEmail) {
 
 function filesDirFor(threadId, ownerEmail) {
     return userDataPath(ownerEmail, 'threads/' + threadId + '-files');
+}
+
+// ── Contacts on a case ─────────────────────────────────────────
+// People involved in this situation (council officer, landlord, the other
+// side's rep, a helpful caseworker) so the user can phone/email straight from
+// the case. Stored on the thread like notes/emails. A contact needs at least
+// one of name / phone / email to be worth saving.
+const cleanField = (s) => String(s || '').trim().slice(0, 300);
+
+function addContact(threadId, contact = {}, ownerEmail) {
+    const thread = readThread(threadId, ownerEmail);
+    if (!thread) return null;
+    const c = {
+        id: 'contact-' + Date.now(),
+        name: cleanField(contact.name),
+        role: cleanField(contact.role),
+        phone: cleanField(contact.phone),
+        email: cleanField(contact.email),
+        company: cleanField(contact.company),
+        notes: cleanField(contact.notes),
+        addedAt: new Date().toISOString(),
+    };
+    if (!c.name && !c.phone && !c.email) return null;
+    if (!Array.isArray(thread.contacts)) thread.contacts = [];
+    thread.contacts.push(c);
+    return writeThread(thread);
+}
+
+function updateContact(threadId, contactId, patch = {}, ownerEmail) {
+    const thread = readThread(threadId, ownerEmail);
+    if (!thread || !Array.isArray(thread.contacts)) return null;
+    const c = thread.contacts.find(x => x.id === contactId);
+    if (!c) return null;
+    for (const k of ['name', 'role', 'phone', 'email', 'company', 'notes']) {
+        if (patch[k] !== undefined) c[k] = cleanField(patch[k]);
+    }
+    return writeThread(thread);
+}
+
+function removeContact(threadId, contactId, ownerEmail) {
+    const thread = readThread(threadId, ownerEmail);
+    if (!thread || !Array.isArray(thread.contacts)) return null;
+    thread.contacts = thread.contacts.filter(c => c.id !== contactId);
+    return writeThread(thread);
+}
+
+// ── Key details / reference numbers on a case ──────────────────
+// Quick label:value facts you read off on a call — PCN ref, account number,
+// claim ref, case number. Distinct from prose notes; meant to be glanceable.
+function addRef(threadId, ref = {}, ownerEmail) {
+    const thread = readThread(threadId, ownerEmail);
+    if (!thread) return null;
+    const r = {
+        id: 'ref-' + Date.now(),
+        label: cleanField(ref.label),
+        value: cleanField(ref.value),
+        addedAt: new Date().toISOString(),
+    };
+    if (!r.label && !r.value) return null;
+    if (!Array.isArray(thread.refs)) thread.refs = [];
+    thread.refs.push(r);
+    return writeThread(thread);
+}
+
+function removeRef(threadId, refId, ownerEmail) {
+    const thread = readThread(threadId, ownerEmail);
+    if (!thread || !Array.isArray(thread.refs)) return null;
+    thread.refs = thread.refs.filter(r => r.id !== refId);
+    return writeThread(thread);
 }
 
 function addFile(threadId, { filename, mimeType, base64 } = {}, ownerEmail) {
@@ -393,6 +464,11 @@ module.exports = {
     createThread,
     addEmail,
     addNote,
+    addContact,
+    updateContact,
+    removeContact,
+    addRef,
+    removeRef,
     appendChat,
     updateThread,
     deleteThread,
