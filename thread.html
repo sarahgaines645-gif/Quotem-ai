@@ -403,6 +403,11 @@
 
 <script>
 const threadId = location.pathname.split('/').filter(Boolean).pop();
+let _userInitial = '?';
+fetch('/whoami').then(r => r.json()).then(d => {
+  const n = d?.person?.name || d?.person?.email || '';
+  _userInitial = n.trim().charAt(0).toUpperCase() || '?';
+}).catch(() => {});
 
 // State
 let thread = null;
@@ -901,7 +906,7 @@ function appendChatMsg(role, content, meta = {}) {
   msgEl.className = 'chat-msg ' + (role === 'q' ? 'q' : 'user');
   const avatar = document.createElement('div');
   avatar.className = 'chat-avatar ' + (role === 'q' ? 'q' : 'user');
-  avatar.textContent = role === 'q' ? 'Q' : '🙂';
+  avatar.textContent = role === 'q' ? 'Q' : _userInitial;
   const bubble = document.createElement('div');
   bubble.className = 'chat-bubble ' + (role === 'q' ? 'q' : 'user');
 
