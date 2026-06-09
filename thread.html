@@ -82,9 +82,11 @@
   /* Notes (case summary, research, free-form) */
   .notes-list { display: flex; flex-direction: column; gap: 10px; }
   .note-card {
-    background: var(--bg); border-radius: 14px; padding: 14px 18px;
-    box-shadow: var(--neu-inset-sm); font-size: 14px; line-height: 1.65;
+    background: var(--bg); border-radius: 14px; padding: 12px 14px;
+    box-shadow: var(--neu-raised-sm); font-size: 14px; line-height: 1.65;
   }
+  .note-card.form-note { cursor: pointer; }
+  .note-card.form-note:hover { opacity: 0.85; }
   .note-kind { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; color: var(--text-faint); margin-bottom: 6px; display: flex; align-items: center; gap: 8px; }
   .note-kind .ago { font-weight: 500; text-transform: none; letter-spacing: 0; color: var(--text-muted); }
   .note-body h1, .note-body h2, .note-body h3 { font-size: 14px; font-weight: 700; color: var(--accent); margin: 12px 0 4px; letter-spacing: -0.01em; }
@@ -706,11 +708,40 @@ function renderNotes() {
   $lbl.style.display = '';
   for (const n of notes) {
     const card = document.createElement('div');
-    card.className = 'note-card';
+    const isFormNote = n.kind === 'form-note';
+    card.className = 'note-card' + (isFormNote ? ' form-note' : '');
     const kindLabel = (n.kind && n.kind !== 'note') ? n.kind.replace(/-/g, ' ') : 'Note';
     card.innerHTML = `
       <div class="note-kind">📋 ${escapeHtml(kindLabel)} <span class="ago">· ${escapeHtml(fmtAgo(n.addedAt))}</span></div>
       <div class="note-body">${window.marked ? window.marked.parse(n.content || '') : escapeHtml(n.content || '').replace(/\n/g, '<br>')}</div>`;
+    if (isFormNote) {
+      // Clicking a form note opens that form in the Forms panel.
+      // Match the filename from thread.files by looking for a PDF whose name
+      // appears in the note content.
+      card.addEventListener('click', async () => {
+        const files = thread.files || [];
+        const match = files.find(f => f.filename.toLowerCase().endsWith('.pdf') &&
+          n.content && n.content.toLowerCase().includes(f.filename.replace(/\.pdf$/i,'').toLowerCase().split('-')[0]));
+        if (!match) return;
+        const panel = document.getElementById('forms-panel');
+        panel.classList.add('open');
+        const statusEl = document.getElementById('forms-status');
+        statusEl.textContent = '⏳ Loading ' + match.filename + '…';
+        try {
+          const r = await fetch('/api/threads/' + threadId + '/files/' + encodeURIComponent(match.filename));
+          if (!r.ok) throw new Error('Could not fetch file');
+          const buf = await r.arrayBuffer();
+          const bytes = new Uint8Array(buf);
+          let binary = '';
+          for (let i = 0; i < bytes.length; i += 8192) binary += String.fromCharCode(...bytes.subarray(i, i + 8192));
+          const b64 = btoa(binary);
+          _formName = match.filename.replace(/\.pdf$/i, '');
+          await loadFormFromBase64(b64);
+        } catch (e) {
+          statusEl.textContent = '⚠️ ' + e.message;
+        }
+      });
+    }
     $list.appendChild(card);
   }
 }
@@ -1379,8 +1410,8 @@ loadThread();
       const r = panel.getBoundingClientRect();
       panel.style.left = r.left + 'px'; panel.style.top = r.top + 'px';
     }
-    panel.style.left = (cx - _dox) + 'px';
-    panel.style.top  = (cy - _doy) + 'px';
+    panel.style.left = Math.max(0, Math.min(window.innerWidth - 60, cx - _dox)) + 'px';
+    panel.style.top  = Math.max(0, Math.min(window.innerHeight - 60, cy - _doy)) + 'px';
   }
   function endDrag() {
     if (_dragActive && !_didDrag) { panel.classList.toggle('open'); if (panel.classList.contains('open')) refreshCaseFiles(); }
