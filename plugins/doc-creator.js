@@ -261,17 +261,23 @@ async function createDocx({ title, content, images = [] }, personEmail) {
 function resolveToken(token, personEmail) {
     if (!token || !/^[a-f0-9]{16}$/.test(token)) return null;
     if (!personEmail) return null;
-    try {
-        const dir = generatedDirFor(personEmail);
-        const files = fs.readdirSync(dir);
-        const match = files.find(f => f.startsWith(token + '__'));
-        if (!match) return null;
-        const fullPath = path.join(dir, match);
-        const filename = match.slice(token.length + 2);
-        return { fullPath, filename };
-    } catch (e) {
-        return null;
+    // Check both the 24h generated dir and the permanent docs dir (no TTL,
+    // written by the thread auto-save so download links survive deploys).
+    for (const subdir of ['q-generated', 'q-docs']) {
+        try {
+            const dir = userDataPath(personEmail, subdir);
+            if (!fs.existsSync(dir)) continue;
+            const files = fs.readdirSync(dir);
+            const match = files.find(f => f.startsWith(token + '__'));
+            if (match) {
+                return {
+                    fullPath: path.join(dir, match),
+                    filename: match.slice(token.length + 2),
+                };
+            }
+        } catch { /* skip missing / unreadable dir */ }
     }
+    return null;
 }
 
 /**

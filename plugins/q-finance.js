@@ -811,23 +811,34 @@ Be precise. Miss nothing. Lay it out clearly so a legal reader can follow the ti
 // Gemini identifies every blank, checkbox, or signature space and returns
 // a JSON array: [{name, label, context, type}] ready for extractFieldValues.
 async function scanFormFields(pdfBase64) {
-    const prompt = `This is a form that needs to be filled in. Identify every blank field, checkbox, and space where the user should write something.
+    if (!process.env.GEMINI_API_KEY) return { error: 'vision_unavailable', fields: [] };
+    const prompt = `You are reading a document that may or may not be a form. Identify EVERY place where a human needs to provide information, including:
+- Blank lines or underscores after labels (e.g. "Name: ________")
+- Empty boxes, cells, or tables waiting to be filled
+- Checkboxes or circles to tick/select
+- Numbered or lettered items with blank space for a response
+- Any labelled space that looks empty or incomplete
+- Signature or date areas
 
-For each field return:
-- name: a camelCase key (e.g. fullName, dateOfBirth, vehicleRegistration)
-- label: a clear 2-6 word description of what goes in the field (e.g. "Full name", "Date of contravention")
-- context: the surrounding sentence or heading on the form (copy 5-10 words before/after the blank)
-- type: one of: text | date | checkbox | signature | address | number | textarea
+Be generous — if something looks like it might need filling, include it.
 
-Return ONLY a valid JSON array of these objects. No explanation, no markdown fences.`;
+For each, return:
+- name: camelCase key (e.g. fullName, dateOfBirth, vehicleRegistration)
+- label: clear 2-6 word description (e.g. "Full name", "Date of contravention")
+- context: 5-10 surrounding words from the document
+- type: text | date | checkbox | signature | address | number | textarea
+
+If the document has absolutely NO spaces for user input, return [].
+Return ONLY a valid JSON array. No explanation, no markdown.`;
     try {
         const raw = await visionRead({ prompt, base64: pdfBase64, mimeType: 'application/pdf', maxTokens: 4096 });
         const match = (raw || '').match(/\[[\s\S]*\]/);
-        if (!match) return [];
-        return JSON.parse(match[0]);
+        if (!match) return { error: null, fields: [] };
+        const fields = JSON.parse(match[0]);
+        return { error: null, fields: Array.isArray(fields) ? fields : [] };
     } catch (e) {
         console.warn('[finance] scanFormFields failed:', e.message);
-        return [];
+        return { error: e.message, fields: [] };
     }
 }
 

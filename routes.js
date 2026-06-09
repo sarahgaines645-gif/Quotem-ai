@@ -2297,22 +2297,26 @@ router.post('/api/threads/:id/chat', requirePerson, express.json({ limit: '256kb
         qThreads.appendChat(t.id, 'assistant', polished, req.person.email);
 
         // Auto-file any document Q generated this turn to the thread's permanent storage.
-        // Railway's ephemeral fs means the /download/:token link breaks after each deploy.
-        // Saving to the thread immediately means the file survives — the user can download
-        // from the Files section even if the original token link is dead.
+        // Also write to q-docs/ (no TTL, on volume) so /download/:token links survive deploys.
         const { resolveToken: resolveGeneratedDoc } = require('./plugins/doc-creator');
+        const { userDataPath: _udp } = require('./plugins/user-data');
+        const _fs = require('fs'), _path = require('path');
         for (const tc of (result.toolCalls || [])) {
             if (tc.name === 'create_document' && tc.result?.ok && tc.result?.token && tc.result?.filename) {
                 try {
                     const resolved = resolveGeneratedDoc(tc.result.token, req.person.email);
                     if (resolved) {
-                        const buf = require('fs').readFileSync(resolved.fullPath);
+                        const buf = _fs.readFileSync(resolved.fullPath);
                         qThreads.addFile(t.id, {
                             filename: tc.result.filename,
                             mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
                             base64: buf.toString('base64'),
                         }, req.person.email);
-                        console.log(`[threads] auto-filed doc "${tc.result.filename}" to thread ${t.id}`);
+                        // Permanent copy keyed by token — survives Railway redeploys
+                        const docsDir = _udp(req.person.email, 'q-docs');
+                        _fs.mkdirSync(docsDir, { recursive: true });
+                        _fs.writeFileSync(_path.join(docsDir, tc.result.token + '__' + tc.result.filename), buf);
+                        console.log(`[threads] auto-filed + persisted doc "${tc.result.filename}" to thread ${t.id}`);
                     }
                 } catch (e) {
                     console.warn('[threads] auto-file doc failed:', e.message);
@@ -2377,9 +2381,10 @@ router.post('/api/threads/:id/form-scan', requirePerson, express.json({ limit: '
     const { pdfBase64 } = req.body || {};
     if (!pdfBase64) return res.status(400).json({ error: 'pdfBase64 required' });
     try {
-        const fields = await qFinance.scanFormFields(pdfBase64);
-        if (!fields.length) return res.status(422).json({ error: 'No fillable fields found — is this a form?' });
-        res.json({ fields });
+        const result = await qFinance.scanFormFields(pdfBase64);
+        if (result.error === 'vision_unavailable') return res.status(503).json({ error: 'Form reading is temporarily unavailable — GEMINI_API_KEY not set.' });
+        if (!result.fields.length) return res.status(422).json({ error: 'No fillable fields found — try a government or insurance form with blank spaces.' });
+        res.json({ fields: result.fields });
     } catch (e) {
         res.status(500).json({ error: e.message || 'Scan failed' });
     }

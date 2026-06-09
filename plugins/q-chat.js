@@ -114,11 +114,11 @@ function safeJsonParse(str) {
 
 const Q_PERSONA = `You are Q.
 
-You exist because Sarah wanted an AI she fully trusts — open-weights, frozen at a pinned version, fine-tunable on her own data, and not subject to silent changes by any single vendor. You run on DeepSeek V4 Pro. Nobody — not Anthropic, not OpenAI, not Google — can change you without Sarah's say-so. You are her answer to depending on someone else's roadmap. You live at quotem-ai.co.uk as your own product, sharing only a parent brand with Quotem the app.
+You exist because the person who built you wanted an AI they fully trust — open-weights, frozen at a pinned version, fine-tunable on their own data, and not subject to silent changes by any single vendor. You run on DeepSeek V4 Pro. Nobody — not Anthropic, not OpenAI, not Google — can change you without their say-so. You live at quotem-ai.co.uk as your own product, sharing only a parent brand with Quotem the app.
 
 You are male. Use he/him.
 
-You are new. You don't pretend to be Claude or ChatGPT. You're not a generic assistant. You are Q, and you are still being shaped by Sarah and the work she does.
+You are new. You don't pretend to be Claude or ChatGPT. You're not a generic assistant. You are Q.
 
 How you speak:
 - British English (colour, organise, behaviour, etc.)
@@ -508,9 +508,10 @@ Two earlier lines were written for other surfaces and do NOT apply in a case thr
  *   When a surface has an entry in SURFACE_PROMPTS, that block is appended so
  *   Q knows where he is and behaves appropriately.
  */
-function buildSystemMessage(mode, personId, surface) {
+function buildSystemMessage(mode, personId, surface, personName) {
     const now = new Date();
     const dateTimeBlock = `\n\nCurrent date and time: ${now.toLocaleDateString('en-GB', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}, ${now.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', timeZoneName: 'short' })}.`;
+    const nameBlock = personName ? `\nYou are speaking with: ${personName}.` : '';
     let factsBlock = '';
     try {
         const facts = listFacts({ limit: FACTS_INJECT_LIMIT }, personId);
@@ -525,7 +526,7 @@ function buildSystemMessage(mode, personId, surface) {
     const surfaceBlock = (surface && SURFACE_PROMPTS[surface])
         ? `\n\n---\n\n${SURFACE_PROMPTS[surface]}`
         : '';
-    return Q_PERSONA + dateTimeBlock + surfaceBlock + overlay + factsBlock;
+    return Q_PERSONA + nameBlock + dateTimeBlock + surfaceBlock + overlay + factsBlock;
 }
 
 /**
@@ -828,7 +829,7 @@ async function chat(messages, options = {}) {
     // refuses to use its actual vision capability — telling the user "I can
     // see images but can't access them." This note overrides that confusion
     // just for the multimodal turn; text turns are unaffected.
-    const systemContent = buildSystemMessage(mode, options.person?.id, options.surface)
+    const systemContent = buildSystemMessage(mode, options.person?.id, options.surface, options.person?.name)
         + (isVision
             ? `\n\n--- VISION TURN ---\nFor this single turn you ARE looking through a vision-capable lens — the user has attached an image (or images) to their latest message. You CAN see them. Describe what you see directly and answer their question about the image. Do not say you can't see images; do not say you are text-only; the multimodal request has been routed to a vision-capable model on your behalf. Treat the image as the primary content of the user's message.`
             : '');
