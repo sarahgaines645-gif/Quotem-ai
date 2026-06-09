@@ -1012,6 +1012,13 @@ async function chat(messages, options = {}) {
             totalTokensOut += data.usage?.completion_tokens || 0;
 
             const choice = data.choices?.[0];
+            const finishReason = choice?.finish_reason;
+            // Log token usage + finish_reason on every iteration so Railway
+            // shows when context is large or responses are being cut off.
+            console.log(`[q-chat] iter=${iteration} in=${data.usage?.prompt_tokens||0} out=${data.usage?.completion_tokens||0} finish=${finishReason}`);
+            if (finishReason === 'length') {
+                console.warn('[q-chat] response cut off by max_tokens — tool calls may be lost. Consider increasing maxTokens for this surface.');
+            }
             const message = choice?.message;
             let callsRequested = message?.tool_calls;
 

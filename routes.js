@@ -2147,10 +2147,14 @@ router.post('/api/threads/:id/chat', requirePerson, express.json({ limit: '256kb
         messages.push({ role: 'user', content: `This is the saved situation "${t.title}". Here's everything so far:\n\n${parts.join('\n\n')}` });
         messages.push({ role: 'assistant', content: 'Got it — fully up to speed on this case.' });
     }
-    for (const h of (t.chatHistory || [])) {
-        if (h && (h.role === 'user' || h.role === 'assistant') && typeof h.content === 'string') {
-            messages.push({ role: h.role, content: h.content });
-        }
+    // Cap history to the last 30 messages — full history bloats V4's context to
+    // 80k+ tokens on an active case (emails + docs + history all added up), which
+    // causes it to hallucinate tool availability and ignore instructions. 30 msgs
+    // is ~3–5 back-and-forth exchanges, enough to keep conversation coherent.
+    const fullHistory = (t.chatHistory || []).filter(h => h && (h.role === 'user' || h.role === 'assistant') && typeof h.content === 'string');
+    const recentHistory = fullHistory.slice(-30);
+    for (const h of recentHistory) {
+        messages.push({ role: h.role, content: h.content });
     }
     messages.push({ role: 'user', content: message });
 
