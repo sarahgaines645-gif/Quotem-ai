@@ -486,6 +486,31 @@ router.post('/forms/fill', requirePerson, express.json({ limit: '24mb' }), async
     }
 });
 
+// POST /forms/fill-editable
+// Body: { pdfBase64, values: { fieldName: value } }
+// Returns an EDITABLE PDF — values are set into the real form fields and the PDF
+// is NOT flattened, so it opens fillable in any PDF reader and the user can fix
+// anything that isn't perfect.
+router.post('/forms/fill-editable', requirePerson, express.json({ limit: '24mb' }), async (req, res) => {
+    try {
+        const { pdfBase64, values } = req.body || {};
+        if (!pdfBase64) return res.status(400).json({ error: 'pdfBase64 required' });
+        if (!values || typeof values !== 'object' || !Object.keys(values).length) {
+            return res.status(400).json({ error: 'values required' });
+        }
+        const { filledBytes, results } = await qFormFiller.fillPdfEditable(Buffer.from(pdfBase64, 'base64'), values);
+        res.set({
+            'Content-Type': 'application/pdf',
+            'Content-Disposition': 'attachment; filename="editable-form.pdf"',
+            'X-Fields-Filled': String(results.filled.length),
+        });
+        res.send(Buffer.from(filledBytes));
+    } catch (e) {
+        console.error('[forms/fill-editable]', e.message);
+        res.status(500).json({ error: e.message });
+    }
+});
+
 // POST /forms/fill-public-link
 // Same input as /forms/fill but stashes the filled PDF and returns a JSON
 // { url, filename } pointing at /public-download/:token — used by the
@@ -2453,6 +2478,45 @@ router.post('/api/threads/:id/form-scan', requirePerson, express.json({ limit: '
     }
 });
 
+// Build the case context (applicant identity + emails/notes/files/chat) that
+// the form tools use to fill or draft answers. One source of truth for both
+// /form-fill and /form-draft. MUST be called inside try/catch — listFacts and
+// the thread arrays can throw, and an uncaught throw here crashes the process.
+function threadFormInfoText(t, person) {
+    const fileParts = [];
+    for (const f of (t.files || [])) {
+        const cached = _threadDocCache.get(`${t.id}:${f.filename}`);
+        if (cached) fileParts.push(`[File: ${f.filename}]\n${cached.slice(0, 2000)}`);
+    }
+    const chatParts = (t.chatHistory || [])
+        .filter(m => m.role === 'assistant' || m.role === 'user')
+        .slice(-20)
+        .map(m => `[${m.role === 'user' ? 'User' : 'Q'}]: ${String(m.content || '').slice(0, 600)}`)
+        .join('\n');
+    const factLines = (listFacts({ limit: 50 }, person.id) || [])
+        .map(f => `- ${f.content}`)
+        .join('\n');
+    const applicant = [
+        'THE PERSON FILLING IN THIS FORM (the applicant). Any field asking for the',
+        "applicant's / claimant's / your name, title, signature, email, address or",
+        'contact details is about THIS person — fill it from here, do not ask:',
+        person.name ? `Name: ${person.name}` : '',
+        person.email ? `Email: ${person.email}` : '',
+        factLines ? `Known about this person:\n${factLines}` : '',
+    ].filter(Boolean).join('\n');
+    return [
+        applicant,
+        t.title ? `Case: ${t.title}` : '',
+        (t.emails || []).map(e => {
+            const dir = e.type === 'in' ? 'Received' : e.type === 'draft' ? 'Draft' : 'Sent';
+            return `[${dir} — ${e.subject || ''}]\n${(e.body || '').slice(0, 1200)}`;
+        }).join('\n\n'),
+        (t.notes || []).map(n => n.text || '').join('\n'),
+        ...fileParts,
+        chatParts ? `[Chat history]\n${chatParts}` : '',
+    ].filter(Boolean).join('\n\n');
+}
+
 // Thread forms panel — step 2: Q fills the fields from thread context.
 // Body: { fields: [{name, label, context, type}] }
 router.post('/api/threads/:id/form-fill', requirePerson, express.json({ limit: '128kb' }), async (req, res) => {
@@ -2466,49 +2530,7 @@ router.post('/api/threads/:id/form-fill', requirePerson, express.json({ limit: '
     // handler, which Express 4 does NOT catch → unhandledRejection → the process
     // crashes and Railway returns 502 (the symptom Sarah hit). Keep it contained.
     try {
-        // Pull already-extracted file text from the cache — if Q has read the
-        // PCN letter or any attachment during this session it's already there.
-        const fileParts = [];
-        for (const f of (t.files || [])) {
-            const cacheKey = `${t.id}:${f.filename}`;
-            const cached = _threadDocCache.get(cacheKey);
-            if (cached) fileParts.push(`[File: ${f.filename}]\n${cached.slice(0, 2000)}`);
-        }
-        // Include last 20 chat messages — case details (PCN, VRM, dates) live here.
-        const chatParts = (t.chatHistory || [])
-            .filter(m => m.role === 'assistant' || m.role === 'user')
-            .slice(-20)
-            .map(m => `[${m.role === 'user' ? 'User' : 'Q'}]: ${String(m.content || '').slice(0, 600)}`)
-            .join('\n');
-        // WHO IS FILLING THIS FORM. Without this, the form-filler sees several names
-        // in the letters (the applicant, the council, an enforcement officer) and the
-        // "never guess which person" rule makes it ASK instead of filling the name/
-        // title/contact fields — they land in "Still needed". Naming the applicant up
-        // front removes that ambiguity: these fields are about HER. Stored facts add
-        // anything Q has remembered (address, full title) so those fill too.
-        const factLines = (listFacts({ limit: 50 }, req.person.id) || [])
-            .map(f => `- ${f.content}`)
-            .join('\n');
-        const applicant = [
-            'THE PERSON FILLING IN THIS FORM (the applicant). Any field asking for the',
-            "applicant's / claimant's / your name, title, signature, email, address or",
-            'contact details is about THIS person — fill it from here, do not ask:',
-            req.person.name ? `Name: ${req.person.name}` : '',
-            req.person.email ? `Email: ${req.person.email}` : '',
-            factLines ? `Known about this person:\n${factLines}` : '',
-        ].filter(Boolean).join('\n');
-        const infoText = [
-            applicant,
-            t.title ? `Case: ${t.title}` : '',
-            (t.emails || []).map(e => {
-                const dir = e.type === 'in' ? 'Received' : e.type === 'draft' ? 'Draft' : 'Sent';
-                return `[${dir} — ${e.subject || ''}]\n${(e.body || '').slice(0, 1200)}`;
-            }).join('\n\n'),
-            (t.notes || []).map(n => n.text || '').join('\n'),
-            ...fileParts,
-            chatParts ? `[Chat history]\n${chatParts}` : '',
-        ].filter(Boolean).join('\n\n');
-
+        const infoText = threadFormInfoText(t, req.person);
         const { values, ask } = await qFormFiller.extractFieldValues(fields, infoText, null);
         res.json({ values: values || {}, ask: ask || [] });
     } catch (e) {

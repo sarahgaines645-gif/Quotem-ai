@@ -387,6 +387,59 @@ async function fillPdf(pdfBytes, values) {
 }
 
 /**
+ * Fill a PDF but keep it EDITABLE — set the values into the real AcroForm fields
+ * and DO NOT flatten. The result opens in any PDF reader with the values in
+ * place and every field still editable, so the user can fix anything that isn't
+ * perfect. (fillPdf, by contrast, flattens to a locked, print-final PDF.)
+ *
+ * @param {Buffer|Uint8Array} pdfBytes
+ * @param {Object} values — { fieldName: value }
+ * @returns {Promise<{ filledBytes, results }>}
+ */
+async function fillPdfEditable(pdfBytes, values) {
+    const pdfDoc = await PDFDocument.load(pdfBytes, { ignoreEncryption: true });
+    const form = pdfDoc.getForm();
+    const results = { filled: [], skipped: [], notFound: [] };
+
+    for (const [name, value] of Object.entries(values)) {
+        try {
+            const field = form.getField(name);
+            const type = field.constructor.name;
+            // A drawn signature (data:image) can't go into a fillable field —
+            // leave it for the user to sign in their PDF reader.
+            if (/^data:image\//i.test(String(value))) { results.skipped.push(name); continue; }
+            if (type === 'PDFTextField') {
+                field.setText(String(value ?? ''));
+                results.filled.push(name);
+            } else if (type === 'PDFCheckBox') {
+                const v = String(value).toLowerCase();
+                if (v === 'true' || v === 'yes' || v === '1') field.check(); else field.uncheck();
+                results.filled.push(name);
+            } else if (type === 'PDFDropdown' || type === 'PDFListBox') {
+                const options = field.getOptions();
+                const match = options.find(o => o.toLowerCase() === String(value).toLowerCase());
+                if (match) { field.select(match); results.filled.push(name); }
+                else results.skipped.push(name);
+            } else {
+                results.skipped.push(name); // signatures etc. — left editable for the user
+            }
+        } catch {
+            results.notFound.push(name);
+        }
+    }
+
+    // Regenerate appearances so the values actually show when opened, while the
+    // fields stay interactive (no flatten = still editable).
+    try {
+        const helv = await pdfDoc.embedFont(StandardFonts.Helvetica);
+        form.updateFieldAppearances(helv);
+    } catch (e) { console.warn('[q-form-filler] editable appearances:', e.message); }
+
+    const filledBytes = await pdfDoc.save();
+    return { filledBytes, results };
+}
+
+/**
  * Full pipeline: intake info → extract values → fill PDF → return bytes.
  *
  * @param {object} opts
@@ -509,4 +562,4 @@ async function fillPdfForWord(pdfBytes, values) {
     return { filledBytes, results };
 }
 
-module.exports = { intakeAndFill, extractFieldValues, fillPdf, fillPdfForWord, labelFields };
+module.exports = { intakeAndFill, extractFieldValues, fillPdf, fillPdfEditable, fillPdfForWord, labelFields };
