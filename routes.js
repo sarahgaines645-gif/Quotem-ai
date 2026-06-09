@@ -2482,11 +2482,39 @@ router.post('/api/threads/:id/form-scan', requirePerson, express.json({ limit: '
 // the form tools use to fill or draft answers. One source of truth for both
 // /form-fill and /form-draft. MUST be called inside try/catch — listFacts and
 // the thread arrays can throw, and an uncaught throw here crashes the process.
-function threadFormInfoText(t, person) {
+async function threadFormInfoText(t, person) {
     const fileParts = [];
     for (const f of (t.files || [])) {
-        const cached = _threadDocCache.get(`${t.id}:${f.filename}`);
-        if (cached) fileParts.push(`[File: ${f.filename}]\n${cached.slice(0, 2000)}`);
+        const cacheKey = `${t.id}:${f.filename}`;
+        let text = _threadDocCache.get(cacheKey);
+        if (!text) {
+            // Not yet cached — read it now so form-fill sees the actual document
+            // content (e.g. the PCN PDF). Mirror the chat path; 8s cap per file
+            // so a slow Gemini call doesn't stall the whole form-fill.
+            try {
+                const file = qThreads.readFile(t.id, f.filename, person.email);
+                if (file && file.buffer) {
+                    const isPdf = /pdf/i.test(f.mimeType || '') || /\.pdf$/i.test(f.filename || '');
+                    const isRtf = /\.rtf$/i.test(f.filename || '') || /rtf/i.test(f.mimeType || '');
+                    if (isPdf) {
+                        const ex = await Promise.race([
+                            qFinance.extractDocument(file.buffer.toString('base64'), 'application/pdf'),
+                            new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), 8000)),
+                        ]);
+                        text = (ex && (ex.full_text || ex.raw)) || '';
+                    } else if (isRtf) {
+                        text = rtfToText(file.buffer.toString('utf8'));
+                    } else {
+                        text = file.buffer.toString('utf8');
+                    }
+                    text = String(text || '').trim();
+                    if (text && !looksBinary(text)) _threadDocCache.set(cacheKey, text);
+                }
+            } catch (e) {
+                console.warn('[threadFormInfoText] read failed:', f.filename, e.message);
+            }
+        }
+        if (text) fileParts.push(`[File: ${f.filename}]\n${text.slice(0, 2000)}`);
     }
     const chatParts = (t.chatHistory || [])
         .filter(m => m.role === 'assistant' || m.role === 'user')
@@ -2496,6 +2524,9 @@ function threadFormInfoText(t, person) {
     const factLines = (listFacts({ limit: 50 }, person.id) || [])
         .map(f => `- ${f.content}`)
         .join('\n');
+    // Pull VRM from the case title so Q can fill vehicle reg fields without asking.
+    const vrmMatch = (t.title || '').match(/\b([A-Z]{2}\d{2}\s?[A-Z]{3}|[A-Z]\d{1,3}\s?[A-Z]{3}|[A-Z]{3}\s?\d{1,3}[A-Z])\b/i);
+    const vrmNote = vrmMatch ? `Vehicle registration: ${vrmMatch[0].replace(/\s/g, '').toUpperCase()}` : '';
     const applicant = [
         'THE PERSON FILLING IN THIS FORM (the applicant). Any field asking for the',
         "applicant's / claimant's / your name, title, signature, email, address or",
@@ -2507,6 +2538,7 @@ function threadFormInfoText(t, person) {
     return [
         applicant,
         t.title ? `Case: ${t.title}` : '',
+        vrmNote,
         (t.emails || []).map(e => {
             const dir = e.type === 'in' ? 'Received' : e.type === 'draft' ? 'Draft' : 'Sent';
             return `[${dir} — ${e.subject || ''}]\n${(e.body || '').slice(0, 1200)}`;
@@ -2530,7 +2562,7 @@ router.post('/api/threads/:id/form-fill', requirePerson, express.json({ limit: '
     // handler, which Express 4 does NOT catch → unhandledRejection → the process
     // crashes and Railway returns 502 (the symptom Sarah hit). Keep it contained.
     try {
-        const infoText = threadFormInfoText(t, req.person);
+        const infoText = await threadFormInfoText(t, req.person);
         const { values, ask } = await qFormFiller.extractFieldValues(fields, infoText, null);
         res.json({ values: values || {}, ask: ask || [] });
     } catch (e) {

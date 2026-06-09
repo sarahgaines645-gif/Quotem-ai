@@ -339,6 +339,14 @@
     padding: 8px 10px; font-family: inherit; font-size: 13px; color: var(--text);
   }
   .ff-q-item.done .ff-q-q { color: var(--text-faint); text-decoration: line-through; }
+  .ff-q-gen {
+    display: block; margin-top: 5px; border: none; cursor: pointer;
+    font-family: inherit; font-size: 11px; font-weight: 700;
+    padding: 5px 10px; border-radius: 8px; box-shadow: var(--neu-raised-sm);
+    background: var(--bg); color: var(--accent);
+  }
+  .ff-q-gen:disabled { opacity: 0.45; cursor: not-allowed; }
+  .ff-q-item.done .ff-q-gen { display: none; }
   .ff-coach { margin-top: 14px; }
   .ff-coach-in {
     width: 100%; box-sizing: border-box; border: none; outline: none;
@@ -819,15 +827,13 @@ function renderNotes() {
       <div class="note-body">${window.marked ? window.marked.parse(n.content || '') : escapeHtml(n.content || '').replace(/\n/g, '<br>')}</div>`;
     if (isFormNote) {
       // Clicking a form note opens that form in the Forms panel.
-      // Match the filename from thread.files by looking for a PDF whose name
-      // appears in the note content.
+      // Uses a CustomEvent so the IIFE-scoped loadFormFromBase64 handles it.
       card.addEventListener('click', async () => {
         const files = thread.files || [];
         const match = files.find(f => f.filename.toLowerCase().endsWith('.pdf') &&
           n.content && n.content.toLowerCase().includes(f.filename.replace(/\.pdf$/i,'').toLowerCase().split('-')[0]));
         if (!match) return;
-        const panel = document.getElementById('forms-panel');
-        panel.classList.add('open');
+        document.getElementById('forms-panel').classList.add('open');
         const statusEl = document.getElementById('forms-status');
         statusEl.textContent = '⏳ Loading ' + match.filename + '…';
         try {
@@ -838,8 +844,9 @@ function renderNotes() {
           let binary = '';
           for (let i = 0; i < bytes.length; i += 8192) binary += String.fromCharCode(...bytes.subarray(i, i + 8192));
           const b64 = btoa(binary);
-          _formName = match.filename.replace(/\.pdf$/i, '');
-          await loadFormFromBase64(b64);
+          document.dispatchEvent(new CustomEvent('forms:open-file', {
+            detail: { b64, formName: match.filename.replace(/\.pdf$/i, '') },
+          }));
         } catch (e) {
           statusEl.textContent = '⚠️ ' + e.message;
         }
@@ -1576,6 +1583,15 @@ loadThread();
   document.addEventListener('touchmove', (e) => { if (!_dragActive) return; const t = e.touches[0]; moveDrag(t.clientX, t.clientY); e.preventDefault(); }, { passive: false });
   document.addEventListener('touchend', endDrag);
 
+  // Note-card click opens a PDF in the panel via CustomEvent (note render code
+  // can't reach into this IIFE directly — the event bridges the boundary).
+  document.addEventListener('forms:open-file', async (e) => {
+    const { b64, formName } = e.detail || {};
+    if (!b64) return;
+    _formName = formName || '';
+    await loadFormFromBase64(b64);
+  });
+
   // ── Drop zone ────────────────────────────────────────────────────
   dropZone.addEventListener('click', () => fileInput.click());
   dropZone.addEventListener('dragover', (e) => { e.preventDefault(); dropZone.style.borderColor = 'var(--accent)'; dropZone.style.color = 'var(--accent)'; });
@@ -1915,7 +1931,30 @@ loadThread();
       };
       inp.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); apply(); } });
       inp.addEventListener('blur', apply);
-      row.appendChild(qEl); row.appendChild(inp); questionsEl.appendChild(row);
+      // "Generate" — ask Q to find the answer in the case docs for this one field.
+      const genBtn = document.createElement('button');
+      genBtn.type = 'button'; genBtn.className = 'ff-q-gen'; genBtn.textContent = 'Generate ✦';
+      genBtn.addEventListener('click', async () => {
+        if (row.classList.contains('done') || genBtn.disabled) return;
+        genBtn.disabled = true; genBtn.textContent = '…';
+        try {
+          const f = _fields.find(x => x.name === q.field);
+          const r = await fetch('/api/threads/' + threadId + '/form-fill', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ fields: [{ name: q.field, type: TYPE_LABEL[f && f.fieldType] || 'text', page: f && f.page, label: q.question }] }),
+          });
+          const data = await r.json();
+          const val = data.values && data.values[q.field];
+          if (val) {
+            inp.value = String(val);
+            apply();
+          } else {
+            genBtn.textContent = 'not found';
+          }
+        } catch { genBtn.textContent = 'error'; }
+        finally { if (!row.classList.contains('done')) { genBtn.disabled = false; if (genBtn.textContent === '…') genBtn.textContent = 'Generate ✦'; } }
+      });
+      row.appendChild(qEl); row.appendChild(inp); row.appendChild(genBtn); questionsEl.appendChild(row);
     }
   }
 
