@@ -2473,7 +2473,25 @@ router.post('/api/threads/:id/form-fill', requirePerson, express.json({ limit: '
         .slice(-20)
         .map(m => `[${m.role === 'user' ? 'User' : 'Q'}]: ${String(m.content || '').slice(0, 600)}`)
         .join('\n');
+    // WHO IS FILLING THIS FORM. Without this, the form-filler sees several names
+    // in the letters (the applicant, the council, an enforcement officer) and the
+    // "never guess which person" rule makes it ASK instead of filling the name/
+    // title/contact fields — they land in "Still needed". Naming the applicant up
+    // front removes that ambiguity: these fields are about HER. Stored facts add
+    // anything Q has remembered (address, full title) so those fill too.
+    const factLines = listFacts({ limit: 50 }, req.person.id)
+        .map(f => `- ${f.content}`)
+        .join('\n');
+    const applicant = [
+        'THE PERSON FILLING IN THIS FORM (the applicant). Any field asking for the',
+        "applicant's / claimant's / your name, title, signature, email, address or",
+        'contact details is about THIS person — fill it from here, do not ask:',
+        req.person.name ? `Name: ${req.person.name}` : '',
+        req.person.email ? `Email: ${req.person.email}` : '',
+        factLines ? `Known about this person:\n${factLines}` : '',
+    ].filter(Boolean).join('\n');
     const infoText = [
+        applicant,
         t.title ? `Case: ${t.title}` : '',
         (t.emails || []).map(e => {
             const dir = e.type === 'in' ? 'Received' : e.type === 'draft' ? 'Draft' : 'Sent';

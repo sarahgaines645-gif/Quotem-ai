@@ -282,7 +282,7 @@
   .forms-status { font-size: 12px; color: var(--text-muted); margin-top: 8px; font-style: italic; }
 
   /* Save-until modal */
-  .remind-modal-bg { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.35); z-index: 200; align-items: center; justify-content: center; padding: 20px; }
+  .remind-modal-bg { display: none; position: fixed; inset: 0; background: var(--bg); z-index: 200; align-items: center; justify-content: center; padding: 20px; }
   .remind-modal-bg.show { display: flex; }
   .remind-modal { background: var(--bg); border-radius: 18px; padding: 22px; box-shadow: var(--neu-raised); width: 100%; max-width: 380px; }
   .remind-modal h3 { font-size: 16px; font-weight: 700; margin-bottom: 12px; }
@@ -299,6 +299,7 @@
   <header>
     <span class="logo-mark"><span class="q">Q</span><span class="dot"></span></span>
     <a href="/threads" class="header-back">← all threads</a>
+    <button id="delete-thread-btn" title="Delete this thread" style="margin-left:auto; background: transparent; border: 1px solid var(--text-faint); cursor: pointer; font-family: inherit; font-size: 12px; color: var(--text-faint); padding: 6px 12px; border-radius: 8px;">🗑 Delete</button>
   </header>
 
   <div class="title-card">
@@ -382,15 +383,8 @@
     </div>
   </div>
 
-  <details style="text-align: center; margin-top: 40px;">
-    <summary style="cursor: pointer; font-size: 11px; color: var(--text-faint); list-style: none; user-select: none;">⚙ Thread options</summary>
-    <div style="margin-top: 12px;">
-      <button id="delete-thread-btn" style="background: transparent; border: 1px solid var(--text-faint); cursor: pointer; font-family: inherit; font-size: 12px; color: var(--text-faint); padding: 8px 14px; border-radius: 8px;">🗑 Delete this Thread</button>
-    </div>
-  </details>
-
   <!-- Delete confirmation modal -->
-  <div id="delete-modal-bg" style="display:none; position: fixed; inset: 0; background: rgba(0,0,0,0.35); z-index: 200; align-items: center; justify-content: center; padding: 20px;">
+  <div id="delete-modal-bg" style="display:none; position: fixed; inset: 0; background: var(--bg); z-index: 200; align-items: center; justify-content: center; padding: 20px;">
     <div style="background: var(--bg); border-radius: 18px; padding: 24px; box-shadow: var(--neu-raised); width: 100%; max-width: 400px;">
       <h3 style="font-size: 17px; font-weight: 700; letter-spacing: -0.02em; margin-bottom: 12px;">Delete this Thread?</h3>
       <p style="font-size: 14px; color: var(--text-muted); line-height: 1.5; margin-bottom: 18px;">All emails, files, notes, and chat history on this Thread will be gone. This cannot be undone.</p>
@@ -1510,7 +1504,18 @@ loadThread();
         if (r.ok && data.values) {
           _fields.forEach((f, i) => {
             const v = data.values[f.name];
-            if (v && v !== 'false' && v !== false && v !== 'true' && v !== true) _values[i] = String(v);
+            if (v === undefined || v === null) return;
+            if (f.type === 'checkbox') {
+              // Checkbox answer: "true" ticks it. Keep it — the old filter threw
+              // every true/false away, so Q's ticked title was silently dropped.
+              // "false"/absent = unticked, which is not a gap, so leave it unset.
+              const truthy = (v === true || v === 'true' || v === 'yes' || v === '1');
+              if (truthy) _values[i] = 'true';
+            } else {
+              // Text field: drop the literal boolean sentinels, keep real values.
+              const s = String(v).trim();
+              if (s && s !== 'false' && s !== 'true') _values[i] = s;
+            }
           });
         }
       } catch {}

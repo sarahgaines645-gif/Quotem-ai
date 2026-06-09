@@ -36,6 +36,7 @@ Return a SINGLE JSON object with exactly two keys:
 THE RULE THAT MATTERS MOST — NEVER MAKE ANYTHING UP:
 - Do NOT invent, guess, or assume a value. If the provided information does not clearly contain it, it goes in "ask", NOT in "values". A blank you asked about is RIGHT; a value you invented is WRONG and worse than blank.
 - Do NOT drop a name into a field just because the field mentions a role you happen to have a name for. If a clause is conditional or it is unclear WHICH person/value belongs in the blank (e.g. "appoint a lead tenant to manage the deposit, ___"), ASK — do not guess.
+- BUT when the information explicitly identifies THE PERSON FILLING IN THIS FORM (the applicant / claimant / "you"), their own fields are NOT a guess. Fill their name, title (tick the matching Mr/Mrs/Miss/Ms checkbox — set it "true"), signature, email, address and contact fields directly from those details. A form like a PCN appeal, a claim, or a statement is filled in BY the applicant ABOUT themselves — the applicant's own details belong in those blanks, so use them. Do not send the applicant's own name/title/contact to "ask".
 - Never fabricate scheme names, reference numbers, addresses, account names, or dates. If it is not in the data, ASK.
 
 OTHER RULES:
