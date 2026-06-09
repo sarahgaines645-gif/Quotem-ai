@@ -430,6 +430,16 @@ router.patch('/email/outbox/:id/to', requirePerson, express.json({ limit: '1mb' 
     if (!ok) return res.status(404).json({ error: 'Not found' });
     res.json({ ok: true });
 });
+// General patch — update body, subject, attachments
+router.patch('/email/outbox/:id', requirePerson, express.json({ limit: '20mb' }), (req, res) => {
+    const patch = {};
+    if (req.body.body !== undefined) patch.body = String(req.body.body || '');
+    if (req.body.subject !== undefined) patch.subject = String(req.body.subject || '');
+    if (Array.isArray(req.body.attachments)) patch.attachments = req.body.attachments;
+    const ok = qEmail.patchOutboxItem(req.person.email, req.params.id, patch);
+    if (!ok) return res.status(404).json({ error: 'Not found' });
+    res.json({ ok: true });
+});
 
 const qFormFiller = require('./plugins/q-form-filler');
 const { fillPdfForWord } = qFormFiller;
@@ -2072,7 +2082,15 @@ router.get('/api/threads/:id/files/:filename', requirePerson, (req, res) => {
     if (!readOwnedThread(req, res)) return;
     const file = qThreads.readFile(req.params.id, req.params.filename, req.person.email);
     if (!file) return res.status(404).json({ error: 'File not found' });
-    res.setHeader('Content-Type', file.mimeType);
+    // Detect mime from extension if stored value is missing or generic.
+    let ct = file.mimeType || '';
+    if (!ct || ct === 'application/octet-stream') {
+        const ext = String(file.filename || '').split('.').pop().toLowerCase();
+        ct = ({ pdf:'application/pdf', png:'image/png', jpg:'image/jpeg', jpeg:'image/jpeg',
+                 gif:'image/gif', webp:'image/webp', txt:'text/plain', rtf:'text/rtf',
+                 mp4:'video/mp4', mp3:'audio/mpeg', docx:'application/vnd.openxmlformats-officedocument.wordprocessingml.document' })[ext] || 'application/octet-stream';
+    }
+    res.setHeader('Content-Type', ct);
     res.setHeader('Content-Disposition', `inline; filename="${file.filename}"`);
     res.end(file.buffer);
 });

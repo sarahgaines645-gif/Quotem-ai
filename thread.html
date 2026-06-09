@@ -917,12 +917,13 @@ function renderFiles() {
           <div class="file-sub">${sizeKb} KB · ${escapeHtml(f.mimeType || 'unknown')} · ${fmtAgo(f.uploadedAt)}</div>
         </div>
         <div class="file-actions">
-          <a href="${url}" target="_blank" rel="noopener">Open</a>
+          <button class="open-file-btn">Open</button>
           <button data-name="${escapeHtml(f.filename)}" class="del-file">Delete</button>
         </div>
       </div>`;
     const fileNameEl = card.querySelector('.file-name');
     card.querySelector('.rename-btn').addEventListener('click', (ev) => { ev.stopPropagation(); renameFile(f.filename, fileNameEl); });
+    card.querySelector('.open-file-btn').addEventListener('click', (ev) => { ev.stopPropagation(); window.open(url, '_blank'); });
     card.querySelector('.del-file').addEventListener('click', async (ev) => {
       ev.stopPropagation();
       if (!confirm('Delete ' + f.filename + '?')) return;
@@ -1443,6 +1444,8 @@ async function sendMessage() {
     $chatTyping.classList.remove('show');
     $chatSend.disabled = false;
     $chatInput.focus();
+    // Refresh outbox — Q may have saved a draft while responding.
+    if (window._obLoad) window._obLoad();
   }
 }
 $chatSend.addEventListener('click', sendMessage);
@@ -2201,43 +2204,55 @@ loadThread();
       if (!items.length) { obList.innerHTML = '<div style="font-size:12px;color:var(--text-faint);">Nothing queued for this case yet.</div>'; return; }
       items.forEach((it) => {
         const row = document.createElement('div');
-        row.style.cssText = 'background:var(--bg);box-shadow:var(--neu-raised-sm);border-radius:10px;padding:10px 12px;margin-bottom:8px;cursor:pointer;';
+        row.style.cssText = 'background:var(--bg);box-shadow:var(--neu-raised-sm);border-radius:10px;padding:10px 12px;margin-bottom:8px;';
         // Header — click to expand
         const hdr = document.createElement('div');
-        hdr.style.cssText = 'font-size:13px;display:flex;justify-content:space-between;align-items:center;';
+        hdr.style.cssText = 'font-size:13px;display:flex;justify-content:space-between;align-items:center;cursor:pointer;';
         hdr.innerHTML = '<span><b>' + esc(it.subject || '(no subject)') + '</b> <span style="color:var(--text-muted)">&rarr; ' + esc(it.to || '(no recipient)') + '</span></span><span style="font-size:11px;color:var(--text-muted);">▼</span>';
         row.appendChild(hdr);
         // Body — hidden by default, toggled on click
         const bodyEl = document.createElement('div');
         bodyEl.style.cssText = 'display:none;margin-top:8px;';
-        // To field (editable if missing)
-        const toRow = document.createElement('div');
-        toRow.style.cssText = 'margin-bottom:6px;';
+        // To field
         const toInput = document.createElement('input');
-        toInput.type = 'text'; toInput.value = it.to || ''; toInput.placeholder = 'To (email address)';
-        toInput.style.cssText = 'width:100%;box-sizing:border-box;border:none;outline:none;background:var(--bg);box-shadow:var(--neu-inset-sm);border-radius:8px;padding:8px 10px;font-family:inherit;font-size:13px;color:var(--text);';
-        toRow.appendChild(toInput); bodyEl.appendChild(toRow);
-        // Body text
-        const bodyPre = document.createElement('pre');
-        bodyPre.style.cssText = 'white-space:pre-wrap;font-family:inherit;font-size:13px;color:var(--text);background:var(--bg);box-shadow:var(--neu-inset-sm);border-radius:8px;padding:10px;margin:0 0 8px 0;max-height:260px;overflow-y:auto;';
-        bodyPre.textContent = it.body || '(no body)';
-        bodyEl.appendChild(bodyPre);
+        toInput.type='text'; toInput.value=it.to||''; toInput.placeholder='To (email address)';
+        toInput.style.cssText='width:100%;box-sizing:border-box;border:none;outline:none;background:var(--bg);box-shadow:var(--neu-inset-sm);border-radius:8px;padding:8px 10px;font-family:inherit;font-size:13px;color:var(--text);margin-bottom:6px;';
+        bodyEl.appendChild(toInput);
+        // Body textarea (editable)
+        const bodyTA = document.createElement('textarea');
+        bodyTA.value = it.body || '';
+        bodyTA.style.cssText='width:100%;box-sizing:border-box;border:none;outline:none;background:var(--bg);box-shadow:var(--neu-inset-sm);border-radius:8px;padding:10px;font-family:inherit;font-size:13px;color:var(--text);min-height:100px;resize:vertical;margin-bottom:6px;';
+        bodyEl.appendChild(bodyTA);
+        // Attachment pills for this item
+        let itemAtts = Array.isArray(it.attachments) ? [...it.attachments] : [];
+        const pillsEl = document.createElement('div'); pillsEl.style.cssText='display:flex;flex-wrap:wrap;gap:6px;margin-bottom:6px;';
+        const renderItemPills = () => {
+          pillsEl.innerHTML='';
+          itemAtts.forEach((a,i)=>{ const p=document.createElement('span'); p.style.cssText='display:inline-flex;align-items:center;gap:4px;background:var(--bg);box-shadow:var(--neu-raised-sm);border-radius:8px;padding:4px 8px;font-size:12px;'; p.innerHTML='📎 '+esc(a.filename)+' <button type="button" style="border:none;background:none;cursor:pointer;color:var(--text-muted);font-size:14px;line-height:1;padding:0;">×</button>'; p.querySelector('button').onclick=()=>{itemAtts.splice(i,1);renderItemPills();}; pillsEl.appendChild(p); });
+        };
+        renderItemPills();
+        bodyEl.appendChild(pillsEl);
         // Actions
-        const acts = document.createElement('div'); acts.style.cssText = 'display:flex;gap:8px;flex-wrap:wrap;';
-        const send = document.createElement('button'); send.className = 'note-save-btn'; send.textContent = '📤 Send';
-        send.onclick = async (e) => { e.stopPropagation(); send.disabled = true;
-          // patch the to field if user edited it
-          if (toInput.value.trim() && toInput.value.trim() !== it.to) {
-            await fetch('/email/outbox/' + it.id + '/to', { method: 'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify({to: toInput.value.trim()}) }).catch(()=>{});
-          }
-          try { const rr = await fetch('/email/outbox/' + it.id + '/send', { method: 'POST' }); const dd = await rr.json(); if (!rr.ok) throw new Error(dd.error || 'Failed'); flash('Sent ✓'); load(); loadThread(); } catch (e2) { flash('Send failed: ' + e2.message); send.disabled = false; } };
-        const del = document.createElement('button'); del.className = 'note-save-btn'; del.textContent = '🗑 Delete';
-        del.onclick = async (e) => { e.stopPropagation(); await fetch('/email/outbox/' + it.id, { method: 'DELETE' }); load(); };
-        acts.appendChild(send); acts.appendChild(del); bodyEl.appendChild(acts);
+        const acts = document.createElement('div'); acts.style.cssText='display:flex;gap:8px;flex-wrap:wrap;align-items:center;';
+        const fileIn = document.createElement('input'); fileIn.type='file'; fileIn.multiple=true; fileIn.style.display='none';
+        fileIn.onchange = async () => { for(const f of fileIn.files){ const b64=await fileToBase64(f); itemAtts.push({filename:f.name,base64:b64,mimeType:f.type||'application/octet-stream'}); } fileIn.value=''; renderItemPills(); };
+        const attachBtn = document.createElement('button'); attachBtn.className='note-save-btn'; attachBtn.textContent='📎 Attach';
+        attachBtn.onclick=(e)=>{e.stopPropagation();fileIn.click();};
+        const saveBtn = document.createElement('button'); saveBtn.className='note-save-btn'; saveBtn.textContent='💾 Save';
+        saveBtn.onclick=async(e)=>{e.stopPropagation();saveBtn.disabled=true;
+          await fetch('/email/outbox/'+it.id,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({to:toInput.value.trim(),body:bodyTA.value,attachments:itemAtts})}).catch(()=>{});
+          flash('Saved'); saveBtn.disabled=false; load();};
+        const send = document.createElement('button'); send.className='note-save-btn'; send.textContent='📤 Send';
+        send.onclick=async(e)=>{e.stopPropagation();send.disabled=true;
+          // Save latest edits first so the send route picks them up
+          await fetch('/email/outbox/'+it.id,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({to:toInput.value.trim(),body:bodyTA.value,attachments:itemAtts})}).catch(()=>{});
+          try{const rr=await fetch('/email/outbox/'+it.id+'/send',{method:'POST'});const dd=await rr.json();if(!rr.ok)throw new Error(dd.error||'Failed');flash('Sent ✓');load();loadThread();}catch(e2){flash('Send failed: '+e2.message);send.disabled=false;}};
+        const del = document.createElement('button'); del.className='note-save-btn'; del.textContent='🗑 Delete';
+        del.onclick=async(e)=>{e.stopPropagation();await fetch('/email/outbox/'+it.id,{method:'DELETE'});load();};
+        acts.append(attachBtn,saveBtn,send,del,fileIn); bodyEl.appendChild(acts);
         row.appendChild(bodyEl);
-        // Toggle expand
-        let open = false;
-        hdr.addEventListener('click', () => { open = !open; bodyEl.style.display = open ? 'block' : 'none'; hdr.querySelector('span:last-child').textContent = open ? '▲' : '▼'; });
+        let open=false;
+        hdr.addEventListener('click',()=>{open=!open;bodyEl.style.display=open?'block':'none';hdr.querySelector('span:last-child').textContent=open?'▲':'▼';});
         obList.appendChild(row);
       });
     } catch (_) { /* ignore */ }
@@ -2268,6 +2283,7 @@ loadThread();
     finally { obSend.disabled = false; }
   };
   load();
+  window._obLoad = load;
 })();
 </script>
 </body>

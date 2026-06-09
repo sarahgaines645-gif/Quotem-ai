@@ -268,7 +268,7 @@ function getOutbox(email) {
 function saveOutbox(email, arr) {
     fs.writeFileSync(outboxFile(email), JSON.stringify(arr, null, 2), 'utf8');
 }
-function addToOutbox(email, { to, subject, body, threadId }) {
+function addToOutbox(email, { to, subject, body, threadId, attachments }) {
     const arr = getOutbox(email);
     const item = {
         id: crypto.randomBytes(8).toString('hex'),
@@ -276,6 +276,7 @@ function addToOutbox(email, { to, subject, body, threadId }) {
         subject: String(subject || '').trim(),
         body: body || '',
         threadId: threadId || null,
+        attachments: Array.isArray(attachments) ? attachments : [],
         createdAt: new Date().toISOString(),
     };
     arr.push(item);
@@ -297,7 +298,7 @@ function patchOutboxItem(email, id, patch) {
 async function sendFromOutbox(email, id) {
     const item = getOutbox(email).find(x => x.id === id);
     if (!item) { const e = new Error('not_found'); e.code = 'not_found'; throw e; }
-    const from = await sendEmail(email, { to: item.to, subject: item.subject, text: item.body });
+    const from = await sendEmail(email, { to: item.to, subject: item.subject, text: item.body, attachments: item.attachments || [] });
     removeFromOutbox(email, id);
     return from;
 }
