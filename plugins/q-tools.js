@@ -116,11 +116,11 @@ const TOOL_DEFINITIONS = [
         type: 'function',
         function: {
             name: 'save_email_draft',
-            description: 'Save a drafted email to the user\'s outbox so they can review and send it with one click. Call this EVERY TIME you write an email for the user — do not just paste email text in the chat. If you are drafting multiple emails in one reply, call this once per email. The user can then find all drafts in the Emails section of this thread or on the Email Writer page.',
+            description: 'Save a drafted email to the user\'s outbox so they can review and send it with one click. Call this EVERY TIME you write an email for the user — do not just paste email text in the chat. If you are drafting multiple emails in one reply, call this once per email. IMPORTANT: always include the "to" field if you know or have discussed the recipient — the user should not have to look it up themselves.',
             parameters: {
                 type: 'object',
                 properties: {
-                    to: { type: 'string', description: 'Recipient email address (if known — leave blank if not yet decided).' },
+                    to: { type: 'string', description: 'Recipient email address. REQUIRED if the email address has been mentioned or discussed in this thread. Leave blank only if genuinely unknown.' },
                     subject: { type: 'string', description: 'The subject line.' },
                     body: { type: 'string', description: 'The full plain-text body of the email.' },
                 },

@@ -2461,6 +2461,12 @@ router.post('/api/threads/:id/form-fill', requirePerson, express.json({ limit: '
         const cached = _threadDocCache.get(cacheKey);
         if (cached) fileParts.push(`[File: ${f.filename}]\n${cached.slice(0, 2000)}`);
     }
+    // Include last 20 chat messages — case details (PCN, VRM, dates) live here.
+    const chatParts = (t.chatHistory || [])
+        .filter(m => m.role === 'assistant' || m.role === 'user')
+        .slice(-20)
+        .map(m => `[${m.role === 'user' ? 'User' : 'Q'}]: ${String(m.content || '').slice(0, 600)}`)
+        .join('\n');
     const infoText = [
         t.title ? `Case: ${t.title}` : '',
         (t.emails || []).map(e => {
@@ -2469,6 +2475,7 @@ router.post('/api/threads/:id/form-fill', requirePerson, express.json({ limit: '
         }).join('\n\n'),
         (t.notes || []).map(n => n.text || '').join('\n'),
         ...fileParts,
+        chatParts ? `[Chat history]\n${chatParts}` : '',
     ].filter(Boolean).join('\n\n');
 
     try {

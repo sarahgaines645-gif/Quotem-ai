@@ -382,9 +382,12 @@
     </div>
   </div>
 
-  <div style="text-align: center; margin-top: 32px;">
-    <button id="delete-thread-btn" style="background: transparent; border: none; cursor: pointer; font-family: inherit; font-size: 12px; color: var(--text-faint); padding: 8px 14px; border-radius: 8px;">🗑 Delete this Thread</button>
-  </div>
+  <details style="text-align: center; margin-top: 40px;">
+    <summary style="cursor: pointer; font-size: 11px; color: var(--text-faint); list-style: none; user-select: none;">⚙ Thread options</summary>
+    <div style="margin-top: 12px;">
+      <button id="delete-thread-btn" style="background: transparent; border: 1px solid var(--text-faint); cursor: pointer; font-family: inherit; font-size: 12px; color: var(--text-faint); padding: 8px 14px; border-radius: 8px;">🗑 Delete this Thread</button>
+    </div>
+  </details>
 
   <!-- Delete confirmation modal -->
   <div id="delete-modal-bg" style="display:none; position: fixed; inset: 0; background: rgba(0,0,0,0.35); z-index: 200; align-items: center; justify-content: center; padding: 20px;">
