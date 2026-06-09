@@ -2448,6 +2448,14 @@ router.post('/api/threads/:id/form-fill', requirePerson, express.json({ limit: '
     const fields = req.body?.fields;
     if (!Array.isArray(fields) || !fields.length) return res.status(400).json({ error: 'fields array required' });
 
+    // Pull already-extracted file text from the cache — if Q has read the
+    // PCN letter or any attachment during this session it's already there.
+    const fileParts = [];
+    for (const f of (t.files || [])) {
+        const cacheKey = `${t.id}:${f.filename}`;
+        const cached = _threadDocCache.get(cacheKey);
+        if (cached) fileParts.push(`[File: ${f.filename}]\n${cached.slice(0, 2000)}`);
+    }
     const infoText = [
         t.title ? `Case: ${t.title}` : '',
         (t.emails || []).map(e => {
@@ -2455,6 +2463,7 @@ router.post('/api/threads/:id/form-fill', requirePerson, express.json({ limit: '
             return `[${dir} — ${e.subject || ''}]\n${(e.body || '').slice(0, 1200)}`;
         }).join('\n\n'),
         (t.notes || []).map(n => n.text || '').join('\n'),
+        ...fileParts,
     ].filter(Boolean).join('\n\n');
 
     try {
