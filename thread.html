@@ -449,7 +449,7 @@
 
   <div class="section-label">📤 Outbox — emails ready to send</div>
   <div id="outbox-list" style="margin-bottom: 12px;"></div>
-  <div style="background: var(--bg); box-shadow: var(--neu-raised-sm); border-radius: 14px; padding: 14px; display: flex; flex-direction: column; gap: 8px;">
+  <div id="ob-compose" style="background: var(--bg); box-shadow: var(--neu-raised-sm); border-radius: 14px; padding: 14px; display: flex; flex-direction: column; gap: 8px;">
     <input type="text" id="ob-to" placeholder="Send to (email address)" style="border:none;outline:none;background:var(--bg);box-shadow:var(--neu-raised-sm);border-radius:10px;padding:10px 12px;font-family:inherit;font-size:14px;color:var(--text);">
     <input type="text" id="ob-subject" placeholder="Subject" style="border:none;outline:none;background:var(--bg);box-shadow:var(--neu-raised-sm);border-radius:10px;padding:10px 12px;font-family:inherit;font-size:14px;color:var(--text);">
     <textarea id="ob-body" placeholder="Write the email — send now, or save to send later…" style="border:none;outline:none;background:var(--bg);box-shadow:var(--neu-raised-sm);border-radius:10px;padding:10px 12px;font-family:inherit;font-size:14px;color:var(--text);min-height:90px;resize:vertical;"></textarea>
@@ -516,6 +516,7 @@
           <button class="forms-btn primary" id="ff-fill">Q, fill from case</button>
           <button class="forms-btn" id="ff-download">⬇ Editable (Acrobat)</button>
           <button class="forms-btn" id="ff-download-flat">⬇ Flat (Word / print)</button>
+          <button class="forms-btn" id="ff-attach-email">📎 Attach to email</button>
         </div>
         <div class="ff-questions" id="ff-questions"></div>
         <div class="ff-coach">
@@ -1478,9 +1479,10 @@ loadThread();
   const canvas   = document.getElementById('ff-canvas');
   const inputsEl = document.getElementById('ff-inputs');
   const questionsEl = document.getElementById('ff-questions');
-  const fillBtn  = document.getElementById('ff-fill');
-  const dlBtn    = document.getElementById('ff-download');
-  const dlFlatBtn = document.getElementById('ff-download-flat');
+  const fillBtn      = document.getElementById('ff-fill');
+  const dlBtn        = document.getElementById('ff-download');
+  const dlFlatBtn    = document.getElementById('ff-download-flat');
+  const attachEmailBtn = document.getElementById('ff-attach-email');
   const coachIn  = document.getElementById('ff-coach-in');
   const coachMsg = document.getElementById('ff-coach-msg');
 
@@ -2048,6 +2050,40 @@ loadThread();
   }
   dlBtn.addEventListener('click', () => doDownload('/forms/fill-editable', '-editable.pdf', dlBtn));
   dlFlatBtn.addEventListener('click', () => doDownload('/forms/fill', '-flat.pdf', dlFlatBtn));
+
+  attachEmailBtn.addEventListener('click', async () => {
+    if (!_pdfBase64) { statusEl.textContent = '⚠️ No form loaded.'; return; }
+    const values = {};
+    for (const [k, v] of Object.entries(_values)) {
+      if (typeof v === 'boolean') { if (v) values[k] = true; }
+      else if (v && String(v).trim()) values[k] = String(v).trim();
+    }
+    if (!Object.keys(values).length) { statusEl.textContent = '⚠️ Nothing filled in yet.'; return; }
+    attachEmailBtn.disabled = true;
+    statusEl.textContent = '⏳ Preparing attachment…';
+    try {
+      const r = await fetch('/forms/fill-editable', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ pdfBase64: _pdfBase64, values }),
+      });
+      if (!r.ok) { const d = await r.json().catch(() => ({})); throw new Error(d.error || 'Fill failed'); }
+      const blob = await r.blob();
+      const reader = new FileReader();
+      reader.onload = () => {
+        const base64 = reader.result.split(',')[1];
+        const filename = (_formName || 'form').replace(/[^a-z0-9]+/gi, '-') + '-filled.pdf';
+        document.dispatchEvent(new CustomEvent('email:attach-file', {
+          detail: { filename, base64, mimeType: 'application/pdf' }
+        }));
+        statusEl.textContent = '✅ Attached to email — scroll down to send.';
+      };
+      reader.readAsDataURL(blob);
+    } catch (e) {
+      statusEl.textContent = '⚠️ ' + e.message;
+    } finally {
+      attachEmailBtn.disabled = false;
+    }
+  });
 })();
 
 // ── "Verify" drag-tool — press Verify, get a ✓ that follows the cursor, then
@@ -2127,6 +2163,11 @@ loadThread();
 
   // Attached files — each entry: { filename, base64, mimeType }
   const _attachments = [];
+  document.addEventListener('email:attach-file', (e) => {
+    _attachments.push(e.detail);
+    renderPills();
+    document.getElementById('ob-compose') && document.getElementById('ob-compose').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  });
   function renderPills() {
     obAttachPills.innerHTML = '';
     _attachments.forEach((a, i) => {
