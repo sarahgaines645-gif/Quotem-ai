@@ -2142,7 +2142,8 @@ router.post('/api/threads/:id/chat', requirePerson, express.json({ limit: '256kb
             parts.push(t.emails.map((e, i) => {
                 const dir = e.type === 'in' ? 'RECEIVED' : 'SENT';
                 const meta = [e.from && `from: ${e.from}`, e.to && `to: ${e.to}`, e.date && `date: ${e.date}`, e.subject && `subject: ${e.subject}`].filter(Boolean).join(' · ');
-                return `--- ${dir} #${i + 1}${meta ? ' (' + meta + ')' : ''} ---\n${e.body}`;
+                const body = (e.body || '').slice(0, 1500);
+                return `--- ${dir} #${i + 1}${meta ? ' (' + meta + ')' : ''} ---\n${body}`;
             }).join('\n\n'));
         }
         if (t.files && t.files.length > 0) {
@@ -2157,7 +2158,7 @@ router.post('/api/threads/:id/chat', requirePerson, express.json({ limit: '256kb
     // causes it to hallucinate tool availability and ignore instructions. 30 msgs
     // is ~3–5 back-and-forth exchanges, enough to keep conversation coherent.
     const fullHistory = (t.chatHistory || []).filter(h => h && (h.role === 'user' || h.role === 'assistant') && typeof h.content === 'string');
-    const recentHistory = fullHistory.slice(-30);
+    const recentHistory = fullHistory.slice(-15);
     for (const h of recentHistory) {
         messages.push({ role: h.role, content: h.content });
     }
@@ -2176,7 +2177,10 @@ router.post('/api/threads/:id/chat', requirePerson, express.json({ limit: '256kb
         /pdf|text\/|rfc822|word|officedocument|msword/i.test(f.mimeType || '')
         || /\.(pdf|txt|eml|md|csv|docx?)$/i.test(f.filename || ''));
     const isAddPing = /I've just added .+ to the case/i.test(message);
-    const refersToFile = /\b(image|images|photo|photos|picture|pictured|pic|pics|screenshot|scan|scanned|see|look|shows?|attached|attachment|document|doc|letter|email|e-?mail|pdf|file|says?|read|content|in it|whats? in|video|videos|footage|recording|clip|watch|frame|frames)\b/i.test(message);
+    // Only load file bytes when message explicitly references visual/binary content.
+    // Broad word matching ("email", "see", "look") fired on every message and sent
+    // 100k+ tokens to V4-Pro → Together timeout. Narrow to actual media references.
+    const refersToFile = /\b(image|images|photo|photos|picture|pic|pics|screenshot|scan|scanned|video|videos|footage|recording|clip|watch|frame|frames|pdf|cctv)\b/i.test(message);
     const wantContent = isAddPing || refersToFile;
 
     // Photos on a case: read each one to TEXT once (cached), then hand Q that text
@@ -2335,7 +2339,9 @@ router.post('/api/threads/:id/chat', requirePerson, express.json({ limit: '256kb
         // on no-think is too shallow, and a case is the LAST place he should
         // think less). The page can request 'max' for a big case (the Deep
         // toggle) — deepest reasoning when it's worth the extra time.
-        const tEffort = (req.body?.reasoningEffort === 'max') ? 'max' : 'high';
+        // 'high' + large case context caused Together to hang silently for 60+ min.
+        // Normal turns use 'low' (fast, still full tool-call support); Deep = 'high'.
+        const tEffort = (req.body?.reasoningEffort === 'max') ? 'high' : 'low';
         const qOpts = { useTools: true, mode: 'aps', surface: 'thread', advocate: true, person: req.person, reasoningEffort: tEffort, threadId: req.params.id };
         // Photos are now read to text above and spliced into `messages`, so the
         // turn stays a normal history-aware Claude turn (no isolated vision call,
