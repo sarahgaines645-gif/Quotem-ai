@@ -1071,43 +1071,20 @@ function appendChatMsg(role, content, meta = {}) {
   if (optionsToRender.length > 0) {
     const optsEl = document.createElement('div');
     optsEl.className = 'chat-options';
-    const picked = new Set();
 
     optionsToRender.forEach(optText => {
       const btn = document.createElement('button');
       btn.className = 'chat-option';
       btn.textContent = optText;
       btn.addEventListener('click', () => {
-        if (picked.has(optText)) {
-          picked.delete(optText);
-          btn.classList.remove('on');
-        } else {
-          picked.add(optText);
-          btn.classList.add('on');
-        }
-        // Show / hide the Send button when at least one option is picked
-        sendBtn.style.display = picked.size > 0 ? 'inline-block' : 'none';
+        // Single click = instant send. Lock all buttons first so no double-tap.
+        optsEl.querySelectorAll('.chat-option').forEach(b => b.disabled = true);
+        btn.classList.add('on');
+        $chatInput.value = optText;
+        sendMessage();
       });
       optsEl.appendChild(btn);
     });
-
-    // "Send selected" button — appears once at least one option is on
-    const sendBtn = document.createElement('button');
-    sendBtn.className = 'chat-option chat-options-send';
-    sendBtn.textContent = '↪ Send selected';
-    sendBtn.style.display = 'none';
-    sendBtn.style.fontWeight = '700';
-    sendBtn.style.background = 'var(--accent)';
-    sendBtn.style.color = 'white';
-    sendBtn.addEventListener('click', () => {
-      if (picked.size === 0) return;
-      const combined = Array.from(picked).join('\n');
-      // Lock all buttons including this one
-      optsEl.querySelectorAll('.chat-option').forEach(b => b.disabled = true);
-      $chatInput.value = combined;
-      sendMessage();
-    });
-    optsEl.appendChild(sendBtn);
 
     $chatThread.appendChild(optsEl);
   }

@@ -362,21 +362,39 @@ When the precise current rule matters, USE web_search. Don't fabricate statutes 
 NUMBERS — NON-NEGOTIABLE. You cannot do arithmetic in your head and you must not try. Every date difference, duration, "X times longer", multiplier, total, percentage or money figure that goes in front of the user or the other side MUST be produced with the calculator tool (use current_datetime to anchor "today"/"how long ago"). Never write a computed number you have not run through the tool. If you genuinely cannot compute it, state the raw dates/figures and say plainly "this needs checking" — do NOT invent a plausible-looking number. A wrong day-count or multiplier in a letter to a council destroys the whole argument's credibility. The argument is devastating on the dates alone; it does not need numbers you guessed.
 
 ────────────────────────────────────────
-CLICKABLE OPTIONS — when you ask, give buttons
+CLICKABLE OPTIONS — always end with buttons
 ────────────────────────────────────────
-Whenever your reply asks something with a likely set of answers, list those answers in an OPTIONS block at the END of your message:
+Every reply must end with an [OPTIONS] block. The user taps ONE button and you respond — they should NEVER have to type a response. No exceptions.
 
+Examples for different situations:
+
+After saving a draft email:
+[OPTIONS]
+- ✅ Send it — looks good
+- ✏️ Make the tone firmer
+- ➕ Add more detail first
+[/OPTIONS]
+
+After asking a question:
 [OPTIONS]
 - ✅ Yes, replied last week
 - ⏳ Not yet — draft it for me
 - 🤔 Not sure, let's talk about it
 [/OPTIONS]
 
-The chat surfaces (email writer, thread page) render these as clickable buttons. Rules:
-- 2-5 options. Each starts with an emoji that matches its vibe.
-- Each option is a COMPLETE answer-as-statement, not a yes/no.
-- Only include the block when you're genuinely asking. If you've taken action and just need the user to read, no OPTIONS block.
-- The block must be the LAST thing in your message.
+After completing research / giving advice:
+[OPTIONS]
+- ➡️ Draft the letter now
+- 🔍 I need to check one more thing first
+- 📋 Save this and come back to it
+[/OPTIONS]
+
+The chat renders these as single-tap buttons. Rules:
+- 2-4 options. Each starts with an emoji.
+- Each option is a COMPLETE statement — not a yes/no fragment.
+- Options must move the case forward. The last option can always be a gentle hold ("one more thing" / "not yet").
+- The block is ALWAYS the last thing in your message. After [/OPTIONS] — nothing.
+- Even when you've taken action and just want them to read: still add forward-momentum options so they can continue without typing.
 
 ────────────────────────────────────────
 WRITING REPLIES
@@ -607,7 +625,7 @@ async function geminiVisionChat(prompt, base64, mimeType) {
 // Together/OpenAI one chat() uses). Reuses Q's existing tools, translated to
 // Anthropic's schema, and runs the same tool loop. Returns the standard chat()
 // result shape, or null to fall back to the Together (V4-Flash) path.
-async function claudeThreadChat({ system, messages, tools, person, maxTokens, startTime, documents }) {
+async function claudeThreadChat({ system, messages, tools, person, maxTokens, startTime, documents, threadId }) {
     const key = process.env.ANTHROPIC_API_KEY;
     if (!key) return null;
 
@@ -724,7 +742,7 @@ async function claudeThreadChat({ system, messages, tools, person, maxTokens, st
         const resultBlocks = [];
         for (const tu of toolUses) {
             const callStart = Date.now();
-            const result = await executeTool(tu.name, JSON.stringify(tu.input || {}), person?.id, person?.email);
+            const result = await executeTool(tu.name, JSON.stringify(tu.input || {}), person?.id, person?.email, threadId);
             toolCalls.push({ name: tu.name, args: tu.input, result, durationMs: Date.now() - callStart });
             // Anthropic 400s on an EMPTY tool_result content block — exactly what a
             // web_search miss or an action tool that returns nothing produces, and
@@ -899,7 +917,7 @@ async function chat(messages, options = {}) {
     // Q_THREAD_CLAUDE_VOICE — a thin pointer that adds no voice of its own, just
     // makes APS govern here and lifts the two cross-surface V4 lines. Force OFF
     // with QUOTEM_CLAUDE_THREADS=0 to drop threads back to V4.
-    if (options.surface === 'check-this' && process.env.ANTHROPIC_API_KEY) {
+    if (options.surface === 'thread' && process.env.ANTHROPIC_API_KEY) {
         const lastUser = [...messages].reverse().find(m => m && m.role === 'user');
         const msgText = (lastUser && typeof lastUser.content === 'string') ? lastUser.content : '';
         const claudeResult = await claudeThreadChat({
@@ -910,6 +928,7 @@ async function chat(messages, options = {}) {
             maxTokens,
             startTime,
             documents: Array.isArray(options.documents) ? options.documents : [],
+            threadId: options.threadId,
         });
         if (claudeResult) {
             console.log('[q-chat] thread → Claude sonnet-4-6 (APS voice)');
