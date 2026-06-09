@@ -1842,12 +1842,13 @@ loadThread();
       applyValues(data.values || {});
       await renderPage(_currentPage);
       flashFilled(data.values || {});
-      renderQuestions(data.ask || []);
+      const ask = filterAsk(data.ask || []);
+      renderQuestions(ask);
       const n = Object.keys(data.values || {}).length;
-      const q = (data.ask || []).length;
+      const q = ask.length;
       statusEl.textContent = n
-        ? `✅ Q filled ${n} field${n === 1 ? '' : 's'}` + (q ? ` — ${q} need${q === 1 ? 's' : ''} you below.` : ' — edit anything, then download.')
-        : 'Q couldn’t fill from the case — type into the form or tell Q below.';
+        ? `✅ Q filled ${n} field${n === 1 ? '' : 's'}` + (q ? ` — ${q} more below; tick boxes & anything else on the form.` : ' — edit on the form, then download.')
+        : 'Q couldn’t fill much from the case — type onto the form, tick the boxes, or tell Q below.';
     } catch (e) {
       statusEl.textContent = '⚠️ ' + (e.message || 'Fill failed');
     } finally {
@@ -1855,6 +1856,22 @@ loadThread();
     }
   }
   fillBtn.addEventListener('click', autoFill);
+
+  // Keep the question list SHORT and useful. The visual form already shows every
+  // field as an editable overlay, so don't re-ask things the user just ticks or
+  // types there: drop checkboxes/radios (titles, "have you checked…"), signature
+  // fields, and the model's give-up questions about junk-named fields (Text1,
+  // Button2). What's left is the real missing free-text Q genuinely needs.
+  function filterAsk(ask) {
+    return (ask || []).filter(q => {
+      if (!q || !q.field || !q.question) return false;
+      const f = _fields.find(x => x.name === q.field);
+      if (!f) return false;
+      if (f.fieldType === 'Btn' || f.fieldType === 'Sig') return false;
+      if (/what (is|are) the (text|value)s? for the\b/i.test(q.question)) return false;
+      return true;
+    });
+  }
 
   // Q flagged these as gaps — answering one drops it straight onto the form.
   function renderQuestions(ask) {
