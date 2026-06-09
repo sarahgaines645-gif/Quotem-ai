@@ -98,15 +98,13 @@
 
   /* Files / evidence */
   .files-list { display: flex; flex-direction: column; gap: 8px; margin-bottom: 10px; }
-  /* Photo gallery grid — images shown as thumbnails, not individual cards */
-  .photo-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 10px; }
-  @media (max-width: 480px) { .photo-grid { grid-template-columns: repeat(2, 1fr); } }
-  .photo-thumb { position: relative; aspect-ratio: 1; border-radius: 10px; overflow: hidden; box-shadow: var(--neu-raised-sm); cursor: pointer; background: var(--shadow-dark); }
-  .photo-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; transition: opacity 0.15s; }
-  .photo-thumb:hover img { opacity: 0.85; }
-  .photo-thumb-name { position: absolute; bottom: 0; left: 0; right: 0; padding: 4px 6px; font-size: 10px; color: white; background: rgba(0,0,0,0.5); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; opacity: 0; transition: opacity 0.15s; }
-  .photo-thumb:hover .photo-thumb-name { opacity: 1; }
-  .photo-thumb-del { position: absolute; top: 5px; right: 5px; width: 20px; height: 20px; border-radius: 50%; background: rgba(0,0,0,0.55); border: none; color: white; font-size: 11px; cursor: pointer; display: none; align-items: center; justify-content: center; line-height: 1; }
+  /* Photo gallery grid — small raised cards */
+  .photo-grid { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 12px; }
+  .photo-thumb { position: relative; width: 76px; padding: 6px; border-radius: 12px; box-shadow: var(--neu-raised-sm); cursor: pointer; background: var(--bg); flex-shrink: 0; }
+  .photo-thumb img { width: 100%; aspect-ratio: 1; object-fit: cover; display: block; border-radius: 7px; transition: opacity 0.15s; }
+  .photo-thumb:hover img { opacity: 0.82; }
+  .photo-thumb-name { display: block; font-size: 9px; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 4px; text-align: center; cursor: text; }
+  .photo-thumb-del { position: absolute; top: 3px; right: 3px; width: 18px; height: 18px; border-radius: 50%; background: rgba(0,0,0,0.55); border: none; color: white; font-size: 10px; cursor: pointer; display: none; align-items: center; justify-content: center; line-height: 1; }
   .photo-thumb:hover .photo-thumb-del { display: flex; }
   /* Lightbox */
   .photo-lightbox { position: fixed; inset: 0; z-index: 400; background: rgba(0,0,0,0.88); display: none; align-items: center; justify-content: center; }
