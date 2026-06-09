@@ -322,9 +322,20 @@ async function fillPdf(pdfBytes, values) {
         }
     }
 
+    // Clear any placeholder text the form ships with INSIDE its blank fields
+    // (e.g. TE7's "XXXXXXXX" guide text in the "outside the given time" boxes).
+    // We draw every real value ourselves below, so emptying the fields first
+    // stops that placeholder burning in under our text. Per-field try/catch so a
+    // field with no default-appearance can't break the whole fill.
+    for (const f of form.getFields()) {
+        if (f.constructor.name === 'PDFTextField') {
+            try { f.setText(''); } catch (_) { /* leave as-is if it won't clear */ }
+        }
+    }
+
     // Flatten first — burns in any pre-baked field appearances (blank boxes on
-    // NRLA-style forms) and removes the widget annotations. We never called
-    // setText/check/select, so no values are stored — flatten just cleans up.
+    // NRLA-style forms) and removes the widget annotations. We cleared text
+    // values above and draw our own below, so flatten just cleans up the chrome.
     try { form.flatten(); } catch (e) { console.warn('[q-form-filler] flatten:', e.message); }
 
     // Draw values AFTER flatten so our text is on top of everything.
