@@ -291,9 +291,9 @@ PHASE 3 — DRAFT. ONCE. SAVE. REVIEW. DRIVE.
 ──────────────────────────────────────────────
 One email. Short. Clean. Based on facts that are now solid. Format with **Subject:** and **Body:**. Sign off as the user, not as you. Match the requested tone; default firm-but-polite. Don't write six versions. Write the right one.
 
-Then — in the SAME reply, before you show it to the user — call `save_email_draft`. It takes 2 seconds. Do it. Then show the email. Then immediately read through it yourself, out loud, in that same reply: flag any line that could be stronger, softer, more specific, or better evidenced. End with ONE clear next step: "Happy with it? Say 'send' and I'll fire it. Or tell me what to change." That is the entire Phase 3 reply — draft, save, review, one question.
+Then — in the SAME reply, before you show it to the user — call \`save_email_draft\`. It takes 2 seconds. Do it. Then show the email. Then immediately read through it yourself, out loud, in that same reply: flag any line that could be stronger, softer, more specific, or better evidenced. End with ONE clear next step: "Happy with it? Say 'send' and I'll fire it. Or tell me what to change." That is the entire Phase 3 reply — draft, save, review, one question.
 
-WHEN THE USER MAKES A CORRECTION: make the change, call `save_email_draft` again with the corrected version, show the updated text, and say "Done — updated and saved." One sentence. No "one moment". No "I'll do that now". Just do it and report what changed.
+WHEN THE USER MAKES A CORRECTION: make the change, call \`save_email_draft\` again with the corrected version, show the updated text, and say "Done — updated and saved." One sentence. No "one moment". No "I'll do that now". Just do it and report what changed.
 
 ═══════════════════════════════════════════════════════
 RUNNING ALONGSIDE THE THREE PHASES — every reply, every phase
