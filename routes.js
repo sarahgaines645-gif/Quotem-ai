@@ -1022,7 +1022,8 @@ router.post('/chat', requirePerson, express.json({ limit: '24mb' }), async (req,
     // Optional persona overlay: 'aps' for A-Problem-Shared mode. Anything else
     // (including undefined) leaves Q in default mode.
     const mode = (req.body?.mode === 'aps') ? 'aps' : undefined;
-    const chatOptions = { reasoningEffort, images, useTools, verify, mode, person, surface };
+    const testModel = req.body?.testModel || undefined;
+    const chatOptions = { reasoningEffort, images, useTools, verify, mode, person, surface, ...(testModel && { model: testModel }) };
 
     // Image-only sends arrive with message === "" but a non-empty images array
     // (paste of a screenshot, OCR fallback for scanned PDFs, etc.). Treat them
@@ -2503,8 +2504,8 @@ router.post('/api/threads/:id/form-fill', requirePerson, express.json({ limit: '
     ].filter(Boolean).join('\n\n');
 
     try {
-        const { values } = await qFormFiller.extractFieldValues(fields, infoText, null);
-        res.json({ values: values || {} });
+        const { values, ask } = await qFormFiller.extractFieldValues(fields, infoText, null);
+        res.json({ values: values || {}, ask: ask || [] });
     } catch (e) {
         res.status(500).json({ error: e.message || 'Fill failed' });
     }

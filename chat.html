@@ -1436,6 +1436,10 @@
     </div>
     <button class="think-btn mode-toggle" id="check-btn" title="Check — Q reviews his own reply before sending (slower, catches mistakes)">Check</button>
     <button class="think-btn mode-toggle" id="aps-btn" type="button" aria-pressed="false" title="APS — A Problem Shared. Q switches into loophole-finder mode for fines, bills, disputes, letters that feel unfair.">APS</button>
+    <div class="thinking-picker" id="model-picker" role="group" aria-label="Model" style="margin-left:6px">
+      <button class="think-btn model-btn on" data-model="" title="DeepSeek V4 Pro — production model">V4</button>
+      <button class="think-btn model-btn" data-model="zai-org/GLM-5" title="GLM-5 744B — test model">GLM-5</button>
+    </div>
   </div>
   <div class="input-wrapper">
     <textarea id="input" rows="1"
@@ -1620,6 +1624,18 @@ function setThinkingLevel(level) {
 }
 $thinkBtns.forEach(b => b.addEventListener('click', () => setThinkingLevel(b.dataset.effort)));
 setThinkingLevel(thinkingLevel);
+
+// Model toggle — V4 Pro (default) vs GLM-5 test
+const MODEL_TEST_KEY = 'q-test-model-v1';
+const $modelBtns = document.querySelectorAll('.model-btn');
+let testModel = localStorage.getItem(MODEL_TEST_KEY) || '';
+function setTestModel(modelId) {
+  testModel = modelId;
+  localStorage.setItem(MODEL_TEST_KEY, modelId);
+  $modelBtns.forEach(b => b.classList.toggle('on', b.dataset.model === testModel));
+}
+$modelBtns.forEach(b => b.addEventListener('click', () => setTestModel(b.dataset.model)));
+setTestModel(testModel);
 
 // Verifier toggle (Check) — independent of Quick/Think/Deep
 const VERIFY_KEY = 'q-verify-v1';
@@ -2529,6 +2545,9 @@ async function send() {
     }
     if (apsOn) {
       body.mode = 'aps';
+    }
+    if (testModel) {
+      body.testModel = testModel;
     }
     const response = await fetch('/chat', {
       method: 'POST',
