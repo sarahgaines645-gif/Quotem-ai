@@ -143,7 +143,7 @@
   .ae-btn:hover:not(:disabled) { opacity: 0.9; }
 
   /* Chat surface — floating panel, QB-style */
-  .chat-card { background: var(--bg); border-radius: 18px; padding: 20px 22px 22px; box-shadow: var(--neu-raised); margin-top: 18px; border-top: 3px solid var(--accent); }
+  .chat-card { background: var(--bg); border-radius: 18px; padding: 20px 22px 22px; box-shadow: var(--neu-raised); margin-top: 18px; }
   .chat-thread { display: flex; flex-direction: column; gap: 14px; max-height: 70vh; overflow-y: auto; padding: 4px 0 14px; margin-bottom: 14px; scrollbar-width: none; -ms-overflow-style: none; overscroll-behavior: contain; }
   .chat-thread::-webkit-scrollbar { width: 0; height: 0; display: none; }
   .chat-msg { display: flex; gap: 10px; align-items: flex-start; }
@@ -173,7 +173,7 @@
   .note-save-btn:hover { color: var(--accent); }
   .note-save-btn:disabled { opacity: 0.5; cursor: not-allowed; }
   .chat-input-row { display: flex; gap: 10px; align-items: flex-end; }
-  .chat-input-row textarea { flex: 1; border: none; outline: none; resize: none; font-family: inherit; font-size: 14px; color: var(--text); background: var(--bg); padding: 12px 16px; border-radius: 12px; box-shadow: var(--neu-inset-sm); line-height: 1.5; min-height: 44px; max-height: 120px; }
+  .chat-input-row textarea { flex: 1; border: none; outline: none; resize: none; font-family: inherit; font-size: 14px; color: var(--text); background: var(--bg); padding: 12px 16px; border-radius: 12px; box-shadow: var(--neu-raised-sm); line-height: 1.5; min-height: 44px; max-height: 120px; }
   .chat-send { border: none; cursor: pointer; background: var(--accent); color: white; font-family: inherit; font-size: 14px; font-weight: 700; padding: 12px 22px; border-radius: 12px; box-shadow: var(--neu-raised-sm); flex-shrink: 0; }
   .chat-send:hover:not(:disabled) { opacity: 0.9; }
   .chat-send:disabled { opacity: 0.5; cursor: not-allowed; }
@@ -1044,6 +1044,7 @@ async function loadThread() {
   renderFiles();
   renderChat();
   refreshKickoffButton();
+  document.dispatchEvent(new CustomEvent('thread:loaded'));
 }
 
 // Show the "Q, take this case" button when there's content but Q hasn't spoken yet.
@@ -1297,6 +1298,7 @@ loadThread();
   bar.addEventListener('mousedown', (e) => { startDrag(e.clientX, e.clientY); e.preventDefault(); });
   document.addEventListener('mousemove', (e) => { moveDrag(e.clientX, e.clientY); });
   document.addEventListener('mouseup', endDrag);
+  document.addEventListener('thread:loaded', refreshCaseFiles);
   bar.addEventListener('touchstart', (e) => { const t = e.touches[0]; startDrag(t.clientX, t.clientY); e.preventDefault(); }, { passive: false });
   document.addEventListener('touchmove', (e) => { if (!_dragActive) return; const t = e.touches[0]; moveDrag(t.clientX, t.clientY); e.preventDefault(); }, { passive: false });
   document.addEventListener('touchend', endDrag);
