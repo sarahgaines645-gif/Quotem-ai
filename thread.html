@@ -367,7 +367,6 @@
   <header>
     <span class="logo-mark"><span class="q">Q</span><span class="dot"></span></span>
     <a href="/threads" class="header-back">← all threads</a>
-    <button id="delete-thread-btn" title="Delete this thread" style="margin-left:auto; background: transparent; border: 1px solid var(--text-faint); cursor: pointer; font-family: inherit; font-size: 12px; color: var(--text-faint); padding: 6px 12px; border-radius: 8px;">🗑 Delete</button>
   </header>
 
   <div class="title-card">
@@ -451,6 +450,11 @@
       <button id="ob-send-btn" class="note-save-btn" type="button">📤 Send now</button>
       <span id="outbox-status" style="font-size:12px;color:var(--text-muted);"></span>
     </div>
+  </div>
+
+  <!-- Delete thread — at the bottom, well away from normal workflow -->
+  <div style="margin-top:48px;padding-top:16px;border-top:1px solid var(--border-subtle);text-align:center;">
+    <button id="delete-thread-btn" style="background:transparent;border:1px solid var(--text-faint);cursor:pointer;font-family:inherit;font-size:12px;color:var(--text-faint);padding:6px 14px;border-radius:8px;">🗑 Delete this thread</button>
   </div>
 
   <!-- Delete confirmation modal -->
