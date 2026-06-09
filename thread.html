@@ -13,6 +13,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
 <script src="/marked.min.js"></script>
 <script src="/qrcode.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <style>
   :root {
     --bg: #e8e8e8; --text: #1a1a1a;
@@ -281,6 +282,66 @@
   .forms-btn:disabled { opacity: 0.45; cursor: not-allowed; }
   .forms-status { font-size: 12px; color: var(--text-muted); margin-top: 8px; font-style: italic; }
 
+  /* ── In-panel visual form viewer (ported from the plotter) ─────── */
+  .ff-nav { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+  .ff-nav .forms-btn { flex: 0 0 auto; padding: 6px 12px; font-size: 13px; }
+  .ff-page { font-size: 12px; color: var(--text-muted); flex: 1; text-align: center; }
+  .ff-stage {
+    background: var(--bg); box-shadow: var(--neu-inset-sm);
+    border-radius: 10px; padding: 8px; overflow: auto; max-height: 46vh;
+  }
+  .ff-holder { position: relative; display: inline-block; line-height: 0; max-width: 100%; }
+  #ff-canvas { display: block; max-width: 100%; height: auto; }
+  .ff-inputs { position: absolute; inset: 0; }
+  .pdf-input {
+    position: absolute; pointer-events: auto;
+    border: none; outline: none; background: rgba(233,30,99,0.10);
+    padding: 0 2px; margin: 0; box-sizing: border-box;
+    font-family: 'Space Grotesk', system-ui, sans-serif; color: #0a0a0a;
+    line-height: 1; cursor: text; transition: background 0.15s, box-shadow 0.15s;
+  }
+  .pdf-input:hover { background: rgba(233,30,99,0.16); }
+  .pdf-input:focus { background: rgba(255,255,255,0.9); box-shadow: 0 0 0 1.5px var(--accent); }
+  .pdf-input.q-filled { background: rgba(233,30,99,0.28); }
+  textarea.pdf-input { resize: none; line-height: 1.15; }
+  .pdf-input.sig-field {
+    cursor: pointer; display: flex; align-items: center; justify-content: center;
+    background: rgba(245,158,11,0.16); color: rgba(0,0,0,0.6);
+    font-size: 10px; font-weight: 700; padding: 0;
+  }
+  .pdf-input.sig-field:hover { background: rgba(245,158,11,0.30); }
+  .pdf-input.checkbox {
+    appearance: none; -webkit-appearance: none; cursor: pointer;
+    border: 1.5px solid rgba(0,0,0,0.5); border-radius: 2px;
+    background: rgba(255,255,255,0.5);
+  }
+  .pdf-input.checkbox:checked { background: var(--accent); border-color: var(--accent); }
+  .pdf-input.checkbox:checked::after {
+    content: '✓'; color: #fff; font-size: 70%;
+    display: flex; align-items: center; justify-content: center;
+    width: 100%; height: 100%; line-height: 1;
+  }
+  .ff-questions { margin-top: 12px; }
+  .ff-questions:empty { display: none; }
+  .ff-q-title { font-size: 12px; font-weight: 700; color: var(--text); margin-bottom: 8px; }
+  .ff-q-item { margin-bottom: 10px; }
+  .ff-q-q { font-size: 12px; color: var(--text-muted); margin-bottom: 4px; }
+  .ff-q-in {
+    width: 100%; box-sizing: border-box; border: none; outline: none;
+    background: var(--bg); box-shadow: var(--neu-inset-sm); border-radius: 8px;
+    padding: 8px 10px; font-family: inherit; font-size: 13px; color: var(--text);
+  }
+  .ff-q-item.done .ff-q-q { color: var(--text-faint); text-decoration: line-through; }
+  .ff-coach { margin-top: 14px; }
+  .ff-coach-in {
+    width: 100%; box-sizing: border-box; border: none; outline: none;
+    background: var(--bg); box-shadow: var(--neu-inset-sm); border-radius: 10px;
+    padding: 9px 12px; font-family: inherit; font-size: 13px; color: var(--text);
+  }
+  .ff-coach-in:focus { box-shadow: var(--neu-inset-sm), 0 0 0 1.5px var(--accent); }
+  .ff-coach-msg { font-size: 12px; color: var(--text-muted); margin-top: 6px; line-height: 1.4; }
+  .ff-coach-msg.thinking { color: var(--text-faint); font-style: italic; }
+
   /* Save-until modal */
   .remind-modal-bg { display: none; position: fixed; inset: 0; background: var(--bg); z-index: 200; align-items: center; justify-content: center; padding: 20px; }
   .remind-modal-bg.show { display: flex; }
@@ -366,6 +427,7 @@
     <div class="chat-input-row">
       <textarea id="chat-input" rows="1" placeholder="Talk to Q about this case — he sees everything in this thread…"></textarea>
       <button class="chat-deep" id="chat-deep" type="button" title="Deep think — Q reasons at maximum for a big or complex case. Slower, but sharper. Off = normal (still full reasoning).">🧠 Deep</button>
+      <button class="chat-deep" id="chat-glm" type="button" title="GLM-5 test — switch this thread to GLM-5 744B instead of V4 Pro">GLM-5</button>
       <button class="chat-send" id="chat-send">Send</button>
     </div>
   </div>
@@ -413,7 +475,31 @@
         📄 Drop a form PDF here<br><span style="font-size:11px;font-weight:400;margin-top:4px;display:block;">or click to choose a file</span>
         <input type="file" id="form-file-input" accept=".pdf,application/pdf" style="display:none">
       </div>
-      <div id="form-fields"></div>
+
+      <!-- Visual form viewer — the real form, fields editable in place -->
+      <div id="ff-viewer" style="display:none;">
+        <div class="ff-nav" id="ff-nav" style="display:none;">
+          <button class="forms-btn" id="ff-prev">←</button>
+          <span class="ff-page" id="ff-page">Page 1 / 1</span>
+          <button class="forms-btn" id="ff-next">→</button>
+        </div>
+        <div class="ff-stage" id="ff-stage">
+          <div class="ff-holder" id="ff-holder">
+            <canvas id="ff-canvas"></canvas>
+            <div class="ff-inputs" id="ff-inputs"></div>
+          </div>
+        </div>
+        <div class="forms-actions">
+          <button class="forms-btn primary" id="ff-fill">Q, fill from case</button>
+          <button class="forms-btn primary" id="ff-download">Download PDF</button>
+        </div>
+        <div class="ff-questions" id="ff-questions"></div>
+        <div class="ff-coach">
+          <input class="ff-coach-in" id="ff-coach-in" type="text" placeholder="Tell Q what to change — e.g. “put today’s date in”" autocomplete="off">
+          <div class="ff-coach-msg" id="ff-coach-msg"></div>
+        </div>
+      </div>
+
       <div id="forms-status" class="forms-status"></div>
     </div>
   </div>
@@ -464,6 +550,14 @@ let deepMode = false;
 $chatDeep.addEventListener('click', () => {
   deepMode = !deepMode;
   $chatDeep.classList.toggle('on', deepMode);
+});
+
+// GLM-5 model toggle — test GLM-5 744B against V4 Pro in this thread.
+const $chatGlm = document.getElementById('chat-glm');
+let threadTestModel = '';
+$chatGlm.addEventListener('click', () => {
+  threadTestModel = threadTestModel ? '' : 'zai-org/GLM-5';
+  $chatGlm.classList.toggle('on', !!threadTestModel);
 });
 
 // Save a pasted/typed note onto the case timeline. The textarea sits next
@@ -1310,7 +1404,7 @@ async function sendMessage() {
     const res = await fetch('/api/threads/' + threadId + '/chat', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ message: text, ...(deepMode && { reasoningEffort: 'max' }) }),
+      body: JSON.stringify({ message: text, ...(deepMode && { reasoningEffort: 'max' }), ...(threadTestModel && { testModel: threadTestModel }) }),
     });
     const json = await res.json();
     if (!res.ok) throw new Error(json.error || 'HTTP ' + res.status);
@@ -1343,16 +1437,56 @@ loadThread();
   const bar      = document.getElementById('forms-bar');
   const dropZone = document.getElementById('form-drop-zone');
   const fileInput = document.getElementById('form-file-input');
-  const fieldsEl = document.getElementById('form-fields');
   const statusEl = document.getElementById('forms-status');
   const caseFilesEl = document.getElementById('forms-case-files');
   const caseSelect  = document.getElementById('forms-case-select');
+  const viewer   = document.getElementById('ff-viewer');
+  const navEl    = document.getElementById('ff-nav');
+  const pageEl   = document.getElementById('ff-page');
+  const prevBtn  = document.getElementById('ff-prev');
+  const nextBtn  = document.getElementById('ff-next');
+  const canvas   = document.getElementById('ff-canvas');
+  const inputsEl = document.getElementById('ff-inputs');
+  const questionsEl = document.getElementById('ff-questions');
+  const fillBtn  = document.getElementById('ff-fill');
+  const dlBtn    = document.getElementById('ff-download');
+  const coachIn  = document.getElementById('ff-coach-in');
+  const coachMsg = document.getElementById('ff-coach-msg');
 
-  let _fields = [];       // [{name, label, context, type}] from the scan
-  let _formName = '';     // filename of the loaded form
-  let _step = 0;          // current field index in wizard
-  let _values = {};       // {index: value} answers from wizard
-  let _pdfBase64 = '';    // base64 of the currently loaded PDF (needed to fill + download)
+  pdfjsLib.GlobalWorkerOptions.workerSrc =
+    'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+  const RENDER_SCALE = 1.5;
+  const TYPE_LABEL = { Tx: 'text', Btn: 'checkbox', Sig: 'signature', Ch: 'choice' };
+
+  // The REAL form is read in the browser with pdf.js (getAnnotations gives the
+  // genuine AcroForm field names). The old path scanned with Gemini vision,
+  // which INVENTED field names — pdf-lib's getField(name) then threw on every
+  // one, so the download flattened blank boxes ("saves as it should look but
+  // with no text"). Reading the real names here is what makes the fill stick.
+  let _pdfDoc   = null;
+  let _formName = '';                 // filename of the loaded form
+  let _pdfBase64 = '';                // base64 of the loaded PDF (needed to fill + download)
+  let _fields   = [];                 // [{name, fieldType, page, rect, pageW, pageH}] — REAL fields
+  let _docText  = '';                 // full form text in reading order, for Q
+  let _currentPage = 1;
+  let _totalPages  = 1;
+  const _values = {};                 // { realFieldName: string|boolean } — single source of truth
+  const _labels = {};                 // { realFieldName: humanLabel } — best-effort
+
+  const esc = (s) => String(s == null ? '' : s)
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+
+  function resetViewer() {
+    _pdfDoc = null; _fields = []; _docText = ''; _currentPage = 1; _totalPages = 1;
+    Object.keys(_values).forEach(k => delete _values[k]);
+    Object.keys(_labels).forEach(k => delete _labels[k]);
+    viewer.style.display = 'none';
+    navEl.style.display = 'none';
+    inputsEl.innerHTML = '';
+    questionsEl.innerHTML = '';
+    coachMsg.textContent = '';
+    if (canvas.width) canvas.getContext('2d').clearRect(0, 0, canvas.width, canvas.height);
+  }
 
   // ── Populate dropdown from thread's PDF files ────────────────────
   function refreshCaseFiles() {
@@ -1372,7 +1506,7 @@ loadThread();
     const filename = caseSelect.value;
     if (!filename) return;
     statusEl.textContent = '⏳ Loading ' + filename + '…';
-    fieldsEl.innerHTML = '';
+    resetViewer();
     panel.classList.add('open');
     try {
       const r = await fetch('/api/threads/' + threadId + '/files/' + encodeURIComponent(filename));
@@ -1441,18 +1575,62 @@ loadThread();
   async function loadFormFromBase64(b64) {
     _pdfBase64 = b64;
     statusEl.textContent = '⏳ Reading form…';
-    fieldsEl.innerHTML = '';
+    resetViewer();
     try {
-      const r = await fetch('/api/threads/' + threadId + '/form-scan', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ pdfBase64: b64 }),
-      });
-      const data = await r.json();
-      if (!r.ok) throw new Error(data.error || 'Scan failed');
-      _fields = data.fields || [];
-      if (!_fields.length) { statusEl.textContent = '⚠️ No fillable fields found — is this a form?'; return; }
-      showReadyCTA();
+      // Decode base64 → bytes for pdf.js. getDocument() detaches the buffer,
+      // so keep _pdfBase64 (already set above) for the later /forms/fill call.
+      const bin = atob(b64);
+      const bytes = new Uint8Array(bin.length);
+      for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+
+      _pdfDoc = await pdfjsLib.getDocument({ data: bytes }).promise;
+      _totalPages = _pdfDoc.numPages;
+      _currentPage = 1;
+      _fields = [];
+      const docPages = [];
+
+      for (let p = 1; p <= _totalPages; p++) {
+        const page = await _pdfDoc.getPage(p);
+        const anns = await page.getAnnotations({ intent: 'display' });
+        const tc = await page.getTextContent();
+        const [,, pageW, pageH] = page.view;
+
+        const items = tc.items.map(it => ({
+          str: it.str, x: it.transform[4], y: it.transform[5], w: it.width || 0, h: it.height || 12,
+        }));
+        for (const ann of anns) {
+          if (ann.subtype !== 'Widget' || !ann.fieldType) continue;
+          const name = ann.fieldName || ('field_' + (_fields.length + 1));
+          _fields.push({ name, fieldType: ann.fieldType, page: p, rect: ann.rect, pageW, pageH });
+          items.push({ str: `[FIELD: ${name}]`, x: ann.rect[0], y: ann.rect[1], w: ann.rect[2]-ann.rect[0], h: ann.rect[3]-ann.rect[1] });
+        }
+
+        // Group into reading-order lines so Q reads the form with [FIELD: x] markers in place.
+        const buckets = new Map();
+        for (const it of items) {
+          const key = Math.round((it.y + it.h / 2) / 6);
+          if (!buckets.has(key)) buckets.set(key, { cy: it.y + it.h / 2, items: [] });
+          buckets.get(key).items.push(it);
+        }
+        const lines = Array.from(buckets.values()).sort((a, b) => b.cy - a.cy)
+          .map(l => { l.items.sort((a, b) => a.x - b.x); return l.items.map(i => i.str).join(' ').replace(/\s+/g, ' ').trim(); })
+          .filter(Boolean);
+        docPages.push(`--- PAGE ${p} ---\n${lines.join('\n')}`);
+        page.cleanup();
+      }
+      _docText = docPages.join('\n\n');
+
+      if (!_fields.length) {
+        statusEl.textContent = '⚠️ No fillable fields in this PDF — it may be a scan or printed form.';
+        return;
+      }
+      statusEl.textContent = '';
+      viewer.style.display = '';
+      navEl.style.display = _totalPages > 1 ? 'flex' : 'none';
+      panel.classList.add('open');
+      await renderPage(_currentPage);
+      // Auto-fill straight away from the case — Q fills what he knows.
+      autoFill();
     } catch (e) {
       statusEl.textContent = '⚠️ ' + (e.message || 'Could not read form');
     }
@@ -1461,7 +1639,7 @@ loadThread();
   async function loadForm(file) {
     _formName = file.name.replace(/\.pdf$/i, '');
     statusEl.textContent = '⏳ Reading form…';
-    fieldsEl.innerHTML = '';
+    resetViewer();
     panel.classList.add('open');
     try {
       const b64 = await fileToBase64(file);
@@ -1480,124 +1658,113 @@ loadThread();
     });
   }
 
-  // ── Wizard — Ready CTA ───────────────────────────────────────────
-  function showReadyCTA() {
-    statusEl.textContent = '';
-    fieldsEl.innerHTML = `<div style="text-align:center;padding:20px 0 8px;">
-      <div style="font-size:13px;color:var(--text-muted);line-height:1.6;margin-bottom:18px;">
-        Found <b style="color:var(--text)">${_fields.length} fields</b> in this form.<br>
-        Q will ask you one question at a time.<br>
-        He'll fill what he knows — you confirm.
-      </div>
-      <button class="forms-btn primary" id="forms-start" style="width:100%;font-size:14px;">Let's go →</button>
-    </div>`;
-    document.getElementById('forms-start').addEventListener('click', async () => {
-      _step = 0; _values = {};
-      document.getElementById('forms-start').disabled = true;
-      statusEl.textContent = '⏳ Q is reading the case…';
-      try {
-        const r = await fetch('/api/threads/' + threadId + '/form-fill', {
-          method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ fields: _fields }),
-        });
-        const data = await r.json();
-        if (r.ok && data.values) {
-          _fields.forEach((f, i) => {
-            const v = data.values[f.name];
-            if (v === undefined || v === null) return;
-            if (f.type === 'checkbox') {
-              // Checkbox answer: "true" ticks it. Keep it — the old filter threw
-              // every true/false away, so Q's ticked title was silently dropped.
-              // "false"/absent = unticked, which is not a gap, so leave it unset.
-              const truthy = (v === true || v === 'true' || v === 'yes' || v === '1');
-              if (truthy) _values[i] = 'true';
-            } else {
-              // Text field: drop the literal boolean sentinels, keep real values.
-              const s = String(v).trim();
-              if (s && s !== 'false' && s !== 'true') _values[i] = s;
-            }
-          });
-        }
-      } catch {}
-      statusEl.textContent = '';
-      stepThroughForm();
+  // ── Render the current page + editable overlays sitting on each field ──
+  async function renderPage(pageNum) {
+    if (!_pdfDoc) return;
+    const page = await _pdfDoc.getPage(pageNum);
+    const vp = page.getViewport({ scale: RENDER_SCALE });
+    canvas.width = vp.width; canvas.height = vp.height;
+    canvas.style.maxWidth = '100%'; canvas.style.height = 'auto';
+    const cx = canvas.getContext('2d');
+    cx.clearRect(0, 0, canvas.width, canvas.height);
+    await page.render({ canvasContext: cx, viewport: vp }).promise;
+    page.cleanup();
+
+    inputsEl.innerHTML = '';
+    const displayRatio = canvas.clientWidth ? (canvas.clientWidth / canvas.width) : 1;
+    const pageFields = _fields.filter(f => f.page === pageNum);
+    for (const f of pageFields) {
+      const [vx1, vy1] = vp.convertToViewportPoint(f.rect[0], f.rect[3]);
+      const [vx2, vy2] = vp.convertToViewportPoint(f.rect[2], f.rect[1]);
+      const x = Math.min(vx1, vx2), y = Math.min(vy1, vy2);
+      const w = Math.abs(vx2 - vx1), h = Math.abs(vy2 - vy1);
+
+      // Signature field — a tappable overlay that opens the sign pad.
+      if (f.fieldType === 'Sig') {
+        const sig = document.createElement('button');
+        sig.type = 'button';
+        sig.className = 'pdf-input sig-field';
+        sig.dataset.fieldName = f.name;
+        const signed = !!_values[f.name];
+        sig.textContent = signed ? '✓ signed' : '✍ sign';
+        sig.style.left   = (x / vp.width)  * 100 + '%';
+        sig.style.top    = (y / vp.height) * 100 + '%';
+        sig.style.width  = (w / vp.width)  * 100 + '%';
+        sig.style.height = (h / vp.height) * 100 + '%';
+        sig.addEventListener('click', () => openSigPad(f.name));
+        inputsEl.appendChild(sig);
+        continue;
+      }
+
+      const el = (f.fieldType === 'Btn') ? document.createElement('input')
+               : (h > 38 ? document.createElement('textarea') : document.createElement('input'));
+      el.className = 'pdf-input' + (f.fieldType === 'Btn' ? ' checkbox' : '');
+      el.dataset.fieldName = f.name;
+      el.dataset.canvasH = String(h);
+      el.title = _labels[f.name] || f.name;
+
+      if (f.fieldType === 'Btn') {
+        el.type = 'checkbox';
+        el.checked = !!_values[f.name];
+        el.addEventListener('change', () => { _values[f.name] = el.checked; });
+      } else {
+        if (el.tagName === 'INPUT') el.type = 'text';
+        el.value = _values[f.name] || '';
+        if (_labels[f.name]) el.placeholder = _labels[f.name];
+        el.addEventListener('input', () => { _values[f.name] = el.value; });
+      }
+
+      el.style.left   = (x / vp.width)  * 100 + '%';
+      el.style.top    = (y / vp.height) * 100 + '%';
+      el.style.width  = (w / vp.width)  * 100 + '%';
+      el.style.height = (h / vp.height) * 100 + '%';
+      // ~11pt body text renders to ~14 canvas px at 1.5x; cap so it fits the box.
+      let fontPx = 14 * displayRatio;
+      if (el.tagName === 'INPUT' && f.fieldType !== 'Btn') {
+        const fits = h * 0.75 * displayRatio;
+        if (fits < fontPx) fontPx = Math.max(8, fits);
+      }
+      el.style.fontSize = fontPx + 'px';
+      inputsEl.appendChild(el);
+    }
+    pageEl.textContent = 'Page ' + pageNum + ' / ' + _totalPages;
+    prevBtn.disabled = pageNum <= 1;
+    nextBtn.disabled = pageNum >= _totalPages;
+  }
+
+  prevBtn.addEventListener('click', async () => { if (_currentPage > 1) { _currentPage--; await renderPage(_currentPage); } });
+  nextBtn.addEventListener('click', async () => { if (_currentPage < _totalPages) { _currentPage++; await renderPage(_currentPage); } });
+
+  // Drop Q-extracted values into the single source of truth, then re-render so
+  // they show up in the inputs sitting on the PDF. Keyed by REAL field name.
+  function applyValues(values) {
+    for (const [name, v] of Object.entries(values || {})) {
+      const f = _fields.find(x => x.name === name);
+      if (!f) continue;
+      if (f.fieldType === 'Btn') {
+        _values[name] = (v === true || ['true','yes','1'].includes(String(v).toLowerCase()));
+      } else {
+        _values[name] = String(v ?? '');
+      }
+    }
+  }
+  function flashFilled(values) {
+    inputsEl.querySelectorAll('[data-field-name]').forEach(el => {
+      if (el.dataset.fieldName in (values || {})) {
+        el.classList.add('q-filled');
+        setTimeout(() => el.classList.remove('q-filled'), 2400);
+      }
     });
   }
 
-  // ── Review screen — pre-filled shown compact, gaps shown as inputs ───
-  function stepThroughForm() {
-    const filled = _fields.filter((_, i) => _values[i]);
-    const gaps   = _fields.map((f, i) => ({ f, i })).filter(({ i }) => !_values[i]);
-    const filledCount = filled.length;
-    const gapCount = gaps.length;
-
-    let html = '';
-
-    // Pre-filled summary
-    if (filledCount) {
-      html += `<div style="font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px;">Q filled (${filledCount})</div>`;
-      html += `<div style="display:flex;flex-direction:column;gap:4px;margin-bottom:16px;">`;
-      _fields.forEach((f, i) => {
-        if (!_values[i]) return;
-        html += `<div style="display:flex;gap:8px;align-items:baseline;">
-          <span style="font-size:11px;color:var(--text-muted);min-width:100px;flex-shrink:0;">${escapeHtml(f.label || f.name)}</span>
-          <input data-idx="${i}" class="ff-val-inp" type="text" value="${escapeHtml(_values[i])}" style="flex:1;border:none;outline:none;background:var(--bg);box-shadow:var(--neu-inset-sm);border-radius:7px;padding:5px 8px;font-size:12px;color:var(--text);">
-        </div>`;
-      });
-      html += `</div>`;
-    }
-
-    // Gaps to fill
-    if (gapCount) {
-      html += `<div style="font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px;">Still needed (${gapCount})</div>`;
-      html += `<div style="display:flex;flex-direction:column;gap:8px;margin-bottom:16px;">`;
-      gaps.forEach(({ f, i }) => {
-        const isLong = f.type === 'address' || f.type === 'textarea';
-        const isSig  = /sign/i.test(f.label || f.name || '');
-        html += `<div>
-          <div style="font-size:12px;color:var(--text-muted);margin-bottom:3px;">${escapeHtml(f.label || f.name)}</div>
-          ${isSig
-            ? `<button data-idx="${i}" class="ff-sig-btn forms-btn" style="width:100%;">✍ Tap to sign</button>`
-            : isLong
-              ? `<textarea data-idx="${i}" class="ff-val-inp" rows="2" style="width:100%;box-sizing:border-box;border:none;outline:none;background:var(--bg);box-shadow:var(--neu-inset-sm);border-radius:8px;padding:8px 10px;font-size:13px;color:var(--text);resize:vertical;"></textarea>`
-              : `<input data-idx="${i}" class="ff-val-inp" type="text" placeholder="type here…" style="width:100%;box-sizing:border-box;border:none;outline:none;background:var(--bg);box-shadow:var(--neu-inset-sm);border-radius:8px;padding:8px 10px;font-size:13px;color:var(--text);">`}
-        </div>`;
-      });
-      html += `</div>`;
-    }
-
-    html += `<div class="forms-actions"><button class="forms-btn primary" id="ff-done-review">Fill the form ✓</button></div>`;
-    fieldsEl.innerHTML = html;
-
-    // Sync all inputs back to _values on change
-    fieldsEl.querySelectorAll('.ff-val-inp').forEach(inp => {
-      inp.addEventListener('input', () => { _values[parseInt(inp.dataset.idx)] = inp.value.trim(); });
-    });
-
-    // Signature buttons
-    fieldsEl.querySelectorAll('.ff-sig-btn').forEach(btn => {
-      btn.addEventListener('click', () => openSigPad(parseInt(btn.dataset.idx), btn));
-    });
-
-    document.getElementById('ff-done-review').addEventListener('click', () => {
-      // Capture any remaining edits
-      fieldsEl.querySelectorAll('.ff-val-inp').forEach(inp => { _values[parseInt(inp.dataset.idx)] = inp.value.trim(); });
-      showComplete();
-    });
-
-    // Focus first gap input if any
-    const firstGap = fieldsEl.querySelector('[placeholder="type here…"]') || fieldsEl.querySelector('textarea[data-idx]');
-    if (firstGap) firstGap.focus();
-  }
-
-  // ── Signature pad ──────────────────────────────────────────────────
-  function openSigPad(idx, triggerBtn) {
-    const existing = document.getElementById('sig-pad-overlay');
-    if (existing) existing.remove();
-
+  // ── Signature pad — type a name or draw it. Typed → drawn as text on the
+  // signature field; drawn → embedded as a PNG image (server handles both). ──
+  function openSigPad(fieldName) {
+    const old = document.getElementById('sig-pad-overlay');
+    if (old) old.remove();
     const ov = document.createElement('div');
     ov.id = 'sig-pad-overlay';
-    ov.style.cssText = 'position:fixed;inset:0;z-index:900;display:flex;align-items:flex-end;justify-content:center;padding:16px;';
+    ov.style.cssText = 'position:fixed;inset:0;z-index:900;display:flex;align-items:center;justify-content:center;padding:16px;background:var(--bg);';
     ov.innerHTML = `
       <div style="background:var(--bg);box-shadow:var(--neu-raised);border-radius:18px;padding:20px;width:100%;max-width:420px;">
         <div style="font-size:14px;font-weight:700;color:var(--text);margin-bottom:12px;">✍ Your signature</div>
@@ -1607,10 +1774,9 @@ loadThread();
         </div>
         <div id="sig-type-panel">
           <input id="sig-type-in" type="text" placeholder="Type your name…" style="width:100%;box-sizing:border-box;border:none;outline:none;background:var(--bg);box-shadow:var(--neu-inset-sm);border-radius:10px;padding:10px 12px;font-size:22px;font-family:'Brush Script MT',cursive;color:var(--text);">
-          <div id="sig-type-preview" style="min-height:44px;font-size:28px;font-family:'Brush Script MT',cursive;color:var(--text);padding:8px 4px;text-align:center;"></div>
         </div>
         <div id="sig-draw-panel" style="display:none;">
-          <canvas id="sig-canvas" width="360" height="120" style="width:100%;height:120px;border-radius:10px;box-shadow:var(--neu-inset-sm);background:var(--bg);touch-action:none;cursor:crosshair;"></canvas>
+          <canvas id="sig-canvas" width="360" height="120" style="width:100%;height:120px;border-radius:10px;box-shadow:var(--neu-inset-sm);background:#fff;touch-action:none;cursor:crosshair;"></canvas>
           <button id="sig-clear" class="forms-btn" style="margin-top:6px;font-size:11px;width:100%;">Clear</button>
         </div>
         <div style="display:flex;gap:8px;margin-top:14px;">
@@ -1620,116 +1786,169 @@ loadThread();
       </div>`;
     document.body.appendChild(ov);
 
-    const typePanel = document.getElementById('sig-type-panel');
-    const drawPanel = document.getElementById('sig-draw-panel');
-    const typeIn    = document.getElementById('sig-type-in');
-    const typePreview = document.getElementById('sig-type-preview');
-    const canvas    = document.getElementById('sig-canvas');
-    const ctx       = canvas.getContext('2d');
-    let drawing = false, mode = 'type';
-
-    typeIn.addEventListener('input', () => { typePreview.textContent = typeIn.value; });
+    const typePanel = ov.querySelector('#sig-type-panel');
+    const drawPanel = ov.querySelector('#sig-draw-panel');
+    const typeIn    = ov.querySelector('#sig-type-in');
+    const sc        = ov.querySelector('#sig-canvas');
+    const sctx      = sc.getContext('2d');
+    sctx.fillStyle = '#fff'; sctx.fillRect(0, 0, sc.width, sc.height);
+    sctx.strokeStyle = '#0a0a0a'; sctx.lineWidth = 2; sctx.lineCap = 'round';
+    let drawing = false, mode = 'type', hasDrawn = false;
     typeIn.focus();
 
-    document.getElementById('sig-tab-type').addEventListener('click', () => {
+    ov.querySelector('#sig-tab-type').addEventListener('click', () => {
       mode = 'type'; typePanel.style.display = ''; drawPanel.style.display = 'none';
-      document.getElementById('sig-tab-type').classList.add('primary');
-      document.getElementById('sig-tab-draw').classList.remove('primary');
+      ov.querySelector('#sig-tab-type').classList.add('primary');
+      ov.querySelector('#sig-tab-draw').classList.remove('primary');
     });
-    document.getElementById('sig-tab-draw').addEventListener('click', () => {
+    ov.querySelector('#sig-tab-draw').addEventListener('click', () => {
       mode = 'draw'; typePanel.style.display = 'none'; drawPanel.style.display = '';
-      document.getElementById('sig-tab-draw').classList.add('primary');
-      document.getElementById('sig-tab-type').classList.remove('primary');
-      ctx.strokeStyle = getComputedStyle(document.documentElement).getPropertyValue('--text') || '#000';
-      ctx.lineWidth = 2; ctx.lineCap = 'round';
+      ov.querySelector('#sig-tab-draw').classList.add('primary');
+      ov.querySelector('#sig-tab-type').classList.remove('primary');
     });
-
-    function getPos(e) {
-      const r = canvas.getBoundingClientRect();
-      const src = e.touches ? e.touches[0] : e;
-      return { x: (src.clientX - r.left) * (canvas.width / r.width), y: (src.clientY - r.top) * (canvas.height / r.height) };
+    function pos(e) {
+      const r = sc.getBoundingClientRect(); const s = e.touches ? e.touches[0] : e;
+      return { x: (s.clientX - r.left) * (sc.width / r.width), y: (s.clientY - r.top) * (sc.height / r.height) };
     }
-    canvas.addEventListener('pointerdown', (e) => { drawing = true; ctx.beginPath(); const p = getPos(e); ctx.moveTo(p.x, p.y); e.preventDefault(); });
-    canvas.addEventListener('pointermove', (e) => { if (!drawing) return; const p = getPos(e); ctx.lineTo(p.x, p.y); ctx.stroke(); e.preventDefault(); });
-    canvas.addEventListener('pointerup', () => { drawing = false; });
-    document.getElementById('sig-clear').addEventListener('click', () => { ctx.clearRect(0, 0, canvas.width, canvas.height); });
-
-    document.getElementById('sig-cancel').addEventListener('click', () => ov.remove());
-    document.getElementById('sig-confirm').addEventListener('click', () => {
-      let val;
-      if (mode === 'type') {
-        val = typeIn.value.trim();
-      } else {
-        val = canvas.toDataURL('image/png');
-      }
-      if (val) {
-        _values[idx] = val;
-        if (triggerBtn) { triggerBtn.textContent = mode === 'type' ? '✍ ' + val : '✍ Signed ✓'; triggerBtn.style.color = 'var(--accent)'; }
-      }
+    sc.addEventListener('pointerdown', (e) => { drawing = true; hasDrawn = true; sctx.beginPath(); const p = pos(e); sctx.moveTo(p.x, p.y); e.preventDefault(); });
+    sc.addEventListener('pointermove', (e) => { if (!drawing) return; const p = pos(e); sctx.lineTo(p.x, p.y); sctx.stroke(); e.preventDefault(); });
+    sc.addEventListener('pointerup', () => { drawing = false; });
+    ov.querySelector('#sig-clear').addEventListener('click', () => { sctx.fillStyle = '#fff'; sctx.fillRect(0, 0, sc.width, sc.height); sctx.strokeStyle = '#0a0a0a'; hasDrawn = false; });
+    ov.querySelector('#sig-cancel').addEventListener('click', () => ov.remove());
+    ov.querySelector('#sig-confirm').addEventListener('click', async () => {
+      let val = '';
+      if (mode === 'type') val = typeIn.value.trim();
+      else if (hasDrawn) val = sc.toDataURL('image/png');
+      if (val) { _values[fieldName] = val; await renderPage(_currentPage); flashFilled({ [fieldName]: val }); }
       ov.remove();
     });
   }
 
-  function toQuestion(label) {
-    const l = label.trim();
-    if (l.endsWith('?')) return l;
-    const lc = l.charAt(0).toLowerCase() + l.slice(1);
-    return 'What\'s the ' + lc + '?';
+  // ── Auto-fill from the case — Q fills what he can, asks for the rest ──
+  async function autoFill() {
+    if (!_fields.length) return;
+    fillBtn.disabled = true;
+    statusEl.textContent = '⏳ Q is reading the case…';
+    try {
+      const fields = _fields.map(f => ({
+        name: f.name, type: TYPE_LABEL[f.fieldType] || 'text', page: f.page, label: _labels[f.name] || '',
+      }));
+      const r = await fetch('/api/threads/' + threadId + '/form-fill', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ fields }),
+      });
+      const data = await r.json();
+      if (!r.ok) throw new Error(data.error || 'Fill failed');
+      applyValues(data.values || {});
+      await renderPage(_currentPage);
+      flashFilled(data.values || {});
+      renderQuestions(data.ask || []);
+      const n = Object.keys(data.values || {}).length;
+      const q = (data.ask || []).length;
+      statusEl.textContent = n
+        ? `✅ Q filled ${n} field${n === 1 ? '' : 's'}` + (q ? ` — ${q} need${q === 1 ? 's' : ''} you below.` : ' — edit anything, then download.')
+        : 'Q couldn’t fill from the case — type into the form or tell Q below.';
+    } catch (e) {
+      statusEl.textContent = '⚠️ ' + (e.message || 'Fill failed');
+    } finally {
+      fillBtn.disabled = false;
+    }
+  }
+  fillBtn.addEventListener('click', autoFill);
+
+  // Q flagged these as gaps — answering one drops it straight onto the form.
+  function renderQuestions(ask) {
+    questionsEl.innerHTML = '';
+    const items = (ask || []).filter(q => q && q.field && q.question && _fields.some(f => f.name === q.field));
+    if (!items.length) return;
+    const title = document.createElement('div');
+    title.className = 'ff-q-title';
+    title.textContent = "A few I couldn’t fill — tell me and I’ll drop them in:";
+    questionsEl.appendChild(title);
+    for (const q of items) {
+      const row = document.createElement('div'); row.className = 'ff-q-item';
+      const qEl = document.createElement('div'); qEl.className = 'ff-q-q'; qEl.textContent = q.question;
+      const inp = document.createElement('input'); inp.type = 'text'; inp.className = 'ff-q-in'; inp.placeholder = 'Type the answer…';
+      const apply = async () => {
+        const v = inp.value.trim();
+        if (!v || row.classList.contains('done')) return;
+        applyValues({ [q.field]: v });
+        await renderPage(_currentPage);
+        flashFilled({ [q.field]: v });
+        row.classList.add('done'); inp.disabled = true;
+      };
+      inp.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); apply(); } });
+      inp.addEventListener('blur', apply);
+      row.appendChild(qEl); row.appendChild(inp); questionsEl.appendChild(row);
+    }
   }
 
-  function showComplete() {
-    const filled = Object.values(_values).filter(v => v).length;
-    statusEl.textContent = '';
-    fieldsEl.innerHTML = `<div style="text-align:center;padding:16px 0 4px;">
-      <div style="font-size:28px;margin-bottom:6px;">✅</div>
-      <div style="font-size:14px;font-weight:700;color:var(--text);margin-bottom:4px;">${filled} of ${_fields.length} filled</div>
-      <div style="font-size:12px;color:var(--text-muted);margin-bottom:18px;">Download the answers or copy and paste them.</div>
-      <div class="forms-actions" style="flex-wrap:wrap;">
-        <button class="forms-btn" id="ff-review">← Review</button>
-        <button class="forms-btn" id="ff-copy-done">Copy</button>
-        <button class="forms-btn primary" id="ff-dl-done">Download</button>
-      </div>
-    </div>`;
-    document.getElementById('ff-review').addEventListener('click', () => { _step = 0; stepThroughForm(); });
-    document.getElementById('ff-copy-done').addEventListener('click', copyForm);
-    document.getElementById('ff-dl-done').addEventListener('click', downloadForm);
+  // ── Q coach — tell him what to change, he edits the form live ──
+  // Same mechanism as the form-filler page: Q replies with a ```form-update```
+  // JSON block keyed by real field name; we apply it and re-render. Uses the
+  // 'forms' surface so it stays on V4-Pro (cheap), NOT the Claude case path.
+  async function askCoach(userText) {
+    let context = '[Q Forms — filling a PDF inside this case thread]\n';
+    if (_docText) context += 'FORM TEXT:\n' + _docText + '\n\n';
+    if (_fields.length) {
+      const lines = _fields.map(f => {
+        const v = _values[f.name];
+        const vs = (v === true) ? 'CHECKED' : (v === false || v === undefined || v === '') ? '(empty)' : String(v);
+        const lbl = _labels[f.name] ? ` [${_labels[f.name]}]` : '';
+        return `[p${f.page}] "${f.name}"${lbl} = ${vs}`;
+      });
+      context += `FIELDS (${_fields.length}):\n` + lines.join('\n') + '\n\n';
+    }
+    context += 'To change a field, reply with a ```form-update``` block of {"realFieldName": value}. ' +
+               'Use the exact field names above. For a checkbox use true.\n\n';
+    coachMsg.classList.add('thinking');
+    coachMsg.textContent = 'thinking…';
+    try {
+      const r = await fetch('/chat', {
+        method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: context + userText, surface: 'forms' }),
+      });
+      const data = await r.json().catch(() => ({}));
+      coachMsg.classList.remove('thinking');
+      let reply = (data.reply || data.error || 'Q went quiet — try again.').toString();
+      const m = reply.match(/```form-update\s*([\s\S]*?)```/i);
+      if (m) {
+        try { applyValues(JSON.parse(m[1].trim())); await renderPage(_currentPage); flashFilled(JSON.parse(m[1].trim())); }
+        catch (err) { console.warn('[forms] bad form-update:', err.message); }
+        reply = reply.replace(/```form-update[\s\S]*?```/i, '').trim();
+      }
+      coachMsg.textContent = reply || '(form updated)';
+    } catch {
+      coachMsg.classList.remove('thinking');
+      coachMsg.textContent = 'Network blip — try again.';
+    }
   }
+  coachIn.addEventListener('keydown', ev => {
+    if (ev.key !== 'Enter') return;
+    const t = coachIn.value.trim();
+    if (!t) return;
+    coachIn.value = '';
+    askCoach(t);
+  });
 
-  // ── Collect + export ─────────────────────────────────────────────
-  function collectText() {
-    if (!_fields.length) return '';
-    const title = _formName || 'Form';
-    const lines = [title, '='.repeat(title.length), ''];
-    _fields.forEach((f, i) => {
-      lines.push((f.label || f.name) + ':');
-      lines.push(_values[i] || '');
-      lines.push('');
-    });
-    return lines.join('\n');
-  }
-
-  function copyForm() {
-    const text = collectText();
-    if (!text) return;
-    navigator.clipboard.writeText(text)
-      .then(() => { statusEl.textContent = '✅ Copied.'; })
-      .catch(() => { statusEl.textContent = '⚠️ Copy failed.'; });
-  }
-
-  async function downloadForm() {
+  // ── Download — write the REAL-name values into the PDF (now they stick) ──
+  dlBtn.addEventListener('click', async () => {
     if (!_pdfBase64) { statusEl.textContent = '⚠️ No form loaded.'; return; }
-    // Build name-keyed values for the server
-    const namedValues = {};
-    _fields.forEach((f, i) => { if (_values[i]) namedValues[f.name] = _values[i]; });
-    if (!Object.keys(namedValues).length) { statusEl.textContent = '⚠️ No values to fill.'; return; }
-    statusEl.textContent = '⏳ Filling PDF…';
+    const values = {};
+    for (const [k, v] of Object.entries(_values)) {
+      if (typeof v === 'boolean') { if (v) values[k] = true; }
+      else if (v && String(v).trim()) values[k] = String(v).trim();
+    }
+    if (!Object.keys(values).length) { statusEl.textContent = '⚠️ Nothing filled in yet.'; return; }
+    dlBtn.disabled = true;
+    statusEl.textContent = '⏳ Writing PDF…';
     try {
       const r = await fetch('/forms/fill', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ pdfBase64: _pdfBase64, values: namedValues }),
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ pdfBase64: _pdfBase64, values }),
       });
-      if (!r.ok) { const d = await r.json(); throw new Error(d.error || 'Fill failed'); }
+      if (!r.ok) { const d = await r.json().catch(() => ({})); throw new Error(d.error || 'Fill failed'); }
+      const filled = r.headers.get('X-Fields-Filled') || '?';
       const blob = await r.blob();
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
@@ -1737,11 +1956,13 @@ loadThread();
       a.download = (_formName || 'form').replace(/[^a-z0-9]+/gi, '-') + '-filled.pdf';
       a.click();
       URL.revokeObjectURL(url);
-      statusEl.textContent = '✅ Downloaded filled PDF.';
+      statusEl.textContent = `✅ Downloaded — ${filled} field${filled === '1' ? '' : 's'} filled.`;
     } catch (e) {
       statusEl.textContent = '⚠️ ' + e.message;
+    } finally {
+      dlBtn.disabled = false;
     }
-  }
+  });
 })();
 
 // ── Outbox for this case (emails ready to send later) ──

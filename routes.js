@@ -2343,7 +2343,8 @@ router.post('/api/threads/:id/chat', requirePerson, express.json({ limit: '256kb
         // 'high' + large case context caused Together to hang silently for 60+ min.
         // Normal turns use 'low' (fast, still full tool-call support); Deep = 'high'.
         const tEffort = (req.body?.reasoningEffort === 'max') ? 'high' : 'low';
-        const qOpts = { useTools: true, mode: 'aps', surface: 'thread', advocate: true, person: req.person, reasoningEffort: tEffort, threadId: req.params.id };
+        const tTestModel = req.body?.testModel || undefined;
+        const qOpts = { useTools: true, mode: 'aps', surface: 'thread', advocate: true, person: req.person, reasoningEffort: tEffort, threadId: req.params.id, ...(tTestModel && { model: tTestModel }) };
         // Photos are now read to text above and spliced into `messages`, so the
         // turn stays a normal history-aware Claude turn (no isolated vision call,
         // no looping). PDFs are still handed to Claude natively to read directly.
