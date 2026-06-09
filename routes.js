@@ -2461,54 +2461,59 @@ router.post('/api/threads/:id/form-fill', requirePerson, express.json({ limit: '
     const fields = req.body?.fields;
     if (!Array.isArray(fields) || !fields.length) return res.status(400).json({ error: 'fields array required' });
 
-    // Pull already-extracted file text from the cache — if Q has read the
-    // PCN letter or any attachment during this session it's already there.
-    const fileParts = [];
-    for (const f of (t.files || [])) {
-        const cacheKey = `${t.id}:${f.filename}`;
-        const cached = _threadDocCache.get(cacheKey);
-        if (cached) fileParts.push(`[File: ${f.filename}]\n${cached.slice(0, 2000)}`);
-    }
-    // Include last 20 chat messages — case details (PCN, VRM, dates) live here.
-    const chatParts = (t.chatHistory || [])
-        .filter(m => m.role === 'assistant' || m.role === 'user')
-        .slice(-20)
-        .map(m => `[${m.role === 'user' ? 'User' : 'Q'}]: ${String(m.content || '').slice(0, 600)}`)
-        .join('\n');
-    // WHO IS FILLING THIS FORM. Without this, the form-filler sees several names
-    // in the letters (the applicant, the council, an enforcement officer) and the
-    // "never guess which person" rule makes it ASK instead of filling the name/
-    // title/contact fields — they land in "Still needed". Naming the applicant up
-    // front removes that ambiguity: these fields are about HER. Stored facts add
-    // anything Q has remembered (address, full title) so those fill too.
-    const factLines = listFacts({ limit: 50 }, req.person.id)
-        .map(f => `- ${f.content}`)
-        .join('\n');
-    const applicant = [
-        'THE PERSON FILLING IN THIS FORM (the applicant). Any field asking for the',
-        "applicant's / claimant's / your name, title, signature, email, address or",
-        'contact details is about THIS person — fill it from here, do not ask:',
-        req.person.name ? `Name: ${req.person.name}` : '',
-        req.person.email ? `Email: ${req.person.email}` : '',
-        factLines ? `Known about this person:\n${factLines}` : '',
-    ].filter(Boolean).join('\n');
-    const infoText = [
-        applicant,
-        t.title ? `Case: ${t.title}` : '',
-        (t.emails || []).map(e => {
-            const dir = e.type === 'in' ? 'Received' : e.type === 'draft' ? 'Draft' : 'Sent';
-            return `[${dir} — ${e.subject || ''}]\n${(e.body || '').slice(0, 1200)}`;
-        }).join('\n\n'),
-        (t.notes || []).map(n => n.text || '').join('\n'),
-        ...fileParts,
-        chatParts ? `[Chat history]\n${chatParts}` : '',
-    ].filter(Boolean).join('\n\n');
-
+    // Everything below MUST stay inside try/catch. Building infoText touches
+    // listFacts + several thread arrays; a throw out here would reject the async
+    // handler, which Express 4 does NOT catch → unhandledRejection → the process
+    // crashes and Railway returns 502 (the symptom Sarah hit). Keep it contained.
     try {
+        // Pull already-extracted file text from the cache — if Q has read the
+        // PCN letter or any attachment during this session it's already there.
+        const fileParts = [];
+        for (const f of (t.files || [])) {
+            const cacheKey = `${t.id}:${f.filename}`;
+            const cached = _threadDocCache.get(cacheKey);
+            if (cached) fileParts.push(`[File: ${f.filename}]\n${cached.slice(0, 2000)}`);
+        }
+        // Include last 20 chat messages — case details (PCN, VRM, dates) live here.
+        const chatParts = (t.chatHistory || [])
+            .filter(m => m.role === 'assistant' || m.role === 'user')
+            .slice(-20)
+            .map(m => `[${m.role === 'user' ? 'User' : 'Q'}]: ${String(m.content || '').slice(0, 600)}`)
+            .join('\n');
+        // WHO IS FILLING THIS FORM. Without this, the form-filler sees several names
+        // in the letters (the applicant, the council, an enforcement officer) and the
+        // "never guess which person" rule makes it ASK instead of filling the name/
+        // title/contact fields — they land in "Still needed". Naming the applicant up
+        // front removes that ambiguity: these fields are about HER. Stored facts add
+        // anything Q has remembered (address, full title) so those fill too.
+        const factLines = (listFacts({ limit: 50 }, req.person.id) || [])
+            .map(f => `- ${f.content}`)
+            .join('\n');
+        const applicant = [
+            'THE PERSON FILLING IN THIS FORM (the applicant). Any field asking for the',
+            "applicant's / claimant's / your name, title, signature, email, address or",
+            'contact details is about THIS person — fill it from here, do not ask:',
+            req.person.name ? `Name: ${req.person.name}` : '',
+            req.person.email ? `Email: ${req.person.email}` : '',
+            factLines ? `Known about this person:\n${factLines}` : '',
+        ].filter(Boolean).join('\n');
+        const infoText = [
+            applicant,
+            t.title ? `Case: ${t.title}` : '',
+            (t.emails || []).map(e => {
+                const dir = e.type === 'in' ? 'Received' : e.type === 'draft' ? 'Draft' : 'Sent';
+                return `[${dir} — ${e.subject || ''}]\n${(e.body || '').slice(0, 1200)}`;
+            }).join('\n\n'),
+            (t.notes || []).map(n => n.text || '').join('\n'),
+            ...fileParts,
+            chatParts ? `[Chat history]\n${chatParts}` : '',
+        ].filter(Boolean).join('\n\n');
+
         const { values, ask } = await qFormFiller.extractFieldValues(fields, infoText, null);
         res.json({ values: values || {}, ask: ask || [] });
     } catch (e) {
-        res.status(500).json({ error: e.message || 'Fill failed' });
+        console.error('[form-fill]', e && e.message, e && e.stack);
+        res.status(500).json({ error: (e && e.message) || 'Fill failed' });
     }
 });
 

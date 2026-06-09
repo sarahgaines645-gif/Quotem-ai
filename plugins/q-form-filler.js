@@ -142,14 +142,27 @@ ${infoText || '(none)'}`;
     };
     // Vision path streams; text path relies on the strict system prompt for JSON output.
 
-    const response = await fetch(`${Q_CONFIG.baseURL}/chat/completions`, {
-        method: 'POST',
-        headers: {
-            'Authorization': `Bearer ${Q_CONFIG.apiKey}`,
-            'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(body),
-    });
+    // Hard timeout — a hung upstream must not wedge the request into a gateway
+    // 502. On abort we throw a clean message the route turns into a 500 + JSON.
+    const ac = new AbortController();
+    const timer = setTimeout(() => ac.abort(), 55000);
+    let response;
+    try {
+        response = await fetch(`${Q_CONFIG.baseURL}/chat/completions`, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${Q_CONFIG.apiKey}`,
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(body),
+            signal: ac.signal,
+        });
+    } catch (e) {
+        if (e.name === 'AbortError') throw new Error('Q took too long reading the case — try again.');
+        throw e;
+    } finally {
+        clearTimeout(timer);
+    }
 
     if (!response.ok) {
         const err = await response.text();
