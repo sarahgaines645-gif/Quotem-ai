@@ -131,6 +131,22 @@ const TOOL_DEFINITIONS = [
     {
         type: 'function',
         function: {
+            name: 'fetch_form',
+            description: 'Download an official government or court form (PDF) directly from GOV.UK or another authoritative source and save it into this Thread\'s Files so the user can fill it in using the Forms panel. Use this whenever the user needs a specific form (e.g. TE7, TE9, N1, ET1, TEN, statutory declaration). First use web_search to find the direct PDF download URL on the official site, then call this tool with that URL. After it saves, tell the user: "I\'ve downloaded [form name] — it\'s in your Files. Open the Forms panel (top right) and pick it from the dropdown to fill it in."',
+            parameters: {
+                type: 'object',
+                properties: {
+                    url:      { type: 'string', description: 'Direct https:// URL to the PDF form. Must be a real GOV.UK or court service URL — never fabricate.' },
+                    filename: { type: 'string', description: 'Friendly filename to save it as, e.g. "TE7-representations.pdf". If omitted, derived from the URL.' },
+                    note:     { type: 'string', description: 'One-line note about what this form is for (e.g. "TE7 — formal representations against a PCN"). Shown in the Files list.' },
+                },
+                required: ['url'],
+            },
+        },
+    },
+    {
+        type: 'function',
+        function: {
             name: 'web_search',
             description: 'Search the live web for current information. Use this for news, facts, prices, or anything that may have changed since your training. Returns the most relevant results from across the web.',
             parameters: {
@@ -1163,6 +1179,42 @@ async function analyzeDocument({ image_url, question }) {
     }
 }
 
+// Fetch a form PDF from a URL and save it to the thread.
+async function fetchFormTool(args, personEmail, threadId) {
+    const { url, filename, note } = args || {};
+    if (!url || !/^https?:\/\//i.test(url)) return { error: 'A valid https:// URL is required.' };
+    if (!threadId) return { error: 'This tool only works inside a Thread.' };
+    try {
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 15000);
+        const resp = await fetch(url, { signal: controller.signal, headers: { 'User-Agent': 'Mozilla/5.0' } });
+        clearTimeout(timeout);
+        if (!resp.ok) return { error: `Could not download the form — the server returned ${resp.status}. Try a different URL.` };
+        const ct = (resp.headers.get('content-type') || '').split(';')[0].trim() || 'application/pdf';
+        const buf = Buffer.from(await resp.arrayBuffer());
+        let name = filename || '';
+        if (!name) {
+            const cd = resp.headers.get('content-disposition') || '';
+            const m = cd.match(/filename\*?=(?:UTF-8'')?["']?([^"';\n]+)/i);
+            name = m ? decodeURIComponent(m[1].trim()) : (url.split('?')[0].split('/').filter(Boolean).pop() || 'form.pdf');
+            if (!name.includes('.') && ct.includes('pdf')) name += '.pdf';
+        }
+        const base64 = buf.toString('base64');
+        const qThreads = require('./q-threads');
+        const updated = qThreads.addFile(threadId, { filename: name, mimeType: ct, base64 }, personEmail);
+        if (!updated) return { error: 'Could not save the form to this thread.' };
+        if (note) qThreads.addNote(threadId, { content: `📋 ${note}`, kind: 'form-note' }, personEmail);
+        return {
+            ok: true,
+            filename: name,
+            sizeKb: Math.round(buf.length / 1024),
+            instruction_for_q: `Form saved as "${name}" (${Math.round(buf.length / 1024)} KB). Tell the user it is now in their Files section. They should open the Forms panel (top right of the thread page) and select it from the dropdown to fill it in. Briefly explain what fields they will need to complete based on what you know about the case.`,
+        };
+    } catch (e) {
+        return { error: e.name === 'AbortError' ? 'Timed out — the form server did not respond in time.' : `Download failed: ${e.message}` };
+    }
+}
+
 // ─────────────────────────────────────────────────────────────
 //  DISPATCHER
 // ─────────────────────────────────────────────────────────────
@@ -1218,7 +1270,7 @@ async function sendEmailTool(args, personEmail) {
     }
 }
 
-async function executeTool(name, argsRaw, personId, personEmail) {
+async function executeTool(name, argsRaw, personId, personEmail, threadId) {
     let args = argsRaw;
     if (typeof argsRaw === 'string') {
         try { args = JSON.parse(argsRaw); }
@@ -1273,6 +1325,7 @@ async function executeTool(name, argsRaw, personId, personEmail) {
         case 'update_life_context':  return updateLifeContextTool(args, personEmail);
         case 'send_email':           return await sendEmailTool(args, personEmail);
         case 'save_email_draft':     return saveEmailDraftTool(args, personEmail);
+        case 'fetch_form':           return await fetchFormTool(args, personEmail, threadId);
         default:                 return { error: `Unknown tool: "${name}"` };
     }
 }
@@ -1872,7 +1925,7 @@ const ALWAYS_ON = new Set([
 // guessed — and current_datetime anchors "how long ago / to today".
 const ADVOCATE_TOOLS = new Set([
     'web_search', 'search_images', 'street_view', 'create_document',
-    'calculator', 'current_datetime',
+    'calculator', 'current_datetime', 'fetch_form',
 ]);
 
 const TRIGGERS = {

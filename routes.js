@@ -2031,6 +2031,52 @@ router.delete('/api/threads/:id/files/:filename', requirePerson, (req, res) => {
     res.json(updated);
 });
 
+router.patch('/api/threads/:id/files/:filename/rename', requirePerson, express.json({ limit: '4kb' }), (req, res) => {
+    const { newName } = req.body || {};
+    if (!newName || typeof newName !== 'string' || !newName.trim()) {
+        return res.status(400).json({ error: 'newName required' });
+    }
+    const updated = qThreads.renameFile(req.params.id, req.params.filename, newName.trim(), req.person.email);
+    if (!updated) return res.status(404).json({ error: 'File not found or name already taken' });
+    res.json(updated);
+});
+
+// Fetch a remote file (PDF or doc from GOV.UK etc.) into the thread's files.
+// Body: { url, filename? }
+router.post('/api/threads/:id/fetch-file', requirePerson, express.json({ limit: '16kb' }), async (req, res) => {
+    const { url, filename } = req.body || {};
+    if (!url || !/^https?:\/\//i.test(url)) return res.status(400).json({ error: 'url required' });
+    const t = qThreads.readThread(req.params.id, req.person.email);
+    if (!t) return res.status(404).json({ error: 'Thread not found' });
+    try {
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 15000);
+        const resp = await fetch(url, { signal: controller.signal, headers: { 'User-Agent': 'Mozilla/5.0' } });
+        clearTimeout(timeout);
+        if (!resp.ok) return res.status(502).json({ error: `Remote returned ${resp.status}` });
+        const ct = resp.headers.get('content-type') || 'application/octet-stream';
+        const buf = Buffer.from(await resp.arrayBuffer());
+        // Derive filename from URL or header if not provided
+        let name = filename || '';
+        if (!name) {
+            const cd = resp.headers.get('content-disposition') || '';
+            const m = cd.match(/filename\*?=(?:UTF-8'')?["']?([^"';\n]+)/i);
+            name = m ? decodeURIComponent(m[1].trim()) : (url.split('?')[0].split('/').filter(Boolean).pop() || 'download');
+            if (!name.includes('.')) {
+                if (ct.includes('pdf')) name += '.pdf';
+                else if (ct.includes('word') || ct.includes('docx')) name += '.docx';
+            }
+        }
+        const base64 = buf.toString('base64');
+        const updated = qThreads.addFile(req.params.id, { filename: name, mimeType: ct.split(';')[0].trim(), base64 }, req.person.email);
+        if (!updated) return res.status(500).json({ error: 'Could not save file' });
+        const saved = updated.files[updated.files.length - 1];
+        res.json({ ok: true, filename: saved.filename, mimeType: saved.mimeType, sizeKb: Math.round(buf.length / 1024) });
+    } catch (e) {
+        res.status(502).json({ error: e.name === 'AbortError' ? 'Timed out fetching the file' : e.message });
+    }
+});
+
 // Draft action — when Q produces a draft email reply in chat, the UI shows
 // three buttons under it: I'll send this / I won't / Save until reminder.
 // Body: { action: 'sent'|'discarded'|'save-until', subject, body, remindIn? }
@@ -2281,7 +2327,7 @@ router.post('/api/threads/:id/chat', requirePerson, express.json({ limit: '256kb
         // think less). The page can request 'max' for a big case (the Deep
         // toggle) — deepest reasoning when it's worth the extra time.
         const tEffort = (req.body?.reasoningEffort === 'max') ? 'max' : 'high';
-        const qOpts = { useTools: true, mode: 'aps', surface: 'thread', advocate: true, person: req.person, reasoningEffort: tEffort };
+        const qOpts = { useTools: true, mode: 'aps', surface: 'thread', advocate: true, person: req.person, reasoningEffort: tEffort, threadId: req.params.id };
         // Photos are now read to text above and spliced into `messages`, so the
         // turn stays a normal history-aware Claude turn (no isolated vision call,
         // no looping). PDFs are still handed to Claude natively to read directly.

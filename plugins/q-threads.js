@@ -326,6 +326,28 @@ function removeFile(threadId, filename, ownerEmail) {
     return writeThread(thread);
 }
 
+function renameFile(threadId, oldName, newName, ownerEmail) {
+    const thread = readThread(threadId, ownerEmail);
+    if (!thread) return null;
+    const safeOld = String(oldName).replace(/[\\/]/g, '_').replace(/^\.+/, '');
+    let safeNew = String(newName).replace(/[\\/]/g, '_').replace(/^\.+/, '').slice(0, 200);
+    if (!safeOld || !safeNew || safeOld === safeNew) return thread;
+    // Preserve extension if not supplied in new name
+    const oldExt = path.extname(safeOld);
+    if (oldExt && !path.extname(safeNew)) safeNew += oldExt;
+    const dir = filesDirFor(threadId, thread.ownerEmail);
+    const oldPath = path.join(dir, safeOld);
+    const newPath = path.join(dir, safeNew);
+    if (!fs.existsSync(oldPath)) return null;
+    if (fs.existsSync(newPath)) return null; // would clobber
+    fs.renameSync(oldPath, newPath);
+    if (Array.isArray(thread.files)) {
+        const f = thread.files.find(f => f.filename === safeOld);
+        if (f) f.filename = safeNew;
+    }
+    return writeThread(thread);
+}
+
 
 function addEmail(threadId, { type = 'in', from = '', to = '', date = '', subject = '', body = '' } = {}, ownerEmail) {
     const thread = readThread(threadId, ownerEmail);
@@ -486,6 +508,7 @@ module.exports = {
     addFile,
     readFile,
     removeFile,
+    renameFile,
     parseEmailContent,
     claimLegacyThreads,
     LEGACY_OWNER,

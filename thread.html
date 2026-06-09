@@ -114,6 +114,10 @@
   .photo-lightbox img { max-width: 92vw; max-height: 88vh; border-radius: 10px; box-shadow: 0 4px 40px rgba(0,0,0,0.5); }
   .photo-lightbox-close { position: absolute; top: 18px; right: 22px; font-size: 28px; color: white; cursor: pointer; line-height: 1; background: none; border: none; opacity: 0.7; }
   .photo-lightbox-close:hover { opacity: 1; }
+  .rename-btn { border: none; background: none; cursor: pointer; font-size: 11px; color: var(--text-faint); padding: 0 2px; opacity: 0; transition: opacity 0.15s; }
+  .file-head:hover .rename-btn, .photo-thumb:hover .rename-btn { opacity: 1; }
+  .rename-btn:hover { color: var(--accent); }
+  .rename-input { font-family: inherit; font-size: 13px; font-weight: 600; border: none; outline: none; background: transparent; color: var(--text); border-bottom: 1px solid var(--accent); width: 100%; }
   .file-card { background: var(--bg); border-radius: 12px; padding: 10px 14px; box-shadow: var(--neu-raised-sm); transition: box-shadow 0.15s; }
   .file-card:hover { box-shadow: var(--neu-raised); }
   .file-card.expanded { box-shadow: var(--neu-inset-sm); }
@@ -732,6 +736,9 @@ function renderFiles() {
       <img src="${url}" alt="${escapeHtml(f.filename)}" loading="lazy">
       <span class="photo-thumb-name">${escapeHtml(f.filename)}</span>
       <button class="photo-thumb-del" title="Delete">✕</button>`;
+    const nameEl = thumb.querySelector('.photo-thumb-name');
+    nameEl.title = 'Double-click to rename';
+    nameEl.addEventListener('dblclick', (e) => { e.stopPropagation(); renameFile(f.filename, nameEl); });
     thumb.querySelector('img').addEventListener('click', () => openLightbox(url));
     thumb.querySelector('.photo-thumb-del').addEventListener('click', async (ev) => {
       ev.stopPropagation();
@@ -761,7 +768,7 @@ function renderFiles() {
       <div class="file-head">
         <span class="file-icon">${icon}</span>
         <div class="file-meta">
-          <div class="file-name">${escapeHtml(f.filename)}</div>
+          <div class="file-name">${escapeHtml(f.filename)}<button class="rename-btn" title="Rename">✎</button></div>
           <div class="file-sub">${sizeKb} KB · ${escapeHtml(f.mimeType || 'unknown')} · ${fmtAgo(f.uploadedAt)}</div>
         </div>
       </div>
@@ -771,6 +778,8 @@ function renderFiles() {
           <button data-name="${escapeHtml(f.filename)}" class="del-file">Delete</button>
         </div>
       </div>`;
+    const fileNameEl = card.querySelector('.file-name');
+    card.querySelector('.rename-btn').addEventListener('click', (ev) => { ev.stopPropagation(); renameFile(f.filename, fileNameEl); });
     card.querySelector('.file-head').addEventListener('click', () => card.classList.toggle('expanded'));
     card.querySelector('.del-file').addEventListener('click', async (ev) => {
       ev.stopPropagation();
@@ -780,6 +789,36 @@ function renderFiles() {
     });
     $list.appendChild(card);
   }
+}
+
+// ── Rename a file ────────────────────────────────────────────────
+async function renameFile(oldName, nameEl) {
+  const current = oldName.replace(/\.[^.]+$/, ''); // stem only for editing
+  const ext = oldName.slice(current.length);
+  const input = document.createElement('input');
+  input.className = 'rename-input';
+  input.value = current;
+  const original = nameEl.innerHTML;
+  nameEl.innerHTML = '';
+  nameEl.appendChild(input);
+  input.focus();
+  input.select();
+  const commit = async () => {
+    const newStem = input.value.trim();
+    if (!newStem || newStem + ext === oldName) { nameEl.innerHTML = original; return; }
+    const newName = newStem + ext;
+    const r = await fetch(
+      '/api/threads/' + threadId + '/files/' + encodeURIComponent(oldName) + '/rename',
+      { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ newName }) }
+    );
+    if (r.ok) { thread = await r.json(); renderFiles(); refreshCaseFiles(); }
+    else { nameEl.innerHTML = original; }
+  };
+  input.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') { e.preventDefault(); commit(); }
+    if (e.key === 'Escape') { nameEl.innerHTML = original; }
+  });
+  input.addEventListener('blur', commit);
 }
 
 // ── Lightbox ─────────────────────────────────────────────────────
