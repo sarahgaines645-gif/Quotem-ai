@@ -403,6 +403,11 @@ router.delete('/email/outbox/:id', requirePerson, (req, res) => {
     qEmail.removeFromOutbox(req.person.email, req.params.id);
     res.json({ ok: true });
 });
+router.patch('/email/outbox/:id/to', requirePerson, express.json({ limit: '1mb' }), (req, res) => {
+    const ok = qEmail.patchOutboxItem(req.person.email, req.params.id, { to: String(req.body.to || '').trim() });
+    if (!ok) return res.status(404).json({ error: 'Not found' });
+    res.json({ ok: true });
+});
 
 const qFormFiller = require('./plugins/q-form-filler');
 const { fillPdfForWord } = qFormFiller;

@@ -244,6 +244,14 @@ function addToOutbox(email, { to, subject, body, threadId }) {
 function removeFromOutbox(email, id) {
     saveOutbox(email, getOutbox(email).filter(x => x.id !== id));
 }
+function patchOutboxItem(email, id, patch) {
+    const arr = getOutbox(email);
+    const idx = arr.findIndex(x => x.id === id);
+    if (idx === -1) return false;
+    Object.assign(arr[idx], patch);
+    saveOutbox(email, arr);
+    return true;
+}
 // Send a queued email, then drop it from the outbox. Returns the from address.
 async function sendFromOutbox(email, id) {
     const item = getOutbox(email).find(x => x.id === id);
@@ -256,5 +264,5 @@ async function sendFromOutbox(email, id) {
 module.exports = {
     gmailConfigured, status, getAccount, disconnect, consentUrl, handleCallback,
     sendEmail, connectSmtp,
-    getOutbox, addToOutbox, removeFromOutbox, sendFromOutbox,
+    getOutbox, addToOutbox, removeFromOutbox, patchOutboxItem, sendFromOutbox,
 };
