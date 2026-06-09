@@ -837,7 +837,7 @@ async function chat(messages, options = {}) {
     const isWriter = options.surface === 'writer';
     const maxTokens = (!isVision && reasoningEffort === 'max')
         ? 8000
-        : (isDocEditor || isAdvocateSurface || isWriter ? 4096 : 1500);
+        : (isDocEditor || isAdvocateSurface || isWriter || (!isVision && reasoningEffort === 'high') ? 4096 : 1500);
     const model = isVision ? Q_CONFIG.visionModel : Q_CONFIG.model;
 
     // When images are attached, the LAST user message becomes a multimodal
