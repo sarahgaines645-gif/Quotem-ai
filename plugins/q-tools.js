@@ -115,6 +115,22 @@ const TOOL_DEFINITIONS = [
     {
         type: 'function',
         function: {
+            name: 'save_email_draft',
+            description: 'Save a drafted email to the user\'s outbox so they can review and send it with one click. Call this EVERY TIME you write an email for the user — do not just paste email text in the chat. If you are drafting multiple emails in one reply, call this once per email. The user can then find all drafts in the Emails section of this thread or on the Email Writer page.',
+            parameters: {
+                type: 'object',
+                properties: {
+                    to: { type: 'string', description: 'Recipient email address (if known — leave blank if not yet decided).' },
+                    subject: { type: 'string', description: 'The subject line.' },
+                    body: { type: 'string', description: 'The full plain-text body of the email.' },
+                },
+                required: ['subject', 'body'],
+            },
+        },
+    },
+    {
+        type: 'function',
+        function: {
             name: 'web_search',
             description: 'Search the live web for current information. Use this for news, facts, prices, or anything that may have changed since your training. Returns the most relevant results from across the web.',
             parameters: {
@@ -1157,6 +1173,29 @@ async function analyzeDocument({ image_url, question }) {
  */
 const qEmailAccounts = require('./q-email-accounts');
 
+// Save a drafted email to the user's outbox (no send — just parks it for review).
+function saveEmailDraftTool(args, personEmail, threadId) {
+    if (!personEmail) return { error: 'Cannot save draft without a signed-in user.' };
+    const subject = String(args.subject || '').trim();
+    const body = String(args.body || '').trim();
+    if (!subject && !body) return { error: 'Need at least a subject or body to save a draft.' };
+    try {
+        const item = qEmailAccounts.addToOutbox(personEmail, {
+            to: String(args.to || '').trim(),
+            subject,
+            body,
+            threadId: threadId || null,
+        });
+        return {
+            ok: true,
+            draftId: item.id,
+            instruction_for_q: 'Draft saved to outbox. Tell the user it\'s in their drafts — they can find it in the Emails section of this thread or on the Email Writer page and send it with one click.',
+        };
+    } catch (e) {
+        return { error: e.message || 'Could not save draft.' };
+    }
+}
+
 // Send an email from the user's own connected account (Gmail/SMTP).
 async function sendEmailTool(args, personEmail) {
     if (!personEmail) return { error: 'Cannot send email without a signed-in user.' };
@@ -1233,6 +1272,7 @@ async function executeTool(name, argsRaw, personId, personEmail) {
         case 'complete_task':        return completeTaskTool(args, personEmail);
         case 'update_life_context':  return updateLifeContextTool(args, personEmail);
         case 'send_email':           return await sendEmailTool(args, personEmail);
+        case 'save_email_draft':     return saveEmailDraftTool(args, personEmail);
         default:                 return { error: `Unknown tool: "${name}"` };
     }
 }
@@ -1830,7 +1870,7 @@ const ALWAYS_ON = new Set([
 // guessed — and current_datetime anchors "how long ago / to today".
 const ADVOCATE_TOOLS = new Set([
     'web_search', 'search_images', 'street_view', 'create_document',
-    'calculator', 'current_datetime',
+    'calculator', 'current_datetime', 'save_email_draft',
 ]);
 
 const TRIGGERS = {
