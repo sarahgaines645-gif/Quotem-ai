@@ -13,7 +13,7 @@
  *   4. Return filled PDF bytes as Buffer
  */
 
-const { PDFDocument, StandardFonts, PDFName, rgb } = require('pdf-lib');
+const { PDFDocument, StandardFonts, PDFName, PDFDict, rgb } = require('pdf-lib');
 const { Q_CONFIG } = require('../config');
 const { cleanModelOutput } = require('./cjk-filter');
 
@@ -428,8 +428,17 @@ async function fillPdfEditable(pdfBytes, values) {
         }
     }
 
-    // Regenerate appearances so the values actually show when opened, while the
-    // fields stay interactive (no flatten = still editable).
+    // Set NeedAppearances = true in the AcroForm dictionary. This tells any PDF
+    // viewer (Adobe Reader, Chrome, Preview) to regenerate field appearances from
+    // the stored values using its own font engine. Without this, viewers show the
+    // form's original appearance stream (e.g. the TE7's "XXXX" placeholder) instead
+    // of what we wrote. updateFieldAppearances is also attempted for viewers that
+    // don't honour NeedAppearances, but NeedAppearances is the reliable one.
+    try {
+        const acroForm = pdfDoc.catalog.lookupMaybe(PDFName.of('AcroForm'), PDFDict);
+        if (acroForm) acroForm.set(PDFName.of('NeedAppearances'), pdfDoc.context.obj(true));
+    } catch (e) { console.warn('[q-form-filler] NeedAppearances:', e.message); }
+
     try {
         const helv = await pdfDoc.embedFont(StandardFonts.Helvetica);
         form.updateFieldAppearances(helv);
