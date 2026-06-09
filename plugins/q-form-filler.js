@@ -50,7 +50,9 @@ OTHER RULES:
 - RESOLVE ROLES TO THE ACTUAL VALUE: "deposit held by" / "payable to" / "the landlord" → the landlord's real name from the data, NOT the word "landlord".
 - Dates: format as DD/MM/YYYY unless the context suggests otherwise.
 - Checkboxes (type "checkbox"): value is "true" or "false".
-- Do NOT ask about signature fields, and do NOT ask about a field you already put in "values".
+- SIGNATURE FIELDS (type "signature" or labelled "Signed", "Signature"): fill with the applicant's full name from the context. Do NOT ask about them.
+- STATEMENT OF TRUTH — "I believe / The witness believes" choice: ALWAYS select "I believe". The applicant signing their own form uses first-person. "The witness believes" is only for a third-party witness signing on someone else's behalf — it is almost never correct.
+- Do NOT ask about a field you already put in "values".
 - Do NOT put checkbox/tick-box fields in "ask" (titles like Mr/Mrs, "have you checked…" confirmations, yes/no boxes) — the user ticks those on the form themselves. Only checkboxes you can confidently set go in "values".
 - Do NOT ask about fields with auto-generated names and no meaningful label (e.g. "Text1", "Button2") — you cannot form a useful question about them, so leave them out entirely.
 - UK POSTCODES: A UK postcode looks like "GU1 3AQ" or "SW1A 2AA" — one or two letters, one or two digits, a space, then a digit and two letters. If a field is labelled "Postcode" or "Post Code", the value MUST match this pattern. A town name ("Guildford"), county ("Surrey"), or any other place name is NEVER a valid postcode — if you only have those, put the field in "ask", not "values".

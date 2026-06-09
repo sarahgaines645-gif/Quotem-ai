@@ -2586,7 +2586,18 @@ router.post('/api/threads/:id/form-fill', requirePerson, express.json({ limit: '
     try {
         const infoText = await threadFormInfoText(t, req.person);
         const { values, ask } = await qFormFiller.extractFieldValues(fields, infoText, null);
-        res.json({ values: values || {}, ask: ask || [] });
+        // Auto-fill signature fields Q left blank — browser PDF viewers can't
+        // edit signature field types, so they must be pre-filled server-side.
+        const filled = values || {};
+        if (req.person.name) {
+            for (const f of fields) {
+                const isSignature = f.type === 'signature' ||
+                    /sign/i.test(f.name || '') ||
+                    /sign/i.test(f.label || '');
+                if (isSignature && !filled[f.name]) filled[f.name] = req.person.name;
+            }
+        }
+        res.json({ values: filled, ask: ask || [] });
     } catch (e) {
         console.error('[form-fill]', e && e.message, e && e.stack);
         res.status(500).json({ error: (e && e.message) || 'Fill failed' });
