@@ -2281,7 +2281,7 @@ router.post('/api/threads/:id/chat', requirePerson, express.json({ limit: '256kb
         // think less). The page can request 'max' for a big case (the Deep
         // toggle) — deepest reasoning when it's worth the extra time.
         const tEffort = (req.body?.reasoningEffort === 'max') ? 'max' : 'high';
-        const qOpts = { useTools: true, mode: 'aps', surface: 'thread', person: req.person, reasoningEffort: tEffort };
+        const qOpts = { useTools: true, mode: 'aps', surface: 'thread', advocate: true, person: req.person, reasoningEffort: tEffort };
         // Photos are now read to text above and spliced into `messages`, so the
         // turn stays a normal history-aware Claude turn (no isolated vision call,
         // no looping). PDFs are still handed to Claude natively to read directly.
