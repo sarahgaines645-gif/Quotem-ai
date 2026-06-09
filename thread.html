@@ -453,7 +453,10 @@
     <input type="text" id="ob-to" placeholder="Send to (email address)" style="border:none;outline:none;background:var(--bg);box-shadow:var(--neu-raised-sm);border-radius:10px;padding:10px 12px;font-family:inherit;font-size:14px;color:var(--text);">
     <input type="text" id="ob-subject" placeholder="Subject" style="border:none;outline:none;background:var(--bg);box-shadow:var(--neu-raised-sm);border-radius:10px;padding:10px 12px;font-family:inherit;font-size:14px;color:var(--text);">
     <textarea id="ob-body" placeholder="Write the email — send now, or save to send later…" style="border:none;outline:none;background:var(--bg);box-shadow:var(--neu-raised-sm);border-radius:10px;padding:10px 12px;font-family:inherit;font-size:14px;color:var(--text);min-height:90px;resize:vertical;"></textarea>
+    <div id="ob-attach-pills" style="display:flex;flex-wrap:wrap;gap:6px;"></div>
+    <input type="file" id="ob-attach-input" multiple style="display:none">
     <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+      <button id="ob-attach-btn" class="note-save-btn" type="button">📎 Attach</button>
       <button id="ob-save-btn" class="note-save-btn" type="button">🕒 Save to outbox</button>
       <button id="ob-send-btn" class="note-save-btn" type="button">📤 Send now</button>
       <span id="outbox-status" style="font-size:12px;color:var(--text-muted);"></span>
@@ -511,7 +514,8 @@
         </div>
         <div class="forms-actions">
           <button class="forms-btn primary" id="ff-fill">Q, fill from case</button>
-          <button class="forms-btn primary" id="ff-download">Download (editable — opens in Acrobat)</button>
+          <button class="forms-btn" id="ff-download">⬇ Editable (Acrobat)</button>
+          <button class="forms-btn" id="ff-download-flat">⬇ Flat (Word / print)</button>
         </div>
         <div class="ff-questions" id="ff-questions"></div>
         <div class="ff-coach">
@@ -1476,6 +1480,7 @@ loadThread();
   const questionsEl = document.getElementById('ff-questions');
   const fillBtn  = document.getElementById('ff-fill');
   const dlBtn    = document.getElementById('ff-download');
+  const dlFlatBtn = document.getElementById('ff-download-flat');
   const coachIn  = document.getElementById('ff-coach-in');
   const coachMsg = document.getElementById('ff-coach-msg');
 
@@ -2042,6 +2047,7 @@ loadThread();
     }
   }
   dlBtn.addEventListener('click', () => doDownload('/forms/fill-editable', '-editable.pdf', dlBtn));
+  dlFlatBtn.addEventListener('click', () => doDownload('/forms/fill', '-flat.pdf', dlFlatBtn));
 })();
 
 // ── "Verify" drag-tool — press Verify, get a ✓ that follows the cursor, then
@@ -2112,9 +2118,42 @@ loadThread();
   const obSave = document.getElementById('ob-save-btn');
   const obSend = document.getElementById('ob-send-btn');
   const obStatus = document.getElementById('outbox-status');
+  const obAttachBtn = document.getElementById('ob-attach-btn');
+  const obAttachInput = document.getElementById('ob-attach-input');
+  const obAttachPills = document.getElementById('ob-attach-pills');
   if (!obList) return;
   const esc = (s) => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
   const flash = (m) => { obStatus.textContent = m; setTimeout(() => { if (obStatus.textContent === m) obStatus.textContent = ''; }, 3000); };
+
+  // Attached files — each entry: { filename, base64, mimeType }
+  const _attachments = [];
+  function renderPills() {
+    obAttachPills.innerHTML = '';
+    _attachments.forEach((a, i) => {
+      const pill = document.createElement('span');
+      pill.style.cssText = 'display:inline-flex;align-items:center;gap:4px;background:var(--bg);box-shadow:var(--neu-raised-sm);border-radius:8px;padding:4px 8px;font-size:12px;';
+      pill.innerHTML = '📎 ' + esc(a.filename) + ' <button type="button" style="border:none;background:none;cursor:pointer;color:var(--text-muted);font-size:14px;line-height:1;padding:0;">×</button>';
+      pill.querySelector('button').onclick = () => { _attachments.splice(i, 1); renderPills(); };
+      obAttachPills.appendChild(pill);
+    });
+  }
+  function fileToBase64(file) {
+    return new Promise((res, rej) => {
+      const r = new FileReader();
+      r.onload = () => res(r.result.split(',')[1]);
+      r.onerror = rej;
+      r.readAsDataURL(file);
+    });
+  }
+  obAttachBtn.addEventListener('click', () => obAttachInput.click());
+  obAttachInput.addEventListener('change', async () => {
+    for (const file of obAttachInput.files) {
+      const base64 = await fileToBase64(file);
+      _attachments.push({ filename: file.name, base64, mimeType: file.type || 'application/octet-stream' });
+    }
+    obAttachInput.value = '';
+    renderPills();
+  });
   async function load() {
     try {
       const r = await fetch('/email/outbox?threadId=' + encodeURIComponent(threadId));
@@ -2153,7 +2192,7 @@ loadThread();
           if (toInput.value.trim() && toInput.value.trim() !== it.to) {
             await fetch('/email/outbox/' + it.id + '/to', { method: 'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify({to: toInput.value.trim()}) }).catch(()=>{});
           }
-          try { const rr = await fetch('/email/outbox/' + it.id + '/send', { method: 'POST' }); const dd = await rr.json(); if (!rr.ok) throw new Error(dd.error || 'Failed'); flash('Sent ✓'); load(); } catch (e2) { flash('Send failed: ' + e2.message); send.disabled = false; } };
+          try { const rr = await fetch('/email/outbox/' + it.id + '/send', { method: 'POST' }); const dd = await rr.json(); if (!rr.ok) throw new Error(dd.error || 'Failed'); flash('Sent ✓'); load(); loadThread(); } catch (e2) { flash('Send failed: ' + e2.message); send.disabled = false; } };
         const del = document.createElement('button'); del.className = 'note-save-btn'; del.textContent = '🗑 Delete';
         del.onclick = async (e) => { e.stopPropagation(); await fetch('/email/outbox/' + it.id, { method: 'DELETE' }); load(); };
         acts.appendChild(send); acts.appendChild(del); bodyEl.appendChild(acts);
@@ -2178,9 +2217,15 @@ loadThread();
     if (!to) return flash('Add a recipient first');
     obSend.disabled = true;
     try {
-      const r = await fetch('/email/send', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ to, subject: obSubject.value, text: obBody.value }) });
+      const payload = { to, subject: obSubject.value, text: obBody.value, threadId };
+      if (_attachments.length) payload.attachments = _attachments.map(a => ({ filename: a.filename, base64: a.base64, mimeType: a.mimeType }));
+      const r = await fetch('/email/send', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
       const d = await r.json(); if (!r.ok) throw new Error(d.error || 'Failed');
-      obTo.value = ''; obSubject.value = ''; obBody.value = ''; flash('Sent to ' + to);
+      obTo.value = ''; obSubject.value = ''; obBody.value = '';
+      _attachments.length = 0; renderPills();
+      flash('Sent to ' + to);
+      // Reload thread so the sent email appears in correspondence immediately.
+      loadThread();
     } catch (e) { flash('Send failed: ' + e.message); }
     finally { obSend.disabled = false; }
   };

@@ -164,9 +164,10 @@ async function gmailAccessToken(refreshToken) {
     return data.access_token;
 }
 
-// Send a plain-text email through the user's connected Gmail.
+// Send an email through the user's connected account (Gmail or SMTP).
+// attachments: [{ filename, base64, mimeType }] — optional file attachments.
 // Returns the from address. Throws Error with .code='not_connected' if none.
-async function sendEmail(email, { to, subject, text }) {
+async function sendEmail(email, { to, subject, text, attachments = [] }) {
     const acct = getAccount(email);
     if (!acct) {
         const e = new Error('not_connected');
@@ -176,15 +177,47 @@ async function sendEmail(email, { to, subject, text }) {
     if (acct.provider === 'gmail') {
         const access = await gmailAccessToken(decrypt(acct.refresh_token));
         const from = acct.email || '';
-        const message = [
-            from ? `From: ${from}` : null,
-            `To: ${to}`,
-            `Subject: ${subject}`,
-            'MIME-Version: 1.0',
-            'Content-Type: text/plain; charset=UTF-8',
-            '',
-            text || '',
-        ].filter(v => v !== null).join('\r\n');
+        let message;
+        if (attachments && attachments.length) {
+            const boundary = 'qm-' + crypto.randomBytes(10).toString('hex');
+            const parts = [
+                `--${boundary}`,
+                'Content-Type: text/plain; charset=UTF-8',
+                '',
+                text || '',
+            ];
+            for (const att of attachments) {
+                const safe = String(att.filename || 'attachment').replace(/"/g, '');
+                parts.push(
+                    `--${boundary}`,
+                    `Content-Type: ${att.mimeType || 'application/octet-stream'}`,
+                    'Content-Transfer-Encoding: base64',
+                    `Content-Disposition: attachment; filename="${safe}"`,
+                    '',
+                    String(att.base64 || '').replace(/\s/g, ''),
+                );
+            }
+            parts.push(`--${boundary}--`);
+            message = [
+                from ? `From: ${from}` : null,
+                `To: ${to}`,
+                `Subject: ${subject}`,
+                'MIME-Version: 1.0',
+                `Content-Type: multipart/mixed; boundary="${boundary}"`,
+                '',
+                parts.join('\r\n'),
+            ].filter(v => v !== null).join('\r\n');
+        } else {
+            message = [
+                from ? `From: ${from}` : null,
+                `To: ${to}`,
+                `Subject: ${subject}`,
+                'MIME-Version: 1.0',
+                'Content-Type: text/plain; charset=UTF-8',
+                '',
+                text || '',
+            ].filter(v => v !== null).join('\r\n');
+        }
         const raw = Buffer.from(message).toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
         const gr = await fetch('https://gmail.googleapis.com/gmail/v1/users/me/messages/send', {
             method: 'POST',
@@ -204,7 +237,15 @@ async function sendEmail(email, { to, subject, text }) {
             requireTLS: acct.smtp_port === 587,
             auth: { user: acct.smtp_user, pass: decrypt(acct.smtp_pass) },
         });
-        await t.sendMail({ from, to, subject, text: text || '' });
+        const mailOpts = { from, to, subject, text: text || '' };
+        if (attachments && attachments.length) {
+            mailOpts.attachments = attachments.map(a => ({
+                filename: a.filename || 'attachment',
+                content: Buffer.from(a.base64 || '', 'base64'),
+                contentType: a.mimeType || 'application/octet-stream',
+            }));
+        }
+        await t.sendMail(mailOpts);
         return from;
     }
     const e = new Error('not_connected');

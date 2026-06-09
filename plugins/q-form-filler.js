@@ -53,6 +53,7 @@ OTHER RULES:
 - Do NOT ask about signature fields, and do NOT ask about a field you already put in "values".
 - Do NOT put checkbox/tick-box fields in "ask" (titles like Mr/Mrs, "have you checked…" confirmations, yes/no boxes) — the user ticks those on the form themselves. Only checkboxes you can confidently set go in "values".
 - Do NOT ask about fields with auto-generated names and no meaningful label (e.g. "Text1", "Button2") — you cannot form a useful question about them, so leave them out entirely.
+- UK POSTCODES: A UK postcode looks like "GU1 3AQ" or "SW1A 2AA" — one or two letters, one or two digits, a space, then a digit and two letters. If a field is labelled "Postcode" or "Post Code", the value MUST match this pattern. A town name ("Guildford"), county ("Surrey"), or any other place name is NEVER a valid postcode — if you only have those, put the field in "ask", not "values".
 - Output a single JSON object. No prose. No markdown fences. Start with { and end with }.
 
 Example:

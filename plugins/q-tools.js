@@ -107,6 +107,7 @@ const TOOL_DEFINITIONS = [
                     to: { type: 'string', description: 'Recipient email address.' },
                     subject: { type: 'string', description: 'The subject line.' },
                     body: { type: 'string', description: 'The full plain-text body of the email.' },
+                    attachments: { type: 'array', items: { type: 'string' }, description: 'Optional list of filenames from this case\'s Files to attach (e.g. ["id-photo.jpg", "TE7.pdf"]). Only use filenames that are actually in the thread\'s file list.' },
                 },
                 required: ['to', 'subject', 'body'],
             },
@@ -1250,18 +1251,31 @@ function saveEmailDraftTool(args, personEmail, threadId) {
 }
 
 // Send an email from the user's own connected account (Gmail/SMTP).
-async function sendEmailTool(args, personEmail) {
+async function sendEmailTool(args, personEmail, threadId) {
     if (!personEmail) return { error: 'Cannot send email without a signed-in user.' };
     const to = String(args.to || '').trim();
     const subject = String(args.subject || '').trim();
     const body = args.body || args.text || '';
     if (!to || !subject) return { error: 'Need a recipient (to) and a subject to send an email.' };
+    // Read any requested thread-file attachments.
+    const attachments = [];
+    if (Array.isArray(args.attachments) && args.attachments.length && threadId) {
+        const qThreads = require('./q-threads');
+        for (const filename of args.attachments) {
+            try {
+                const file = qThreads.readFile(threadId, String(filename), personEmail);
+                if (file && file.buffer) {
+                    attachments.push({ filename: file.filename || filename, base64: file.buffer.toString('base64'), mimeType: file.mimeType || 'application/octet-stream' });
+                }
+            } catch (e) { console.warn('[send_email] attachment read failed:', filename, e.message); }
+        }
+    }
     try {
-        const from = await qEmailAccounts.sendEmail(personEmail, { to, subject, text: body });
+        const from = await qEmailAccounts.sendEmail(personEmail, { to, subject, text: body, attachments });
         return {
             ok: true,
             sentFrom: from || 'your connected account',
-            instruction_for_q: `Email sent to ${to} from the user's own account. Confirm briefly that it's sent — do not paste the whole email back.`,
+            instruction_for_q: `Email sent to ${to} from the user's own account${attachments.length ? ` with ${attachments.length} attachment(s)` : ''}. Confirm briefly that it's sent — do not paste the whole email back.`,
         };
     } catch (e) {
         if (e.code === 'not_connected') {
@@ -1324,7 +1338,7 @@ async function executeTool(name, argsRaw, personId, personEmail, threadId) {
         case 'list_tasks':           return listTasksTool(args, personEmail);
         case 'complete_task':        return completeTaskTool(args, personEmail);
         case 'update_life_context':  return updateLifeContextTool(args, personEmail);
-        case 'send_email':           return await sendEmailTool(args, personEmail);
+        case 'send_email':           return await sendEmailTool(args, personEmail, threadId);
         case 'save_email_draft':     return saveEmailDraftTool(args, personEmail, threadId);
         case 'fetch_form':           return await fetchFormTool(args, personEmail, threadId);
         default:                 return { error: `Unknown tool: "${name}"` };

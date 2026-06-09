@@ -351,11 +351,21 @@ router.get('/email/gmail/callback', async (req, res) => {
     }
 });
 
-router.post('/email/send', requirePerson, express.json({ limit: '1mb' }), async (req, res) => {
-    const { to, subject, text } = req.body || {};
+router.post('/email/send', requirePerson, express.json({ limit: '10mb' }), async (req, res) => {
+    const { to, subject, text, attachments, threadId } = req.body || {};
     if (!to || !subject) return res.status(400).json({ error: 'to and subject are required' });
     try {
-        const from = await qEmail.sendEmail(req.person.email, { to, subject, text: text || '' });
+        const from = await qEmail.sendEmail(req.person.email, { to, subject, text: text || '', attachments: attachments || [] });
+        // Record on the case thread so it appears in correspondence.
+        if (threadId) {
+            try {
+                qThreads.addEmail(threadId, {
+                    type: 'out', from: from || req.person.email,
+                    to, subject, body: text || '',
+                    date: new Date().toISOString().slice(0, 10),
+                }, req.person.email);
+            } catch (_) { /* non-fatal — email is sent regardless */ }
+        }
         res.json({ ok: true, sentFrom: from });
     } catch (e) {
         if (e.code === 'not_connected') return res.status(409).json({ error: 'No email connected — connect Gmail first.' });
@@ -390,7 +400,19 @@ router.post('/email/outbox', requirePerson, express.json({ limit: '1mb' }), (req
 });
 router.post('/email/outbox/:id/send', requirePerson, async (req, res) => {
     try {
+        // Read item before sending — sendFromOutbox removes it afterwards.
+        const item = qEmail.getOutbox(req.person.email).find(x => x.id === req.params.id);
         const from = await qEmail.sendFromOutbox(req.person.email, req.params.id);
+        // Record on the case thread so it appears in correspondence.
+        if (item && item.threadId) {
+            try {
+                qThreads.addEmail(item.threadId, {
+                    type: 'out', from: from || req.person.email,
+                    to: item.to, subject: item.subject || '', body: item.body || '',
+                    date: new Date().toISOString().slice(0, 10),
+                }, req.person.email);
+            } catch (_) { /* non-fatal */ }
+        }
         res.json({ ok: true, sentFrom: from });
     } catch (e) {
         if (e.code === 'not_found') return res.status(404).json({ error: 'That email is no longer in your outbox.' });
