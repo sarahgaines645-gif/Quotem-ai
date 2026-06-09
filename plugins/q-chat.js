@@ -966,7 +966,9 @@ async function chat(messages, options = {}) {
                         tools: (() => {
                             const lastUser = [...messages].reverse().find(m => m.role === 'user');
                             const msgText = typeof lastUser?.content === 'string' ? lastUser.content : '';
-                            return selectActiveTools(msgText, { docEditor: options.surface === 'doc-editor', advocate: isAdvocateSurface });
+                            const activeTools = selectActiveTools(msgText, { docEditor: options.surface === 'doc-editor', advocate: isAdvocateSurface });
+                            if (iteration === 0) console.log('[q-chat] tools sent to V4 (' + options.surface + '):', activeTools.map(t => t.function?.name).join(', '));
+                            return activeTools;
                         })(),
                         tool_choice: 'auto',
                     }),

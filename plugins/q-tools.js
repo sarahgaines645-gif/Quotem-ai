@@ -1201,6 +1201,7 @@ async function fetchFormTool(args, personEmail, threadId) {
         }
         const base64 = buf.toString('base64');
         const qThreads = require('./q-threads');
+        console.log(`[fetch_form] downloading ${url} → "${name}" (${buf.length} bytes) for thread ${threadId}`);
         const updated = qThreads.addFile(threadId, { filename: name, mimeType: ct, base64 }, personEmail);
         if (!updated) return { error: 'Could not save the form to this thread.' };
         if (note) qThreads.addNote(threadId, { content: `📋 ${note}`, kind: 'form-note' }, personEmail);
