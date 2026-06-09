@@ -255,7 +255,8 @@
     width: 100%; border: none; outline: none; font-family: inherit;
     font-size: 13px; font-weight: 600; color: var(--text);
     background: var(--bg); padding: 9px 12px; border-radius: 10px;
-    box-shadow: var(--neu-raised-sm); margin-bottom: 14px; cursor: pointer;
+    box-shadow: var(--neu-inset-sm); margin-bottom: 14px; cursor: pointer;
+    -webkit-appearance: none; appearance: none;
   }
   .form-field { margin-bottom: 11px; }
   .form-field label { display: block; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-faint); margin-bottom: 4px; }
@@ -405,7 +406,7 @@
     <div class="forms-body" id="forms-body">
       <div id="forms-case-files" style="margin-bottom:12px;display:none;">
         <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.1em;color:var(--text-faint);margin-bottom:6px;">From this case</div>
-        <select id="forms-case-select" style="width:100%;border:none;outline:none;font-family:inherit;font-size:13px;color:var(--text);background:var(--bg);padding:10px 12px;border-radius:10px;box-shadow:var(--neu-raised-sm);cursor:pointer;">
+        <select id="forms-case-select" class="forms-select">
           <option value="">— pick a file —</option>
         </select>
       </div>
@@ -1348,7 +1349,11 @@ loadThread();
       const r = await fetch('/api/threads/' + threadId + '/files/' + encodeURIComponent(filename));
       if (!r.ok) throw new Error('Could not fetch file');
       const buf = await r.arrayBuffer();
-      const b64 = btoa(String.fromCharCode(...new Uint8Array(buf)));
+      // Spread in 8 KB chunks — large PDFs blow the call stack with one spread.
+      const bytes = new Uint8Array(buf);
+      let binary = '';
+      for (let i = 0; i < bytes.length; i += 8192) binary += String.fromCharCode(...bytes.subarray(i, i + 8192));
+      const b64 = btoa(binary);
       _formName = filename.replace(/\.pdf$/i, '');
       await loadFormFromBase64(b64);
     } catch (e) {
