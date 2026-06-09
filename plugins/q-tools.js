@@ -1843,6 +1843,8 @@ const ALWAYS_ON = new Set([
     // to one (anywhere — main chat, email writer, inside a Thread).
     'list_threads', 'read_thread', 'save_situation',
     'add_email_to_thread', 'add_note_to_thread', 'add_file_to_thread',
+    // Email drafting — always on so Q saves drafts from any chat surface.
+    'save_email_draft',
     // Finance tools — always available so Q can read and update the finance
     // data store from any page, not just when on /finance.
     'read_finance', 'add_finance_problem',
@@ -1870,7 +1872,7 @@ const ALWAYS_ON = new Set([
 // guessed — and current_datetime anchors "how long ago / to today".
 const ADVOCATE_TOOLS = new Set([
     'web_search', 'search_images', 'street_view', 'create_document',
-    'calculator', 'current_datetime', 'save_email_draft',
+    'calculator', 'current_datetime',
 ]);
 
 const TRIGGERS = {
