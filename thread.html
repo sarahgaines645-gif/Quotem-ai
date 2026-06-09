@@ -1440,43 +1440,22 @@ loadThread();
 
   async function loadFormFromBase64(b64) {
     _pdfBase64 = b64;
-    openFormInPlotter(b64);
-  }
-
-  // Open the proven plotter (the quotem-style visual form display) full-screen,
-  // seeded with this PDF + the case id. The Thread is the "remote": the plotter
-  // reads the form's REAL AcroForm fields and auto-fills them from the case
-  // context, shows the fills ON the form (pink), and downloads a real filled PDF
-  // WITH text. The old in-panel filler scanned the form with Gemini, which
-  // invented field names the PDF didn't have, so getField() found nothing and
-  // the download came out as a blank form — the "saves but no text" bug.
-  function openFormInPlotter(b64) {
-    const existing = document.getElementById('plotter-overlay');
-    if (existing) existing.remove();
-    const ov = document.createElement('div');
-    ov.id = 'plotter-overlay';
-    ov.style.cssText = 'position:fixed;inset:0;z-index:1000;background:var(--bg);display:flex;flex-direction:column;';
-    ov.innerHTML =
-      '<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 14px;background:var(--bg);box-shadow:var(--neu-raised-sm);flex-shrink:0;">' +
-        '<span style="font-weight:700;font-size:14px;color:var(--text);">📋 Fill this form — Q is reading your case</span>' +
-        '<button id="plotter-close" title="Close" style="border:none;background:transparent;font-size:22px;line-height:1;cursor:pointer;color:var(--text-muted);">✕</button>' +
-      '</div>' +
-      '<iframe id="plotter-frame" style="flex:1;border:none;width:100%;background:var(--bg);"></iframe>';
-    document.body.appendChild(ov);
-    function onPlotterMsg(ev) {
-      if ((ev.data || {}).type === 'plotter-ready') {
-        const frame = document.getElementById('plotter-frame');
-        if (frame && frame.contentWindow) {
-          frame.contentWindow.postMessage({ type: 'thread-form-pdf', base64: b64, threadId: threadId }, '*');
-        }
-      }
+    statusEl.textContent = '⏳ Reading form…';
+    fieldsEl.innerHTML = '';
+    try {
+      const r = await fetch('/api/threads/' + threadId + '/form-scan', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ pdfBase64: b64 }),
+      });
+      const data = await r.json();
+      if (!r.ok) throw new Error(data.error || 'Scan failed');
+      _fields = data.fields || [];
+      if (!_fields.length) { statusEl.textContent = '⚠️ No fillable fields found — is this a form?'; return; }
+      showReadyCTA();
+    } catch (e) {
+      statusEl.textContent = '⚠️ ' + (e.message || 'Could not read form');
     }
-    window.addEventListener('message', onPlotterMsg);
-    document.getElementById('plotter-close').addEventListener('click', () => {
-      window.removeEventListener('message', onPlotterMsg);
-      ov.remove();
-    });
-    document.getElementById('plotter-frame').src = '/plotter?thread=' + encodeURIComponent(threadId);
   }
 
   async function loadForm(file) {
