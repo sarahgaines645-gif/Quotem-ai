@@ -255,7 +255,16 @@ async function fillPdf(pdfBytes, values) {
             const field = form.getField(name);
             const type = field.constructor.name;
             const widgets = field.acroField.getWidgets();
-            if (type === 'PDFTextField') {
+            // A drawn signature arrives as a data:image PNG — embed it onto the
+            // field rect, whatever the field type. Works for signature widgets
+            // (which pdf-lib otherwise can't fill) and image stamps alike.
+            if (/^data:image\//i.test(String(value))) {
+                for (const w of widgets) {
+                    const page = pageForWidget(w);
+                    if (page) draws.push({ page, rect: w.getRectangle(), image: String(value) });
+                }
+                results.filled.push(name);
+            } else if (type === 'PDFTextField') {
                 const text = String(value ?? '');
                 for (const w of widgets) {
                     const page = pageForWidget(w);
@@ -281,6 +290,17 @@ async function fillPdf(pdfBytes, values) {
                     }
                     results.filled.push(name);
                 } else results.skipped.push(name);
+            } else if (type === 'PDFSignature') {
+                // Typed signature — pdf-lib can't set a value on a signature
+                // field, so draw the typed name onto its rect like text.
+                const text = String(value ?? '');
+                if (text) {
+                    for (const w of widgets) {
+                        const page = pageForWidget(w);
+                        if (page) draws.push({ page, rect: w.getRectangle(), text, isCheck: false });
+                    }
+                    results.filled.push(name);
+                } else results.skipped.push(name);
             } else {
                 results.skipped.push(name);
             }
@@ -299,8 +319,25 @@ async function fillPdf(pdfBytes, values) {
     // the same Y as surrounding body text. Word groups text into lines by Y
     // position, so this keeps filled values on the right line when converting.
     const helvetica = await pdfDoc.embedFont(StandardFonts.Helvetica);
-    for (const { page, rect, text, isCheck } of draws) {
-        if (isCheck) {
+    for (const { page, rect, text, isCheck, image } of draws) {
+        if (image) {
+            // Drawn signature / image stamp — embed and fit within the rect,
+            // centred, aspect preserved.
+            try {
+                const b64 = image.split(',')[1] || '';
+                const imgBytes = Buffer.from(b64, 'base64');
+                let img;
+                try { img = await pdfDoc.embedPng(imgBytes); }
+                catch { img = await pdfDoc.embedJpg(imgBytes); }
+                const scale = Math.min(rect.width / img.width, rect.height / img.height);
+                const w = img.width * scale, h = img.height * scale;
+                page.drawImage(img, {
+                    x: rect.x + (rect.width - w) / 2,
+                    y: rect.y + (rect.height - h) / 2,
+                    width: w, height: h,
+                });
+            } catch (e) { console.warn('[q-form-filler] signature image:', e.message); }
+        } else if (isCheck) {
             const size = Math.min(rect.height, rect.width) * 0.7;
             page.drawText('X', {
                 x: rect.x + (rect.width - size * 0.55) / 2,
