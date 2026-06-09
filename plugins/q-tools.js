@@ -1325,7 +1325,7 @@ async function executeTool(name, argsRaw, personId, personEmail, threadId) {
         case 'complete_task':        return completeTaskTool(args, personEmail);
         case 'update_life_context':  return updateLifeContextTool(args, personEmail);
         case 'send_email':           return await sendEmailTool(args, personEmail);
-        case 'save_email_draft':     return saveEmailDraftTool(args, personEmail);
+        case 'save_email_draft':     return saveEmailDraftTool(args, personEmail, threadId);
         case 'fetch_form':           return await fetchFormTool(args, personEmail, threadId);
         default:                 return { error: `Unknown tool: "${name}"` };
     }
