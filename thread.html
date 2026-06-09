@@ -916,8 +916,6 @@ function renderFiles() {
           <div class="file-name">${escapeHtml(f.filename)}<button class="rename-btn" title="Rename">✎</button></div>
           <div class="file-sub">${sizeKb} KB · ${escapeHtml(f.mimeType || 'unknown')} · ${fmtAgo(f.uploadedAt)}</div>
         </div>
-      </div>
-      <div class="file-body">
         <div class="file-actions">
           <a href="${url}" target="_blank" rel="noopener">Open</a>
           <button data-name="${escapeHtml(f.filename)}" class="del-file">Delete</button>
@@ -925,7 +923,6 @@ function renderFiles() {
       </div>`;
     const fileNameEl = card.querySelector('.file-name');
     card.querySelector('.rename-btn').addEventListener('click', (ev) => { ev.stopPropagation(); renameFile(f.filename, fileNameEl); });
-    card.querySelector('.file-head').addEventListener('click', () => card.classList.toggle('expanded'));
     card.querySelector('.del-file').addEventListener('click', async (ev) => {
       ev.stopPropagation();
       if (!confirm('Delete ' + f.filename + '?')) return;
