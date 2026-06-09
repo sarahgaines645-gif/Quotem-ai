@@ -467,9 +467,13 @@
         $err.textContent = 'Please drop a PDF file.';
         return;
       }
-      try {
-        const buf = await file.arrayBuffer();
+      const buf = await file.arrayBuffer();
+      await loadArrayBuffer(buf);
+    }
 
+    async function loadArrayBuffer(buf) {
+      $err.textContent = '';
+      try {
         // Convert to base64 BEFORE passing to PDF.js — getDocument() detaches the ArrayBuffer
         const bytes = new Uint8Array(buf);
         let b64 = '';
@@ -645,6 +649,68 @@
         $err.textContent = 'Could not read PDF: ' + e.message;
       }
       $file.value = '';
+    }
+
+    // ── Thread mode — a Thread's floating form opens this plotter in an iframe.
+    // The case is the "remote"; the plotter is the display. The parent posts the
+    // dropped PDF; we load it, enumerate the REAL fields, then auto-fill from the
+    // case context (PCN, name, dates) and show the fills ON the form.
+    const THREAD_ID = new URLSearchParams(location.search).get('thread');
+    if (THREAD_ID) {
+      window.addEventListener('message', async (ev) => {
+        const d = ev.data || {};
+        if (d.type !== 'thread-form-pdf' || !d.base64) return;
+        try {
+          const bin = atob(d.base64);
+          const bytes = new Uint8Array(bin.length);
+          for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+          await loadArrayBuffer(bytes.buffer);
+          await autofillFromThread();
+        } catch (e) {
+          $err.textContent = 'Could not open the form: ' + (e.message || e);
+        }
+      });
+      // Tell the parent we're ready to receive the PDF.
+      try { parent.postMessage({ type: 'plotter-ready' }, '*'); } catch (_) {}
+    }
+
+    async function autofillFromThread() {
+      if (!THREAD_ID || !allFields.length) return;
+      // Wait briefly for the vision label pass so Q matches on human labels, not
+      // raw PDF field names (field_3, topmostSubform[0]…). Falls through after
+      // ~15s so it never hangs.
+      for (let i = 0; i < 30 && !labelsReady; i++) {
+        await new Promise(r => setTimeout(r, 500));
+      }
+      $fillStatus.textContent = 'Q is reading the case and filling the form…';
+      $fillStatus.className = 'fill-status';
+      try {
+        const fields = allFields.map(f => ({
+          name:    f.name,
+          type:    (TYPE_META[f.fieldType] || TYPE_META['Tx']).label,
+          page:    f.page,
+          context: f.context || '',
+          label:   fieldLabels[f.name] || '',
+        }));
+        const r = await fetch('/api/threads/' + encodeURIComponent(THREAD_ID) + '/form-fill', {
+          method: 'POST', credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ fields }),
+        });
+        const data = await r.json();
+        if (!r.ok) throw new Error(data.error || 'HTTP ' + r.status);
+        applyValues(data.values || {});
+        await renderPage(currentPage);
+        flashFilledInputs(data.values || {});
+        const n = Object.keys(data.values || {}).length;
+        $fillStatus.textContent = n
+          ? '✓ Q filled ' + n + ' field' + (n === 1 ? '' : 's') + ' from the case — check them, fill any gaps, then Download.'
+          : "Q couldn't fill any from the case yet — type into the form, or ask Q in the chat.";
+        $fillStatus.className = 'fill-status ' + (n ? 'ok' : '');
+      } catch (e) {
+        $fillStatus.textContent = 'Auto-fill hit a snag: ' + e.message + ' — you can still fill it by hand.';
+        $fillStatus.className = 'fill-status err';
+      }
     }
 
     // ── Render a page and its field overlays ─────────────────────────────────
