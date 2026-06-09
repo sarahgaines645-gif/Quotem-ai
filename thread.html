@@ -378,7 +378,13 @@
       <span class="forms-bar-chev">▼</span>
     </div>
     <div class="forms-body" id="forms-body">
-      <div id="form-drop-zone" style="border:2px dashed var(--shadow-dark);border-radius:12px;padding:24px 16px;text-align:center;cursor:pointer;margin-bottom:12px;color:var(--text-muted);font-size:13px;font-weight:600;transition:border-color 0.15s,color 0.15s;">
+      <div id="forms-case-files" style="margin-bottom:12px;display:none;">
+        <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.1em;color:var(--text-faint);margin-bottom:6px;">From this case</div>
+        <select id="forms-case-select" style="width:100%;border:none;outline:none;font-family:inherit;font-size:13px;color:var(--text);background:var(--bg);padding:10px 12px;border-radius:10px;box-shadow:var(--neu-raised-sm);cursor:pointer;">
+          <option value="">— pick a file —</option>
+        </select>
+      </div>
+      <div id="form-drop-zone" style="border:2px dashed var(--shadow-dark);border-radius:12px;padding:18px 16px;text-align:center;cursor:pointer;margin-bottom:12px;color:var(--text-muted);font-size:13px;font-weight:600;transition:border-color 0.15s,color 0.15s;">
         📄 Drop a form PDF here<br><span style="font-size:11px;font-weight:400;margin-top:4px;display:block;">or click to choose a file</span>
         <input type="file" id="form-file-input" accept=".pdf,application/pdf" style="display:none">
       </div>
@@ -711,7 +717,7 @@ function renderFiles() {
       ev.stopPropagation();
       if (!confirm('Delete ' + f.filename + '?')) return;
       const r = await fetch(url, { method: 'DELETE' });
-      if (r.ok) { thread = await r.json(); renderFiles(); }
+      if (r.ok) { thread = await r.json(); renderFiles(); refreshCaseFiles(); }
     });
     $list.appendChild(card);
   }
@@ -1223,11 +1229,46 @@ loadThread();
   const fileInput = document.getElementById('form-file-input');
   const fieldsEl = document.getElementById('form-fields');
   const statusEl = document.getElementById('forms-status');
+  const caseFilesEl = document.getElementById('forms-case-files');
+  const caseSelect  = document.getElementById('forms-case-select');
 
   let _fields = [];       // [{name, label, context, type}] from the scan
   let _formName = '';     // filename of the loaded form
   let _step = 0;          // current field index in wizard
   let _values = {};       // {index: value} answers from wizard
+
+  // ── Populate dropdown from thread's PDF files ────────────────────
+  function refreshCaseFiles() {
+    const pdfs = (thread.files || []).filter(f => (f.mimeType || '').includes('pdf'));
+    if (!pdfs.length) { caseFilesEl.style.display = 'none'; return; }
+    caseSelect.innerHTML = '<option value="">— pick a file —</option>';
+    pdfs.forEach(f => {
+      const o = document.createElement('option');
+      o.value = f.filename;
+      o.textContent = f.filename;
+      caseSelect.appendChild(o);
+    });
+    caseFilesEl.style.display = 'block';
+  }
+
+  caseSelect.addEventListener('change', async () => {
+    const filename = caseSelect.value;
+    if (!filename) return;
+    statusEl.textContent = '⏳ Loading ' + filename + '…';
+    fieldsEl.innerHTML = '';
+    panel.classList.add('open');
+    try {
+      const r = await fetch('/api/threads/' + threadId + '/files/' + encodeURIComponent(filename));
+      if (!r.ok) throw new Error('Could not fetch file');
+      const buf = await r.arrayBuffer();
+      const b64 = btoa(String.fromCharCode(...new Uint8Array(buf)));
+      _formName = filename.replace(/\.pdf$/i, '');
+      await loadFormFromBase64(b64);
+    } catch (e) {
+      statusEl.textContent = '⚠️ ' + (e.message || 'Could not load file');
+    }
+    caseSelect.value = '';
+  });
 
   // ── Drag to reposition ───────────────────────────────────────────
   let _dragActive = false, _didDrag = false, _dox = 0, _doy = 0, _dsx = 0, _dsy = 0;
@@ -1250,7 +1291,7 @@ loadThread();
     panel.style.top  = (cy - _doy) + 'px';
   }
   function endDrag() {
-    if (_dragActive && !_didDrag) panel.classList.toggle('open');
+    if (_dragActive && !_didDrag) { panel.classList.toggle('open'); if (panel.classList.contains('open')) refreshCaseFiles(); }
     _dragActive = false;
   }
   bar.addEventListener('mousedown', (e) => { startDrag(e.clientX, e.clientY); e.preventDefault(); });
@@ -1275,13 +1316,10 @@ loadThread();
     fileInput.value = '';
   });
 
-  async function loadForm(file) {
-    _formName = file.name.replace(/\.pdf$/i, '');
+  async function loadFormFromBase64(b64) {
     statusEl.textContent = '⏳ Reading form…';
     fieldsEl.innerHTML = '';
-    panel.classList.add('open');
     try {
-      const b64 = await fileToBase64(file);
       const r = await fetch('/api/threads/' + threadId + '/form-scan', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -1292,6 +1330,19 @@ loadThread();
       _fields = data.fields || [];
       if (!_fields.length) { statusEl.textContent = '⚠️ No fillable fields found — is this a form?'; return; }
       showReadyCTA();
+    } catch (e) {
+      statusEl.textContent = '⚠️ ' + (e.message || 'Could not read form');
+    }
+  }
+
+  async function loadForm(file) {
+    _formName = file.name.replace(/\.pdf$/i, '');
+    statusEl.textContent = '⏳ Reading form…';
+    fieldsEl.innerHTML = '';
+    panel.classList.add('open');
+    try {
+      const b64 = await fileToBase64(file);
+      await loadFormFromBase64(b64);
     } catch (e) {
       statusEl.textContent = '⚠️ ' + (e.message || 'Could not read form');
     }
