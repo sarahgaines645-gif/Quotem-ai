@@ -1358,6 +1358,7 @@ loadThread();
   let _formName = '';     // filename of the loaded form
   let _step = 0;          // current field index in wizard
   let _values = {};       // {index: value} answers from wizard
+  let _pdfBase64 = '';    // base64 of the currently loaded PDF (needed to fill + download)
 
   // ── Populate dropdown from thread's PDF files ────────────────────
   function refreshCaseFiles() {
@@ -1444,6 +1445,7 @@ loadThread();
   });
 
   async function loadFormFromBase64(b64) {
+    _pdfBase64 = b64;
     statusEl.textContent = '⏳ Reading form…';
     fieldsEl.innerHTML = '';
     try {
@@ -1709,17 +1711,31 @@ loadThread();
       .catch(() => { statusEl.textContent = '⚠️ Copy failed.'; });
   }
 
-  function downloadForm() {
-    const text = collectText();
-    if (!text) return;
-    const blob = new Blob([text], { type: 'text/plain' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = (_formName || 'form').replace(/[^a-z0-9]+/gi, '-') + '-filled.txt';
-    a.click();
-    URL.revokeObjectURL(url);
-    statusEl.textContent = '✅ Downloaded.';
+  async function downloadForm() {
+    if (!_pdfBase64) { statusEl.textContent = '⚠️ No form loaded.'; return; }
+    // Build name-keyed values for the server
+    const namedValues = {};
+    _fields.forEach((f, i) => { if (_values[i]) namedValues[f.name] = _values[i]; });
+    if (!Object.keys(namedValues).length) { statusEl.textContent = '⚠️ No values to fill.'; return; }
+    statusEl.textContent = '⏳ Filling PDF…';
+    try {
+      const r = await fetch('/forms/fill', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ pdfBase64: _pdfBase64, values: namedValues }),
+      });
+      if (!r.ok) { const d = await r.json(); throw new Error(d.error || 'Fill failed'); }
+      const blob = await r.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = (_formName || 'form').replace(/[^a-z0-9]+/gi, '-') + '-filled.pdf';
+      a.click();
+      URL.revokeObjectURL(url);
+      statusEl.textContent = '✅ Downloaded filled PDF.';
+    } catch (e) {
+      statusEl.textContent = '⚠️ ' + e.message;
+    }
   }
 })();
 
