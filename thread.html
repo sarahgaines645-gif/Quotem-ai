@@ -98,6 +98,22 @@
 
   /* Files / evidence */
   .files-list { display: flex; flex-direction: column; gap: 8px; margin-bottom: 10px; }
+  /* Photo gallery grid — images shown as thumbnails, not individual cards */
+  .photo-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 10px; }
+  @media (max-width: 480px) { .photo-grid { grid-template-columns: repeat(2, 1fr); } }
+  .photo-thumb { position: relative; aspect-ratio: 1; border-radius: 10px; overflow: hidden; box-shadow: var(--neu-raised-sm); cursor: pointer; background: var(--shadow-dark); }
+  .photo-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; transition: opacity 0.15s; }
+  .photo-thumb:hover img { opacity: 0.85; }
+  .photo-thumb-name { position: absolute; bottom: 0; left: 0; right: 0; padding: 4px 6px; font-size: 10px; color: white; background: rgba(0,0,0,0.5); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; opacity: 0; transition: opacity 0.15s; }
+  .photo-thumb:hover .photo-thumb-name { opacity: 1; }
+  .photo-thumb-del { position: absolute; top: 5px; right: 5px; width: 20px; height: 20px; border-radius: 50%; background: rgba(0,0,0,0.55); border: none; color: white; font-size: 11px; cursor: pointer; display: none; align-items: center; justify-content: center; line-height: 1; }
+  .photo-thumb:hover .photo-thumb-del { display: flex; }
+  /* Lightbox */
+  .photo-lightbox { position: fixed; inset: 0; z-index: 400; background: rgba(0,0,0,0.88); display: none; align-items: center; justify-content: center; }
+  .photo-lightbox.open { display: flex; }
+  .photo-lightbox img { max-width: 92vw; max-height: 88vh; border-radius: 10px; box-shadow: 0 4px 40px rgba(0,0,0,0.5); }
+  .photo-lightbox-close { position: absolute; top: 18px; right: 22px; font-size: 28px; color: white; cursor: pointer; line-height: 1; background: none; border: none; opacity: 0.7; }
+  .photo-lightbox-close:hover { opacity: 1; }
   .file-card { background: var(--bg); border-radius: 12px; padding: 10px 14px; box-shadow: var(--neu-raised-sm); transition: box-shadow 0.15s; }
   .file-card:hover { box-shadow: var(--neu-raised); }
   .file-card.expanded { box-shadow: var(--neu-inset-sm); }
@@ -318,7 +334,13 @@
     </div>
   </div>
 
+  <div class="photo-lightbox" id="photo-lightbox">
+    <button class="photo-lightbox-close" id="photo-lightbox-close">✕</button>
+    <img id="photo-lightbox-img" src="" alt="">
+  </div>
+
   <div class="section-label">📎 Files &amp; evidence</div>
+  <div class="photo-grid" id="photo-grid"></div>
   <div class="files-list" id="files-list"></div>
   <div class="upload-drop" id="upload-drop">
     <input type="file" id="file-input" multiple>
@@ -483,26 +505,33 @@ $noteInput.addEventListener('keydown', (e) => {
   }
 });
 
-// Section-level collapse: click a header to fold its list. State persists
-// in localStorage so closing a section stays closed across refreshes.
+// Section-level collapse: click a header to fold everything until the next
+// section label. State persists in localStorage across refreshes.
+function getSectionChildren(label) {
+  const children = [];
+  let el = label.nextElementSibling;
+  while (el && !el.classList.contains('section-label')) {
+    children.push(el);
+    el = el.nextElementSibling;
+  }
+  return children;
+}
 document.querySelectorAll('.section-label').forEach(label => {
-  const next = label.nextElementSibling;
-  if (!next) return;
+  const children = getSectionChildren(label);
+  if (!children.length) return;
   label.classList.add('collapsible');
-  // Generate key before appending chev so textContent stays clean
   const key = 'q-sec:' + label.textContent.replace(/[^\w ]/g, '').trim().toLowerCase().slice(0, 24);
   const chev = document.createElement('span');
   chev.className = 'section-chev';
   chev.textContent = '▼';
   label.appendChild(chev);
-  // Restore saved state
   if (localStorage.getItem(key) === '1') {
     label.classList.add('collapsed');
-    next.style.display = 'none';
+    children.forEach(c => { c.style.display = 'none'; });
   }
   label.addEventListener('click', () => {
     const collapsed = label.classList.toggle('collapsed');
-    next.style.display = collapsed ? 'none' : '';
+    children.forEach(c => { c.style.display = collapsed ? 'none' : ''; });
     collapsed ? localStorage.setItem(key, '1') : localStorage.removeItem(key);
   });
 });
@@ -684,16 +713,41 @@ function renderNotes() {
 }
 
 function renderFiles() {
+  const $grid = document.getElementById('photo-grid');
   const $list = document.getElementById('files-list');
+  $grid.innerHTML = '';
   $list.innerHTML = '';
   const files = thread.files || [];
   if (!files.length) return;
-  for (const f of files) {
+
+  const images = files.filter(f => (f.mimeType || '').startsWith('image/'));
+  const others = files.filter(f => !(f.mimeType || '').startsWith('image/'));
+
+  // ── Photo thumbnail grid ─────────────────────────────────────────
+  for (const f of images) {
+    const url = '/api/threads/' + threadId + '/files/' + encodeURIComponent(f.filename);
+    const thumb = document.createElement('div');
+    thumb.className = 'photo-thumb';
+    thumb.innerHTML = `
+      <img src="${url}" alt="${escapeHtml(f.filename)}" loading="lazy">
+      <span class="photo-thumb-name">${escapeHtml(f.filename)}</span>
+      <button class="photo-thumb-del" title="Delete">✕</button>`;
+    thumb.querySelector('img').addEventListener('click', () => openLightbox(url));
+    thumb.querySelector('.photo-thumb-del').addEventListener('click', async (ev) => {
+      ev.stopPropagation();
+      if (!confirm('Delete ' + f.filename + '?')) return;
+      const r = await fetch(url, { method: 'DELETE' });
+      if (r.ok) { thread = await r.json(); renderFiles(); refreshCaseFiles(); }
+    });
+    $grid.appendChild(thumb);
+  }
+
+  // ── Non-image file cards ─────────────────────────────────────────
+  for (const f of others) {
     const card = document.createElement('div');
     card.className = 'file-card';
-    const isImage = (f.mimeType || '').startsWith('image/');
     const url = '/api/threads/' + threadId + '/files/' + encodeURIComponent(f.filename);
-    const icon = isImage ? `<svg width="20" height="18" viewBox="0 0 20 18" fill="none"><rect x="0" y="4" width="20" height="14" rx="2" fill="#1a1a1a"/><path d="M6 4V2.5C6 1.67 6.67 1 7.5 1h5C13.33 1 14 1.67 14 2.5V4" stroke="#1a1a1a" stroke-width="2" fill="#1a1a1a"/><circle cx="10" cy="11" r="4" stroke="rgba(255,255,255,0.6)" stroke-width="1.5" fill="none"/><circle cx="10" cy="11" r="2" fill="rgba(255,255,255,0.22)"/></svg>` : (
+    const icon = (
       f.mimeType?.includes('pdf')   ? '📄' :
       f.mimeType?.includes('word')  ? '📝' :
       f.mimeType?.includes('rtf')   ? '📝' :
@@ -712,15 +766,12 @@ function renderFiles() {
         </div>
       </div>
       <div class="file-body">
-        ${isImage ? `<img class="file-preview" src="${url}" alt="">` : ''}
         <div class="file-actions">
           <a href="${url}" target="_blank" rel="noopener">Open</a>
           <button data-name="${escapeHtml(f.filename)}" class="del-file">Delete</button>
         </div>
       </div>`;
-    card.querySelector('.file-head').addEventListener('click', () => {
-      card.classList.toggle('expanded');
-    });
+    card.querySelector('.file-head').addEventListener('click', () => card.classList.toggle('expanded'));
     card.querySelector('.del-file').addEventListener('click', async (ev) => {
       ev.stopPropagation();
       if (!confirm('Delete ' + f.filename + '?')) return;
@@ -730,6 +781,19 @@ function renderFiles() {
     $list.appendChild(card);
   }
 }
+
+// ── Lightbox ─────────────────────────────────────────────────────
+function openLightbox(src) {
+  const lb = document.getElementById('photo-lightbox');
+  document.getElementById('photo-lightbox-img').src = src;
+  lb.classList.add('open');
+}
+document.getElementById('photo-lightbox-close').addEventListener('click', () => {
+  document.getElementById('photo-lightbox').classList.remove('open');
+});
+document.getElementById('photo-lightbox').addEventListener('click', (e) => {
+  if (e.target === e.currentTarget) e.currentTarget.classList.remove('open');
+});
 
 const $uploadDrop = document.getElementById('upload-drop');
 const $fileInput  = document.getElementById('file-input');
