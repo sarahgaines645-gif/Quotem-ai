@@ -917,7 +917,7 @@ async function chat(messages, options = {}) {
     // Q_THREAD_CLAUDE_VOICE — a thin pointer that adds no voice of its own, just
     // makes APS govern here and lifts the two cross-surface V4 lines. Force OFF
     // with QUOTEM_CLAUDE_THREADS=0 to drop threads back to V4.
-    if (options.surface === 'thread' && process.env.ANTHROPIC_API_KEY) {
+    if (options.surface === 'check-this' && process.env.ANTHROPIC_API_KEY) {
         const lastUser = [...messages].reverse().find(m => m && m.role === 'user');
         const msgText = (lastUser && typeof lastUser.content === 'string') ? lastUser.content : '';
         const claudeResult = await claudeThreadChat({
