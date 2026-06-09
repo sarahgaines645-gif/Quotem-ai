@@ -184,6 +184,10 @@
   .chat-bubble.q strong { font-weight: 700; }
   .chat-bubble.q a { color: var(--accent); text-decoration: underline; }
   .chat-bubble.q code { font-family: monospace; font-size: 13px; background: var(--accent-soft); padding: 1px 5px; border-radius: 4px; }
+  .chat-check-action { margin: -4px 0 12px 56px; }
+  .chat-check-btn { border: none; cursor: pointer; font-family: inherit; font-size: 12px; font-weight: 600; color: var(--accent); background: transparent; padding: 4px 0; }
+  .chat-check-btn:hover:not(:disabled) { text-decoration: underline; }
+  .chat-check-btn:disabled { opacity: 0.5; cursor: default; }
   .chat-checks { margin: -4px 0 14px 56px; padding: 10px 14px; border-radius: 12px; background: var(--bg); box-shadow: var(--neu-inset-sm); font-size: 13px; color: var(--text-muted); }
   .chat-checks-head { font-weight: 600; color: var(--text); margin-bottom: 6px; }
   .chat-check { padding: 4px 0; line-height: 1.45; }
@@ -1187,6 +1191,36 @@ function appendChatMsg(role, content, meta = {}) {
   msgEl.appendChild(avatar);
   msgEl.appendChild(bubble);
   $chatThread.appendChild(msgEl);
+
+  // "Q check this" — runs the reply (a drafted letter/email/statement) past real
+  // Claude via /check for a legal/quality review. On Q's substantive replies only.
+  if (role === 'q' && !meta.isCheck && (content || '').trim().length > 40) {
+    const act = document.createElement('div');
+    act.className = 'chat-check-action';
+    const cbtn = document.createElement('button');
+    cbtn.type = 'button';
+    cbtn.className = 'chat-check-btn';
+    cbtn.textContent = '✓ Q check this';
+    cbtn.addEventListener('click', async () => {
+      const old = cbtn.textContent;
+      cbtn.disabled = true; cbtn.textContent = '⏳ Checking…';
+      try {
+        const r = await fetch('/api/threads/' + threadId + '/check', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ document: content || '' }),
+        });
+        const d = await r.json().catch(() => ({}));
+        if (!r.ok || !d.review) throw new Error(d.error || 'Check failed');
+        appendChatMsg('q', d.review, { isCheck: true });
+      } catch (e) {
+        appendChatMsg('q', 'Sorry — the check failed. Try again in a moment.', { isCheck: true });
+      } finally {
+        cbtn.disabled = false; cbtn.textContent = old;
+      }
+    });
+    act.appendChild(cbtn);
+    $chatThread.appendChild(act);
+  }
 
   if (draftToRender) {
     renderDraftActions($chatThread, draftToRender);
