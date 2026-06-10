@@ -2126,16 +2126,20 @@ function selectActiveTools(userMessage, options = {}) {
         const name = t.function?.name;
         if (!name) return false;
         if (ALWAYS_ON.has(name)) {
-            // On a case Thread's OPENING turn, the current thread's data is already
-            // injected by the route and Q has no business reaching into OTHER
-            // threads — that auto-pull is exactly what dragged an unrelated case
-            // into a brand-new one ("every time I create a thread it talks about a
-            // different one"). Block cross-thread reads on the first turn only.
-            // After Q has opened the case they're available again, so the user can
-            // still connect genuinely related cases (e.g. council tax ↔ CMS) by
-            // asking — Q just can't do it uninvited at kickoff.
+            // Inside a case Thread, Q must stay on THIS case and never go rummaging
+            // through the user's other situations — not on the first turn, not on
+            // any later turn. Reaching into other threads is what made a brand-new
+            // "Baby shower" case start "checking saved situations" and trying to
+            // connect to unrelated cases, and what dragged old cases into new ones.
+            // This block is total on the thread surface.
+            // The connection the user DOES value (e.g. council tax <-> CMS) does
+            // NOT need these tools: Q carries those facts in his shared memory
+            // (injected every turn), so he can still join genuinely related things
+            // without pulling the wrong case's file in. read_thread/list_threads
+            // stay available on the MAIN chat surface, where "what's happening with
+            // my X case" is a legitimate request.
             if ((name === 'read_thread' || name === 'list_threads')
-                && options.surface === 'thread' && options.firstTurn) return false;
+                && options.surface === 'thread') return false;
             return true;
         }
         // Doc-editor page: all doc-editor tools always on
