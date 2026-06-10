@@ -268,8 +268,9 @@ function addFile(threadId, { filename, mimeType, base64 } = {}, ownerEmail) {
     const thread = readThread(threadId, ownerEmail);
     if (!thread) return null;
 
-    // Sanitise filename — strip path separators, keep extension
-    const safe = String(filename).replace(/[\\/]/g, '_').replace(/^\.+/, '').slice(0, 200);
+    // Sanitise filename — path.basename strips all directory components; replace
+    // any residual separators and cap length so callers can't craft escape paths.
+    const safe = path.basename(String(filename)).replace(/[\\/]/g, '_').slice(0, 200);
     if (!safe) return null;
 
     const dir = filesDirFor(threadId, thread.ownerEmail);
@@ -302,7 +303,7 @@ function addFile(threadId, { filename, mimeType, base64 } = {}, ownerEmail) {
 function readFile(threadId, filename, ownerEmail) {
     const thread = readThread(threadId, ownerEmail);
     if (!thread) return null;
-    const safe = String(filename).replace(/[\\/]/g, '_').replace(/^\.+/, '');
+    const safe = path.basename(String(filename)).replace(/[\\/]/g, '_');
     const filepath = path.join(filesDirFor(threadId, thread.ownerEmail), safe);
     if (!fs.existsSync(filepath)) return null;
     const meta = Array.isArray(thread.files)
@@ -318,7 +319,7 @@ function readFile(threadId, filename, ownerEmail) {
 function removeFile(threadId, filename, ownerEmail) {
     const thread = readThread(threadId, ownerEmail);
     if (!thread) return null;
-    const safe = String(filename).replace(/[\\/]/g, '_').replace(/^\.+/, '');
+    const safe = path.basename(String(filename)).replace(/[\\/]/g, '_');
     try { fs.unlinkSync(path.join(filesDirFor(threadId, thread.ownerEmail), safe)); } catch { /* already gone */ }
     if (Array.isArray(thread.files)) {
         thread.files = thread.files.filter(f => f.filename !== safe);
@@ -329,8 +330,8 @@ function removeFile(threadId, filename, ownerEmail) {
 function renameFile(threadId, oldName, newName, ownerEmail) {
     const thread = readThread(threadId, ownerEmail);
     if (!thread) return null;
-    const safeOld = String(oldName).replace(/[\\/]/g, '_').replace(/^\.+/, '');
-    let safeNew = String(newName).replace(/[\\/]/g, '_').replace(/^\.+/, '').slice(0, 200);
+    const safeOld = path.basename(String(oldName)).replace(/[\\/]/g, '_');
+    let safeNew = path.basename(String(newName)).replace(/[\\/]/g, '_').slice(0, 200);
     if (!safeOld || !safeNew || safeOld === safeNew) return thread;
     // Preserve extension if not supplied in new name
     const oldExt = path.extname(safeOld);

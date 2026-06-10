@@ -24,6 +24,15 @@ const ROOT = path.join(__dirname, '..');
 if (!process.env.TOGETHER_API_KEY) {
     console.warn('[Q] ⚠️  TOGETHER_API_KEY is not set. Q will fail every request that needs to reason.');
 }
+// ── Security: session signing key must be set ──────────────────
+// Without Q_AUTH_PEPPER the server falls back to a public hardcoded string,
+// meaning anyone who knows it can forge a valid session cookie for any email.
+if (!process.env.Q_AUTH_PEPPER || process.env.Q_AUTH_PEPPER.length < 16) {
+    console.error('[Q] 🔴 SECURITY: Q_AUTH_PEPPER is not set or is too short (need ≥ 16 chars). Session cookies are cryptographically weak — set this in Railway env immediately.');
+}
+if (!process.env.EMAIL_TOKEN_KEY && !process.env.Q_AUTH_PEPPER) {
+    console.error('[Q] 🔴 SECURITY: Neither EMAIL_TOKEN_KEY nor Q_AUTH_PEPPER is set. Gmail refresh tokens are encrypted with a public fallback key and can be decrypted by anyone.');
+}
 
 // ── First-run bootstrap: seed Q's memory from the bundled seed file ────
 // Q's "first day" history (the conversations including Alex's first
