@@ -487,6 +487,7 @@
       <button class="chat-deep" id="chat-deep" type="button" title="Deep think — Q reasons at maximum. Slower, sharper.">🧠 Deep</button>
       <button class="chat-toggle-sm" id="chat-verify" type="button" title="Verify — press, then click the message you want Q to check">✓</button>
       <button class="chat-toggle-sm" id="chat-glm" type="button" title="GLM-5 test — switch this thread to GLM-5 744B instead of V4 Pro">G</button>
+      <button class="chat-toggle-sm" id="chat-clear" type="button" title="Clear Q's conversation on this thread — keeps emails, files and notes">✕ Clear</button>
     </div>
   </div>
 
@@ -652,6 +653,19 @@ let deepMode = false;
 $chatDeep.addEventListener('click', () => {
   deepMode = !deepMode;
   $chatDeep.classList.toggle('on', deepMode);
+});
+
+// Clear Q's conversation on this thread (keeps emails, files, notes).
+document.getElementById('chat-clear').addEventListener('click', async () => {
+  if (!confirm('Clear Q\'s conversation on this thread? Emails, files and notes are kept.')) return;
+  const r = await fetch('/api/threads/' + threadId + '/chat', { method: 'DELETE' });
+  if (r.ok) {
+    thread.chatHistory = [];
+    renderChat();
+    refreshKickoffButton();
+  } else {
+    alert('Could not clear chat.');
+  }
 });
 
 // GLM-5 model toggle — test GLM-5 744B against V4 Pro in this thread.

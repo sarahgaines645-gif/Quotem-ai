@@ -1993,6 +1993,15 @@ router.delete('/api/threads/:id', requirePerson, (req, res) => {
     res.json({ ok });
 });
 
+// Clear just the Q chat history on a thread — keeps emails, files, notes intact.
+router.delete('/api/threads/:id/chat', requirePerson, (req, res) => {
+    const t = readOwnedThread(req, res);
+    if (!t) return;
+    t.chatHistory = [];
+    qThreads.writeThread(t);
+    res.json({ ok: true });
+});
+
 // One-time legacy claim — Sarah's existing Threads were created without
 // owner-scoping and got locked to '__legacy__' on next read. This endpoint
 // claims every '__legacy__' Thread for the calling user. Run once.
