@@ -2437,9 +2437,9 @@ router.post('/api/threads/:id/chat', requirePerson, express.json({ limit: '256kb
         // on no-think is too shallow, and a case is the LAST place he should
         // think less). The page can request 'max' for a big case (the Deep
         // toggle) — deepest reasoning when it's worth the extra time.
-        // 'high' + large case context caused Together to hang silently for 60+ min.
-        // Normal turns use 'low' (fast, still full tool-call support); Deep = 'high'.
-        const tEffort = (req.body?.reasoningEffort === 'max') ? 'high' : 'low';
+        // Context now trimmed (15 msgs, 1500c emails, narrow file triggers) so
+        // 'high' reasoning is safe again. 'low' was causing flat/passive replies.
+        const tEffort = (req.body?.reasoningEffort === 'max') ? 'high' : 'high';
         const tTestModel = req.body?.testModel || undefined;
         const qOpts = { useTools: true, mode: 'aps', surface: 'thread', advocate: true, person: req.person, reasoningEffort: tEffort, threadId: req.params.id, ...(tTestModel && { model: tTestModel }) };
         // Photos are now read to text above and spliced into `messages`, so the
