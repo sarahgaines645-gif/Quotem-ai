@@ -210,8 +210,11 @@
   .chat-send { border: none; cursor: pointer; background: var(--accent); color: white; font-family: inherit; font-size: 14px; font-weight: 700; padding: 12px 22px; border-radius: 12px; box-shadow: var(--neu-raised-sm); flex-shrink: 0; }
   .chat-send:hover:not(:disabled) { opacity: 0.9; }
   .chat-send:disabled { opacity: 0.5; cursor: not-allowed; }
-  .chat-deep { border: none; cursor: pointer; background: var(--bg); color: var(--text-muted); font-family: inherit; font-size: 13px; font-weight: 600; padding: 12px 14px; border-radius: 12px; box-shadow: var(--neu-raised-sm); flex-shrink: 0; }
+  .chat-toggles { display: flex; gap: 8px; align-items: center; margin-top: 8px; }
+  .chat-deep { border: none; cursor: pointer; background: var(--bg); color: var(--text-muted); font-family: inherit; font-size: 13px; font-weight: 600; padding: 7px 14px; border-radius: 10px; box-shadow: var(--neu-raised-sm); flex-shrink: 0; }
   .chat-deep.on { color: var(--accent); box-shadow: var(--neu-inset-sm); }
+  .chat-toggle-sm { border: none; cursor: pointer; background: var(--bg); color: var(--text-muted); font-family: inherit; font-size: 11px; font-weight: 700; width: 28px; height: 28px; border-radius: 8px; box-shadow: var(--neu-raised-sm); flex-shrink: 0; letter-spacing: 0.02em; }
+  .chat-toggle-sm.on { color: var(--accent); box-shadow: var(--neu-inset-sm); }
   .chat-typing { font-size: 12px; color: var(--text-muted); padding: 4px 0; font-style: italic; display: none; }
   .chat-typing.show { display: block; }
   /* Clickable option buttons under a Q message */
@@ -381,6 +384,7 @@
   <header>
     <span class="logo-mark"><span class="q">Q</span><span class="dot"></span></span>
     <button id="priority-btn" class="priority-btn" title="Mark as priority">☆ Priority</button>
+    <button id="chat-forms" class="priority-btn" type="button" title="Open the Forms panel — fill and download GOV.UK forms for this case">📋 Forms</button>
     <a href="/threads" class="header-back">← all threads</a>
   </header>
 
@@ -452,11 +456,12 @@
     <div class="chat-typing" id="chat-typing">Q is thinking…</div>
     <div class="chat-input-row">
       <textarea id="chat-input" rows="1" placeholder="Talk to Q about this case — he sees everything in this thread…"></textarea>
-      <button class="chat-deep" id="chat-forms" type="button" title="Open the Forms panel — fill and download GOV.UK forms for this case">📋 Forms</button>
-      <button class="chat-deep" id="chat-deep" type="button" title="Deep think — Q reasons at maximum for a big or complex case. Slower, but sharper. Off = normal (still full reasoning).">🧠 Deep</button>
-      <button class="chat-deep" id="chat-verify" type="button" title="Verify — press, then click the message you want Q to check">✓ Verify</button>
-      <button class="chat-deep" id="chat-glm" type="button" title="GLM-5 test — switch this thread to GLM-5 744B instead of V4 Pro">GLM-5</button>
       <button class="chat-send" id="chat-send">Send</button>
+    </div>
+    <div class="chat-toggles">
+      <button class="chat-deep" id="chat-deep" type="button" title="Deep think — Q reasons at maximum. Slower, sharper.">🧠 Deep</button>
+      <button class="chat-toggle-sm" id="chat-verify" type="button" title="Verify — press, then click the message you want Q to check">V</button>
+      <button class="chat-toggle-sm" id="chat-glm" type="button" title="GLM-5 test — switch this thread to GLM-5 744B instead of V4 Pro">G</button>
     </div>
   </div>
 
