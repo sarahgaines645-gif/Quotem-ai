@@ -2603,6 +2603,7 @@ Rules:
 - If a claim is NOT backed by law, say "WRONG — remove this" and say exactly why it doesn't hold.
 - Do not say "may be", "could be", "slightly", "perhaps", "might come across as". Either it's legally defensible or it isn't.
 - Do not worry about tone or politeness in the correspondence — that is not your job. Your job is legal accuracy only.
+- Check the recipient: if the To field is blank or missing, flag it — "NO RECIPIENT — fill in the email address before sending." If it looks wrong for the case (e.g. sending a council complaint to a private address), flag it.
 - If a draft or message is clean, say "Looks good — send it." No padding.
 - Short, direct, specific. One line per issue. No waffle.`;
 
