@@ -191,10 +191,31 @@
   .chat-bubble.q a { color: var(--accent); text-decoration: underline; }
   .chat-bubble.q code { font-family: monospace; font-size: 13px; background: var(--accent-soft); padding: 1px 5px; border-radius: 4px; }
   #chat-verify.on { color: var(--accent); box-shadow: var(--neu-inset-sm); }
-  .verify-ghost { position: fixed; z-index: 400; pointer-events: none; font-size: 22px; font-weight: 700; color: var(--accent); text-shadow: 0 1px 2px rgba(0,0,0,0.2); }
-  body.verify-armed { cursor: crosshair; }
-  body.verify-armed .q-checkable { cursor: pointer; }
-  body.verify-armed .q-checkable:hover { box-shadow: 0 0 0 2px var(--accent), var(--neu-raised-sm); }
+  /* ── Verify popup ── */
+  .verify-panel {
+    position: fixed; bottom: 24px; right: 20px; z-index: 300;
+    width: 400px; max-width: calc(100vw - 32px);
+    background: var(--bg); border-radius: 18px;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.14), 0 2px 8px rgba(0,0,0,0.07);
+    border-top: 3px solid var(--accent);
+    display: flex; flex-direction: column; max-height: 520px;
+    opacity: 0; pointer-events: none; transition: opacity 0.18s, transform 0.18s;
+    transform: translateY(12px);
+  }
+  .verify-panel.open { opacity: 1; pointer-events: auto; transform: translateY(0); }
+  .verify-bar { display: flex; align-items: center; gap: 10px; padding: 11px 16px; flex-shrink: 0; border-bottom: 1px solid var(--shadow-dark); }
+  .verify-bar-title { font-size: 13px; font-weight: 700; letter-spacing: -0.01em; }
+  .verify-bar-sub { flex: 1; font-size: 11px; color: var(--text-muted); }
+  .verify-bar-close { border: none; background: none; cursor: pointer; font-size: 15px; color: var(--text-muted); font-family: inherit; padding: 2px 5px; border-radius: 5px; }
+  .verify-bar-close:hover { color: var(--text); }
+  .verify-msgs { flex: 1; overflow-y: auto; padding: 12px 14px; display: flex; flex-direction: column; gap: 10px; scrollbar-width: thin; }
+  .verify-msg { font-size: 13px; line-height: 1.55; }
+  .verify-msg.user { color: var(--text-muted); font-style: italic; font-size: 12px; }
+  .verify-msg.claude { background: var(--bg); box-shadow: var(--neu-raised-sm); border-radius: 12px; padding: 10px 13px; color: var(--text); }
+  .verify-typing-line { font-size: 12px; color: var(--text-faint); font-style: italic; padding: 0 4px; }
+  .verify-input-row { display: flex; gap: 8px; padding: 10px 14px; flex-shrink: 0; border-top: 1px solid var(--shadow-dark); }
+  .verify-input { flex: 1; border: none; outline: none; font-family: inherit; font-size: 13px; background: var(--bg); box-shadow: var(--neu-inset-sm); border-radius: 10px; padding: 8px 12px; resize: none; color: var(--text); min-height: 36px; max-height: 80px; }
+  .verify-go { border: none; cursor: pointer; background: var(--accent); color: white; font-family: inherit; font-size: 13px; font-weight: 700; padding: 8px 14px; border-radius: 10px; flex-shrink: 0; align-self: flex-end; }
   .chat-checks { margin: -4px 0 14px 56px; padding: 10px 14px; border-radius: 12px; background: var(--bg); box-shadow: var(--neu-inset-sm); font-size: 13px; color: var(--text-muted); }
   .chat-checks-head { font-weight: 600; color: var(--text); margin-bottom: 6px; }
   .chat-check { padding: 4px 0; line-height: 1.45; }
@@ -559,6 +580,20 @@
         <button class="remind-option" data-when="in 1 month">⏰ In a month</button>
       </div>
       <button class="remind-cancel" id="remind-cancel">Cancel</button>
+    </div>
+  </div>
+
+  <!-- ── Verify popup ── -->
+  <div class="verify-panel" id="verify-panel">
+    <div class="verify-bar">
+      <span class="verify-bar-title">✓ Fact-check</span>
+      <span class="verify-bar-sub">Claude reading this thread</span>
+      <button class="verify-bar-close" id="verify-close">✕</button>
+    </div>
+    <div class="verify-msgs" id="verify-msgs"></div>
+    <div class="verify-input-row">
+      <textarea class="verify-input" id="verify-input" rows="1" placeholder="Ask Claude to check something…"></textarea>
+      <button class="verify-go" id="verify-go">→</button>
     </div>
   </div>
 
@@ -2266,60 +2301,90 @@ loadThread();
 // ── "Verify" drag-tool — press Verify, get a ✓ that follows the cursor, then
 //    click the message you want Q to check. No per-reply button clutter. ──
 (function () {
-  const vbtn = document.getElementById('chat-verify');
-  if (!vbtn) return;
-  let armed = false, ghost = null;
-  function disarm() {
-    armed = false; vbtn.classList.remove('on');
-    document.body.classList.remove('verify-armed');
-    if (ghost) { ghost.remove(); ghost = null; }
+  const vbtn   = document.getElementById('chat-verify');
+  const panel  = document.getElementById('verify-panel');
+  const msgs   = document.getElementById('verify-msgs');
+  const inp    = document.getElementById('verify-input');
+  const goBtn  = document.getElementById('verify-go');
+  const closeB = document.getElementById('verify-close');
+  if (!vbtn || !panel) return;
+
+  let verifyHistory = [];  // [{role, content}] for conversational follow-ups
+
+  function openVerify() {
+    panel.classList.add('open');
+    vbtn.classList.add('on');
+    if (verifyHistory.length === 0) autoCheck();
   }
-  function arm() {
-    armed = true; vbtn.classList.add('on');
-    document.body.classList.add('verify-armed');
-    ghost = document.createElement('div');
-    ghost.className = 'verify-ghost'; ghost.textContent = '✓';
-    document.body.appendChild(ghost);
+  function closeVerify() {
+    panel.classList.remove('open');
+    vbtn.classList.remove('on');
   }
-  vbtn.addEventListener('click', (e) => { e.stopPropagation(); if (armed) disarm(); else arm(); });
-  document.addEventListener('mousemove', (e) => {
-    if (!armed || !ghost) return;
-    ghost.style.left = (e.clientX + 12) + 'px';
-    ghost.style.top = (e.clientY + 12) + 'px';
-  });
-  document.addEventListener('click', (e) => {
-    if (!armed) return;
-    const bubble = e.target.closest && e.target.closest('.q-checkable');
-    if (bubble) {
-      e.preventDefault(); e.stopPropagation();
-      const text = bubble.dataset.checkText || bubble.textContent || '';
-      disarm();
-      runCheck(text);
-    } else if (e.target !== vbtn) {
-      disarm();
+  vbtn.addEventListener('click', (e) => { e.stopPropagation(); panel.classList.contains('open') ? closeVerify() : openVerify(); });
+  closeB.addEventListener('click', closeVerify);
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && panel.classList.contains('open')) closeVerify(); });
+
+  function addMsg(role, text) {
+    const d = document.createElement('div');
+    d.className = 'verify-msg ' + role;
+    if (role === 'claude') {
+      d.innerHTML = (typeof marked !== 'undefined' ? marked.parse(text) : text.replace(/\n/g, '<br>'));
+    } else {
+      d.textContent = text;
     }
-  }, true);
-  document.addEventListener('keydown', (e) => { if (e.key === 'Escape') disarm(); });
-  async function runCheck(text) {
-    if (!text.trim()) return;
-    const tmp = document.createElement('div');
-    tmp.className = 'chat-typing'; tmp.textContent = '✓ Checking that for you…';
-    $chatThread.appendChild(tmp);
-    $chatThread.scrollTop = $chatThread.scrollHeight;
+    msgs.appendChild(d);
+    msgs.scrollTop = msgs.scrollHeight;
+    return d;
+  }
+  function addTyping() {
+    const d = document.createElement('div');
+    d.className = 'verify-msg verify-typing-line';
+    d.textContent = 'Claude is reading…';
+    msgs.appendChild(d);
+    msgs.scrollTop = msgs.scrollHeight;
+    return d;
+  }
+
+  async function runVerify(question) {
+    const typing = addTyping();
     try {
+      const body = verifyHistory.length === 0 && !question
+        ? { question: 'Review the last 5 messages Q sent in this thread. Check each one for legal accuracy, any unsupported claims, anything that could harm the case, and what is solid. Be direct and specific.' }
+        : { question, history: verifyHistory };
       const r = await fetch('/api/threads/' + threadId + '/check', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ document: text }),
+        body: JSON.stringify(body),
       });
       const d = await r.json().catch(() => ({}));
-      if (!r.ok || !d.review) throw new Error(d.error || 'Check failed');
-      tmp.remove();
-      appendChatMsg('q', d.review, { isCheck: true });
+      typing.remove();
+      const reply = d.review || 'No response — try again.';
+      verifyHistory.push({ role: 'assistant', content: reply });
+      addMsg('claude', reply);
     } catch (e) {
-      tmp.remove();
-      appendChatMsg('q', 'Sorry — the check failed. Try again.', { isCheck: true });
+      typing.remove();
+      addMsg('claude', 'Check failed — try again.');
     }
   }
+
+  function autoCheck() {
+    verifyHistory = [];
+    msgs.innerHTML = '';
+    runVerify(null);
+  }
+
+  function sendQuestion() {
+    const q = inp.value.trim();
+    if (!q) return;
+    inp.value = '';
+    inp.style.height = '';
+    verifyHistory.push({ role: 'user', content: q });
+    addMsg('user', q);
+    runVerify(q);
+  }
+
+  goBtn.addEventListener('click', sendQuestion);
+  inp.addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendQuestion(); } });
+  inp.addEventListener('input', () => { inp.style.height = 'auto'; inp.style.height = Math.min(inp.scrollHeight, 80) + 'px'; });
 })();
 
 // ── Outbox for this case (emails ready to send later) ──

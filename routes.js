@@ -388,12 +388,13 @@ router.post('/email/send', requirePerson, express.json({ limit: '10mb' }), async
         // Record on the case thread so it appears in correspondence.
         if (threadId) {
             try {
-                qThreads.addEmail(threadId, {
+                const recorded = qThreads.addEmail(threadId, {
                     type: 'out', from: from || req.person.email,
                     to, subject, body: text || '',
                     date: new Date().toISOString().slice(0, 10),
                 }, req.person.email);
-            } catch (_) { /* non-fatal — email is sent regardless */ }
+                if (!recorded) console.error('[email] addEmail returned null — thread not found or wrong owner? threadId=%s email=%s', threadId, req.person.email);
+            } catch (e2) { console.error('[email] addEmail failed:', e2.message); }
         }
         res.json({ ok: true, sentFrom: from });
     } catch (e) {
@@ -435,12 +436,13 @@ router.post('/email/outbox/:id/send', requirePerson, async (req, res) => {
         // Record on the case thread so it appears in correspondence.
         if (item && item.threadId) {
             try {
-                qThreads.addEmail(item.threadId, {
+                const recorded = qThreads.addEmail(item.threadId, {
                     type: 'out', from: from || req.person.email,
                     to: item.to, subject: item.subject || '', body: item.body || '',
                     date: new Date().toISOString().slice(0, 10),
                 }, req.person.email);
-            } catch (_) { /* non-fatal */ }
+                if (!recorded) console.error('[email] addEmail returned null for outbox send — threadId=%s email=%s', item.threadId, req.person.email);
+            } catch (e2) { console.error('[email] addEmail to thread failed:', e2.message); }
         }
         res.json({ ok: true, sentFrom: from });
     } catch (e) {
@@ -2567,30 +2569,40 @@ router.post('/api/threads/:id/chat', requirePerson, express.json({ limit: '256kb
 // "Check this" — single focused Claude Sonnet review of a draft document.
 // No tool loop, no credit burn. Body: { document: '...text...' }
 // Claude reads the full case context + the document and gives a legal/quality check.
-router.post('/api/threads/:id/check', requirePerson, express.json({ limit: '128kb' }), async (req, res) => {
+router.post('/api/threads/:id/check', requirePerson, express.json({ limit: '512kb' }), async (req, res) => {
     const t = readOwnedThread(req, res);
     if (!t) return;
-    const doc = (req.body?.document || '').trim();
-    if (!doc) return res.status(400).json({ error: 'document required' });
+
+    // Supports two modes:
+    // 1. Single-shot: { document: string } — check a specific document
+    // 2. Conversational: { question: string, history: [{role,content}] } — follow-up in the verify popup
+    const doc      = (req.body?.document || '').trim();
+    const question = (req.body?.question  || '').trim();
+    const history  = Array.isArray(req.body?.history) ? req.body.history.slice(-12) : [];
+    if (!doc && !question) return res.status(400).json({ error: 'document or question required' });
 
     const caseContext = [
         t.title ? `Case: ${t.title}` : '',
         (t.emails || []).map(e => `[${e.type === 'in' ? 'Received' : e.type === 'draft' ? 'Draft' : 'Sent'} — ${e.subject || ''}]\n${(e.body || '').slice(0, 800)}`).join('\n\n'),
         (t.notes || []).map(n => n.text || '').join('\n'),
+        (t.chatHistory || []).slice(-10).filter(m => m.role === 'assistant').map(m => `[Q said]\n${(m.content || '').slice(0, 600)}`).join('\n\n'),
     ].filter(Boolean).join('\n\n');
 
-    const system = `You are a careful legal and correspondence reviewer. The user is about to send the document below. Read the full case context, then review the document for:
-- Legal accuracy and strength of arguments
-- Anything missing that should be included
-- Tone — is it professional and firm without being inflammatory?
-- Any factual errors or unsupported claims
+    const system = `You are a careful legal and correspondence reviewer for a case. Read the full case context, then answer the user's question honestly and directly.
+
+When reviewing text or messages, check for:
+- Legal accuracy — cite the actual law or regulation if relevant; flag anything unsupported
+- Factual errors or claims that can't be substantiated
+- Tone — professional and firm, not inflammatory
+- Anything missing that strengthens the case
 - Whether it is ready to send or needs changes
 
-Be direct. If it's ready, say so clearly. If not, list exactly what to fix.`;
+Be direct. Short answers. If something is wrong, say specifically what and why. If it's fine, say so.`;
 
     const messages = [
         ...(caseContext ? [{ role: 'user', content: `CASE CONTEXT:\n${caseContext}` }, { role: 'assistant', content: 'Understood — I have the full case context.' }] : []),
-        { role: 'user', content: `Please check this document before I send it:\n\n${doc}` },
+        ...history,
+        { role: 'user', content: doc ? `Please check this before I send it:\n\n${doc}` : question },
     ];
 
     try {
