@@ -562,7 +562,14 @@ function buildSystemMessage(mode, personId, surface, personName) {
     const surfaceBlock = (surface && SURFACE_PROMPTS[surface])
         ? `\n\n---\n\n${SURFACE_PROMPTS[surface]}`
         : '';
-    return Q_PERSONA + nameBlock + dateTimeBlock + surfaceBlock + overlay + factsBlock;
+    // On a case Thread, the 1-3 sentence rule in Q_PERSONA and the V4 identity
+    // line directly contradict APS. Q_THREAD_CLAUDE_VOICE was written to clear
+    // these for the Claude path — apply it here so V4 and GLM-5 get the same
+    // override. Without it both models read "1-3 sentences" above APS and stay flat.
+    const threadVoice = (mode === 'aps' && surface === 'thread')
+        ? `\n\n---\n\n${Q_THREAD_CLAUDE_VOICE}`
+        : '';
+    return Q_PERSONA + nameBlock + dateTimeBlock + surfaceBlock + overlay + threadVoice + factsBlock;
 }
 
 /**
