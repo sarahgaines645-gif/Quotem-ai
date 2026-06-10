@@ -203,6 +203,10 @@
     transform: translateY(12px);
   }
   .verify-panel.open { opacity: 1; pointer-events: auto; transform: translateY(0); }
+  .verify-panel.minimized .verify-msgs,
+  .verify-panel.minimized .verify-input-row { display: none; }
+  .verify-panel.minimized .verify-bar { border-bottom: none; cursor: pointer; }
+  .verify-panel.minimized { max-height: none; }
   .verify-bar { display: flex; align-items: center; gap: 10px; padding: 11px 16px; flex-shrink: 0; border-bottom: 1px solid var(--shadow-dark); }
   .verify-bar-title { font-size: 13px; font-weight: 700; letter-spacing: -0.01em; }
   .verify-bar-sub { flex: 1; font-size: 11px; color: var(--text-muted); }
@@ -585,10 +589,11 @@
 
   <!-- ── Verify popup ── -->
   <div class="verify-panel" id="verify-panel">
-    <div class="verify-bar">
+    <div class="verify-bar" id="verify-bar-click">
       <span class="verify-bar-title">✓ Fact-check</span>
-      <span class="verify-bar-sub">Claude reading this thread</span>
-      <button class="verify-bar-close" id="verify-close">✕</button>
+      <span class="verify-bar-sub" id="verify-bar-sub">Claude reading this thread</span>
+      <button class="verify-bar-close" id="verify-min" title="Minimise">−</button>
+      <button class="verify-bar-close" id="verify-close" title="Clear and close" style="font-size:12px;">✕</button>
     </div>
     <div class="verify-msgs" id="verify-msgs"></div>
     <div class="verify-input-row">
@@ -2306,23 +2311,49 @@ loadThread();
   const msgs   = document.getElementById('verify-msgs');
   const inp    = document.getElementById('verify-input');
   const goBtn  = document.getElementById('verify-go');
+  const minBtn = document.getElementById('verify-min');
   const closeB = document.getElementById('verify-close');
+  const barSub = document.getElementById('verify-bar-sub');
+  const barClick = document.getElementById('verify-bar-click');
   if (!vbtn || !panel) return;
 
   let verifyHistory = [];  // [{role, content}] for conversational follow-ups
 
   function openVerify() {
     panel.classList.add('open');
+    panel.classList.remove('minimized');
     vbtn.classList.add('on');
+    if (barSub) barSub.textContent = 'Claude reading this thread';
     if (verifyHistory.length === 0) autoCheck();
   }
-  function closeVerify() {
-    panel.classList.remove('open');
+  function minimizeVerify() {
+    panel.classList.add('minimized');
     vbtn.classList.remove('on');
+    if (barSub) barSub.textContent = 'click to restore';
   }
-  vbtn.addEventListener('click', (e) => { e.stopPropagation(); panel.classList.contains('open') ? closeVerify() : openVerify(); });
-  closeB.addEventListener('click', closeVerify);
-  document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && panel.classList.contains('open')) closeVerify(); });
+  function closeVerify() {
+    // Full close — clears history so next open runs a fresh check
+    panel.classList.remove('open');
+    panel.classList.remove('minimized');
+    vbtn.classList.remove('on');
+    verifyHistory = [];
+    msgs.innerHTML = '';
+  }
+
+  // ✓ toolbar button: opens if hidden/closed; restores if minimized
+  vbtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    if (!panel.classList.contains('open')) { openVerify(); return; }
+    if (panel.classList.contains('minimized')) { openVerify(); return; }
+    minimizeVerify();
+  });
+  // − button: minimize
+  if (minBtn) minBtn.addEventListener('click', (e) => { e.stopPropagation(); minimizeVerify(); });
+  // ✕ button: clear and close
+  closeB.addEventListener('click', (e) => { e.stopPropagation(); closeVerify(); });
+  // clicking the title bar while minimized: restore
+  if (barClick) barClick.addEventListener('click', () => { if (panel.classList.contains('minimized')) openVerify(); });
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && panel.classList.contains('open') && !panel.classList.contains('minimized')) minimizeVerify(); });
 
   function addMsg(role, text) {
     const d = document.createElement('div');
