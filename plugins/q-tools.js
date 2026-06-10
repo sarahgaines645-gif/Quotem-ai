@@ -2126,12 +2126,16 @@ function selectActiveTools(userMessage, options = {}) {
         const name = t.function?.name;
         if (!name) return false;
         if (ALWAYS_ON.has(name)) {
-            // Inside a Thread the current thread's data is already injected into
-            // the message by the route. read_thread / list_threads here can ONLY
-            // read OTHER threads — which caused Q to pull an old case into a new
-            // thread and respond about the wrong situation entirely. Block both on
-            // the thread surface; Q has everything he needs already in context.
-            if ((name === 'read_thread' || name === 'list_threads') && options.surface === 'thread') return false;
+            // On a case Thread's OPENING turn, the current thread's data is already
+            // injected by the route and Q has no business reaching into OTHER
+            // threads — that auto-pull is exactly what dragged an unrelated case
+            // into a brand-new one ("every time I create a thread it talks about a
+            // different one"). Block cross-thread reads on the first turn only.
+            // After Q has opened the case they're available again, so the user can
+            // still connect genuinely related cases (e.g. council tax ↔ CMS) by
+            // asking — Q just can't do it uninvited at kickoff.
+            if ((name === 'read_thread' || name === 'list_threads')
+                && options.surface === 'thread' && options.firstTurn) return false;
             return true;
         }
         // Doc-editor page: all doc-editor tools always on

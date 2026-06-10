@@ -1529,6 +1529,18 @@ async function pingQOnUpdate(what) {
 
 async function autoKickoff() {
   $chatTyping.classList.add('show');
+  // Does this case actually hold anything? An empty thread has no emails, no
+  // files and no real notes. Telling Q to "diagnose" an empty case made him
+  // fabricate a whole situation out of the parking-ticket examples in his prompt
+  // — so on an empty case we ask him to ASK, not diagnose. The proactive
+  // list_threads pull is gone entirely (it dragged unrelated cases in).
+  const hasData =
+    (Array.isArray(thread.emails) && thread.emails.length > 0) ||
+    (Array.isArray(thread.files)  && thread.files.length  > 0) ||
+    (Array.isArray(thread.notes)  && thread.notes.some(n => n && (n.content || '').trim()));
+  const kickoffMessage = hasData
+    ? "Open this case in Phase 1, working ONLY from what's already saved to it. Run a research sweep (web_search for the rules, deadlines, recent ombudsman rulings, similar cases) on THIS case's facts. Then give me the diagnosis: what's happening, why I'm right, the rules in my favour, the gaps in the facts, what they're likely to come back with. Ask me ONE question to fill the most important gap. Do NOT look at or pull in any other case unless I tell you to. NO DRAFTING — Phase 1 is diagnosis only. Use 'I've' not 'I could'."
+    : "This case is empty — I haven't added anything to it yet. Greet me in one short line and ask me what the situation is that I want help with. Do NOT assume any facts, do NOT diagnose, do NOT research anything, and do NOT mention parking tickets, councils, bailiffs or any other example — just ask me what I'm dealing with.";
   try {
     const res = await fetch('/api/threads/' + threadId + '/chat', {
       method: 'POST',
@@ -1537,7 +1549,7 @@ async function autoKickoff() {
         // silentUser keeps this kickoff prompt out of saved chat history so
         // it doesn't render as a user message next time the page loads.
         silentUser: true,
-        message: "Open this case in Phase 1. Run the research sweep first (web_search for rules, deadlines, recent ombudsman rulings, similar cases), then list_threads to spot anything related I've already saved. Then give me the diagnosis: what's happening, why I'm right, the rules in my favour, the gaps in the facts, what they're likely to come back with. Ask me ONE question to fill the most important gap. NO DRAFTING — Phase 1 is diagnosis only. Use 'I've' not 'I could'.",
+        message: kickoffMessage,
       }),
     });
     const json = await res.json();

@@ -2385,8 +2385,18 @@ router.post('/api/threads/:id/chat', requirePerson, express.json({ limit: '256kb
     if (!message || typeof message !== 'string') return res.status(400).json({ error: 'message required' });
 
     const messages = [];
-    if (t.emails.length > 0 || (t.files && t.files.length > 0)) {
+    const noteList = Array.isArray(t.notes) ? t.notes.filter(n => n && String(n.content || '').trim()) : [];
+    const hasRealData = t.emails.length > 0 || (t.files && t.files.length > 0) || noteList.length > 0;
+    if (hasRealData) {
         const parts = [];
+        // Notes / saved case summary FIRST — this is the user's own account of the
+        // situation (createThread stores the case summary as a note). It was never
+        // being injected, so a thread that held only a typed summary looked EMPTY
+        // to Q and he confabulated a case from the prompt's examples instead.
+        if (noteList.length > 0) {
+            parts.push('--- CASE NOTES / SUMMARY (the user\'s own account of this situation) ---\n' +
+                noteList.map(n => String(n.content || '').trim()).join('\n\n'));
+        }
         if (t.emails.length > 0) {
             parts.push(t.emails.map((e, i) => {
                 const dir = e.type === 'in' ? 'RECEIVED' : 'SENT';
@@ -2401,6 +2411,15 @@ router.post('/api/threads/:id/chat', requirePerson, express.json({ limit: '256kb
         }
         messages.push({ role: 'user', content: `This is the saved situation "${t.title}". Here's everything so far:\n\n${parts.join('\n\n')}` });
         messages.push({ role: 'assistant', content: 'Got it — fully up to speed on this case.' });
+    } else {
+        // EMPTY-THREAD GUARD. With no emails, files or notes, Q has NOTHING real to
+        // work from. On high reasoning, when the kickoff demands a diagnosis, he
+        // confabulates a whole case out of the PARKING-TICKET EXAMPLES baked into
+        // the APS prompt (a fake PCN, a council, bailiffs, TE7/TE9) and presents it
+        // as the user's life. This injected turn makes the emptiness explicit and
+        // forbids inventing, so he ASKS what the situation is instead.
+        messages.push({ role: 'user', content: `IMPORTANT — READ THIS FIRST: the case "${t.title}" is EMPTY. There are no emails, no files and no notes saved to it. You have NO information whatsoever about this situation. Do NOT invent, assume, or guess any details. Do NOT treat ANY example from your instructions (parking tickets, PCNs, councils, bailiffs, court forms, reference numbers, place names) as if it were real or mine — those are illustrations, never facts about me. Your ONLY job on this turn: greet me in one short line and ask me what the situation is that I want help with. Nothing else — no diagnosis, no research, no draft.` });
+        messages.push({ role: 'assistant', content: 'Understood — this case is empty, so I will simply ask what it is rather than assume anything.' });
     }
     // Cap history to the last 30 messages — full history bloats V4's context to
     // 80k+ tokens on an active case (emails + docs + history all added up), which
@@ -2611,7 +2630,7 @@ router.post('/api/threads/:id/chat', requirePerson, express.json({ limit: '256kb
         // Deep toggle sends 'max' from client — keeps the extra depth + 8k tokens.
         const tEffort = (req.body?.reasoningEffort === 'max') ? 'max' : 'high';
         const tTestModel = req.body?.testModel || undefined;
-        const qOpts = { useTools: true, mode: 'aps', surface: 'thread', advocate: true, person: req.person, reasoningEffort: tEffort, threadId: req.params.id, ...(tTestModel && { model: tTestModel }) };
+        const qOpts = { useTools: true, mode: 'aps', surface: 'thread', advocate: true, person: req.person, reasoningEffort: tEffort, threadId: req.params.id, firstTurn: isKickoff, ...(tTestModel && { model: tTestModel }) };
         // Photos are now read to text above and spliced into `messages`, so the
         // turn stays a normal history-aware Claude turn (no isolated vision call,
         // no looping). PDFs are still handed to Claude natively to read directly.
