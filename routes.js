@@ -2378,31 +2378,38 @@ router.post('/api/threads/:id/chat', requirePerson, express.json({ limit: '256kb
                 const cacheKey = `${t.id}:${f.filename}`;
                 let text;
                 if (_threadDocCache.has(cacheKey)) {
-                    text = _threadDocCache.get(cacheKey);
-                } else if (wantContent) {
-                    // Only call Gemini/Claude to read a photo when triggered —
-                    // the read is expensive (vision model call). Cache makes
-                    // subsequent turns free.
-                    const file = qThreads.readFile(t.id, f.filename, req.person.email);
-                    if (!file || !file.buffer) continue;
-                    const b64 = file.buffer.toString('base64');
-                    const mime = file.mimeType || 'image/jpeg';
-                    let extracted = '';
-                    try {
-                        const ex = await qFinance.extractDocument(b64, mime);   // Gemini (cheap) first
-                        extracted = (ex && (ex.full_text || ex.raw)) || '';
-                    } catch (e) {
-                        console.warn('[threads] Gemini photo read failed: ' + f.filename + ' — ' + e.message);
-                    }
-                    if (!extracted || !extracted.trim()) {
-                        extracted = await claudeReadImage(b64, mime);            // Claude fallback if Gemini's down
-                    }
-                    text = String(extracted || '').trim();
-                    _threadDocCache.set(cacheKey, text);
-                    console.log(`[threads] read photo "${f.filename}" (${text.length} chars)`);
+                    text = _threadDocCache.get(cacheKey);   // hot path
                 } else {
-                    continue; // not cached, not triggered — don't call vision model
-                }
+                    // Cold-start: check persistent disk bucket before calling vision model.
+                    const persisted = qThreads.getTextCache(t.id, f.filename, req.person.email);
+                    if (persisted !== null) {
+                        text = persisted;
+                        _threadDocCache.set(cacheKey, text);
+                        console.log(`[threads] photo "${f.filename}" loaded from disk cache`);
+                    } else if (wantContent) {
+                        // Vision model call — only on triggered turns (expensive).
+                        const file = qThreads.readFile(t.id, f.filename, req.person.email);
+                        if (!file || !file.buffer) continue;
+                        const b64 = file.buffer.toString('base64');
+                        const mime = file.mimeType || 'image/jpeg';
+                        let extracted = '';
+                        try {
+                            const ex = await qFinance.extractDocument(b64, mime);
+                            extracted = (ex && (ex.full_text || ex.raw)) || '';
+                        } catch (e) {
+                            console.warn('[threads] Gemini photo read failed: ' + f.filename + ' — ' + e.message);
+                        }
+                        if (!extracted || !extracted.trim()) {
+                            extracted = await claudeReadImage(b64, mime);
+                        }
+                        text = String(extracted || '').trim();
+                        _threadDocCache.set(cacheKey, text);
+                        qThreads.setTextCache(t.id, f.filename, text, req.person.email);
+                        console.log(`[threads] read photo "${f.filename}" (${text.length} chars) — cached to disk`);
+                    } else {
+                        continue; // not on disk, not triggered — skip
+                    }   // end wantContent
+                }   // end cold-start outer else
                 if (!text) continue;
                 const MAXC = 14000;
                 const block = `CONTENT OF ATTACHED PHOTO "${f.filename}" (I've read it for you):\n${text.length > MAXC ? text.slice(0, MAXC) + '\n…[truncated]' : text}`;
@@ -2474,29 +2481,37 @@ router.post('/api/threads/:id/chat', requirePerson, express.json({ limit: '256kb
                 const cacheKey = `${t.id}:${f.filename}`;
                 let text;
                 if (_threadDocCache.has(cacheKey)) {
-                    text = _threadDocCache.get(cacheKey);   // instant — no Gemini call
+                    text = _threadDocCache.get(cacheKey);   // hot path — in-memory
                 } else {
-                    // Always extract — not just on trigger turns. The in-memory cache makes
-                    // subsequent turns free; without this, Q loses file context after every
-                    // Railway restart until the user explicitly mentions "file"/"document".
-                    const file = qThreads.readFile(t.id, f.filename, req.person.email);
-                    if (!file || !file.buffer) continue;
-                    if (isPdf) {
-                        const ex = await qFinance.extractDocument(file.buffer.toString('base64'), 'application/pdf');
-                        text = (ex && (ex.full_text || ex.raw)) || '';
-                    } else if (isRtf) {
-                        text = rtfToText(file.buffer.toString('utf8'));
+                    // Cold-start: check the persistent per-thread bucket on disk first.
+                    // This survives Railway restarts so Gemini is never called twice for
+                    // the same file. Falls through to extraction only on the first-ever read.
+                    const persisted = qThreads.getTextCache(t.id, f.filename, req.person.email);
+                    if (persisted !== null) {
+                        text = persisted;
+                        _threadDocCache.set(cacheKey, text);   // warm the in-memory cache
+                        console.log(`[threads] "${f.filename}" loaded from disk cache (${text.length} chars)`);
                     } else {
-                        text = file.buffer.toString('utf8');
-                    }
-                    text = String(text || '').trim();
-                    if (looksBinary(text)) {
-                        console.warn(`[threads] "${f.filename}" decoded as binary — skipping`);
-                        text = '';
-                    }
-                    _threadDocCache.set(cacheKey, text);
-                    console.log(`[threads] extracted "${f.filename}" (${text.length} chars)${isPdf ? ' + handed PDF to Claude' : ''} — cached`);
-                }
+                        const file = qThreads.readFile(t.id, f.filename, req.person.email);
+                        if (!file || !file.buffer) continue;
+                        if (isPdf) {
+                            const ex = await qFinance.extractDocument(file.buffer.toString('base64'), 'application/pdf');
+                            text = (ex && (ex.full_text || ex.raw)) || '';
+                        } else if (isRtf) {
+                            text = rtfToText(file.buffer.toString('utf8'));
+                        } else {
+                            text = file.buffer.toString('utf8');
+                        }
+                        text = String(text || '').trim();
+                        if (looksBinary(text)) {
+                            console.warn(`[threads] "${f.filename}" decoded as binary — skipping`);
+                            text = '';
+                        }
+                        _threadDocCache.set(cacheKey, text);
+                        qThreads.setTextCache(t.id, f.filename, text, req.person.email);
+                        console.log(`[threads] extracted "${f.filename}" (${text.length} chars)${isPdf ? ' + handed PDF to Claude' : ''} — cached to disk`);
+                    }   // end inner else (extract)
+                }   // end outer else (cold-start)
                 // Inject the text into the conversation context.
                 const MAXC = 14000;
                 let block = null;

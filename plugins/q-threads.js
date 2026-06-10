@@ -370,6 +370,24 @@ function removeEmail(threadId, emailId, ownerEmail) {
     return writeThread(thread);
 }
 
+// Per-thread persistent text extraction cache.
+// Stores Gemini/RTF extracted text inside the thread JSON so it survives
+// Railway restarts. The in-memory _threadDocCache in routes.js is still
+// the hot path; this is the cold-start fallback bucket.
+function getTextCache(threadId, filename, ownerEmail) {
+    const thread = readThread(threadId, ownerEmail);
+    if (!thread || !thread.textCache) return null;
+    return thread.textCache[filename] ?? null;
+}
+
+function setTextCache(threadId, filename, text, ownerEmail) {
+    const thread = readThread(threadId, ownerEmail);
+    if (!thread) return;
+    if (!thread.textCache) thread.textCache = {};
+    thread.textCache[filename] = text;
+    writeThread(thread);
+}
+
 function appendChat(threadId, role, content, ownerEmail) {
     const thread = readThread(threadId, ownerEmail);
     if (!thread) return null;
@@ -502,6 +520,8 @@ module.exports = {
     addRef,
     removeRef,
     appendChat,
+    getTextCache,
+    setTextCache,
     updateThread,
     deleteThread,
     writeThread,
