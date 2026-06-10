@@ -249,19 +249,18 @@
     box-shadow: 0 8px 32px rgba(0,0,0,0.13), 0 2px 8px rgba(0,0,0,0.08);
     border-top: 3px solid var(--accent);
     display: flex; flex-direction: column;
-    transition: max-height 0.25s ease;
-    max-height: 44px; overflow: hidden;
+    transition: max-height 0.25s ease, opacity 0.2s ease;
+    max-height: 0; overflow: hidden; opacity: 0; pointer-events: none;
   }
-  .forms-panel.open { max-height: 88vh; }
+  .forms-panel.open { max-height: 88vh; opacity: 1; pointer-events: auto; }
   .forms-bar {
     display: flex; align-items: center; gap: 10px; padding: 0 16px;
-    height: 44px; cursor: grab; flex-shrink: 0; user-select: none;
+    height: 44px; flex-shrink: 0;
   }
-  .forms-bar:active { cursor: grabbing; }
   .forms-bar-icon { font-size: 16px; }
   .forms-bar-label { flex: 1; font-size: 13px; font-weight: 700; letter-spacing: -0.01em; color: var(--text); }
-  .forms-bar-chev { font-size: 10px; color: var(--text-muted); transition: transform 0.2s; }
-  .forms-panel.open .forms-bar-chev { transform: rotate(180deg); }
+  .forms-bar-close { font-size: 16px; color: var(--text-muted); cursor: pointer; line-height: 1; padding: 4px 6px; border-radius: 6px; background: none; border: none; font-family: inherit; }
+  .forms-bar-close:hover { color: var(--text); }
   .forms-body {
     flex: 1; overflow-y: auto; padding: 0 16px 20px;
     scrollbar-width: thin; scrollbar-color: var(--shadow-dark) transparent;
@@ -269,7 +268,8 @@
   .forms-select {
     width: 100%; border: none; outline: none; font-family: inherit;
     font-size: 13px; font-weight: 600; color: var(--text);
-    background: var(--bg); padding: 9px 12px; border-radius: 10px;
+    background: var(--bg) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%23888' stroke-width='1.8' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") no-repeat right 12px center;
+    padding: 9px 34px 9px 12px; border-radius: 10px;
     box-shadow: var(--neu-inset-sm); margin-bottom: 14px; cursor: pointer;
     -webkit-appearance: none; appearance: none;
   }
@@ -452,6 +452,7 @@
     <div class="chat-typing" id="chat-typing">Q is thinking…</div>
     <div class="chat-input-row">
       <textarea id="chat-input" rows="1" placeholder="Talk to Q about this case — he sees everything in this thread…"></textarea>
+      <button class="chat-deep" id="chat-forms" type="button" title="Open the Forms panel — fill and download GOV.UK forms for this case">📋 Forms</button>
       <button class="chat-deep" id="chat-deep" type="button" title="Deep think — Q reasons at maximum for a big or complex case. Slower, but sharper. Off = normal (still full reasoning).">🧠 Deep</button>
       <button class="chat-deep" id="chat-verify" type="button" title="Verify — press, then click the message you want Q to check">✓ Verify</button>
       <button class="chat-deep" id="chat-glm" type="button" title="GLM-5 test — switch this thread to GLM-5 744B instead of V4 Pro">GLM-5</button>
@@ -494,10 +495,10 @@
 
   <!-- ── Floating forms panel ── -->
   <div class="forms-panel" id="forms-panel">
-    <div class="forms-bar" id="forms-bar">
+    <div class="forms-bar">
       <span class="forms-bar-icon">📋</span>
       <span class="forms-bar-label">Forms</span>
-      <span class="forms-bar-chev">▼</span>
+      <button class="forms-bar-close" id="forms-close" title="Close">✕</button>
     </div>
     <div class="forms-body" id="forms-body">
       <div id="forms-case-files" style="margin-bottom:12px;display:none;">
@@ -875,6 +876,7 @@ function renderNotes() {
           n.content && n.content.toLowerCase().includes(f.filename.replace(/\.pdf$/i,'').toLowerCase().split('-')[0]));
         if (!match) return;
         document.getElementById('forms-panel').classList.add('open');
+        const _fb = document.getElementById('chat-forms'); if (_fb) _fb.classList.add('on');
         const statusEl = document.getElementById('forms-status');
         statusEl.textContent = '⏳ Loading ' + match.filename + '…';
         try {
@@ -1690,6 +1692,7 @@ loadThread();
     statusEl.textContent = '⏳ Loading ' + filename + '…';
     resetViewer();
     panel.classList.add('open');
+    const _fb2 = document.getElementById('chat-forms'); if (_fb2) _fb2.classList.add('on');
     try {
       const r = await fetch('/api/threads/' + threadId + '/files/' + encodeURIComponent(filename));
       if (!r.ok) throw new Error('Could not fetch file');
@@ -1738,6 +1741,24 @@ loadThread();
   bar.addEventListener('touchstart', (e) => { const t = e.touches[0]; startDrag(t.clientX, t.clientY); e.preventDefault(); }, { passive: false });
   document.addEventListener('touchmove', (e) => { if (!_dragActive) return; const t = e.touches[0]; moveDrag(t.clientX, t.clientY); e.preventDefault(); }, { passive: false });
   document.addEventListener('touchend', endDrag);
+
+  // Toolbar "📋 Forms" button opens the panel; ✕ closes it.
+  const formsToolbarBtn = document.getElementById('chat-forms');
+  const formsCloseBtn   = document.getElementById('forms-close');
+  if (formsToolbarBtn) {
+    formsToolbarBtn.addEventListener('click', () => {
+      const isOpen = panel.classList.toggle('open');
+      formsToolbarBtn.classList.toggle('on', isOpen);
+      if (isOpen) refreshCaseFiles();
+    });
+  }
+  if (formsCloseBtn) {
+    formsCloseBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      panel.classList.remove('open');
+      if (formsToolbarBtn) formsToolbarBtn.classList.remove('on');
+    });
+  }
 
   // Note-card click opens a PDF in the panel via CustomEvent (note render code
   // can't reach into this IIFE directly — the event bridges the boundary).
@@ -1819,6 +1840,7 @@ loadThread();
       viewer.style.display = '';
       navEl.style.display = _totalPages > 1 ? 'flex' : 'none';
       panel.classList.add('open');
+      const _fb3 = document.getElementById('chat-forms'); if (_fb3) _fb3.classList.add('on');
       await renderPage(_currentPage);
       // Auto-fill straight away from the case — Q fills what he knows.
       autoFill();
@@ -1832,6 +1854,7 @@ loadThread();
     statusEl.textContent = '⏳ Reading form…';
     resetViewer();
     panel.classList.add('open');
+    const _fb4 = document.getElementById('chat-forms'); if (_fb4) _fb4.classList.add('on');
     try {
       const b64 = await fileToBase64(file);
       await loadFormFromBase64(b64);
