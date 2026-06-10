@@ -2111,17 +2111,42 @@ router.get('/api/threads/:id/files/:filename', requirePerson, (req, res) => {
     if (!readOwnedThread(req, res)) return;
     const file = qThreads.readFile(req.params.id, req.params.filename, req.person.email);
     if (!file) return res.status(404).json({ error: 'File not found' });
-    // Detect mime from extension if stored value is missing or generic.
     let ct = file.mimeType || '';
-    if (!ct || ct === 'application/octet-stream') {
-        const ext = String(file.filename || '').split('.').pop().toLowerCase();
+    const ext = String(file.filename || '').split('.').pop().toLowerCase();
+    // RTF files are often stored with application/msword — always remap so browsers handle them consistently.
+    if (ext === 'rtf') ct = 'text/rtf';
+    else if (!ct || ct === 'application/octet-stream') {
         ct = ({ pdf:'application/pdf', png:'image/png', jpg:'image/jpeg', jpeg:'image/jpeg',
-                 gif:'image/gif', webp:'image/webp', txt:'text/plain', rtf:'text/rtf',
+                 gif:'image/gif', webp:'image/webp', txt:'text/plain',
                  mp4:'video/mp4', mp3:'audio/mpeg', docx:'application/vnd.openxmlformats-officedocument.wordprocessingml.document' })[ext] || 'application/octet-stream';
     }
     res.setHeader('Content-Type', ct);
-    res.setHeader('Content-Disposition', `inline; filename="${file.filename}"`);
+    res.setHeader('Content-Disposition', `inline; filename="${encodeURIComponent(file.filename)}"`);
     res.end(file.buffer);
+});
+
+// Returns extracted plain text for any document file (RTF, Word, text).
+// Used by the client's inline text viewer so non-viewable files can be read in-page.
+router.get('/api/threads/:id/files/:filename/text', requirePerson, async (req, res) => {
+    if (!readOwnedThread(req, res)) return;
+    const t = qThreads.loadThread(req.params.id, req.person.email);
+    const filename = req.params.filename;
+    const cacheKey = `${t.id}:${filename}`;
+    if (_threadDocCache.has(cacheKey)) {
+        return res.json({ text: _threadDocCache.get(cacheKey), filename });
+    }
+    const file = qThreads.readFile(t.id, filename, req.person.email);
+    if (!file || !file.buffer) return res.status(404).json({ error: 'File not found' });
+    const isRtf = /\.rtf$/i.test(filename) || /rtf/i.test(file.mimeType || '');
+    let text;
+    if (isRtf) {
+        text = rtfToText(file.buffer.toString('utf8'));
+    } else {
+        text = file.buffer.toString('utf8');
+    }
+    text = String(text || '').trim();
+    if (text && !looksBinary(text)) _threadDocCache.set(cacheKey, text);
+    res.json({ text: looksBinary(text || '') ? '' : text, filename });
 });
 
 router.delete('/api/threads/:id/files/:filename', requirePerson, (req, res) => {
@@ -2272,14 +2297,18 @@ router.post('/api/threads/:id/chat', requirePerson, express.json({ limit: '256kb
         /pdf|text\/|rfc822|word|officedocument|msword/i.test(f.mimeType || '')
         || /\.(pdf|txt|eml|md|csv|docx?)$/i.test(f.filename || ''));
     const isAddPing = /I've just added .+ to the case/i.test(message);
-    // Only load file bytes when message explicitly references visual/binary content.
-    // Broad word matching ("email", "see", "look") fired on every message and sent
-    // 100k+ tokens to V4-Pro → Together timeout. Narrow to actual media references.
-    const refersToFile = /\b(image|images|photo|photos|picture|pic|pics|screenshot|scan|scanned|video|videos|footage|recording|clip|watch|frame|frames|pdf|cctv)\b/i.test(message);
+    // Load content when message references visual/binary content, or on the
+    // kickoff turn (Q hasn't spoken yet — this is the first sweep of the case).
+    const refersToFile = /\b(image|images|photo|photos|picture|pic|pics|screenshot|scan|scanned|video|videos|footage|recording|clip|watch|frame|frames|pdf|rtf|doc|cctv|file|files|document|documents)\b/i.test(message);
+    const isKickoff = !(t.chatHistory || []).some(m => m.role === 'assistant');
     // Test models (e.g. GLM-5) don't reliably call tools, so always inject file
     // content directly — they won't call read_file_content to fetch it themselves.
     const isTestModel = !!(req.body?.testModel);
-    const wantContent = isAddPing || refersToFile || isTestModel;
+    // wantExtract: whether to run Gemini extraction on uncached files (costs time/money).
+    // wantInject: whether to inject already-cached content — always true so Q never
+    // loses context he already has.
+    const wantExtract = isAddPing || refersToFile || isKickoff || isTestModel;
+    const wantContent = wantExtract; // kept for backward compat with image/video blocks below
 
     // Photos on a case: read each one to TEXT once (cached), then hand Q that text
     // as context so he reasons over it with the FULL thread history and his tools
@@ -2368,24 +2397,19 @@ router.post('/api/threads/:id/chat', requirePerson, express.json({ limit: '256kb
     // Claude never gets a "couldn't read it" note — that would make Claude doubt
     // the document it is holding.
     const pdfDocuments = [];
-    if (docFiles.length && wantContent) {
+    if (docFiles.length) {
         for (const f of docFiles) {
             const isPdf = /pdf/i.test(f.mimeType || '') || /\.pdf$/i.test(f.filename || '');
+            const isRtf = /\.rtf$/i.test(f.filename || '') || /rtf/i.test(f.mimeType || '');
             try {
-                if (isPdf) {
-                    // Read the raw PDF for Claude every referential turn (independent
-                    // of the text cache below). ~28MB cap — Anthropic's PDF limit is 32MB.
+                if (isPdf && wantExtract) {
+                    // Hand raw PDF to Claude when triggered (8MB cap).
                     try {
                         const pf = qThreads.readFile(t.id, f.filename, req.person.email);
-                        // 8MB raw cap. base64 inflates ~33% (8MB → ~11MB) and the
-                        // doc is re-sent on every tool-loop iteration alongside the
-                        // history + system prompt, so the old 28MB cap (~37MB base64)
-                        // blew past Anthropic's 32MB request limit and 400'd every
-                        // time → silent V4 fallback. 8MB keeps every request safe.
                         if (pf && pf.buffer && pf.buffer.length < 8 * 1024 * 1024) {
                             pdfDocuments.push({ filename: f.filename, base64: pf.buffer.toString('base64'), mediaType: 'application/pdf' });
                         } else if (pf && pf.buffer) {
-                            console.warn(`[threads] PDF "${f.filename}" is ${(pf.buffer.length/1024/1024).toFixed(1)}MB — too big to hand Claude directly; relying on the text transcript instead.`);
+                            console.warn(`[threads] PDF "${f.filename}" is ${(pf.buffer.length/1024/1024).toFixed(1)}MB — too big for Claude directly`);
                         }
                     } catch (e) {
                         console.warn('[threads] PDF read for Claude failed: ' + f.filename + ' — ' + e.message);
@@ -2394,35 +2418,35 @@ router.post('/api/threads/:id/chat', requirePerson, express.json({ limit: '256kb
                 const cacheKey = `${t.id}:${f.filename}`;
                 let text;
                 if (_threadDocCache.has(cacheKey)) {
-                    text = _threadDocCache.get(cacheKey);          // already read once — no Gemini call
-                } else {
+                    text = _threadDocCache.get(cacheKey);   // instant — no Gemini call
+                } else if (wantExtract) {
+                    // First extraction: Gemini/RTF parse. Cached forever after.
                     const file = qThreads.readFile(t.id, f.filename, req.person.email);
                     if (!file || !file.buffer) continue;
                     if (isPdf) {
                         const ex = await qFinance.extractDocument(file.buffer.toString('base64'), 'application/pdf');
-                        text = (ex && (ex.full_text || ex.raw)) || '';   // never JSON-dump the bill schema at Q
-                    } else if (/\.rtf$/i.test(f.filename || '') || /rtf/i.test(f.mimeType || '')) {
+                        text = (ex && (ex.full_text || ex.raw)) || '';
+                    } else if (isRtf) {
                         text = rtfToText(file.buffer.toString('utf8'));
                     } else {
                         text = file.buffer.toString('utf8');
                     }
                     text = String(text || '').trim();
-                    // Guard: never feed Q binary/garbage (a .doc/.docx zip, a
-                    // mangled read). Garbage in = confabulation out.
                     if (looksBinary(text)) {
-                        console.warn(`[threads] "${f.filename}" decoded as binary/garbage — not feeding it to Q`);
+                        console.warn(`[threads] "${f.filename}" decoded as binary — skipping`);
                         text = '';
                     }
-                    _threadDocCache.set(cacheKey, text);           // cache hit OR miss — read at most once
+                    _threadDocCache.set(cacheKey, text);
                     console.log(`[threads] extracted "${f.filename}" (${text.length} chars)${isPdf ? ' + handed PDF to Claude' : ''} — cached`);
+                } else {
+                    continue; // not cached, not triggered — skip
                 }
+                // Inject the text into the conversation context.
                 const MAXC = 14000;
                 let block = null;
                 if (text) {
                     block = `CONTENT OF ATTACHED FILE "${f.filename}":\n${text.length > MAXC ? text.slice(0, MAXC) + '\n…[truncated]' : text}`;
                 } else if (!isPdf) {
-                    // Non-PDF we genuinely couldn't read. A PDF gets no note — Claude
-                    // is holding the file itself.
                     block = `(The attached file "${f.filename}" could not be read automatically.)`;
                 }
                 if (block) messages.splice(messages.length - 1, 0, { role: 'user', content: block });
