@@ -2122,11 +2122,11 @@ function selectActiveTools(userMessage, options = {}) {
         if (!name) return false;
         if (ALWAYS_ON.has(name)) {
             // Inside a Thread the current thread's data is already injected into
-            // the message by the route. `read_thread` here can ONLY read OTHER
-            // threads — which caused Q to pull a CMS case into a new faulty-product
-            // thread and present it as that thread's diagnosis. Block it unless
-            // the user explicitly names another thread they want Q to read.
-            if (name === 'read_thread' && options.surface === 'thread') return false;
+            // the message by the route. read_thread / list_threads here can ONLY
+            // read OTHER threads — which caused Q to pull an old case into a new
+            // thread and respond about the wrong situation entirely. Block both on
+            // the thread surface; Q has everything he needs already in context.
+            if ((name === 'read_thread' || name === 'list_threads') && options.surface === 'thread') return false;
             return true;
         }
         // Doc-editor page: all doc-editor tools always on

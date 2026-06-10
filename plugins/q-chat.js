@@ -942,7 +942,7 @@ async function chat(messages, options = {}) {
         const claudeResult = await claudeThreadChat({
             system: systemContent + '\n\n---\n\n' + Q_THREAD_CLAUDE_VOICE,
             messages: outboundMessages,
-            tools: selectActiveTools(msgText, { docEditor: false, advocate: true }),
+            tools: selectActiveTools(msgText, { docEditor: false, advocate: true, surface: options.surface }),
             person: options.person,
             maxTokens,
             startTime,
@@ -985,7 +985,7 @@ async function chat(messages, options = {}) {
                         tools: (() => {
                             const lastUser = [...messages].reverse().find(m => m.role === 'user');
                             const msgText = typeof lastUser?.content === 'string' ? lastUser.content : '';
-                            const activeTools = selectActiveTools(msgText, { docEditor: options.surface === 'doc-editor', advocate: isAdvocateSurface });
+                            const activeTools = selectActiveTools(msgText, { docEditor: options.surface === 'doc-editor', advocate: isAdvocateSurface, surface: options.surface });
                             if (iteration === 0) console.log('[q-chat] tools sent to V4 (' + options.surface + '):', activeTools.map(t => t.function?.name).join(', '));
                             return activeTools;
                         })(),
