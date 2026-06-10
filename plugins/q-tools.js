@@ -117,13 +117,14 @@ const TOOL_DEFINITIONS = [
         type: 'function',
         function: {
             name: 'save_email_draft',
-            description: 'Save a drafted email to the user\'s outbox so they can review and send it with one click. Call this EVERY TIME you write an email for the user — do not just paste email text in the chat. If you are drafting multiple emails in one reply, call this once per email. IMPORTANT: always include the "to" field if you know or have discussed the recipient — the user should not have to look it up themselves.',
+            description: 'Save a drafted email to the user\'s outbox so they can review and send it with one click. Call this EVERY TIME you write an email for the user — do not just paste email text in the chat. If you are drafting multiple emails in one reply, call this once per email. IMPORTANT: always include the "to" field if you know or have discussed the recipient — the user should not have to look it up themselves. When REVISING a draft you already saved, pass the draft_id you received from the first save — this updates the same item rather than creating a second one.',
             parameters: {
                 type: 'object',
                 properties: {
                     to: { type: 'string', description: 'Recipient email address. REQUIRED if the email address has been mentioned or discussed in this thread. Leave blank only if genuinely unknown.' },
                     subject: { type: 'string', description: 'The subject line.' },
                     body: { type: 'string', description: 'The full plain-text body of the email.' },
+                    draft_id: { type: 'string', description: 'The draftId returned by a previous save_email_draft call for THIS email. Pass it when revising an existing draft so it is updated in place rather than creating a duplicate.' },
                 },
                 required: ['subject', 'body'],
             },
@@ -1228,22 +1229,31 @@ async function fetchFormTool(args, personEmail, threadId) {
 const qEmailAccounts = require('./q-email-accounts');
 
 // Save a drafted email to the user's outbox (no send — just parks it for review).
+// If args.draft_id is provided, patches the existing item rather than adding a new one.
 function saveEmailDraftTool(args, personEmail, threadId) {
     if (!personEmail) return { error: 'Cannot save draft without a signed-in user.' };
     const subject = String(args.subject || '').trim();
     const body = String(args.body || '').trim();
     if (!subject && !body) return { error: 'Need at least a subject or body to save a draft.' };
+    const to = String(args.to || '').trim();
     try {
-        const item = qEmailAccounts.addToOutbox(personEmail, {
-            to: String(args.to || '').trim(),
-            subject,
-            body,
-            threadId: threadId || null,
-        });
+        const existingId = args.draft_id ? String(args.draft_id).trim() : null;
+        if (existingId) {
+            const patched = qEmailAccounts.patchOutboxItem(personEmail, existingId, { to, subject, body });
+            if (patched) {
+                return {
+                    ok: true,
+                    draftId: existingId,
+                    instruction_for_q: 'Draft updated in the Outbox. Tell the user the draft has been revised — they can scroll down to the Outbox and send when ready. Do NOT create another draft. Do NOT mention the Email Writer page.',
+                };
+            }
+            // id not found — fall through and create fresh
+        }
+        const item = qEmailAccounts.addToOutbox(personEmail, { to, subject, body, threadId: threadId || null });
         return {
             ok: true,
             draftId: item.id,
-            instruction_for_q: 'Draft saved. Tell the user it is now in the Outbox section of THIS thread — they can scroll down to the Outbox, review it, and send with one click. Do NOT mention the Email Writer page.',
+            instruction_for_q: `Draft saved to the Outbox. Tell the user it is in the Outbox section of THIS thread — they can scroll down, review it, and send with one click. IMPORTANT: remember draftId "${item.id}" — pass it as draft_id if you revise this email so it updates the same item rather than creating a duplicate. Do NOT mention the Email Writer page.`,
         };
     } catch (e) {
         return { error: e.message || 'Could not save draft.' };
