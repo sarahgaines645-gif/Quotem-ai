@@ -2174,8 +2174,8 @@ router.get('/api/threads/:id/files/:filename', requirePerson, (req, res) => {
 // Returns extracted plain text for any document file (RTF, Word, text).
 // Used by the client's inline text viewer so non-viewable files can be read in-page.
 router.get('/api/threads/:id/files/:filename/text', requirePerson, async (req, res) => {
-    if (!readOwnedThread(req, res)) return;
-    const t = qThreads.loadThread(req.params.id, req.person.email);
+    const t = readOwnedThread(req, res);
+    if (!t) return;
     const filename = req.params.filename;
     const cacheKey = `${t.id}:${filename}`;
     if (_threadDocCache.has(cacheKey)) {
@@ -2363,14 +2363,17 @@ router.post('/api/threads/:id/chat', requirePerson, express.json({ limit: '256kb
     // conversation, so he looped. Gemini reads it first (cheap, the model Sarah
     // wants); if Gemini's down (e.g. a retired model) Claude reads it. Cached, so
     // it's read at most once per photo no matter how many times she refers to it.
-    if (imageFiles.length && wantContent) {
+    if (imageFiles.length) {
         for (const f of imageFiles) {
             try {
                 const cacheKey = `${t.id}:${f.filename}`;
                 let text;
                 if (_threadDocCache.has(cacheKey)) {
                     text = _threadDocCache.get(cacheKey);
-                } else {
+                } else if (wantContent) {
+                    // Only call Gemini/Claude to read a photo when triggered —
+                    // the read is expensive (vision model call). Cache makes
+                    // subsequent turns free.
                     const file = qThreads.readFile(t.id, f.filename, req.person.email);
                     if (!file || !file.buffer) continue;
                     const b64 = file.buffer.toString('base64');
@@ -2388,11 +2391,12 @@ router.post('/api/threads/:id/chat', requirePerson, express.json({ limit: '256kb
                     text = String(extracted || '').trim();
                     _threadDocCache.set(cacheKey, text);
                     console.log(`[threads] read photo "${f.filename}" (${text.length} chars)`);
+                } else {
+                    continue; // not cached, not triggered — don't call vision model
                 }
+                if (!text) continue;
                 const MAXC = 14000;
-                const block = text
-                    ? `CONTENT OF ATTACHED PHOTO "${f.filename}" (I've read it for you):\n${text.length > MAXC ? text.slice(0, MAXC) + '\n…[truncated]' : text}`
-                    : `(The attached photo "${f.filename}" could not be read — say so plainly; do not guess what it says.)`;
+                const block = `CONTENT OF ATTACHED PHOTO "${f.filename}" (I've read it for you):\n${text.length > MAXC ? text.slice(0, MAXC) + '\n…[truncated]' : text}`;
                 messages.splice(messages.length - 1, 0, { role: 'user', content: block });
             } catch (e) {
                 console.warn('[threads] photo read failed: ' + f.filename + ' — ' + e.message);
@@ -2433,15 +2437,12 @@ router.post('/api/threads/:id/chat', requirePerson, express.json({ limit: '256kb
     // Q is a text model — a PDF/doc attached to the case is invisible to him
     // unless its content is extracted and handed over. Without this he
     // correctly but uselessly says "I can't read PDFs". Reuses the proven
-    // finance Gemini document reader (reads PDFs natively). Scoped to
-    // add-ping / referential turns, same as images, so normal tool turns
-    // aren't slowed.
-    // PDFs are handed to Claude to read NATIVELY — it reads printed/scanned legal
-    // docs, tables and figures directly, no Gemini key required. We ALSO keep a
-    // best-effort Gemini transcript when GEMINI_API_KEY is set (belt-and-braces:
-    // covers the V4 fallback path and any Claude PDF hiccup). A PDF we hand to
-    // Claude never gets a "couldn't read it" note — that would make Claude doubt
-    // the document it is holding.
+    // finance Gemini document reader (reads PDFs natively).
+    // PDFs are handed to Claude NATIVELY on triggered turns (expensive — adds
+    // base64 bytes on every turn). Text extraction is always attempted so that
+    // after a Railway restart (which wipes _threadDocCache) Q immediately
+    // regains file context on the next turn without needing an explicit
+    // "file"/"document" trigger word.
     const pdfDocuments = [];
     if (docFiles.length) {
         for (const f of docFiles) {
@@ -2465,8 +2466,10 @@ router.post('/api/threads/:id/chat', requirePerson, express.json({ limit: '256kb
                 let text;
                 if (_threadDocCache.has(cacheKey)) {
                     text = _threadDocCache.get(cacheKey);   // instant — no Gemini call
-                } else if (wantExtract) {
-                    // First extraction: Gemini/RTF parse. Cached forever after.
+                } else {
+                    // Always extract — not just on trigger turns. The in-memory cache makes
+                    // subsequent turns free; without this, Q loses file context after every
+                    // Railway restart until the user explicitly mentions "file"/"document".
                     const file = qThreads.readFile(t.id, f.filename, req.person.email);
                     if (!file || !file.buffer) continue;
                     if (isPdf) {
@@ -2484,8 +2487,6 @@ router.post('/api/threads/:id/chat', requirePerson, express.json({ limit: '256kb
                     }
                     _threadDocCache.set(cacheKey, text);
                     console.log(`[threads] extracted "${f.filename}" (${text.length} chars)${isPdf ? ' + handed PDF to Claude' : ''} — cached`);
-                } else {
-                    continue; // not cached, not triggered — skip
                 }
                 // Inject the text into the conversation context.
                 const MAXC = 14000;
