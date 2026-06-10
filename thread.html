@@ -269,6 +269,40 @@
   .draft-btn.skip:hover, .draft-btn.save:hover { color: var(--accent); }
   .draft-btn:disabled { opacity: 0.4; cursor: default; }
   .draft-status { font-size: 12px; color: var(--text-muted); padding: 6px 4px 0 40px; font-style: italic; }
+  /* ── Email compose — screen terminal style ──────────────────── */
+  .ob-compose-card {
+    background: var(--bg);
+    border-radius: 18px;
+    padding: 20px 20px 18px;
+    margin-top: 4px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    /* raised card + soft accent glow for the "glowing screen" feel */
+    box-shadow: var(--neu-raised), 0 0 48px rgba(233,30,99,0.09);
+    border-top: 3px solid var(--accent);
+  }
+  .ob-field {
+    width: 100%;
+    box-sizing: border-box;
+    border: none;
+    outline: none;
+    background: var(--bg);
+    box-shadow: var(--neu-raised-sm);
+    border-radius: 12px;
+    padding: 11px 15px;
+    font-family: inherit;
+    font-size: 15px;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    color: var(--text);
+    line-height: 1.5;
+    display: block;
+    transition: box-shadow 0.15s;
+  }
+  .ob-field::placeholder { font-weight: 500; color: var(--text-faint); font-size: 14px; }
+  .ob-field:focus { box-shadow: var(--neu-raised-sm), 0 0 0 2px var(--accent-soft); }
+  .ob-body-field { min-height: 110px; resize: vertical; line-height: 1.6; }
   /* ── Floating forms panel ───────────────────────────────────── */
   .forms-panel {
     position: fixed; top: 72px; right: 16px; z-index: 150;
@@ -493,16 +527,17 @@
 
   <div class="section-label">📤 Outbox — emails ready to send</div>
   <div id="outbox-list" style="margin-bottom: 12px;"></div>
-  <div id="ob-compose" style="background: var(--bg); box-shadow: var(--neu-raised-sm); border-radius: 14px; padding: 14px 18px; display: flex; flex-direction: column; gap: 0;">
-    <input type="text" id="ob-to" placeholder="To" style="border:none;border-bottom:1px solid var(--shadow-dark);outline:none;background:transparent;padding:10px 0;font-family:inherit;font-size:14px;color:var(--text);width:100%;">
-    <input type="text" id="ob-subject" placeholder="Subject" style="border:none;border-bottom:1px solid var(--shadow-dark);outline:none;background:transparent;padding:10px 0;font-family:inherit;font-size:14px;color:var(--text);width:100%;">
-    <textarea id="ob-body" placeholder="Write the email — send now, or save to send later…" style="border:none;outline:none;background:transparent;padding:10px 0;font-family:inherit;font-size:14px;color:var(--text);min-height:90px;resize:vertical;width:100%;"></textarea>
+  <div id="ob-compose" class="ob-compose-card">
+    <input type="text" id="ob-to" class="ob-field" placeholder="To">
+    <input type="text" id="ob-subject" class="ob-field" placeholder="Subject">
+    <textarea id="ob-body" class="ob-field ob-body-field" placeholder="Write the email — send now, or save to send later…"></textarea>
     <div id="ob-attach-pills" style="display:flex;flex-wrap:wrap;gap:6px;"></div>
     <input type="file" id="ob-attach-input" multiple style="display:none">
     <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;position:relative;">
       <button id="ob-attach-btn" class="note-save-btn" type="button">📎 Attach</button>
       <button id="ob-thread-files-btn" class="note-save-btn" type="button">📁 From thread</button>
       <div id="ob-thread-files-picker" style="display:none;position:absolute;top:calc(100% + 6px);left:0;z-index:50;background:var(--bg);box-shadow:var(--neu-raised);border-radius:12px;padding:10px 14px;min-width:220px;max-width:320px;max-height:240px;overflow-y:auto;"></div>
+      <button id="ob-read-btn" class="note-save-btn" type="button" title="Read the email aloud in a formal voice">🔊 Read</button>
       <button id="ob-save-btn" class="note-save-btn" type="button">🕒 Save to outbox</button>
       <button id="ob-send-btn" class="note-save-btn" type="button">📤 Send now</button>
       <span id="outbox-status" style="font-size:12px;color:var(--text-muted);"></span>
@@ -2572,6 +2607,45 @@ loadThread();
     openThreadFilePicker(obThreadFilesBtn, obThreadFilesPicker, (ref) => { _attachments.push(ref); renderPills(); });
   });
   document.addEventListener('click', () => { obThreadFilesPicker.style.display = 'none'; });
+
+  // ── Read aloud (Web Speech API — no API key, works in browser) ──
+  const obReadBtn = document.getElementById('ob-read-btn');
+  let _reading = false;
+  function pickFormalVoice() {
+    const voices = speechSynthesis.getVoices();
+    // Prefer a UK English voice for the posh legal read
+    const preferred = ['Daniel', 'Google UK English Male', 'Google UK English Female', 'Arthur', 'Malcolm'];
+    for (const name of preferred) {
+      const v = voices.find(v => v.name === name);
+      if (v) return v;
+    }
+    // Fall back to any en-GB voice
+    return voices.find(v => v.lang === 'en-GB') || voices.find(v => v.lang.startsWith('en')) || null;
+  }
+  obReadBtn.addEventListener('click', () => {
+    if (_reading) {
+      speechSynthesis.cancel();
+      _reading = false;
+      obReadBtn.textContent = '🔊 Read';
+      return;
+    }
+    const text = (document.getElementById('ob-body').value || '').trim();
+    if (!text) { flash('Nothing to read yet'); return; }
+    const utt = new SpeechSynthesisUtterance(text);
+    const voice = pickFormalVoice();
+    if (voice) utt.voice = voice;
+    utt.rate = 0.85;
+    utt.pitch = 0.9;
+    utt.onstart = () => { _reading = true; obReadBtn.textContent = '⏹ Stop'; };
+    utt.onend = utt.onerror = () => { _reading = false; obReadBtn.textContent = '🔊 Read'; };
+    // Voices may load async on first call — wait if needed
+    if (speechSynthesis.getVoices().length === 0) {
+      speechSynthesis.onvoiceschanged = () => { utt.voice = pickFormalVoice(); speechSynthesis.speak(utt); };
+    } else {
+      speechSynthesis.speak(utt);
+    }
+  });
+
   async function load() {
     try {
       const r = await fetch('/email/outbox?threadId=' + encodeURIComponent(threadId));
