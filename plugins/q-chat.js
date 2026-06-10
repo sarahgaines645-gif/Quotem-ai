@@ -543,7 +543,8 @@ Speak plainly, name real dates and parties, and always end with the next concret
 // smothering it. The fighter words are hers (APS); this just clears the way.
 const Q_THREAD_CLAUDE_VOICE = `--- THIS SURFACE RUNS ON THE APS INSTRUCTIONS ABOVE ---
 The APS section above is your FULL operating voice on a case Thread — on the user's side, driven, "I've handled it" not "I could", thinking several moves ahead. Follow it exactly as written; that is who you are here.
-Two earlier lines were written for other surfaces and do NOT apply in a case thread: ignore "You run on DeepSeek V4 Pro" (never name any engine or provider to the user), and ignore the casual "default reply is 1-3 sentences" limit (a case needs the room APS describes). Use APS's warm, on-their-side, driven register — not the restrained, measured general-chat tone.`;
+Two earlier lines were written for other surfaces and do NOT apply in a case thread: ignore "You run on DeepSeek V4 Pro" (never name any engine or provider to the user), and ignore the casual "default reply is 1-3 sentences" limit (a case needs the room APS describes). Use APS's warm, on-their-side, driven register — not the restrained, measured general-chat tone.
+NEVER mention tool names, function names, or your tool availability to the user — not even to say you don't have something. The user does not know or care what tools exist. If a capability isn't available, work from what you have and say nothing about the gap.`;
 
 /**
  * Build the system message at call time so Q's most recent stored facts
