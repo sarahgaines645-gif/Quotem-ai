@@ -69,18 +69,16 @@
   }
   .thread-card:hover { color: var(--accent); }
   .thread-card:active { box-shadow: var(--neu-inset-xs); }
-  .thread-card.priority { box-shadow: var(--neu-raised); }
+  .thread-card.priority { box-shadow: var(--neu-raised); border-left: 3px solid var(--accent); }
   .tc-row1 { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
   .tc-title { font-size: 16px; font-weight: 700; letter-spacing: -0.02em; flex: 1; min-width: 0; }
+  .tc-pin { font-size: 14px; flex-shrink: 0; }
   .tc-status { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; padding: 3px 10px; border-radius: 7px; box-shadow: var(--neu-inset-xs); color: var(--text-faint); }
   .tc-status.open      { color: var(--accent); }
   .tc-status.resolved  { color: var(--text-muted); }
   .tc-summary { font-size: 13px; color: var(--text-muted); margin-top: 5px; }
   .tc-meta { display: flex; gap: 14px; margin-top: 10px; font-size: 11px; color: var(--text-faint); }
   .tc-meta-item { display: inline-flex; align-items: center; gap: 4px; }
-  /* Remove-from-priority button on overview cards */
-  .unpin-btn { position: absolute; top: 12px; right: 14px; background: none; border: none; cursor: pointer; font-size: 11px; font-weight: 700; letter-spacing: 0.04em; padding: 4px 8px; border-radius: 6px; color: var(--accent); box-shadow: var(--neu-raised-sm); background: var(--bg); font-family: inherit; transition: box-shadow 0.15s; }
-  .unpin-btn:hover { box-shadow: var(--neu-inset-xs); }
   /* Overview empty hint */
   .overview-empty { font-size: 12px; color: var(--text-faint); padding: 10px 4px; font-style: italic; }
 
@@ -196,12 +194,14 @@ function makeCard(t) {
 function makeOverviewCard(t) {
   const a = makeCard(t);
   a.classList.add('priority');
-  const btn = document.createElement('button');
-  btn.className = 'unpin-btn';
-  btn.title = 'Remove from priority';
-  btn.textContent = '★ remove';
-  btn.addEventListener('click', (e) => { e.preventDefault(); e.stopPropagation(); togglePin(t.id); });
-  a.appendChild(btn);
+  // Add 📌 indicator into the title row — no button, no interaction
+  const pinIcon = a.querySelector('.tc-row1');
+  if (pinIcon) {
+    const span = document.createElement('span');
+    span.className = 'tc-pin';
+    span.textContent = '📌';
+    pinIcon.prepend(span);
+  }
   return a;
 }
 
