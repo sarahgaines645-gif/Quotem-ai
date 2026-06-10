@@ -156,6 +156,10 @@
   .add-email-toggle { font-size: 12px; font-weight: 600; color: var(--text-muted); cursor: pointer; }
   .add-email-toggle:hover { color: var(--accent); }
   .add-email-form { margin-top: 10px; }
+  .ae-file-drop { border-radius: 10px; padding: 12px 16px; text-align: center; font-size: 12px; color: var(--text-muted); cursor: pointer; margin-bottom: 10px; box-shadow: var(--neu-inset-xs); transition: color 0.15s; }
+  .ae-file-drop:hover, .ae-file-drop.dragging { color: var(--accent); }
+  .ae-file-drop input { display: none; }
+  .ae-file-status { font-size: 11px; color: var(--accent); margin-top: 4px; font-weight: 600; min-height: 16px; }
   .ae-row { display: flex; gap: 8px; margin-bottom: 8px; flex-wrap: wrap; }
   .ae-row select, .ae-row input { border: none; outline: none; font-family: inherit; font-size: 13px; color: var(--text); background: var(--bg); padding: 7px 12px; border-radius: 8px; box-shadow: var(--neu-inset-xs); }
   .ae-row input { flex: 1; min-width: 100px; }
@@ -397,6 +401,11 @@
   <div class="add-email-card collapsed" id="add-email-card">
     <div class="add-email-toggle" id="add-email-toggle">＋ Add an email to this thread</div>
     <div class="add-email-form">
+      <div class="ae-file-drop" id="ae-file-drop">
+        📎 Drop an email file here to auto-fill, or click to choose — .eml, PDF, RTF
+        <input type="file" id="ae-file-input" accept=".eml,.msg,.pdf,.rtf,.txt">
+        <div class="ae-file-status" id="ae-file-status"></div>
+      </div>
       <div class="ae-row">
         <select id="ae-type">
           <option value="in">📥 Received</option>
@@ -1464,7 +1473,70 @@ $aeToggle.addEventListener('click', () => {
 $aeCancel.addEventListener('click', () => {
   $aeCard.classList.add('collapsed');
   ['ae-from','ae-to','ae-date','ae-subject','ae-body'].forEach(id => document.getElementById(id).value = '');
+  document.getElementById('ae-file-status').textContent = '';
 });
+
+// ── Email file drop zone — auto-fills form from .eml, PDF, RTF ──
+(function () {
+  const $drop   = document.getElementById('ae-file-drop');
+  const $input  = document.getElementById('ae-file-input');
+  const $status = document.getElementById('ae-file-status');
+
+  function fillEmlFields(parsed) {
+    if (parsed.from)    document.getElementById('ae-from').value    = parsed.from;
+    if (parsed.to)      document.getElementById('ae-to').value      = parsed.to;
+    if (parsed.subject) document.getElementById('ae-subject').value = parsed.subject;
+    if (parsed.date)    document.getElementById('ae-date').value    = parsed.date;
+    if (parsed.body)    document.getElementById('ae-body').value    = parsed.body;
+    if (parsed.direction === 'out') document.getElementById('ae-type').value = 'out';
+  }
+
+  function parseEml(text) {
+    const sep = text.indexOf('\n\n');
+    const headerBlock = sep > 0 ? text.slice(0, sep) : text;
+    const body = sep > 0 ? text.slice(sep + 2).replace(/^--[^\n]+\n[\s\S]*?Content-Type:[^\n]+\n\n/i, '').trim() : '';
+    const get = (name) => {
+      const m = headerBlock.match(new RegExp('^' + name + ':\\s*(.+)', 'im'));
+      return m ? m[1].replace(/\r/g, '').trim() : '';
+    };
+    return { from: get('from'), to: get('to'), subject: get('subject'), date: get('date'), body };
+  }
+
+  async function handleFile(file) {
+    if (!file) return;
+    $status.textContent = 'Reading…';
+    const ext = file.name.split('.').pop().toLowerCase();
+    try {
+      if (ext === 'eml' || ext === 'msg' || ext === 'txt') {
+        const text = await file.text();
+        const parsed = parseEml(text);
+        fillEmlFields(parsed);
+        $status.textContent = '✓ Fields filled from ' + file.name;
+      } else {
+        // PDF, RTF — send to server to extract text then parse
+        const buf = await file.arrayBuffer();
+        const b64 = btoa(String.fromCharCode(...new Uint8Array(buf)));
+        const r = await fetch('/api/threads/' + threadId + '/extract-email', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ filename: file.name, mimeType: file.type || 'application/octet-stream', base64: b64 })
+        });
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        const parsed = await r.json();
+        fillEmlFields(parsed);
+        $status.textContent = '✓ Fields filled from ' + file.name + (parsed.body ? '' : ' — check body manually');
+      }
+    } catch (e) {
+      $status.textContent = '⚠ ' + e.message;
+    }
+  }
+
+  $drop.addEventListener('click', () => $input.click());
+  $input.addEventListener('change', () => handleFile($input.files[0]));
+  $drop.addEventListener('dragover', (e) => { e.preventDefault(); $drop.classList.add('dragging'); });
+  $drop.addEventListener('dragleave', () => $drop.classList.remove('dragging'));
+  $drop.addEventListener('drop', (e) => { e.preventDefault(); $drop.classList.remove('dragging'); handleFile(e.dataTransfer.files[0]); });
+})();
 $aeSave.addEventListener('click', async () => {
   const body = document.getElementById('ae-body').value.trim();
   if (!body) { alert('Paste the email body first.'); return; }

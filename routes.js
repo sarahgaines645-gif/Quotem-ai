@@ -2004,6 +2004,49 @@ router.post('/api/threads/claim-legacy', requirePerson, (req, res) => {
     res.json(result);
 });
 
+// Extract email fields from a file (PDF, RTF, EML) — used by the add-email form
+// to auto-fill From/To/Subject/Date/body without the user typing them manually.
+router.post('/api/threads/:id/extract-email', requirePerson, express.json({ limit: '50mb' }), async (req, res) => {
+    if (!readOwnedThread(req, res)) return;
+    const { filename = '', mimeType = '', base64 } = req.body || {};
+    if (!base64) return res.status(400).json({ error: 'base64 required' });
+
+    let text = '';
+    try {
+        const buf = Buffer.from(base64, 'base64');
+        const isPdf = /pdf/i.test(mimeType) || /\.pdf$/i.test(filename);
+        const isRtf = /\.rtf$/i.test(filename) || /rtf/i.test(mimeType);
+        if (isPdf) {
+            const ex = await qFinance.extractDocument(base64, 'application/pdf');
+            text = (ex && (ex.full_text || ex.raw)) || '';
+        } else if (isRtf) {
+            text = rtfToText(buf.toString('utf8'));
+        } else {
+            text = buf.toString('utf8');
+        }
+    } catch (e) {
+        return res.status(500).json({ error: 'Could not extract text: ' + e.message });
+    }
+
+    // Parse email-style headers from extracted text.
+    const get = (name) => {
+        const m = text.match(new RegExp(name + '[:\\s]+([^\\n\\r]+)', 'i'));
+        return m ? m[1].replace(/\r/g, '').trim() : '';
+    };
+    const from    = get('from');
+    const to      = get('to');
+    const subject = get('subject');
+    const date    = get('date');
+    // Body = everything after the last recognisable header, or the full text if no headers found.
+    const lastHeaderRe = /(?:^|\n)(?:from|to|subject|date|cc|bcc|message-id)[^\n]*\n/gi;
+    let lastIdx = 0;
+    let m;
+    while ((m = lastHeaderRe.exec(text)) !== null) lastIdx = m.index + m[0].length;
+    const body = lastIdx > 0 ? text.slice(lastIdx).trim() : text.trim();
+
+    res.json({ from, to, subject, date, body, direction: 'in' });
+});
+
 // File attachments — base64 in JSON body for simplicity (no multipart parser dep).
 // Detects email-format uploads (.eml or text with From:/To:/Subject: headers) and
 // routes them to addEmail so they land on the Correspondence timeline instead of
