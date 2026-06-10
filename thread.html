@@ -523,9 +523,6 @@
       <button class="chat-toggle-sm" id="chat-glm" type="button" title="GLM-5 test — switch this thread to GLM-5 744B instead of V4 Pro">G</button>
     </div>
   </div>
-  <div style="text-align:right;margin-top:4px;padding-right:2px;">
-    <button id="chat-clear" type="button" style="background:none;border:none;cursor:pointer;font-size:11px;color:var(--text-muted);opacity:0.5;padding:2px 4px;" title="Clear Q's conversation on this thread — keeps emails, files and notes">clear chat</button>
-  </div>
 
   <div class="section-label">📤 Outbox — emails ready to send</div>
   <div id="outbox-list" style="margin-bottom: 12px;"></div>
@@ -694,18 +691,6 @@ $chatDeep.addEventListener('click', () => {
   $chatDeep.classList.toggle('on', deepMode);
 });
 
-// Clear Q's conversation on this thread (keeps emails, files, notes).
-document.getElementById('chat-clear').addEventListener('click', async () => {
-  if (!confirm('Clear Q\'s conversation on this thread? Emails, files and notes are kept.')) return;
-  const r = await fetch('/api/threads/' + threadId + '/chat', { method: 'DELETE' });
-  if (r.ok) {
-    thread.chatHistory = [];
-    renderChat();
-    refreshKickoffButton();
-  } else {
-    alert('Could not clear chat.');
-  }
-});
 
 // GLM-5 model toggle — test GLM-5 744B against V4 Pro in this thread.
 // Persists per-thread in localStorage so the choice survives page reloads.
