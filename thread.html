@@ -499,8 +499,10 @@
     <textarea id="ob-body" placeholder="Write the email — send now, or save to send later…" style="border:none;outline:none;background:transparent;padding:10px 0;font-family:inherit;font-size:14px;color:var(--text);min-height:90px;resize:vertical;width:100%;"></textarea>
     <div id="ob-attach-pills" style="display:flex;flex-wrap:wrap;gap:6px;"></div>
     <input type="file" id="ob-attach-input" multiple style="display:none">
-    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;position:relative;">
       <button id="ob-attach-btn" class="note-save-btn" type="button">📎 Attach</button>
+      <button id="ob-thread-files-btn" class="note-save-btn" type="button">📁 From thread</button>
+      <div id="ob-thread-files-picker" style="display:none;position:absolute;top:calc(100% + 6px);left:0;z-index:50;background:var(--bg);box-shadow:var(--neu-raised);border-radius:12px;padding:10px 14px;min-width:220px;max-width:320px;max-height:240px;overflow-y:auto;"></div>
       <button id="ob-save-btn" class="note-save-btn" type="button">🕒 Save to outbox</button>
       <button id="ob-send-btn" class="note-save-btn" type="button">📤 Send now</button>
       <span id="outbox-status" style="font-size:12px;color:var(--text-muted);"></span>
@@ -2500,22 +2502,26 @@ loadThread();
   const esc = (s) => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
   const flash = (m) => { obStatus.textContent = m; setTimeout(() => { if (obStatus.textContent === m) obStatus.textContent = ''; }, 3000); };
 
-  // Attached files — each entry: { filename, base64, mimeType }
+  // Attached files — each entry is either:
+  //   { filename, base64, mimeType }           — uploaded from device
+  //   { filename, threadRef:true, threadId, mimeType } — already on the server in this thread
   const _attachments = [];
   document.addEventListener('email:attach-file', (e) => {
     _attachments.push(e.detail);
     renderPills();
     document.getElementById('ob-compose') && document.getElementById('ob-compose').scrollIntoView({ behavior: 'smooth', block: 'start' });
   });
+  function makeAttachPill(a, i, arr, reRender) {
+    const pill = document.createElement('span');
+    pill.style.cssText = 'display:inline-flex;align-items:center;gap:4px;background:var(--bg);box-shadow:var(--neu-raised-sm);border-radius:8px;padding:4px 8px;font-size:12px;';
+    const icon = a.threadRef ? '📁' : '📎';
+    pill.innerHTML = icon + ' ' + esc(a.filename) + ' <button type="button" style="border:none;background:none;cursor:pointer;color:var(--text-muted);font-size:14px;line-height:1;padding:0;">×</button>';
+    pill.querySelector('button').onclick = () => { arr.splice(i, 1); reRender(); };
+    return pill;
+  }
   function renderPills() {
     obAttachPills.innerHTML = '';
-    _attachments.forEach((a, i) => {
-      const pill = document.createElement('span');
-      pill.style.cssText = 'display:inline-flex;align-items:center;gap:4px;background:var(--bg);box-shadow:var(--neu-raised-sm);border-radius:8px;padding:4px 8px;font-size:12px;';
-      pill.innerHTML = '📎 ' + esc(a.filename) + ' <button type="button" style="border:none;background:none;cursor:pointer;color:var(--text-muted);font-size:14px;line-height:1;padding:0;">×</button>';
-      pill.querySelector('button').onclick = () => { _attachments.splice(i, 1); renderPills(); };
-      obAttachPills.appendChild(pill);
-    });
+    _attachments.forEach((a, i) => obAttachPills.appendChild(makeAttachPill(a, i, _attachments, renderPills)));
   }
   function fileToBase64(file) {
     return new Promise((res, rej) => {
@@ -2534,6 +2540,38 @@ loadThread();
     obAttachInput.value = '';
     renderPills();
   });
+
+  // ── "From thread" file picker ──────────────────────────────────
+  const obThreadFilesBtn = document.getElementById('ob-thread-files-btn');
+  const obThreadFilesPicker = document.getElementById('ob-thread-files-picker');
+  function openThreadFilePicker(btn, picker, onPick) {
+    const files = (thread && thread.files) ? thread.files : [];
+    if (!files.length) { flash('No files in this thread yet'); return; }
+    picker.innerHTML = '';
+    if (picker.style.display !== 'none') { picker.style.display = 'none'; return; }
+    files.forEach(f => {
+      const already = _attachments.some(a => a.filename === f.filename && a.threadRef);
+      const row = document.createElement('div');
+      row.style.cssText = 'padding:6px 8px;cursor:pointer;border-radius:8px;font-size:13px;display:flex;align-items:center;gap:8px;' + (already ? 'opacity:0.45;pointer-events:none;' : '');
+      const icon = (f.mimeType || '').startsWith('image/') ? '🖼' : '📄';
+      row.innerHTML = icon + ' ' + esc(f.filename);
+      if (!already) {
+        row.addEventListener('mouseenter', () => row.style.background = 'var(--shadow-light)');
+        row.addEventListener('mouseleave', () => row.style.background = '');
+        row.addEventListener('click', () => {
+          onPick({ filename: f.filename, threadRef: true, threadId, mimeType: f.mimeType || 'application/octet-stream' });
+          picker.style.display = 'none';
+        });
+      }
+      picker.appendChild(row);
+    });
+    picker.style.display = 'block';
+  }
+  obThreadFilesBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    openThreadFilePicker(obThreadFilesBtn, obThreadFilesPicker, (ref) => { _attachments.push(ref); renderPills(); });
+  });
+  document.addEventListener('click', () => { obThreadFilesPicker.style.display = 'none'; });
   async function load() {
     try {
       const r = await fetch('/email/outbox?threadId=' + encodeURIComponent(threadId));
@@ -2567,28 +2605,33 @@ loadThread();
         const pillsEl = document.createElement('div'); pillsEl.style.cssText='display:flex;flex-wrap:wrap;gap:6px;margin-bottom:6px;';
         const renderItemPills = () => {
           pillsEl.innerHTML='';
-          itemAtts.forEach((a,i)=>{ const p=document.createElement('span'); p.style.cssText='display:inline-flex;align-items:center;gap:4px;background:var(--bg);box-shadow:var(--neu-raised-sm);border-radius:8px;padding:4px 8px;font-size:12px;'; p.innerHTML='📎 '+esc(a.filename)+' <button type="button" style="border:none;background:none;cursor:pointer;color:var(--text-muted);font-size:14px;line-height:1;padding:0;">×</button>'; p.querySelector('button').onclick=()=>{itemAtts.splice(i,1);renderItemPills();}; pillsEl.appendChild(p); });
+          itemAtts.forEach((a,i)=>{ pillsEl.appendChild(makeAttachPill(a,i,itemAtts,renderItemPills)); });
         };
         renderItemPills();
         bodyEl.appendChild(pillsEl);
         // Actions
-        const acts = document.createElement('div'); acts.style.cssText='display:flex;gap:8px;flex-wrap:wrap;align-items:center;';
+        const acts = document.createElement('div'); acts.style.cssText='display:flex;gap:8px;flex-wrap:wrap;align-items:center;position:relative;';
         const fileIn = document.createElement('input'); fileIn.type='file'; fileIn.multiple=true; fileIn.style.display='none';
         fileIn.onchange = async () => { for(const f of fileIn.files){ const b64=await fileToBase64(f); itemAtts.push({filename:f.name,base64:b64,mimeType:f.type||'application/octet-stream'}); } fileIn.value=''; renderItemPills(); };
         const attachBtn = document.createElement('button'); attachBtn.className='note-save-btn'; attachBtn.textContent='📎 Attach';
         attachBtn.onclick=(e)=>{e.stopPropagation();fileIn.click();};
+        // Thread files picker for this outbox item
+        const threadFilesBtn2 = document.createElement('button'); threadFilesBtn2.className='note-save-btn'; threadFilesBtn2.textContent='📁 From thread';
+        const threadFilesPicker2 = document.createElement('div'); threadFilesPicker2.style.cssText='display:none;position:absolute;top:calc(100% + 6px);left:0;z-index:50;background:var(--bg);box-shadow:var(--neu-raised);border-radius:12px;padding:10px 14px;min-width:220px;max-width:320px;max-height:240px;overflow-y:auto;';
+        threadFilesBtn2.onclick=(e)=>{e.stopPropagation();openThreadFilePicker(threadFilesBtn2,threadFilesPicker2,(ref)=>{itemAtts.push(ref);renderItemPills();});};
+        acts.appendChild(threadFilesPicker2);
         const saveBtn = document.createElement('button'); saveBtn.className='note-save-btn'; saveBtn.textContent='💾 Save';
         saveBtn.onclick=async(e)=>{e.stopPropagation();saveBtn.disabled=true;
           await fetch('/email/outbox/'+it.id,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({to:toInput.value.trim(),body:bodyTA.value,attachments:itemAtts})}).catch(()=>{});
           flash('Saved'); saveBtn.disabled=false; load();};
         const send = document.createElement('button'); send.className='note-save-btn'; send.textContent='📤 Send';
         send.onclick=async(e)=>{e.stopPropagation();send.disabled=true;
-          // Save latest edits first so the send route picks them up
+          // Save latest edits first so the send route picks them up (server resolves threadRef attachments on send).
           await fetch('/email/outbox/'+it.id,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({to:toInput.value.trim(),body:bodyTA.value,attachments:itemAtts})}).catch(()=>{});
           try{const rr=await fetch('/email/outbox/'+it.id+'/send',{method:'POST'});const dd=await rr.json();if(!rr.ok)throw new Error(dd.error||'Failed');flash('Sent ✓');load();loadThread();}catch(e2){flash('Send failed: '+e2.message);send.disabled=false;}};
         const del = document.createElement('button'); del.className='note-save-btn'; del.textContent='🗑 Delete';
         del.onclick=async(e)=>{e.stopPropagation();await fetch('/email/outbox/'+it.id,{method:'DELETE'});load();};
-        acts.append(attachBtn,saveBtn,send,del,fileIn); bodyEl.appendChild(acts);
+        acts.append(attachBtn,threadFilesBtn2,saveBtn,send,del,fileIn); bodyEl.appendChild(acts);
         row.appendChild(bodyEl);
         let open=false;
         hdr.addEventListener('click',()=>{open=!open;bodyEl.style.display=open?'block':'none';hdr.querySelector('span:last-child').textContent=open?'▲':'▼';});
@@ -2599,9 +2642,13 @@ loadThread();
   obSave.onclick = async () => {
     if (!obSubject.value.trim() && !obBody.value.trim()) return flash('Nothing to save yet');
     try {
-      const r = await fetch('/email/outbox', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ to: obTo.value.trim(), subject: obSubject.value, body: obBody.value, threadId }) });
+      const payload = { to: obTo.value.trim(), subject: obSubject.value, body: obBody.value, threadId };
+      if (_attachments.length) payload.attachments = _attachments.map(a => a.threadRef ? { filename: a.filename, threadRef: true, threadId: a.threadId, mimeType: a.mimeType } : { filename: a.filename, base64: a.base64, mimeType: a.mimeType });
+      const r = await fetch('/email/outbox', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
       if (!r.ok) throw new Error('Failed');
-      obTo.value = ''; obSubject.value = ''; obBody.value = ''; flash('Saved to outbox'); load();
+      obTo.value = ''; obSubject.value = ''; obBody.value = '';
+      _attachments.length = 0; renderPills();
+      flash('Saved to outbox'); load();
     } catch (_) { flash('Could not save'); }
   };
   obSend.onclick = async () => {
@@ -2610,13 +2657,12 @@ loadThread();
     obSend.disabled = true;
     try {
       const payload = { to, subject: obSubject.value, text: obBody.value, threadId };
-      if (_attachments.length) payload.attachments = _attachments.map(a => ({ filename: a.filename, base64: a.base64, mimeType: a.mimeType }));
+      if (_attachments.length) payload.attachments = _attachments.map(a => a.threadRef ? { filename: a.filename, threadRef: true, threadId: a.threadId, mimeType: a.mimeType } : { filename: a.filename, base64: a.base64, mimeType: a.mimeType });
       const r = await fetch('/email/send', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
       const d = await r.json(); if (!r.ok) throw new Error(d.error || 'Failed');
       obTo.value = ''; obSubject.value = ''; obBody.value = '';
       _attachments.length = 0; renderPills();
       flash('Sent to ' + to);
-      // Reload thread so the sent email appears in correspondence immediately.
       loadThread();
     } catch (e) { flash('Send failed: ' + e.message); }
     finally { obSend.disabled = false; }

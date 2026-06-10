@@ -126,6 +126,7 @@ const TOOL_DEFINITIONS = [
                     subject: { type: 'string', description: 'The subject line.' },
                     body: { type: 'string', description: 'The full plain-text body of the email.' },
                     draft_id: { type: 'string', description: 'The draftId returned by a previous save_email_draft call for THIS email. Pass it when revising an existing draft so it is updated in place rather than creating a duplicate.' },
+                    attachments: { type: 'array', items: { type: 'string' }, description: 'Optional list of filenames from this thread\'s Files to include as attachments (e.g. ["id-photo.jpg", "TE7.pdf"]). Only use filenames that are actually in the thread\'s file list.' },
                 },
                 required: ['subject', 'body'],
             },
@@ -1250,7 +1251,11 @@ function saveEmailDraftTool(args, personEmail, threadId) {
             }
             // id not found — fall through and create fresh
         }
-        const item = qEmailAccounts.addToOutbox(personEmail, { to, subject, body, threadId: threadId || null });
+        // Convert filename list to thread refs so the server can resolve at send time.
+        const threadRefs = Array.isArray(args.attachments) && args.attachments.length && threadId
+            ? args.attachments.map(f => ({ filename: String(f), threadRef: true, threadId }))
+            : undefined;
+        const item = qEmailAccounts.addToOutbox(personEmail, { to, subject, body, threadId: threadId || null, attachments: threadRefs });
         return {
             ok: true,
             draftId: item.id,

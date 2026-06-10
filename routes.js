@@ -380,11 +380,31 @@ router.get('/email/gmail/callback', async (req, res) => {
     }
 });
 
+// Resolve any thread-file references ({threadRef:true, threadId, filename}) into
+// real {filename, base64, mimeType} objects. Plain base64 attachments pass through.
+// Synchronous — qThreads.readFile is fs-backed (no network call).
+function resolveThreadAttachments(attachments, ownerEmail) {
+    if (!Array.isArray(attachments)) return [];
+    return attachments.map(a => {
+        if (a.threadRef && a.threadId && a.filename) {
+            try {
+                const file = qThreads.readFile(a.threadId, a.filename, ownerEmail);
+                if (file && file.buffer) {
+                    return { filename: file.filename || a.filename, base64: file.buffer.toString('base64'), mimeType: file.mimeType || 'application/octet-stream' };
+                }
+            } catch (e) { console.warn('[email] thread-file resolve failed:', a.filename, e.message); }
+            return null;
+        }
+        return a;
+    }).filter(Boolean);
+}
+
 router.post('/email/send', requirePerson, express.json({ limit: '10mb' }), async (req, res) => {
     const { to, subject, text, attachments, threadId } = req.body || {};
     if (!to || !subject) return res.status(400).json({ error: 'to and subject are required' });
     try {
-        const from = await qEmail.sendEmail(req.person.email, { to, subject, text: text || '', attachments: attachments || [] });
+        const resolved = resolveThreadAttachments(attachments, req.person.email);
+        const from = await qEmail.sendEmail(req.person.email, { to, subject, text: text || '', attachments: resolved });
         // Record on the case thread so it appears in correspondence.
         if (threadId) {
             try {
@@ -423,18 +443,21 @@ router.get('/email/outbox', requirePerson, (req, res) => {
     if (req.query.threadId) outbox = outbox.filter(x => x.threadId === req.query.threadId);
     res.json({ outbox });
 });
-router.post('/email/outbox', requirePerson, express.json({ limit: '1mb' }), (req, res) => {
-    const { to, subject, body, threadId } = req.body || {};
+router.post('/email/outbox', requirePerson, express.json({ limit: '10mb' }), (req, res) => {
+    const { to, subject, body, threadId, attachments } = req.body || {};
     if (!subject && !body) return res.status(400).json({ error: 'Nothing to save.' });
-    res.json({ ok: true, item: qEmail.addToOutbox(req.person.email, { to, subject, body, threadId }) });
+    res.json({ ok: true, item: qEmail.addToOutbox(req.person.email, { to, subject, body, threadId, attachments }) });
 });
 router.post('/email/outbox/:id/send', requirePerson, async (req, res) => {
     try {
-        // Read item before sending — sendFromOutbox removes it afterwards.
         const item = qEmail.getOutbox(req.person.email).find(x => x.id === req.params.id);
-        const from = await qEmail.sendFromOutbox(req.person.email, req.params.id);
+        if (!item) { const e = new Error('not_found'); e.code = 'not_found'; throw e; }
+        // Resolve any thread-file references before sending, then call sendEmail directly.
+        const resolvedAtts = resolveThreadAttachments(item.attachments, req.person.email);
+        const from = await qEmail.sendEmail(req.person.email, { to: item.to, subject: item.subject, text: item.body, attachments: resolvedAtts });
+        qEmail.removeFromOutbox(req.person.email, req.params.id);
         // Record on the case thread so it appears in correspondence.
-        if (item && item.threadId) {
+        if (item.threadId) {
             try {
                 const recorded = qThreads.addEmail(item.threadId, {
                     type: 'out', from: from || req.person.email,
