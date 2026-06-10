@@ -40,8 +40,8 @@
   .new-btn { border: none; cursor: pointer; background: var(--accent); color: white; font-family: inherit; font-size: 14px; font-weight: 700; padding: 11px 22px; border-radius: 12px; box-shadow: var(--neu-raised-sm); transition: opacity 0.15s; }
   .new-btn:hover { opacity: 0.9; }
   .new-btn:active { box-shadow: var(--neu-inset-xs); }
-  /* New-thread modal */
-  .modal-bg { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.35); z-index: 100; align-items: center; justify-content: center; padding: 20px; }
+  /* New-thread modal — solid backdrop, no scrim */
+  .modal-bg { display: none; position: fixed; inset: 0; background: var(--bg); z-index: 100; align-items: center; justify-content: center; padding: 20px; }
   .modal-bg.show { display: flex; }
   .modal { background: var(--bg); border-radius: 18px; padding: 24px; box-shadow: var(--neu-raised); width: 100%; max-width: 480px; }
   .modal h3 { font-size: 17px; font-weight: 700; letter-spacing: -0.02em; margin-bottom: 14px; }
@@ -53,15 +53,23 @@
   .modal-actions .cancel { background: var(--bg); color: var(--text-muted); box-shadow: var(--neu-raised-sm); }
   .modal-actions .save   { background: var(--accent); color: white; box-shadow: var(--neu-raised-sm); }
 
+  /* Overview (pinned) section */
+  .overview-section { margin-bottom: 24px; }
+  .overview-label { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.12em; color: var(--text-faint); margin-bottom: 10px; display: flex; align-items: center; gap: 8px; }
+  .overview-label::after { content: ''; flex: 1; height: 1px; background: var(--shadow-dark); opacity: 0.25; }
+  .section-label { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.12em; color: var(--text-faint); margin-bottom: 10px; display: flex; align-items: center; gap: 8px; }
+  .section-label::after { content: ''; flex: 1; height: 1px; background: var(--shadow-dark); opacity: 0.25; }
+
   .threads-list { display: flex; flex-direction: column; gap: 12px; }
   .thread-card {
     background: var(--bg); border-radius: 16px; padding: 18px 20px;
     box-shadow: var(--neu-raised-sm); cursor: pointer;
     transition: color 0.15s; text-decoration: none; color: var(--text);
-    display: block;
+    display: block; position: relative;
   }
   .thread-card:hover { color: var(--accent); }
   .thread-card:active { box-shadow: var(--neu-inset-xs); }
+  .thread-card.pinned { box-shadow: var(--neu-raised); border-left: 3px solid var(--accent); }
   .tc-row1 { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
   .tc-title { font-size: 16px; font-weight: 700; letter-spacing: -0.02em; flex: 1; min-width: 0; }
   .tc-status { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; padding: 3px 10px; border-radius: 7px; box-shadow: var(--neu-inset-xs); color: var(--text-faint); }
@@ -70,6 +78,10 @@
   .tc-summary { font-size: 13px; color: var(--text-muted); margin-top: 5px; }
   .tc-meta { display: flex; gap: 14px; margin-top: 10px; font-size: 11px; color: var(--text-faint); }
   .tc-meta-item { display: inline-flex; align-items: center; gap: 4px; }
+  /* Pin button — sits in top-right of card, stops card navigation */
+  .pin-btn { position: absolute; top: 12px; right: 14px; background: none; border: none; cursor: pointer; font-size: 15px; line-height: 1; padding: 4px; border-radius: 6px; color: var(--text-faint); transition: color 0.15s; }
+  .pin-btn:hover { color: var(--accent); }
+  .pin-btn.active { color: var(--accent); }
 
   .empty {
     text-align: center; padding: 80px 24px; color: var(--text-muted);
@@ -109,6 +121,11 @@
     </div>
   </div>
 
+  <div id="overview-section" class="overview-section" style="display:none;">
+    <div class="overview-label">📌 Priority / Overview</div>
+    <div id="pinned-list" class="threads-list"></div>
+  </div>
+  <div id="all-label" class="section-label" style="display:none;">All Threads</div>
   <div id="threads-list" class="threads-list"></div>
   <div id="empty-state" class="empty" style="display:none;">
     <div class="em">📁</div>
@@ -118,10 +135,29 @@
 </div>
 
 <script>
-const $list   = document.getElementById('threads-list');
-const $empty  = document.getElementById('empty-state');
-const $search = document.getElementById('search');
+const $list          = document.getElementById('threads-list');
+const $pinnedList    = document.getElementById('pinned-list');
+const $overviewSec   = document.getElementById('overview-section');
+const $allLabel      = document.getElementById('all-label');
+const $empty         = document.getElementById('empty-state');
+const $search        = document.getElementById('search');
 let all = [];
+
+// ── Pin state — persisted in localStorage ──────────────────────
+const PINS_KEY = 'q-pinned-threads';
+function getPins() {
+  try { return new Set(JSON.parse(localStorage.getItem(PINS_KEY) || '[]')); }
+  catch { return new Set(); }
+}
+function savePins(set) {
+  localStorage.setItem(PINS_KEY, JSON.stringify([...set]));
+}
+function togglePin(id) {
+  const pins = getPins();
+  if (pins.has(id)) pins.delete(id); else pins.add(id);
+  savePins(pins);
+  applyFilter();
+}
 
 function fmtAgo(iso) {
   if (!iso) return '';
@@ -136,31 +172,52 @@ function fmtAgo(iso) {
   return new Date(iso).toLocaleDateString();
 }
 
+function makeCard(t, pinned) {
+  const a = document.createElement('a');
+  a.className = 'thread-card' + (pinned ? ' pinned' : '');
+  a.href = '/thread/' + t.id;
+  const status = t.status || 'open';
+  a.innerHTML = `
+    <button class="pin-btn ${pinned ? 'active' : ''}" title="${pinned ? 'Remove from overview' : 'Pin to overview'}">${pinned ? '📌' : '📍'}</button>
+    <div class="tc-row1">
+      <div class="tc-title">${escapeHtml(t.title || '(untitled)')}</div>
+      <div class="tc-status ${status}">${status}</div>
+    </div>
+    ${t.summary ? `<div class="tc-summary">${escapeHtml(t.summary)}</div>` : ''}
+    <div class="tc-meta">
+      <span class="tc-meta-item">📨 ${(t.emails || []).length} email${(t.emails || []).length === 1 ? '' : 's'}</span>
+      <span class="tc-meta-item">💬 ${(t.chatHistory || []).length} message${(t.chatHistory || []).length === 1 ? '' : 's'}</span>
+      <span class="tc-meta-item">🕐 ${fmtAgo(t.updatedAt)}</span>
+    </div>`;
+  a.querySelector('.pin-btn').addEventListener('click', (e) => {
+    e.preventDefault(); e.stopPropagation();
+    togglePin(t.id);
+  });
+  return a;
+}
+
 function render(list) {
   $list.innerHTML = '';
+  $pinnedList.innerHTML = '';
   if (!list.length) {
     $empty.style.display = 'block';
+    $overviewSec.style.display = 'none';
+    $allLabel.style.display = 'none';
     return;
   }
   $empty.style.display = 'none';
-  for (const t of list) {
-    const a = document.createElement('a');
-    a.className = 'thread-card';
-    a.href = '/thread/' + t.id;
-    const status = t.status || 'open';
-    a.innerHTML = `
-      <div class="tc-row1">
-        <div class="tc-title">${escapeHtml(t.title || '(untitled)')}</div>
-        <div class="tc-status ${status}">${status}</div>
-      </div>
-      ${t.summary ? `<div class="tc-summary">${escapeHtml(t.summary)}</div>` : ''}
-      <div class="tc-meta">
-        <span class="tc-meta-item">📨 ${(t.emails || []).length} email${(t.emails || []).length === 1 ? '' : 's'}</span>
-        <span class="tc-meta-item">💬 ${(t.chatHistory || []).length} message${(t.chatHistory || []).length === 1 ? '' : 's'}</span>
-        <span class="tc-meta-item">🕐 ${fmtAgo(t.updatedAt)}</span>
-      </div>`;
-    $list.appendChild(a);
+  const pins = getPins();
+  const pinned = list.filter(t => pins.has(t.id));
+  const rest   = list.filter(t => !pins.has(t.id));
+  if (pinned.length) {
+    $overviewSec.style.display = 'block';
+    $allLabel.style.display = rest.length ? 'block' : 'none';
+    for (const t of pinned) $pinnedList.appendChild(makeCard(t, true));
+  } else {
+    $overviewSec.style.display = 'none';
+    $allLabel.style.display = 'none';
   }
+  for (const t of rest) $list.appendChild(makeCard(t, false));
 }
 
 function applyFilter() {
