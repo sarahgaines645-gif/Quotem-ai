@@ -2585,12 +2585,12 @@ router.post('/api/threads/:id/check', requirePerson, express.json({ limit: '512k
     const qEmailAccounts = require('./plugins/q-email-accounts');
     const outboxDrafts = qEmailAccounts.getOutbox(req.person.email)
         .filter(item => item.threadId === t.id)
-        .map(item => `[OUTBOX DRAFT — To: ${item.to || '(no recipient)'} — Subject: ${item.subject || ''}]\n${(item.body || '').slice(0, 1200)}`)
+        .map(item => `[OUTBOX DRAFT — To: ${item.to || '(no recipient)'} — Subject: ${item.subject || ''}]\n${item.body || ''}`)
         .join('\n\n');
 
     const caseContext = [
         t.title ? `Case: ${t.title}` : '',
-        (t.emails || []).map(e => `[${e.type === 'in' ? 'Received' : e.type === 'draft' ? 'Draft' : 'Sent'} — ${e.subject || ''}]\n${(e.body || '').slice(0, 800)}`).join('\n\n'),
+        (t.emails || []).map(e => `[${e.type === 'in' ? 'Received' : e.type === 'draft' ? 'Draft' : 'Sent'} — ${e.subject || ''}]\n${e.body || ''}`).join('\n\n'),
         outboxDrafts,
         (t.notes || []).map(n => n.text || '').join('\n'),
         (t.chatHistory || []).slice(-10).filter(m => m.role === 'assistant').map(m => `[Q said]\n${(m.content || '').slice(0, 600)}`).join('\n\n'),
