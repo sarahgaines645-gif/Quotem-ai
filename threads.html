@@ -69,7 +69,7 @@
   }
   .thread-card:hover { color: var(--accent); }
   .thread-card:active { box-shadow: var(--neu-inset-xs); }
-  .thread-card.pinned { box-shadow: var(--neu-raised); border-left: 3px solid var(--accent); }
+  .thread-card.priority { box-shadow: var(--neu-raised); }
   .tc-row1 { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
   .tc-title { font-size: 16px; font-weight: 700; letter-spacing: -0.02em; flex: 1; min-width: 0; }
   .tc-status { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; padding: 3px 10px; border-radius: 7px; box-shadow: var(--neu-inset-xs); color: var(--text-faint); }
@@ -78,10 +78,11 @@
   .tc-summary { font-size: 13px; color: var(--text-muted); margin-top: 5px; }
   .tc-meta { display: flex; gap: 14px; margin-top: 10px; font-size: 11px; color: var(--text-faint); }
   .tc-meta-item { display: inline-flex; align-items: center; gap: 4px; }
-  /* Pin button — sits in top-right of card, stops card navigation */
-  .pin-btn { position: absolute; top: 12px; right: 14px; background: none; border: none; cursor: pointer; font-size: 15px; line-height: 1; padding: 4px; border-radius: 6px; color: var(--text-faint); transition: color 0.15s; }
-  .pin-btn:hover { color: var(--accent); }
-  .pin-btn.active { color: var(--accent); }
+  /* Remove-from-priority button on overview cards */
+  .unpin-btn { position: absolute; top: 10px; right: 12px; background: none; border: none; cursor: pointer; font-size: 18px; line-height: 1; padding: 4px; border-radius: 6px; color: var(--text-faint); transition: color 0.15s; }
+  .unpin-btn:hover { color: var(--accent); }
+  /* Overview empty hint */
+  .overview-empty { font-size: 12px; color: var(--text-faint); padding: 10px 4px; font-style: italic; }
 
   .empty {
     text-align: center; padding: 80px 24px; color: var(--text-muted);
@@ -121,9 +122,10 @@
     </div>
   </div>
 
-  <div id="overview-section" class="overview-section" style="display:none;">
-    <div class="overview-label">📌 Priority / Overview</div>
+  <div id="overview-section" class="overview-section">
+    <div class="overview-label">📌 Priority</div>
     <div id="pinned-list" class="threads-list"></div>
+    <div id="overview-empty" class="overview-empty">No priority threads yet — open a thread and tap 📌 to add it here</div>
   </div>
   <div id="all-label" class="section-label" style="display:none;">All Threads</div>
   <div id="threads-list" class="threads-list"></div>
@@ -172,13 +174,12 @@ function fmtAgo(iso) {
   return new Date(iso).toLocaleDateString();
 }
 
-function makeCard(t, pinned) {
+function makeCard(t) {
   const a = document.createElement('a');
-  a.className = 'thread-card' + (pinned ? ' pinned' : '');
+  a.className = 'thread-card';
   a.href = '/thread/' + t.id;
   const status = t.status || 'open';
   a.innerHTML = `
-    <button class="pin-btn ${pinned ? 'active' : ''}" title="${pinned ? 'Remove from overview' : 'Pin to overview'}">${pinned ? '📌' : '📍'}</button>
     <div class="tc-row1">
       <div class="tc-title">${escapeHtml(t.title || '(untitled)')}</div>
       <div class="tc-status ${status}">${status}</div>
@@ -189,35 +190,45 @@ function makeCard(t, pinned) {
       <span class="tc-meta-item">💬 ${(t.chatHistory || []).length} message${(t.chatHistory || []).length === 1 ? '' : 's'}</span>
       <span class="tc-meta-item">🕐 ${fmtAgo(t.updatedAt)}</span>
     </div>`;
-  a.querySelector('.pin-btn').addEventListener('click', (e) => {
-    e.preventDefault(); e.stopPropagation();
-    togglePin(t.id);
-  });
+  return a;
+}
+
+function makeOverviewCard(t) {
+  const a = makeCard(t);
+  a.classList.add('priority');
+  const btn = document.createElement('button');
+  btn.className = 'unpin-btn';
+  btn.title = 'Remove from priority';
+  btn.textContent = '📌';
+  btn.addEventListener('click', (e) => { e.preventDefault(); e.stopPropagation(); togglePin(t.id); });
+  a.appendChild(btn);
   return a;
 }
 
 function render(list) {
   $list.innerHTML = '';
   $pinnedList.innerHTML = '';
-  if (!list.length) {
-    $empty.style.display = 'block';
-    $overviewSec.style.display = 'none';
-    $allLabel.style.display = 'none';
-    return;
-  }
-  $empty.style.display = 'none';
+  const $overviewEmpty = document.getElementById('overview-empty');
+
   const pins = getPins();
   const pinned = list.filter(t => pins.has(t.id));
   const rest   = list.filter(t => !pins.has(t.id));
+
   if (pinned.length) {
-    $overviewSec.style.display = 'block';
-    $allLabel.style.display = rest.length ? 'block' : 'none';
-    for (const t of pinned) $pinnedList.appendChild(makeCard(t, true));
+    $overviewEmpty.style.display = 'none';
+    for (const t of pinned) $pinnedList.appendChild(makeOverviewCard(t));
   } else {
-    $overviewSec.style.display = 'none';
-    $allLabel.style.display = 'none';
+    $overviewEmpty.style.display = 'block';
   }
-  for (const t of rest) $list.appendChild(makeCard(t, false));
+
+  if (!list.length) {
+    $empty.style.display = 'block';
+    $allLabel.style.display = 'none';
+  } else {
+    $empty.style.display = 'none';
+    $allLabel.style.display = rest.length && pinned.length ? 'block' : 'none';
+    for (const t of rest) $list.appendChild(makeCard(t));
+  }
 }
 
 function applyFilter() {

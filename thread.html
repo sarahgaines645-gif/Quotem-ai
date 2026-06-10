@@ -37,6 +37,8 @@
   .logo-mark .dot { width: 8px; height: 8px; background: var(--accent); border-radius: 50%; display: inline-block; margin-left: 4px; align-self: flex-end; margin-bottom: 4px; box-shadow: 0 1px 2px rgba(233,30,99,0.3); }
   .header-back { font-size: 12px; color: var(--text-muted); text-decoration: none; margin-left: auto; }
   .header-back:hover { color: var(--text); }
+  .priority-btn { font-size: 12px; font-weight: 700; background: var(--bg); border: none; border-radius: 8px; padding: 5px 12px; cursor: pointer; box-shadow: var(--neu-raised-sm); color: var(--text-muted); font-family: inherit; transition: color 0.15s; }
+  .priority-btn.on { color: var(--accent); box-shadow: var(--neu-inset-xs); }
 
   .title-card { background: var(--bg); border-radius: 18px; padding: 18px 22px; box-shadow: var(--neu-raised); margin-bottom: 18px; }
   .title-row { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; }
@@ -374,6 +376,7 @@
 
   <header>
     <span class="logo-mark"><span class="q">Q</span><span class="dot"></span></span>
+    <button id="priority-btn" class="priority-btn" title="Mark as priority">📌 Priority</button>
     <a href="/threads" class="header-back">← all threads</a>
   </header>
 
@@ -548,6 +551,25 @@
 
 <script>
 const threadId = location.pathname.split('/').filter(Boolean).pop();
+
+// ── Priority toggle — marks this thread in the overview on threads.html ──
+const PINS_KEY = 'q-pinned-threads';
+function getPins() { try { return new Set(JSON.parse(localStorage.getItem(PINS_KEY)||'[]')); } catch { return new Set(); } }
+function savePins(s) { localStorage.setItem(PINS_KEY, JSON.stringify([...s])); }
+const $priorityBtn = document.getElementById('priority-btn');
+function refreshPriorityBtn() {
+  const on = getPins().has(threadId);
+  $priorityBtn.textContent = on ? '📌 Priority ✓' : '📌 Priority';
+  $priorityBtn.classList.toggle('on', on);
+}
+$priorityBtn.addEventListener('click', () => {
+  const pins = getPins();
+  if (pins.has(threadId)) pins.delete(threadId); else pins.add(threadId);
+  savePins(pins);
+  refreshPriorityBtn();
+});
+refreshPriorityBtn();
+
 let _userInitial = '?';
 fetch('/whoami').then(r => r.json()).then(d => {
   const n = d?.person?.name || d?.person?.email || '';
