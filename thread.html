@@ -2611,39 +2611,49 @@ loadThread();
   // ── Read aloud (Web Speech API — no API key, works in browser) ──
   const obReadBtn = document.getElementById('ob-read-btn');
   let _reading = false;
-  function pickFormalVoice() {
-    const voices = speechSynthesis.getVoices();
-    // Prefer a UK English voice for the posh legal read
-    const preferred = ['Daniel', 'Google UK English Male', 'Google UK English Female', 'Arthur', 'Malcolm'];
-    for (const name of preferred) {
-      const v = voices.find(v => v.name === name);
-      if (v) return v;
+  // Read email aloud — tries Gemini TTS (Charon voice, natural) first;
+  // falls back to browser Speech API if server is unavailable.
+  async function readEmailAloud(text, btn) {
+    if (btn._ttsAudio) {
+      btn._ttsAudio.pause(); URL.revokeObjectURL(btn._ttsUrl || '');
+      btn._ttsAudio = null; btn.textContent = '🔊 Read'; return;
     }
-    // Fall back to any en-GB voice
-    return voices.find(v => v.lang === 'en-GB') || voices.find(v => v.lang.startsWith('en')) || null;
+    if (!text.trim()) { flash('Nothing to read yet'); return; }
+    btn.textContent = '⏳'; btn.disabled = true;
+    try {
+      const r = await fetch('/api/tts-email', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text }),
+      });
+      btn.disabled = false;
+      if (r.ok) {
+        const blob = await r.blob();
+        const url = URL.createObjectURL(blob);
+        const audio = new Audio(url);
+        btn._ttsAudio = audio; btn._ttsUrl = url;
+        btn.textContent = '⏹ Stop';
+        audio.play();
+        audio.onended = audio.onerror = () => {
+          btn._ttsAudio = null; URL.revokeObjectURL(url); btn.textContent = '🔊 Read';
+        };
+        return;
+      }
+    } catch (_) {}
+    btn.disabled = false;
+    // Browser fallback (Web Speech API — quality varies by OS/browser)
+    const utt = new SpeechSynthesisUtterance(text);
+    const voices = speechSynthesis.getVoices();
+    const preferred = ['Daniel', 'Google UK English Male', 'Google UK English Female', 'Arthur', 'Malcolm'];
+    const voice = preferred.map(n => voices.find(v => v.name === n)).find(Boolean)
+      || voices.find(v => v.lang === 'en-GB') || null;
+    if (voice) utt.voice = voice;
+    utt.rate = 0.85; utt.pitch = 0.9;
+    utt.onstart = () => { btn.textContent = '⏹ Stop'; };
+    utt.onend = utt.onerror = () => { btn.textContent = '🔊 Read'; };
+    speechSynthesis.speak(utt);
   }
   obReadBtn.addEventListener('click', () => {
-    if (_reading) {
-      speechSynthesis.cancel();
-      _reading = false;
-      obReadBtn.textContent = '🔊 Read';
-      return;
-    }
-    const text = (document.getElementById('ob-body').value || '').trim();
-    if (!text) { flash('Nothing to read yet'); return; }
-    const utt = new SpeechSynthesisUtterance(text);
-    const voice = pickFormalVoice();
-    if (voice) utt.voice = voice;
-    utt.rate = 0.85;
-    utt.pitch = 0.9;
-    utt.onstart = () => { _reading = true; obReadBtn.textContent = '⏹ Stop'; };
-    utt.onend = utt.onerror = () => { _reading = false; obReadBtn.textContent = '🔊 Read'; };
-    // Voices may load async on first call — wait if needed
-    if (speechSynthesis.getVoices().length === 0) {
-      speechSynthesis.onvoiceschanged = () => { utt.voice = pickFormalVoice(); speechSynthesis.speak(utt); };
-    } else {
-      speechSynthesis.speak(utt);
-    }
+    readEmailAloud((document.getElementById('ob-body').value || '').trim(), obReadBtn);
   });
 
   async function load() {
@@ -2655,24 +2665,26 @@ loadThread();
       if (!items.length) { obList.innerHTML = '<div style="font-size:12px;color:var(--text-faint);">Nothing queued for this case yet.</div>'; return; }
       items.forEach((it) => {
         const row = document.createElement('div');
-        row.style.cssText = 'background:var(--bg);box-shadow:var(--neu-raised-sm);border-radius:10px;padding:10px 12px;margin-bottom:8px;';
+        row.className = 'ob-compose-card';
+        row.style.marginBottom = '14px';
         // Header — click to expand
         const hdr = document.createElement('div');
-        hdr.style.cssText = 'font-size:13px;display:flex;justify-content:space-between;align-items:center;cursor:pointer;';
-        hdr.innerHTML = '<span><b>' + esc(it.subject || '(no subject)') + '</b> <span style="color:var(--text-muted)">&rarr; ' + esc(it.to || '(no recipient)') + '</span></span><span style="font-size:11px;color:var(--text-muted);">▼</span>';
+        hdr.style.cssText = 'font-size:15px;font-weight:700;letter-spacing:-0.01em;display:flex;justify-content:space-between;align-items:center;cursor:pointer;gap:12px;';
+        hdr.innerHTML = '<span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + esc(it.subject || '(no subject)') + '<span style="font-weight:500;color:var(--text-muted);margin-left:8px;font-size:13px;">&rarr; ' + esc(it.to || '(no recipient)') + '</span></span><span style="font-size:11px;color:var(--text-muted);flex-shrink:0;">▼</span>';
         row.appendChild(hdr);
         // Body — hidden by default, toggled on click
         const bodyEl = document.createElement('div');
-        bodyEl.style.cssText = 'display:none;margin-top:8px;';
+        bodyEl.style.cssText = 'display:none;margin-top:12px;display:flex;flex-direction:column;gap:8px;';
+        bodyEl.style.display = 'none';
         // To field
         const toInput = document.createElement('input');
         toInput.type='text'; toInput.value=it.to||''; toInput.placeholder='To (email address)';
-        toInput.style.cssText='width:100%;box-sizing:border-box;border:none;outline:none;background:var(--bg);box-shadow:var(--neu-inset-sm);border-radius:8px;padding:8px 10px;font-family:inherit;font-size:13px;color:var(--text);margin-bottom:6px;';
+        toInput.className = 'ob-field';
         bodyEl.appendChild(toInput);
         // Body textarea (editable)
         const bodyTA = document.createElement('textarea');
         bodyTA.value = it.body || '';
-        bodyTA.style.cssText='width:100%;box-sizing:border-box;border:none;outline:none;background:var(--bg);box-shadow:var(--neu-inset-sm);border-radius:8px;padding:10px;font-family:inherit;font-size:13px;color:var(--text);min-height:100px;resize:vertical;margin-bottom:6px;';
+        bodyTA.className = 'ob-field ob-body-field';
         bodyEl.appendChild(bodyTA);
         // Attachment pills for this item
         let itemAtts = Array.isArray(it.attachments) ? [...it.attachments] : [];
@@ -2703,9 +2715,11 @@ loadThread();
           // Save latest edits first so the send route picks them up (server resolves threadRef attachments on send).
           await fetch('/email/outbox/'+it.id,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({to:toInput.value.trim(),body:bodyTA.value,attachments:itemAtts})}).catch(()=>{});
           try{const rr=await fetch('/email/outbox/'+it.id+'/send',{method:'POST'});const dd=await rr.json();if(!rr.ok)throw new Error(dd.error||'Failed');flash('Sent ✓');load();loadThread();}catch(e2){flash('Send failed: '+e2.message);send.disabled=false;}};
+        const readBtn2 = document.createElement('button'); readBtn2.className='note-save-btn'; readBtn2.textContent='🔊 Read';
+        readBtn2.onclick=(e)=>{e.stopPropagation();readEmailAloud((bodyTA.value||'').trim(),readBtn2);};
         const del = document.createElement('button'); del.className='note-save-btn'; del.textContent='🗑 Delete';
         del.onclick=async(e)=>{e.stopPropagation();await fetch('/email/outbox/'+it.id,{method:'DELETE'});load();};
-        acts.append(attachBtn,threadFilesBtn2,saveBtn,send,del,fileIn); bodyEl.appendChild(acts);
+        acts.append(attachBtn,threadFilesBtn2,readBtn2,saveBtn,send,del,fileIn); bodyEl.appendChild(acts);
         row.appendChild(bodyEl);
         let open=false;
         hdr.addEventListener('click',()=>{open=!open;bodyEl.style.display=open?'block':'none';hdr.querySelector('span:last-child').textContent=open?'▲':'▼';});

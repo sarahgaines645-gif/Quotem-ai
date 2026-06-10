@@ -380,6 +380,57 @@ router.get('/email/gmail/callback', async (req, res) => {
     }
 });
 
+// TTS — read email text aloud in a clear formal voice (Gemini TTS, "Charon" voice).
+// Returns audio/wav. Falls back to 503 so the client can use the browser's Speech API instead.
+router.post('/api/tts-email', requirePerson, express.json({ limit: '64kb' }), async (req, res) => {
+    const text = String(req.body?.text || '').trim().slice(0, 5000);
+    if (!text) return res.status(400).json({ error: 'No text provided.' });
+    const GEMINI_KEY = process.env.GEMINI_API_KEY;
+    if (!GEMINI_KEY) return res.status(503).json({ error: 'tts_unavailable' });
+    try {
+        const gr = await fetch(
+            `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-tts:generateContent?key=${GEMINI_KEY}`,
+            {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    contents: [{ parts: [{ text }] }],
+                    generationConfig: {
+                        response_modalities: ['AUDIO'],
+                        speech_config: {
+                            voice_config: { prebuilt_voice_config: { voice_name: 'Charon' } },
+                        },
+                    },
+                }),
+            }
+        );
+        if (!gr.ok) {
+            console.error('[tts-email] Gemini error:', (await gr.text()).slice(0, 300));
+            return res.status(502).json({ error: 'tts_failed' });
+        }
+        const data = await gr.json();
+        const b64 = data?.candidates?.[0]?.content?.parts?.[0]?.inline_data?.data;
+        if (!b64) return res.status(502).json({ error: 'no_audio' });
+        // Gemini returns raw 16-bit LE PCM at 24 kHz mono. Wrap in a minimal WAV header.
+        const pcm = Buffer.from(b64, 'base64');
+        const sr = 24000, ch = 1, bps = 16;
+        const wav = Buffer.alloc(44 + pcm.length);
+        wav.write('RIFF', 0);  wav.writeUInt32LE(36 + pcm.length, 4);  wav.write('WAVE', 8);
+        wav.write('fmt ', 12); wav.writeUInt32LE(16, 16);               wav.writeUInt16LE(1, 20);
+        wav.writeUInt16LE(ch, 22);  wav.writeUInt32LE(sr, 24);
+        wav.writeUInt32LE(sr * ch * (bps / 8), 28); wav.writeUInt16LE(ch * (bps / 8), 32);
+        wav.writeUInt16LE(bps, 34);
+        wav.write('data', 36); wav.writeUInt32LE(pcm.length, 40);
+        pcm.copy(wav, 44);
+        res.setHeader('Content-Type', 'audio/wav');
+        res.setHeader('Content-Length', wav.length);
+        res.end(wav);
+    } catch (e) {
+        console.error('[tts-email]', e.message);
+        res.status(500).json({ error: 'tts_error' });
+    }
+});
+
 // Resolve any thread-file references ({threadRef:true, threadId, filename}) into
 // real {filename, base64, mimeType} objects. Plain base64 attachments pass through.
 // Synchronous — qThreads.readFile is fs-backed (no network call).
