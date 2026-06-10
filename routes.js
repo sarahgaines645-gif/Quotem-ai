@@ -2248,7 +2248,10 @@ router.post('/api/threads/:id/chat', requirePerson, express.json({ limit: '256kb
     // Broad word matching ("email", "see", "look") fired on every message and sent
     // 100k+ tokens to V4-Pro → Together timeout. Narrow to actual media references.
     const refersToFile = /\b(image|images|photo|photos|picture|pic|pics|screenshot|scan|scanned|video|videos|footage|recording|clip|watch|frame|frames|pdf|cctv)\b/i.test(message);
-    const wantContent = isAddPing || refersToFile;
+    // Test models (e.g. GLM-5) don't reliably call tools, so always inject file
+    // content directly — they won't call read_file_content to fetch it themselves.
+    const isTestModel = !!(req.body?.testModel);
+    const wantContent = isAddPing || refersToFile || isTestModel;
 
     // Photos on a case: read each one to TEXT once (cached), then hand Q that text
     // as context so he reasons over it with the FULL thread history and his tools
