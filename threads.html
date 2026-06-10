@@ -79,8 +79,8 @@
   .tc-meta { display: flex; gap: 14px; margin-top: 10px; font-size: 11px; color: var(--text-faint); }
   .tc-meta-item { display: inline-flex; align-items: center; gap: 4px; }
   /* Remove-from-priority button on overview cards */
-  .unpin-btn { position: absolute; top: 10px; right: 12px; background: none; border: none; cursor: pointer; font-size: 18px; line-height: 1; padding: 4px; border-radius: 6px; color: var(--text-faint); transition: color 0.15s; }
-  .unpin-btn:hover { color: var(--accent); }
+  .unpin-btn { position: absolute; top: 12px; right: 14px; background: none; border: none; cursor: pointer; font-size: 11px; font-weight: 700; letter-spacing: 0.04em; padding: 4px 8px; border-radius: 6px; color: var(--accent); box-shadow: var(--neu-raised-sm); background: var(--bg); font-family: inherit; transition: box-shadow 0.15s; }
+  .unpin-btn:hover { box-shadow: var(--neu-inset-xs); }
   /* Overview empty hint */
   .overview-empty { font-size: 12px; color: var(--text-faint); padding: 10px 4px; font-style: italic; }
 
@@ -125,7 +125,7 @@
   <div id="overview-section" class="overview-section">
     <div class="overview-label">📌 Priority</div>
     <div id="pinned-list" class="threads-list"></div>
-    <div id="overview-empty" class="overview-empty">No priority threads yet — open a thread and tap 📌 to add it here</div>
+    <div id="overview-empty" class="overview-empty">No priority threads yet — open a thread and tap ☆ Priority to add it here</div>
   </div>
   <div id="all-label" class="section-label" style="display:none;">All Threads</div>
   <div id="threads-list" class="threads-list"></div>
@@ -199,7 +199,7 @@ function makeOverviewCard(t) {
   const btn = document.createElement('button');
   btn.className = 'unpin-btn';
   btn.title = 'Remove from priority';
-  btn.textContent = '📌';
+  btn.textContent = '★ remove';
   btn.addEventListener('click', (e) => { e.preventDefault(); e.stopPropagation(); togglePin(t.id); });
   a.appendChild(btn);
   return a;
