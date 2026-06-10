@@ -624,7 +624,7 @@ const TOOL_DEFINITIONS = [
         type: 'function',
         function: {
             name: 'list_threads',
-            description: 'List all of Sarah\'s saved Threads (situations / cases). Use this whenever she references something you might have a Thread for — "the landlord thing", "that complaint with X", "what happened with the boiler" — so you can match her words to a real Thread and pull its details with read_thread. Returns: array of {id, title, summary, status, updatedAt, emailCount}.',
+            description: 'List all of the user\'s saved Threads (situations / cases). Use this whenever they reference something you might have a Thread for — "the landlord thing", "that complaint with X", "what happened with the boiler" — so you can match their words to a real Thread and pull its details with read_thread. Returns: array of {id, title, summary, status, updatedAt, emailCount}.',
             parameters: { type: 'object', properties: {} },
         },
     },
@@ -1616,7 +1616,7 @@ function saveSituation({ title, summary, content } = {}, personEmail) {
             title: thread.title,
             id: thread.id,
             url,
-            instruction_for_q: `Tell Sarah the situation is saved. Give her a markdown link to open it: [${thread.title}](${url}). Briefly confirm what's in it (1 sentence) so she knows it captured the right thing, then propose the next concrete move on the case.`,
+            instruction_for_q: `Tell the user their situation is saved. Give them a markdown link to open it: [${thread.title}](${url}). Briefly confirm what's in it (1 sentence) so they know it captured the right thing, then propose the next concrete move on the case.`,
         };
     } catch (e) {
         return { error: 'Could not save situation: ' + e.message };
@@ -1642,8 +1642,8 @@ function listThreadsTool(personEmail) {
                 emailCount: (t.emails || []).length,
             })),
             instruction_for_q: threads.length === 0
-                ? 'No saved threads yet. If Sarah is asking about a situation that should be saved, offer to save it with save_situation.'
-                : 'Match Sarah\'s words to one of these threads. If you find the one she means, call read_thread next to load the full content. If unsure between two, ask which.',
+                ? 'No saved threads yet. If the user is asking about a situation that should be saved, offer to save it with save_situation.'
+                : 'Match the user\'s words to one of these threads. If you find the one they mean, call read_thread next to load the full content. If unsure between two, ask which.',
         };
     } catch (e) {
         return { error: e.message || 'Failed to list threads' };
@@ -1687,7 +1687,7 @@ function addEmailToThreadTool({ threadId, type, from, to, date, subject, body } 
         ok: true,
         threadId: updated.id,
         emailCount: (updated.emails || []).length,
-        instruction_for_q: 'Email added to the Thread. Tell Sarah briefly what was added (who/when), then continue.',
+        instruction_for_q: 'Email added to the Thread. Tell the user briefly what was added (who/when), then continue.',
     };
 }
 
@@ -2126,12 +2126,6 @@ function selectActiveTools(userMessage, options = {}) {
         const name = t.function?.name;
         if (!name) return false;
         if (ALWAYS_ON.has(name)) {
-            // Inside a Thread the current thread's data is already injected into
-            // the message by the route. read_thread / list_threads here can ONLY
-            // read OTHER threads — which caused Q to pull an old case into a new
-            // thread and respond about the wrong situation entirely. Block both on
-            // the thread surface; Q has everything he needs already in context.
-            if ((name === 'read_thread' || name === 'list_threads') && options.surface === 'thread') return false;
             return true;
         }
         // Doc-editor page: all doc-editor tools always on
