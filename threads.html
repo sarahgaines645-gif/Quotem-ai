@@ -72,7 +72,6 @@
   .thread-card.priority { box-shadow: var(--neu-raised); border-left: 3px solid var(--accent); }
   .tc-row1 { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
   .tc-title { font-size: 16px; font-weight: 700; letter-spacing: -0.02em; flex: 1; min-width: 0; }
-  .tc-pin { font-size: 14px; flex-shrink: 0; }
   .tc-status { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; padding: 3px 10px; border-radius: 7px; box-shadow: var(--neu-inset-xs); color: var(--text-faint); }
   .tc-status.open      { color: var(--accent); }
   .tc-status.resolved  { color: var(--text-muted); }
@@ -121,7 +120,7 @@
   </div>
 
   <div id="overview-section" class="overview-section">
-    <div class="overview-label">📌 Priority</div>
+    <div class="overview-label">Priority</div>
     <div id="pinned-list" class="threads-list"></div>
     <div id="overview-empty" class="overview-empty">No priority threads yet — open a thread and tap ☆ Priority to add it here</div>
   </div>
@@ -194,14 +193,6 @@ function makeCard(t) {
 function makeOverviewCard(t) {
   const a = makeCard(t);
   a.classList.add('priority');
-  // Add 📌 indicator into the title row — no button, no interaction
-  const pinIcon = a.querySelector('.tc-row1');
-  if (pinIcon) {
-    const span = document.createElement('span');
-    span.className = 'tc-pin';
-    span.textContent = '📌';
-    pinIcon.prepend(span);
-  }
   return a;
 }
 
