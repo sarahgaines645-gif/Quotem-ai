@@ -167,6 +167,11 @@ async function gmailAccessToken(refreshToken) {
 // Send an email through the user's connected account (Gmail or SMTP).
 // attachments: [{ filename, base64, mimeType }] — optional file attachments.
 // Returns the from address. Throws Error with .code='not_connected' if none.
+// RFC 2047 encode a header value so non-ASCII (e.g. em dashes) survives transit.
+function encodeHeader(str) {
+    if (/^[\x00-\x7F]*$/.test(str)) return str;
+    return '=?UTF-8?B?' + Buffer.from(String(str), 'utf8').toString('base64') + '?=';
+}
 async function sendEmail(email, { to, subject, text, attachments = [] }) {
     const acct = getAccount(email);
     if (!acct) {
@@ -201,7 +206,7 @@ async function sendEmail(email, { to, subject, text, attachments = [] }) {
             message = [
                 from ? `From: ${from}` : null,
                 `To: ${to}`,
-                `Subject: ${subject}`,
+                `Subject: ${encodeHeader(subject)}`,
                 'MIME-Version: 1.0',
                 `Content-Type: multipart/mixed; boundary="${boundary}"`,
                 '',
@@ -211,7 +216,7 @@ async function sendEmail(email, { to, subject, text, attachments = [] }) {
             message = [
                 from ? `From: ${from}` : null,
                 `To: ${to}`,
-                `Subject: ${subject}`,
+                `Subject: ${encodeHeader(subject)}`,
                 'MIME-Version: 1.0',
                 'Content-Type: text/plain; charset=UTF-8',
                 '',
