@@ -460,17 +460,17 @@
     </div>
     <div class="chat-toggles">
       <button class="chat-deep" id="chat-deep" type="button" title="Deep think — Q reasons at maximum. Slower, sharper.">🧠 Deep</button>
-      <button class="chat-toggle-sm" id="chat-verify" type="button" title="Verify — press, then click the message you want Q to check">V</button>
+      <button class="chat-toggle-sm" id="chat-verify" type="button" title="Verify — press, then click the message you want Q to check">✓</button>
       <button class="chat-toggle-sm" id="chat-glm" type="button" title="GLM-5 test — switch this thread to GLM-5 744B instead of V4 Pro">G</button>
     </div>
   </div>
 
   <div class="section-label">📤 Outbox — emails ready to send</div>
   <div id="outbox-list" style="margin-bottom: 12px;"></div>
-  <div id="ob-compose" style="background: var(--bg); box-shadow: var(--neu-raised-sm); border-radius: 14px; padding: 14px; display: flex; flex-direction: column; gap: 8px;">
-    <input type="text" id="ob-to" placeholder="Send to (email address)" style="border:none;outline:none;background:var(--bg);box-shadow:var(--neu-raised-sm);border-radius:10px;padding:10px 12px;font-family:inherit;font-size:14px;color:var(--text);">
-    <input type="text" id="ob-subject" placeholder="Subject" style="border:none;outline:none;background:var(--bg);box-shadow:var(--neu-raised-sm);border-radius:10px;padding:10px 12px;font-family:inherit;font-size:14px;color:var(--text);">
-    <textarea id="ob-body" placeholder="Write the email — send now, or save to send later…" style="border:none;outline:none;background:var(--bg);box-shadow:var(--neu-raised-sm);border-radius:10px;padding:10px 12px;font-family:inherit;font-size:14px;color:var(--text);min-height:90px;resize:vertical;"></textarea>
+  <div id="ob-compose" style="background: var(--bg); box-shadow: var(--neu-raised-sm); border-radius: 14px; padding: 14px 18px; display: flex; flex-direction: column; gap: 0;">
+    <input type="text" id="ob-to" placeholder="To" style="border:none;border-bottom:1px solid var(--shadow-dark);outline:none;background:transparent;padding:10px 0;font-family:inherit;font-size:14px;color:var(--text);width:100%;">
+    <input type="text" id="ob-subject" placeholder="Subject" style="border:none;border-bottom:1px solid var(--shadow-dark);outline:none;background:transparent;padding:10px 0;font-family:inherit;font-size:14px;color:var(--text);width:100%;">
+    <textarea id="ob-body" placeholder="Write the email — send now, or save to send later…" style="border:none;outline:none;background:transparent;padding:10px 0;font-family:inherit;font-size:14px;color:var(--text);min-height:90px;resize:vertical;width:100%;"></textarea>
     <div id="ob-attach-pills" style="display:flex;flex-wrap:wrap;gap:6px;"></div>
     <input type="file" id="ob-attach-input" multiple style="display:none">
     <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
