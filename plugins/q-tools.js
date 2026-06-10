@@ -100,13 +100,14 @@ const TOOL_DEFINITIONS = [
         type: 'function',
         function: {
             name: 'send_email',
-            description: 'Send an email from the user\'s OWN connected email account (Gmail or SMTP). ONLY call this when the user has clearly told you to SEND an email (e.g. "email this to the council", "send that to john@x.com") — never to draft or preview. It goes out from their real address and lands in their Sent folder; it cannot be unsent, so the recipient, subject and body must be exactly what they asked for. If nothing is connected you get a not-connected error — then tell them to connect their email first.',
+            description: 'Send an email from the user\'s OWN connected email account (Gmail or SMTP). ONLY call this when the user has clearly told you to SEND an email — never to draft or preview. It goes out from their real address; it cannot be unsent. If you previously saved a draft with save_email_draft, pass that draft_id here so the draft is removed from the outbox automatically after sending.',
             parameters: {
                 type: 'object',
                 properties: {
                     to: { type: 'string', description: 'Recipient email address.' },
                     subject: { type: 'string', description: 'The subject line.' },
                     body: { type: 'string', description: 'The full plain-text body of the email.' },
+                    draft_id: { type: 'string', description: 'The draftId from a previous save_email_draft call for this email. Pass it so the outbox draft is removed automatically after sending — otherwise the draft lingers in the outbox.' },
                     attachments: { type: 'array', items: { type: 'string' }, description: 'Optional list of filenames from this case\'s Files to attach (e.g. ["id-photo.jpg", "TE7.pdf"]). Only use filenames that are actually in the thread\'s file list.' },
                 },
                 required: ['to', 'subject', 'body'],
@@ -1282,6 +1283,18 @@ async function sendEmailTool(args, personEmail, threadId) {
     }
     try {
         const from = await qEmailAccounts.sendEmail(personEmail, { to, subject, text: body, attachments });
+        // Remove the matching outbox draft so it doesn't linger after sending.
+        const draftId = args.draft_id ? String(args.draft_id).trim() : null;
+        if (draftId) {
+            try { qEmailAccounts.removeFromOutbox(personEmail, draftId); } catch { /* not critical */ }
+        } else if (threadId) {
+            // No draft_id — remove any outbox item in this thread with the same subject.
+            try {
+                const all = qEmailAccounts.getOutbox(personEmail);
+                const match = all.find(x => x.threadId === threadId && x.subject === subject);
+                if (match) qEmailAccounts.removeFromOutbox(personEmail, match.id);
+            } catch { /* not critical */ }
+        }
         // Record the sent email in the thread's Correspondence section.
         if (threadId) {
             try {
@@ -1295,7 +1308,7 @@ async function sendEmailTool(args, personEmail, threadId) {
         return {
             ok: true,
             sentFrom: from || 'your connected account',
-            instruction_for_q: `Email sent to ${to} from the user's own account${attachments.length ? ` with ${attachments.length} attachment(s)` : ''}. It is now in the Correspondence section of this thread. Confirm briefly that it's sent — do not paste the whole email back.`,
+            instruction_for_q: `Email sent to ${to} from the user's own account${attachments.length ? ` with ${attachments.length} attachment(s)` : ''}. The draft has been removed from the outbox. It is now in the Correspondence section of this thread. Confirm briefly that it's sent — do not paste the whole email back.`,
         };
     } catch (e) {
         if (e.code === 'not_connected') {

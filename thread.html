@@ -2387,7 +2387,7 @@ loadThread();
     const typing = addTyping();
     try {
       const body = verifyHistory.length === 0 && !question
-        ? { question: 'Check the last 5 messages Q sent AND any outbox draft emails in this thread. For each: is every legal claim correct? Name the specific law if yes; say "WRONG — remove this" with the reason if no. No softening. If everything is clean, say so.' }
+        ? { question: 'Check the draft emails and recent messages in this thread. For each legal claim: is it backed by actual law? Name the law if yes. Say "WRONG — remove this" plus the reason if no. No softening, no "may be". If everything is clean, say so.' }
         : { question, history: verifyHistory };
       const r = await fetch('/api/threads/' + threadId + '/check', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
