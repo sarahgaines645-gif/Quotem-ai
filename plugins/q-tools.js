@@ -1243,7 +1243,7 @@ function saveEmailDraftTool(args, personEmail, threadId) {
         return {
             ok: true,
             draftId: item.id,
-            instruction_for_q: 'Draft saved to outbox. Tell the user it\'s in their drafts — they can find it in the Emails section of this thread or on the Email Writer page and send it with one click.',
+            instruction_for_q: 'Draft saved. Tell the user it is now in the Outbox section of THIS thread — they can scroll down to the Outbox, review it, and send with one click. Do NOT mention the Email Writer page.',
         };
     } catch (e) {
         return { error: e.message || 'Could not save draft.' };
@@ -1257,10 +1257,10 @@ async function sendEmailTool(args, personEmail, threadId) {
     const subject = String(args.subject || '').trim();
     const body = args.body || args.text || '';
     if (!to || !subject) return { error: 'Need a recipient (to) and a subject to send an email.' };
+    const qThreads = require('./q-threads');
     // Read any requested thread-file attachments.
     const attachments = [];
     if (Array.isArray(args.attachments) && args.attachments.length && threadId) {
-        const qThreads = require('./q-threads');
         for (const filename of args.attachments) {
             try {
                 const file = qThreads.readFile(threadId, String(filename), personEmail);
@@ -1272,10 +1272,20 @@ async function sendEmailTool(args, personEmail, threadId) {
     }
     try {
         const from = await qEmailAccounts.sendEmail(personEmail, { to, subject, text: body, attachments });
+        // Record the sent email in the thread's Correspondence section.
+        if (threadId) {
+            try {
+                qThreads.addEmail(threadId, {
+                    type: 'out', from: from || personEmail,
+                    to, subject, body,
+                    date: new Date().toISOString().slice(0, 10),
+                }, personEmail);
+            } catch (e) { console.error('[send_email] addEmail failed:', e.message); }
+        }
         return {
             ok: true,
             sentFrom: from || 'your connected account',
-            instruction_for_q: `Email sent to ${to} from the user's own account${attachments.length ? ` with ${attachments.length} attachment(s)` : ''}. Confirm briefly that it's sent — do not paste the whole email back.`,
+            instruction_for_q: `Email sent to ${to} from the user's own account${attachments.length ? ` with ${attachments.length} attachment(s)` : ''}. It is now in the Correspondence section of this thread. Confirm briefly that it's sent — do not paste the whole email back.`,
         };
     } catch (e) {
         if (e.code === 'not_connected') {
@@ -2084,7 +2094,15 @@ function selectActiveTools(userMessage, options = {}) {
     return TOOL_DEFINITIONS.filter(t => {
         const name = t.function?.name;
         if (!name) return false;
-        if (ALWAYS_ON.has(name)) return true;
+        if (ALWAYS_ON.has(name)) {
+            // Inside a Thread the current thread's data is already injected into
+            // the message by the route. `read_thread` here can ONLY read OTHER
+            // threads — which caused Q to pull a CMS case into a new faulty-product
+            // thread and present it as that thread's diagnosis. Block it unless
+            // the user explicitly names another thread they want Q to read.
+            if (name === 'read_thread' && options.surface === 'thread') return false;
+            return true;
+        }
         // Doc-editor page: all doc-editor tools always on
         if (options.docEditor && DOC_EDITOR_TOOLS.has(name)) return true;
         // APS / case mode: research + evidence tools always on (the prompt
