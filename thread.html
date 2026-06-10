@@ -2345,11 +2345,18 @@ loadThread();
     return d;
   }
 
+  function sendToQ(verifyReply) {
+    // Fill the main chat textarea with the correction request and submit — Q responds normally.
+    const prompt = `Fact-check found issues with the draft — please correct the draft email:\n\n${verifyReply}`;
+    if (typeof $chatInput !== 'undefined') $chatInput.value = prompt;
+    if (typeof sendMessage === 'function') sendMessage();
+  }
+
   async function runVerify(question) {
     const typing = addTyping();
     try {
       const body = verifyHistory.length === 0 && !question
-        ? { question: 'Review the last 5 messages Q sent in this thread. Check each one for legal accuracy, any unsupported claims, anything that could harm the case, and what is solid. Be direct and specific.' }
+        ? { question: 'Check the last 5 messages Q sent AND any outbox draft emails in this thread. For each: is every legal claim correct? Name the specific law if yes; say "WRONG — remove this" with the reason if no. No softening. If everything is clean, say so.' }
         : { question, history: verifyHistory };
       const r = await fetch('/api/threads/' + threadId + '/check', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -2359,7 +2366,18 @@ loadThread();
       typing.remove();
       const reply = d.review || 'No response — try again.';
       verifyHistory.push({ role: 'assistant', content: reply });
-      addMsg('claude', reply);
+      const msgEl = addMsg('claude', reply);
+      // Add "Ask Q to fix" button if there's something to correct
+      const fixBtn = document.createElement('button');
+      fixBtn.textContent = '→ Ask Q to fix';
+      fixBtn.style.cssText = 'margin-top:8px;display:block;border:none;background:none;cursor:pointer;font-family:inherit;font-size:12px;font-weight:700;color:var(--accent);padding:0;';
+      fixBtn.addEventListener('click', () => {
+        fixBtn.textContent = 'Sent to Q ✓';
+        fixBtn.style.opacity = '0.5';
+        fixBtn.disabled = true;
+        sendToQ(reply);
+      });
+      msgEl.appendChild(fixBtn);
     } catch (e) {
       typing.remove();
       addMsg('claude', 'Check failed — try again.');

@@ -2581,23 +2581,30 @@ router.post('/api/threads/:id/check', requirePerson, express.json({ limit: '512k
     const history  = Array.isArray(req.body?.history) ? req.body.history.slice(-12) : [];
     if (!doc && !question) return res.status(400).json({ error: 'document or question required' });
 
+    // Pull outbox drafts for this thread (emails Q has drafted but not yet sent)
+    const qEmailAccounts = require('./plugins/q-email-accounts');
+    const outboxDrafts = qEmailAccounts.getOutbox(req.person.email)
+        .filter(item => item.threadId === t.id)
+        .map(item => `[OUTBOX DRAFT — To: ${item.to || '(no recipient)'} — Subject: ${item.subject || ''}]\n${(item.body || '').slice(0, 1200)}`)
+        .join('\n\n');
+
     const caseContext = [
         t.title ? `Case: ${t.title}` : '',
         (t.emails || []).map(e => `[${e.type === 'in' ? 'Received' : e.type === 'draft' ? 'Draft' : 'Sent'} — ${e.subject || ''}]\n${(e.body || '').slice(0, 800)}`).join('\n\n'),
+        outboxDrafts,
         (t.notes || []).map(n => n.text || '').join('\n'),
         (t.chatHistory || []).slice(-10).filter(m => m.role === 'assistant').map(m => `[Q said]\n${(m.content || '').slice(0, 600)}`).join('\n\n'),
     ].filter(Boolean).join('\n\n');
 
-    const system = `You are a careful legal and correspondence reviewer for a case. Read the full case context, then answer the user's question honestly and directly.
+    const system = `You are a hard-nosed legal and correspondence reviewer. You have the full case context. Your job is to tell the user what is legally solid and what is not — no softening, no hedging.
 
-When reviewing text or messages, check for:
-- Legal accuracy — cite the actual law or regulation if relevant; flag anything unsupported
-- Factual errors or claims that can't be substantiated
-- Tone — professional and firm, not inflammatory
-- Anything missing that strengthens the case
-- Whether it is ready to send or needs changes
-
-Be direct. Short answers. If something is wrong, say specifically what and why. If it's fine, say so.`;
+Rules:
+- If a claim is backed by law, say so and name the law or regulation.
+- If a claim is NOT backed by law, say "WRONG — remove this" and say exactly why it doesn't hold.
+- Do not say "may be", "could be", "slightly", "perhaps", "might come across as". Either it's legally defensible or it isn't.
+- Do not worry about tone or politeness in the correspondence — that is not your job. Your job is legal accuracy only.
+- If a draft or message is clean, say "Looks good — send it." No padding.
+- Short, direct, specific. One line per issue. No waffle.`;
 
     const messages = [
         ...(caseContext ? [{ role: 'user', content: `CASE CONTEXT:\n${caseContext}` }, { role: 'assistant', content: 'Understood — I have the full case context.' }] : []),
