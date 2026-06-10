@@ -2121,7 +2121,8 @@ router.get('/api/threads/:id/files/:filename', requirePerson, (req, res) => {
                  mp4:'video/mp4', mp3:'audio/mpeg', docx:'application/vnd.openxmlformats-officedocument.wordprocessingml.document' })[ext] || 'application/octet-stream';
     }
     res.setHeader('Content-Type', ct);
-    res.setHeader('Content-Disposition', `inline; filename="${encodeURIComponent(file.filename)}"`);
+    const safeName = String(file.filename).replace(/"/g, '_');
+    res.setHeader('Content-Disposition', `inline; filename="${safeName}"`);
     res.end(file.buffer);
 });
 
