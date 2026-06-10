@@ -214,6 +214,34 @@ router.get('/', (req, res) => {
 });
 
 // Health check — is Q wired up at all?
+// TEMP — GLM-5 tool-call test. Remove after confirming.
+router.get('/test-glm-tools', async (req, res) => {
+    const key = process.env.TOGETHER_API_KEY;
+    if (!key) return res.json({ error: 'No Together key' });
+    const body = {
+        model: 'zai-org/GLM-5',
+        max_tokens: 256,
+        temperature: 0,
+        tools: [{ type: 'function', function: { name: 'web_search', description: 'Search the web.', parameters: { type: 'object', properties: { query: { type: 'string' } }, required: ['query'] } } }],
+        tool_choice: 'auto',
+        messages: [{ role: 'user', content: 'What is the weather in London today? Use web_search.' }]
+    };
+    try {
+        const r = await fetch('https://api.together.xyz/v1/chat/completions', {
+            method: 'POST', headers: { 'Authorization': 'Bearer ' + key, 'Content-Type': 'application/json' },
+            body: JSON.stringify(body)
+        });
+        const data = await r.json();
+        const msg = data.choices?.[0]?.message;
+        res.json({
+            finish_reason: data.choices?.[0]?.finish_reason,
+            tool_calls: msg?.tool_calls || null,
+            content: msg?.content || null,
+            error: data.error || null
+        });
+    } catch(e) { res.json({ error: e.message }); }
+});
+
 router.get('/ping', (req, res) => {
     res.json({
         ok: true,
