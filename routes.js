@@ -23,6 +23,7 @@ const { stats: ragStats } = require('./plugins/q-rag');
 const { speakAsVoice } = require('./plugins/q-voice-clone');
 const { runAgent } = require('./plugins/q-agent');
 const { analyzeDocument, webSearch } = require('./plugins/q-tools');
+const qThreads = require('./plugins/q-threads');
 const { generateImage } = require('./plugins/q-image-gen');
 const { vectoriseImage } = require('./plugins/q-graphics');
 const { generateMusic } = require('./plugins/q-music');
@@ -1891,7 +1892,7 @@ router.post('/api/finance/advice', requirePerson, async (req, res) => {
 // ── THREADS — saved situations (folders) ───────────────────────────────
 // Every Thread is owned by ONE user (by email). All routes here require
 // sign-in via requirePerson and only operate on Threads owned by req.person.
-const qThreads = require('./plugins/q-threads');
+// (qThreads is required at the top of this file so email-send routes can use it)
 const { polishUK } = require('./plugins/polish-uk');
 // requirePerson already imported at the top of this file from ./auth
 
