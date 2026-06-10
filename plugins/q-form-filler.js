@@ -287,11 +287,11 @@ async function fillPdf(pdfBytes, values) {
                 }
                 results.filled.push(name);
             } else if (type === 'PDFTextField') {
-                const text = String(value ?? '');
-                for (const w of widgets) {
-                    const page = pageForWidget(w);
-                    if (page) draws.push({ page, rect: w.getRectangle(), text, isCheck: false });
-                }
+                // Set value directly in the field so flatten burns in OUR value,
+                // not whatever was pre-filled in the PDF. Without this, PDFs that
+                // already have values (e.g. NRLA tenancy agreements) double-print:
+                // flatten burns in the old value, then we draw on top of it.
+                field.setText(String(value ?? ''));
                 results.filled.push(name);
             } else if (type === 'PDFCheckBox') {
                 const v = String(value).toLowerCase();
@@ -331,12 +331,17 @@ async function fillPdf(pdfBytes, values) {
         }
     }
 
-    // Flatten first — burns in any pre-baked field appearances (blank boxes on
-    // NRLA-style forms) and removes the widget annotations. We never called
-    // setText/check/select, so no values are stored — flatten just cleans up.
-    // NOTE: do NOT setText('') the fields before this to scrub placeholder text
-    // (TE7's "XXXX") — doing so changes flatten's behaviour and the values we
-    // draw below stop surviving (download came out blank). Text > cosmetics.
+    // Regenerate text field appearances before flattening so flatten burns in
+    // our values (set above via setText) with a consistent font, not the PDF's
+    // original appearance stream (which may be blank or show old content).
+    try {
+        const helvPre = await pdfDoc.embedFont(StandardFonts.Helvetica);
+        form.updateFieldAppearances(helvPre);
+    } catch (e) { console.warn('[q-form-filler] updateFieldAppearances:', e.message); }
+
+    // Flatten — burns in text field values and widget appearances (blank boxes,
+    // checkboxes), then removes all annotations. Images/signatures are drawn
+    // after this step since pdf-lib cannot set their values via the field API.
     try { form.flatten(); } catch (e) { console.warn('[q-form-filler] flatten:', e.message); }
 
     // Draw values AFTER flatten so our text is on top of everything.
