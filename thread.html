@@ -1298,14 +1298,12 @@ async function loadThread() {
   document.dispatchEvent(new CustomEvent('thread:loaded'));
 }
 
-// Show the "Q, take this case" button when there's content but Q hasn't spoken yet.
-// Q only fires when Sarah explicitly hands him the case — no surprise auto-kicks
-// while she's mid-upload.
+// Show the "Q, take this case" button whenever Q hasn't spoken yet — even on a
+// fresh empty thread so Sarah can kick Q off immediately after creating it.
 function refreshKickoffButton() {
   const $btn = document.getElementById('kickoff-btn');
-  const hasContent = (thread.emails || []).length > 0 || (thread.notes || []).length > 0 || (thread.files || []).length > 0;
   const qHasSpoken = (thread.chatHistory || []).some(m => m.role === 'assistant');
-  $btn.style.display = (hasContent && !qHasSpoken) ? 'block' : 'none';
+  $btn.style.display = !qHasSpoken ? 'block' : 'none';
 }
 
 document.getElementById('kickoff-btn').addEventListener('click', () => {
