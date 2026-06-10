@@ -1960,6 +1960,9 @@ const TRIGGERS = {
         /\be-?mail (it|this|that|them|him|her)\b/i,
         /\bfire (off|over) (an? )?e-?mail\b/i,
         /\b(send|e-?mail)\b[^.?!]{0,40}@/i,
+        // Short confirmations when Q has already drafted and asked "say send"
+        /^(yes[,.]?\s*)?(go ahead|send( it)?|fire it|send that|yes send|ok send|do it)[.!]?\s*$/i,
+        /\blooks good[,.]?\s*(send|fire|go ahead)\b/i,
     ],
     web_search: [
         /\blook( it)? up\b/i,
