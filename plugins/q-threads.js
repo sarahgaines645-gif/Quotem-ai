@@ -137,7 +137,9 @@ function readThread(id, ownerEmail) {
 function writeThread(thread) {
     if (!thread || !thread.ownerEmail) throw new Error('writeThread: thread must have ownerEmail');
     thread.updatedAt = new Date().toISOString();
-    fs.writeFileSync(pathFor(thread.id, thread.ownerEmail), JSON.stringify(thread, null, 2), 'utf8');
+    const filePath = pathFor(thread.id, thread.ownerEmail);
+    fs.mkdirSync(path.dirname(filePath), { recursive: true });
+    fs.writeFileSync(filePath, JSON.stringify(thread, null, 2), 'utf8');
     return thread;
 }
 
