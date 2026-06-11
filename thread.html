@@ -2460,11 +2460,24 @@ loadThread();
     return d;
   }
 
-  function sendToQ(verifyReply) {
-    // Fill the main chat textarea with the correction request and submit — Q responds normally.
-    const prompt = `Fact-check found issues with the draft — please correct the draft email:\n\n${verifyReply}`;
-    if (typeof $chatInput !== 'undefined') $chatInput.value = prompt;
-    if (typeof sendMessage === 'function') sendMessage();
+  async function sendToQ(verifyReply) {
+    // Send the fact-check to Q SILENTLY. The old version pasted the whole review
+    // into the chat box and submitted it, so the entire essay rendered as a giant
+    // user bubble the user then had to look at. silentUser:true keeps the request
+    // out of the visible chat (and out of saved history) — the user just sees Q's
+    // corrected draft come back. The "Sent to Q ✓" button is the only feedback.
+    const prompt = `The fact-check below found issues with the draft email(s). Correct them: apply every fix it lists, keep everything it marked correct, and reply with the corrected draft(s) ready to send — nothing else. Do not repeat the fact-check back to me.\n\n${verifyReply}`;
+    try { $chatTyping.classList.add('show'); } catch (e) {}
+    try {
+      const res = await fetch('/api/threads/' + threadId + '/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ silentUser: true, message: prompt }),
+      });
+      const json = await res.json();
+      if (res.ok) appendChatMsg('q', json.reply, { checks: json.checks });
+    } catch (e) { /* silent fail — button already shows "Sent to Q ✓" */ }
+    finally { try { $chatTyping.classList.remove('show'); } catch (e) {} }
   }
 
   async function runVerify(question) {
