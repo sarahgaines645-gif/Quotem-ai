@@ -2728,11 +2728,26 @@ router.post('/api/threads/:id/check', requirePerson, express.json({ limit: '512k
         .map(item => `[OUTBOX DRAFT — To: ${item.to || '(no recipient)'} — Subject: ${item.subject || ''}]\n${item.body || ''}`)
         .join('\n\n');
 
+    // Uploaded document text — pull from the persistent per-thread cache (cheap
+    // disk read; already-extracted text). Without this the verifier never saw the
+    // case's files and kept demanding documents that were actually uploaded. If a
+    // file hasn't been read to text yet, at least name it so Claude knows it exists.
+    const fileContext = (t.files || []).map(f => {
+        let txt = '';
+        try { txt = qThreads.getTextCache(t.id, f.filename, req.person.email) || ''; } catch (e) { /* not cached */ }
+        return txt
+            ? `[DOCUMENT: ${f.filename}]\n${String(txt).slice(0, 8000)}`
+            : `[DOCUMENT: ${f.filename} (${f.mimeType || 'file'}) — uploaded but not yet read into text]`;
+    }).join('\n\n');
+
     const caseContext = [
         t.title ? `Case: ${t.title}` : '',
+        // Notes are stored as n.content (not n.text) — the old n.text read nothing,
+        // so the verifier never saw the case summary. Include kind for context.
+        (t.notes || []).map(n => `[NOTE${n.kind ? ' — ' + n.kind : ''}]\n${(n.content || '').trim()}`).filter(s => s.length > 8).join('\n\n'),
         (t.emails || []).map(e => `[${e.type === 'in' ? 'Received' : e.type === 'draft' ? 'Draft' : 'Sent'} — ${e.subject || ''}]\n${e.body || ''}`).join('\n\n'),
+        fileContext,
         outboxDrafts,
-        (t.notes || []).map(n => n.text || '').join('\n'),
         (t.chatHistory || []).slice(-10).filter(m => m.role === 'assistant').map(m => `[Q said]\n${(m.content || '').slice(0, 600)}`).join('\n\n'),
     ].filter(Boolean).join('\n\n');
 
