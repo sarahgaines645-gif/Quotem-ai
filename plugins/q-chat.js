@@ -91,6 +91,16 @@ const FACTS_INJECT_LIMIT = 25;
 // instead of the cryptic "loop limit" error.
 const MAX_TOOL_ITERATIONS = 8;
 
+// Cap web_search calls per single turn. The APS research sweep makes Q fire a
+// burst of searches (legislation, ombudsman rulings, similar cases, the
+// council's own policy, the MP's contact …). Each search is another tool-loop
+// iteration = another ~29k-token completion call to Together; six of those in a
+// minute blow the model's per-minute rate limit (HTTP 429) and the whole case
+// turn dies. After this many searches we drop web_search from the toolset and
+// tell Q to answer with what he has — the research stays thorough, the burst
+// that throttles the account does not happen.
+const MAX_WEB_SEARCHES_PER_TURN = 4;
+
 // Friendly error bank — shown in Q's own voice whenever something tech-side
 // breaks (upstream 5xx, network blip, empty completion, etc.). Picked at
 // random per error so the experience feels alive. Wording locked by Sarah
@@ -902,6 +912,8 @@ async function chat(messages, options = {}) {
     ];
     const toolCalls = [];     // [{ name, args, result, durationMs }]
     let draftReply = null;    // Captured when the tool loop exits cleanly
+    let webSearchCount = 0;   // web_search calls this turn — capped to avoid 429 bursts
+    let searchCapNudged = false; // ensure the "stop searching" nudge is sent only once
     let emptyRetries = 0;     // empty 200-OK responses → retry before the friendly note
     let totalTokensIn = 0;
     let totalTokensOut = 0;
@@ -993,7 +1005,13 @@ async function chat(messages, options = {}) {
                         tools: (() => {
                             const lastUser = [...messages].reverse().find(m => m.role === 'user');
                             const msgText = typeof lastUser?.content === 'string' ? lastUser.content : '';
-                            const activeTools = selectActiveTools(msgText, { docEditor: options.surface === 'doc-editor', advocate: isAdvocateSurface, surface: options.surface, firstTurn: options.firstTurn });
+                            let activeTools = selectActiveTools(msgText, { docEditor: options.surface === 'doc-editor', advocate: isAdvocateSurface, surface: options.surface, firstTurn: options.firstTurn });
+                            // Once Q has used his search budget for this turn, take
+                            // web_search off the table so he stops bursting the rate
+                            // limit and synthesises what he already gathered.
+                            if (webSearchCount >= MAX_WEB_SEARCHES_PER_TURN) {
+                                activeTools = activeTools.filter(t => t.function?.name !== 'web_search');
+                            }
                             if (iteration === 0) console.log('[q-chat] tools sent to V4 (' + options.surface + '):', activeTools.map(t => t.function?.name).join(', '));
                             return activeTools;
                         })(),
@@ -1010,17 +1028,26 @@ async function chat(messages, options = {}) {
             // every turn; now only a genuine, sustained outage surfaces the
             // friendly note (the error bank itself is deliberately untouched).
             const RETRYABLE = new Set([429, 500, 502, 503, 504]);
+            const MAX_ATTEMPTS = 4;
             let response = null;
-            for (let attempt = 0; attempt < 3; attempt++) {
+            for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
+                let status = 0;
                 try {
                     response = await fetch(`${Q_CONFIG.baseURL}/chat/completions`, reqInit);
                     if (response.ok || !RETRYABLE.has(response.status)) break;
-                    console.warn('[q-chat] upstream HTTP ' + response.status + ' — retry ' + (attempt + 1) + '/2');
+                    status = response.status;
+                    console.warn('[q-chat] upstream HTTP ' + response.status + ' — retry ' + (attempt + 1) + '/' + (MAX_ATTEMPTS - 1));
                 } catch (netErr) {
                     response = null;
                     console.warn('[q-chat] upstream network error (attempt ' + (attempt + 1) + '): ' + netErr.message);
                 }
-                if (attempt < 2) await new Promise(r => setTimeout(r, 700 * (attempt + 1) + Math.floor(Math.random() * 300)));
+                if (attempt < MAX_ATTEMPTS - 1) {
+                    // A 429 is a per-minute rate limit, not a momentary blip — a
+                    // 700ms retry can't outlast it, so back off seconds (2s, 4s, 8s).
+                    // 5xx/network blips clear fast, so keep those short.
+                    const base = status === 429 ? 2000 * Math.pow(2, attempt) : 700 * (attempt + 1);
+                    await new Promise(r => setTimeout(r, base + Math.floor(Math.random() * 300)));
+                }
             }
 
             if (!response || !response.ok) {
@@ -1120,6 +1147,7 @@ async function chat(messages, options = {}) {
                 const callStart = Date.now();
                 const result = await executeTool(name, argsRaw, options.person?.id, options.person?.email, options.threadId);
                 const callMs = Date.now() - callStart;
+                if (name === 'web_search') webSearchCount++;
                 toolCalls.push({
                     name,
                     args: typeof argsRaw === 'string' ? safeJsonParse(argsRaw) : argsRaw,
@@ -1127,6 +1155,17 @@ async function chat(messages, options = {}) {
                     durationMs: callMs,
                 });
                 toolResults.push({ call, name, result });
+            }
+
+            // Hit the per-turn search budget on this round → tell Q (once) to stop
+            // searching and write his answer. web_search is also removed from the
+            // toolset above, so this just keeps him from looking for it.
+            if (webSearchCount >= MAX_WEB_SEARCHES_PER_TURN && !searchCapNudged) {
+                searchCapNudged = true;
+                conversation.push({
+                    role: 'system',
+                    content: `You have done ${webSearchCount} web searches this turn — that is enough. Do NOT search again. Use what you and the searches have already found and give the user your answer now.`,
+                });
             }
 
             if (isDsmlRecovered) {
