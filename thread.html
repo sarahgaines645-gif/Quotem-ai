@@ -278,8 +278,9 @@
     display: flex;
     flex-direction: column;
     gap: 8px;
-    /* raised card + soft accent glow for the "glowing screen" feel */
-    box-shadow: var(--neu-raised), 0 0 48px rgba(233,30,99,0.09);
+    /* flat card — no raised neu shadow so it sits flat (not a popping 3D button);
+       the left accent line + rounded corners give it its edge. */
+    box-shadow: none;
     border-left: 3px solid var(--accent);
   }
   .ob-field {
