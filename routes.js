@@ -2594,15 +2594,17 @@ router.post('/api/threads/:id/chat', requirePerson, express.json({ limit: '256kb
                     }
                 }
                 const cacheKey = `${t.id}:${f.filename}`;
-                let text;
-                if (_threadDocCache.has(cacheKey)) {
-                    text = _threadDocCache.get(cacheKey);   // hot path — in-memory
-                } else {
+                let text = _threadDocCache.has(cacheKey) ? _threadDocCache.get(cacheKey) : null;
+                // Treat an EMPTY cached value as a miss, not a fact. An empty
+                // extraction is a failure (e.g. Gemini was down during the model
+                // retirement) — caching it permanently blinded Q to a real document.
+                // Re-read whenever the cached text is blank.
+                if (!text || !String(text).trim()) {
                     // Cold-start: check the persistent per-thread bucket on disk first.
                     // This survives Railway restarts so Gemini is never called twice for
                     // the same file. Falls through to extraction only on the first-ever read.
                     const persisted = qThreads.getTextCache(t.id, f.filename, req.person.email);
-                    if (persisted !== null) {
+                    if (persisted !== null && String(persisted).trim()) {
                         text = persisted;
                         _threadDocCache.set(cacheKey, text);   // warm the in-memory cache
                         console.log(`[threads] "${f.filename}" loaded from disk cache (${text.length} chars)`);
