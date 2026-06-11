@@ -280,7 +280,7 @@
     gap: 8px;
     /* raised card + soft accent glow for the "glowing screen" feel */
     box-shadow: var(--neu-raised), 0 0 48px rgba(233,30,99,0.09);
-    border-top: 3px solid var(--accent);
+    border-left: 3px solid var(--accent);
   }
   .ob-field {
     width: 100%;
@@ -2684,6 +2684,17 @@ loadThread();
         hdr.style.cssText = 'font-size:15px;font-weight:700;letter-spacing:-0.01em;display:flex;justify-content:space-between;align-items:center;cursor:pointer;gap:12px;';
         hdr.innerHTML = '<span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + esc(it.subject || '(no subject)') + '<span style="font-weight:500;color:var(--text-muted);margin-left:8px;font-size:13px;">&rarr; ' + esc(it.to || '(no recipient)') + '</span></span><span style="font-size:11px;color:var(--text-muted);flex-shrink:0;">▼</span>';
         row.appendChild(hdr);
+        // When was this draft made / last edited — so multiple versions are
+        // tellable apart at a glance (the whole point of the user's request).
+        const fmtT = (iso) => { try { return new Date(iso).toLocaleString('en-GB', { day:'2-digit', month:'short', hour:'2-digit', minute:'2-digit' }); } catch { return ''; } };
+        const madeT = it.createdAt ? 'Saved ' + fmtT(it.createdAt) : '';
+        const updT  = it.updatedAt ? ' · edited ' + fmtT(it.updatedAt) : '';
+        if (madeT) {
+          const meta = document.createElement('div');
+          meta.style.cssText = 'font-size:11px;color:var(--text-faint);margin-top:4px;';
+          meta.textContent = madeT + updT;
+          row.appendChild(meta);
+        }
         // Body — hidden by default, toggled on click
         const bodyEl = document.createElement('div');
         bodyEl.style.cssText = 'display:none;margin-top:12px;display:flex;flex-direction:column;gap:8px;';

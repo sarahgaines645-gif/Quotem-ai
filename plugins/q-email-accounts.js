@@ -295,7 +295,7 @@ function patchOutboxItem(email, id, patch) {
     const arr = getOutbox(email);
     const idx = arr.findIndex(x => x.id === id);
     if (idx === -1) return false;
-    Object.assign(arr[idx], patch);
+    Object.assign(arr[idx], patch, { updatedAt: new Date().toISOString() });
     saveOutbox(email, arr);
     return true;
 }

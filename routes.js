@@ -2421,6 +2421,28 @@ router.post('/api/threads/:id/chat', requirePerson, express.json({ limit: '256kb
         messages.push({ role: 'user', content: `IMPORTANT — READ THIS FIRST: the case "${t.title}" is EMPTY. There are no emails, no files and no notes saved to it. You have NO information whatsoever about this situation. Do NOT invent, assume, or guess any details. Do NOT treat ANY example from your instructions (parking tickets, PCNs, councils, bailiffs, court forms, reference numbers, place names) as if it were real or mine — those are illustrations, never facts about me. Your ONLY job on this turn: greet me in one short line and ask me what the situation is that I want help with. Nothing else — no diagnosis, no research, no draft.` });
         messages.push({ role: 'assistant', content: 'Understood — this case is empty, so I will simply ask what it is rather than assume anything.' });
     }
+
+    // Show Q the drafts already sitting in THIS case's Outbox. Without this he is
+    // blind to his own outbox: he can't see what he saved, can't reuse a draft's
+    // id (so every rewrite becomes a NEW draft instead of updating the old one),
+    // and can't reconcile "there should be two, why are there four". Injecting the
+    // id + subject + recipient + timestamps lets him revise in place via draft_id
+    // and answer "what's in my outbox" accurately.
+    try {
+        const threadDrafts = (qEmail.getOutbox(req.person.email) || []).filter(d => d && d.threadId === t.id);
+        if (threadDrafts.length) {
+            const fmt = (iso) => { try { return new Date(iso).toLocaleString('en-GB', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }); } catch { return 'unknown time'; } };
+            const lines = threadDrafts.map(d => {
+                const made = d.createdAt ? fmt(d.createdAt) : 'unknown time';
+                const upd = d.updatedAt ? `, last edited ${fmt(d.updatedAt)}` : '';
+                const snippet = String(d.body || '').replace(/\s+/g, ' ').slice(0, 200);
+                return `• draft_id: ${d.id} — "${d.subject || '(no subject)'}" -> to: ${d.to || '(no recipient yet)'} (saved ${made}${upd})\n  ${snippet}`;
+            }).join('\n\n');
+            messages.push({ role: 'user', content: `These email drafts are ALREADY in this case's Outbox right now:\n\n${lines}\n\nWhen you revise one of these, call save_email_draft WITH its draft_id so it UPDATES that same draft in place — do NOT create a new one. There should be ONE draft per email you're working on, not a new copy each rewrite. If I ask what's in my outbox, THIS list is the truth — don't guess.` });
+            messages.push({ role: 'assistant', content: 'I can see the current outbox drafts and their ids — I will update them in place, not duplicate them.' });
+        }
+    } catch (e) { console.warn('[threads] could not inject outbox drafts: ' + e.message); }
+
     // Cap history to the last 30 messages — full history bloats V4's context to
     // 80k+ tokens on an active case (emails + docs + history all added up), which
     // causes it to hallucinate tool availability and ignore instructions. 30 msgs
