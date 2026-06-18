@@ -56,6 +56,40 @@ try {
     console.error('[Q] memory seed failed:', e.message);
 }
 
+// ── MEMORY PERSISTENCE SELF-TEST ──────────────────────────────
+// Proves at boot whether Q can actually WRITE his conversation memory to the
+// mounted volume and READ it back. This is the answer to "why does Q forget":
+// if the write silently fails, every chat turn starts blank. Logged loudly so
+// one glance at the startup log says exactly what's wrong — no guessing.
+try {
+    const VOLUME_DIR = process.env.RAILWAY_VOLUME_MOUNT_PATH
+        || (fs.existsSync('/data') ? '/data' : null);
+    const Q_DATA_DIR = VOLUME_DIR ? path.join(VOLUME_DIR, 'q-memory') : path.join(ROOT, 'data');
+    fs.mkdirSync(Q_DATA_DIR, { recursive: true });
+    const probe = path.join(Q_DATA_DIR, '.write-probe');
+    const stamp = 'ok-' + process.pid;
+    fs.writeFileSync(probe, stamp, 'utf8');
+    const readBack = fs.readFileSync(probe, 'utf8');
+    const sarahFile = path.join(Q_DATA_DIR, 'q-memory-sarah.json');
+    const sarahExists = fs.existsSync(sarahFile);
+    const sarahBytes = sarahExists ? fs.statSync(sarahFile).size : 0;
+    console.log('═══════════════ Q MEMORY SELF-TEST ═══════════════');
+    if (readBack === stamp) {
+        console.log(`[Q] ✅ WRITE OK — Q can save memory to ${Q_DATA_DIR}`);
+    } else {
+        console.log(`[Q] ❌ WRITE/READ MISMATCH at ${Q_DATA_DIR} — memory will NOT persist`);
+    }
+    console.log(`[Q]    RAILWAY_VOLUME_MOUNT_PATH = ${process.env.RAILWAY_VOLUME_MOUNT_PATH || 'UNSET (using /data fallback)'}`);
+    console.log(`[Q]    Sarah's memory file: exists=${sarahExists} bytes=${sarahBytes}`);
+    console.log('═══════════════════════════════════════════════════');
+} catch (e) {
+    console.log('═══════════════ Q MEMORY SELF-TEST ═══════════════');
+    console.log(`[Q] ❌ CANNOT WRITE Q'S MEMORY — this is why he forgets.`);
+    console.log(`[Q]    error: ${e.code || ''} ${e.message}`);
+    console.log(`[Q]    RAILWAY_VOLUME_MOUNT_PATH = ${process.env.RAILWAY_VOLUME_MOUNT_PATH || 'UNSET (using /data fallback)'}`);
+    console.log('═══════════════════════════════════════════════════');
+}
+
 // ── First-run bootstrap: Sarah is always in Q's circle ────────
 // Migrate any legacy access-key entries away (their hashes are tied
 // to a previous pepper and won't validate). Then if no people exist,

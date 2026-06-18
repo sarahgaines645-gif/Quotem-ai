@@ -1207,6 +1207,20 @@ router.post('/chat', requirePerson, express.json({ limit: '24mb' }), async (req,
         const allMessages = loadMemory(person.id);
         const surfaceMessages = allMessages.filter(m => (m.surface || 'chat') === surface);
         const rawHistory = surfaceMessages.slice(-50);
+        // DIAGNOSTIC (remove once the "loses context after 2 messages" cause is
+        // confirmed): one line that answers everything. `total` = messages in the
+        // file; `sending` = turns handed to the model this request. If `total`
+        // stays ~0 while you keep chatting, the file isn't persisting/loading
+        // (path/volume) — that's the bug, not the chat logic. If `total` grows
+        // but Q still forgets, history reaches the model and it's prompt/model.
+        try {
+            const _mp = getMemoryPath(person.id);
+            const _exists = fs.existsSync(_mp);
+            const _size = _exists ? fs.statSync(_mp).size : 0;
+            console.log(`[chat-mem] person=${person.id} surface=${surface} total=${allMessages.length} thisSurface=${surfaceMessages.length} sending=${rawHistory.length} file=${_mp} exists=${_exists} bytes=${_size}`);
+        } catch (e) {
+            console.log(`[chat-mem] person=${person.id} surface=${surface} total=${allMessages.length} sending=${rawHistory.length} (path probe failed: ${e.message})`);
+        }
         const history = rawHistory.map(m => {
             const ts = m.timestamp ? m.timestamp.slice(0, 16).replace('T', ' ') : '?';
             return {
