@@ -1196,6 +1196,18 @@ async function fetchFormTool(args, personEmail, threadId) {
         if (!resp.ok) return { error: `Could not download the form — the server returned ${resp.status}. Try a different URL.` };
         const ct = (resp.headers.get('content-type') || '').split(';')[0].trim() || 'application/pdf';
         const buf = Buffer.from(await resp.arrayBuffer());
+        // Guard against saving non-PDF content as a form. GOV.UK and others can
+        // return a cookie/consent page, a redirect, or an error page with a 200 —
+        // that would be stored as a .pdf that fails to render ("Invalid PDF
+        // structure"). A real PDF starts with the "%PDF-" signature; if it
+        // doesn't, refuse and tell Q the link was wrong rather than save junk.
+        if (buf.slice(0, 5).toString('latin1') !== '%PDF-') {
+            const sniff = buf.slice(0, 200).toString('latin1').toLowerCase();
+            const looksHtml = sniff.includes('<html') || sniff.includes('<!doctype');
+            return { error: looksHtml
+                ? 'That link returned a web page, not the form PDF itself. Find the direct PDF download link (it ends in .pdf and opens as a PDF in the browser) and use that.'
+                : 'That link did not return a valid PDF. Use the direct PDF download URL for the form.' };
+        }
         let name = filename || '';
         if (!name) {
             const cd = resp.headers.get('content-disposition') || '';
