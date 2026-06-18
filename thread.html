@@ -1806,7 +1806,11 @@ loadThread();
 
   // ── Populate dropdown from thread's PDF files ────────────────────
   function refreshCaseFiles() {
-    const pdfs = (thread.files || []).filter(f => (f.mimeType || '').includes('pdf'));
+    // A file counts as a fillable form if its type says PDF OR its name ends .pdf —
+    // forms fetched from GOV.UK are often saved as application/octet-stream, which
+    // the type-only check silently hid from this dropdown (the rest of the app
+    // already matches on the .pdf extension too).
+    const pdfs = (thread.files || []).filter(f => (f.mimeType || '').includes('pdf') || /\.pdf$/i.test(f.filename || ''));
     if (!pdfs.length) { caseFilesEl.style.display = 'none'; return; }
     caseSelect.innerHTML = '<option value="">— pick a file —</option>';
     pdfs.forEach(f => {
