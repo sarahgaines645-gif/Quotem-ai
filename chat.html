@@ -1438,7 +1438,7 @@
     <button class="think-btn mode-toggle" id="aps-btn" type="button" aria-pressed="false" title="APS — A Problem Shared. Q switches into loophole-finder mode for fines, bills, disputes, letters that feel unfair.">APS</button>
     <div class="thinking-picker" id="model-picker" role="group" aria-label="Model" style="margin-left:6px">
       <button class="think-btn model-btn on" data-model="" title="DeepSeek V4 Pro — production model">V4</button>
-      <button class="think-btn model-btn" data-model="zai-org/GLM-5" title="GLM-5 744B — test model">GLM-5</button>
+      <button class="think-btn model-btn" data-model="zai-org/GLM-5.2" title="GLM-5.2 436B — test model">GLM-5.2</button>
     </div>
   </div>
   <div class="input-wrapper">
@@ -1625,10 +1625,12 @@ function setThinkingLevel(level) {
 $thinkBtns.forEach(b => b.addEventListener('click', () => setThinkingLevel(b.dataset.effort)));
 setThinkingLevel(thinkingLevel);
 
-// Model toggle — V4 Pro (default) vs GLM-5 test
+// Model toggle — V4 Pro (default) vs GLM-5.2 test
 const MODEL_TEST_KEY = 'q-test-model-v1';
 const $modelBtns = document.querySelectorAll('.model-btn');
 let testModel = localStorage.getItem(MODEL_TEST_KEY) || '';
+// Migrate anyone stuck on the retired GLM-5 id to the current GLM-5.2.
+if (testModel === 'zai-org/GLM-5') testModel = 'zai-org/GLM-5.2';
 function setTestModel(modelId) {
   testModel = modelId;
   localStorage.setItem(MODEL_TEST_KEY, modelId);

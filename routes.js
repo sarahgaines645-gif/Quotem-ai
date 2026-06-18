@@ -219,7 +219,7 @@ router.get('/test-glm-tools', async (req, res) => {
     const key = process.env.TOGETHER_API_KEY;
     if (!key) return res.json({ error: 'No Together key' });
     const body = {
-        model: 'zai-org/GLM-5',
+        model: 'zai-org/GLM-5.2',
         max_tokens: 256,
         temperature: 0,
         tools: [{ type: 'function', function: { name: 'web_search', description: 'Search the web.', parameters: { type: 'object', properties: { query: { type: 'string' } }, required: ['query'] } } }],

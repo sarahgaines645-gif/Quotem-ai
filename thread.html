@@ -521,7 +521,7 @@
     <div class="chat-toggles">
       <button class="chat-deep" id="chat-deep" type="button" title="Deep think — Q reasons at maximum. Slower, sharper.">🧠 Deep</button>
       <button class="chat-toggle-sm" id="chat-verify" type="button" title="Verify — press, then click the message you want Q to check">✓</button>
-      <button class="chat-toggle-sm" id="chat-glm" type="button" title="GLM-5 test — switch this thread to GLM-5 744B instead of V4 Pro">G</button>
+      <button class="chat-toggle-sm" id="chat-glm" type="button" title="GLM-5.2 test — switch this thread to GLM-5.2 436B instead of V4 Pro">G</button>
     </div>
   </div>
 
@@ -693,14 +693,16 @@ $chatDeep.addEventListener('click', () => {
 });
 
 
-// GLM-5 model toggle — test GLM-5 744B against V4 Pro in this thread.
+// GLM-5.2 model toggle — test GLM-5.2 436B against V4 Pro in this thread.
 // Persists per-thread in localStorage so the choice survives page reloads.
 const $chatGlm = document.getElementById('chat-glm');
 const _modelKey = 'thread-model-' + threadId;
 let threadTestModel = localStorage.getItem(_modelKey) || '';
+// Migrate anyone stuck on the retired GLM-5 id to the current GLM-5.2.
+if (threadTestModel === 'zai-org/GLM-5') { threadTestModel = 'zai-org/GLM-5.2'; localStorage.setItem(_modelKey, threadTestModel); }
 $chatGlm.classList.toggle('on', !!threadTestModel);
 $chatGlm.addEventListener('click', () => {
-  threadTestModel = threadTestModel ? '' : 'zai-org/GLM-5';
+  threadTestModel = threadTestModel ? '' : 'zai-org/GLM-5.2';
   if (threadTestModel) localStorage.setItem(_modelKey, threadTestModel);
   else localStorage.removeItem(_modelKey);
   $chatGlm.classList.toggle('on', !!threadTestModel);
