@@ -656,6 +656,33 @@ async function geminiVisionChat(prompt, base64, mimeType) {
     }
 }
 
+// A model's `reasoning` field is its private chain-of-thought. Some Together
+// models (V4 in think mode) occasionally drop a SHORT final answer there with an
+// empty content field — that we still want to recover. But a long deliberating
+// scratchpad ("Let me… Actually… I think… Wait…") must NEVER be shown as the
+// reply — that's Q "thinking out loud" at the user, which looks broken. This
+// tells the two apart so the answer-in-reasoning quirk survives but the leak
+// does not. (Regression guard: before the reasoning fallback was added, Q only
+// ever showed `content`, so this never happened.)
+function looksLikeScratchpad(t) {
+    const s = String(t || '').trim();
+    if (!s) return false;
+    if (s.length > 1500) return true; // long text = deliberation, not an answer
+    return /(^|[\n.]\s*)(let me\b|let's\b|i should\b|i think\b|i need to\b|i'?ll\b|actually,|wait[,.]|hmm\b|first,? i\b|on (second|further) thought|the user (said|wants|needs|is)|looking (more )?carefully|i'?m not (sure|certain)|but wait)/i.test(s);
+}
+
+// Choose the user-facing reply from a model message: real content first, then
+// the answer-in-reasoning_content quirk, then `reasoning` ONLY when it's a clean
+// short answer (never a scratchpad). Returns '' when there's nothing usable, so
+// the caller retries — which forces a proper answer instead of leaking thinking.
+function pickReply(msg) {
+    const direct = (msg?.content || msg?.reasoning_content || '').trim();
+    if (direct) return direct;
+    const r = (msg?.reasoning || '').trim();
+    if (r && !looksLikeScratchpad(r)) return r;
+    return '';
+}
+
 // Real Claude (Sonnet 4.6 — the model Quotem uses) for advocacy THREADS:
 // bailiffs, council-tax fines, disputes, where being wrong has consequences.
 // Anthropic Messages API via raw fetch (its shape differs from the
@@ -1097,7 +1124,7 @@ async function chat(messages, options = {}) {
                 // V4 Pro/Flash sometimes put the reply in message.reasoning instead
                 // of message.content (thinking-mode quirk on Together AI). Fall back
                 // to the reasoning field so the response isn't lost.
-                const candidate = message?.content || message?.reasoning_content || message?.reasoning || '';
+                const candidate = pickReply(message);
                 if (!candidate.trim()) {
                     console.warn('[q-chat] empty reply from model. iteration=' + iteration
                         + ' emptyRetries=' + emptyRetries
@@ -1234,7 +1261,7 @@ async function chat(messages, options = {}) {
                     // back blank → the "existential crisis" friendly error. This matters
                     // now that Think is the default thinking level.
                     const fm = finalData.choices?.[0]?.message;
-                    draftReply = (fm?.content || fm?.reasoning_content || fm?.reasoning || '');
+                    draftReply = pickReply(fm);
                 }
             } catch (e) {
                 console.warn('[q-chat] final no-tools call failed:', e.message);
