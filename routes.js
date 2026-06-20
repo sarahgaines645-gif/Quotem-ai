@@ -1319,7 +1319,14 @@ router.get('/chat-history', requirePerson, (req, res) => {
     if (surface) {
         messages = messages.filter(m => (m.surface || 'chat') === surface);
     }
-    return res.json({ messages, storedAt: getMemoryPath(req.person.id) });
+    // Only return the most recent slice for DISPLAY. Rendering the whole history
+    // (which can be thousands of messages / several MB) synchronously on page load
+    // froze the chat ~10s — worst on phones. The model still gets its own
+    // 50-message window on each /chat turn and facts persist, so capping what the
+    // page draws costs nothing but the freeze. `total` lets the UI add a "load
+    // older" control later without another round-trip guess.
+    const total = messages.length;
+    return res.json({ messages: messages.slice(-80), total, storedAt: getMemoryPath(req.person.id) });
 });
 
 // Wipe THIS person's memory only. Sarah's clear doesn't touch anyone else's;
