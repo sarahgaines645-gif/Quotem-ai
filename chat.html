@@ -1419,8 +1419,8 @@
       <div class="logo-plate">
         <span class="q-letter">Q</span><span class="dot"></span>
       </div>
-      <h2>Hi Sarah.</h2>
-      <p class="intro">I'm Q. Type or hit the mic to speak.</p>
+      <h2 id="greeting-h">Hi.</h2>
+      <p class="intro" id="greeting-intro">I'm Q. Type or hit the mic to speak.</p>
     </div>
   </div>
 </main>
@@ -1666,19 +1666,41 @@ function setAps(on) {
 $apsBtn.addEventListener('click', () => setAps(!apsOn));
 setAps(apsOn);
 
-// Load conversation history from server memory (persists across devices)
-(async function loadHistory() {
+// Load conversation history + set the greeting. Doing both here means the
+// "what's your name?" onboarding only fires on a genuinely fresh chat (no
+// history), so a returning user's message can never be mistaken for a name.
+let awaitingName = false;
+let myName = '';
+(async function loadHistoryAndGreet() {
+  let hadHistory = false;
   try {
     const res = await fetch('/chat-history?surface=chat');
     const data = await res.json();
     const history = Array.isArray(data.messages) ? data.messages : [];
     if (history.length > 0) {
+      hadHistory = true;
       $empty.remove();
       history.forEach(m => renderMessage(m.role === 'assistant' ? 'q' : 'user', m.content, false));
       setTimeout(scrollToBottom, 0);
     }
   } catch (e) {
     console.warn('[q/chat] could not load server history:', e.message);
+  }
+  // Who am I talking to? Greet them by their own name.
+  try {
+    const r = await fetch('/whoami');
+    const d = await r.json();
+    myName = ((d.person && d.person.name) || '').trim();
+  } catch (e) { /* offline — leave the neutral "Hi." */ }
+  const gh = document.getElementById('greeting-h');
+  const gi = document.getElementById('greeting-intro');
+  if (myName) {
+    if (gh) gh.textContent = 'Hi ' + myName + '.';
+  } else if (!hadHistory) {
+    // Brand-new person, no name on file → Q introduces himself and asks.
+    awaitingName = true;
+    if (gh) gh.textContent = "Hi — I'm Q.";
+    if (gi) gi.textContent = "What's your name? Type it below and I'll remember it.";
   }
 })();
 
@@ -2497,6 +2519,39 @@ async function send() {
   const textsNow = attachedTexts.slice();
   if (!userText && imagesNow.length === 0 && textsNow.length === 0) return;
   if ($send.disabled) return;
+
+  // Onboarding: if Q doesn't know their name yet, the first thing they type IS
+  // their name — save it, greet them, and don't send it off to the model.
+  if (awaitingName && userText) {
+    if ($empty && $empty.parentNode) $empty.remove();
+    renderMessage('user', userText);
+    $input.value = '';
+    $input.style.height = '';
+    const proposed = userText
+      .replace(/^\s*(hi|hello|hey|i['’]?m|i am|my name['’]?s?|my name is|it['’]?s|call me|the name['’]?s)\b[\s,]*/i, '')
+      .replace(/[.!]+$/, '').trim() || userText.trim();
+    try {
+      const r = await fetch('/set-name', {
+        method: 'POST', credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: proposed }),
+      });
+      const d = await r.json();
+      if (d.ok && d.name) {
+        myName = d.name;
+        awaitingName = false;
+        const gh = document.getElementById('greeting-h');
+        if (gh) gh.textContent = 'Hi ' + myName + '.';
+        renderMessage('q', 'Lovely to meet you, ' + myName + '! What can I help you with?');
+      } else {
+        renderMessage('q', "Sorry, I couldn't save that just now — tell me your name again?");
+      }
+    } catch (e) {
+      renderMessage('q', "Sorry, I couldn't save that just now — tell me your name again?");
+    }
+    return;
+  }
+
   if ($empty && $empty.parentNode) $empty.remove();
   // Active chatting keeps the chosen Think/Deep level alive — without this,
   // a 35-minute conversation on Think would revert to Quick on reload even

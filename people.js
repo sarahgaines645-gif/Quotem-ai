@@ -164,6 +164,22 @@ async function changePassword(id, newPassword) {
     return true;
 }
 
+/**
+ * Update a person's display name (what Q greets them by). Trims, collapses
+ * whitespace and caps length. Returns the updated safe person, or throws.
+ */
+function updateName(id, newName) {
+    const clean = String(newName || '').trim().replace(/\s+/g, ' ').slice(0, 60);
+    if (!clean) throw new Error('name is required');
+    const people = loadPeople();
+    const person = people.find(p => p.id === id);
+    if (!person) throw new Error(`person "${id}" not found`);
+    person.name = clean;
+    savePeople(people);
+    const { passwordHash, ...safe } = person;
+    return safe;
+}
+
 async function rotatePassword(id) {
     const newPassword = crypto.randomBytes(12).toString('base64url');
     await changePassword(id, newPassword);
@@ -354,6 +370,7 @@ module.exports = {
     getPersonByEmail,
     listPeople,
     changePassword,
+    updateName,
     rotatePassword,
     removePerson,
     migrateIfLegacy,

@@ -46,7 +46,7 @@ const {
 startScheduler();
 const { loadMemory, clearMemory, appendMessage, getRecentMessages, getCircleSummary, getMemoryPath, getVoicePath, getDocPath, getTutorPath } = require('./memory');
 const { requirePerson, tryAttachPerson, setSessionCookie, clearSessionCookie } = require('./auth');
-const { listPeople, addPerson, signupPerson, isApproved, approvePerson, isAdmin, getPerson, getPersonByEmail, removePerson, verifyLogin, changePassword, rotatePassword, createResetToken, consumeResetToken } = require('./people');
+const { listPeople, addPerson, signupPerson, isApproved, approvePerson, isAdmin, getPerson, getPersonByEmail, removePerson, verifyLogin, changePassword, updateName, rotatePassword, createResetToken, consumeResetToken } = require('./people');
 const { sendMail, isConfigured: mailerConfigured } = require('./mailer');
 const { resolveToken: resolveGeneratedDoc, resolveTokenAcrossUsers } = require('./plugins/doc-creator');
 const { summarise: summariseCosts, getLogPath: costLogPath } = require('./cost-tracker');
@@ -108,6 +108,19 @@ router.post('/change-password', requirePerson, express.json({ limit: '4kb' }), a
     try {
         await changePassword(req.person.id, newPassword);
         res.json({ ok: true });
+    } catch (e) {
+        res.status(400).json({ error: e.message });
+    }
+});
+
+// Set/change the name Q greets you by. Used by the chat onboarding ("what's
+// your name?") and any "actually, call me X" correction.
+router.post('/set-name', requirePerson, express.json({ limit: '4kb' }), (req, res) => {
+    const name = (req.body?.name || '').toString().trim();
+    if (!name) return res.status(400).json({ error: 'name is required' });
+    try {
+        const person = updateName(req.person.id, name);
+        res.json({ ok: true, name: person.name });
     } catch (e) {
         res.status(400).json({ error: e.message });
     }
