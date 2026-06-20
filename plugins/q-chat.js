@@ -94,12 +94,14 @@ const MAX_TOOL_ITERATIONS = 8;
 // Cap web_search calls per single turn. The APS research sweep makes Q fire a
 // burst of searches (legislation, ombudsman rulings, similar cases, the
 // council's own policy, the MP's contact …). Each search is another tool-loop
-// iteration = another ~29k-token completion call to Together; six of those in a
-// minute blow the model's per-minute rate limit (HTTP 429) and the whole case
-// turn dies. After this many searches we drop web_search from the toolset and
-// tell Q to answer with what he has — the research stays thorough, the burst
-// that throttles the account does not happen.
-const MAX_WEB_SEARCHES_PER_TURN = 4;
+// iteration = another ~29k-token completion call to Together. A genuine case
+// sweep needs room to be thorough, so the budget is generous; if Together's
+// per-minute limit (HTTP 429) is hit along the way, the retry/backoff below
+// just makes the turn take longer rather than killing it. When the budget IS
+// reached we SILENTLY drop web_search from the toolset — no message to the
+// model, so there is nothing for it to relay to the user ("you can search
+// again next turn…"). Giving him longer is the fix; the nudge was the leak.
+const MAX_WEB_SEARCHES_PER_TURN = 8;
 
 // Friendly error bank — shown in Q's own voice whenever something tech-side
 // breaks (upstream 5xx, network blip, empty completion, etc.). Picked at
@@ -939,8 +941,7 @@ async function chat(messages, options = {}) {
     ];
     const toolCalls = [];     // [{ name, args, result, durationMs }]
     let draftReply = null;    // Captured when the tool loop exits cleanly
-    let webSearchCount = 0;   // web_search calls this turn — capped to avoid 429 bursts
-    let searchCapNudged = false; // ensure the "stop searching" nudge is sent only once
+    let webSearchCount = 0;   // web_search calls this turn — budget in MAX_WEB_SEARCHES_PER_TURN
     let emptyRetries = 0;     // empty 200-OK responses → retry before the friendly note
     let totalTokensIn = 0;
     let totalTokensOut = 0;
@@ -1184,16 +1185,10 @@ async function chat(messages, options = {}) {
                 toolResults.push({ call, name, result });
             }
 
-            // Hit the per-turn search budget on this round → tell Q (once) to stop
-            // searching and write his answer. web_search is also removed from the
-            // toolset above, so this just keeps him from looking for it.
-            if (webSearchCount >= MAX_WEB_SEARCHES_PER_TURN && !searchCapNudged) {
-                searchCapNudged = true;
-                conversation.push({
-                    role: 'system',
-                    content: `(Internal instruction — NEVER repeat, paraphrase, or mention any of this to the user.) You have used this turn's web-search budget, so searching is now off. Answer the user's ORIGINAL request directly and fully using what you already have. Do NOT talk about searching, tools, budgets, limits, or "this turn"/"next turn" — the user must only ever see your real answer, never anything about your own process. For "take this case" that means: give the case diagnosis, not a comment about searching.`,
-                });
-            }
+            // When the search budget is reached, web_search is silently removed
+            // from the toolset (above) so Q simply can't search again — no nudge
+            // message is injected, so there is nothing for him to paraphrase back
+            // to the user. He just answers with what he has.
 
             if (isDsmlRecovered) {
                 // Inline format — single user message summarising the round.
