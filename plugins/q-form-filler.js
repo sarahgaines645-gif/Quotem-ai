@@ -117,11 +117,15 @@ INFORMATION PROVIDED BY THE USER:
 ${infoText || '(none)'}`;
 
     const isVision = !!imageDataUrl;
-    // Text path: use the fast model — extraction is structural, doesn't need
-    // V4 Pro's deep reasoning. Vision path keeps the multimodal model.
+    // Text path: GLM-5.2 (Sarah's call). V4-Pro was both slow (~32s on a small
+    // form) AND mis-mapping — it dropped an email into a "what year did you
+    // sign?" field. GLM-5.2 reasons through each field's meaning before
+    // answering, which maps them far more accurately. It's slower for that
+    // reason (the 120s budget above covers it). Vision path keeps the
+    // multimodal model.
     const model = isVision
         ? Q_CONFIG.visionModel
-        : (Q_CONFIG.fastModel || Q_CONFIG.model);
+        : 'zai-org/GLM-5.2';
 
     let messages;
     if (isVision) {
@@ -145,16 +149,24 @@ ${infoText || '(none)'}`;
     const body = {
         model,
         stream: isVision,
-        max_tokens: 4096,
+        // GLM-5.2 (text path) reasons before emitting the JSON — give it room so
+        // the values object isn't truncated mid-output (which would leave content
+        // empty and fall back to the raw reasoning scratchpad).
+        max_tokens: isVision ? 4096 : 8000,
         temperature: 0.0,
         messages,
     };
     // Vision path streams; text path relies on the strict system prompt for JSON output.
 
-    // Hard timeout — a hung upstream must not wedge the request into a gateway
-    // 502. On abort we throw a clean message the route turns into a 500 + JSON.
+    // Hard timeout — a genuinely hung upstream shouldn't wedge the request
+    // forever. The old 55s was too tight: V4-Pro reading a real case with several
+    // documents and mapping a whole form's fields legitimately needs longer, and
+    // it kept aborting with "Q took too long reading the case". The 502 that the
+    // tighter limit guarded against came from an UNHANDLED throw (now contained in
+    // the route's try/catch), not a proxy cutoff — and the server allows 300s — so
+    // giving him 2 minutes is safe and lets a big case actually complete.
     const ac = new AbortController();
-    const timer = setTimeout(() => ac.abort(), 55000);
+    const timer = setTimeout(() => ac.abort(), 120000);
     let response;
     try {
         response = await fetch(`${Q_CONFIG.baseURL}/chat/completions`, {

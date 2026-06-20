@@ -2880,12 +2880,11 @@ async function threadFormInfoText(t, person) {
     const vrmMatch = (t.title || '').match(/\b([A-Z]{2}\d{2}\s?[A-Z]{3}|[A-Z]\d{1,3}\s?[A-Z]{3}|[A-Z]{3}\s?\d{1,3}[A-Z])\b/i);
     const vrmNote = vrmMatch ? `Vehicle registration: ${vrmMatch[0].replace(/\s/g, '').toUpperCase()}` : '';
     const applicant = [
-        'THE PERSON FILLING IN THIS FORM (the applicant). Any field asking for the',
-        "applicant's / claimant's / your name, title, signature, email, address or",
-        'contact details is about THIS person — fill it from here, do not ask:',
-        person.name ? `Name: ${person.name}` : '',
-        person.email ? `Email: ${person.email}` : '',
-        factLines ? `Known about this person:\n${factLines}` : '',
+        `ACCOUNT HOLDER (the person logged in): ${person.name || '(name unknown)'}${person.email ? ' <' + person.email + '>' : ''}.`,
+        'CRITICAL — WORK OUT WHO THIS FORM IS FOR before filling any personal details.',
+        '• If the case shows the account holder is doing this for THEMSELVES, the applicant/claimant/"you" fields (name, title, signature, email, address, contact) are theirs — fill them from the account holder above.',
+        '• But if the case is being handled ON BEHALF OF someone else — a friend, client or family member (e.g. the notes say "a friend asked me to help" or name a different applicant) — then the APPLICANT IS THAT OTHER PERSON, NOT the account holder. Fill the applicant fields from THAT person\'s details found in the case. If a required applicant detail (their email, address, phone, etc.) is NOT in the case, put it in "ask" — do NOT fall back to the account holder\'s email or address. Never put the account holder\'s email/address on a form that is for someone else.',
+        factLines ? `Known about the account holder:\n${factLines}` : '',
     ].filter(Boolean).join('\n');
     return [
         applicant,
@@ -2919,12 +2918,22 @@ router.post('/api/threads/:id/form-fill', requirePerson, express.json({ limit: '
         // Auto-fill signature fields Q left blank — browser PDF viewers can't
         // edit signature field types, so they must be pre-filled server-side.
         const filled = values || {};
+        // Only pre-fill signature fields with the account holder's name if the
+        // extract actually treated THEM as the applicant (their name landed in a
+        // filled value). On a form handled for someone else, signing as the
+        // account holder is wrong — leave it blank so the real applicant's name
+        // (or a hand signature) goes there instead.
         if (req.person.name) {
-            for (const f of fields) {
-                const isSignature = f.type === 'signature' ||
-                    /sign/i.test(f.name || '') ||
-                    /sign/i.test(f.label || '');
-                if (isSignature && !filled[f.name]) filled[f.name] = req.person.name;
+            const me = req.person.name.trim().toLowerCase();
+            const accountHolderIsApplicant = Object.values(filled).some(v =>
+                typeof v === 'string' && v.trim().toLowerCase() === me);
+            if (accountHolderIsApplicant) {
+                for (const f of fields) {
+                    const isSignature = f.type === 'signature' ||
+                        /sign/i.test(f.name || '') ||
+                        /sign/i.test(f.label || '');
+                    if (isSignature && !filled[f.name]) filled[f.name] = req.person.name;
+                }
             }
         }
         res.json({ values: filled, ask: ask || [] });
