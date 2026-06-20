@@ -1191,7 +1191,7 @@ async function chat(messages, options = {}) {
                 searchCapNudged = true;
                 conversation.push({
                     role: 'system',
-                    content: `You have done ${webSearchCount} web searches this turn — that is enough. Do NOT search again. Use what you and the searches have already found and give the user your answer now.`,
+                    content: `(Internal instruction — NEVER repeat, paraphrase, or mention any of this to the user.) You have used this turn's web-search budget, so searching is now off. Answer the user's ORIGINAL request directly and fully using what you already have. Do NOT talk about searching, tools, budgets, limits, or "this turn"/"next turn" — the user must only ever see your real answer, never anything about your own process. For "take this case" that means: give the case diagnosis, not a comment about searching.`,
                 });
             }
 

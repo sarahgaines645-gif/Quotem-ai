@@ -325,4 +325,134 @@ function resolveTokenAcrossUsers(token) {
     return null;
 }
 
-module.exports = { createDocx, resolveToken, resolveTokenAcrossUsers, stashFile, generatedDirFor };
+/**
+ * Produce a real .pdf from the same { title, content, images } shape as
+ * createDocx — content is markdown (#/##/### headings, **bold**, *italic*,
+ * bullets, ---). Rendered straight to PDF with pdf-lib (no Word round-trip,
+ * no LibreOffice). pdf-lib is lazy-required so a missing dep can never break
+ * the working .docx path — it only errors if createPdf is actually called.
+ */
+async function createPdf({ title, content, images = [] }, personEmail) {
+    if (!title || typeof title !== 'string') throw new Error('title (string) is required');
+    if (!content || typeof content !== 'string') throw new Error('content (string) is required');
+    if (!personEmail) throw new Error('personEmail required — generated docs must belong to a user');
+
+    let PDFDocument, StandardFonts, rgb;
+    try { ({ PDFDocument, StandardFonts, rgb } = require('pdf-lib')); }
+    catch { throw new Error('PDF support is unavailable on this server (pdf-lib not installed).'); }
+
+    pruneOldFiles(personEmail);
+
+    const pdf = await PDFDocument.create();
+    pdf.setTitle(title);
+    pdf.setCreator('Q (quotem-ai.co.uk)');
+    const fonts = {
+        reg: await pdf.embedFont(StandardFonts.Helvetica),
+        bold: await pdf.embedFont(StandardFonts.HelveticaBold),
+        ital: await pdf.embedFont(StandardFonts.HelveticaOblique),
+        bi: await pdf.embedFont(StandardFonts.HelveticaBoldOblique),
+    };
+    const pickFont = (b, i) => (b && i) ? fonts.bi : b ? fonts.bold : i ? fonts.ital : fonts.reg;
+
+    const PW = 595.28, PH = 841.89, M = 56, MAXW = PW - M * 2; // A4, ~0.78in margins
+    let page = pdf.addPage([PW, PH]);
+    let y = PH - M;
+    const newPage = () => { page = pdf.addPage([PW, PH]); y = PH - M; };
+
+    // pdf-lib's standard fonts are WinAnsi — strip/normalise anything they can't
+    // encode so a stray unicode char can never make the whole doc throw.
+    const clean = (s) => String(s == null ? '' : s)
+        .replace(/[‘’]/g, "'").replace(/[“”]/g, '"')
+        .replace(/[–—]/g, '-').replace(/…/g, '...').replace(/ /g, ' ')
+        .replace(/[^\x09\x0A\x0D\x20-\x7E\xA0-\xFF]/g, '');
+
+    // Tokenise inline ***both*** / **bold** / *italic* into styled runs.
+    function inlineRuns(text) {
+        const runs = [];
+        const re = /(\*\*\*(.+?)\*\*\*|\*\*(.+?)\*\*|\*(.+?)\*)/g;
+        let last = 0, m;
+        while ((m = re.exec(text)) !== null) {
+            if (m.index > last) runs.push({ t: text.slice(last, m.index), b: false, i: false });
+            if (m[2]) runs.push({ t: m[2], b: true, i: true });
+            else if (m[3]) runs.push({ t: m[3], b: true, i: false });
+            else if (m[4]) runs.push({ t: m[4], b: false, i: true });
+            last = m.index + m[0].length;
+        }
+        if (last < text.length) runs.push({ t: text.slice(last), b: false, i: false });
+        return runs.length ? runs : [{ t: text, b: false, i: false }];
+    }
+
+    // Word-wrap a set of styled runs at the given size/indent, paginating.
+    function drawBlock(runs, size, indent = 0, gapAfter = 6, forceBold = false) {
+        const x0 = M + indent;
+        const lineH = size * 1.4;
+        const spaceW = fonts.reg.widthOfTextAtSize(' ', size);
+        const words = [];
+        for (const r of runs) for (const t of clean(r.t).split(/\s+/)) if (t) words.push({ t, b: r.b || forceBold, i: r.i });
+        let line = [], lineW = 0;
+        const flush = () => {
+            if (!line.length) return;
+            if (y - lineH < M) newPage();
+            let x = x0;
+            for (const w of line) {
+                const f = pickFont(w.b, w.i);
+                page.drawText(w.t, { x, y: y - size, size, font: f, color: rgb(0.12, 0.12, 0.14) });
+                x += f.widthOfTextAtSize(w.t, size) + spaceW;
+            }
+            y -= lineH; line = []; lineW = 0;
+        };
+        for (const w of words) {
+            const ww = pickFont(w.b, w.i).widthOfTextAtSize(w.t, size);
+            if (lineW + ww > MAXW - indent && line.length) flush();
+            line.push(w); lineW += ww + spaceW;
+        }
+        flush();
+        y -= gapAfter;
+    }
+
+    drawBlock([{ t: title, b: true, i: false }], 20, 0, 14);
+
+    for (const raw of content.split('\n')) {
+        const trimmed = raw.trim();
+        if (/^(---+|===+)$/.test(trimmed)) {
+            if (y - 12 < M) newPage();
+            page.drawLine({ start: { x: M, y: y - 4 }, end: { x: PW - M, y: y - 4 }, thickness: 0.5, color: rgb(0.72, 0.72, 0.74) });
+            y -= 14; continue;
+        }
+        const h1 = trimmed.match(/^#\s+(.*)/), h2 = trimmed.match(/^##\s+(.*)/), h3 = trimmed.match(/^###\s+(.*)/);
+        if (h3) { y -= 4; drawBlock(inlineRuns(h3[1]), 13, 0, 4, true); continue; }
+        if (h2) { y -= 6; drawBlock(inlineRuns(h2[1]), 15, 0, 6, true); continue; }
+        if (h1) { y -= 8; drawBlock(inlineRuns(h1[1]), 17, 0, 8, true); continue; }
+        if (!trimmed) { y -= 6; continue; }
+        const bullet = trimmed.match(/^[-*•]\s+(.*)/), numbered = trimmed.match(/^(\d+\.)\s+(.*)/);
+        if (bullet) { drawBlock([{ t: '•', b: false, i: false }, ...inlineRuns(bullet[1])], 11, 16, 4); continue; }
+        if (numbered) { drawBlock([{ t: numbered[1], b: false, i: false }, ...inlineRuns(numbered[2])], 11, 16, 4); continue; }
+        drawBlock(inlineRuns(trimmed), 11, 0, 8);
+    }
+
+    for (const img of (Array.isArray(images) ? images : [])) {
+        const buf = img && img.buffer;
+        const type = imageTypeFromBuffer(buf);
+        if (!buf || (type !== 'png' && type !== 'jpg')) continue;
+        try {
+            const embed = type === 'png' ? await pdf.embedPng(buf) : await pdf.embedJpg(buf);
+            let { width, height } = embed.scale(1);
+            if (width > MAXW) { height = height * (MAXW / width); width = MAXW; }
+            const maxH = 360;
+            if (height > maxH) { width = width * (maxH / height); height = maxH; }
+            if (y - height - 16 < M) newPage();
+            page.drawImage(embed, { x: M + (MAXW - width) / 2, y: y - height, width, height });
+            y -= height + 6;
+            if (img.caption) drawBlock([{ t: img.caption, b: false, i: true }], 8, 0, 10);
+        } catch { /* one bad image never fails the doc */ }
+    }
+
+    const buffer = Buffer.from(await pdf.save());
+    const token = crypto.randomBytes(8).toString('hex');
+    const filename = safeFilenameStem(title) + '.pdf';
+    const dir = generatedDirFor(personEmail);
+    fs.writeFileSync(path.join(dir, token + '__' + filename), buffer);
+    return { token, filename, sizeBytes: buffer.length };
+}
+
+module.exports = { createDocx, createPdf, resolveToken, resolveTokenAcrossUsers, stashFile, generatedDirFor };

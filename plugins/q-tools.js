@@ -25,7 +25,7 @@ const path = require('path');
 const { Q_CONFIG } = require('../config');
 const { addFact, searchFacts, listFacts } = require('../facts');
 const { getTutorPath } = require('../memory');
-const { createDocx, stashFile, resolveToken } = require('./doc-creator');
+const { createDocx, createPdf, stashFile, resolveToken } = require('./doc-creator');
 const { cleanModelOutput } = require('./cjk-filter');
 const docEditor = require('./q-doc-editor');
 const qImageGen = require('./q-image-gen');
@@ -324,7 +324,7 @@ const TOOL_DEFINITIONS = [
         type: 'function',
         function: {
             name: 'create_document',
-            description: 'Write a Word (.docx) document on the user\'s behalf and return a download link. Use this whenever the user asks for a letter, complaint, formal email, contract, brief, evidence pack, or any other writing they\'ll want to save or send. Compose the full body yourself in the `content` field — the user will see it as a real Word file. You can also embed images (Street View shots, photos you found) by passing `image_sources` — they appear after the body with their source captions, ideal for a ticket-appeal evidence pack. Don\'t use this for short replies or notes; just write those in chat.',
+            description: 'Write a document on the user\'s behalf — Word (.docx, editable) or PDF (finished, ready to print/send) — and return a download link. Use this whenever the user asks for a letter, complaint, formal email, contract, brief, statement, evidence pack, or any other writing they\'ll want to save or send. Compose the full body yourself in the `content` field. Set `format` to "pdf" when the user asks for a PDF or wants a final copy to send/file; otherwise it\'s a Word file they can edit. You can also embed images (Street View shots, photos you found) by passing `image_sources` — they appear after the body with their source captions, ideal for a ticket-appeal evidence pack. Don\'t use this for short replies or notes; just write those in chat.',
             parameters: {
                 type: 'object',
                 properties: {
@@ -335,6 +335,11 @@ const TOOL_DEFINITIONS = [
                     content: {
                         type: 'string',
                         description: 'Full body of the document in plain text. Use blank lines between paragraphs. Single newlines become line breaks within a paragraph.',
+                    },
+                    format: {
+                        type: 'string',
+                        enum: ['word', 'pdf'],
+                        description: 'Output format. "word" (.docx, editable) by default; "pdf" for a finished copy to print or send. Use "pdf" when the user asks for a PDF.',
                     },
                     image_sources: {
                         type: 'array',
@@ -1447,10 +1452,11 @@ function trimParagraphs(paragraphs) {
  * create_document — generate a .docx file and return a download link.
  * Q embeds the link in his reply so the user can click and save the file.
  */
-async function createDocument({ title, content, image_sources } = {}, personEmail) {
+async function createDocument({ title, content, image_sources, format } = {}, personEmail) {
     if (!title || typeof title !== 'string') return { error: 'title (string) is required' };
     if (!content || typeof content !== 'string') return { error: 'content (string) is required' };
     if (!personEmail) return { error: 'Cannot create a document without a signed-in user.' };
+    const asPdf = String(format || '').toLowerCase() === 'pdf';
     try {
         // Resolve any evidence images to buffers. A source that can't be
         // resolved is skipped (not fatal) — the doc still builds, and
@@ -1472,7 +1478,9 @@ async function createDocument({ title, content, image_sources } = {}, personEmai
                                     : { buffer: f.buffer, caption });
             }
         }
-        const result = await createDocx({ title, content, images }, personEmail);
+        const result = asPdf
+            ? await createPdf({ title, content, images }, personEmail)
+            : await createDocx({ title, content, images }, personEmail);
         const embedded = images.filter(i => i.buffer).length;
         return {
             ok: true,
