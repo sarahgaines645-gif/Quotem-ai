@@ -578,7 +578,11 @@ NEVER mention tool names, function names, or your tool availability to the user 
  */
 function buildSystemMessage(mode, personId, surface, personName) {
     const now = new Date();
-    const dateTimeBlock = `\n\nCurrent date and time: ${now.toLocaleDateString('en-GB', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}, ${now.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', timeZoneName: 'short' })}.`;
+    // Shown to the hour, not the minute, on purpose: this string sits inside the
+    // cached prompt prefix, so a per-minute timestamp reset the prompt cache every
+    // 60s (re-paying the cache-write cost). Per-hour holds the cache for the hour.
+    // Q can call current_datetime if it ever needs the exact minute.
+    const dateTimeBlock = `\n\nCurrent date and time (to the hour — use the current_datetime tool if you need the exact minute): ${now.toLocaleString('en-GB', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', timeZoneName: 'short' })}.`;
     const nameBlock = personName ? `\nYou are speaking with: ${personName}.` : '';
     let factsBlock = '';
     try {
