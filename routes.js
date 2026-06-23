@@ -2484,8 +2484,9 @@ router.post('/api/threads/:id/chat', requirePerson, express.json({ limit: '256kb
     // again. 15 was pointlessly tight: across sessions Q lost what he and the user
     // had already settled, so he'd contradict "the last Q" and re-ask the same
     // questions on a long-running case (Sarah's council-tax case did exactly this).
-    // 40 messages of THIS case ≈ a few thousand tokens — fine for V4-Pro (the case
-    // chat model) and restores cross-session continuity.
+    // 40 messages of THIS case ≈ a few thousand tokens — fine for GLM-5.2 (the
+    // case chat model, a reasoning model with ample context) and restores
+    // cross-session continuity.
     const fullHistory = (t.chatHistory || []).filter(h => h && (h.role === 'user' || h.role === 'assistant') && typeof h.content === 'string');
     const recentHistory = fullHistory.slice(-40);
     for (const h of recentHistory) {

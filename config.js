@@ -29,17 +29,17 @@ const Q_CONFIG = {
   // Utility tasks (extraction etc.). V4-Flash was removed by Together 2026-06-09;
   // using V4-Pro as fallback until a replacement fast model is confirmed available.
   fastModel: 'deepseek-ai/DeepSeek-V4-Pro',
-  // Case THREADS run on V4-Pro — the SAME model as the normal chat. On Sarah's
-  // live council-tax case it gave sharper legal reasoning (caught the ignored SMI
-  // disregard) than Claude (which looped on a phantom liability order and missed
-  // it, and costs more) and is safe with tools where GLM-5.2 dropped her Outbox
-  // drafts. KNOWN RISK: V4-Pro is non-reasoning, so on tool turns (reasoning_effort
-  // is stripped there) it can narrate indecision into the reply ("let me re-read…
-  // actually no…"). Mitigated by the bigger case reply budget + capToolResult +
-  // leaner case context this session. If it resurfaces, the rollback paths are
-  // QUOTEM_THREAD_MODEL='zai-org/GLM-5.2' (GLM, tools forced in q-chat.js) or
+  // Case THREADS run on GLM-5.2 — a true reasoning model (thinks in a separate
+  // channel, answers decisively). Sarah's call, and VERIFIED LIVE 2026-06-23: a
+  // direct Together test of `zai-org/GLM-5.2` with tool_choice:'auto' had it call
+  // save_email_draft with valid args (finish_reason=tool_calls) — so it DOES drive
+  // tools and WILL save her Outbox drafts (the earlier "GLM drops drafts" worry was
+  // a stale comment, not reality). It's cheaper than Claude, which on her council-
+  // tax case looped on a phantom liability order and missed the winning argument
+  // (the ignored SMI disregard). Rollback paths if needed:
+  // QUOTEM_THREAD_MODEL='deepseek-ai/DeepSeek-V4-Pro' (V4) or
   // QUOTEM_CLAUDE_THREADS=1 (back to Claude Sonnet).
-  threadModel: process.env.QUOTEM_THREAD_MODEL || 'deepseek-ai/DeepSeek-V4-Pro',
+  threadModel: process.env.QUOTEM_THREAD_MODEL || 'zai-org/GLM-5.2',
   temperature: 0.0,
   maxTokens: 4000,
   // Voice cloning — set after deploying q-lab/voice-cloning-space/ to a HF Space.
