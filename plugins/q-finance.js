@@ -767,11 +767,14 @@ async function extractDocument(imageBase64, mimeType = 'image/jpeg') {
     const raw = await visionRead({
         prompt:    BILL_PROMPT,
         base64:    imageBase64,
-        // Long multi-page docs (e.g. 3-month bank statements) blew past 8192 and
-        // hit Gemini MAX_TOKENS — the JSON came back with no closing brace, the
-        // parse below failed, and the WHOLE document was discarded as 0 chars.
-        // Gemini 2.5 Flash supports far more output, so give it real room.
-        maxTokens: 32000,
+        // 8192 is the proven-safe cap. NOTE: raising it to 32000 made LARGE PDF
+        // reads (e.g. a 3-month bank statement) fail with a Gemini 400 — a big
+        // image/PDF input PLUS a big output reservation tips the request over a
+        // per-request limit (32000 is fine on its own / for text). At 8192 these
+        // big docs still process; they just hit MAX_TOKENS and truncate — which
+        // the salvage below now recovers as partial text instead of 0 chars.
+        // (Full transcription of very long statements needs page-chunking — TODO.)
+        maxTokens: 8192,
     });
     if (!raw || !raw.trim()) return { error: 'empty' };
     // Clean, complete JSON — the normal path (keeps the structured bill fields).
