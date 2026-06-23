@@ -1011,11 +1011,20 @@ async function chat(messages, options = {}) {
     // persona was Claude following Q_PERSONA's V4-tuned restraint literally and
     // smothering APS, NOT a Claude limitation. So the Claude prompt appends
     // Q_THREAD_CLAUDE_VOICE — a thin pointer that adds no voice of its own, just
-    // makes APS govern here and lifts the two cross-surface V4 lines. Force OFF
-    // with QUOTEM_CLAUDE_THREADS=0 to drop threads back to V4.
-    if ((options.surface === 'thread' || options.surface === 'check-this')
-        && process.env.ANTHROPIC_API_KEY
-        && process.env.QUOTEM_CLAUDE_THREADS !== '0') {
+    // makes APS govern here and lifts the two cross-surface V4 lines.
+    //
+    // 2026-06-23 (Sarah's call): the CASE CHAT now runs on V4-Pro by default, NOT
+    // Claude. On her live council-tax case Claude got derailed (looping on a
+    // liability order that didn't exist, re-reading a stale draft) and MISSED the
+    // winning argument — the ignored SMI disregard — which her normal V4-Pro chat
+    // caught cleanly. V4-Pro is what that normal chat runs on, it keeps her tools
+    // (Outbox draft-saving) working where GLM-5.2 doesn't, and it's far cheaper
+    // than Claude. So Claude-for-threads is now OPT-IN: set QUOTEM_CLAUDE_THREADS=1
+    // to put the case chat back on Claude Sonnet. The document CHECKER (check-this)
+    // STAYS on Claude — it's a one-shot legal review, no loop/cost concern.
+    const claudeForThread = options.surface === 'thread' && process.env.QUOTEM_CLAUDE_THREADS === '1';
+    const claudeForCheck  = options.surface === 'check-this' && process.env.QUOTEM_CLAUDE_CHECK !== '0';
+    if ((claudeForThread || claudeForCheck) && process.env.ANTHROPIC_API_KEY) {
         const lastUser = [...messages].reverse().find(m => m && m.role === 'user');
         const msgText = (lastUser && typeof lastUser.content === 'string') ? lastUser.content : '';
         const claudeResult = await claudeThreadChat({

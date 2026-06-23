@@ -2477,14 +2477,15 @@ router.post('/api/threads/:id/chat', requirePerson, express.json({ limit: '256kb
         }
     } catch (e) { console.warn('[threads] could not inject outbox drafts: ' + e.message); }
 
-    // Case history window. This was clipped to 15 back when the case chat ran on
-    // V4 (small context — full history ballooned it to 80k+ tokens and it started
-    // hallucinating tools). It's on Claude Sonnet now (200k context), so 15 was
-    // pointlessly tight: across sessions Q lost what he and the user had already
-    // settled, so he'd contradict "the last Q" and re-ask the same questions on a
-    // long-running case. 40 messages restores cross-session continuity and is a
-    // non-issue for Claude's context. (V4/GLM test turns also cope: 40 capped
-    // messages of THIS case ≈ a few thousand tokens, not the old whole-case dump.)
+    // Case history window. Clipped to 15 originally because the WHOLE-CASE dump
+    // (read_thread pulling other cases verbatim) ballooned the prompt to 80k+
+    // tokens and the model started hallucinating tools. That balloon is now capped
+    // independently (capToolResult), so the active-case history can be generous
+    // again. 15 was pointlessly tight: across sessions Q lost what he and the user
+    // had already settled, so he'd contradict "the last Q" and re-ask the same
+    // questions on a long-running case (Sarah's council-tax case did exactly this).
+    // 40 messages of THIS case ≈ a few thousand tokens — fine for V4-Pro (the case
+    // chat model) and restores cross-session continuity.
     const fullHistory = (t.chatHistory || []).filter(h => h && (h.role === 'user' || h.role === 'assistant') && typeof h.content === 'string');
     const recentHistory = fullHistory.slice(-40);
     for (const h of recentHistory) {

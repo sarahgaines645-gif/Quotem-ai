@@ -29,6 +29,17 @@ const Q_CONFIG = {
   // Utility tasks (extraction etc.). V4-Flash was removed by Together 2026-06-09;
   // using V4-Pro as fallback until a replacement fast model is confirmed available.
   fastModel: 'deepseek-ai/DeepSeek-V4-Pro',
+  // Case THREADS run on V4-Pro — the SAME model as the normal chat. On Sarah's
+  // live council-tax case it gave sharper legal reasoning (caught the ignored SMI
+  // disregard) than Claude (which looped on a phantom liability order and missed
+  // it, and costs more) and is safe with tools where GLM-5.2 dropped her Outbox
+  // drafts. KNOWN RISK: V4-Pro is non-reasoning, so on tool turns (reasoning_effort
+  // is stripped there) it can narrate indecision into the reply ("let me re-read…
+  // actually no…"). Mitigated by the bigger case reply budget + capToolResult +
+  // leaner case context this session. If it resurfaces, the rollback paths are
+  // QUOTEM_THREAD_MODEL='zai-org/GLM-5.2' (GLM, tools forced in q-chat.js) or
+  // QUOTEM_CLAUDE_THREADS=1 (back to Claude Sonnet).
+  threadModel: process.env.QUOTEM_THREAD_MODEL || 'deepseek-ai/DeepSeek-V4-Pro',
   temperature: 0.0,
   maxTokens: 4000,
   // Voice cloning — set after deploying q-lab/voice-cloning-space/ to a HF Space.
