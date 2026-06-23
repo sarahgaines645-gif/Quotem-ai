@@ -2488,7 +2488,12 @@ router.post('/api/threads/:id/chat', requirePerson, express.json({ limit: '256kb
     // case chat model, a reasoning model with ample context) and restores
     // cross-session continuity.
     const fullHistory = (t.chatHistory || []).filter(h => h && (h.role === 'user' || h.role === 'assistant') && typeof h.content === 'string');
-    const recentHistory = fullHistory.slice(-40);
+    // Was 40 for continuity, but on a doc-heavy case (60k+ token context, no GLM
+    // prompt caching on Together) every message re-sent all of it on every tool
+    // step and burned credit fast. 20 keeps recent continuity at roughly half the
+    // history cost. EMERGENCY-tuned alongside the web-search (2) + iteration (5)
+    // caps; raise back once credit/caching isn't the constraint.
+    const recentHistory = fullHistory.slice(-20);
     for (const h of recentHistory) {
         messages.push({ role: h.role, content: h.content });
     }

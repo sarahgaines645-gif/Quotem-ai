@@ -89,7 +89,7 @@ const FACTS_INJECT_LIMIT = 25;
 // chains (e.g. recall → web_search → analyze_document). When the cap IS hit
 // we fall back to a final no-tools call so Q always returns a real answer
 // instead of the cryptic "loop limit" error.
-const MAX_TOOL_ITERATIONS = 8;
+const MAX_TOOL_ITERATIONS = 5;
 
 // Cap web_search calls per single turn. The APS research sweep makes Q fire a
 // burst of searches (legislation, ombudsman rulings, similar cases, the
@@ -101,7 +101,7 @@ const MAX_TOOL_ITERATIONS = 8;
 // reached we SILENTLY drop web_search from the toolset — no message to the
 // model, so there is nothing for it to relay to the user ("you can search
 // again next turn…"). Giving him longer is the fix; the nudge was the leak.
-const MAX_WEB_SEARCHES_PER_TURN = 8;
+const MAX_WEB_SEARCHES_PER_TURN = 2;
 
 // Friendly error bank — shown in Q's own voice whenever something tech-side
 // breaks (upstream 5xx, network blip, empty completion, etc.). Picked at

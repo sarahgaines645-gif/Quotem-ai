@@ -334,7 +334,7 @@ const TOOL_DEFINITIONS = [
                     },
                     content: {
                         type: 'string',
-                        description: 'Full body of the document in plain text. Use blank lines between paragraphs. Single newlines become line breaks within a paragraph.',
+                        description: 'Full body of the document, written in MARKDOWN so it comes out as a properly formatted document (not a flat wall of text). Use: "## Section heading" and "### Sub-heading" for headings (NOT ALL-CAPS lines), **bold** for key labels/emphasis, *italic* where apt, "- " for bullet lists, and "---" on its own line for a divider. Blank line between paragraphs. Structure a letter or complaint with real headings — e.g. "## Background", "## What went wrong", "## What I am asking for" — so it reads like a professional document.',
                     },
                     format: {
                         type: 'string',
