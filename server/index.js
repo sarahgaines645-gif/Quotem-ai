@@ -90,6 +90,24 @@ try {
     console.log('═══════════════════════════════════════════════════');
 }
 
+// Build banner — proves at a glance WHICH commit is live and WHICH model the case
+// threads actually run on. The runtime logs never showed this, so "is my deploy
+// live / which model is Q on?" was unanswerable without guessing. Seeing this
+// banner at all = the new code booted; the model line confirms GLM vs V4 vs Claude.
+// Wrapped so it can never break boot.
+try {
+    const { Q_CONFIG } = require('../config');
+    const commit = (process.env.RAILWAY_GIT_COMMIT_SHA || process.env.RAILWAY_GIT_COMMIT || '').slice(0, 7) || 'unknown';
+    const claudeThreads = process.env.QUOTEM_CLAUDE_THREADS === '1';
+    console.log('═══════════════ Q BUILD ═══════════════');
+    console.log(`[Q]    commit = ${commit}`);
+    console.log(`[Q]    case-thread model = ${claudeThreads ? 'claude-sonnet-4-6 (QUOTEM_CLAUDE_THREADS=1)' : Q_CONFIG.threadModel}`);
+    console.log(`[Q]    page-chat model  = ${Q_CONFIG.model}`);
+    console.log('════════════════════════════════════════');
+} catch (e) {
+    console.log('[Q] build banner failed: ' + (e && e.message));
+}
+
 // ── First-run bootstrap: Sarah is always in Q's circle ────────
 // Migrate any legacy access-key entries away (their hashes are tied
 // to a previous pepper and won't validate). Then if no people exist,
