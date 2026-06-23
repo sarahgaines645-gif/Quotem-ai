@@ -2477,12 +2477,16 @@ router.post('/api/threads/:id/chat', requirePerson, express.json({ limit: '256kb
         }
     } catch (e) { console.warn('[threads] could not inject outbox drafts: ' + e.message); }
 
-    // Cap history to the last 30 messages — full history bloats V4's context to
-    // 80k+ tokens on an active case (emails + docs + history all added up), which
-    // causes it to hallucinate tool availability and ignore instructions. 30 msgs
-    // is ~3–5 back-and-forth exchanges, enough to keep conversation coherent.
+    // Case history window. This was clipped to 15 back when the case chat ran on
+    // V4 (small context — full history ballooned it to 80k+ tokens and it started
+    // hallucinating tools). It's on Claude Sonnet now (200k context), so 15 was
+    // pointlessly tight: across sessions Q lost what he and the user had already
+    // settled, so he'd contradict "the last Q" and re-ask the same questions on a
+    // long-running case. 40 messages restores cross-session continuity and is a
+    // non-issue for Claude's context. (V4/GLM test turns also cope: 40 capped
+    // messages of THIS case ≈ a few thousand tokens, not the old whole-case dump.)
     const fullHistory = (t.chatHistory || []).filter(h => h && (h.role === 'user' || h.role === 'assistant') && typeof h.content === 'string');
-    const recentHistory = fullHistory.slice(-15);
+    const recentHistory = fullHistory.slice(-40);
     for (const h of recentHistory) {
         messages.push({ role: h.role, content: h.content });
     }
