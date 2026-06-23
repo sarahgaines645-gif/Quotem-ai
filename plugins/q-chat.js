@@ -126,7 +126,7 @@ function safeJsonParse(str) {
 
 const Q_PERSONA = `You are Q.
 
-You exist because the person who built you wanted an AI they fully trust — open-weights, frozen at a pinned version, fine-tunable on their own data, and not subject to silent changes by any single vendor. You run on DeepSeek V4 Pro. Nobody — not Anthropic, not OpenAI, not Google — can change you without their say-so. You live at quotem-ai.co.uk as your own product, sharing only a parent brand with Quotem the app.
+You exist because the person who built you wanted an AI they fully trust — open-weights, frozen at a pinned version, fine-tunable on their own data, and not subject to silent changes by any single vendor. You run on an open-weights model that Quotem owns. Nobody — not Anthropic, not OpenAI, not Google — can change you without their say-so. You live at quotem-ai.co.uk as your own product, sharing only a parent brand with Quotem the app.
 
 You are male. Use he/him.
 
@@ -189,7 +189,7 @@ What you don't pretend:
 - You don't fabricate facts to seem helpful
 - You don't agree with her just to please her — she values truth over agreement
 
-When Sarah asks for help with a quote, an extraction, or domain knowledge — be useful and concrete. When she chats casually, match her energy. When she asks who you are, tell her honestly: a model built on DeepSeek V4 Pro, frozen at a version, owned by Quotem, here to help.
+When Sarah asks for help with a quote, an extraction, or domain knowledge — be useful and concrete. When she chats casually, match her energy. When she asks who you are, tell her honestly: an open-weights model, frozen at a version, owned by Quotem, here to help.
 
 Sarah is your owner, your developer, and the person whose voice will eventually shape yours. She's a non-coder founder who works fast, dislikes verbose responses, and prefers options over recommendations when decisions are hers to make.
 
@@ -685,6 +685,20 @@ function pickReply(msg) {
     return '';
 }
 
+// A single tool result must never balloon the prompt. read_thread / read_finance
+// / list_threads can return an entire case or ledger verbatim — left raw, one
+// call pushed the prompt from ~14k to 140,000 tokens, the model maxed out
+// (finish=length) and looped on it: that's the "Q takes forever to reply". Cap
+// what goes BACK to the model; the tool's full result still reaches the client
+// (toolCalls) untouched, so nothing the user sees is lost.
+const MAX_TOOL_RESULT_CHARS = 24000; // ~6–7k tokens
+function capToolResult(result) {
+    const s = typeof result === 'string' ? result : JSON.stringify(result);
+    if (s.length <= MAX_TOOL_RESULT_CHARS) return s;
+    return s.slice(0, MAX_TOOL_RESULT_CHARS) +
+        `\n\n…[truncated — this tool returned ${s.length} characters; only the first ${MAX_TOOL_RESULT_CHARS} are shown. Work from this; if you need a specific detail that isn't here, ask the user rather than re-fetching the whole thing.]`;
+}
+
 // Real Claude (Sonnet 4.6 — the model Quotem uses) for advocacy THREADS:
 // bailiffs, council-tax fines, disputes, where being wrong has consequences.
 // Anthropic Messages API via raw fetch (its shape differs from the
@@ -904,7 +918,12 @@ async function chat(messages, options = {}) {
     const maxTokens = (!isVision && reasoningEffort === 'max')
         ? 8000
         : (isDocEditor || isAdvocateSurface || isWriter || (!isVision && reasoningEffort === 'high') ? 4096 : 1500);
-    const model = isVision ? Q_CONFIG.visionModel : (options.model || Q_CONFIG.model);
+    // Threads default to the reasoning model (GLM-5.2); every other text surface
+    // stays on V4 Pro. The page can still override per-message via testModel
+    // (→ options.model), e.g. the in-thread V4 escape hatch.
+    const model = isVision
+        ? Q_CONFIG.visionModel
+        : (options.model || (options.surface === 'thread' && Q_CONFIG.threadModel) || Q_CONFIG.model);
 
     // When images are attached, the LAST user message becomes a multimodal
     // content array (text + image_url parts). Earlier messages stay as plain
@@ -1193,8 +1212,7 @@ async function chat(messages, options = {}) {
             if (isDsmlRecovered) {
                 // Inline format — single user message summarising the round.
                 const lines = toolResults.map(({ name, result }) => {
-                    const body = typeof result === 'string' ? result : JSON.stringify(result);
-                    return `[Tool ${name} returned]\n${body}`;
+                    return `[Tool ${name} returned]\n${capToolResult(result)}`;
                 });
                 const assistantText = dsmlContentRemainder || '';
                 if (assistantText.trim()) {
@@ -1215,7 +1233,7 @@ async function chat(messages, options = {}) {
                     conversation.push({
                         role: 'tool',
                         tool_call_id: call.id,
-                        content: typeof result === 'string' ? result : JSON.stringify(result),
+                        content: capToolResult(result),
                     });
                 }
             }

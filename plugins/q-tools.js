@@ -629,7 +629,7 @@ const TOOL_DEFINITIONS = [
         type: 'function',
         function: {
             name: 'list_threads',
-            description: 'List all of the user\'s saved Threads (situations / cases). Use this whenever they reference something you might have a Thread for — "the landlord thing", "that complaint with X", "what happened with the boiler" — so you can match their words to a real Thread and pull its details with read_thread. Returns: array of {id, title, summary, status, updatedAt, emailCount}.',
+            description: 'List the user\'s saved Threads (situations / cases) — id, title, summary only. Call it ONLY when the user clearly refers back to a past situation you might have saved ("the landlord thing", "that complaint with X", "what happened with the boiler"), so you can match their words to a real case. Do NOT call it on every turn, as a reflex, or on a vague / one-word message — only when they\'re actually pointing at a remembered case. Returns: array of {id, title, summary, status, updatedAt, emailCount}.',
             parameters: { type: 'object', properties: {} },
         },
     },
@@ -637,7 +637,7 @@ const TOOL_DEFINITIONS = [
         type: 'function',
         function: {
             name: 'read_thread',
-            description: 'Read the full contents of one Thread — all emails, all prior chat with Q on this case, status, notes. Use this AFTER list_threads when you\'ve identified the Thread Sarah is asking about. Once read, you have the whole case in context and can speak about it confidently. Returns the complete Thread object.',
+            description: 'Read the full contents of ONE specific Thread the user has clearly named or pointed at in THIS message. ONLY call it then. Do NOT call it proactively, "to check", or on a vague / short / one-word message (e.g. "council tax", "no nothing", "yes") — pulling in a case the user did not ask about floods the conversation with the wrong case\'s details, makes you lose the thread of what they actually said, and leads you to state facts (names, dates, councils) they never gave. If you are not sure which case they mean — or whether they mean a saved case at all — ASK them; do NOT read one to find out. Returns the complete Thread object.',
             parameters: {
                 type: 'object',
                 properties: {
