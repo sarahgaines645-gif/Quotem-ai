@@ -934,6 +934,12 @@ async function chat(messages, options = {}) {
     const model = isVision
         ? Q_CONFIG.visionModel
         : (options.model || (options.surface === 'thread' && Q_CONFIG.threadModel) || Q_CONFIG.model);
+    // GLM is a true reasoning model (separate thinking channel). Verified live on
+    // Together that it KEEPS emitting tool_calls with reasoning_effort set (both
+    // 'high' and 'max') — unlike V4, where high reasoning + tools kills tool_calls.
+    // So GLM can reason deep AND use tools; this flag lets the Deep toggle actually
+    // deepen its thinking on a case (see the reasoning_effort spread below).
+    const isReasoningModel = /glm/i.test(String(model || ''));
 
     // When images are attached, the LAST user message becomes a multimodal
     // content array (text + image_url parts). Earlier messages stay as plain
@@ -1063,12 +1069,19 @@ async function chat(messages, options = {}) {
                     // returning empty content; Q then said "I can see them but
                     // can't access them" — the same hallucination, different
                     // cause. K2.5 supports a normal JSON response.
-                    // Skip reasoning_effort when tools are in play: high reasoning +
-                    // function-calling on these models makes them reason in text and
-                    // stop emitting tool_calls (proven in Quoteapp, a40f304), and it's
-                    // a big part of the slow turns. Reasoning still applies to pure
-                    // text turns and the no-tools fallback below.
-                    ...(!isVision && !useTools && reasoningEffort && { reasoning_effort: reasoningEffort }),
+                    // Skip reasoning_effort when tools are in play — EXCEPT GLM on Deep.
+                    // On V4/Kimi, high reasoning + function-calling makes them reason in
+                    // text and stop emitting tool_calls (proven in Quoteapp, a40f304),
+                    // and it's a big part of the slow turns. GLM is different: it reasons
+                    // in a separate channel and a live test confirmed it KEEPS calling
+                    // tools with reasoning_effort 'max'. So when the Deep toggle is on
+                    // (reasoningEffort==='max') AND the model is GLM, pass reasoning_effort
+                    // through even with tools — that's what makes the Deep button actually
+                    // deepen Q's thinking on a case. Normal (non-Deep) GLM turns stay at
+                    // GLM's default thinking, untouched. Pure text turns: unchanged.
+                    ...(!isVision && reasoningEffort
+                        && (!useTools || (isReasoningModel && reasoningEffort === 'max'))
+                        && { reasoning_effort: reasoningEffort }),
                     ...(useTools && {
                         tools: (() => {
                             const lastUser = [...messages].reverse().find(m => m.role === 'user');
