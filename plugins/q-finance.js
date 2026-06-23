@@ -767,15 +767,28 @@ async function extractDocument(imageBase64, mimeType = 'image/jpeg') {
     const raw = await visionRead({
         prompt:    BILL_PROMPT,
         base64:    imageBase64,
-        mimeType,
-        maxTokens: 8192,   // was 1200 — that GUARANTEED a full letter could not be transcribed
+        // Long multi-page docs (e.g. 3-month bank statements) blew past 8192 and
+        // hit Gemini MAX_TOKENS — the JSON came back with no closing brace, the
+        // parse below failed, and the WHOLE document was discarded as 0 chars.
+        // Gemini 2.5 Flash supports far more output, so give it real room.
+        maxTokens: 32000,
     });
+    if (!raw || !raw.trim()) return { error: 'empty' };
+    // Clean, complete JSON — the normal path (keeps the structured bill fields).
     try {
         const m = raw.match(/\{[\s\S]*\}/);
-        return m ? JSON.parse(m[0]) : { error: 'Parse failed' };
-    } catch {
-        return { error: 'Parse failed', raw };
-    }
+        if (m) return JSON.parse(m[0]);
+    } catch { /* truncated or invalid JSON — salvage below rather than lose it */ }
+    // Salvage: Gemini truncated the JSON (no closing brace/quote) or returned
+    // non-JSON. Don't throw the document away — pull the full_text value out,
+    // even if its closing quote is missing, and unescape it so Q still reads it.
+    const m2 = raw.match(/"full_text"\s*:\s*"((?:\\.|[^"\\])*)/);
+    const salvaged = (m2 ? m2[1] : raw)
+        .replace(/\\n/g, '\n').replace(/\\t/g, '\t').replace(/\\r/g, '')
+        .replace(/\\"/g, '"').replace(/\\\\/g, '\\')
+        .trim();
+    console.warn(`[finance] extractDocument salvaged ${salvaged.length} chars from a truncated/non-JSON read`);
+    return salvaged ? { full_text: salvaged, truncated: true } : { error: 'Parse failed', raw };
 }
 
 // Describe video footage (CCTV, enforcement camera, dashcam) as plain text.

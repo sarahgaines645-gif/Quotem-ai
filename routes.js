@@ -2619,6 +2619,7 @@ router.post('/api/threads/:id/chat', requirePerson, express.json({ limit: '256kb
         for (const f of docFiles) {
             const isPdf = /pdf/i.test(f.mimeType || '') || /\.pdf$/i.test(f.filename || '');
             const isRtf = /\.rtf$/i.test(f.filename || '') || /rtf/i.test(f.mimeType || '');
+            const isDocx = /\.docx$/i.test(f.filename || '') || /officedocument\.wordprocessingml/i.test(f.mimeType || '');
             try {
                 if (isPdf && wantExtract) {
                     // Hand raw PDF to Claude when triggered (8MB cap).
@@ -2656,6 +2657,17 @@ router.post('/api/threads/:id/chat', requirePerson, express.json({ limit: '256kb
                             text = (ex && (ex.full_text || ex.raw)) || '';
                         } else if (isRtf) {
                             text = rtfToText(file.buffer.toString('utf8'));
+                        } else if (isDocx) {
+                            // .docx is zipped XML — reading the raw bytes gives binary
+                            // (the "decoded as binary — skipping" case that blinded Q to
+                            // Word docs on a case). mammoth pulls the real text out.
+                            try {
+                                const mammoth = require('mammoth');
+                                text = (await mammoth.extractRawText({ buffer: file.buffer })).value || '';
+                            } catch (e) {
+                                console.warn(`[threads] mammoth failed on "${f.filename}": ${e.message}`);
+                                text = '';
+                            }
                         } else {
                             text = file.buffer.toString('utf8');
                         }
