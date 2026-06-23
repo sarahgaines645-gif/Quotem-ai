@@ -915,8 +915,14 @@ async function chat(messages, options = {}) {
     // or coaching question in the same reply. 1500 ran him dry mid-brief —
     // this is exactly the doc-editor situation, give him the same room.
     const isWriter = options.surface === 'writer';
-    const maxTokens = (!isVision && reasoningEffort === 'max')
-        ? 8000
+    // Case/thread (advocate) turns: V4-Pro pours its whole budget into private
+    // reasoning (re-reading the case, checking the law) and at 4096 was cut off
+    // mid-thought (finish=length) BEFORE writing any answer, then looped/failed.
+    // Give it room to finish thinking AND write. (The real fix for cases is a
+    // model that reasons efficiently — see Claude routing — this just stops the
+    // truncation loop in the meantime.)
+    const maxTokens = (!isVision && reasoningEffort === 'max') ? 12000
+        : (!isVision && isAdvocateSurface) ? 8000
         : (isDocEditor || isAdvocateSurface || isWriter || (!isVision && reasoningEffort === 'high') ? 4096 : 1500);
     // Threads default to the reasoning model (GLM-5.2); every other text surface
     // stays on V4 Pro. The page can still override per-message via testModel
