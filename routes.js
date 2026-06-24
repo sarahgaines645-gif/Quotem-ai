@@ -2420,6 +2420,12 @@ router.post('/api/threads/:id/chat', requirePerson, express.json({ limit: '256kb
 
     const messages = [];
     const noteList = Array.isArray(t.notes) ? t.notes.filter(n => n && String(n.content || '').trim()) : [];
+    // A case BRIEF (an app-maintained fact-summary note) is what lets the raw docs
+    // stay out of a normal turn safely. Until that brief exists, do NOT gate the
+    // documents — inject them every turn as before, so Q is never blind to the case.
+    // Once the brief exists, the gate below ("wantContent") takes over and the raw
+    // docs only load when actually needed.
+    const hasBrief = noteList.some(n => n && n.kind === 'brief' && String(n.content || '').trim().length > 200);
     const hasRealData = t.emails.length > 0 || (t.files && t.files.length > 0) || noteList.length > 0;
     if (hasRealData) {
         const parts = [];
@@ -2709,7 +2715,7 @@ router.post('/api/threads/:id/chat', requirePerson, express.json({ limit: '256kb
                 // EVERY message (GLM is not cached on Together, so each re-send is paid
                 // in full — that was the credit burn). Mention a file and it loads
                 // again that turn; otherwise he works from the notes/brief.
-                if (block && wantContent) messages.splice(messages.length - 1, 0, { role: 'user', content: block });
+                if (block && (wantContent || !hasBrief)) messages.splice(messages.length - 1, 0, { role: 'user', content: block });
             } catch (e) {
                 console.warn('[threads] doc extract failed: ' + f.filename + ' — ' + e.message);
             }
