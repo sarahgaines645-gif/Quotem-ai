@@ -2689,7 +2689,16 @@ router.post('/api/threads/:id/chat', requirePerson, express.json({ limit: '256kb
                 } else if (!isPdf) {
                     block = `(The attached file "${f.filename}" could not be read automatically.)`;
                 }
-                if (block) messages.splice(messages.length - 1, 0, { role: 'user', content: block });
+                // Inject the FULL raw document text ONLY when this turn needs it:
+                // the first sweep of the case (kickoff), a just-added file, or when
+                // the user refers to a document/file. On a normal follow-up turn we
+                // do NOT re-send the raw documents — the file LIST is always shown
+                // (above) and the case notes + recent chat carry what was read. This
+                // is what stops a doc-heavy case re-sending 60k tokens of raw files on
+                // EVERY message (GLM is not cached on Together, so each re-send is paid
+                // in full — that was the credit burn). Mention a file and it loads
+                // again that turn; otherwise he works from the notes/brief.
+                if (block && wantContent) messages.splice(messages.length - 1, 0, { role: 'user', content: block });
             } catch (e) {
                 console.warn('[threads] doc extract failed: ' + f.filename + ' — ' + e.message);
             }
