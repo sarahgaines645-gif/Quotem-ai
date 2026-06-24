@@ -2514,10 +2514,21 @@ router.post('/api/threads/:id/chat', requirePerson, express.json({ limit: '256kb
     // Test models (e.g. GLM-5) don't reliably call tools, so always inject file
     // content directly — they won't call read_file_content to fetch it themselves.
     const isTestModel = !!(req.body?.testModel);
+    // Sarah's design: work from the case notes/summary on a normal turn, but RE-READ
+    // all the documents at the two moments accuracy actually matters, so the summary
+    // can never drift unchecked:
+    //   • before drafting/redrafting a sendable document (a mistake in a sent letter
+    //     is the worst place for one), and
+    //   • periodically (~every 10 replies / 20 messages) as a drift catch.
+    // On every other turn the raw docs stay out of the prompt (the file list + notes
+    // carry the case), which is what keeps a doc-heavy case cheap.
+    const isDrafting = /\b(draft|redraft|rewrite|compose|finali[sz]e|write (it|the|a|an|me|up|out)|put (it|this) together)\b/i.test(message);
+    const qReplies = (t.chatHistory || []).filter(m => m && m.role === 'assistant').length;
+    const dueForReVerify = qReplies > 0 && qReplies % 10 === 0;
     // wantExtract: whether to run Gemini extraction on uncached files (costs time/money).
     // wantInject: whether to inject already-cached content — always true so Q never
     // loses context he already has.
-    const wantExtract = isAddPing || refersToFile || isKickoff || isTestModel;
+    const wantExtract = isAddPing || refersToFile || isKickoff || isTestModel || isDrafting || dueForReVerify;
     const wantContent = wantExtract; // kept for backward compat with image/video blocks below
 
     // Photos on a case: read each one to TEXT once (cached), then hand Q that text
