@@ -191,6 +191,24 @@ function addNote(threadId, { content, kind = 'note' } = {}, ownerEmail) {
     return writeThread(thread);
 }
 
+// Create or REPLACE the single 'brief' note — the app-maintained case summary +
+// timeline. One living note, never duplicated: Q rewrites it as the case evolves
+// so the summary and its dated timeline stay accurate. It's also what lets the raw
+// documents stay out of a normal turn (see hasBrief in routes.js).
+function setSummaryNote(threadId, content, ownerEmail) {
+    const thread = readThread(threadId, ownerEmail);
+    if (!thread || !content) return null;
+    if (!Array.isArray(thread.notes)) thread.notes = [];
+    thread.notes = thread.notes.filter(n => n && n.kind !== 'brief');
+    thread.notes.unshift({
+        id: 'note-' + Date.now(),
+        content: String(content).trim(),
+        kind: 'brief',
+        addedAt: new Date().toISOString(),
+    });
+    return writeThread(thread);
+}
+
 
 function filesDirFor(threadId, ownerEmail) {
     return userDataPath(ownerEmail, 'threads/' + threadId + '-files');
@@ -517,6 +535,7 @@ module.exports = {
     addEmail,
     removeEmail,
     addNote,
+    setSummaryNote,
     addContact,
     updateContact,
     removeContact,

@@ -628,6 +628,21 @@ const TOOL_DEFINITIONS = [
     {
         type: 'function',
         function: {
+            name: 'update_case_summary',
+            description: 'Maintain the case\'s living SUMMARY — the single note that captures the whole case at a glance. Call this whenever you learn or confirm something material (a new fact, date, document, decision, or who-said-what). It REPLACES the one summary note (never makes duplicates), so always pass the FULL updated summary, not just the new bit. Write it in markdown with clear "## " headings — and it MUST include a "## Timeline" section listing key events in date order (e.g. "- 2025-11-26 — Stage 2 response issued"), kept accurate as things develop. This summary is your source of truth and is what lets you work without re-reading every document, so keep it current.',
+            parameters: {
+                type: 'object',
+                properties: {
+                    threadId: { type: 'string', description: 'The Thread id.' },
+                    content:  { type: 'string', description: 'The COMPLETE updated case summary in markdown — headings, key facts, parties, reference numbers, current status, and a "## Timeline" of dated events. This fully replaces the previous summary.' },
+                },
+                required: ['threadId', 'content'],
+            },
+        },
+    },
+    {
+        type: 'function',
+        function: {
             name: 'list_threads',
             description: 'List the user\'s saved Threads (situations / cases) — id, title, summary only. Call it ONLY when the user clearly refers back to a past situation you might have saved ("the landlord thing", "that complaint with X", "what happened with the boiler"), so you can match their words to a real case. Do NOT call it on every turn, as a reflex, or on a vague / one-word message — only when they\'re actually pointing at a remembered case. Returns: array of {id, title, summary, status, updatedAt, emailCount}.',
             parameters: { type: 'object', properties: {} },
@@ -1351,6 +1366,10 @@ async function executeTool(name, argsRaw, personId, personEmail, threadId) {
     if (!args || typeof args !== 'object') {
         return { error: 'Tool arguments must be an object' };
     }
+    // Thread tools act on the CURRENT case. Inject its id so they work even when
+    // the model omits it (it doesn't always know the raw thread id). An explicit
+    // id from the model still wins (e.g. cross-case reads).
+    if (threadId && !args.threadId) args.threadId = threadId;
 
     switch (name) {
         case 'web_search':       return await webSearch(args);
@@ -1383,6 +1402,7 @@ async function executeTool(name, argsRaw, personId, personEmail, threadId) {
         case 'read_thread':          return readThreadTool(args, personEmail);
         case 'add_email_to_thread':  return addEmailToThreadTool(args, personEmail);
         case 'add_note_to_thread':   return addNoteToThreadTool(args, personEmail);
+        case 'update_case_summary':  return updateCaseSummaryTool(args, personEmail);
         case 'read_finance':         return readFinanceTool(personEmail);
         case 'add_finance_problem':  return addFinanceProblemTool(args, personEmail);
         case 'send_notification':    return await sendNotificationTool(args, personEmail);
@@ -1730,6 +1750,25 @@ function addNoteToThreadTool({ threadId, content, kind } = {}, personEmail) {
     };
 }
 
+/**
+ * update_case_summary — create or replace the case's single living summary note
+ * (the brief + timeline). Replaces, never duplicates.
+ */
+function updateCaseSummaryTool({ threadId, content } = {}, personEmail) {
+    if (!threadId) return { error: 'threadId is required' };
+    if (!content) return { error: 'content is required' };
+    if (!personEmail) return { error: 'Cannot mutate a thread without a signed-in user.' };
+    const owned = qThreads.readThread(threadId, personEmail);
+    if (!owned) return { error: 'Thread not found: ' + threadId };
+    const updated = qThreads.setSummaryNote(threadId, content, personEmail);
+    if (!updated) return { error: 'Thread not found: ' + threadId };
+    return {
+        ok: true,
+        threadId: updated.id,
+        instruction_for_q: 'Case summary + timeline updated. Brief confirmation, then carry on — do NOT paste the summary back to the user.',
+    };
+}
+
 // ── Finance ──────────────────────────────────────────────────────────────
 
 const qFinance = require('./q-finance');
@@ -1968,7 +2007,7 @@ const ALWAYS_ON = new Set([
     // every turn so he can correlate to a saved case whenever Sarah refers
     // to one (anywhere — main chat, email writer, inside a Thread).
     'list_threads', 'read_thread', 'save_situation',
-    'add_email_to_thread', 'add_note_to_thread', 'add_file_to_thread',
+    'add_email_to_thread', 'add_note_to_thread', 'update_case_summary', 'add_file_to_thread',
     // Email drafting — always on so Q saves drafts from any chat surface.
     'save_email_draft',
     // Finance tools — always available so Q can read and update the finance
