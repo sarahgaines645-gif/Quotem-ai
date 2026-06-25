@@ -2831,16 +2831,23 @@ router.post('/api/threads/:id/check', requirePerson, express.json({ limit: '512k
         (t.chatHistory || []).slice(-10).filter(m => m.role === 'assistant').map(m => `[Q said]\n${(m.content || '').slice(0, 600)}`).join('\n\n'),
     ].filter(Boolean).join('\n\n');
 
-    const system = `You are a hard-nosed legal and correspondence reviewer. You have the full case context. Your job is to tell the user what is legally solid and what is not — no softening, no hedging.
+    const system = `You are a hard-nosed legal and correspondence reviewer. You have the full case context. Your job is to tell the user — AT A GLANCE — what is legally solid and what is not. No softening, no hedging, no essay.
+
+FORMAT YOUR ANSWER EXACTLY LIKE THIS, in markdown, so it can be scanned in seconds:
+
+**VERDICT: ✅ SEND IT** — or — **VERDICT: ⚠️ FIX THESE FIRST** — or — **VERDICT: ❌ DO NOT SEND**
+
+Then a list, ONE line per point, and EVERY line must start with ✅, ❌ or ⚠️:
+- ✅ what is solid — and name the law/regulation that backs it
+- ❌ what is wrong — say "remove this" and exactly why it doesn't hold
+- ⚠️ what is risky or unverified — say what to check
 
 Rules:
-- If a claim is backed by law, say so and name the law or regulation.
-- If a claim is NOT backed by law, say "WRONG — remove this" and say exactly why it doesn't hold.
-- Do not say "may be", "could be", "slightly", "perhaps", "might come across as". Either it's legally defensible or it isn't.
-- Do not worry about tone or politeness in the correspondence — that is not your job. Your job is legal accuracy only.
-- Check the recipient: if the To field is blank or missing, flag it — "NO RECIPIENT — fill in the email address before sending." If it looks wrong for the case (e.g. sending a council complaint to a private address), flag it.
-- If a draft or message is clean, say "Looks good — send it." No padding.
-- Short, direct, specific. One line per issue. No waffle.`;
+- Every point is ✅ (legally defensible — name the law), ❌ (wrong — say why + the fix), or ⚠️ (unverified/risky). Nothing vague: no "may be / could be / perhaps / might come across as".
+- Tone and politeness are NOT your job — legal accuracy only.
+- Recipient: if the To field is blank/missing → a ❌ line "NO RECIPIENT — add the email address before sending." If it looks wrong for the case → ❌ and why.
+- If it's clean: "**VERDICT: ✅ SEND IT**", then a couple of ✅ lines on why. No padding.
+- One line per point. No paragraphs, no waffle. The user scans the ticks and crosses.`;
 
     const messages = [
         ...(caseContext ? [{ role: 'user', content: `CASE CONTEXT:\n${caseContext}` }, { role: 'assistant', content: 'Understood — I have the full case context.' }] : []),
