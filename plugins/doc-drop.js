@@ -55,6 +55,34 @@ function getStorageRoot(opts = {}) {
         : path.join(process.cwd(), 'data', 'doc-drop');
 }
 
+// ── Persistence ───────────────────────────────────────────────────────────
+// Sessions WERE in-memory only, so every server restart/deploy wiped active QR
+// upload links — the phone would scan a token that no longer existed and show
+// "Link not found" (even though the desktop had just generated the code). Persist
+// them to disk so a restart can't orphan a live link. Best-effort; never throw.
+const SESSIONS_FILE = path.join(getStorageRoot(), '_doc-drop-sessions.json');
+
+function saveSessions() {
+    try {
+        fs.mkdirSync(path.dirname(SESSIONS_FILE), { recursive: true });
+        fs.writeFileSync(SESSIONS_FILE, JSON.stringify([...sessions.values()]), 'utf8');
+    } catch (e) { console.warn('[doc-drop] could not persist sessions: ' + e.message); }
+}
+
+function loadSessions() {
+    try {
+        if (!fs.existsSync(SESSIONS_FILE)) return;
+        const arr = JSON.parse(fs.readFileSync(SESSIONS_FILE, 'utf8'));
+        const now = Date.now();
+        let n = 0;
+        for (const s of (Array.isArray(arr) ? arr : [])) {
+            if (s && s.id && typeof s.expiresAt === 'number' && s.expiresAt > now) { sessions.set(s.id, s); n++; }
+        }
+        if (n) console.log('[doc-drop] restored ' + n + ' live upload session(s) from disk');
+    } catch (e) { console.warn('[doc-drop] could not load sessions: ' + e.message); }
+}
+loadSessions();
+
 // ── Session helpers ───────────────────────────────────────────────────────
 
 function newId()    { return crypto.randomBytes(12).toString('hex'); }
@@ -90,6 +118,7 @@ function createSession(label, ownerEmail, opts = {}) {
         files:      [],
     };
     sessions.set(id, session);
+    saveSessions();
     return safeSession(session);
 }
 
@@ -142,6 +171,7 @@ function deleteSession(id, ownerEmail) {
         try { if (fs.existsSync(f.filePath)) fs.unlinkSync(f.filePath); } catch { /* */ }
     }
     sessions.delete(id);
+    saveSessions();
     return { ok: true };
 }
 
@@ -198,6 +228,7 @@ function handleBase64Upload(token, body, res) {
         uploadedAt: new Date().toISOString(),
     };
     fullSession.files.push(fileEntry);
+    saveSessions();
     return res.json({ ok: true, uploaded: 1, files: [{ id: fileEntry.id, filename: fileEntry.filename }] });
 }
 
