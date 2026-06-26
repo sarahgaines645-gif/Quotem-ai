@@ -2535,7 +2535,13 @@ router.post('/api/threads/:id/chat', requirePerson, express.json({ limit: '256kb
     // wantInject: whether to inject already-cached content — always true so Q never
     // loses context he already has.
     const wantExtract = isAddPing || refersToFile || isKickoff || isTestModel || isDrafting || dueForReVerify;
-    const wantContent = wantExtract; // kept for backward compat with image/video blocks below
+    // lean turn (e.g. the "Ask Q to fix" hand-off after a fact-check): the fact-
+    // check already verified the draft against the documents, so Q just applies the
+    // listed fixes to the draft — it does NOT need all the raw docs re-loaded. The
+    // outbox draft + notes are still injected, so keep this fast and avoid the
+    // timeout that left the user staring at "Q's not doing anything".
+    const lean = req.body?.lean === true;
+    const wantContent = !lean && wantExtract; // kept for backward compat with image/video blocks below
 
     // Photos on a case: read each one to TEXT once (cached), then hand Q that text
     // as context so he reasons over it with the FULL thread history and his tools
