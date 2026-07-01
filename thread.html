@@ -2093,6 +2093,14 @@ loadThread();
       if (el.tagName === 'INPUT' && f.fieldType !== 'Btn') {
         const fits = h * 0.75 * displayRatio;
         if (fits < fontPx) fontPx = Math.max(8, fits);
+        // A long sentence on a narrow single line clips at the right edge. Shrink
+        // the font so the WHOLE value shows on screen — mirrors the download's fit.
+        const val = String(_values[f.name] || '');
+        if (val.length) {
+          const displayW = (w * displayRatio) - 6;
+          const fitW = displayW / (val.length * 0.5);   // Helvetica avg ≈ 0.5em/char
+          if (fitW < fontPx) fontPx = Math.max(6, fitW);
+        }
       }
       el.style.fontSize = fontPx + 'px';
       inputsEl.appendChild(el);

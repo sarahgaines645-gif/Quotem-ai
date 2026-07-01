@@ -296,6 +296,10 @@ async function fillPdf(pdfBytes, values) {
     // Collect draw instructions BEFORE flatten — widgets disappear after it.
     const draws = [];
 
+    // Font used to MEASURE text width so we can size it to fit each field
+    // (shrink single-line fields, wrap tall ones). Same face as the render font.
+    const measureFont = await pdfDoc.embedFont(StandardFonts.Helvetica);
+
     for (const [name, value] of Object.entries(values)) {
         try {
             const field = form.getField(name);
@@ -316,16 +320,25 @@ async function fillPdf(pdfBytes, values) {
                 // already have values (e.g. NRLA tenancy agreements) double-print:
                 // flatten burns in the old value, then we draw on top of it.
                 const str = String(value ?? '');
-                // Tall boxes / long answers are multi-line write-in areas ("explain
-                // your complaint", "how you've been affected"). Without the multiline
-                // flag pdf-lib prints the whole paragraph on ONE baseline and it runs
-                // off the box, unreadable. Turn on wrapping + pin a readable size so
-                // updateFieldAppearances flows the text DOWN the lines instead.
+                // Write-in fields fall into two shapes and each clips text a
+                // different way if left at the default size:
+                //  • TALL box ("explain your complaint") — without the multiline
+                //    flag pdf-lib prints the whole paragraph on ONE baseline that
+                //    runs off the box. Turn on wrapping so it flows DOWN the lines.
+                //  • Single LINE too narrow for a long sentence ("what do you want
+                //    them to do to put things right") — the text is clipped at the
+                //    right edge. Shrink the font so the WHOLE sentence fits the line.
                 try {
-                    const maxH = widgets.reduce((m, w) => Math.max(m, w.getRectangle().height), 0);
-                    if (maxH > 28 || str.length > 80) {
+                    const rects = widgets.map(w => w.getRectangle());
+                    const maxH = rects.reduce((m, r) => Math.max(m, r.height), 0);
+                    const maxW = rects.reduce((m, r) => Math.max(m, r.width), 0);
+                    if (maxH > 28) {
                         field.enableMultiline();
                         field.setFontSize(10);
+                    } else if (maxW > 0 && str && measureFont.widthOfTextAtSize(str, 11) > (maxW - 4)) {
+                        let size = 11;
+                        while (size > 5 && measureFont.widthOfTextAtSize(str, size) > (maxW - 4)) size -= 0.5;
+                        field.setFontSize(size);
                     }
                 } catch { /* best effort — still set the text below */ }
                 field.setText(str);
@@ -458,6 +471,9 @@ async function fillPdfEditable(pdfBytes, values) {
     const form = pdfDoc.getForm();
     const results = { filled: [], skipped: [], notFound: [] };
 
+    // Measure text so single-line fields shrink to fit instead of clipping.
+    const editMeasureFont = await pdfDoc.embedFont(StandardFonts.Helvetica);
+
     for (const [name, value] of Object.entries(values)) {
         try {
             const field = form.getField(name);
@@ -467,12 +483,19 @@ async function fillPdfEditable(pdfBytes, values) {
             if (/^data:image\//i.test(String(value))) { results.skipped.push(name); continue; }
             if (type === 'PDFTextField') {
                 const str = String(value ?? '');
-                // Same multiline fix as fillPdf: a paragraph in a tall write-in box
-                // must wrap, not run off one line. enableMultiline + a fixed size so
-                // the viewer (NeedAppearances) flows it down the lines.
+                // Same two-shape fix as fillPdf: tall box → wrap down; narrow single
+                // line with a long sentence → shrink the font so it isn't clipped.
                 try {
-                    const maxH = field.acroField.getWidgets().reduce((m, w) => Math.max(m, w.getRectangle().height), 0);
-                    if (maxH > 28 || str.length > 80) { field.enableMultiline(); field.setFontSize(10); }
+                    const rects = field.acroField.getWidgets().map(w => w.getRectangle());
+                    const maxH = rects.reduce((m, r) => Math.max(m, r.height), 0);
+                    const maxW = rects.reduce((m, r) => Math.max(m, r.width), 0);
+                    if (maxH > 28) {
+                        field.enableMultiline(); field.setFontSize(10);
+                    } else if (maxW > 0 && str && editMeasureFont.widthOfTextAtSize(str, 11) > (maxW - 4)) {
+                        let size = 11;
+                        while (size > 5 && editMeasureFont.widthOfTextAtSize(str, size) > (maxW - 4)) size -= 0.5;
+                        field.setFontSize(size);
+                    }
                 } catch { /* best effort */ }
                 field.setText(str);
                 results.filled.push(name);
