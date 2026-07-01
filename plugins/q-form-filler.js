@@ -155,6 +155,12 @@ ${infoText || '(none)'}`;
         max_tokens: isVision ? 4096 : 8000,
         temperature: 0.0,
         messages,
+        // Text path (GLM-5.2): FORCE JSON so GLM emits ONLY the {values,ask} object
+        // and never narrates "Let me analyze this form…" as prose (which the parser
+        // below rejects as "returned text instead of JSON"). Verified GLM-5.2 honours
+        // response_format:json_object on Together. Vision path streams + uses a
+        // multimodal model, so it stays on the strict-prompt path.
+        ...(!isVision && { response_format: { type: 'json_object' } }),
     };
     // Vision path streams; text path relies on the strict system prompt for JSON output.
 
