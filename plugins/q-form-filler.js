@@ -55,6 +55,7 @@ OTHER RULES:
 - RESOLVE ROLES TO THE ACTUAL VALUE: "deposit held by" / "payable to" / "the landlord" → the landlord's real name from the data, NOT the word "landlord".
 - Dates: format as DD/MM/YYYY unless the context suggests otherwise.
 - Checkboxes (type "checkbox"): value is "true" or "false".
+- CHOICE fields (type "choice"): a single-select group — Yes/No, or one of several options. The label lists them ("… (choose exactly one: Yes / No)"). Return the ONE option that fits as the value, spelled exactly as shown (e.g. "Yes"). NEVER return more than one option for the same group, and NEVER set several options of one group true — pick exactly one. If the case doesn't tell you which, leave the field out (do not guess both).
 - SIGNATURE FIELDS (type "signature" or labelled "Signed", "Signature"): fill with the applicant's full name from the context. Do NOT ask about them.
 - STATEMENT OF TRUTH — "I believe / The witness believes" choice: ALWAYS select "I believe". The applicant signing their own form uses first-person. "The witness believes" is only for a third-party witness signing on someone else's behalf — it is almost never correct.
 - Do NOT ask about a field you already put in "values".
@@ -314,7 +315,20 @@ async function fillPdf(pdfBytes, values) {
                 // not whatever was pre-filled in the PDF. Without this, PDFs that
                 // already have values (e.g. NRLA tenancy agreements) double-print:
                 // flatten burns in the old value, then we draw on top of it.
-                field.setText(String(value ?? ''));
+                const str = String(value ?? '');
+                // Tall boxes / long answers are multi-line write-in areas ("explain
+                // your complaint", "how you've been affected"). Without the multiline
+                // flag pdf-lib prints the whole paragraph on ONE baseline and it runs
+                // off the box, unreadable. Turn on wrapping + pin a readable size so
+                // updateFieldAppearances flows the text DOWN the lines instead.
+                try {
+                    const maxH = widgets.reduce((m, w) => Math.max(m, w.getRectangle().height), 0);
+                    if (maxH > 28 || str.length > 80) {
+                        field.enableMultiline();
+                        field.setFontSize(10);
+                    }
+                } catch { /* best effort — still set the text below */ }
+                field.setText(str);
                 results.filled.push(name);
             } else if (type === 'PDFCheckBox') {
                 const v = String(value).toLowerCase();
@@ -325,6 +339,18 @@ async function fillPdf(pdfBytes, values) {
                     }
                 }
                 results.filled.push(name);
+            } else if (type === 'PDFRadioGroup') {
+                // Yes/No and single-select groups: the value is the CHOSEN option
+                // (e.g. "Yes"). select() sets the group so ONLY that option's widget
+                // renders ticked — never all of them (the "both Yes and No ticked"
+                // bug came from treating each radio widget as an independent tick).
+                const opts = field.getOptions();
+                const want = String(value).trim().toLowerCase();
+                const match = opts.find(o => String(o).toLowerCase() === want)
+                    || (/^(true|yes|1)$/.test(want) ? opts.find(o => /^y(es)?$/i.test(o)) : null)
+                    || (/^(false|no|0)$/.test(want) ? opts.find(o => /^n(o)?$/i.test(o)) : null);
+                if (match) { try { field.select(match); results.filled.push(name); } catch { results.skipped.push(name); } }
+                else results.skipped.push(name);
             } else if (type === 'PDFDropdown' || type === 'PDFListBox') {
                 const options = field.getOptions();
                 const match = options.find(o => o.toLowerCase() === String(value).toLowerCase()) || options[0];
@@ -440,12 +466,29 @@ async function fillPdfEditable(pdfBytes, values) {
             // leave it for the user to sign in their PDF reader.
             if (/^data:image\//i.test(String(value))) { results.skipped.push(name); continue; }
             if (type === 'PDFTextField') {
-                field.setText(String(value ?? ''));
+                const str = String(value ?? '');
+                // Same multiline fix as fillPdf: a paragraph in a tall write-in box
+                // must wrap, not run off one line. enableMultiline + a fixed size so
+                // the viewer (NeedAppearances) flows it down the lines.
+                try {
+                    const maxH = field.acroField.getWidgets().reduce((m, w) => Math.max(m, w.getRectangle().height), 0);
+                    if (maxH > 28 || str.length > 80) { field.enableMultiline(); field.setFontSize(10); }
+                } catch { /* best effort */ }
+                field.setText(str);
                 results.filled.push(name);
             } else if (type === 'PDFCheckBox') {
                 const v = String(value).toLowerCase();
                 if (v === 'true' || v === 'yes' || v === '1') field.check(); else field.uncheck();
                 results.filled.push(name);
+            } else if (type === 'PDFRadioGroup') {
+                // Pick exactly ONE option so only that widget ticks (never both Yes+No).
+                const opts = field.getOptions();
+                const want = String(value).trim().toLowerCase();
+                const match = opts.find(o => String(o).toLowerCase() === want)
+                    || (/^(true|yes|1)$/.test(want) ? opts.find(o => /^y(es)?$/i.test(o)) : null)
+                    || (/^(false|no|0)$/.test(want) ? opts.find(o => /^n(o)?$/i.test(o)) : null);
+                if (match) { try { field.select(match); results.filled.push(name); } catch { results.skipped.push(name); } }
+                else results.skipped.push(name);
             } else if (type === 'PDFDropdown' || type === 'PDFListBox') {
                 const options = field.getOptions();
                 const match = options.find(o => o.toLowerCase() === String(value).toLowerCase());

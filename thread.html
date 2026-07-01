@@ -1952,7 +1952,13 @@ loadThread();
         for (const ann of anns) {
           if (ann.subtype !== 'Widget' || !ann.fieldType) continue;
           const name = ann.fieldName || ('field_' + (_fields.length + 1));
-          _fields.push({ name, fieldType: ann.fieldType, page: p, rect: ann.rect, pageW, pageH });
+          // Radio groups (and many Yes/No pairs) expose MULTIPLE widgets that share
+          // ONE fieldName and differ only by export value ("Yes"/"No"). Capture the
+          // export value + radio flag so we can tick ONLY the chosen option instead
+          // of every widget in the group (the "both Yes and No ticked" bug).
+          const isRadio = ann.radioButton === true;
+          const exportValue = ann.exportValue || ann.buttonValue || '';
+          _fields.push({ name, fieldType: ann.fieldType, page: p, rect: ann.rect, pageW, pageH, isRadio, exportValue });
           items.push({ str: `[FIELD: ${name}]`, x: ann.rect[0], y: ann.rect[1], w: ann.rect[2]-ann.rect[0], h: ann.rect[3]-ann.rect[1] });
         }
 
@@ -2058,8 +2064,19 @@ loadThread();
 
       if (f.fieldType === 'Btn') {
         el.type = 'checkbox';
-        el.checked = !!_values[f.name];
-        el.addEventListener('change', () => { _values[f.name] = el.checked; });
+        if (f.isRadio) {
+          // One radio group → _values[name] holds the CHOSEN option string.
+          // This widget ticks only if it IS that option; picking it re-renders so
+          // the others in the group visibly clear (single-select, not multi-tick).
+          el.checked = String(_values[f.name] ?? '') === f.exportValue;
+          el.addEventListener('change', () => {
+            _values[f.name] = el.checked ? f.exportValue : '';
+            renderPage(_currentPage);
+          });
+        } else {
+          el.checked = !!_values[f.name];
+          el.addEventListener('change', () => { _values[f.name] = el.checked; });
+        }
       } else {
         if (el.tagName === 'INPUT') el.type = 'text';
         el.value = _values[f.name] || '';
@@ -2094,7 +2111,16 @@ loadThread();
     for (const [name, v] of Object.entries(values || {})) {
       const f = _fields.find(x => x.name === name);
       if (!f) continue;
-      if (f.fieldType === 'Btn') {
+      if (f.isRadio) {
+        // Q returns the chosen option ("Yes"); match it to a real export value so
+        // exactly one widget in the group ticks. yes/true → the Yes option, etc.
+        const want = String(v ?? '').trim().toLowerCase();
+        const opts = _fields.filter(x => x.name === name && x.exportValue);
+        const m = opts.find(o => o.exportValue.toLowerCase() === want)
+          || (/^(true|yes|1)$/.test(want) ? opts.find(o => /^y(es)?$/i.test(o.exportValue)) : null)
+          || (/^(false|no|0)$/.test(want) ? opts.find(o => /^n(o)?$/i.test(o.exportValue)) : null);
+        _values[name] = m ? m.exportValue : '';
+      } else if (f.fieldType === 'Btn') {
         _values[name] = (v === true || ['true','yes','1'].includes(String(v).toLowerCase()));
       } else {
         _values[name] = String(v ?? '');
@@ -2183,9 +2209,24 @@ loadThread();
     fillBtn.disabled = true;
     statusEl.textContent = '⏳ Q is reading the case…';
     try {
-      const fields = _fields.map(f => ({
-        name: f.name, type: TYPE_LABEL[f.fieldType] || 'text', page: f.page, label: _labels[f.name] || '',
-      }));
+      // Collapse each radio group (several widgets sharing a name) into ONE choice
+      // field that lists its real options, so Q picks a single option instead of
+      // seeing duplicate same-name checkboxes he can't tell apart.
+      const seen = new Set();
+      const fields = [];
+      for (const f of _fields) {
+        if (seen.has(f.name)) continue;
+        seen.add(f.name);
+        if (f.isRadio) {
+          const opts = _fields.filter(x => x.name === f.name && x.exportValue).map(x => x.exportValue);
+          fields.push({
+            name: f.name, type: 'choice', page: f.page,
+            label: (_labels[f.name] || f.name) + (opts.length ? ` (choose exactly one: ${opts.join(' / ')})` : ''),
+          });
+        } else {
+          fields.push({ name: f.name, type: TYPE_LABEL[f.fieldType] || 'text', page: f.page, label: _labels[f.name] || '' });
+        }
+      }
       const r = await fetch('/api/threads/' + threadId + '/form-fill', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ fields }),
