@@ -2206,9 +2206,17 @@ function selectActiveTools(userMessage, options = {}) {
         // APS / case mode: research + evidence tools always on (the prompt
         // tells Q to research and build the bundle — he must have the tools).
         if (options.advocate && ADVOCATE_TOOLS.has(name)) return true;
+        // Sarah's call (2026-07-01): Q should have ALL his tools every turn, not
+        // trigger-gated. The gating meant he only had web_search/send_email ~1 turn
+        // in 5 — on the others he'd say "I can't" and tell the user to go do it
+        // themselves, which breaks his "do it, never send the user off" rule. So any
+        // tool that has a definition here is now always available. The per-turn search
+        // cap still bounds cost, and the prompt still gates when he actually SENDS.
+        // (Tools with no trigger entry stay scoped to their surface — e.g. the
+        // doc-editor tools, which need an open document.)
         const triggers = TRIGGERS[name];
         if (!triggers) return false;
-        return triggers.some(rx => rx.test(msg));
+        return true;
     });
 }
 
