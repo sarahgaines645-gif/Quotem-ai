@@ -21,7 +21,7 @@ const { userDataPath } = require('./user-data');
 const CLIENT_ID = process.env.GOOGLE_CLIENT_ID || process.env.GMAIL_CLIENT_ID || '';
 const CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET || process.env.GMAIL_CLIENT_SECRET || '';
 const REDIRECT_URI = process.env.GMAIL_REDIRECT_URI || '';
-const SCOPES = 'https://www.googleapis.com/auth/gmail.send https://www.googleapis.com/auth/userinfo.email';
+const SCOPES = 'https://www.googleapis.com/auth/gmail.send https://www.googleapis.com/auth/gmail.readonly https://www.googleapis.com/auth/userinfo.email';
 
 function gmailConfigured() {
     return !!(CLIENT_ID && CLIENT_SECRET && REDIRECT_URI);
@@ -336,8 +336,15 @@ function saveInboxAccount(email, { address, host, port, user, pass }) {
     }, null, 2), 'utf8');
 }
 function inboxStatus(email) {
-    const a = getInboxAccount(email);
-    return { connected: !!a, email: a?.email || null };
+    // The inbox reads from the connected Gmail (via the Gmail API) when the
+    // send account is Gmail — no separate connection, just the read scope
+    // (granted by reconnecting once). Falls back to a standalone IMAP inbox
+    // for non-Gmail providers.
+    const send = getAccount(email);
+    if (send && send.provider === 'gmail') return { connected: true, provider: 'gmail', email: send.email || null };
+    const imap = getInboxAccount(email);
+    if (imap) return { connected: true, provider: 'imap', email: imap.email || null };
+    return { connected: false, provider: null, email: null };
 }
 function disconnectInbox(email) {
     try { fs.rmSync(inboxFile(email), { force: true }); } catch { /* nothing to remove */ }
@@ -440,10 +447,92 @@ async function readInboxMessage(email, uid) {
     }
 }
 
+// ── Inbox via the connected Gmail (Gmail API + gmail.readonly scope) ───────
+// Reading Gmail over IMAP with an app password no longer works — Google
+// disabled basic-auth IMAP/POP/SMTP in 2025. So when the user's SEND account
+// is Gmail, we read their inbox through the Gmail API using the SAME OAuth
+// token that already sends — they just reconnect once to grant the read scope.
+function b64urlToUtf8(data) {
+    return Buffer.from(String(data || '').replace(/-/g, '+').replace(/_/g, '/'), 'base64').toString('utf8');
+}
+function parseFromHeader(v) {
+    const m = /^\s*"?([^"<]*?)"?\s*<([^>]+)>/.exec(v || '');
+    if (m) { const addr = m[2].trim(); return { from: addr, fromName: (m[1] || '').trim() || addr }; }
+    const addr = (v || '').trim();
+    return { from: addr, fromName: addr };
+}
+function gmailBody(payload) {
+    let text = '', html = '';
+    (function walk(part) {
+        if (!part) return;
+        const mime = part.mimeType || '';
+        if (mime === 'text/plain' && part.body?.data && !text) text = b64urlToUtf8(part.body.data);
+        else if (mime === 'text/html' && part.body?.data && !html) html = b64urlToUtf8(part.body.data);
+        if (Array.isArray(part.parts)) part.parts.forEach(walk);
+    })(payload);
+    return { text, html };
+}
+// Gmail API GET → JSON. Maps 403 (missing read scope) and 404 to coded errors
+// the routes turn into a "reconnect to allow reading" / not-found message.
+async function gmailApiGet(access, path) {
+    const r = await fetch('https://gmail.googleapis.com/gmail/v1/users/me/' + path, { headers: { Authorization: `Bearer ${access}` } });
+    if (r.status === 403) { const e = new Error('inbox_scope_missing'); e.code = 'inbox_scope_missing'; throw e; }
+    if (r.status === 404) { const e = new Error('inbox_message_not_found'); e.code = 'inbox_message_not_found'; throw e; }
+    if (!r.ok) { const e = new Error('gmail_api_' + r.status + ': ' + (await r.text()).slice(0, 200)); e.code = 'inbox_fetch_failed'; throw e; }
+    return r.json();
+}
+async function gmailAccessFor(email) {
+    const acct = getAccount(email);
+    if (!acct || acct.provider !== 'gmail') { const e = new Error('inbox_not_connected'); e.code = 'inbox_not_connected'; throw e; }
+    try { return await gmailAccessToken(decrypt(acct.refresh_token)); }
+    catch { const e = new Error('inbox_auth_failed'); e.code = 'inbox_auth_failed'; throw e; }
+}
+// Newest-first list of the user's Gmail inbox (metadata only — fast).
+async function listGmailInbox(email, { limit = 25 } = {}) {
+    const access = await gmailAccessFor(email);
+    const list = await gmailApiGet(access, `messages?labelIds=INBOX&maxResults=${limit}`);
+    const ids = (list.messages || []).map(m => m.id);
+    const metas = await Promise.all(ids.map(async (id) => {
+        try {
+            const d = await gmailApiGet(access, `messages/${id}?format=metadata&metadataHeaders=From&metadataHeaders=Subject&metadataHeaders=Date`);
+            const headers = d.payload?.headers || [];
+            const hv = (n) => (headers.find(x => (x.name || '').toLowerCase() === n)?.value) || '';
+            const { from, fromName } = parseFromHeader(hv('from'));
+            return {
+                id: d.id,
+                from, fromName,
+                subject: hv('subject') || '(no subject)',
+                date: d.internalDate ? new Date(Number(d.internalDate)).toISOString() : null,
+                seen: !(d.labelIds || []).includes('UNREAD'),
+            };
+        } catch { return null; }
+    }));
+    return metas.filter(Boolean);
+}
+// Full body of one Gmail message by id.
+async function readGmailMessage(email, id) {
+    const access = await gmailAccessFor(email);
+    const d = await gmailApiGet(access, `messages/${encodeURIComponent(id)}?format=full`);
+    const headers = d.payload?.headers || [];
+    const hv = (n) => (headers.find(x => (x.name || '').toLowerCase() === n)?.value) || '';
+    const { from, fromName } = parseFromHeader(hv('from'));
+    const { text, html } = gmailBody(d.payload);
+    return {
+        id: d.id,
+        from, fromName,
+        to: hv('to'),
+        subject: hv('subject') || '(no subject)',
+        date: d.internalDate ? new Date(Number(d.internalDate)).toISOString() : null,
+        text: text || d.snippet || '',
+        html,
+    };
+}
+
 module.exports = {
     gmailConfigured, status, getAccount, disconnect, consentUrl, handleCallback,
     sendEmail, connectSmtp,
     getOutbox, addToOutbox, removeFromOutbox, patchOutboxItem, sendFromOutbox,
-    // Inbox (IMAP read-only)
+    // Inbox — Gmail API (read scope) for connected Gmail; IMAP for other providers
     inboxStatus, getInboxAccount, connectInbox, disconnectInbox, listInbox, readInboxMessage,
+    listGmailInbox, readGmailMessage,
 };

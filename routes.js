@@ -580,24 +580,33 @@ router.post('/email/imap/disconnect', requirePerson, (req, res) => {
     qEmail.disconnectInbox(req.person.email);
     res.json({ ok: true });
 });
-// Live list of recent inbox messages (envelope only). Any failure surfaces to
-// the user right here — nothing fails silently in the background.
+// Live list of recent inbox messages. Reads the connected Gmail via the Gmail
+// API (reusing the send token) when the send account is Gmail; otherwise reads
+// a standalone IMAP inbox. Any failure surfaces here — nothing fails silently.
 router.get('/email/inbox', requirePerson, async (req, res) => {
+    const send = qEmail.getAccount(req.person.email);
     try {
-        const messages = await qEmail.listInbox(req.person.email, { limit: 25 });
+        const messages = (send && send.provider === 'gmail')
+            ? await qEmail.listGmailInbox(req.person.email, { limit: 25 })
+            : await qEmail.listInbox(req.person.email, { limit: 25 });
         res.json({ messages });
     } catch (e) {
-        if (e.code === 'inbox_not_connected') return res.status(409).json({ error: 'No inbox connected — connect your inbox first.' });
+        if (e.code === 'inbox_scope_missing') return res.status(403).json({ code: 'scope', error: 'Reconnect Gmail to allow reading your inbox — the current connection can only send.' });
+        if (e.code === 'inbox_not_connected') return res.status(409).json({ error: 'No inbox connected — connect Gmail (or an inbox) first.' });
         console.error('[inbox] list:', e.message);
         res.status(502).json({ error: 'Could not read your inbox — the connection may need reconnecting.' });
     }
 });
-// Full body of one message by UID.
-router.get('/email/inbox/:uid', requirePerson, async (req, res) => {
+// Full body of one message by id (Gmail message id, or IMAP uid).
+router.get('/email/inbox/:id', requirePerson, async (req, res) => {
+    const send = qEmail.getAccount(req.person.email);
     try {
-        const message = await qEmail.readInboxMessage(req.person.email, req.params.uid);
+        const message = (send && send.provider === 'gmail')
+            ? await qEmail.readGmailMessage(req.person.email, req.params.id)
+            : await qEmail.readInboxMessage(req.person.email, req.params.id);
         res.json({ message });
     } catch (e) {
+        if (e.code === 'inbox_scope_missing') return res.status(403).json({ code: 'scope', error: 'Reconnect Gmail to allow reading.' });
         if (e.code === 'inbox_not_connected') return res.status(409).json({ error: 'No inbox connected.' });
         if (e.code === 'inbox_message_not_found') return res.status(404).json({ error: 'That message could not be found.' });
         console.error('[inbox] read:', e.message);
