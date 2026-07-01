@@ -308,8 +308,142 @@ async function sendFromOutbox(email, id) {
     return from;
 }
 
+// ── Inbox (IMAP, read-only, fetched LIVE on demand) ───────────────────────
+// Kept in a SEPARATE file from the send account so connecting an inbox never
+// touches the Gmail/SMTP send connection — the two are independent (a user may
+// send via Gmail OAuth but read via an IMAP app password, or only do one).
+// Deliberately NO background poller: we open IMAP when the user opens the inbox
+// and fetch live, so any failure surfaces on screen instead of dying silently
+// in a log (that silent-poller death is exactly how the old inbox went dark).
+function inboxFile(email) {
+    return userDataPath(email, 'email/inbox.json');
+}
+function getInboxAccount(email) {
+    try {
+        const f = inboxFile(email);
+        if (!fs.existsSync(f)) return null;
+        return JSON.parse(fs.readFileSync(f, 'utf8'));
+    } catch { return null; }
+}
+function saveInboxAccount(email, { address, host, port, user, pass }) {
+    fs.writeFileSync(inboxFile(email), JSON.stringify({
+        email: address || user || '',
+        imap_host: host,
+        imap_port: parseInt(port, 10) || 993,
+        imap_user: user,
+        imap_pass: encrypt(pass),
+        updated_at: new Date().toISOString(),
+    }, null, 2), 'utf8');
+}
+function inboxStatus(email) {
+    const a = getInboxAccount(email);
+    return { connected: !!a, email: a?.email || null };
+}
+function disconnectInbox(email) {
+    try { fs.rmSync(inboxFile(email), { force: true }); } catch { /* nothing to remove */ }
+}
+// Build (but do NOT connect) an ImapFlow client from the user's stored creds.
+// Throws a coded Error if not connected or the stored password won't decrypt.
+function inboxClient(email) {
+    const acct = getInboxAccount(email);
+    if (!acct) { const e = new Error('inbox_not_connected'); e.code = 'inbox_not_connected'; throw e; }
+    const pass = decrypt(acct.imap_pass);
+    if (!pass) { const e = new Error('inbox_decrypt_failed'); e.code = 'inbox_decrypt_failed'; throw e; }
+    const { ImapFlow } = require('imapflow');
+    const port = acct.imap_port || 993;
+    const client = new ImapFlow({
+        host: acct.imap_host, port,
+        secure: port !== 143,              // 993 = implicit TLS; 143 = STARTTLS
+        auth: { user: acct.imap_user, pass },
+        logger: false, socketTimeout: 30000,
+    });
+    client.on('error', () => { /* absorb late socket-emitted errors */ });
+    return client;
+}
+// Verify IMAP sign-in (open INBOX, release, logout) THEN store the creds.
+// Throws if sign-in fails — the route turns that into a friendly message.
+async function connectInbox(email, { address, host, port, user, pass }) {
+    const { ImapFlow } = require('imapflow');
+    const p = parseInt(port, 10) || 993;
+    const client = new ImapFlow({ host, port: p, secure: p !== 143, auth: { user, pass }, logger: false, socketTimeout: 30000 });
+    await client.connect();
+    const lock = await client.getMailboxLock('INBOX');
+    lock.release();
+    await client.logout();
+    saveInboxAccount(email, { address, host, port: p, user, pass });
+    return address || user;
+}
+// List the most recent inbox messages (envelope only — fast, no bodies).
+// Newest first. Throws coded Errors that the route maps to status codes.
+async function listInbox(email, { limit = 25 } = {}) {
+    const client = inboxClient(email);   // throws before connect if not set up
+    const out = [];
+    try {
+        await client.connect();
+        const lock = await client.getMailboxLock('INBOX');
+        try {
+            const box = client.mailbox || {};
+            const exists = box.exists || 0;
+            if (exists > 0) {
+                const next = box.uidNext || (exists + 1);
+                const start = Math.max(1, next - limit);
+                for await (const msg of client.fetch(`${start}:*`, { uid: true, envelope: true, flags: true })) {
+                    const env = msg.envelope || {};
+                    const from = (env.from && env.from[0]) || {};
+                    out.push({
+                        uid: msg.uid,
+                        from: from.address || '',
+                        fromName: from.name || from.address || '',
+                        subject: env.subject || '(no subject)',
+                        date: env.date ? new Date(env.date).toISOString() : null,
+                        seen: msg.flags ? msg.flags.has('\\Seen') : false,
+                    });
+                }
+            }
+        } finally { try { lock.release(); } catch { /* connection may be dead */ } }
+        await client.logout();
+    } catch (err) {
+        try { await client.logout(); } catch { /* already broken */ }
+        const e = new Error('inbox_fetch_failed: ' + err.message); e.code = 'inbox_fetch_failed'; throw e;
+    }
+    out.sort((a, b) => (b.uid || 0) - (a.uid || 0));
+    return out.slice(0, limit);
+}
+// Read one message's full body by UID.
+async function readInboxMessage(email, uid) {
+    const { simpleParser } = require('mailparser');
+    const client = inboxClient(email);
+    try {
+        await client.connect();
+        const lock = await client.getMailboxLock('INBOX');
+        let parsed = null;
+        try {
+            const msg = await client.fetchOne(String(uid), { source: true }, { uid: true });
+            if (msg && msg.source) parsed = await simpleParser(msg.source);
+        } finally { try { lock.release(); } catch { /* connection may be dead */ } }
+        await client.logout();
+        if (!parsed) { const e = new Error('inbox_message_not_found'); e.code = 'inbox_message_not_found'; throw e; }
+        return {
+            uid: Number(uid),
+            from: parsed.from?.value?.[0]?.address || '',
+            fromName: parsed.from?.value?.[0]?.name || '',
+            to: parsed.to?.text || '',
+            subject: parsed.subject || '(no subject)',
+            date: parsed.date ? new Date(parsed.date).toISOString() : null,
+            text: parsed.text || '',
+            html: parsed.html || '',
+        };
+    } catch (err) {
+        try { await client.logout(); } catch { /* already broken */ }
+        if (err.code) throw err;
+        const e = new Error('inbox_read_failed: ' + err.message); e.code = 'inbox_read_failed'; throw e;
+    }
+}
+
 module.exports = {
     gmailConfigured, status, getAccount, disconnect, consentUrl, handleCallback,
     sendEmail, connectSmtp,
     getOutbox, addToOutbox, removeFromOutbox, patchOutboxItem, sendFromOutbox,
+    // Inbox (IMAP read-only)
+    inboxStatus, getInboxAccount, connectInbox, disconnectInbox, listInbox, readInboxMessage,
 };

@@ -119,6 +119,25 @@
   .step-2, .step-3 { display: none; }
   .step-2.show, .step-3.show { display: block; }
 
+  /* Inbox */
+  #inbox-form input {
+    width: 100%; border: none; outline: none; font-family: inherit; font-size: 14px;
+    color: var(--text); background: var(--bg); padding: 11px 14px; border-radius: 12px;
+    box-shadow: var(--neu-inset-sm); margin-bottom: 8px;
+  }
+  #inbox-form input::placeholder { color: var(--text-faint); }
+  #inbox-form summary { font-size: 12px; color: var(--text-muted); cursor: pointer; margin-bottom: 8px; }
+  .inbox-row { padding: 11px 4px; border-bottom: 1px solid rgba(0,0,0,0.06); cursor: pointer; display: flex; gap: 12px; align-items: baseline; transition: color 0.12s; }
+  .inbox-row:hover { color: var(--accent); }
+  .inbox-row.unseen .inbox-subj { font-weight: 700; }
+  .inbox-from { font-size: 13px; font-weight: 600; flex: 0 0 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .inbox-subj { font-size: 13px; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .inbox-date { font-size: 11px; color: var(--text-faint); white-space: nowrap; }
+  .inbox-reader-box { background: var(--bg); border-radius: 14px; padding: 16px 18px; box-shadow: var(--neu-inset-sm); }
+  .inbox-reader-box .ir-body { font-size: 14px; line-height: 1.65; margin-top: 12px; white-space: pre-wrap; word-break: break-word; }
+  .inbox-empty { font-size: 13px; color: var(--text-muted); padding: 10px 4px; }
+  @media (max-width: 600px) { .inbox-from { flex-basis: 100px; } }
+
   .gen-row { display: flex; align-items: center; gap: 10px; margin-top: 16px; flex-wrap: wrap; }
 
   /* Chat-with-Q surface */
@@ -221,6 +240,32 @@
     <span class="section-label" style="margin:0;">📧 Your email</span>
     <span class="status" id="email-conn-status">Checking…</span>
     <button class="btn-sm" id="email-connect-btn" style="display:none;">Connect Gmail</button>
+  </div>
+
+  <!-- ── Inbox (read your incoming mail) ── -->
+  <div class="card" id="inbox-card">
+    <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+      <span class="section-label" style="margin:0;">📥 Your inbox</span>
+      <span class="status" id="inbox-status">Checking…</span>
+      <button class="btn-sm" id="inbox-refresh-btn" style="display:none;">↻ Refresh</button>
+      <button class="btn-sm" id="inbox-connect-btn" style="display:none;">Connect inbox</button>
+      <button class="btn-sm" id="inbox-disconnect-btn" style="display:none;">Disconnect</button>
+    </div>
+    <div id="inbox-form" style="display:none;margin-top:14px;">
+      <div style="font-size:12px;color:var(--text-muted);margin-bottom:10px;line-height:1.5;">
+        Reading Gmail needs a Google <b>app password</b> (Google Account → Security → 2-Step Verification → App passwords) — not your normal password. Make sure IMAP is switched on in Gmail settings.
+      </div>
+      <input id="inbox-email" type="email" placeholder="you@gmail.com" autocomplete="email" />
+      <input id="inbox-pass" type="password" placeholder="16-character app password" autocomplete="off" />
+      <details>
+        <summary>Not Gmail? Mail server settings</summary>
+        <input id="inbox-host" type="text" placeholder="imap.gmail.com" />
+        <input id="inbox-port" type="text" placeholder="993" inputmode="numeric" />
+      </details>
+      <button class="btn-sm" id="inbox-save-btn">Connect inbox</button>
+    </div>
+    <div id="inbox-list" style="margin-top:12px;"></div>
+    <div id="inbox-reader" style="display:none;margin-top:12px;"></div>
   </div>
 
   <!-- ── STEP 1: paste ── -->
@@ -766,6 +811,139 @@ function escapeHtml(s) {
 
   loadStatus();
   loadOutbox();
+})();
+
+// ── Inbox: connect + live list + read (on-demand, no background poller) ──
+(function () {
+  const $card    = document.getElementById('inbox-card');
+  const $stat    = document.getElementById('inbox-status');
+  const $refresh = document.getElementById('inbox-refresh-btn');
+  const $connect = document.getElementById('inbox-connect-btn');
+  const $discon  = document.getElementById('inbox-disconnect-btn');
+  const $form    = document.getElementById('inbox-form');
+  const $email   = document.getElementById('inbox-email');
+  const $pass    = document.getElementById('inbox-pass');
+  const $host    = document.getElementById('inbox-host');
+  const $port    = document.getElementById('inbox-port');
+  const $save    = document.getElementById('inbox-save-btn');
+  const $list    = document.getElementById('inbox-list');
+  const $reader  = document.getElementById('inbox-reader');
+  if (!$card) return;
+
+  function fmtDate(iso) {
+    if (!iso) return '';
+    try {
+      const d = new Date(iso), now = new Date();
+      return d.toDateString() === now.toDateString()
+        ? d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+        : d.toLocaleDateString([], { day: 'numeric', month: 'short' });
+    } catch { return ''; }
+  }
+  function stripHtml(html) {
+    const tmp = document.createElement('div'); tmp.innerHTML = html || '';
+    return (tmp.textContent || tmp.innerText || '').trim();
+  }
+
+  async function loadStatus() {
+    try {
+      const r = await apiFetch('/email/inbox/status'); const d = await r.json();
+      if (d.connected) {
+        $stat.textContent = '✓ Reading ' + (d.email || 'your inbox');
+        $refresh.style.display = ''; $discon.style.display = '';
+        $connect.style.display = 'none'; $form.style.display = 'none';
+        loadList();
+      } else {
+        $stat.textContent = 'Not connected';
+        $connect.style.display = ''; $refresh.style.display = 'none'; $discon.style.display = 'none';
+        $list.innerHTML = ''; $reader.style.display = 'none';
+      }
+    } catch { $stat.textContent = ''; }
+  }
+
+  async function loadList() {
+    $reader.style.display = 'none';
+    $list.innerHTML = '<div class="inbox-empty">Loading your inbox…</div>';
+    try {
+      const r = await apiFetch('/email/inbox'); const d = await r.json();
+      if (!r.ok) throw new Error(d.error || 'Could not read inbox');
+      const msgs = d.messages || [];
+      if (!msgs.length) { $list.innerHTML = '<div class="inbox-empty">No messages found.</div>'; return; }
+      $list.innerHTML = '';
+      msgs.forEach((m) => {
+        const row = document.createElement('div');
+        row.className = 'inbox-row' + (m.seen ? '' : ' unseen');
+        row.innerHTML =
+          '<span class="inbox-from">' + escapeHtml(m.fromName || m.from || '(unknown)') + '</span>' +
+          '<span class="inbox-subj">' + escapeHtml(m.subject || '(no subject)') + '</span>' +
+          '<span class="inbox-date">' + fmtDate(m.date) + '</span>';
+        row.addEventListener('click', () => openMessage(m.uid));
+        $list.appendChild(row);
+      });
+    } catch (e) {
+      $list.innerHTML = '<div class="inbox-empty">' + escapeHtml(e.message) + '</div>';
+    }
+  }
+
+  async function openMessage(uid) {
+    $reader.style.display = '';
+    $reader.innerHTML = '<div class="inbox-reader-box">Opening…</div>';
+    $reader.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    try {
+      const r = await apiFetch('/email/inbox/' + encodeURIComponent(uid)); const d = await r.json();
+      if (!r.ok) throw new Error(d.error || 'Could not open message');
+      const m = d.message || {};
+      const bodyText = (m.text && m.text.trim()) ? m.text : stripHtml(m.html || '');
+      const box = document.createElement('div');
+      box.className = 'inbox-reader-box';
+      box.innerHTML =
+        '<div style="font-size:15px;font-weight:700;">' + escapeHtml(m.subject || '(no subject)') + '</div>' +
+        '<div style="font-size:12px;color:var(--text-muted);margin-top:4px;">' +
+          escapeHtml(m.fromName || m.from || '') + (m.from ? ' &lt;' + escapeHtml(m.from) + '&gt;' : '') +
+          (m.date ? ' · ' + escapeHtml(new Date(m.date).toLocaleString()) : '') + '</div>' +
+        '<div class="ir-body">' + escapeHtml(bodyText) + '</div>';
+      const acts = document.createElement('div');
+      acts.style.cssText = 'display:flex;gap:8px;margin-top:14px;flex-wrap:wrap;';
+      const reply = document.createElement('button'); reply.className = 'btn-sm'; reply.textContent = '↩ Reply with Q';
+      reply.addEventListener('click', () => {
+        if ($paste) {
+          $paste.value = 'From: ' + (m.fromName || '') + ' <' + (m.from || '') + '>\nSubject: ' + (m.subject || '') + '\n\n' + bodyText;
+          const rt = document.getElementById('reply-to'); if (rt) rt.value = m.from || '';
+          $paste.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          showToast('Loaded into the reply box — hit “Read it”');
+        }
+      });
+      const close = document.createElement('button'); close.className = 'btn-sm'; close.textContent = '✕ Close';
+      close.addEventListener('click', () => { $reader.style.display = 'none'; });
+      acts.appendChild(reply); acts.appendChild(close); box.appendChild(acts);
+      $reader.innerHTML = ''; $reader.appendChild(box);
+    } catch (e) {
+      $reader.innerHTML = '<div class="inbox-reader-box">' + escapeHtml(e.message) + '</div>';
+    }
+  }
+
+  $connect.addEventListener('click', () => { $form.style.display = $form.style.display === 'none' ? '' : 'none'; });
+  $refresh.addEventListener('click', loadList);
+  $discon.addEventListener('click', async () => {
+    await apiFetch('/email/imap/disconnect', { method: 'POST' });
+    showToast('Inbox disconnected'); loadStatus();
+  });
+  $save.addEventListener('click', async () => {
+    const email = ($email.value || '').trim();
+    const pass  = ($pass.value || '').trim();
+    const host  = ($host.value || '').trim() || 'imap.gmail.com';
+    const port  = ($port.value || '').trim() || '993';
+    if (!email || !pass) return showToast('Enter your email address and app password');
+    $save.disabled = true; $save.textContent = 'Connecting…';
+    try {
+      const r = await apiFetch('/email/imap', { method: 'POST', body: { host, port, user: email, pass, email } });
+      const d = await r.json(); if (!r.ok) throw new Error(d.error || 'Could not connect');
+      $pass.value = '';
+      showToast('✓ Inbox connected'); loadStatus();
+    } catch (e) { showToast(e.message); }
+    finally { $save.disabled = false; $save.textContent = 'Connect inbox'; }
+  });
+
+  loadStatus();
 })();
 </script>
 </body>

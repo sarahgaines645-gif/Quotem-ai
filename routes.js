@@ -559,6 +559,52 @@ router.patch('/email/outbox/:id', requirePerson, express.json({ limit: '20mb' })
     res.json({ ok: true });
 });
 
+// ── Inbox (IMAP, read-only, fetched LIVE on demand — no background poller) ──
+router.get('/email/inbox/status', requirePerson, (req, res) => {
+    res.json(qEmail.inboxStatus(req.person.email));
+});
+// Connect an inbox for READING via IMAP + app password (independent of the
+// send connection). Verifies sign-in before storing anything.
+router.post('/email/imap', requirePerson, express.json({ limit: '64kb' }), async (req, res) => {
+    const { host, port, user, pass, email } = req.body || {};
+    if (!host || !user || !pass) return res.status(400).json({ error: 'Mail server, address and app password are all required.' });
+    try {
+        const addr = await qEmail.connectInbox(req.person.email, { address: email, host, port, user, pass });
+        res.json({ ok: true, email: addr });
+    } catch (e) {
+        console.warn('[inbox] connect verify failed:', e.message);
+        res.status(400).json({ error: 'Could not sign in to that inbox — check the address, server and app password (and that IMAP is switched on for the account).' });
+    }
+});
+router.post('/email/imap/disconnect', requirePerson, (req, res) => {
+    qEmail.disconnectInbox(req.person.email);
+    res.json({ ok: true });
+});
+// Live list of recent inbox messages (envelope only). Any failure surfaces to
+// the user right here — nothing fails silently in the background.
+router.get('/email/inbox', requirePerson, async (req, res) => {
+    try {
+        const messages = await qEmail.listInbox(req.person.email, { limit: 25 });
+        res.json({ messages });
+    } catch (e) {
+        if (e.code === 'inbox_not_connected') return res.status(409).json({ error: 'No inbox connected — connect your inbox first.' });
+        console.error('[inbox] list:', e.message);
+        res.status(502).json({ error: 'Could not read your inbox — the connection may need reconnecting.' });
+    }
+});
+// Full body of one message by UID.
+router.get('/email/inbox/:uid', requirePerson, async (req, res) => {
+    try {
+        const message = await qEmail.readInboxMessage(req.person.email, req.params.uid);
+        res.json({ message });
+    } catch (e) {
+        if (e.code === 'inbox_not_connected') return res.status(409).json({ error: 'No inbox connected.' });
+        if (e.code === 'inbox_message_not_found') return res.status(404).json({ error: 'That message could not be found.' });
+        console.error('[inbox] read:', e.message);
+        res.status(502).json({ error: 'Could not open that message.' });
+    }
+});
+
 const qFormFiller = require('./plugins/q-form-filler');
 const { fillPdfForWord } = qFormFiller;
 const docEditor = require('./plugins/q-doc-editor');
