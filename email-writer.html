@@ -701,8 +701,8 @@ function escapeHtml(s) {
   async function loadStatus() {
     try {
       const r = await apiFetch('/email/status'); const d = await r.json();
-      if (d.connected) { $connStat.textContent = '✓ Sending as ' + (d.email || d.provider); $connBtn.style.display = 'none'; }
-      else if (d.gmailAvailable) { $connStat.textContent = 'Not connected'; $connBtn.style.display = ''; }
+      if (d.connected) { $connStat.textContent = '✓ Sending as ' + (d.email || d.provider); $connBtn.textContent = 'Reconnect Gmail'; $connBtn.style.display = ''; }
+      else if (d.gmailAvailable) { $connStat.textContent = 'Not connected'; $connBtn.textContent = 'Connect Gmail'; $connBtn.style.display = ''; }
       else { $connStat.textContent = 'Email isn\'t set up on the server yet'; $connBtn.style.display = 'none'; }
     } catch { $connStat.textContent = ''; }
   }
