@@ -18,7 +18,8 @@ If the customer's brief specifies something different, the customer's spec wins.
 ### Doors
 
 - **Standard internal door:** Ply flush
-- **Standard external front/back door:** Hardwood panelled
+- **Standard external front door:** Composite
+- **Standard external back door:** PVCu
 - **Standard French / patio door:** PVCu sliding or French
 - **Standard lock:** 5-lever mortice deadlock on external doors, nightlatch on top, euro cylinder on PVCu / composite
 
