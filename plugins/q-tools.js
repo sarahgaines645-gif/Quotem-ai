@@ -2010,6 +2010,13 @@ const ALWAYS_ON = new Set([
     'add_email_to_thread', 'add_note_to_thread', 'update_case_summary', 'add_file_to_thread',
     // Email drafting — always on so Q saves drafts from any chat surface.
     'save_email_draft',
+    // Sarah's set (2026-07-01): Q keeps his CORE kit every turn so he never sends
+    // the user off to do it himself — email, search, calendar, tasklist and document
+    // creation. The rest (image/music/video generation, the doc-editor tools) stay
+    // trigger-gated so they don't bloat every prompt — that bloat was hitting
+    // Together's token rate limit (429) on big cases.
+    'send_email', 'web_search', 'create_document', 'analyze_document',
+    'add_event', 'list_events', 'add_task', 'list_tasks', 'complete_task',
     // Finance tools — always available so Q can read and update the finance
     // data store from any page, not just when on /finance.
     'read_finance', 'add_finance_problem',
@@ -2206,17 +2213,14 @@ function selectActiveTools(userMessage, options = {}) {
         // APS / case mode: research + evidence tools always on (the prompt
         // tells Q to research and build the bundle — he must have the tools).
         if (options.advocate && ADVOCATE_TOOLS.has(name)) return true;
-        // Sarah's call (2026-07-01): Q should have ALL his tools every turn, not
-        // trigger-gated. The gating meant he only had web_search/send_email ~1 turn
-        // in 5 — on the others he'd say "I can't" and tell the user to go do it
-        // themselves, which breaks his "do it, never send the user off" rule. So any
-        // tool that has a definition here is now always available. The per-turn search
-        // cap still bounds cost, and the prompt still gates when he actually SENDS.
-        // (Tools with no trigger entry stay scoped to their surface — e.g. the
-        // doc-editor tools, which need an open document.)
+        // The core kit (email/search/calendar/tasklist/docs) is in ALWAYS_ON above,
+        // so it's always in Q's hand. Everything else (image/music/video generation,
+        // the doc-editor tools) stays trigger-gated — attached only when the user's
+        // message asks for it — so it doesn't bloat every prompt and trip Together's
+        // token rate limit on big cases.
         const triggers = TRIGGERS[name];
         if (!triggers) return false;
-        return true;
+        return triggers.some(rx => rx.test(msg));
     });
 }
 
