@@ -588,9 +588,10 @@ router.get('/email/inbox', requirePerson, async (req, res) => {
     const send = qEmail.getAccount(req.person.email);
     const label = String(req.query.label || 'INBOX');
     try {
+        const limit = Math.min(parseInt(req.query.limit, 10) || 50, 100);
         const messages = (send && send.provider === 'gmail')
-            ? await qEmail.listGmailInbox(req.person.email, { limit: 25, label })
-            : await qEmail.listInbox(req.person.email, { limit: 25 });
+            ? await qEmail.listGmailInbox(req.person.email, { limit, label })
+            : await qEmail.listInbox(req.person.email, { limit });
         res.json({ messages });
     } catch (e) {
         if (e.code === 'inbox_scope_missing') return res.status(403).json({ code: 'scope', error: 'Reconnect Gmail to allow reading your inbox — the current connection can only send.' });

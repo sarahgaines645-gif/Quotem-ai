@@ -869,6 +869,7 @@ function escapeHtml(s) {
   const $list    = document.getElementById('inbox-list');
   const $reader  = document.getElementById('inbox-reader');
   const $folder  = document.getElementById('inbox-folder');
+  let allLabels = [];
   if (!$card) return;
 
   function fmtDate(iso) {
@@ -931,6 +932,7 @@ function escapeHtml(s) {
     try {
       const r = await apiFetch('/email/inbox/labels'); const d = await r.json();
       const labels = d.labels || [];
+      allLabels = labels;
       if (!labels.length) { $folder.style.display = 'none'; return; }
       const cur = $folder.value;
       $folder.innerHTML = '';
@@ -1094,6 +1096,18 @@ function escapeHtml(s) {
       actions.appendChild(mkBtn('✉ Mark unread', async () => {
         try { await msgAction(id, { add: ['UNREAD'] }); markRow(id, false); showToast('Marked unread'); } catch (e2) { showToast(e2.message); }
       }));
+      if (allLabels.length) {
+        const sel = document.createElement('select'); sel.title = 'Move to';
+        sel.style.cssText = 'font-family:inherit;font-size:12px;font-weight:600;color:var(--text-muted);background:var(--bg);border:none;outline:none;padding:7px 10px;border-radius:10px;box-shadow:var(--neu-raised-sm);cursor:pointer;';
+        const ph = document.createElement('option'); ph.value = ''; ph.textContent = '📁 Move to…'; sel.appendChild(ph);
+        allLabels.filter(l => l.id !== 'INBOX' && l.id !== 'ALL').forEach(l => { const o = document.createElement('option'); o.value = l.id; o.textContent = l.name; sel.appendChild(o); });
+        sel.addEventListener('change', async () => {
+          if (!sel.value) return;
+          try { await msgAction(id, { add: [sel.value], remove: ['INBOX'] }); closeFloat(); showToast('Moved'); loadList(); }
+          catch (e2) { showToast(e2.message); sel.value = ''; }
+        });
+        actions.appendChild(sel);
+      }
       panel.querySelector('.inbox-float-close').addEventListener('click', closeFloat);
       makeDraggable(panel, panel.querySelector('.inbox-float-head'));
       if (!m.seen) { msgAction(id, { remove: ['UNREAD'] }).then(() => markRow(id, true)).catch(() => {}); }
