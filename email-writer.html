@@ -999,6 +999,7 @@ function escapeHtml(s) {
       const r = await apiFetch('/email/inbox/' + encodeURIComponent(id)); const d = await r.json();
       if (!r.ok) throw new Error(d.error || 'Could not open message');
       const m = d.message || {};
+      const hasHtml = !!(m.html && m.html.trim());
       const bodyText = (m.text && m.text.trim()) ? m.text : stripHtml(m.html || '');
       const when = m.date ? new Date(m.date).toLocaleString() : '';
       const metaFrom = escapeHtml(m.fromName || m.from || '') + (m.from && m.fromName ? ' &lt;' + escapeHtml(m.from) + '&gt;' : '');
@@ -1012,9 +1013,20 @@ function escapeHtml(s) {
             (when ? '<div><b>Date</b>' + escapeHtml(when) + '</div>' : '') +
           '</div>' +
         '</div>' +
-        '<div class="inbox-float-body">' + escapeHtml(bodyText) + '</div>' +
+        '<div class="inbox-float-body">' + (hasHtml ? '' : escapeHtml(bodyText)) + '</div>' +
         '<div class="inbox-float-actions"></div>';
       const actions = panel.querySelector('.inbox-float-actions');
+      // Render the real formatted email (with images) in a sandboxed iframe —
+      // no scripts can run (safe), auto-sized to the content.
+      if (hasHtml) {
+        const bodyEl = panel.querySelector('.inbox-float-body');
+        const frame = document.createElement('iframe');
+        frame.setAttribute('sandbox', 'allow-same-origin allow-popups');
+        frame.style.cssText = 'width:100%;border:none;background:#fff;border-radius:10px;min-height:120px;';
+        frame.srcdoc = '<base target="_blank">' + m.html;
+        frame.onload = () => { try { frame.style.height = (frame.contentDocument.body.scrollHeight + 24) + 'px'; } catch (e) { frame.style.height = '420px'; } };
+        bodyEl.appendChild(frame);
+      }
       const reply = document.createElement('button'); reply.className = 'btn-sm'; reply.textContent = '↩ Reply with Q';
       reply.addEventListener('click', () => {
         if ($paste) {
