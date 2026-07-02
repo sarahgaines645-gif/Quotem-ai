@@ -884,6 +884,15 @@ function escapeHtml(s) {
     const tmp = document.createElement('div'); tmp.innerHTML = html || '';
     return (tmp.textContent || tmp.innerText || '').trim();
   }
+  // Neutralise remote image srcs (tracking pixels) — cid:/data: images are left
+  // alone. Returns the rewritten html + how many remote images were blocked.
+  function blockRemoteImages(html) {
+    let count = 0;
+    const out = String(html || '').replace(/<img\b[^>]*>/gi, (tag) =>
+      tag.replace(/\ssrc\s*=\s*(["'])(https?:\/\/[^"']*)\1/gi, (m, q, url) => { count++; return ' data-blocked-src=' + q + url + q; })
+    );
+    return { html: out, count };
+  }
 
   async function loadStatus() {
     try {
@@ -1020,12 +1029,25 @@ function escapeHtml(s) {
       // no scripts can run (safe), auto-sized to the content.
       if (hasHtml) {
         const bodyEl = panel.querySelector('.inbox-float-body');
+        const blocked = blockRemoteImages(m.html);
+        let shown = false;
         const frame = document.createElement('iframe');
         frame.setAttribute('sandbox', 'allow-same-origin allow-popups');
         frame.style.cssText = 'width:100%;border:none;background:#fff;border-radius:10px;min-height:120px;';
-        frame.srcdoc = '<base target="_blank">' + m.html;
         frame.onload = () => { try { frame.style.height = (frame.contentDocument.body.scrollHeight + 24) + 'px'; } catch (e) { frame.style.height = '420px'; } };
+        const setContent = (h) => { frame.srcdoc = '<base target="_blank">' + h; };
+        if (blocked.count > 0) {
+          const btn = document.createElement('button'); btn.className = 'btn-sm';
+          btn.textContent = '🖼 Show images (' + blocked.count + ')';
+          btn.style.marginBottom = '8px';
+          btn.addEventListener('click', () => {
+            shown = !shown; setContent(shown ? m.html : blocked.html);
+            btn.textContent = shown ? '🚫 Hide images' : ('🖼 Show images (' + blocked.count + ')');
+          });
+          bodyEl.appendChild(btn);
+        }
         bodyEl.appendChild(frame);
+        setContent(blocked.html);
       }
       const reply = document.createElement('button'); reply.className = 'btn-sm'; reply.textContent = '↩ Reply with Q';
       reply.addEventListener('click', () => {
