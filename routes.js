@@ -551,6 +551,7 @@ router.patch('/email/outbox/:id/to', requirePerson, express.json({ limit: '1mb' 
 // General patch — update body, subject, attachments
 router.patch('/email/outbox/:id', requirePerson, express.json({ limit: '20mb' }), (req, res) => {
     const patch = {};
+    if (req.body.to !== undefined) patch.to = String(req.body.to || '').trim();
     if (req.body.body !== undefined) patch.body = String(req.body.body || '');
     if (req.body.subject !== undefined) patch.subject = String(req.body.subject || '');
     if (Array.isArray(req.body.attachments)) patch.attachments = req.body.attachments;

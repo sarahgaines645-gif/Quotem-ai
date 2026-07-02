@@ -792,20 +792,48 @@ function escapeHtml(s) {
       if (!items.length) { $obCard.style.display = 'none'; $obList.innerHTML = ''; return; }
       $obCard.style.display = '';
       $obList.innerHTML = '';
+      const inpCss = 'width:100%;border:none;outline:none;font-family:inherit;font-size:13px;color:var(--text);background:var(--bg);padding:10px 12px;border-radius:10px;box-shadow:var(--neu-inset-sm);margin-bottom:8px;';
       items.forEach((it) => {
         const row = document.createElement('div');
         row.style.cssText = 'border-top:1px solid rgba(0,0,0,0.08);padding:10px 0;';
-        row.innerHTML = '<div style="font-size:13px;"><b>' + escapeHtml(it.subject || '(no subject)') + '</b> → ' + escapeHtml(it.to || '(no recipient)') + '</div>';
-        const acts = document.createElement('div'); acts.style.cssText = 'margin-top:6px;display:flex;gap:8px;';
+
+        const head = document.createElement('div');
+        head.style.cssText = 'font-size:13px;cursor:pointer;';
+        head.innerHTML = '<b>' + escapeHtml(it.subject || '(no subject)') + '</b> → ' + escapeHtml(it.to || '(no recipient)') + ' <span style="color:var(--text-faint);">▾ open</span>';
+        row.appendChild(head);
+
+        const editor = document.createElement('div');
+        editor.style.cssText = 'display:none;margin-top:10px;';
+        const toIn = document.createElement('input'); toIn.type = 'email'; toIn.placeholder = 'To'; toIn.value = it.to || ''; toIn.style.cssText = inpCss;
+        const subIn = document.createElement('input'); subIn.type = 'text'; subIn.placeholder = 'Subject'; subIn.value = it.subject || ''; subIn.style.cssText = inpCss;
+        const bodyTa = document.createElement('textarea'); bodyTa.rows = 8; bodyTa.value = it.body || ''; bodyTa.style.marginBottom = '8px';
+        editor.appendChild(toIn); editor.appendChild(subIn); editor.appendChild(bodyTa);
+
+        const acts = document.createElement('div'); acts.style.cssText = 'display:flex;gap:8px;flex-wrap:wrap;';
+        const patchBody = () => ({ to: toIn.value.trim(), subject: subIn.value, body: bodyTa.value });
+        const save = document.createElement('button'); save.className = 'btn-sm'; save.textContent = '💾 Save';
+        save.addEventListener('click', async () => {
+          save.disabled = true;
+          try { const rr = await apiFetch('/email/outbox/' + it.id, { method: 'PATCH', body: patchBody() }); if (!rr.ok) throw new Error('Failed'); showToast('💾 Saved'); head.querySelector('b').textContent = subIn.value || '(no subject)'; }
+          catch { showToast('Could not save'); }
+          finally { save.disabled = false; }
+        });
         const send = document.createElement('button'); send.className = 'btn-sm'; send.textContent = '📤 Send';
         send.addEventListener('click', async () => {
           send.disabled = true;
-          try { const rr = await apiFetch('/email/outbox/' + it.id + '/send', { method: 'POST' }); const dd = await rr.json(); if (!rr.ok) throw new Error(dd.error || 'Failed'); showToast('✓ Sent'); loadOutbox(); }
-          catch (e) { showToast('Send failed: ' + e.message); send.disabled = false; }
+          try {
+            await apiFetch('/email/outbox/' + it.id, { method: 'PATCH', body: patchBody() });
+            const rr = await apiFetch('/email/outbox/' + it.id + '/send', { method: 'POST' }); const dd = await rr.json(); if (!rr.ok) throw new Error(dd.error || 'Failed');
+            showToast('✓ Sent'); loadOutbox();
+          } catch (e) { showToast('Send failed: ' + e.message); send.disabled = false; }
         });
         const del = document.createElement('button'); del.className = 'btn-sm'; del.textContent = '🗑️ Delete';
         del.addEventListener('click', async () => { await apiFetch('/email/outbox/' + it.id, { method: 'DELETE' }); loadOutbox(); });
-        acts.appendChild(send); acts.appendChild(del); row.appendChild(acts);
+        acts.appendChild(save); acts.appendChild(send); acts.appendChild(del);
+        editor.appendChild(acts);
+        row.appendChild(editor);
+
+        head.addEventListener('click', () => { editor.style.display = editor.style.display === 'none' ? '' : 'none'; });
         $obList.appendChild(row);
       });
     } catch { /* ignore */ }
