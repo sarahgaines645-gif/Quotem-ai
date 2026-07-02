@@ -585,9 +585,10 @@ router.post('/email/imap/disconnect', requirePerson, (req, res) => {
 // a standalone IMAP inbox. Any failure surfaces here — nothing fails silently.
 router.get('/email/inbox', requirePerson, async (req, res) => {
     const send = qEmail.getAccount(req.person.email);
+    const label = String(req.query.label || 'INBOX');
     try {
         const messages = (send && send.provider === 'gmail')
-            ? await qEmail.listGmailInbox(req.person.email, { limit: 25 })
+            ? await qEmail.listGmailInbox(req.person.email, { limit: 25, label })
             : await qEmail.listInbox(req.person.email, { limit: 25 });
         res.json({ messages });
     } catch (e) {
@@ -595,6 +596,18 @@ router.get('/email/inbox', requirePerson, async (req, res) => {
         if (e.code === 'inbox_not_connected') return res.status(409).json({ error: 'No inbox connected — connect Gmail (or an inbox) first.' });
         console.error('[inbox] list:', e.message);
         res.status(502).json({ error: 'Could not read your inbox — the connection may need reconnecting.' });
+    }
+});
+// The user's Gmail folders/labels for the folder switcher (Gmail only).
+router.get('/email/inbox/labels', requirePerson, async (req, res) => {
+    const send = qEmail.getAccount(req.person.email);
+    if (!send || send.provider !== 'gmail') return res.json({ labels: [] });
+    try {
+        res.json({ labels: await qEmail.listGmailLabels(req.person.email) });
+    } catch (e) {
+        if (e.code === 'inbox_scope_missing') return res.status(403).json({ code: 'scope', error: 'Reconnect Gmail to allow reading.' });
+        console.error('[inbox] labels:', e.message);
+        res.json({ labels: [] });
     }
 });
 // Full body of one message by id (Gmail message id, or IMAP uid).

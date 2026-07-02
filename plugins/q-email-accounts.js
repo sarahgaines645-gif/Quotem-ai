@@ -488,9 +488,12 @@ async function gmailAccessFor(email) {
     catch { const e = new Error('inbox_auth_failed'); e.code = 'inbox_auth_failed'; throw e; }
 }
 // Newest-first list of the user's Gmail inbox (metadata only — fast).
-async function listGmailInbox(email, { limit = 25 } = {}) {
+async function listGmailInbox(email, { limit = 25, label = 'INBOX' } = {}) {
     const access = await gmailAccessFor(email);
-    const list = await gmailApiGet(access, `messages?labelIds=INBOX&maxResults=${limit}`);
+    const q = (label && label !== 'ALL')
+        ? `messages?labelIds=${encodeURIComponent(label)}&maxResults=${limit}`
+        : `messages?maxResults=${limit}`;
+    const list = await gmailApiGet(access, q);
     const ids = (list.messages || []).map(m => m.id);
     const metas = await Promise.all(ids.map(async (id) => {
         try {
@@ -508,6 +511,23 @@ async function listGmailInbox(email, { limit = 25 } = {}) {
         } catch { return null; }
     }));
     return metas.filter(Boolean);
+}
+// The user's Gmail folders (system + custom labels), for the folder switcher.
+async function listGmailLabels(email) {
+    const access = await gmailAccessFor(email);
+    const d = await gmailApiGet(access, 'labels');
+    const labels = d.labels || [];
+    const present = new Set(labels.map(l => l.id));
+    const SYS = [
+        { id: 'INBOX', name: 'Inbox' }, { id: 'STARRED', name: 'Starred' },
+        { id: 'SENT', name: 'Sent' }, { id: 'DRAFT', name: 'Drafts' },
+        { id: 'SPAM', name: 'Spam' }, { id: 'TRASH', name: 'Bin' },
+    ];
+    const sys = SYS.filter(s => present.has(s.id));
+    const user = labels.filter(l => l.type === 'user')
+        .map(l => ({ id: l.id, name: l.name }))
+        .sort((a, b) => a.name.localeCompare(b.name));
+    return [...sys, ...user, { id: 'ALL', name: 'All mail' }];
 }
 // Full body of one Gmail message by id.
 async function readGmailMessage(email, id) {
@@ -534,5 +554,5 @@ module.exports = {
     getOutbox, addToOutbox, removeFromOutbox, patchOutboxItem, sendFromOutbox,
     // Inbox — Gmail API (read scope) for connected Gmail; IMAP for other providers
     inboxStatus, getInboxAccount, connectInbox, disconnectInbox, listInbox, readInboxMessage,
-    listGmailInbox, readGmailMessage,
+    listGmailInbox, readGmailMessage, listGmailLabels,
 };

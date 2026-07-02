@@ -133,7 +133,8 @@
   .inbox-from { font-size: 13px; font-weight: 600; flex: 0 0 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .inbox-subj { font-size: 13px; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .inbox-date { font-size: 11px; color: var(--text-faint); white-space: nowrap; }
-  .inbox-reader-box { background: var(--bg); border-radius: 14px; padding: 16px 18px; box-shadow: var(--neu-inset-sm); }
+  .inbox-reader-box { background: var(--bg); border-radius: 16px; padding: 18px 20px; box-shadow: var(--neu-raised-sm); }
+  #inbox-folder { font-family: inherit; font-size: 12px; font-weight: 600; color: var(--text-muted); background: var(--bg); border: none; outline: none; padding: 7px 12px; border-radius: 10px; box-shadow: var(--neu-raised-sm); cursor: pointer; }
   .inbox-reader-box .ir-body { font-size: 14px; line-height: 1.65; margin-top: 12px; white-space: pre-wrap; word-break: break-word; }
   .inbox-empty { font-size: 13px; color: var(--text-muted); padding: 10px 4px; }
   @media (max-width: 600px) { .inbox-from { flex-basis: 100px; } }
@@ -248,6 +249,7 @@
       <span class="section-label" style="margin:0;">📥 Your inbox</span>
       <span class="status" id="inbox-status">Checking…</span>
       <button class="btn-sm" id="inbox-refresh-btn" style="display:none;">↻ Refresh</button>
+      <select id="inbox-folder" style="display:none;" title="Folder"></select>
       <button class="btn-sm" id="inbox-connect-btn" style="display:none;">Connect inbox</button>
       <button class="btn-sm" id="inbox-disconnect-btn" style="display:none;">Disconnect</button>
     </div>
@@ -828,6 +830,7 @@ function escapeHtml(s) {
   const $save    = document.getElementById('inbox-save-btn');
   const $list    = document.getElementById('inbox-list');
   const $reader  = document.getElementById('inbox-reader');
+  const $folder  = document.getElementById('inbox-folder');
   if (!$card) return;
 
   function fmtDate(iso) {
@@ -851,20 +854,38 @@ function escapeHtml(s) {
         $stat.textContent = '✓ Reading ' + (d.email || 'your inbox');
         $refresh.style.display = ''; $discon.style.display = (d.provider === 'imap') ? '' : 'none';
         $connect.style.display = 'none'; $form.style.display = 'none';
+        if (d.provider === 'gmail') loadLabels(); else $folder.style.display = 'none';
         loadList();
       } else {
         $stat.textContent = 'Not connected';
         $connect.style.display = ''; $refresh.style.display = 'none'; $discon.style.display = 'none';
+        $folder.style.display = 'none';
         $list.innerHTML = ''; $reader.style.display = 'none';
       }
     } catch { $stat.textContent = ''; }
   }
 
+  async function loadLabels() {
+    try {
+      const r = await apiFetch('/email/inbox/labels'); const d = await r.json();
+      const labels = d.labels || [];
+      if (!labels.length) { $folder.style.display = 'none'; return; }
+      const cur = $folder.value;
+      $folder.innerHTML = '';
+      labels.forEach((l) => {
+        const opt = document.createElement('option'); opt.value = l.id; opt.textContent = l.name; $folder.appendChild(opt);
+      });
+      if (cur) $folder.value = cur;
+      $folder.style.display = '';
+    } catch { $folder.style.display = 'none'; }
+  }
+
   async function loadList() {
     $reader.style.display = 'none';
-    $list.innerHTML = '<div class="inbox-empty">Loading your inbox…</div>';
+    const label = ($folder && $folder.value) ? $folder.value : 'INBOX';
+    $list.innerHTML = '<div class="inbox-empty">Loading…</div>';
     try {
-      const r = await apiFetch('/email/inbox'); const d = await r.json();
+      const r = await apiFetch('/email/inbox?label=' + encodeURIComponent(label)); const d = await r.json();
       if (r.status === 403 && d.code === 'scope') { renderScopePrompt(d.error); return; }
       if (!r.ok) throw new Error(d.error || 'Could not read inbox');
       const msgs = d.messages || [];
@@ -937,6 +958,7 @@ function escapeHtml(s) {
 
   $connect.addEventListener('click', () => { $form.style.display = $form.style.display === 'none' ? '' : 'none'; });
   $refresh.addEventListener('click', loadList);
+  $folder.addEventListener('change', loadList);
   $discon.addEventListener('click', async () => {
     await apiFetch('/email/imap/disconnect', { method: 'POST' });
     showToast('Inbox disconnected'); loadStatus();
