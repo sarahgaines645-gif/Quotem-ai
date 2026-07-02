@@ -886,12 +886,27 @@ function escapeHtml(s) {
   }
   // Neutralise remote image srcs (tracking pixels) — cid:/data: images are left
   // alone. Returns the rewritten html + how many remote images were blocked.
+  // Remove inline cid: images — the Gmail API doesn't hand us their data, so
+  // they'd render as broken boxes. (Resolving them is the attachments phase.)
+  function stripCidImages(html) {
+    return String(html || '').replace(/<img\b[^>]*>/gi, (tag) => /\ssrc\s*=\s*["']cid:/i.test(tag) ? '' : tag);
+  }
+  // Remove remote (http) images so tracking pixels don't fire and nothing shows
+  // a broken box. Returns the stripped html + how many were removed.
   function blockRemoteImages(html) {
     let count = 0;
-    const out = String(html || '').replace(/<img\b[^>]*>/gi, (tag) =>
-      tag.replace(/\ssrc\s*=\s*(["'])(https?:\/\/[^"']*)\1/gi, (m, q, url) => { count++; return ' data-blocked-src=' + q + url + q; })
-    );
+    const out = String(html || '').replace(/<img\b[^>]*>/gi, (tag) => {
+      if (/\ssrc\s*=\s*["']https?:\/\//i.test(tag)) { count++; return ''; }
+      return tag;
+    });
     return { html: out, count };
+  }
+  // A plain-text email → clean HTML so it renders on the same white surface as
+  // the formatted ones (consistent look; line breaks + links preserved).
+  function textToEmailHtml(text) {
+    const esc = String(text || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    const linked = esc.replace(/(https?:\/\/[^\s<]+)/g, '<a href="$1">$1</a>');
+    return '<div style="font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;font-size:14px;line-height:1.6;color:#1a1a1a;padding:16px;white-space:pre-wrap;word-break:break-word;">' + linked + '</div>';
   }
 
   async function loadStatus() {
@@ -1022,14 +1037,18 @@ function escapeHtml(s) {
             (when ? '<div><b>Date</b>' + escapeHtml(when) + '</div>' : '') +
           '</div>' +
         '</div>' +
-        '<div class="inbox-float-body">' + (hasHtml ? '' : escapeHtml(bodyText)) + '</div>' +
+        '<div class="inbox-float-body"></div>' +
         '<div class="inbox-float-actions"></div>';
       const actions = panel.querySelector('.inbox-float-actions');
       // Render the real formatted email (with images) in a sandboxed iframe —
       // no scripts can run (safe), auto-sized to the content.
-      if (hasHtml) {
+      {
+        // Every email renders on the same clean white surface — HTML as-is,
+        // plain text converted to simple HTML. cid images stripped (no data),
+        // remote images blocked until "Show images".
         const bodyEl = panel.querySelector('.inbox-float-body');
-        const blocked = blockRemoteImages(m.html);
+        const base = stripCidImages(hasHtml ? m.html : textToEmailHtml(bodyText));
+        const blocked = blockRemoteImages(base);
         let shown = false;
         const frame = document.createElement('iframe');
         frame.setAttribute('sandbox', 'allow-same-origin allow-popups');
@@ -1041,7 +1060,7 @@ function escapeHtml(s) {
           btn.textContent = '🖼 Show images (' + blocked.count + ')';
           btn.style.marginBottom = '8px';
           btn.addEventListener('click', () => {
-            shown = !shown; setContent(shown ? m.html : blocked.html);
+            shown = !shown; setContent(shown ? base : blocked.html);
             btn.textContent = shown ? '🚫 Hide images' : ('🖼 Show images (' + blocked.count + ')');
           });
           bodyEl.appendChild(btn);
