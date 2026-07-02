@@ -21,7 +21,9 @@ const { userDataPath } = require('./user-data');
 const CLIENT_ID = process.env.GOOGLE_CLIENT_ID || process.env.GMAIL_CLIENT_ID || '';
 const CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET || process.env.GMAIL_CLIENT_SECRET || '';
 const REDIRECT_URI = process.env.GMAIL_REDIRECT_URI || '';
-const SCOPES = 'https://www.googleapis.com/auth/gmail.send https://www.googleapis.com/auth/gmail.readonly https://www.googleapis.com/auth/userinfo.email';
+// gmail.modify supersets read + lets us mark read/unread, star, archive and
+// move to Bin (it can't PERMANENTLY delete — "delete" is a move to Bin, like Gmail).
+const SCOPES = 'https://www.googleapis.com/auth/gmail.send https://www.googleapis.com/auth/gmail.modify https://www.googleapis.com/auth/userinfo.email';
 
 function gmailConfigured() {
     return !!(CLIENT_ID && CLIENT_SECRET && REDIRECT_URI);
@@ -543,9 +545,33 @@ async function readGmailMessage(email, id) {
         to: hv('to'),
         subject: hv('subject') || '(no subject)',
         date: d.internalDate ? new Date(Number(d.internalDate)).toISOString() : null,
+        starred: (d.labelIds || []).includes('STARRED'),
+        seen: !(d.labelIds || []).includes('UNREAD'),
         text: text || d.snippet || '',
         html,
     };
+}
+// Change a message's labels (mark read/unread, star, archive). Gmail only.
+async function modifyGmailMessage(email, id, { add = [], remove = [] } = {}) {
+    const access = await gmailAccessFor(email);
+    const r = await fetch(`https://gmail.googleapis.com/gmail/v1/users/me/messages/${encodeURIComponent(id)}/modify`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${access}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ addLabelIds: add, removeLabelIds: remove }),
+    });
+    if (r.status === 403) { const e = new Error('inbox_scope_missing'); e.code = 'inbox_scope_missing'; throw e; }
+    if (!r.ok) { const e = new Error('gmail_modify_' + r.status); e.code = 'inbox_action_failed'; throw e; }
+    return true;
+}
+// Move a message to Bin. Gmail only.
+async function trashGmailMessage(email, id) {
+    const access = await gmailAccessFor(email);
+    const r = await fetch(`https://gmail.googleapis.com/gmail/v1/users/me/messages/${encodeURIComponent(id)}/trash`, {
+        method: 'POST', headers: { Authorization: `Bearer ${access}` },
+    });
+    if (r.status === 403) { const e = new Error('inbox_scope_missing'); e.code = 'inbox_scope_missing'; throw e; }
+    if (!r.ok) { const e = new Error('gmail_trash_' + r.status); e.code = 'inbox_action_failed'; throw e; }
+    return true;
 }
 
 module.exports = {
@@ -555,4 +581,5 @@ module.exports = {
     // Inbox — Gmail API (read scope) for connected Gmail; IMAP for other providers
     inboxStatus, getInboxAccount, connectInbox, disconnectInbox, listInbox, readInboxMessage,
     listGmailInbox, readGmailMessage, listGmailLabels,
+    modifyGmailMessage, trashGmailMessage,
 };

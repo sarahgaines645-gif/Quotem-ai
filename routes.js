@@ -627,6 +627,32 @@ router.get('/email/inbox/:id', requirePerson, async (req, res) => {
         res.status(502).json({ error: 'Could not open that message.' });
     }
 });
+// Change a message's labels (mark read/unread, star, archive) — Gmail only.
+router.post('/email/inbox/:id/modify', requirePerson, express.json({ limit: '16kb' }), async (req, res) => {
+    const send = qEmail.getAccount(req.person.email);
+    if (!send || send.provider !== 'gmail') return res.status(400).json({ error: 'Inbox actions need a connected Gmail account.' });
+    try {
+        await qEmail.modifyGmailMessage(req.person.email, req.params.id, { add: req.body.add || [], remove: req.body.remove || [] });
+        res.json({ ok: true });
+    } catch (e) {
+        if (e.code === 'inbox_scope_missing') return res.status(403).json({ code: 'scope', error: 'Reconnect Gmail to manage your inbox (grant the newer permission).' });
+        console.error('[inbox] modify:', e.message);
+        res.status(502).json({ error: 'Could not update that message.' });
+    }
+});
+// Move a message to Bin — Gmail only.
+router.post('/email/inbox/:id/trash', requirePerson, async (req, res) => {
+    const send = qEmail.getAccount(req.person.email);
+    if (!send || send.provider !== 'gmail') return res.status(400).json({ error: 'Inbox actions need a connected Gmail account.' });
+    try {
+        await qEmail.trashGmailMessage(req.person.email, req.params.id);
+        res.json({ ok: true });
+    } catch (e) {
+        if (e.code === 'inbox_scope_missing') return res.status(403).json({ code: 'scope', error: 'Reconnect Gmail to manage your inbox (grant the newer permission).' });
+        console.error('[inbox] trash:', e.message);
+        res.status(502).json({ error: 'Could not delete that message.' });
+    }
+});
 
 const qFormFiller = require('./plugins/q-form-filler');
 const { fillPdfForWord } = qFormFiller;

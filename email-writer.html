@@ -932,6 +932,7 @@ function escapeHtml(s) {
       msgs.forEach((m) => {
         const row = document.createElement('div');
         row.className = 'inbox-row' + (m.seen ? '' : ' unseen');
+        row.dataset.id = m.id;
         row.innerHTML =
           '<span class="inbox-from">' + escapeHtml(m.fromName || m.from || '(unknown)') + '</span>' +
           '<span class="inbox-subj">' + escapeHtml(m.subject || '(no subject)') + '</span>' +
@@ -946,6 +947,17 @@ function escapeHtml(s) {
 
   let floatPanel = null;
   function closeFloat() { if (floatPanel) { floatPanel.remove(); floatPanel = null; } }
+  async function msgAction(id, opts) {
+    const url = opts.trash
+      ? ('/email/inbox/' + encodeURIComponent(id) + '/trash')
+      : ('/email/inbox/' + encodeURIComponent(id) + '/modify');
+    const r = await apiFetch(url, { method: 'POST', body: opts.trash ? {} : { add: opts.add || [], remove: opts.remove || [] } });
+    if (!r.ok) { const d = await r.json().catch(() => ({})); throw new Error(d.error || 'Action failed'); }
+  }
+  function markRow(id, seen) {
+    const row = $list.querySelector('[data-id="' + id + '"]');
+    if (row) { seen ? row.classList.remove('unseen') : row.classList.add('unseen'); }
+  }
   function makeDraggable(panel, handle) {
     let dragging = false, offX = 0, offY = 0;
     const pt = (e) => (e.touches && e.touches[0]) ? e.touches[0] : e;
@@ -1014,8 +1026,24 @@ function escapeHtml(s) {
         }
       });
       actions.appendChild(reply);
+      const mkBtn = (label, fn) => { const b = document.createElement('button'); b.className = 'btn-sm'; b.textContent = label; b.addEventListener('click', fn); return b; };
+      actions.appendChild(mkBtn('🗑 Delete', async () => {
+        try { await msgAction(id, { trash: true }); closeFloat(); showToast('Moved to Bin'); loadList(); } catch (e2) { showToast(e2.message); }
+      }));
+      actions.appendChild(mkBtn('📥 Archive', async () => {
+        try { await msgAction(id, { remove: ['INBOX'] }); closeFloat(); showToast('Archived'); loadList(); } catch (e2) { showToast(e2.message); }
+      }));
+      let starred = !!m.starred;
+      const starBtn = mkBtn(starred ? '★ Unstar' : '☆ Star', async () => {
+        try { await msgAction(id, starred ? { remove: ['STARRED'] } : { add: ['STARRED'] }); starred = !starred; starBtn.textContent = starred ? '★ Unstar' : '☆ Star'; } catch (e2) { showToast(e2.message); }
+      });
+      actions.appendChild(starBtn);
+      actions.appendChild(mkBtn('✉ Mark unread', async () => {
+        try { await msgAction(id, { add: ['UNREAD'] }); markRow(id, false); showToast('Marked unread'); } catch (e2) { showToast(e2.message); }
+      }));
       panel.querySelector('.inbox-float-close').addEventListener('click', closeFloat);
       makeDraggable(panel, panel.querySelector('.inbox-float-head'));
+      if (!m.seen) { msgAction(id, { remove: ['UNREAD'] }).then(() => markRow(id, true)).catch(() => {}); }
     } catch (e) {
       panel.querySelector('.inbox-float-subject').textContent = 'Could not open';
       const meta = document.createElement('div'); meta.className = 'inbox-float-meta'; meta.textContent = e.message;
