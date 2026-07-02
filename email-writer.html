@@ -135,6 +135,16 @@
   .inbox-date { font-size: 11px; color: var(--text-faint); white-space: nowrap; }
   .inbox-reader-box { background: var(--bg); border-radius: 16px; padding: 18px 20px; box-shadow: var(--neu-raised-sm); }
   #inbox-folder { font-family: inherit; font-size: 12px; font-weight: 600; color: var(--text-muted); background: var(--bg); border: none; outline: none; padding: 7px 12px; border-radius: 10px; box-shadow: var(--neu-raised-sm); cursor: pointer; }
+  /* Floating message reader — draggable, sits on a SOLID surface (no scrim) */
+  .inbox-float { position: fixed; top: 11%; left: 50%; transform: translateX(-50%); z-index: 3000; width: min(560px, 92vw); max-height: 78vh; background: var(--bg); border-radius: 18px; box-shadow: var(--neu-raised); display: flex; flex-direction: column; overflow: hidden; }
+  .inbox-float-head { position: relative; padding: 16px 18px 12px; cursor: move; user-select: none; border-bottom: 1px solid rgba(0,0,0,0.06); }
+  .inbox-float-subject { font-size: 16px; font-weight: 700; letter-spacing: -0.01em; margin-bottom: 8px; padding-right: 32px; line-height: 1.35; }
+  .inbox-float-meta { font-size: 12px; color: var(--text-muted); line-height: 1.7; }
+  .inbox-float-meta b { color: var(--text); font-weight: 600; margin-right: 5px; }
+  .inbox-float-close { position: absolute; top: 12px; right: 14px; width: 26px; height: 26px; border-radius: 8px; box-shadow: var(--neu-raised-sm); font-size: 12px; color: var(--text-muted); display: flex; align-items: center; justify-content: center; cursor: pointer; }
+  .inbox-float-close:hover { color: var(--accent); }
+  .inbox-float-body { padding: 16px 18px; overflow-y: auto; font-size: 14px; line-height: 1.65; white-space: pre-wrap; word-break: break-word; }
+  .inbox-float-actions { padding: 12px 18px 16px; display: flex; gap: 8px; flex-wrap: wrap; border-top: 1px solid rgba(0,0,0,0.06); }
   .inbox-reader-box .ir-body { font-size: 14px; line-height: 1.65; margin-top: 12px; white-space: pre-wrap; word-break: break-word; }
   .inbox-empty { font-size: 13px; color: var(--text-muted); padding: 10px 4px; }
   @media (max-width: 600px) { .inbox-from { flex-basis: 100px; } }
@@ -909,7 +919,7 @@ function escapeHtml(s) {
   }
 
   async function loadList() {
-    $reader.style.display = 'none';
+    closeFloat();
     const label = ($folder && $folder.value) ? $folder.value : 'INBOX';
     $list.innerHTML = '<div class="inbox-empty">Loading…</div>';
     try {
@@ -934,40 +944,82 @@ function escapeHtml(s) {
     }
   }
 
-  async function openMessage(uid) {
-    $reader.style.display = '';
-    $reader.innerHTML = '<div class="inbox-reader-box">Opening…</div>';
-    $reader.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  let floatPanel = null;
+  function closeFloat() { if (floatPanel) { floatPanel.remove(); floatPanel = null; } }
+  function makeDraggable(panel, handle) {
+    let dragging = false, offX = 0, offY = 0;
+    const pt = (e) => (e.touches && e.touches[0]) ? e.touches[0] : e;
+    const start = (e) => {
+      if (e.target.closest('.inbox-float-close')) return;
+      const p = pt(e); const rect = panel.getBoundingClientRect();
+      panel.style.left = rect.left + 'px'; panel.style.top = rect.top + 'px'; panel.style.transform = 'none';
+      offX = p.clientX - rect.left; offY = p.clientY - rect.top; dragging = true;
+      document.addEventListener('mousemove', move); document.addEventListener('mouseup', end);
+      document.addEventListener('touchmove', move, { passive: false }); document.addEventListener('touchend', end);
+      if (e.cancelable) e.preventDefault();
+    };
+    const move = (e) => {
+      if (!dragging) return; const p = pt(e);
+      const nx = Math.max(4, Math.min(p.clientX - offX, window.innerWidth - 60));
+      const ny = Math.max(4, Math.min(p.clientY - offY, window.innerHeight - 40));
+      panel.style.left = nx + 'px'; panel.style.top = ny + 'px';
+      if (e.cancelable) e.preventDefault();
+    };
+    const end = () => {
+      dragging = false;
+      document.removeEventListener('mousemove', move); document.removeEventListener('mouseup', end);
+      document.removeEventListener('touchmove', move); document.removeEventListener('touchend', end);
+    };
+    handle.addEventListener('mousedown', start);
+    handle.addEventListener('touchstart', start, { passive: false });
+  }
+
+  async function openMessage(id) {
+    closeFloat();
+    const panel = document.createElement('div');
+    panel.className = 'inbox-float';
+    panel.innerHTML = '<div class="inbox-float-head"><div class="inbox-float-close" title="Close">✕</div><div class="inbox-float-subject">Opening…</div></div>';
+    document.body.appendChild(panel);
+    floatPanel = panel;
+    panel.querySelector('.inbox-float-close').addEventListener('click', closeFloat);
+    makeDraggable(panel, panel.querySelector('.inbox-float-head'));
     try {
-      const r = await apiFetch('/email/inbox/' + encodeURIComponent(uid)); const d = await r.json();
+      const r = await apiFetch('/email/inbox/' + encodeURIComponent(id)); const d = await r.json();
       if (!r.ok) throw new Error(d.error || 'Could not open message');
       const m = d.message || {};
       const bodyText = (m.text && m.text.trim()) ? m.text : stripHtml(m.html || '');
-      const box = document.createElement('div');
-      box.className = 'inbox-reader-box';
-      box.innerHTML =
-        '<div style="font-size:15px;font-weight:700;">' + escapeHtml(m.subject || '(no subject)') + '</div>' +
-        '<div style="font-size:12px;color:var(--text-muted);margin-top:4px;">' +
-          escapeHtml(m.fromName || m.from || '') + (m.from ? ' &lt;' + escapeHtml(m.from) + '&gt;' : '') +
-          (m.date ? ' · ' + escapeHtml(new Date(m.date).toLocaleString()) : '') + '</div>' +
-        '<div class="ir-body">' + escapeHtml(bodyText) + '</div>';
-      const acts = document.createElement('div');
-      acts.style.cssText = 'display:flex;gap:8px;margin-top:14px;flex-wrap:wrap;';
+      const when = m.date ? new Date(m.date).toLocaleString() : '';
+      const metaFrom = escapeHtml(m.fromName || m.from || '') + (m.from && m.fromName ? ' &lt;' + escapeHtml(m.from) + '&gt;' : '');
+      panel.innerHTML =
+        '<div class="inbox-float-head">' +
+          '<div class="inbox-float-close" title="Close">✕</div>' +
+          '<div class="inbox-float-subject">' + escapeHtml(m.subject || '(no subject)') + '</div>' +
+          '<div class="inbox-float-meta">' +
+            '<div><b>From</b>' + metaFrom + '</div>' +
+            (m.to ? '<div><b>To</b>' + escapeHtml(m.to) + '</div>' : '') +
+            (when ? '<div><b>Date</b>' + escapeHtml(when) + '</div>' : '') +
+          '</div>' +
+        '</div>' +
+        '<div class="inbox-float-body">' + escapeHtml(bodyText) + '</div>' +
+        '<div class="inbox-float-actions"></div>';
+      const actions = panel.querySelector('.inbox-float-actions');
       const reply = document.createElement('button'); reply.className = 'btn-sm'; reply.textContent = '↩ Reply with Q';
       reply.addEventListener('click', () => {
         if ($paste) {
           $paste.value = 'From: ' + (m.fromName || '') + ' <' + (m.from || '') + '>\nSubject: ' + (m.subject || '') + '\n\n' + bodyText;
           const rt = document.getElementById('reply-to'); if (rt) rt.value = m.from || '';
+          closeFloat();
           $paste.scrollIntoView({ behavior: 'smooth', block: 'start' });
           showToast('Loaded into the reply box — hit “Read it”');
         }
       });
-      const close = document.createElement('button'); close.className = 'btn-sm'; close.textContent = '✕ Close';
-      close.addEventListener('click', () => { $reader.style.display = 'none'; });
-      acts.appendChild(reply); acts.appendChild(close); box.appendChild(acts);
-      $reader.innerHTML = ''; $reader.appendChild(box);
+      actions.appendChild(reply);
+      panel.querySelector('.inbox-float-close').addEventListener('click', closeFloat);
+      makeDraggable(panel, panel.querySelector('.inbox-float-head'));
     } catch (e) {
-      $reader.innerHTML = '<div class="inbox-reader-box">' + escapeHtml(e.message) + '</div>';
+      panel.querySelector('.inbox-float-subject').textContent = 'Could not open';
+      const meta = document.createElement('div'); meta.className = 'inbox-float-meta'; meta.textContent = e.message;
+      panel.querySelector('.inbox-float-head').appendChild(meta);
     }
   }
 
@@ -987,6 +1039,7 @@ function escapeHtml(s) {
   $connect.addEventListener('click', () => { $form.style.display = $form.style.display === 'none' ? '' : 'none'; });
   $refresh.addEventListener('click', loadList);
   $folder.addEventListener('change', loadList);
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeFloat(); });
   $discon.addEventListener('click', async () => {
     await apiFetch('/email/imap/disconnect', { method: 'POST' });
     showToast('Inbox disconnected'); loadStatus();
