@@ -117,6 +117,53 @@ const TOOL_DEFINITIONS = [
     {
         type: 'function',
         function: {
+            name: 'check_inbox',
+            description: "Read the user's OWN email inbox (their connected Gmail) and return the most recent messages — sender, subject, date, and whether it's unread. Use this whenever the user asks you to check their email, see if anything important has come in, or look for a message from someone. Read-only — it never sends, changes, or deletes anything. After listing, tell the user plainly what's landed and flag anything that looks important or time-sensitive.",
+            parameters: {
+                type: 'object',
+                properties: {
+                    limit: { type: 'number', description: 'How many recent messages to return (default 15, max 40).' },
+                    unread_only: { type: 'boolean', description: 'If true, only return unread messages.' },
+                },
+                required: [],
+            },
+        },
+    },
+    {
+        type: 'function',
+        function: {
+            name: 'read_email',
+            description: "Read ONE full email by its id (the id comes from check_inbox). Returns the sender, subject, date, the full text of the message, and a list of any attachments (each with an attachment_id you can pass to read_email_attachment). Use this after check_inbox when the user wants to know what a message actually says, before replying, or before filing it to a case.",
+            parameters: {
+                type: 'object',
+                properties: {
+                    message_id: { type: 'string', description: 'The id of the message to open, from check_inbox.' },
+                },
+                required: ['message_id'],
+            },
+        },
+    },
+    {
+        type: 'function',
+        function: {
+            name: 'read_email_attachment',
+            description: "Fetch an attachment from an email and read what's inside it. PDFs, images and scans are read with vision/OCR; text and Word files are decoded. Use this when the user wants to know what an attachment contains, or before filing it. Optionally file the attachment straight into a case Thread's Files by passing save_to_thread_id.",
+            parameters: {
+                type: 'object',
+                properties: {
+                    message_id: { type: 'string', description: 'The email id (from check_inbox / read_email).' },
+                    attachment_id: { type: 'string', description: "The attachment_id from read_email's attachments list." },
+                    filename: { type: 'string', description: 'The attachment filename (from read_email).' },
+                    mime_type: { type: 'string', description: "The attachment's mime_type from read_email (helps read it correctly). Optional." },
+                    save_to_thread_id: { type: 'string', description: "Optional. A Thread id to also save this attachment into that case's Files." },
+                },
+                required: ['message_id', 'attachment_id', 'filename'],
+            },
+        },
+    },
+    {
+        type: 'function',
+        function: {
             name: 'save_email_draft',
             description: 'Save a drafted email to the user\'s outbox so they can review and send it with one click. Call this EVERY TIME you write an email for the user — do not just paste email text in the chat. If you are drafting multiple emails in one reply, call this once per email. IMPORTANT: always include the "to" field if you know or have discussed the recipient — the user should not have to look it up themselves. When REVISING a draft you already saved, pass the draft_id you received from the first save — this updates the same item rather than creating a second one.',
             parameters: {
@@ -1414,6 +1461,9 @@ async function executeTool(name, argsRaw, personId, personEmail, threadId) {
         case 'complete_task':        return completeTaskTool(args, personEmail);
         case 'update_life_context':  return updateLifeContextTool(args, personEmail);
         case 'send_email':           return await sendEmailTool(args, personEmail, threadId);
+        case 'check_inbox':          return await checkInboxTool(args, personEmail);
+        case 'read_email':           return await readEmailTool(args, personEmail);
+        case 'read_email_attachment': return await readEmailAttachmentTool(args, personEmail);
         case 'save_email_draft':     return saveEmailDraftTool(args, personEmail, threadId);
         case 'fetch_form':           return await fetchFormTool(args, personEmail, threadId);
         default:                 return { error: `Unknown tool: "${name}"` };
@@ -1709,6 +1759,105 @@ function readThreadTool({ id } = {}, personEmail) {
         notes: t.notes || [],
         instruction_for_q: 'You now have the full case. Reference it confidently in your reply — name the parties, dates, what was said. Always end with the next concrete move.',
     };
+}
+
+// ── Inbox reading — Q checks the user's OWN connected email (read-only) ──────
+// The read engine lives in q-email-accounts (Gmail API for a connected Gmail,
+// IMAP for other providers). These wrap it so Q can check mail, read a message,
+// and pull an attachment's text — then compose with the existing tools
+// (add_email_to_thread, add_event, send_email) to file it, diarise it, or reply.
+function inboxToolError(e) {
+    const code = e && e.code;
+    if (code === 'inbox_not_connected') return { error: 'No email is connected yet — connect it on the Email Writer page first, then I can read your inbox.' };
+    if (code === 'inbox_scope_missing' || code === 'inbox_auth_failed') return { error: 'I need permission to read your inbox — reconnect your Gmail on the Email Writer page (one tap) and it will work.' };
+    return { error: 'Could not read the inbox right now: ' + ((e && e.message) || 'unknown error') };
+}
+
+async function checkInboxTool({ limit, unread_only } = {}, personEmail) {
+    if (!personEmail) return { error: 'No signed-in user.' };
+    const n = Math.min(Math.max(parseInt(limit, 10) || 15, 1), 40);
+    try {
+        const acct = qEmailAccounts.getAccount(personEmail);
+        const isGmail = acct && acct.provider === 'gmail';
+        let list;
+        if (isGmail) {
+            list = await qEmailAccounts.listGmailInbox(personEmail, { limit: n, label: unread_only ? 'UNREAD' : 'INBOX' });
+        } else {
+            list = await qEmailAccounts.listInbox(personEmail, { limit: n });
+            if (unread_only) list = list.filter(m => m.seen === false);
+        }
+        return {
+            ok: true, count: list.length,
+            messages: list.map(m => ({
+                id: (m.id != null ? m.id : m.uid),
+                from: m.fromName || m.from, from_email: m.from,
+                subject: m.subject, date: m.date, unread: m.seen === false,
+            })),
+        };
+    } catch (e) { return inboxToolError(e); }
+}
+
+async function readEmailTool({ message_id } = {}, personEmail) {
+    if (!personEmail) return { error: 'No signed-in user.' };
+    if (!message_id) return { error: 'message_id is required (get it from check_inbox).' };
+    try {
+        const acct = qEmailAccounts.getAccount(personEmail);
+        const isGmail = acct && acct.provider === 'gmail';
+        const msg = isGmail
+            ? await qEmailAccounts.readGmailMessage(personEmail, String(message_id))
+            : await qEmailAccounts.readInboxMessage(personEmail, message_id);
+        return {
+            ok: true,
+            id: (msg.id != null ? msg.id : msg.uid),
+            from: msg.fromName || msg.from, from_email: msg.from, to: msg.to,
+            subject: msg.subject, date: msg.date,
+            body: String(msg.text || '').slice(0, 12000),
+            attachments: (msg.attachments || []).map(a => ({
+                attachment_id: a.attachmentId, filename: a.filename, mime_type: a.mimeType, size: a.size,
+            })),
+        };
+    } catch (e) { return inboxToolError(e); }
+}
+
+async function readEmailAttachmentTool({ message_id, attachment_id, filename, mime_type, save_to_thread_id } = {}, personEmail) {
+    if (!personEmail) return { error: 'No signed-in user.' };
+    if (!message_id || !attachment_id) return { error: 'message_id and attachment_id are required (from read_email).' };
+    try {
+        const acct = qEmailAccounts.getAccount(personEmail);
+        if (!acct || acct.provider !== 'gmail') return { error: 'Reading attachments currently works with a connected Gmail account — reconnect Gmail on the Email Writer page.' };
+        const att = await qEmailAccounts.getGmailAttachment(personEmail, String(message_id), String(attachment_id));
+        if (!att || !att.base64) return { error: 'Could not fetch that attachment.' };
+        const name = String(filename || 'attachment');
+        const mime = mime_type || (/\.pdf$/i.test(name) ? 'application/pdf'
+            : /\.(png|jpe?g|webp|gif|heic)$/i.test(name) ? 'image/jpeg'
+            : /\.docx?$/i.test(name) ? 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+            : 'application/octet-stream');
+        // Read the text out: PDFs / images via vision-OCR (the "eyes"); plain text decoded.
+        let text = '';
+        try {
+            if (/pdf|image\//i.test(mime) || /\.(pdf|png|jpe?g|webp|gif|heic)$/i.test(name)) {
+                const ex = await qFinance.extractDocument(att.base64, /pdf/i.test(mime) ? 'application/pdf' : mime);
+                text = (ex && (ex.full_text || ex.raw)) || '';
+            } else if (/text|json|csv|xml|html/i.test(mime) || /\.(txt|csv|md|json|xml|html?)$/i.test(name)) {
+                text = Buffer.from(att.base64, 'base64').toString('utf8');
+            }
+        } catch { text = ''; }
+        let saved = null;
+        if (save_to_thread_id) {
+            try {
+                const owned = qThreads.readThread(String(save_to_thread_id), personEmail);
+                if (owned) {
+                    const updated = qThreads.addFile(String(save_to_thread_id), { filename: name, mimeType: mime, base64: att.base64 }, personEmail);
+                    if (updated) saved = { threadId: updated.id, filename: name };
+                }
+            } catch { /* filing is best-effort; still return the text */ }
+        }
+        return {
+            ok: true, filename: name, mime_type: mime,
+            text: String(text || '').slice(0, 12000) || '(no readable text found in this attachment)',
+            saved,
+        };
+    } catch (e) { return inboxToolError(e); }
 }
 
 /**
@@ -2017,6 +2166,12 @@ const ALWAYS_ON = new Set([
     // Together's token rate limit (429) on big cases.
     'send_email', 'web_search', 'create_document', 'analyze_document',
     'add_event', 'list_events', 'add_task', 'list_tasks', 'complete_task',
+    // Inbox reading (2026-07-01, Sarah): Q checks the user's OWN email, reads a
+    // message + its attachments, then files/diarises/replies with the tools above.
+    // Read-only + lightweight defs — kept always-on so "check my email" works on
+    // any phrasing and any follow-up turn (unlike the heavy generators that were
+    // gated to avoid the 429 bloat).
+    'check_inbox', 'read_email', 'read_email_attachment',
     // Finance tools — always available so Q can read and update the finance
     // data store from any page, not just when on /finance.
     'read_finance', 'add_finance_problem',

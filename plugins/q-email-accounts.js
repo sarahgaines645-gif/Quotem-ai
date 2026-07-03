@@ -474,6 +474,25 @@ function gmailBody(payload) {
     })(payload);
     return { text, html };
 }
+// Walk a Gmail payload for real file attachments (parts with a filename AND an
+// attachmentId). Returns light metadata; the bytes are fetched on demand via
+// getGmailAttachment so listing an email stays cheap.
+function gmailAttachments(payload) {
+    const out = [];
+    (function walk(part) {
+        if (!part) return;
+        if (part.filename && part.body && part.body.attachmentId) {
+            out.push({
+                filename:     part.filename,
+                attachmentId: part.body.attachmentId,
+                mimeType:     part.mimeType || '',
+                size:         part.body.size || 0,
+            });
+        }
+        if (Array.isArray(part.parts)) part.parts.forEach(walk);
+    })(payload);
+    return out;
+}
 // Gmail API GET → JSON. Maps 403 (missing read scope) and 404 to coded errors
 // the routes turn into a "reconnect to allow reading" / not-found message.
 async function gmailApiGet(access, path) {
@@ -549,7 +568,17 @@ async function readGmailMessage(email, id) {
         seen: !(d.labelIds || []).includes('UNREAD'),
         text: text || d.snippet || '',
         html,
+        attachments: gmailAttachments(d.payload),
     };
+}
+// Fetch one attachment's bytes by id. Gmail returns base64URL — normalise to
+// standard base64 so callers can Buffer.from() it or hand it to a vision reader.
+async function getGmailAttachment(email, messageId, attachmentId) {
+    const access = await gmailAccessFor(email);
+    const d = await gmailApiGet(access, `messages/${encodeURIComponent(messageId)}/attachments/${encodeURIComponent(attachmentId)}`);
+    if (!d || !d.data) { const e = new Error('inbox_message_not_found'); e.code = 'inbox_message_not_found'; throw e; }
+    const base64 = String(d.data).replace(/-/g, '+').replace(/_/g, '/');
+    return { base64, size: d.size || 0 };
 }
 // Change a message's labels (mark read/unread, star, archive). Gmail only.
 async function modifyGmailMessage(email, id, { add = [], remove = [] } = {}) {
@@ -580,6 +609,6 @@ module.exports = {
     getOutbox, addToOutbox, removeFromOutbox, patchOutboxItem, sendFromOutbox,
     // Inbox — Gmail API (read scope) for connected Gmail; IMAP for other providers
     inboxStatus, getInboxAccount, connectInbox, disconnectInbox, listInbox, readInboxMessage,
-    listGmailInbox, readGmailMessage, listGmailLabels,
+    listGmailInbox, readGmailMessage, listGmailLabels, getGmailAttachment,
     modifyGmailMessage, trashGmailMessage,
 };
