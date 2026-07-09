@@ -304,6 +304,30 @@
   .copy-btn:active { box-shadow: var(--neu-inset-xs); }
   .copy-btn.copied { color: var(--accent); }
 
+  /* Tap-to-answer buttons under Q's replies — parsed from his [OPTIONS] block.
+     Neumorphic raised pills that wrap onto new lines; one tap sends that answer
+     back so the user never has to type. Accent shows only as a pressed/hover
+     indicator (no solid-colour fills). */
+  .chat-options { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+  .chat-option {
+    font-family: inherit;
+    font-size: 13.5px; font-weight: 600;
+    color: var(--text);
+    background: var(--bg);
+    border: none;
+    cursor: pointer;
+    padding: 10px 16px;
+    border-radius: 12px;
+    box-shadow: var(--neu-raised-sm);
+    transition: all 0.15s ease;
+    text-align: left;
+    max-width: 100%;
+  }
+  .chat-option:hover { color: var(--accent); }
+  .chat-option:active,
+  .chat-option.on { box-shadow: var(--neu-inset-xs); color: var(--accent); }
+  .chat-option:disabled { cursor: default; opacity: 0.55; }
+
   /* Q's rendered markdown — accent-coloured headings, neat lists, code wells. */
   .message.q .message-body > p { margin: 0 0 12px; }
   .message.q .message-body > p:last-child { margin-bottom: 0; }
@@ -1294,6 +1318,16 @@
     .input-btn { width: 34px; height: 34px; }
     .message { gap: 10px; margin-bottom: 18px; }
     .message-content { max-width: 100%; }
+    /* The page can't scroll sideways (body overflow:hidden), so anything wider
+       than the phone gets CLIPPED — that's why the right-hand header buttons
+       (Sign out / Clear) became unreachable. Shrink the header to fit: drop the
+       decorative tagline, tighten padding + gaps, and give messages more room. */
+    header { padding: 14px 14px; }
+    .logo-tagline { display: none; }
+    .header-right { gap: 6px; }
+    .icon-btn { width: 34px; height: 34px; }
+    main { padding-left: 16px; padding-right: 16px; }
+    .chat-option { font-size: 13px; padding: 9px 14px; }
   }
 </style>
 </head>
@@ -2668,15 +2702,35 @@ function renderQContent(text) {
   }
 }
 
+function parseOptionsBlock(content) {
+  // Pull a trailing [OPTIONS]...[/OPTIONS] block out of Q's message and return
+  // { stripped, options[] } — each option a full answer string. Same parser the
+  // thread + email-writer chats use, so Q's tap-to-answer buttons work here too
+  // (in APS mode Q ends every reply with this block). Without it the raw tags
+  // rendered as plain text.
+  const m = content && content.match(/\[OPTIONS\]([\s\S]*?)\[\/OPTIONS\]\s*$/i);
+  if (!m) return { stripped: content || '', options: [] };
+  const options = m[1]
+    .split('\n')
+    .map(l => l.replace(/^\s*[-*]\s*/, '').trim())
+    .filter(Boolean);
+  return { stripped: content.replace(m[0], '').trim(), options };
+}
+
 function renderMessage(role, content, animate, images) {
   const isUser = role === 'user';
   const messageEl = document.createElement('div');
   messageEl.className = 'message ' + (isUser ? 'user' : 'q');
   if (animate === false) messageEl.style.animation = 'none';
+  // Q's replies may end with a tap-to-answer [OPTIONS] block. Strip it out here so
+  // the raw [OPTIONS] tags never render as text, and turn each option into a button.
+  const parsed = (!isUser && typeof content === 'string') ? parseOptionsBlock(content) : null;
+  const bodyText = parsed ? parsed.stripped : content;
+  const options = parsed ? parsed.options : [];
   const imagesHtml = (Array.isArray(images) && images.length > 0)
     ? '<div class="message-images">' + images.map(img => '<img src="' + img.dataUrl + '" alt="">').join('') + '</div>'
     : '';
-  const renderedContent = isUser ? escapeHtml(content) : renderQContent(content);
+  const renderedContent = isUser ? escapeHtml(content) : renderQContent(bodyText);
   const bodyHtml = '<div class="message-body">' + imagesHtml + renderedContent + '</div>';
   const inner = isUser
     ? '<div class="message-content"><div class="message-meta">You</div>' + bodyHtml + '</div><div class="avatar you">YOU</div>'
@@ -2686,21 +2740,21 @@ function renderMessage(role, content, animate, images) {
   // Copy button on Q's messages — always visible (touch-friendly on mobile
   // where text selection is fiddly). Copies the plain-text version of the
   // reply, not the rendered HTML.
-  if (!isUser && typeof content === 'string' && content.trim()) {
+  if (!isUser && typeof bodyText === 'string' && bodyText.trim()) {
     const btn = document.createElement('button');
     btn.className = 'copy-btn';
     btn.type = 'button';
     btn.textContent = 'Copy';
     btn.addEventListener('click', async () => {
       try {
-        await navigator.clipboard.writeText(content);
+        await navigator.clipboard.writeText(bodyText);
         btn.textContent = 'Copied ✓';
         btn.classList.add('copied');
         setTimeout(() => { btn.textContent = 'Copy'; btn.classList.remove('copied'); }, 1500);
       } catch {
         // Fallback for older browsers / insecure contexts
         const ta = document.createElement('textarea');
-        ta.value = content;
+        ta.value = bodyText;
         ta.style.position = 'fixed'; ta.style.opacity = '0';
         document.body.appendChild(ta);
         ta.select();
@@ -2712,6 +2766,30 @@ function renderMessage(role, content, animate, images) {
     });
     const contentEl = messageEl.querySelector('.message-content');
     if (contentEl) contentEl.appendChild(btn);
+  }
+
+  // Tap-to-answer buttons from Q's [OPTIONS] block — one tap sends that option
+  // straight back as the user's reply (they never have to type). Only on live
+  // replies (animate !== false) so a history reload doesn't stack stale buttons.
+  if (!isUser && options.length > 0 && animate !== false) {
+    const optsEl = document.createElement('div');
+    optsEl.className = 'chat-options';
+    options.forEach((optText) => {
+      const ob = document.createElement('button');
+      ob.type = 'button';
+      ob.className = 'chat-option';
+      ob.textContent = optText;
+      ob.addEventListener('click', () => {
+        if (ob.disabled) return;
+        optsEl.querySelectorAll('.chat-option').forEach(b => b.disabled = true);
+        ob.classList.add('on');
+        $input.value = optText;
+        send();
+      });
+      optsEl.appendChild(ob);
+    });
+    const optContentEl = messageEl.querySelector('.message-content');
+    if (optContentEl) optContentEl.appendChild(optsEl);
   }
 
   $conversation.appendChild(messageEl);
