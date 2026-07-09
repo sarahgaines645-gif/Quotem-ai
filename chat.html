@@ -2722,6 +2722,11 @@ function renderMessage(role, content, animate, images) {
   const messageEl = document.createElement('div');
   messageEl.className = 'message ' + (isUser ? 'user' : 'q');
   if (animate === false) messageEl.style.animation = 'none';
+  // Only the newest reply shows its tap buttons — clear any left over from earlier
+  // turns so they don't stack up down the conversation. (Skip on history reload.)
+  if (animate !== false) {
+    try { $conversation.querySelectorAll('.chat-options').forEach(el => el.remove()); } catch {}
+  }
   // Q's replies may end with a tap-to-answer [OPTIONS] block. Strip it out here so
   // the raw [OPTIONS] tags never render as text, and turn each option into a button.
   const parsed = (!isUser && typeof content === 'string') ? parseOptionsBlock(content) : null;
