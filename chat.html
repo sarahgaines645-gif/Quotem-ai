@@ -425,6 +425,15 @@
     opacity: 0.4;
     margin: 16px 0;
   }
+  /* Tables scroll sideways inside this wrapper on narrow screens instead of
+     squashing (cells were wrapping letter-by-letter on phones — "Yes" became
+     Y/e/s stacked). renderQContent wraps every <table> in it. */
+  .message.q .message-body .md-table-scroll {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    margin: 12px 0;
+    border-radius: 12px;
+  }
   .message.q .message-body table {
     border-collapse: separate;
     border-spacing: 0;
@@ -436,6 +445,7 @@
     overflow: hidden;
     box-shadow: var(--neu-inset-sm);
   }
+  .message.q .message-body .md-table-scroll table { margin: 0; }
   .message.q .message-body th,
   .message.q .message-body td {
     padding: 9px 12px;
@@ -443,6 +453,7 @@
     border: none;
     border-bottom: 1px solid rgba(0,0,0,0.07);
     vertical-align: top;
+    min-width: 72px; /* columns can't collapse below ~9 chars — overflow scrolls instead */
   }
   .message.q .message-body thead th {
     background: rgba(233,30,99,0.08);
@@ -2695,7 +2706,11 @@ function renderQContent(text) {
     return safe.replace(/\n/g, '<br>');
   }
   try {
-    return marked.parse(safe, { breaks: true, gfm: true });
+    // Wrap tables in a horizontal-scroll container so phone-width bubbles
+    // scroll sideways instead of squashing columns to one letter per line.
+    return marked.parse(safe, { breaks: true, gfm: true })
+      .replace(/<table>/g, '<div class="md-table-scroll"><table>')
+      .replace(/<\/table>/g, '</table></div>');
   } catch (e) {
     console.warn('[q/chat] markdown render failed, falling back to plain:', e);
     return safe.replace(/\n/g, '<br>');
