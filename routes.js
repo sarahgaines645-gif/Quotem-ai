@@ -393,6 +393,14 @@ router.get('/email/gmail/callback', async (req, res) => {
     }
 });
 
+// Disconnect the send account (Gmail or SMTP). For Gmail this also revokes
+// the token at Google, so this server can no longer act as that address.
+router.post('/email/disconnect', requirePerson, async (req, res) => {
+    try { await qEmail.disconnect(req.person.email); }
+    catch (e) { console.warn('[email] disconnect:', e.message); }
+    res.json({ ok: true });
+});
+
 // TTS — read email text aloud in a clear formal voice (Gemini TTS, "Charon" voice).
 // Returns audio/wav. Falls back to 503 so the client can use the browser's Speech API instead.
 router.post('/api/tts-email', requirePerson, express.json({ limit: '64kb' }), async (req, res) => {

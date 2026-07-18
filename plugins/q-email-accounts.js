@@ -90,7 +90,23 @@ async function connectSmtp(email, { address, host, port, user, pass }) {
     saveSmtp(email, { address, host, port: p, user, pass });
     return address || user;
 }
-function disconnect(email) {
+// Disconnect the send account. For Gmail, also revoke the refresh token at
+// Google (best effort) so the grant itself is dead — deleting our file alone
+// would leave a live token behind if anything had copied it.
+async function disconnect(email) {
+    const acct = getAccount(email);
+    if (acct && acct.provider === 'gmail') {
+        const token = decrypt(acct.refresh_token);
+        if (token) {
+            try {
+                await fetch('https://oauth2.googleapis.com/revoke', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                    body: new URLSearchParams({ token }),
+                });
+            } catch { /* best effort — still remove our copy below */ }
+        }
+    }
     try { fs.rmSync(accountFile(email), { force: true }); } catch { /* nothing to remove */ }
 }
 function status(email) {

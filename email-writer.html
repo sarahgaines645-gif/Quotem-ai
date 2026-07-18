@@ -251,6 +251,18 @@
     <span class="section-label" style="margin:0;">📧 Your email</span>
     <span class="status" id="email-conn-status">Checking…</span>
     <button class="btn-sm" id="email-connect-btn" style="display:none;">Connect Gmail</button>
+    <button class="btn-sm" id="email-other-btn" style="display:none;">Connect other email</button>
+    <button class="btn-sm" id="email-disconnect-btn" style="display:none;">Disconnect</button>
+    <div id="smtp-form" style="display:none;width:100%;margin-top:6px;">
+      <div style="font-size:12px;color:var(--text-muted);margin-bottom:10px;line-height:1.5;">
+        BT, Yahoo etc. need an <b>app password</b> from your provider's security settings. Business email on your own domain usually takes your normal email password. Outlook/Hotmail can't connect this way — Microsoft only allows its own sign-in.
+      </div>
+      <input id="smtp-email" type="email" placeholder="you@yourcompany.co.uk" autocomplete="email" />
+      <input id="smtp-pass" type="password" placeholder="Email password (or app password)" autocomplete="off" />
+      <input id="smtp-host" type="text" placeholder="Mail server — e.g. smtp.btinternet.com" />
+      <input id="smtp-port" type="text" placeholder="587" inputmode="numeric" />
+      <button class="btn-sm" id="smtp-save-btn">Connect</button>
+    </div>
   </div>
 
   <!-- ── Inbox (read your incoming mail) ── -->
@@ -749,6 +761,14 @@ function escapeHtml(s) {
 (function () {
   const $connStat = document.getElementById('email-conn-status');
   const $connBtn  = document.getElementById('email-connect-btn');
+  const $disconBtn = document.getElementById('email-disconnect-btn');
+  const $otherBtn = document.getElementById('email-other-btn');
+  const $smtpForm = document.getElementById('smtp-form');
+  const $smtpEmail = document.getElementById('smtp-email');
+  const $smtpPass = document.getElementById('smtp-pass');
+  const $smtpHost = document.getElementById('smtp-host');
+  const $smtpPort = document.getElementById('smtp-port');
+  const $smtpSave = document.getElementById('smtp-save-btn');
   const $to       = document.getElementById('reply-to');
   const $sendNow  = document.getElementById('send-now-btn');
   const $saveOut  = document.getElementById('save-outbox-btn');
@@ -758,14 +778,65 @@ function escapeHtml(s) {
   async function loadStatus() {
     try {
       const r = await apiFetch('/email/status'); const d = await r.json();
-      if (d.connected) { $connStat.textContent = '✓ Sending as ' + (d.email || d.provider); $connBtn.textContent = 'Reconnect Gmail'; $connBtn.style.display = ''; }
-      else if (d.gmailAvailable) { $connStat.textContent = 'Not connected'; $connBtn.textContent = 'Connect Gmail'; $connBtn.style.display = ''; }
-      else { $connStat.textContent = 'Email isn\'t set up on the server yet'; $connBtn.style.display = 'none'; }
+      if (d.connected) {
+        $connStat.textContent = '✓ Sending as ' + (d.email || d.provider);
+        $connBtn.textContent = 'Reconnect Gmail';
+        $connBtn.style.display = (d.provider === 'gmail') ? '' : 'none';
+        $disconBtn.style.display = '';
+        $otherBtn.style.display = 'none'; $smtpForm.style.display = 'none';
+      } else {
+        $connStat.textContent = 'Not connected';
+        $connBtn.textContent = 'Connect Gmail';
+        $connBtn.style.display = d.gmailAvailable ? '' : 'none';
+        $disconBtn.style.display = 'none';
+        $otherBtn.style.display = '';
+      }
     } catch { $connStat.textContent = ''; }
   }
   if ($connBtn) $connBtn.addEventListener('click', async () => {
     try { const r = await apiFetch('/email/gmail/start'); const d = await r.json(); if (d.url) location.href = d.url; else showToast(d.error || 'Could not start Gmail connect'); }
     catch { showToast('Could not start Gmail connect'); }
+  });
+  if ($otherBtn) $otherBtn.addEventListener('click', () => {
+    $smtpForm.style.display = $smtpForm.style.display === 'none' ? '' : 'none';
+  });
+  // Prefill the mail server for providers we know (host left blank by the user).
+  const HOST_HINTS = {
+    'btinternet.com': 'smtp.btinternet.com', 'btopenworld.com': 'smtp.btinternet.com',
+    'yahoo.com': 'smtp.mail.yahoo.com', 'yahoo.co.uk': 'smtp.mail.yahoo.com',
+  };
+  if ($smtpEmail) $smtpEmail.addEventListener('blur', () => {
+    const dom = (($smtpEmail.value || '').split('@')[1] || '').toLowerCase().trim();
+    if (!$smtpHost.value.trim() && HOST_HINTS[dom]) $smtpHost.value = HOST_HINTS[dom];
+  });
+  if ($smtpSave) $smtpSave.addEventListener('click', async () => {
+    const user = ($smtpEmail.value || '').trim();
+    const pass = ($smtpPass.value || '').trim();
+    const host = ($smtpHost.value || '').trim();
+    const port = ($smtpPort.value || '').trim() || '587';
+    if (!user || !pass) return showToast('Enter your email address and password');
+    if (/@(gmail|googlemail)\./i.test(user)) return showToast('For Gmail use the Connect Gmail button instead');
+    if (/@(outlook|hotmail|live|msn)\./i.test(user)) return showToast('Outlook/Hotmail can\'t connect this way — Microsoft only allows its own sign-in');
+    if (!host) return showToast('Enter your mail server (e.g. smtp.btinternet.com)');
+    $smtpSave.disabled = true; $smtpSave.textContent = 'Connecting…';
+    try {
+      const r = await apiFetch('/email/smtp', { method: 'POST', body: { host, port, user, pass, email: user } });
+      const d = await r.json(); if (!r.ok) throw new Error(d.error || 'Could not connect');
+      $smtpPass.value = '';
+      showToast('✓ Email connected'); $smtpForm.style.display = 'none'; loadStatus();
+    } catch (e) { showToast(e.message); }
+    finally { $smtpSave.disabled = false; $smtpSave.textContent = 'Connect'; }
+  });
+  if ($disconBtn) $disconBtn.addEventListener('click', async () => {
+    if (!confirm('Disconnect this email? This account will no longer be able to send as that address.')) return;
+    $disconBtn.disabled = true;
+    try {
+      const r = await apiFetch('/email/disconnect', { method: 'POST' });
+      if (!r.ok) throw new Error('Failed');
+      showToast('✓ Email disconnected');
+      // Reload so the inbox card (which rides on the Gmail connection) resets too.
+      setTimeout(() => location.reload(), 900);
+    } catch { showToast('Could not disconnect — try again'); $disconBtn.disabled = false; }
   });
 
   // Returning from the Google OAuth round-trip
