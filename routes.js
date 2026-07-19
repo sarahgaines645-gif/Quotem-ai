@@ -1128,6 +1128,24 @@ router.post('/revision/question', requirePerson, express.json({ limit: '256kb' }
     }
 });
 
+// POST /revision/quiz — a checked batch of clickable questions.
+// Q writes them (cheap), Sonnet verifies every answer key (pennies).
+router.post('/revision/quiz', requirePerson, express.json({ limit: '256kb' }), async (req, res) => {
+    try {
+        const qRevision = require('./plugins/q-revision');
+        const { subject, board, level, topic, count, avoid } = req.body || {};
+        if (!subject) return res.status(400).json({ error: 'subject required' });
+        const result = await qRevision.generateQuiz({
+            subject, board, level, topic, count,
+            avoid: Array.isArray(avoid) ? avoid : [],
+        });
+        res.json({ ok: true, ...result });
+    } catch (e) {
+        console.error('[revision/quiz]', e.message);
+        res.status(500).json({ error: e.message });
+    }
+});
+
 // POST /revision/mark — mark the student's answer against the mark scheme
 router.post('/revision/mark', requirePerson, express.json({ limit: '256kb' }), async (req, res) => {
     try {

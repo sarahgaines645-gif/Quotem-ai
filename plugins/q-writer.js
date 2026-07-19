@@ -15,7 +15,7 @@
 
 const { Q_CONFIG } = require('../config');
 const { cleanModelOutput } = require('./cjk-filter');
-const { accurateJSON } = require('./q-claude');
+const { accurateJSON, SONNET } = require('./q-claude');
 
 async function callQ(systemPrompt, userPrompt, { maxTokens = 4096 } = {}) {
     const response = await fetch(`${Q_CONFIG.baseURL}/chat/completions`, {
@@ -47,8 +47,13 @@ async function callQ(systemPrompt, userPrompt, { maxTokens = 4096 } = {}) {
 // Accuracy-critical calls (reading the brief, marking, references, teaching)
 // go to Claude first — Q is the fallback so the writer never goes dark.
 // Voice-flavoured calls (swaps, reframes, leading questions) stay on Q.
+//
+// SONNET, not Opus, on this path: /writer/brief runs TWO of these calls in
+// one HTTP request, and Railway's ~60s proxy window kills anything slower
+// (the documented May 502). Sonnet is fast Claude — accurate and inside the
+// window. Opus is reserved for the exam room's heavy lifting (Sarah's tiers).
 async function callAccurate(systemPrompt, userPrompt, opts = {}) {
-    return accurateJSON(systemPrompt, userPrompt, { ...opts, fallback: callQ });
+    return accurateJSON(systemPrompt, userPrompt, { ...opts, model: SONNET, fallback: callQ });
 }
 
 async function analyseTask(taskText) {

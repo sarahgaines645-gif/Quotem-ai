@@ -20,7 +20,7 @@
 
 const { Q_CONFIG } = require('../config');
 const { cleanModelOutput } = require('./cjk-filter');
-const { accurateJSON } = require('./q-claude');
+const { accurateJSON, claudeJSON, hasClaude, SONNET } = require('./q-claude');
 
 async function callQ(systemPrompt, userPrompt, { maxTokens = 4096 } = {}) {
     const response = await fetch(`${Q_CONFIG.baseURL}/chat/completions`, {
@@ -49,9 +49,18 @@ async function callQ(systemPrompt, userPrompt, { maxTokens = 4096 } = {}) {
     return JSON.parse(cleaned);
 }
 
-// Everything in revision is accuracy-critical — Claude first, Q as fallback.
+// Exam-room calls are Claude-ONLY (Sarah, 19 Jul: "Opus for the heavy
+// lifting"). Opus first at medium effort — short marking jobs don't need
+// deep thinking, and the request must land inside Railway's ~60s proxy
+// window. If Opus fails, Sonnet — still Claude, still accurate. Never
+// DeepSeek for marking: better "try again in a minute" than a lesser
+// model grading the student.
 async function callAccurate(systemPrompt, userPrompt, opts = {}) {
-    return accurateJSON(systemPrompt, userPrompt, { ...opts, fallback: callQ });
+    return accurateJSON(systemPrompt, userPrompt, {
+        ...opts,
+        effort: 'medium',
+        fallback: (s, u, o) => claudeJSON(s, u, { ...(o || {}), model: SONNET }),
+    });
 }
 
 // ── Small helpers ─────────────────────────────────────────────────────────
@@ -193,4 +202,106 @@ Mark it.`;
     };
 }
 
-module.exports = { generateQuestion, markAnswer };
+// ── Clickable quiz batches (the game stage) ───────────────────────────────
+// Sarah's cost design: Q (cheap) CREATES the questions, Sonnet CHECKS every
+// answer key before a student sees it, and Opus is saved for the heavy
+// lifting in the exam room. A whole batch of 10 costs pennies.
+//
+// Accuracy gate: if the Sonnet check can't run, we do NOT serve unchecked
+// questions — a wrong answer key teaches the wrong law. We throw and the
+// page shows "try again".
+
+function normaliseQuizQuestions(raw) {
+    const list = Array.isArray(raw?.questions) ? raw.questions : [];
+    const out = [];
+    for (const q of list) {
+        const options = asStringArray(q.options);
+        const correctIndex = toInt(q.correctIndex, -1);
+        if (!q.question || options.length !== 4) continue;
+        if (correctIndex < 0 || correctIndex > 3) continue;
+        out.push({
+            question: String(q.question).trim(),
+            options,
+            correctIndex,
+            why: String(q.why || '').trim(),
+            topicTag: String(q.topicTag || '').trim() || 'General',
+            difficulty: ['foundation', 'standard', 'stretch'].includes(q.difficulty) ? q.difficulty : 'standard',
+        });
+    }
+    return out;
+}
+
+const QUIZ_SHAPE = `Return ONLY valid JSON:
+- questions (array): each {
+    question (string — one clear multiple-choice question),
+    options (array of exactly 4 strings — one right, three genuinely tempting but wrong),
+    correctIndex (integer 0-3),
+    why (string — ONE sentence: why the right answer is right, worded so the student learns something even when they got it right),
+    topicTag (string — short topic label matching the topic list wording where possible),
+    difficulty ("foundation" | "standard" | "stretch")
+  }`;
+
+async function generateQuiz({ subject, board, level, topic, count, avoid } = {}) {
+    const n = clamp(toInt(count, 10), 3, 12);
+    const boardLine = board && board !== 'Other'
+        ? board
+        : 'a UK exam board (not specified — stay on content every board teaches)';
+    const avoided = asStringArray(avoid);
+
+    const writerSystem = `You write multiple-choice revision questions for a UK student. Board: ${boardLine}. Level: ${level || 'A-Level'}. Subject: ${subject || 'General Studies'}.
+
+Rules:
+- Write ${n} questions. Mix difficulties: a couple of "foundation" to build confidence, mostly "standard", one or two "stretch".
+- If a topic list is given, spread across it; keep each question on ONE topic and label it with topicTag.
+- Wrong options must be genuinely tempting — the classic mix-ups students actually make — never obviously silly.
+- Never repeat or closely rephrase anything in the avoid list.
+- Only test content genuinely on this subject at this level. Real cases, real statutes, real terms — never invented ones, never fake specification codes.
+- British English. Question stems short enough to read on a phone.
+
+${QUIZ_SHAPE}`;
+
+    const writerUser = `SUBJECT: ${subject || 'not given'}
+LEVEL: ${level || 'not given'}
+TOPICS: ${topic && String(topic).trim() ? String(topic).trim() : '(none — core topics for this subject)'}
+AVOID (already asked): ${avoided.length ? avoided.join(' | ') : '(nothing yet)'}
+
+Write the ${n} questions.`;
+
+    // Step 1 — Q creates (cheap). If Q is down, Sonnet writes the batch
+    // directly (still cheap, already accurate — the check is then built in).
+    let draft = null;
+    let writtenByClaude = false;
+    try {
+        draft = normaliseQuizQuestions(await callQ(writerSystem, writerUser, { maxTokens: 3000 }));
+    } catch (e) {
+        console.warn('[q-revision] Q quiz writer failed, Sonnet writing directly: ' + e.message);
+    }
+    if (!draft || draft.length === 0) {
+        draft = normaliseQuizQuestions(await claudeJSON(writerSystem, writerUser, { maxTokens: 3000, model: SONNET }));
+        writtenByClaude = true;
+    }
+    if (draft.length === 0) throw new Error('No usable questions came back — try again.');
+    if (writtenByClaude) return { questions: draft, checkedBy: 'sonnet' };
+
+    // Step 2 — Sonnet checks every answer key. No check, no quiz.
+    if (!hasClaude()) throw new Error('Checker unavailable — quiz needs ANTHROPIC_API_KEY.');
+    const checkerSystem = `You are the accuracy checker for a UK revision quiz (${boardLine}, ${level || 'A-Level'}, ${subject || 'General Studies'}). Another model drafted these multiple-choice questions. Your job: make sure a student can NEVER be taught something wrong by this batch.
+
+For every question:
+- Verify the keyed answer (correctIndex) is definitely correct and the ONLY correct option. If the key is wrong, fix correctIndex.
+- Verify the other three options are definitely wrong at this level. If a distractor is arguably right, rewrite it so it is cleanly wrong.
+- Verify cases, statutes, dates, terms are real and correctly stated. Fix small errors in place.
+- Verify the "why" sentence is accurate; rewrite it if not.
+- If a question is beyond repair (ambiguous, off-spec, not genuinely this subject), DROP it entirely rather than keep something doubtful.
+- Do not add new questions. Keep the same JSON shape and field wording style.
+
+${QUIZ_SHAPE}`;
+
+    const checked = normaliseQuizQuestions(
+        await claudeJSON(checkerSystem, `DRAFT BATCH:\n${JSON.stringify({ questions: draft }, null, 1)}`, { maxTokens: 3500, model: SONNET })
+    );
+    if (checked.length === 0) throw new Error('The checker rejected the whole batch — try again.');
+    return { questions: checked, checkedBy: 'sonnet' };
+}
+
+module.exports = { generateQuestion, markAnswer, generateQuiz };
