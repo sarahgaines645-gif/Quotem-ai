@@ -1,0 +1,870 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <script src="/q-auth.js?v=4"></script>
+  <meta charset="UTF-8">
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+  <link rel="apple-touch-icon" sizes="180x180" href="/favicon-180.png" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>Q — Revision</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Lora:ital,wght@0,400;0,500;0,600;1,400&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #e8e8e8;
+      --text: #1a1a1a;
+      --text-muted: rgba(0,0,0,0.55);
+      --text-faint: rgba(0,0,0,0.35);
+      --accent: #e91e63;
+      --paper:        #fbf9f3;
+      --paper-back:   #ece8da;
+      --paper-shadow: rgba(80,70,40,0.18);
+      --neu-raised-sm: 6px 6px 16px #ababab, -5px -5px 12px #ffffff;
+      --neu-inset-sm:  inset 3px 3px 8px #ababab, inset -2px -2px 6px #ffffff;
+      --neu-inset-xs:  inset 3px 3px 8px #ababab, inset -2px -2px 6px #ffffff;
+      --neu-raised-xs: 3px 3px 8px #ababab, -2px -2px 6px #ffffff;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body {
+      background: var(--bg); color: var(--text);
+      font-family: 'Space Grotesk', system-ui, sans-serif;
+      min-height: 100%;
+    }
+    body { padding: 28px 16px 100px; }
+
+    header {
+      max-width: 760px; margin: 0 auto 20px;
+      display: flex; align-items: center; gap: 12px;
+    }
+    header .brand { font-size: 26px; font-weight: 700; }
+    header .brand .dot { color: var(--accent); }
+    header .crumbs { color: var(--text-muted); font-size: 13px; }
+    header .nav-links { margin-left: auto; display: flex; gap: 14px; align-items: center; }
+    header a.back { color: var(--text-muted); text-decoration: none; font-size: 13px; }
+    header a.back:hover { color: var(--accent); }
+
+    /* ── Progress strip — the ladder is the heart of the page ───────────── */
+    .progress-strip {
+      max-width: 760px; margin: 0 auto 20px;
+      background: var(--bg);
+      box-shadow: var(--neu-raised-sm);
+      border-radius: 14px;
+      padding: 14px 20px 12px;
+      display: flex; align-items: center; gap: 18px; flex-wrap: wrap;
+    }
+    .ladder {
+      flex: 1; min-width: 250px;
+      display: flex; position: relative; padding-top: 2px;
+    }
+    .ladder::before {
+      content: '';
+      position: absolute; left: 20px; right: 20px; top: 8px;
+      height: 2px; background: rgba(0,0,0,0.08); border-radius: 1px;
+    }
+    .rung {
+      flex: 1; display: flex; flex-direction: column; align-items: center;
+      gap: 6px; position: relative; z-index: 1;
+    }
+    .rung .r-dot {
+      width: 12px; height: 12px; border-radius: 50%;
+      background: var(--bg); box-shadow: var(--neu-inset-xs);
+      transition: background 0.25s, box-shadow 0.25s;
+    }
+    .rung.done .r-dot { background: rgba(0,0,0,0.28); box-shadow: none; }
+    .rung.current .r-dot {
+      background: var(--accent); box-shadow: 0 0 0 4px rgba(233,30,99,0.15);
+    }
+    .rung .r-g {
+      font-size: 11px; font-weight: 600; color: var(--text-faint);
+      line-height: 1;
+    }
+    .rung.done .r-g { color: var(--text-muted); }
+    .rung.current .r-g { color: var(--text); font-weight: 700; }
+    .strip-stats { display: flex; gap: 10px; }
+    .strip-stat {
+      display: flex; flex-direction: column; align-items: center; gap: 1px;
+      min-width: 62px; padding: 7px 10px 6px;
+      background: var(--bg); box-shadow: var(--neu-inset-sm); border-radius: 10px;
+    }
+    .strip-stat .s-val { font-size: 15px; font-weight: 700; color: var(--text); line-height: 1.2; }
+    .strip-stat .s-lbl {
+      font-size: 9px; font-weight: 600; color: var(--text-faint);
+      text-transform: uppercase; letter-spacing: 0.06em;
+    }
+
+    /* ── Setup card ─────────────────────────────────────────────────────── */
+    .setup-strip {
+      max-width: 760px; margin: 0 auto 20px;
+      background: var(--bg);
+      box-shadow: var(--neu-raised-sm);
+      border-radius: 14px;
+      padding: 16px 20px;
+      display: flex; flex-direction: column; gap: 12px;
+    }
+    .setup-strip.hidden { display: none; }
+    .setup-strip-header {
+      font-size: 13px; color: var(--text-muted); font-weight: 500;
+      display: flex; align-items: center; justify-content: space-between;
+    }
+    .setup-strip-header span { font-size: 11px; color: var(--text-faint); }
+    .setup-row { display: flex; gap: 10px; flex-wrap: wrap; align-items: flex-start; }
+    .setup-label { font-size: 12px; color: var(--text-muted); margin-bottom: 4px; }
+    .setup-field { display: flex; flex-direction: column; flex: 1; min-width: 140px; }
+    .setup-input {
+      width: 100%; font-family: 'Space Grotesk', sans-serif; font-size: 12px;
+      background: var(--bg); box-shadow: var(--neu-inset-sm);
+      border: none; outline: none; border-radius: 10px;
+      padding: 8px 12px; color: var(--text);
+    }
+    .setup-input::placeholder { color: var(--text-faint); font-style: italic; }
+    .setup-select {
+      font-family: 'Space Grotesk', sans-serif; font-size: 12px;
+      background: var(--bg); box-shadow: var(--neu-inset-sm);
+      border: none; outline: none; border-radius: 10px;
+      padding: 8px 12px; color: var(--text); cursor: pointer;
+      width: 100%;
+    }
+    .setup-start {
+      align-self: flex-end;
+      padding: 8px 20px; border: none; border-radius: 20px;
+      font-family: 'Space Grotesk', sans-serif; font-size: 13px; font-weight: 600;
+      color: var(--text); background: var(--bg); cursor: pointer;
+      box-shadow: var(--neu-raised-sm);
+      transition: box-shadow 0.15s;
+    }
+    .setup-start:hover { box-shadow: var(--neu-raised-xs); }
+    .setup-start:active { box-shadow: var(--neu-inset-sm); }
+    .setup-nudge { font-size: 11px; color: var(--accent); font-style: italic; }
+    .setup-nudge.hidden { display: none; }
+
+    /* Settings cog to re-open setup */
+    .setup-cog {
+      position: fixed; bottom: 20px; left: 20px;
+      width: 36px; height: 36px; border-radius: 50%; border: none;
+      background: var(--bg); box-shadow: var(--neu-raised-sm);
+      cursor: pointer; display: flex; align-items: center; justify-content: center;
+      color: var(--text-muted); z-index: 99;
+      transition: color 0.15s;
+    }
+    .setup-cog:hover { color: var(--accent); }
+    .setup-cog.hidden { display: none; }
+
+    /* ── The desk + paper ───────────────────────────────────────────────── */
+    .desk { max-width: 760px; margin: 0 auto; position: relative; }
+    .paper {
+      position: relative;
+      background: var(--paper);
+      border-radius: 4px 0 4px 4px;
+      padding: 56px 64px 64px;
+      min-height: 560px;
+      box-shadow:
+        0 1px 0 rgba(255,255,255,0.6) inset,
+        0 24px 50px -10px var(--paper-shadow),
+        0 6px 14px -4px rgba(0,0,0,0.08);
+      background-image:
+        linear-gradient(to bottom,
+          transparent 0, transparent 95px,
+          rgba(0,0,0,0.04) 95px, rgba(0,0,0,0.04) 96px,
+          transparent 96px),
+        repeating-linear-gradient(to bottom,
+          transparent 0, transparent 31px,
+          rgba(0,0,0,0.025) 31px, rgba(0,0,0,0.025) 32px);
+      background-attachment: local;
+    }
+    .paper::after {
+      content: '';
+      position: absolute; top: 0; bottom: 0; left: 48px; width: 1px;
+      background: rgba(233,30,99,0.18);
+    }
+    .paper .curl { position: absolute; top: 0; right: 0; width: 56px; height: 56px; pointer-events: none; }
+    .paper .curl::before {
+      content: ''; position: absolute; top: 6px; right: 6px;
+      width: 44px; height: 44px; background: rgba(40,30,10,0.18);
+      filter: blur(6px); border-radius: 0 0 0 100%;
+    }
+    .paper .curl::after {
+      content: ''; position: absolute; top: 0; right: 0; width: 56px; height: 56px;
+      background: linear-gradient(225deg, var(--paper-back) 0%, var(--paper-back) 48%, rgba(0,0,0,0.08) 49%, var(--paper) 50%, var(--paper) 100%);
+      clip-path: polygon(100% 0, 100% 100%, 0 0);
+      box-shadow: -1px 1px 2px rgba(0,0,0,0.05) inset;
+    }
+
+    .view { display: none; }
+    .view.show { display: block; }
+
+    .paper-meta {
+      font-size: 12px; color: var(--text-muted);
+      margin-bottom: 14px; display: flex; gap: 14px; flex-wrap: wrap; align-items: center;
+    }
+
+    /* Idle / thinking / error states */
+    .paper-quiet {
+      font-family: 'Lora', Georgia, serif; font-style: italic;
+      font-size: 16px; line-height: 32px; color: var(--text-faint);
+    }
+    .paper-thinking {
+      font-family: 'Space Grotesk', sans-serif; font-style: italic;
+      font-size: 14px; color: var(--text-faint);
+      animation: qpulse 1.6s ease-in-out infinite;
+    }
+    @keyframes qpulse { 0%,100% { opacity: 0.45; } 50% { opacity: 0.95; } }
+    .err-msg {
+      font-family: 'Space Grotesk', sans-serif; font-size: 14px;
+      color: var(--text-muted); line-height: 1.6; margin-bottom: 18px;
+    }
+
+    /* Chips */
+    .chip-row { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 14px; }
+    .chip {
+      font-size: 10px; font-weight: 600; letter-spacing: 0.05em;
+      text-transform: uppercase; color: var(--text-muted);
+      padding: 3px 10px; border-radius: 10px;
+      box-shadow: 0 0 0 1px rgba(0,0,0,0.08); background: transparent;
+    }
+
+    /* Question view */
+    .q-text {
+      font-family: 'Lora', Georgia, serif;
+      font-size: 17px; line-height: 32px; color: var(--text);
+      margin-bottom: 4px; white-space: pre-wrap;
+    }
+    .marks-label {
+      font-size: 12px; font-weight: 600; color: var(--text-muted);
+      text-align: right; margin-bottom: 14px;
+    }
+    .answer-area {
+      width: 100%; font-family: 'Lora', Georgia, serif; font-size: 15px;
+      line-height: 1.7; background: var(--bg); box-shadow: var(--neu-inset-sm);
+      border: none; outline: none; border-radius: 10px;
+      padding: 12px 14px; color: var(--text); resize: none;
+      min-height: 150px; overflow: hidden;
+    }
+    .answer-area::placeholder { color: var(--text-faint); font-style: italic; }
+    .answer-hint {
+      font-size: 11px; color: var(--accent); font-style: italic; margin-top: 6px;
+    }
+    .answer-hint.hidden { display: none; }
+    .paper-actions { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin-top: 16px; }
+    .paper-btn {
+      padding: 8px 18px; border: none; border-radius: 16px;
+      font-family: 'Space Grotesk', sans-serif; font-size: 13px; font-weight: 600;
+      background: var(--bg); color: var(--text); cursor: pointer;
+      box-shadow: var(--neu-raised-sm);
+      transition: box-shadow 0.15s, color 0.15s;
+    }
+    .paper-btn:hover { box-shadow: var(--neu-raised-xs); }
+    .paper-btn:active { box-shadow: var(--neu-inset-sm); }
+    .paper-btn:disabled { opacity: 0.55; cursor: default; }
+    .quiet-btn {
+      display: inline-flex; align-items: center; gap: 7px;
+      padding: 7px 14px; background: transparent; border: none; cursor: pointer;
+      font-family: 'Space Grotesk', sans-serif; font-size: 12px; color: var(--text-faint);
+      box-shadow: 0 0 0 1px rgba(0,0,0,0.06); border-radius: 14px;
+      transition: color 0.15s, box-shadow 0.15s;
+    }
+    .quiet-btn:hover { color: var(--text-muted); box-shadow: 0 0 0 1px rgba(0,0,0,0.12); }
+
+    /* Marking view */
+    .score-big {
+      font-family: 'Space Grotesk', sans-serif;
+      font-size: 42px; font-weight: 700; color: var(--text);
+      line-height: 1; margin-bottom: 4px;
+    }
+    .score-big .of { font-size: 20px; font-weight: 600; color: var(--text-muted); }
+    .grade-band {
+      display: flex; align-items: flex-start; gap: 10px;
+      padding: 10px 14px; margin: 14px 0;
+      border-radius: 8px; font-family: 'Space Grotesk', sans-serif;
+      font-size: 13px; line-height: 1.55;
+    }
+    .grade-band[data-grade="red"]   { background: rgba(220,53,69,0.08);  border-left: 3px solid #dc3545; }
+    .grade-band[data-grade="amber"] { background: rgba(255,165,0,0.10);  border-left: 3px solid #e6a817; }
+    .grade-band[data-grade="green"] { background: rgba(40,167,69,0.09);  border-left: 3px solid #28a745; }
+    .grade-band .gb-dot {
+      width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; margin-top: 5px;
+    }
+    .grade-band[data-grade="red"]   .gb-dot { background: #dc3545; }
+    .grade-band[data-grade="amber"] .gb-dot { background: #e6a817; }
+    .grade-band[data-grade="green"] .gb-dot { background: #28a745; }
+    .grade-band .gb-feedback { flex: 1; color: var(--text); }
+
+    .missing-label, .tip-label {
+      font-size: 10px; font-weight: 600; color: var(--accent);
+      text-transform: uppercase; letter-spacing: 0.07em; margin-bottom: 6px;
+    }
+    .missing-wrap { margin: 16px 0 0; }
+    .missing-wrap.hidden { display: none; }
+    .missing-list { margin: 0 0 0 4px; padding: 0; list-style: none; }
+    .missing-list li {
+      font-family: 'Lora', Georgia, serif; font-size: 14px;
+      line-height: 1.6; color: var(--text); margin-bottom: 6px;
+      padding-left: 18px; position: relative;
+    }
+    .missing-list li::before {
+      content: '+'; position: absolute; left: 0; top: 0;
+      color: var(--text-faint); font-family: 'Space Grotesk', sans-serif; font-weight: 700;
+    }
+    .tip-wrap { margin: 18px 0 0; }
+    .tip-text { font-size: 13px; color: var(--text); line-height: 1.55; }
+
+    .model-toggle-wrap { margin: 20px 0 0; }
+    .model-answer {
+      margin-top: 12px;
+      font-family: 'Lora', Georgia, serif; font-size: 14px;
+      line-height: 1.75; color: var(--text); white-space: pre-wrap;
+      padding-left: 14px; border-left: 2px solid rgba(0,0,0,0.10);
+    }
+    .model-answer.hidden { display: none; }
+
+    /* ── Explain popup (no scrim — the raised shadow does the focus work) ── */
+    .explain-popup {
+      position: fixed; z-index: 200;
+      background: var(--bg); border-radius: 14px;
+      box-shadow: 10px 10px 28px #ababab, -8px -8px 20px #ffffff;
+      padding: 14px 16px; width: 270px; max-height: 70vh; overflow-y: auto;
+      scrollbar-width: none;
+    }
+    .explain-popup::-webkit-scrollbar { display: none; }
+    .explain-popup.hidden { display: none; }
+    .explain-popup .exp-text {
+      font-size: 12px; color: var(--text); line-height: 1.55;
+      margin-bottom: 10px;
+    }
+    .explain-popup .exp-links { display: flex; flex-direction: column; gap: 5px; }
+    .explain-popup .exp-link {
+      display: flex; align-items: center; gap: 7px;
+      padding: 5px 10px; border-radius: 10px;
+      background: var(--bg); box-shadow: var(--neu-raised-xs);
+      font-family: 'Space Grotesk', sans-serif; font-size: 11px;
+      color: var(--text-muted); text-decoration: none;
+    }
+    .explain-popup .exp-link:hover { color: var(--accent); }
+    .explain-popup .exp-close {
+      display: block; width: 100%; padding: 5px; border: none;
+      font-family: 'Space Grotesk', sans-serif; font-size: 11px;
+      color: var(--text-faint); background: transparent; cursor: pointer;
+      text-align: center; margin-top: 6px;
+    }
+    .explain-popup .exp-close:hover { color: var(--text); }
+
+    /* Mobile */
+    @media (max-width: 600px) {
+      .paper { padding: 44px 24px 52px; min-height: 440px; }
+      .paper::after { left: 18px; }
+      .q-text { font-size: 16px; line-height: 28px; }
+      .progress-strip { padding: 12px 14px 10px; gap: 12px; }
+      .ladder { min-width: 100%; }
+      .strip-stats { width: 100%; justify-content: space-between; }
+      .strip-stat { flex: 1; }
+      .score-big { font-size: 36px; }
+      .explain-popup { width: min(280px, calc(100vw - 24px)); }
+      .paper-actions .paper-btn { flex: 1 1 auto; text-align: center; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="brand">Q<span class="dot">.</span></div>
+    <div class="crumbs">Revision</div>
+    <div class="nav-links">
+      <a href="/writer" class="back">← Writer</a>
+    </div>
+  </header>
+
+  <!-- Progress strip — always visible. The climb from U is the whole point. -->
+  <div class="progress-strip" id="progress-strip">
+    <div class="ladder" id="ladder"></div>
+    <div class="strip-stats">
+      <div class="strip-stat">
+        <span class="s-val" id="stat-streak">🔥 0</span>
+        <span class="s-lbl">day streak</span>
+      </div>
+      <div class="strip-stat">
+        <span class="s-val" id="stat-xp">0</span>
+        <span class="s-lbl">XP today</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Setup card — shown first, folds away once revising -->
+  <div class="setup-strip" id="setup-strip">
+    <div class="setup-strip-header">
+      What are we revising today?
+      <span>saved for next time</span>
+    </div>
+    <div class="setup-row">
+      <div class="setup-field" style="flex:2">
+        <div class="setup-label">Subject</div>
+        <input class="setup-input" id="setup-subject" type="text"
+          placeholder="e.g. Biology" autocomplete="off" />
+      </div>
+      <div class="setup-field" style="flex:1">
+        <div class="setup-label">Level</div>
+        <select class="setup-select" id="setup-level">
+          <option>GCSE</option>
+          <option selected>A-Level Year 12</option>
+          <option>A-Level Year 13</option>
+          <option>BTEC</option>
+          <option>Other</option>
+        </select>
+      </div>
+      <div class="setup-field" style="flex:1">
+        <div class="setup-label">Exam board</div>
+        <select class="setup-select" id="setup-board">
+          <option>AQA</option>
+          <option>Edexcel</option>
+          <option>OCR</option>
+          <option>WJEC</option>
+          <option value="Other">Other / Not sure</option>
+        </select>
+      </div>
+    </div>
+    <div class="setup-row">
+      <div class="setup-field" style="flex:2">
+        <div class="setup-label">Topics (optional — paste your teacher's whole list if you have one)</div>
+        <textarea class="setup-input" id="setup-topic" rows="2"
+          placeholder="leave blank and I'll pick" autocomplete="off" style="resize: vertical; font-family: inherit;"></textarea>
+      </div>
+      <div class="setup-field" style="flex:1">
+        <div class="setup-label">Videos by (optional)</div>
+        <input class="setup-input" id="setup-channel" type="text"
+          placeholder="e.g. The Law Teacher" autocomplete="off" />
+      </div>
+    </div>
+    <div style="display:flex; justify-content:flex-end; gap:12px; align-items:center">
+      <span class="setup-nudge hidden" id="setup-nudge">Tell me the subject first — one word is enough.</span>
+      <button type="button" class="setup-start" id="setup-start">Start revising →</button>
+    </div>
+  </div>
+
+  <div class="desk">
+    <div class="paper">
+      <div class="curl"></div>
+
+      <!-- Idle -->
+      <div class="view show" id="view-idle">
+        <p class="paper-quiet">Set your subject above and hit Start — your first question lands right here. Answer it like it's the real paper; I'll mark it like a real examiner.</p>
+      </div>
+
+      <!-- Thinking -->
+      <div class="view" id="view-thinking">
+        <p class="paper-thinking" id="thinking-text">Q is writing your question…</p>
+      </div>
+
+      <!-- Error -->
+      <div class="view" id="view-error">
+        <p class="err-msg" id="error-text">That one didn't come through — probably a network blip. Your progress is safe.</p>
+        <button type="button" class="paper-btn" id="btn-retry">↻ Try again</button>
+      </div>
+
+      <!-- Question -->
+      <div class="view" id="view-question">
+        <div class="paper-meta">
+          <span id="q-number">Question 1</span>
+          <span id="q-context"></span>
+        </div>
+        <div class="chip-row">
+          <span class="chip" id="chip-topic"></span>
+          <span class="chip" id="chip-difficulty"></span>
+        </div>
+        <div class="q-text" id="q-text"></div>
+        <div class="marks-label" id="q-marks"></div>
+        <textarea class="answer-area" id="answer-area" rows="6"
+          placeholder="Write your answer here — bullet points earn marks too…"></textarea>
+        <div class="answer-hint hidden" id="answer-hint">Write your answer first — even a bullet point can score.</div>
+        <div class="paper-actions">
+          <button type="button" class="paper-btn" id="btn-mark">Mark it →</button>
+          <button type="button" class="quiet-btn" id="btn-explain">I don't understand this</button>
+          <button type="button" class="quiet-btn" id="btn-skip">Skip</button>
+        </div>
+      </div>
+
+      <!-- Marking -->
+      <div class="view" id="view-marking">
+        <div class="paper-meta"><span id="m-context"></span></div>
+        <div class="score-big" id="m-score">0<span class="of">/0</span></div>
+        <div class="grade-band" id="m-band" data-grade="amber">
+          <span class="gb-dot"></span>
+          <span class="gb-feedback" id="m-feedback"></span>
+        </div>
+        <div class="missing-wrap" id="m-missing-wrap">
+          <div class="missing-label">What would've got the marks</div>
+          <ul class="missing-list" id="m-missing"></ul>
+        </div>
+        <div class="tip-wrap">
+          <div class="tip-label">Next time</div>
+          <div class="tip-text" id="m-tip"></div>
+        </div>
+        <div class="model-toggle-wrap">
+          <button type="button" class="quiet-btn" id="btn-model-toggle">Show a full-mark answer</button>
+          <div class="model-answer hidden" id="m-model"></div>
+        </div>
+        <div class="paper-actions">
+          <button type="button" class="paper-btn" id="btn-next">Next question →</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Settings cog to re-open setup -->
+  <button class="setup-cog hidden" id="setup-cog" title="Change subject or topic" aria-label="Open settings">
+    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+    </svg>
+  </button>
+
+  <!-- Explain popup -->
+  <div class="explain-popup hidden" id="explain-popup">
+    <div class="exp-text" id="explain-text"></div>
+    <div class="exp-links" id="explain-links"></div>
+    <button class="exp-close" id="explain-close">close</button>
+  </div>
+
+  <script>
+  (() => {
+    'use strict';
+
+    const GRADES = ['U', 'E', 'D', 'C', 'B', 'A', 'A*'];
+
+    // ── State ──────────────────────────────────────────────────────────────
+    const state = {
+      progress: { settings: {}, history: [], streak: { lastDay: '', count: 0 } },
+      currentQ: null,        // the question object being answered
+      askedSoFar: [],        // ≤10-word summaries, this session only
+      sessionCount: 0,       // question number this session
+      lastError: null,       // 'question' | 'mark' — what Try again should redo
+    };
+
+    // ── Element refs ───────────────────────────────────────────────────────
+    const $ = (id) => document.getElementById(id);
+    const views = {
+      idle: $('view-idle'), thinking: $('view-thinking'), error: $('view-error'),
+      question: $('view-question'), marking: $('view-marking'),
+    };
+    const setupStrip = $('setup-strip');
+    const setupCog   = $('setup-cog');
+    const setupNudge = $('setup-nudge');
+    const answerArea = $('answer-area');
+    const answerHint = $('answer-hint');
+    const btnMark    = $('btn-mark');
+
+    function showView(name) {
+      Object.keys(views).forEach((k) => views[k].classList.toggle('show', k === name));
+    }
+
+    // ── API helpers ────────────────────────────────────────────────────────
+    async function post(url, body) {
+      const r = await fetch(url, {
+        method: 'POST', credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      return r.json();
+    }
+
+    // ── Dates ──────────────────────────────────────────────────────────────
+    function dayKey(d) {
+      const x = d ? new Date(d) : new Date();
+      return x.getFullYear() + '-' + String(x.getMonth() + 1).padStart(2, '0')
+        + '-' + String(x.getDate()).padStart(2, '0');
+    }
+    const todayKey = () => dayKey();
+    const yesterdayKey = () => dayKey(new Date(Date.now() - 86400000));
+
+    // ── Progress maths ─────────────────────────────────────────────────────
+    function currentGrade() {
+      const h = state.progress.history;
+      if (!h.length) return 'U';
+      const last10 = h.slice(-10);
+      const avg = last10.reduce((s, e) => s + (e.outOf ? (e.score / e.outOf) * 100 : 0), 0) / last10.length;
+      if (avg < 20) return 'U';
+      if (avg < 35) return 'E';
+      if (avg < 45) return 'D';
+      if (avg < 55) return 'C';
+      if (avg < 70) return 'B';
+      if (avg <= 85) return 'A';
+      return 'A*';
+    }
+
+    function streakCount() {
+      const s = state.progress.streak || {};
+      if (s.lastDay === todayKey() || s.lastDay === yesterdayKey()) return s.count || 0;
+      return 0; // streak broken — the fire's gone out
+    }
+
+    function xpToday() {
+      return state.progress.history
+        .filter((e) => dayKey(e.date) === todayKey())
+        .reduce((s, e) => s + (e.score || 0), 0);
+    }
+
+    function weakAreas() {
+      const byTag = {};
+      state.progress.history.forEach((e) => {
+        if (!e.topicTag || !e.outOf) return;
+        (byTag[e.topicTag] = byTag[e.topicTag] || []).push(e.score / e.outOf);
+      });
+      return Object.keys(byTag)
+        .filter((t) => byTag[t].reduce((a, b) => a + b, 0) / byTag[t].length < 0.5)
+        .slice(0, 6);
+    }
+
+    // ── Progress strip render ──────────────────────────────────────────────
+    function renderStrip() {
+      const grade = currentGrade();
+      const idx = GRADES.indexOf(grade);
+      const ladder = $('ladder');
+      ladder.innerHTML = '';
+      GRADES.forEach((g, i) => {
+        const rung = document.createElement('div');
+        rung.className = 'rung' + (i < idx ? ' done' : i === idx ? ' current' : '');
+        const dot = document.createElement('span');
+        dot.className = 'r-dot';
+        const lbl = document.createElement('span');
+        lbl.className = 'r-g';
+        lbl.textContent = g;
+        rung.appendChild(dot);
+        rung.appendChild(lbl);
+        ladder.appendChild(rung);
+      });
+      $('stat-streak').textContent = '🔥 ' + streakCount();
+      $('stat-xp').textContent = String(xpToday());
+    }
+
+    // ── Persistence ────────────────────────────────────────────────────────
+    async function loadProgress() {
+      try {
+        const r = await fetch('/revision/progress', { credentials: 'include' });
+        const d = await r.json();
+        if (d && typeof d === 'object') {
+          state.progress.settings = d.settings || {};
+          state.progress.history = Array.isArray(d.history) ? d.history : [];
+          state.progress.streak = d.streak && typeof d.streak === 'object'
+            ? { lastDay: d.streak.lastDay || '', count: d.streak.count || 0 }
+            : { lastDay: '', count: 0 };
+        }
+      } catch (e) { /* first visit or offline — start fresh, nothing lost */ }
+    }
+
+    function saveProgress() {
+      post('/revision/progress', state.progress).catch(() => {});
+    }
+
+    // ── Setup ──────────────────────────────────────────────────────────────
+    function prefillSetup() {
+      const s = state.progress.settings || {};
+      if (s.subject) $('setup-subject').value = s.subject;
+      if (s.level)   $('setup-level').value = s.level;
+      if (s.board)   $('setup-board').value = s.board;
+      if (s.topic)   $('setup-topic').value = s.topic;
+      if (s.channel) $('setup-channel').value = s.channel;
+    }
+
+    $('setup-start').addEventListener('click', () => {
+      const subject = $('setup-subject').value.trim();
+      if (!subject) {
+        setupNudge.classList.remove('hidden');
+        $('setup-subject').focus();
+        return;
+      }
+      setupNudge.classList.add('hidden');
+      state.progress.settings = {
+        subject,
+        level: $('setup-level').value,
+        board: $('setup-board').value,
+        topic: $('setup-topic').value.trim(),
+        channel: $('setup-channel').value.trim(),
+      };
+      saveProgress();
+      setupStrip.classList.add('hidden');
+      setupCog.classList.remove('hidden');
+      nextQuestion();
+    });
+
+    setupCog.addEventListener('click', () => {
+      setupStrip.classList.toggle('hidden');
+    });
+
+    // ── Question flow ──────────────────────────────────────────────────────
+    async function nextQuestion() {
+      const s = state.progress.settings;
+      $('thinking-text').textContent = 'Q is writing your question…';
+      showView('thinking');
+      state.lastError = 'question';
+      try {
+        const d = await post('/revision/question', {
+          subject: s.subject, board: s.board, level: s.level, topic: s.topic,
+          askedSoFar: state.askedSoFar,
+          weakAreas: weakAreas(),
+        });
+        if (!d.ok || !d.question) throw new Error(d.error || 'no question');
+
+        state.currentQ = d;
+        state.sessionCount += 1;
+        // Remember a ≤10-word summary so this session never repeats itself
+        state.askedSoFar.push(d.question.split(/\s+/).slice(0, 10).join(' '));
+        if (state.askedSoFar.length > 30) state.askedSoFar.shift();
+
+        $('q-number').textContent = 'Question ' + state.sessionCount;
+        $('q-context').textContent = [s.subject, s.board !== 'Other' ? s.board : '', s.level]
+          .filter(Boolean).join(' · ');
+        $('chip-topic').textContent = d.topicTag || s.subject;
+        $('chip-difficulty').textContent = d.difficulty || 'standard';
+        $('q-text').textContent = d.question;
+        $('q-marks').textContent = '[' + d.marks + (d.marks === 1 ? ' mark]' : ' marks]');
+        answerArea.value = '';
+        answerArea.style.height = '';
+        answerHint.classList.add('hidden');
+        btnMark.disabled = false;
+        btnMark.textContent = 'Mark it →';
+        showView('question');
+        answerArea.focus();
+      } catch (e) {
+        $('error-text').textContent = 'Couldn\'t fetch your question — probably a network blip. Your progress is safe.';
+        showView('error');
+      }
+    }
+
+    // Answer box grows with the answer
+    answerArea.addEventListener('input', () => {
+      answerHint.classList.add('hidden');
+      answerArea.style.height = 'auto';
+      answerArea.style.height = Math.max(150, answerArea.scrollHeight) + 'px';
+    });
+
+    // ── Marking flow ───────────────────────────────────────────────────────
+    async function markIt() {
+      const q = state.currentQ;
+      if (!q) return;
+      const answer = answerArea.value.trim();
+      if (!answer) {
+        answerHint.classList.remove('hidden');
+        answerArea.focus();
+        return;
+      }
+      btnMark.disabled = true;
+      btnMark.textContent = 'Marking…';
+      try {
+        const d = await post('/revision/mark', {
+          question: q.question, markScheme: q.markScheme, modelAnswer: q.modelAnswer,
+          marks: q.marks, answer, level: state.progress.settings.level,
+        });
+        if (!d.ok || typeof d.score !== 'number') throw new Error(d.error || 'no mark');
+
+        // Record it
+        state.progress.history.push({
+          date: new Date().toISOString(),
+          topicTag: q.topicTag, score: d.score, outOf: d.outOf,
+        });
+        const st = state.progress.streak;
+        if (st.lastDay !== todayKey()) {
+          st.count = st.lastDay === yesterdayKey() ? (st.count || 0) + 1 : 1;
+          st.lastDay = todayKey();
+        }
+        saveProgress();
+        renderStrip();
+
+        // Show the marking
+        $('m-context').textContent = (q.topicTag || '') + ' · ' + q.marks + ' marks';
+        $('m-score').innerHTML = d.score + '<span class="of">/' + d.outOf + '</span>';
+        $('m-band').dataset.grade = d.grade || 'amber';
+        $('m-feedback').textContent = d.feedback || '';
+        const missing = Array.isArray(d.missing) ? d.missing.filter(Boolean) : [];
+        $('m-missing-wrap').classList.toggle('hidden', missing.length === 0);
+        const list = $('m-missing');
+        list.innerHTML = '';
+        missing.forEach((m) => {
+          const li = document.createElement('li');
+          li.textContent = m;
+          list.appendChild(li);
+        });
+        $('m-tip').textContent = d.tip || '';
+        $('m-model').textContent = q.modelAnswer || '';
+        $('m-model').classList.add('hidden');
+        $('btn-model-toggle').textContent = 'Show a full-mark answer';
+        showView('marking');
+      } catch (e) {
+        // Keep their answer on the paper — just let them resend it
+        btnMark.disabled = false;
+        btnMark.textContent = '↻ Try marking again';
+        answerHint.textContent = 'Marking didn\'t come back — your answer is still here, hit the button again.';
+        answerHint.classList.remove('hidden');
+      }
+    }
+
+    btnMark.addEventListener('click', markIt);
+    $('btn-skip').addEventListener('click', nextQuestion);
+    $('btn-next').addEventListener('click', nextQuestion);
+    $('btn-retry').addEventListener('click', () => {
+      if (state.lastError === 'question') nextQuestion();
+      else showView(state.currentQ ? 'question' : 'idle');
+    });
+
+    $('btn-model-toggle').addEventListener('click', () => {
+      const el = $('m-model');
+      el.classList.toggle('hidden');
+      $('btn-model-toggle').textContent = el.classList.contains('hidden')
+        ? 'Show a full-mark answer' : 'Hide the full-mark answer';
+    });
+
+    // ── "I don't understand this" → /writer/explain ───────────────────────
+    const explainPopup = $('explain-popup');
+    const explainText  = $('explain-text');
+    const explainLinks = $('explain-links');
+    $('explain-close').addEventListener('click', () => explainPopup.classList.add('hidden'));
+
+    $('btn-explain').addEventListener('click', async () => {
+      const q = state.currentQ;
+      const concept = (q && (q.topicTag || q.question)) || state.progress.settings.subject || 'this topic';
+      const btnRect = $('btn-explain').getBoundingClientRect();
+      explainPopup.style.left = Math.max(12, Math.min(btnRect.left, window.innerWidth - 290)) + 'px';
+      explainPopup.style.top = Math.min(btnRect.bottom + 8, window.innerHeight - 220) + 'px';
+      explainText.textContent = 'Q is explaining…';
+      explainLinks.innerHTML = '';
+      explainPopup.classList.remove('hidden');
+      try {
+        const d = await post('/writer/explain', {
+          concept,
+          subject: state.progress.settings.subject || '',
+          yearGroup: state.progress.settings.level || '',
+        });
+        if (!d.ok) throw new Error(d.error);
+        explainText.textContent = d.explanation || '';
+        explainLinks.innerHTML = '';
+        const terms = (d.searchTerms && d.searchTerms.length) ? d.searchTerms : [concept];
+        // Teacher-recommended channel goes first — their videos, this topic
+        const channel = (state.progress.settings.channel || '').trim();
+        if (channel) {
+          const a = document.createElement('a');
+          a.className = 'exp-link';
+          a.href = 'https://www.youtube.com/results?search_query=' + encodeURIComponent(channel + ' ' + concept);
+          a.target = '_blank';
+          a.rel = 'noopener';
+          a.textContent = '▶  ' + channel + ' — ' + concept;
+          explainLinks.appendChild(a);
+        }
+        terms.slice(0, channel ? 2 : 3).forEach((term) => {
+          const a = document.createElement('a');
+          a.className = 'exp-link';
+          a.href = 'https://www.youtube.com/results?search_query=' + encodeURIComponent(term);
+          a.target = '_blank';
+          a.rel = 'noopener';
+          a.textContent = '▶  ' + term;
+          explainLinks.appendChild(a);
+        });
+      } catch (e) {
+        explainText.textContent = 'Couldn\'t get an explanation — try again.';
+      }
+    });
+
+    // ── Boot ───────────────────────────────────────────────────────────────
+    (async () => {
+      await loadProgress();
+      prefillSetup();
+      renderStrip();
+    })();
+  })();
+  </script>
+</body>
+</html>

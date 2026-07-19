@@ -235,6 +235,13 @@ function getTutorPath(personId) {
     return path.join(Q_DATA_DIR, `q-tutor-${safeId(personId)}.json`);
 }
 
+// Q's revision book — per person: subject settings, question history (scores
+// per topic), and the streak. The /revise page reads and writes the whole
+// object; weak-topic targeting is derived from it.
+function getRevisionPath(personId) {
+    return path.join(Q_DATA_DIR, `q-revision-${safeId(personId)}.json`);
+}
+
 module.exports = {
     loadMemory,
     saveMemory,
@@ -246,5 +253,6 @@ module.exports = {
     getVoicePath,
     getDocPath,
     getTutorPath,
+    getRevisionPath,
     migrateLegacyMemory,
 };

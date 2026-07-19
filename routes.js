@@ -44,7 +44,7 @@ const {
 // Boot the scheduler worker as soon as the routes module loads.
 // Idempotent — calling more than once is safe.
 startScheduler();
-const { loadMemory, clearMemory, appendMessage, getRecentMessages, getCircleSummary, getMemoryPath, getVoicePath, getDocPath, getTutorPath } = require('./memory');
+const { loadMemory, clearMemory, appendMessage, getRecentMessages, getCircleSummary, getMemoryPath, getVoicePath, getDocPath, getTutorPath, getRevisionPath } = require('./memory');
 const { requirePerson, tryAttachPerson, setSessionCookie, clearSessionCookie } = require('./auth');
 const { listPeople, addPerson, signupPerson, isApproved, approvePerson, isAdmin, getPerson, getPersonByEmail, removePerson, verifyLogin, changePassword, updateName, rotatePassword, createResetToken, consumeResetToken } = require('./people');
 const { sendMail, isConfigured: mailerConfigured } = require('./mailer');
@@ -332,6 +332,12 @@ router.get('/tools', (req, res) => {
 // questions and assembles. See plugins/q-writer.js.
 router.get('/writer', (req, res) => {
     res.sendFile(path.join(__dirname, 'writer.html'));
+});
+
+// Revision — one exam-style question at a time, marked strictly, U→A ladder.
+// Claude-backed (q-revision via q-claude) with Q as fallback.
+router.get('/revise', (req, res) => {
+    res.sendFile(path.join(__dirname, 'revise.html'));
 });
 
 // Q's personal finance page.
@@ -1012,6 +1018,149 @@ router.get('/writer/doc', requirePerson, async (req, res) => {
         res.json({ ok: true, text, name, savedAt });
     } catch (e) {
         res.json({ ok: true, text: null });
+    }
+});
+
+// ── Fetch a pasted link and turn the page into task text ───────────────────
+// The writer (and revision) source slot accepts a URL — e.g. the course page
+// an assignment lives on. We fetch it server-side, strip it to readable text,
+// and feed it into the same brief pipeline as an uploaded file.
+
+function htmlToText(html) {
+    let s = String(html);
+    // Drop the parts that are never content
+    s = s.replace(/<!--[\s\S]*?-->/g, ' ');
+    s = s.replace(/<(script|style|noscript|svg|iframe|template)\b[\s\S]*?<\/\1>/gi, ' ');
+    s = s.replace(/<(nav|footer|aside)\b[\s\S]*?<\/\1>/gi, ' ');
+    // Structure → line breaks so the text keeps its shape
+    s = s.replace(/<\/(p|div|li|tr|h[1-6]|section|article|blockquote|table)>/gi, '\n');
+    s = s.replace(/<(br|hr)\s*\/?>/gi, '\n');
+    s = s.replace(/<li\b[^>]*>/gi, '\n- ');
+    // Strip remaining tags, decode the common entities
+    s = s.replace(/<[^>]+>/g, ' ');
+    s = s.replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/&lt;/g, '<')
+         .replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#0?39;/g, "'")
+         .replace(/&#(\d+);/g, (_, n) => { try { return String.fromCodePoint(Number(n)); } catch { return ' '; } });
+    // Tidy whitespace
+    s = s.replace(/[ \t]+/g, ' ').replace(/ ?\n ?/g, '\n').replace(/\n{3,}/g, '\n\n');
+    return s.trim();
+}
+
+router.post('/writer/fetch-url', requirePerson, express.json({ limit: '32kb' }), async (req, res) => {
+    let url = String(req.body?.url || '').trim();
+    if (!url) return res.status(400).json({ error: 'url required' });
+    if (!/^https?:\/\//i.test(url)) url = 'https://' + url;
+
+    let parsed;
+    try { parsed = new URL(url); } catch { return res.status(400).json({ error: 'That doesn\'t look like a valid link.' }); }
+    // Never let this be used to poke at internal services
+    const host = parsed.hostname.toLowerCase();
+    if (host === 'localhost' || host === '0.0.0.0' || host === '[::1]'
+        || /^127\./.test(host) || /^10\./.test(host) || /^192\.168\./.test(host)
+        || /^169\.254\./.test(host) || /^172\.(1[6-9]|2\d|3[01])\./.test(host)) {
+        return res.status(400).json({ error: 'That address can\'t be fetched.' });
+    }
+
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 20000);
+    try {
+        const r = await fetch(parsed.href, {
+            signal: controller.signal,
+            redirect: 'follow',
+            headers: {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36',
+                'Accept': 'text/html,application/xhtml+xml,application/pdf;q=0.9,*/*;q=0.8',
+            },
+        });
+        clearTimeout(timer);
+        if (!r.ok) return res.status(502).json({ error: `The site answered with ${r.status}. If the page needs a login, copy the text and paste it in instead.` });
+
+        const contentType = (r.headers.get('content-type') || '').toLowerCase();
+
+        // A link straight to a PDF (course briefs often are)
+        if (contentType.includes('application/pdf') || parsed.pathname.toLowerCase().endsWith('.pdf')) {
+            const buffer = Buffer.from(await r.arrayBuffer());
+            const pdfParse = require('pdf-parse');
+            const data = await pdfParse(buffer);
+            const pdfText = (data.text || '').trim();
+            console.log('[writer/fetch-url] pdf ' + host + ' → ' + pdfText.length + ' chars');
+            if (pdfText.length < 200) return res.json({ ok: false, error: 'That PDF came back nearly empty — it may be scanned images. Try uploading it as a file instead.' });
+            return res.json({ ok: true, text: pdfText.slice(0, 200000), title: parsed.pathname.split('/').pop() || host, kind: 'pdf' });
+        }
+
+        const html = await r.text();
+        const titleMatch = html.match(/<title[^>]*>([\s\S]{0,300}?)<\/title>/i);
+        const title = titleMatch ? htmlToText(titleMatch[1]).slice(0, 120) : '';
+        const text = htmlToText(html);
+        console.log('[writer/fetch-url] ' + host + ' → ' + text.length + ' chars');
+        if (text.length < 200) {
+            return res.json({ ok: false, error: 'That page didn\'t give me much to read — it probably needs a login. Open it, copy the text, and paste it in instead.' });
+        }
+        return res.json({ ok: true, text: text.slice(0, 200000), title, kind: 'html' });
+    } catch (e) {
+        clearTimeout(timer);
+        const msg = e.name === 'AbortError' ? 'That site took too long to answer.' : ('Couldn\'t reach that link: ' + e.message);
+        console.warn('[writer/fetch-url] ' + msg);
+        return res.status(502).json({ error: msg + ' If the page needs a login, copy the text and paste it in instead.' });
+    }
+});
+
+// ── Revision routes ────────────────────────────────────────────────────────
+// Active-recall subject revision: one exam-style question at a time, marked
+// strictly against a mark scheme. Engine: plugins/q-revision.js (Claude first
+// via q-claude, Q fallback). Progress lives per-person in q-revision-{id}.json.
+
+// POST /revision/question — write the next exam-style question
+router.post('/revision/question', requirePerson, express.json({ limit: '256kb' }), async (req, res) => {
+    try {
+        const qRevision = require('./plugins/q-revision');
+        const { subject, board, level, topic, askedSoFar, weakAreas } = req.body || {};
+        if (!subject) return res.status(400).json({ error: 'subject required' });
+        const result = await qRevision.generateQuestion({
+            subject, board, level, topic,
+            askedSoFar: Array.isArray(askedSoFar) ? askedSoFar : [],
+            weakAreas: Array.isArray(weakAreas) ? weakAreas : [],
+        });
+        res.json({ ok: true, ...result });
+    } catch (e) {
+        console.error('[revision/question]', e.message);
+        res.status(500).json({ error: e.message });
+    }
+});
+
+// POST /revision/mark — mark the student's answer against the mark scheme
+router.post('/revision/mark', requirePerson, express.json({ limit: '256kb' }), async (req, res) => {
+    try {
+        const qRevision = require('./plugins/q-revision');
+        const { question, markScheme, modelAnswer, marks, answer, level } = req.body || {};
+        if (!question || !answer) return res.status(400).json({ error: 'question and answer required' });
+        const result = await qRevision.markAnswer({ question, markScheme, modelAnswer, marks, answer, level });
+        res.json({ ok: true, ...result });
+    } catch (e) {
+        console.error('[revision/mark]', e.message);
+        res.status(500).json({ error: e.message });
+    }
+});
+
+// GET /revision/progress — this person's revision book
+router.get('/revision/progress', requirePerson, (req, res) => {
+    try {
+        const p = getRevisionPath(req.person.id);
+        if (!fs.existsSync(p)) return res.json({});
+        res.json(JSON.parse(fs.readFileSync(p, 'utf8')));
+    } catch (e) {
+        res.json({});
+    }
+});
+
+// POST /revision/progress — save the whole revision book
+router.post('/revision/progress', requirePerson, express.json({ limit: '512kb' }), (req, res) => {
+    try {
+        fs.writeFileSync(getRevisionPath(req.person.id), JSON.stringify(req.body || {}, null, 2), 'utf8');
+        res.json({ ok: true });
+    } catch (e) {
+        console.error('[revision/progress]', e.message);
+        res.status(500).json({ error: e.message });
     }
 });
 

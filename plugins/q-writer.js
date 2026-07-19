@@ -15,6 +15,7 @@
 
 const { Q_CONFIG } = require('../config');
 const { cleanModelOutput } = require('./cjk-filter');
+const { accurateJSON } = require('./q-claude');
 
 async function callQ(systemPrompt, userPrompt, { maxTokens = 4096 } = {}) {
     const response = await fetch(`${Q_CONFIG.baseURL}/chat/completions`, {
@@ -43,6 +44,13 @@ async function callQ(systemPrompt, userPrompt, { maxTokens = 4096 } = {}) {
     return JSON.parse(cleaned);
 }
 
+// Accuracy-critical calls (reading the brief, marking, references, teaching)
+// go to Claude first — Q is the fallback so the writer never goes dark.
+// Voice-flavoured calls (swaps, reframes, leading questions) stay on Q.
+async function callAccurate(systemPrompt, userPrompt, opts = {}) {
+    return accurateJSON(systemPrompt, userPrompt, { ...opts, fallback: callQ });
+}
+
 async function analyseTask(taskText) {
     const system = `You analyse assignment briefs and writing tasks to extract structure for a writing coach.
 
@@ -59,7 +67,7 @@ Return ONLY valid JSON with these fields:
 - subject (string): the subject area (e.g. "Strategic HRM", "English Literature", "Business Studies")
 - keyConcepts (array of strings): 3-6 specific concepts/themes from THIS brief the student must address
 - gradeBands (object with keys "top", "mid", "low"): one concrete sentence per band — what distinguishes a top answer from a mid answer for THIS specific task`;
-    return await callQ(system, `TASK INPUT:\n${taskText}`, { maxTokens: 800 });
+    return await callAccurate(system, `TASK INPUT:\n${taskText}`, { maxTokens: 800 });
 }
 
 async function nextQuestion(analysis, history) {
@@ -147,7 +155,7 @@ Return ONLY valid JSON:
 - markedSections (array of 2-6 objects): the sections the student needs to write, in order. Each: { name (string), description (string — 1 sentence of what goes in it), suggestFirstQ (string — the natural leading question a real tutor would ask first to get them writing this section) }
 - teachersBrief (string): what an examiner is looking for in a top answer — the secret sauce, in plain language`;
 
-    return await callQ(
+    return await callAccurate(
         system,
         `TASK ANALYSIS:\n${JSON.stringify(analysis, null, 2)}\n\nBuild the tutor's brief.`,
         { maxTokens: 1200 }
@@ -332,7 +340,7 @@ Return ONLY valid JSON:
 - type (string): "book", "article", "website", "newspaper", "chapter", or "other"
 - warnings (array of strings): any fields you had to leave as [?] or [n.d.] etc — so the user knows what to verify`;
 
-    return await callQ(system, `SOURCE TO FORMAT:\n${sourceDescription}`, { maxTokens: 500 });
+    return await callAccurate(system, `SOURCE TO FORMAT:\n${sourceDescription}`, { maxTokens: 500 });
 }
 
 async function suggestReferences(docText, subject, keyConcepts) {
@@ -354,7 +362,7 @@ Return ONLY valid JSON:
     const docSnippet = (docText || '').slice(0, 1200);
     const conceptList = (keyConcepts || []).join(', ');
 
-    return await callQ(
+    return await callAccurate(
         system,
         `SUBJECT: ${subject || 'unknown'}\nKEY CONCEPTS: ${conceptList || 'unknown'}\n\nDOCUMENT SO FAR:\n${docSnippet || '(blank)'}`,
         { maxTokens: 1200 }
@@ -383,7 +391,7 @@ Return ONLY valid JSON:
     uncertain (boolean)
   }`;
 
-    return await callQ(
+    return await callAccurate(
         system,
         `HIGHLIGHTED TEXT:\n"${paragraphText.slice(0, 600)}"\n\nSUBJECT: ${subject || 'unknown'}\nKEY CONCEPTS: ${(keyConcepts || []).join(', ')}`,
         { maxTokens: 900 }
@@ -404,7 +412,7 @@ Return ONLY valid JSON:
 - explanation (string): 2-3 sentences. Plain English, age-appropriate. No jargon. If a simple analogy helps, use one.
 - searchTerms (array of 3 strings): good search phrases the student could type into YouTube or a search engine to find videos that explain this. Make them specific enough to return useful results (e.g. "GCSE English Romeo and Juliet themes", "what is a simile explained simply", "Year 9 history WW1 causes").`;
 
-    return await callQ(
+    return await callAccurate(
         system,
         `CONCEPT / THING THEY DON'T UNDERSTAND: "${concept}"\nSUBJECT: ${subject || 'unknown'}`,
         { maxTokens: 350 }
@@ -431,7 +439,7 @@ Return ONLY valid JSON:
 - reason (string): 2 sentences — what's good and specifically what's holding it back
 - nextGradeHint (string): the single most impactful thing they could add or change to reach the next grade — concrete and specific, not vague`;
 
-    return await callQ(
+    return await callAccurate(
         system,
         `SECTION: ${sectionName}\nTASK: ${analysis?.task || 'unknown'}\n\nSTUDENT'S WRITING:\n${sectionText.slice(0, 1500)}`,
         { maxTokens: 500 }
@@ -470,7 +478,7 @@ Return ONLY valid JSON:
     craftLesson (string): 2-3 sentences teaching the CRAFT behind this — why it works, what it does to the reader
   }`;
 
-    return await callQ(
+    return await callAccurate(
         system,
         `SECTION NAME: ${sectionName}\nCURRENT GRADE: ${currentGrade}\nTARGET: ${targetGrade}\n\nSTUDENT'S WRITING:\n${sectionText.slice(0, 1000)}`,
         { maxTokens: 900 }
