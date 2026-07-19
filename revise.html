@@ -46,7 +46,7 @@
 
     /* ── Progress strip — the ladder is the heart of the page ───────────── */
     .progress-strip {
-      max-width: 760px; margin: 0 auto 20px;
+      max-width: 760px; margin: 0 auto 16px;
       background: var(--bg);
       box-shadow: var(--neu-raised-sm);
       border-radius: 14px;
@@ -91,6 +91,24 @@
     .strip-stat .s-lbl {
       font-size: 9px; font-weight: 600; color: var(--text-faint);
       text-transform: uppercase; letter-spacing: 0.06em;
+    }
+
+    /* ── Topic shelf — every topic they've built on, with mastery medals ── */
+    .topic-shelf {
+      max-width: 760px; margin: 0 auto 16px;
+      display: flex; flex-wrap: wrap; gap: 8px;
+    }
+    .topic-shelf.hidden { display: none; }
+    .shelf-chip {
+      display: inline-flex; align-items: center; gap: 6px;
+      font-size: 11px; font-weight: 500; color: var(--text-muted);
+      padding: 4px 12px; border-radius: 12px;
+      box-shadow: 0 0 0 1px rgba(0,0,0,0.07); background: transparent;
+    }
+    .shelf-chip.mastered { color: var(--text); box-shadow: 0 0 0 1px rgba(0,0,0,0.13); }
+    .shelf-chip .weak-dot {
+      width: 7px; height: 7px; border-radius: 50%;
+      background: #e6a817; flex-shrink: 0;
     }
 
     /* ── Setup card ─────────────────────────────────────────────────────── */
@@ -149,6 +167,21 @@
     }
     .setup-cog:hover { color: var(--accent); }
     .setup-cog.hidden { display: none; }
+
+    /* ── Stage tabs ─────────────────────────────────────────────────────── */
+    .stage-tabs { max-width: 760px; margin: 0 auto 14px; display: flex; gap: 10px; }
+    .stage-tab {
+      display: inline-flex; align-items: center; gap: 7px;
+      padding: 8px 18px; border: none; border-radius: 16px;
+      font-family: 'Space Grotesk', sans-serif; font-size: 13px; font-weight: 600;
+      background: var(--bg); color: var(--text-muted); cursor: pointer;
+      box-shadow: var(--neu-raised-sm);
+      transition: box-shadow 0.15s, color 0.15s;
+    }
+    .stage-tab:hover { color: var(--text); }
+    .stage-tab.active { box-shadow: var(--neu-inset-sm); color: var(--text); }
+    .stage-tab .lock { font-size: 12px; line-height: 1; }
+    .stage-tab .lock.hidden { display: none; }
 
     /* ── The desk + paper ───────────────────────────────────────────────── */
     .desk { max-width: 760px; margin: 0 auto; position: relative; }
@@ -223,7 +256,7 @@
       box-shadow: 0 0 0 1px rgba(0,0,0,0.08); background: transparent;
     }
 
-    /* Question view */
+    /* Question view (shared type styles) */
     .q-text {
       font-family: 'Lora', Georgia, serif;
       font-size: 17px; line-height: 32px; color: var(--text);
@@ -256,6 +289,7 @@
     .paper-btn:hover { box-shadow: var(--neu-raised-xs); }
     .paper-btn:active { box-shadow: var(--neu-inset-sm); }
     .paper-btn:disabled { opacity: 0.55; cursor: default; }
+    .paper-btn.hidden { display: none; }
     .quiet-btn {
       display: inline-flex; align-items: center; gap: 7px;
       padding: 7px 14px; background: transparent; border: none; cursor: pointer;
@@ -264,6 +298,144 @@
       transition: color 0.15s, box-shadow 0.15s;
     }
     .quiet-btn:hover { color: var(--text-muted); box-shadow: 0 0 0 1px rgba(0,0,0,0.12); }
+    .enter-hint { font-size: 11px; color: var(--text-faint); font-style: italic; }
+    .enter-hint.hidden { display: none; }
+
+    /* ── Quiz options (Build stage) ─────────────────────────────────────── */
+    .quiz-options { display: flex; flex-direction: column; gap: 10px; margin-top: 16px; }
+    .opt {
+      display: flex; align-items: center; gap: 12px; width: 100%;
+      padding: 12px 14px; border: none; border-radius: 12px;
+      font-family: 'Space Grotesk', sans-serif; font-size: 14px; font-weight: 500;
+      background: var(--bg); color: var(--text); cursor: pointer; text-align: left;
+      box-shadow: var(--neu-raised-sm); line-height: 1.4;
+      border-left: 3px solid transparent;
+      transition: box-shadow 0.15s;
+    }
+    .opt:hover { box-shadow: var(--neu-raised-xs); }
+    .opt:active { box-shadow: var(--neu-inset-sm); }
+    .opt:disabled { cursor: default; }
+    .opt:disabled:hover { box-shadow: var(--neu-raised-sm); }
+    .opt .opt-letter {
+      width: 26px; height: 26px; border-radius: 50%; flex-shrink: 0;
+      display: inline-flex; align-items: center; justify-content: center;
+      font-size: 12px; font-weight: 700; color: var(--text-muted);
+      background: var(--bg); box-shadow: var(--neu-inset-xs);
+    }
+    .opt .opt-text { flex: 1; }
+    .opt .opt-mark { font-weight: 700; font-size: 15px; flex-shrink: 0; }
+    .opt.correct {
+      background: rgba(40,167,69,0.09); border-left-color: #28a745;
+      box-shadow: var(--neu-raised-xs);
+    }
+    .opt.correct:disabled:hover { box-shadow: var(--neu-raised-xs); }
+    .opt.correct .opt-mark { color: #28a745; }
+    .opt.wrong {
+      background: rgba(220,53,69,0.08); border-left-color: #dc3545;
+      box-shadow: var(--neu-raised-xs);
+      animation: opt-shake 0.4s;
+    }
+    .opt.wrong:disabled:hover { box-shadow: var(--neu-raised-xs); }
+    .opt.wrong .opt-mark { color: #dc3545; }
+    .opt.dim { opacity: 0.55; }
+    @keyframes opt-shake {
+      0%,100% { transform: translateX(0); }
+      20% { transform: translateX(-6px); }
+      40% { transform: translateX(5px); }
+      60% { transform: translateX(-4px); }
+      80% { transform: translateX(3px); }
+    }
+
+    .why-wrap { margin-top: 16px; }
+    .why-wrap.hidden { display: none; }
+    .why-label {
+      font-size: 10px; font-weight: 600; color: var(--accent);
+      text-transform: uppercase; letter-spacing: 0.07em; margin-bottom: 4px;
+    }
+    .why-text { font-size: 13px; color: var(--text); line-height: 1.55; }
+    .mastery-line { margin-top: 10px; font-size: 12px; font-weight: 600; color: var(--text); }
+    .mastery-line.hidden { display: none; }
+
+    /* ── The tower — the game at the side ───────────────────────────────── */
+    .tower-card {
+      position: fixed; right: 28px; top: 50%; transform: translateY(-50%);
+      width: 168px; background: var(--bg); border-radius: 18px;
+      box-shadow: 10px 10px 28px #ababab, -8px -8px 20px #ffffff;
+      padding: 14px 16px 12px; z-index: 100;
+    }
+    .tower-card.hidden { display: none; }
+    .tower-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+    .tower-title {
+      font-size: 10px; font-weight: 700; text-transform: uppercase;
+      letter-spacing: 0.07em; color: var(--text-muted);
+    }
+    .tower-topped { font-size: 11px; font-weight: 600; color: var(--text-muted); }
+    .tower-well {
+      position: relative; height: 236px;
+      background: var(--bg); box-shadow: var(--neu-inset-sm); border-radius: 12px;
+      overflow: hidden;
+    }
+    .tower-well.topped { animation: t-glow 1.2s ease-in-out; }
+    @keyframes t-glow {
+      0%,100% { box-shadow: var(--neu-inset-sm); }
+      40% { box-shadow: var(--neu-inset-sm), 0 0 22px rgba(233,30,99,0.45), inset 0 0 14px rgba(233,30,99,0.18); }
+    }
+    .tower-stack {
+      position: absolute; left: 4px; right: 4px; top: 6px; bottom: 8px;
+      display: flex; flex-direction: column-reverse; align-items: center;
+      justify-content: flex-start; gap: 3px;
+      transform-origin: 50% 100%;
+    }
+    .tower-stack.wobble { animation: t-wobble 0.55s ease-in-out; }
+    @keyframes t-wobble {
+      0%,100% { transform: rotate(0); }
+      20% { transform: rotate(2.4deg) translateX(2px); }
+      45% { transform: rotate(-2deg) translateX(-2px); }
+      70% { transform: rotate(1.2deg); }
+      85% { transform: rotate(-0.6deg); }
+    }
+    .t-block { flex-shrink: 0; }
+    .t-block .t-inner {
+      width: 108px; height: 17px; border-radius: 5px;
+      background: var(--bg); box-shadow: var(--neu-raised-xs);
+      animation: t-drop 0.38s cubic-bezier(0.33, 1.4, 0.6, 1);
+    }
+    .t-block.keystone .t-inner {
+      box-shadow: var(--neu-raised-xs), 0 0 0 1px rgba(233,30,99,0.4), 0 0 12px rgba(233,30,99,0.28);
+    }
+    @keyframes t-drop {
+      0%   { transform: translateY(-64px); opacity: 0.85; }
+      62%  { transform: translateY(2px); opacity: 1; }
+      82%  { transform: translateY(-2px); }
+      100% { transform: translateY(0); }
+    }
+    .t-block.fall-l { animation: t-fall-l 0.55s ease-in forwards; }
+    .t-block.fall-r { animation: t-fall-r 0.55s ease-in forwards; }
+    @keyframes t-fall-l { to { transform: translate(-46px, 120px) rotate(-26deg); opacity: 0; } }
+    @keyframes t-fall-r { to { transform: translate(42px, 120px) rotate(24deg); opacity: 0; } }
+    .tower-badge {
+      position: absolute; left: 50%; top: 42%;
+      transform: translate(-50%, -50%) scale(0.6);
+      font-size: 13px; font-weight: 700; color: var(--text);
+      background: var(--bg); border-radius: 14px; padding: 8px 14px;
+      box-shadow: var(--neu-raised-sm); opacity: 0; pointer-events: none;
+      white-space: nowrap; z-index: 2;
+    }
+    .tower-badge.pop { animation: badge-pop 1.5s cubic-bezier(0.34, 1.5, 0.64, 1) forwards; }
+    @keyframes badge-pop {
+      0%   { opacity: 0; transform: translate(-50%, -50%) scale(0.5); }
+      18%  { opacity: 1; transform: translate(-50%, -50%) scale(1.06); }
+      30%  { transform: translate(-50%, -50%) scale(1); }
+      80%  { opacity: 1; }
+      100% { opacity: 0; transform: translate(-50%, -58%) scale(0.95); }
+    }
+    .tower-stats { display: flex; justify-content: space-between; margin-top: 10px; gap: 6px; }
+    .tw-stat { display: flex; flex-direction: column; align-items: center; gap: 1px; flex: 1; }
+    .tw-stat .v { font-size: 12px; font-weight: 700; color: var(--text); line-height: 1.2; }
+    .tw-stat .l {
+      font-size: 8px; font-weight: 600; text-transform: uppercase;
+      letter-spacing: 0.05em; color: var(--text-faint);
+    }
 
     /* Marking view */
     .score-big {
@@ -348,6 +520,20 @@
     }
     .explain-popup .exp-close:hover { color: var(--text); }
 
+    /* Compact tower + layout below 980px (tower would overlap the paper) */
+    @media (max-width: 980px) {
+      body { padding-bottom: 210px; }
+      .tower-card {
+        top: auto; bottom: 14px; right: 10px; transform: none;
+        width: 138px; padding: 10px 12px 8px;
+      }
+      .tower-well { height: 128px; }
+      .tower-stack { left: 4px; right: 4px; top: 4px; bottom: 6px; gap: 2px; }
+      .t-block .t-inner { width: 84px; height: 9px; border-radius: 3px; }
+      .tower-stats { margin-top: 8px; }
+      .tower-badge { font-size: 11px; padding: 6px 10px; }
+    }
+
     /* Mobile */
     @media (max-width: 600px) {
       .paper { padding: 44px 24px 52px; min-height: 440px; }
@@ -360,6 +546,8 @@
       .score-big { font-size: 36px; }
       .explain-popup { width: min(280px, calc(100vw - 24px)); }
       .paper-actions .paper-btn { flex: 1 1 auto; text-align: center; }
+      .opt { padding: 12px; font-size: 13px; }
+      .stage-tab { flex: 1; justify-content: center; }
     }
   </style>
 </head>
@@ -386,6 +574,9 @@
       </div>
     </div>
   </div>
+
+  <!-- Topic shelf — one chip per topic, medals for mastered, dot for weak -->
+  <div class="topic-shelf hidden" id="topic-shelf"></div>
 
   <!-- Setup card — shown first, folds away once revising -->
   <div class="setup-strip" id="setup-strip">
@@ -438,27 +629,84 @@
     </div>
   </div>
 
+  <!-- Stage tabs: Build (quiz + tower) is the default; Exam Room unlocks with mastery -->
+  <div class="stage-tabs">
+    <button type="button" class="stage-tab active" id="tab-build">Build</button>
+    <button type="button" class="stage-tab" id="tab-exam">Exam Room <span class="lock" id="tab-exam-lock">🔒</span></button>
+  </div>
+
   <div class="desk">
     <div class="paper">
       <div class="curl"></div>
 
-      <!-- Idle -->
-      <div class="view show" id="view-idle">
-        <p class="paper-quiet">Set your subject above and hit Start — your first question lands right here. Answer it like it's the real paper; I'll mark it like a real examiner.</p>
+      <!-- BUILD: idle -->
+      <div class="view show" id="view-quiz-idle">
+        <p class="paper-quiet">Set your subject above and hit Start. Quick-fire questions land here — right answers build your tower, wrong ones shake it. Master a topic and the Exam Room opens.</p>
       </div>
 
-      <!-- Thinking -->
+      <!-- BUILD: thinking -->
+      <div class="view" id="view-quiz-thinking">
+        <p class="paper-thinking" id="quiz-thinking-text">Q is writing your questions…</p>
+      </div>
+
+      <!-- BUILD: error -->
+      <div class="view" id="view-quiz-error">
+        <p class="err-msg" id="quiz-error-text">Your questions didn't come through — probably a network blip. Your tower and progress are safe.</p>
+        <button type="button" class="paper-btn" id="btn-quiz-retry">↻ Try again</button>
+      </div>
+
+      <!-- BUILD: question -->
+      <div class="view" id="view-quiz">
+        <div class="paper-meta">
+          <span id="qz-number">Question 1</span>
+          <span id="qz-context"></span>
+        </div>
+        <div class="chip-row">
+          <span class="chip" id="qz-chip-topic"></span>
+          <span class="chip" id="qz-chip-difficulty"></span>
+        </div>
+        <div class="q-text" id="qz-text"></div>
+        <div class="quiz-options" id="qz-options"></div>
+        <div class="why-wrap hidden" id="qz-why-wrap">
+          <div class="why-label">Why</div>
+          <div class="why-text" id="qz-why"></div>
+          <div class="mastery-line hidden" id="qz-mastery"></div>
+        </div>
+        <div class="paper-actions">
+          <button type="button" class="paper-btn hidden" id="btn-qz-next">Next →</button>
+          <span class="enter-hint hidden" id="qz-enter-hint">or press Enter</span>
+          <button type="button" class="quiet-btn" id="btn-qz-explain">I don't understand this</button>
+        </div>
+      </div>
+
+      <!-- Locked Exam Room notice -->
+      <div class="view" id="view-locked">
+        <p class="paper-quiet">Top out a tower with your accuracy up — the Exam Room opens when you've mastered a topic. Mastery is 10 answered on one topic at 85% right; the shelf up top keeps count for you.</p>
+        <div class="paper-actions">
+          <button type="button" class="paper-btn" id="btn-keep-building">Keep building →</button>
+        </div>
+      </div>
+
+      <!-- EXAM ROOM: welcome -->
+      <div class="view" id="view-idle">
+        <p class="paper-quiet">This is the Exam Room — full written answers, marked strictly against a real mark scheme, graded on the ladder above. Slower than the quiz, and where the real marks live.</p>
+        <div class="paper-actions">
+          <button type="button" class="paper-btn" id="btn-exam-start">First question →</button>
+        </div>
+      </div>
+
+      <!-- EXAM ROOM: thinking -->
       <div class="view" id="view-thinking">
         <p class="paper-thinking" id="thinking-text">Q is writing your question…</p>
       </div>
 
-      <!-- Error -->
+      <!-- EXAM ROOM: error -->
       <div class="view" id="view-error">
         <p class="err-msg" id="error-text">That one didn't come through — probably a network blip. Your progress is safe.</p>
         <button type="button" class="paper-btn" id="btn-retry">↻ Try again</button>
       </div>
 
-      <!-- Question -->
+      <!-- EXAM ROOM: question -->
       <div class="view" id="view-question">
         <div class="paper-meta">
           <span id="q-number">Question 1</span>
@@ -480,7 +728,7 @@
         </div>
       </div>
 
-      <!-- Marking -->
+      <!-- EXAM ROOM: marking -->
       <div class="view" id="view-marking">
         <div class="paper-meta"><span id="m-context"></span></div>
         <div class="score-big" id="m-score">0<span class="of">/0</span></div>
@@ -507,6 +755,23 @@
     </div>
   </div>
 
+  <!-- The tower — visible whenever you're building -->
+  <div class="tower-card" id="tower-card">
+    <div class="tower-head">
+      <span class="tower-title">The tower</span>
+      <span class="tower-topped" id="tw-topped">🏆 ×0</span>
+    </div>
+    <div class="tower-well" id="tower-well">
+      <div class="tower-stack" id="tower-stack"></div>
+      <div class="tower-badge" id="tower-badge">Topped! 🏆</div>
+    </div>
+    <div class="tower-stats">
+      <div class="tw-stat"><span class="v" id="tw-height">0/10</span><span class="l">height</span></div>
+      <div class="tw-stat"><span class="v" id="tw-streak">⚡ 0</span><span class="l">streak</span></div>
+      <div class="tw-stat"><span class="v" id="tw-score">0/0</span><span class="l">session</span></div>
+    </div>
+  </div>
+
   <!-- Settings cog to re-open setup -->
   <button class="setup-cog hidden" id="setup-cog" title="Change subject or topic" aria-label="Open settings">
     <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -526,21 +791,44 @@
     'use strict';
 
     const GRADES = ['U', 'E', 'D', 'C', 'B', 'A', 'A*'];
+    const TOWER_TOP = 10;
 
     // ── State ──────────────────────────────────────────────────────────────
     const state = {
-      progress: { settings: {}, history: [], streak: { lastDay: '', count: 0 } },
-      currentQ: null,        // the question object being answered
-      askedSoFar: [],        // ≤10-word summaries, this session only
-      sessionCount: 0,       // question number this session
-      lastError: null,       // 'question' | 'mark' — what Try again should redo
+      progress: {
+        settings: {}, history: [], streak: { lastDay: '', count: 0 },
+        quiz: { perTopic: {}, towersTopped: 0, examUnlocked: false, dayXP: { day: '', points: 0 } },
+      },
+      stage: 'build',        // 'build' | 'exam'
+      buildView: 'idle',     // idle | thinking | question | error
+      examView: 'idle',      // idle | thinking | question | marking | error
+
+      // Build (quiz) session
+      queue: [],             // fetched questions waiting to be served
+      fetchingBatch: false,
+      awaitingServe: false,  // student is staring at "thinking" waiting for a batch
+      quizQ: null,           // question currently on the paper
+      quizResolved: false,   // an option has been clicked
+      avoid: [],             // stems served this session (cap 40)
+      sessionAnswered: 0,
+      sessionCorrect: 0,
+      tower: { height: 0, streak: 0, wrongRun: 0 },
+
+      // Exam Room session (unchanged from before)
+      currentQ: null,
+      askedSoFar: [],
+      sessionCount: 0,
+      lastError: null,
     };
 
     // ── Element refs ───────────────────────────────────────────────────────
     const $ = (id) => document.getElementById(id);
-    const views = {
-      idle: $('view-idle'), thinking: $('view-thinking'), error: $('view-error'),
-      question: $('view-question'), marking: $('view-marking'),
+    const domViews = {
+      'quiz-idle': $('view-quiz-idle'), 'quiz-thinking': $('view-quiz-thinking'),
+      'quiz-error': $('view-quiz-error'), 'quiz': $('view-quiz'),
+      'locked': $('view-locked'),
+      'idle': $('view-idle'), 'thinking': $('view-thinking'), 'error': $('view-error'),
+      'question': $('view-question'), 'marking': $('view-marking'),
     };
     const setupStrip = $('setup-strip');
     const setupCog   = $('setup-cog');
@@ -548,10 +836,39 @@
     const answerArea = $('answer-area');
     const answerHint = $('answer-hint');
     const btnMark    = $('btn-mark');
+    const towerStack = $('tower-stack');
+    const towerWell  = $('tower-well');
 
-    function showView(name) {
-      Object.keys(views).forEach((k) => views[k].classList.toggle('show', k === name));
+    function showDomView(name) {
+      Object.keys(domViews).forEach((k) => domViews[k].classList.toggle('show', k === name));
     }
+
+    // ── Stage plumbing ─────────────────────────────────────────────────────
+    const BUILD_DOM = { idle: 'quiz-idle', thinking: 'quiz-thinking', question: 'quiz', error: 'quiz-error' };
+
+    function render() {
+      if (state.stage === 'build') showDomView(BUILD_DOM[state.buildView] || 'quiz-idle');
+      else showDomView(state.examView);
+      $('tower-card').classList.toggle('hidden', state.stage !== 'build');
+      renderTabs();
+    }
+    function setBuild(v) { state.buildView = v; if (state.stage === 'build') render(); }
+    function setExam(v)  { state.examView = v;  if (state.stage === 'exam') render(); }
+
+    function renderTabs() {
+      $('tab-build').classList.toggle('active', state.stage === 'build');
+      $('tab-exam').classList.toggle('active', state.stage === 'exam');
+      $('tab-exam-lock').classList.toggle('hidden', !!state.progress.quiz.examUnlocked);
+    }
+
+    $('tab-build').addEventListener('click', () => { state.stage = 'build'; render(); });
+    $('tab-exam').addEventListener('click', () => {
+      if (!state.progress.quiz.examUnlocked) { showDomView('locked'); return; }
+      state.stage = 'exam';
+      render();
+    });
+    $('btn-keep-building').addEventListener('click', render);
+    $('btn-exam-start').addEventListener('click', () => nextQuestion());
 
     // ── API helpers ────────────────────────────────────────────────────────
     async function post(url, body) {
@@ -593,13 +910,30 @@
       return 0; // streak broken — the fire's gone out
     }
 
-    function xpToday() {
-      return state.progress.history
-        .filter((e) => dayKey(e.date) === todayKey())
-        .reduce((s, e) => s + (e.score || 0), 0);
+    // Any answered question (quiz or exam) keeps the day streak alive
+    function touchDayStreak() {
+      const st = state.progress.streak;
+      if (st.lastDay !== todayKey()) {
+        st.count = st.lastDay === yesterdayKey() ? (st.count || 0) + 1 : 1;
+        st.lastDay = todayKey();
+      }
     }
 
-    function weakAreas() {
+    function addQuizXP(n) {
+      const x = state.progress.quiz.dayXP;
+      if (x.day !== todayKey()) { x.day = todayKey(); x.points = 0; }
+      x.points += n;
+    }
+
+    function xpToday() {
+      const exam = state.progress.history
+        .filter((e) => dayKey(e.date) === todayKey())
+        .reduce((s, e) => s + (e.score || 0), 0);
+      const x = state.progress.quiz.dayXP;
+      return exam + (x.day === todayKey() ? (x.points || 0) : 0);
+    }
+
+    function weakAreas() { // exam-room measure, from written-answer history
       const byTag = {};
       state.progress.history.forEach((e) => {
         if (!e.topicTag || !e.outOf) return;
@@ -608,6 +942,25 @@
       return Object.keys(byTag)
         .filter((t) => byTag[t].reduce((a, b) => a + b, 0) / byTag[t].length < 0.5)
         .slice(0, 6);
+    }
+
+    // ── Quiz mastery maths (lifetime, persisted) ───────────────────────────
+    function topicStats(tag) { return state.progress.quiz.perTopic[tag] || null; }
+    function isMastered(tag) {
+      const t = topicStats(tag);
+      return !!t && t.answered >= 10 && t.correct / t.answered >= 0.85;
+    }
+    function isWeakTopic(tag) {
+      const t = topicStats(tag);
+      return !!t && t.answered >= 4 && t.correct / t.answered < 0.5;
+    }
+    function weakQuizTopics() {
+      return Object.keys(state.progress.quiz.perTopic).filter(isWeakTopic).slice(0, 3);
+    }
+    function topicForQuiz() {
+      const base = state.progress.settings.topic || '';
+      const weak = weakQuizTopics();
+      return weak.length ? base + '\n(Focus especially on: ' + weak.join('; ') + ')' : base;
     }
 
     // ── Progress strip render ──────────────────────────────────────────────
@@ -632,6 +985,30 @@
       $('stat-xp').textContent = String(xpToday());
     }
 
+    // ── Topic shelf render ─────────────────────────────────────────────────
+    function renderShelf() {
+      const shelf = $('topic-shelf');
+      const entries = Object.entries(state.progress.quiz.perTopic);
+      shelf.classList.toggle('hidden', entries.length === 0);
+      shelf.innerHTML = '';
+      entries
+        .sort((a, b) => b[1].answered - a[1].answered)
+        .forEach(([tag, t]) => {
+          const chip = document.createElement('span');
+          chip.className = 'shelf-chip' + (isMastered(tag) ? ' mastered' : '');
+          if (isWeakTopic(tag)) {
+            const dot = document.createElement('span');
+            dot.className = 'weak-dot';
+            dot.title = 'Needs work';
+            chip.appendChild(dot);
+          }
+          chip.appendChild(document.createTextNode(
+            (isMastered(tag) ? '🏅 ' : '') + tag + ' ' + t.correct + '/' + t.answered
+          ));
+          shelf.appendChild(chip);
+        });
+    }
+
     // ── Persistence ────────────────────────────────────────────────────────
     async function loadProgress() {
       try {
@@ -643,6 +1020,15 @@
           state.progress.streak = d.streak && typeof d.streak === 'object'
             ? { lastDay: d.streak.lastDay || '', count: d.streak.count || 0 }
             : { lastDay: '', count: 0 };
+          const qd = (d.quiz && typeof d.quiz === 'object') ? d.quiz : {};
+          state.progress.quiz = {
+            perTopic: (qd.perTopic && typeof qd.perTopic === 'object') ? qd.perTopic : {},
+            towersTopped: qd.towersTopped || 0,
+            examUnlocked: !!qd.examUnlocked,
+            dayXP: (qd.dayXP && qd.dayXP.day)
+              ? { day: qd.dayXP.day, points: qd.dayXP.points || 0 }
+              : { day: '', points: 0 },
+          };
         }
       } catch (e) { /* first visit or offline — start fresh, nothing lost */ }
     }
@@ -679,18 +1065,303 @@
       saveProgress();
       setupStrip.classList.add('hidden');
       setupCog.classList.remove('hidden');
-      nextQuestion();
+      // Fresh subject/topic = fresh question queue (tower and tallies stay)
+      state.queue = [];
+      state.avoid = [];
+      state.quizQ = null;
+      state.quizResolved = false;
+      state.stage = 'build';
+      state.awaitingServe = true;
+      $('quiz-thinking-text').textContent = firstBatchText();
+      setBuild('thinking');
+      render();
+      fetchBatch();
     });
 
     setupCog.addEventListener('click', () => {
       setupStrip.classList.toggle('hidden');
     });
 
-    // ── Question flow ──────────────────────────────────────────────────────
+    // ── Quiz batches — fetch 10 at a time, prefetch when 3 remain ─────────
+    function firstBatchText() {
+      return state.sessionAnswered === 0
+        ? 'Q is writing your questions — every answer gets double-checked before it reaches you. Half a minute, tops…'
+        : 'Next batch is nearly ready…';
+    }
+
+    function addAvoid(stem) {
+      state.avoid.push(String(stem || '').slice(0, 200));
+      while (state.avoid.length > 40) state.avoid.shift();
+    }
+
+    async function fetchBatch() {
+      if (state.fetchingBatch) return;
+      state.fetchingBatch = true;
+      const s = state.progress.settings;
+      try {
+        const d = await post('/revision/quiz', {
+          subject: s.subject, board: s.board, level: s.level,
+          topic: topicForQuiz(), count: 10, avoid: state.avoid,
+        });
+        if (!d.ok || !Array.isArray(d.questions) || !d.questions.length) {
+          throw new Error(d.error || 'no questions');
+        }
+        d.questions.forEach((q) => {
+          if (!q || !q.question || !Array.isArray(q.options) || q.options.length < 2) return;
+          const ci = parseInt(q.correctIndex, 10);
+          if (!(ci >= 0 && ci < q.options.length)) return;
+          state.queue.push(q);
+          addAvoid(q.question);
+        });
+        state.fetchingBatch = false;
+        if (!state.queue.length) throw new Error('empty batch');
+        if (state.awaitingServe) { state.awaitingServe = false; serveQuiz(); }
+      } catch (e) {
+        state.fetchingBatch = false;
+        // Only surface the error if the student is actually waiting on us —
+        // a failed background prefetch retries itself when the queue runs dry.
+        if (state.awaitingServe) {
+          state.awaitingServe = false;
+          setBuild('error');
+        }
+      }
+    }
+
+    $('btn-quiz-retry').addEventListener('click', () => {
+      state.awaitingServe = true;
+      $('quiz-thinking-text').textContent = firstBatchText();
+      setBuild('thinking');
+      fetchBatch();
+    });
+
+    // ── Serve one quiz question ────────────────────────────────────────────
+    function serveQuiz() {
+      if (!state.queue.length) {
+        state.awaitingServe = true;
+        $('quiz-thinking-text').textContent = firstBatchText();
+        setBuild('thinking');
+        if (!state.fetchingBatch) fetchBatch();
+        return;
+      }
+      const q = state.queue.shift();
+      state.quizQ = q;
+      state.quizResolved = false;
+
+      const s = state.progress.settings;
+      $('qz-number').textContent = 'Question ' + (state.sessionAnswered + 1);
+      $('qz-context').textContent = [s.subject, s.board !== 'Other' ? s.board : '', s.level]
+        .filter(Boolean).join(' · ');
+      $('qz-chip-topic').textContent = q.topicTag || s.subject;
+      $('qz-chip-difficulty').textContent = q.difficulty || 'standard';
+      $('qz-text').textContent = q.question;
+
+      const wrap = $('qz-options');
+      wrap.innerHTML = '';
+      q.options.slice(0, 4).forEach((opt, i) => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'opt';
+        const letter = document.createElement('span');
+        letter.className = 'opt-letter';
+        letter.textContent = String.fromCharCode(65 + i);
+        const text = document.createElement('span');
+        text.className = 'opt-text';
+        text.textContent = String(opt);
+        const mark = document.createElement('span');
+        mark.className = 'opt-mark';
+        btn.appendChild(letter);
+        btn.appendChild(text);
+        btn.appendChild(mark);
+        btn.addEventListener('click', () => answerQuiz(i));
+        wrap.appendChild(btn);
+      });
+
+      $('qz-why-wrap').classList.add('hidden');
+      $('qz-mastery').classList.add('hidden');
+      $('btn-qz-next').classList.add('hidden');
+      $('qz-enter-hint').classList.add('hidden');
+      setBuild('question');
+
+      // Prefetch the next batch while they're still answering this one
+      if (state.queue.length <= 3 && !state.fetchingBatch) fetchBatch();
+    }
+
+    // ── Answer a quiz question ─────────────────────────────────────────────
+    function answerQuiz(i) {
+      if (state.quizResolved || !state.quizQ) return;
+      state.quizResolved = true;
+      const q = state.quizQ;
+      const ci = parseInt(q.correctIndex, 10);
+      const correct = i === ci;
+
+      const buttons = Array.from($('qz-options').children);
+      buttons.forEach((b, idx) => {
+        b.disabled = true;
+        if (idx === ci) {
+          b.classList.add('correct');
+          b.querySelector('.opt-mark').textContent = '✓';
+        } else if (idx === i) {
+          b.classList.add('wrong');
+          b.querySelector('.opt-mark').textContent = '✕';
+        } else {
+          b.classList.add('dim');
+        }
+      });
+
+      // The teaching moment — one sentence, always shown
+      $('qz-why').textContent = q.why || '';
+      $('qz-why-wrap').classList.remove('hidden');
+
+      // Tallies (session + lifetime per-topic)
+      state.sessionAnswered += 1;
+      if (correct) state.sessionCorrect += 1;
+      const tag = (q.topicTag || state.progress.settings.subject || 'General').trim();
+      const wasMastered = isMastered(tag);
+      const pt = state.progress.quiz.perTopic;
+      const t = pt[tag] = pt[tag] || { answered: 0, correct: 0 };
+      t.answered += 1;
+      if (correct) t.correct += 1;
+
+      // Mastery + the gate
+      if (!wasMastered && isMastered(tag)) {
+        const line = $('qz-mastery');
+        if (!state.progress.quiz.examUnlocked) {
+          state.progress.quiz.examUnlocked = true;
+          line.textContent = '🏅 ' + tag + ' mastered — the Exam Room just unlocked.';
+        } else {
+          line.textContent = '🏅 ' + tag + ' mastered.';
+        }
+        line.classList.remove('hidden');
+      }
+
+      if (correct) addQuizXP(1);
+      touchDayStreak();
+      saveProgress();
+      renderStrip();
+      renderShelf();
+      renderTabs();
+
+      // The tower reacts
+      if (correct) towerCorrect(); else towerWrong();
+
+      $('btn-qz-next').classList.remove('hidden');
+      $('qz-enter-hint').classList.remove('hidden');
+    }
+
+    $('btn-qz-next').addEventListener('click', serveQuiz);
+    document.addEventListener('keydown', (e) => {
+      if (e.key !== 'Enter') return;
+      const tag = e.target && e.target.tagName;
+      if (tag === 'TEXTAREA' || tag === 'INPUT' || tag === 'SELECT') return;
+      if (state.stage === 'build' && state.buildView === 'question' && state.quizResolved) {
+        e.preventDefault();
+        serveQuiz();
+      }
+    });
+
+    // ── The tower ──────────────────────────────────────────────────────────
+    function updateTowerStats() {
+      $('tw-height').textContent = state.tower.height + '/' + TOWER_TOP;
+      $('tw-streak').textContent = '⚡ ' + state.tower.streak;
+      $('tw-score').textContent = state.sessionCorrect + '/' + state.sessionAnswered;
+      $('tw-topped').textContent = '🏆 ×' + (state.progress.quiz.towersTopped || 0);
+    }
+
+    function addBlock(keystone) {
+      const h = state.tower.height; // height before this block lands
+      const block = document.createElement('div');
+      block.className = 't-block' + (keystone ? ' keystone' : '');
+      // Hand-stacked feel: each course sits a touch off-true
+      const dx = ((h * 37) % 7) - 3;
+      const rot = (((h * 53) % 5) - 2) * 0.6;
+      block.style.transform = 'translateX(' + dx + 'px) rotate(' + rot + 'deg)';
+      const inner = document.createElement('div');
+      inner.className = 't-inner';
+      block.appendChild(inner);
+      towerStack.appendChild(block);
+    }
+
+    function liveBlocks() {
+      return Array.from(towerStack.children)
+        .filter((b) => !b.classList.contains('fall-l') && !b.classList.contains('fall-r'));
+    }
+
+    function towerCorrect() {
+      state.tower.wrongRun = 0;
+      state.tower.streak += 1;
+      addBlock(state.tower.streak % 5 === 0); // every 5th in a row is a keystone
+      state.tower.height += 1;
+      if (state.tower.height >= TOWER_TOP) topOut();
+      updateTowerStats();
+    }
+
+    function towerWrong() {
+      state.tower.streak = 0;
+      state.tower.wrongRun += 1;
+      if (state.tower.wrongRun >= 3) { collapseTower(); return; }
+      // Hard wobble, then the top two blocks crack off
+      towerStack.classList.remove('wobble');
+      void towerStack.offsetWidth; // restart the animation
+      towerStack.classList.add('wobble');
+      setTimeout(() => {
+        const blocks = liveBlocks();
+        const falling = blocks.slice(-2); // visual top of the stack
+        falling.forEach((b, idx) => {
+          setTimeout(() => b.classList.add(idx % 2 ? 'fall-r' : 'fall-l'), idx * 80);
+        });
+        state.tower.height = Math.max(0, state.tower.height - falling.length);
+        updateTowerStats();
+        setTimeout(() => falling.forEach((b) => b.remove()), 800);
+      }, 140);
+      updateTowerStats();
+    }
+
+    function collapseTower() {
+      // The Jenga moment — the whole thing comes down
+      state.tower.wrongRun = 0;
+      towerStack.classList.remove('wobble');
+      void towerStack.offsetWidth;
+      towerStack.classList.add('wobble');
+      const blocks = liveBlocks().reverse(); // top first
+      blocks.forEach((b, idx) => {
+        b.style.animationDelay = (idx * 45) + 'ms';
+        b.classList.add(idx % 2 ? 'fall-r' : 'fall-l');
+      });
+      state.tower.height = 0;
+      updateTowerStats();
+      setTimeout(() => {
+        blocks.forEach((b) => b.remove());
+        towerStack.classList.remove('wobble');
+      }, blocks.length * 45 + 650);
+    }
+
+    function topOut() {
+      state.progress.quiz.towersTopped = (state.progress.quiz.towersTopped || 0) + 1;
+      saveProgress();
+      // Reset the count NOW and only sweep the blocks that made this tower —
+      // a quick next answer starts the fresh climb without being swept away.
+      const topped = Array.from(towerStack.children);
+      state.tower.height = 0;
+      towerWell.classList.remove('topped');
+      void towerWell.offsetWidth;
+      towerWell.classList.add('topped');
+      const badge = $('tower-badge');
+      badge.classList.remove('pop');
+      void badge.offsetWidth;
+      badge.classList.add('pop');
+      setTimeout(() => {
+        topped.forEach((b) => b.remove());
+        towerWell.classList.remove('topped');
+        badge.classList.remove('pop');
+        updateTowerStats();
+      }, 1400);
+    }
+
+    // ── EXAM ROOM — the full written flow (unchanged mechanics) ───────────
     async function nextQuestion() {
       const s = state.progress.settings;
       $('thinking-text').textContent = 'Q is writing your question…';
-      showView('thinking');
+      setExam('thinking');
       state.lastError = 'question';
       try {
         const d = await post('/revision/question', {
@@ -718,11 +1389,11 @@
         answerHint.classList.add('hidden');
         btnMark.disabled = false;
         btnMark.textContent = 'Mark it →';
-        showView('question');
+        setExam('question');
         answerArea.focus();
       } catch (e) {
         $('error-text').textContent = 'Couldn\'t fetch your question — probably a network blip. Your progress is safe.';
-        showView('error');
+        setExam('error');
       }
     }
 
@@ -733,12 +1404,12 @@
       answerArea.style.height = Math.max(150, answerArea.scrollHeight) + 'px';
     });
 
-    // ── Marking flow ───────────────────────────────────────────────────────
     async function markIt() {
       const q = state.currentQ;
       if (!q) return;
       const answer = answerArea.value.trim();
       if (!answer) {
+        answerHint.textContent = 'Write your answer first — even a bullet point can score.';
         answerHint.classList.remove('hidden');
         answerArea.focus();
         return;
@@ -757,11 +1428,7 @@
           date: new Date().toISOString(),
           topicTag: q.topicTag, score: d.score, outOf: d.outOf,
         });
-        const st = state.progress.streak;
-        if (st.lastDay !== todayKey()) {
-          st.count = st.lastDay === yesterdayKey() ? (st.count || 0) + 1 : 1;
-          st.lastDay = todayKey();
-        }
+        touchDayStreak();
         saveProgress();
         renderStrip();
 
@@ -783,7 +1450,7 @@
         $('m-model').textContent = q.modelAnswer || '';
         $('m-model').classList.add('hidden');
         $('btn-model-toggle').textContent = 'Show a full-mark answer';
-        showView('marking');
+        setExam('marking');
       } catch (e) {
         // Keep their answer on the paper — just let them resend it
         btnMark.disabled = false;
@@ -798,7 +1465,7 @@
     $('btn-next').addEventListener('click', nextQuestion);
     $('btn-retry').addEventListener('click', () => {
       if (state.lastError === 'question') nextQuestion();
-      else showView(state.currentQ ? 'question' : 'idle');
+      else setExam(state.currentQ ? 'question' : 'idle');
     });
 
     $('btn-model-toggle').addEventListener('click', () => {
@@ -808,16 +1475,14 @@
         ? 'Show a full-mark answer' : 'Hide the full-mark answer';
     });
 
-    // ── "I don't understand this" → /writer/explain ───────────────────────
+    // ── "I don't understand this" → /writer/explain (both stages) ─────────
     const explainPopup = $('explain-popup');
     const explainText  = $('explain-text');
     const explainLinks = $('explain-links');
     $('explain-close').addEventListener('click', () => explainPopup.classList.add('hidden'));
 
-    $('btn-explain').addEventListener('click', async () => {
-      const q = state.currentQ;
-      const concept = (q && (q.topicTag || q.question)) || state.progress.settings.subject || 'this topic';
-      const btnRect = $('btn-explain').getBoundingClientRect();
+    async function openExplain(anchorBtn, concept) {
+      const btnRect = anchorBtn.getBoundingClientRect();
       explainPopup.style.left = Math.max(12, Math.min(btnRect.left, window.innerWidth - 290)) + 'px';
       explainPopup.style.top = Math.min(btnRect.bottom + 8, window.innerHeight - 220) + 'px';
       explainText.textContent = 'Q is explaining…';
@@ -856,6 +1521,18 @@
       } catch (e) {
         explainText.textContent = 'Couldn\'t get an explanation — try again.';
       }
+    }
+
+    $('btn-explain').addEventListener('click', (e) => {
+      const q = state.currentQ;
+      const concept = (q && (q.topicTag || q.question)) || state.progress.settings.subject || 'this topic';
+      openExplain(e.currentTarget, concept);
+    });
+
+    $('btn-qz-explain').addEventListener('click', (e) => {
+      const q = state.quizQ;
+      const concept = (q && (q.topicTag || q.question)) || state.progress.settings.subject || 'this topic';
+      openExplain(e.currentTarget, concept);
     });
 
     // ── Boot ───────────────────────────────────────────────────────────────
@@ -863,6 +1540,9 @@
       await loadProgress();
       prefillSetup();
       renderStrip();
+      renderShelf();
+      updateTowerStats();
+      render();
     })();
   })();
   </script>
