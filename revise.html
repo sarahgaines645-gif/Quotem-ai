@@ -356,7 +356,7 @@
     .mastery-line { margin-top: 10px; font-size: 12px; font-weight: 600; color: var(--text); }
     .mastery-line.hidden { display: none; }
 
-    /* ── Tower Drop — the game at the side (canvas) ─────────────────────── */
+    /* ── THE TUBE — the game at the side (canvas) ───────────────────────── */
     .tower-card {
       position: fixed; right: 28px; top: 50%; transform: translateY(-50%);
       width: 200px; background: var(--bg); border-radius: 18px;
@@ -377,7 +377,6 @@
       transition: box-shadow 0.15s;
     }
     .tower-mute:active { box-shadow: var(--neu-inset-sm); }
-    .tower-topped { font-size: 11px; font-weight: 600; color: var(--text-muted); }
     .tower-well {
       position: relative; height: 264px;
       background: var(--bg); box-shadow: var(--neu-inset-sm); border-radius: 12px;
@@ -385,7 +384,7 @@
     }
     #tower-canvas {
       position: absolute; inset: 0; width: 100%; height: 100%;
-      display: block; cursor: pointer; touch-action: manipulation;
+      display: block; cursor: default;
       -webkit-tap-highlight-color: transparent;
     }
     .tower-badge {
@@ -729,22 +728,21 @@
     </div>
   </div>
 
-  <!-- Tower Drop — every right answer earns a block; tap (or Space) to drop it -->
+  <!-- THE TUBE — fills while you dither, flushes when you're right. Fast or correct. -->
   <div class="tower-card" id="tower-card">
     <div class="tower-head">
-      <span class="tower-title">Tower drop</span>
+      <span class="tower-title">The tube</span>
       <button type="button" class="tower-mute" id="tower-mute" title="Sound on / off" aria-label="Toggle sound">🔈</button>
-      <span class="tower-topped" id="tw-topped">🏆 ×0</span>
     </div>
     <div class="tower-well">
       <canvas id="tower-canvas"></canvas>
-      <div class="tower-badge" id="tower-badge">Row 10! 🏆</div>
+      <div class="tower-badge" id="tower-badge">Overflow! 🫧</div>
     </div>
     <div class="tower-stats">
-      <div class="tw-stat"><span class="v" id="tw-height">0</span><span class="l">height</span></div>
-      <div class="tw-stat"><span class="v" id="tw-best">0</span><span class="l">best</span></div>
-      <div class="tw-stat"><span class="v" id="tw-combo">×0</span><span class="l">combo</span></div>
-      <div class="tw-stat"><span class="v" id="tw-score">0/0</span><span class="l">session</span></div>
+      <div class="tw-stat"><span class="v" id="tw-run">0:00</span><span class="l">run</span></div>
+      <div class="tw-stat"><span class="v" id="tw-runq">0</span><span class="l">questions</span></div>
+      <div class="tw-stat"><span class="v" id="tw-best">0:00</span><span class="l">best run</span></div>
+      <div class="tw-stat"><span class="v" id="tw-bestq">0</span><span class="l">best qs</span></div>
     </div>
   </div>
 
@@ -775,7 +773,7 @@
         quiz: {
           perTopic: {}, towersTopped: 0, examUnlocked: false,
           dayXP: { day: '', points: 0 },
-          bestHeight: 0, bestCombo: 0, muted: false,
+          bestRunSeconds: 0, bestRunQuestions: 0, muted: false,
         },
       },
       stage: 'build',        // 'build' | 'exam'
@@ -791,7 +789,6 @@
       avoid: [],             // stems served this session (cap 40)
       sessionAnswered: 0,
       sessionCorrect: 0,
-      tower: { wrongRun: 0 },
 
       // Exam Room session (unchanged from before)
       currentQ: null,
@@ -1011,8 +1008,8 @@
             dayXP: (qd.dayXP && qd.dayXP.day)
               ? { day: qd.dayXP.day, points: qd.dayXP.points || 0 }
               : { day: '', points: 0 },
-            bestHeight: qd.bestHeight || 0,
-            bestCombo: qd.bestCombo || 0,
+            bestRunSeconds: qd.bestRunSeconds || 0,
+            bestRunQuestions: qd.bestRunQuestions || 0,
             muted: !!qd.muted,
           };
         }
@@ -1066,6 +1063,7 @@
 
     setupCog.addEventListener('click', () => {
       setupStrip.classList.toggle('hidden');
+      game.wake(); // setup closed = the live question is back on the clock
     });
 
     // ── Quiz batches — fetch 10 at a time, prefetch when 3 remain ─────────
@@ -1167,6 +1165,7 @@
       $('btn-qz-next').classList.add('hidden');
       $('qz-enter-hint').classList.add('hidden');
       setBuild('question');
+      game.questionLive(); // the tube starts dripping for this question
 
       // Prefetch the next batch while they're still answering this one
       if (state.queue.length <= 3 && !state.fetchingBatch) fetchBatch();
@@ -1222,13 +1221,15 @@
 
       if (correct) addQuizXP(1);
       touchDayStreak();
+
+      // The tube reacts first — any new run record rides the same save below
+      game.answer(correct);
+
       saveProgress();
       renderStrip();
       renderShelf();
       renderTabs();
-
-      // The tower reacts
-      if (correct) towerCorrect(); else towerWrong();
+      updateGameStats();
 
       $('btn-qz-next').classList.remove('hidden');
       $('qz-enter-hint').classList.remove('hidden');
@@ -1236,38 +1237,49 @@
 
     $('btn-qz-next').addEventListener('click', serveQuiz);
     document.addEventListener('keydown', (e) => {
+      if (e.key !== 'Enter') return;
       const tag = e.target && e.target.tagName;
       if (tag === 'TEXTAREA' || tag === 'INPUT' || tag === 'SELECT') return;
-      if (e.key === 'Enter') {
-        if (state.stage === 'build' && state.buildView === 'question' && state.quizResolved) {
-          e.preventDefault();
-          serveQuiz();
-        }
-      } else if (e.key === ' ' || e.code === 'Space') {
-        // Space drops the sliding block
-        if (state.stage === 'build' && game.tap()) e.preventDefault();
+      if (state.stage === 'build' && state.buildView === 'question' && state.quizResolved) {
+        e.preventDefault();
+        serveQuiz();
       }
     });
 
-    // ── Tower Drop — the real game (canvas, vanilla, no libraries) ────────
-    // A correct answer EARNS a drop: a block slides above the tower and the
-    // student taps (or hits Space) to drop it. Overhangs slice off and tumble,
-    // the tower narrows with sloppy drops, perfect drops snap + sparkle +
-    // regain width. Wrong answers jolt the tower; three in a row collapse it.
-    // Endless — the camera climbs with the tower; chase your best.
+    // ── THE TUBE — pressure survival (canvas, vanilla, no libraries) ──────
+    // Sarah's design: while a question sits unanswered, tiny colourful balls
+    // drip into the tube and pile up. A correct answer opens the valve and
+    // flushes an inch off (streaks flush more, up to two inches). A wrong
+    // answer dumps a splash in. If the pile reaches the top, the tube
+    // overflows — run over, tube resets, nothing else is lost.
+    // Fast or correct: that's the whole game.
     const game = (() => {
-      const PADB = 10, PERFECT_TOL = 4, MIN_W = 14, AUTO_MS = 4000;
-      let canvas = null, ctx = null, W = 0, H = 0, BH = 20;
+      const INCHES = 12;            // logical tube height
+      const DRAIN_INCH = 1;         // base flush per correct answer
+      const SPLASH_INCH = 0.5;      // penalty dumped in on a wrong answer
+      const INCH_PER_BALL = 0.09;   // pressure each landed ball adds
+      const BASE_INTERVAL = 1.8;    // seconds between balls at run start
+      const FLOOR_INTERVAL = 0.55;  // fastest the drip ever gets
+      const BALL_COLORS = ['#e74c3c', '#f39c12', '#f1c40f', '#2ecc71', '#3498db', '#9b59b6', '#e91e63', '#1abc9c'];
+
+      let canvas = null, ctx = null, W = 0, H = 0;
       let col = { bg: '#e8e8e8', text: '#1a1a1a', accent: '#e91e63', muted: 'rgba(0,0,0,0.55)', faint: 'rgba(0,0,0,0.35)' };
-      let blocks = [];   // landed: {x, w, row, landT, perfect} — row 0 is the base
-      let camera = 0, camTarget = 0;
-      let slider = null; // {w, row, phase, period, spawn, x}
-      let fall = null;   // {x, w, yTop, vy, row}
-      let debris = [], parts = [], floats = [];
-      let shakeT = 0, shakeMag = 0, collapseUntil = 0;
-      let pending = 0, combo = 0, height = 0;
-      let running = false, lastT = 0, hinted = false;
-      let hooks = { isMuted: () => false, onHeight: () => {}, onCombo: () => {}, onMilestone: () => {} };
+      let TX = 0, TY = 4, TW = 0, TB = 0, innerH = 1; // tube geometry
+      let pattern = null;                             // packed-ball texture for the settled pile
+
+      let level = 0;          // inches of pressure currently in the tube
+      let falling = [];       // live balls dropping in (simulated)
+      let flushBalls = [];    // balls escaping through the valve
+      let scatter = [];       // overflow spray
+      let topBalls = [];      // jittered balls that break up the pile's top line
+      let floats = [];
+      let settleOff = 0, settleVel = 0;              // pile settle spring after a drain
+      let shakeT = 0, shakeMag = 0, valveT = 0, warnPhase = 0, nextTick = 0;
+      let spawnIn = BASE_INTERVAL;
+      let streak = 0;         // consecutive corrects — drain multiplier
+      let run = { active: false, time: 0, questions: 0, milestone: 0 };
+      let running = false, lastT = 0, lastPop = 0;
+      let hooks = { isMuted: () => false, isLive: () => false, onRun: () => {}, onRecords: () => {}, onOverflow: () => {} };
 
       // — sound: synthesized with WebAudio, nothing loaded —
       const audio = { ctx: null };
@@ -1293,17 +1305,32 @@
           osc.start(t0); osc.stop(t0 + dur + 0.02);
         } catch (e) { /* never let sound break the game */ }
       }
-      const sndTap     = () => tone(950, 0.03, { type: 'triangle', gain: 0.06 });
-      const sndThock   = () => tone(175, 0.09, { slideTo: 85, gain: 0.22 });
-      const sndThud    = () => tone(95, 0.12, { slideTo: 55, gain: 0.26 });
-      const sndPerfect = (c) => {
-        const base = 540 * Math.min(2.1, 1 + (c - 1) * 0.09); // pitch climbs with the combo
-        [1, 1.26, 1.5].forEach((m, i) => tone(base * m, 0.09, { type: 'triangle', gain: 0.11, delay: i * 0.055 }));
-      };
-      const sndRumble  = () => {
-        tone(62, 0.5, { type: 'sawtooth', slideTo: 36, gain: 0.2 });
-        tone(48, 0.6, { slideTo: 30, gain: 0.18, delay: 0.05 });
-      };
+      function noise(dur, fFrom, fTo, gain) {
+        if (hooks.isMuted() || !audio.ctx) return;
+        try {
+          const t0 = audio.ctx.currentTime;
+          const n = Math.floor(audio.ctx.sampleRate * dur);
+          const buf = audio.ctx.createBuffer(1, n, audio.ctx.sampleRate);
+          const d = buf.getChannelData(0);
+          for (let i = 0; i < n; i++) d[i] = Math.random() * 2 - 1;
+          const src = audio.ctx.createBufferSource();
+          src.buffer = buf;
+          const filt = audio.ctx.createBiquadFilter();
+          filt.type = 'lowpass';
+          filt.frequency.setValueAtTime(fFrom, t0);
+          filt.frequency.exponentialRampToValueAtTime(Math.max(40, fTo), t0 + dur);
+          const g = audio.ctx.createGain();
+          g.gain.setValueAtTime(gain, t0);
+          g.gain.exponentialRampToValueAtTime(0.001, t0 + dur);
+          src.connect(filt); filt.connect(g); g.connect(audio.ctx.destination);
+          src.start(t0); src.stop(t0 + dur);
+        } catch (e) { /* silence over breakage */ }
+      }
+      const sndPop    = (now) => { if (now - lastPop > 90) { lastPop = now; tone(280 + Math.random() * 260, 0.04, { gain: 0.05 }); } };
+      const sndWhoosh = () => noise(0.35, 1400, 250, 0.16);
+      const sndSplash = () => noise(0.18, 2600, 700, 0.14);
+      const sndRumble = () => { noise(0.7, 220, 60, 0.28); tone(52, 0.5, { slideTo: 34, gain: 0.2 }); };
+      const sndTick   = () => tone(1250, 0.02, { gain: 0.028 });
 
       function hexA(hex, a) {
         const m = /^#?([0-9a-f]{6})$/i.exec((hex || '').trim());
@@ -1323,14 +1350,48 @@
         };
       }
 
-      const baseW = () => Math.min(124, Math.max(80, W * 0.6));
-      const topBlock = () => blocks[blocks.length - 1];
-      const topWorldY = () => (topBlock().row + 1) * BH;
-      const screenY = (worldY) => H - PADB - (worldY - camera);
+      const randColor = () => BALL_COLORS[Math.floor(Math.random() * BALL_COLORS.length)];
+      const ballR = () => (H < 140 ? 3.6 : 4.4);
+      const levelPx = () => (level / INCHES) * innerH;
+      const pileTopY = () => TB - levelPx() + settleOff;
 
-      function resetTower() {
-        blocks = [{ x: (W - baseW()) / 2, w: baseW(), row: 0, landT: 0, perfect: false }];
-        height = 0; camera = 0; camTarget = 0; combo = 0;
+      function layout() {
+        // Desktop card: a tall narrow tube. Mobile strip (wider than tall):
+        // the same tube lying down — a full-width trough that fills upward.
+        TW = W > H ? W - 16 : Math.min(76, Math.max(48, W * 0.46));
+        TX = (W - TW) / 2;
+        TY = 4;
+        TB = H - 16;
+        innerH = Math.max(1, TB - TY);
+      }
+
+      function makePattern() {
+        const t = document.createElement('canvas');
+        t.width = 44; t.height = 44;
+        const c = t.getContext('2d');
+        for (let row = 0; row < 5; row++) {
+          for (let i = 0; i < 5; i++) {
+            const x = i * 11 + (row % 2 ? 5.5 : 0) + (Math.random() - 0.5) * 2;
+            const y = row * 9.5 + (Math.random() - 0.5) * 2;
+            c.fillStyle = randColor();
+            c.beginPath(); c.arc(x, y, 5.2, 0, Math.PI * 2); c.fill();
+            c.fillStyle = 'rgba(255,255,255,0.25)';
+            c.beginPath(); c.arc(x - 1.5, y - 1.5, 2.1, 0, Math.PI * 2); c.fill();
+          }
+        }
+        pattern = ctx.createPattern(t, 'repeat');
+      }
+
+      function regenTop() {
+        topBalls = [];
+        const n = Math.max(6, Math.floor(TW / 9));
+        for (let i = 0; i < n; i++) {
+          topBalls.push({
+            fx: (i + 0.5) / n + (Math.random() - 0.5) * 0.06,
+            jy: Math.random() * 3.5,
+            color: randColor(),
+          });
+        }
       }
 
       function resize() {
@@ -1338,225 +1399,195 @@
         const r = canvas.getBoundingClientRect();
         if (r.width < 10 || r.height < 10) return;
         const dpr = window.devicePixelRatio || 1;
-        const oldW = W;
         W = r.width; H = r.height;
         canvas.width = Math.round(W * dpr);
         canvas.height = Math.round(H * dpr);
         ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-        BH = H < 140 ? 15 : 20;
-        if (oldW > 0 && Math.abs(oldW - W) > 1) {
-          const s = W / oldW; // keep the tower proportional across rotations/resizes
-          blocks.forEach((b) => { b.x *= s; b.w *= s; });
-          if (slider) slider.w *= s;
-          if (fall) { fall.x *= s; fall.w *= s; }
-        }
-        if (!blocks.length) resetTower();
+        layout();
+        if (!pattern) makePattern();
+        if (!topBalls.length) regenTop();
         draw();
       }
 
-      function spawnSlider() {
-        if (W < 10) { pending += 1; return; } // canvas not laid out yet — keep the earned drop
-        slider = {
-          w: topBlock().w, row: topBlock().row + 1,
-          phase: Math.random() * Math.PI * 2,
-          period: Math.max(0.85, 1.7 - height * 0.02), // gently faster as the tower grows
-          spawn: performance.now(), x: 0,
-        };
-        slider.x = sliderX();
-        if (!hinted) {
-          hinted = true;
-          addFloat(W / 2, (slider.row + 1) * BH + 34, 'tap to drop!', col.muted);
-        }
-        kick();
+      function addFloat(text, color) {
+        floats.push({
+          x: TX + TW / 2,
+          y: Math.max(22, pileTopY() - 14),
+          text, color, life: 1,
+        });
       }
-
-      function sliderX() {
-        const minX = 6, maxX = Math.max(6, W - 6 - slider.w);
-        return minX + (maxX - minX) * (0.5 - 0.5 * Math.cos(slider.phase));
-      }
-
-      function tap() {
-        ensureAudio();
-        if (slider && !fall) { sndTap(); doDrop(); return true; }
-        return false;
-      }
-
-      function doDrop() {
-        if (!slider) return;
-        fall = {
-          x: slider.x, w: slider.w, row: slider.row,
-          yTop: (slider.row + 1) * BH + Math.min(64, H * 0.45),
-          vy: 0,
-        };
-        slider = null;
-      }
-
-      function puff(x, y, n, color) {
-        for (let i = 0; i < n; i++) {
-          parts.push({
-            x: x + (Math.random() - 0.5) * 10, y: y + (Math.random() - 0.5) * 6,
-            vx: (Math.random() - 0.5) * 90, vy: 40 + Math.random() * 90,
-            life: 0.5 + Math.random() * 0.4, r: 1.2 + Math.random() * 1.8, color,
-          });
-        }
-      }
-      function addFloat(x, y, text, color) { floats.push({ x, y, text, color, life: 1 }); }
       function shake(ms, mag) { shakeT = Math.max(shakeT, ms / 1000); shakeMag = mag; }
-      function tumble(x, yTop, w, dir, life, delay) {
-        debris.push({
-          x, yTop, w, h: BH, vx: dir * (40 + Math.random() * 40), vy: 40 + Math.random() * 30,
-          rot: 0, vr: dir * (2.6 + Math.random() * 1.4), life: life || 1.4, delay: delay || 0,
+
+      function spawnBall(vol, yOff) {
+        falling.push({
+          x: TX + 8 + Math.random() * Math.max(4, TW - 16),
+          y: TY - 6 - (yOff || 0),
+          vx: (Math.random() - 0.5) * 24,
+          vy: 30 + Math.random() * 40,
+          r: ballR(), color: randColor(), vol, bounced: false,
         });
+        // keep live physics bodies modest — oldest just lands instantly
+        if (falling.length > 30) landBall(falling.shift(), performance.now());
       }
 
-      function land() {
-        const prev = topBlock();
-        const overL = Math.max(fall.x, prev.x);
-        const overR = Math.min(fall.x + fall.w, prev.x + prev.w);
-        const ov = overR - overL;
-        const offset = Math.abs(fall.x - prev.x);
-        const rowTop = (fall.row + 1) * BH;
-        const dir = fall.x < prev.x ? -1 : 1;
+      function landBall(b, now) {
+        level = Math.min(INCHES, level + b.vol);
+        sndPop(now);
+        // the ball melts into the pile — recolour a surface ball so it shows
+        if (topBalls.length) topBalls[Math.floor(Math.random() * topBalls.length)].color = b.color;
+        if (level >= INCHES) overflow();
+      }
 
-        if (ov <= 0) {
-          // Clean miss — the whole block tumbles away, nothing gained
-          tumble(fall.x, rowTop, fall.w, dir);
-          combo = 0;
-          addFloat(fall.x + fall.w / 2, rowTop + 8, 'missed!', col.faint);
-          sndThud();
-        } else if (offset <= PERFECT_TOL) {
-          // PERFECT — snap aligned, sparkle, regain a little width
-          combo += 1;
-          const w = Math.min(prev.w + 4, baseW());
-          const x = Math.max(2, Math.min(W - 2 - w, prev.x - (w - prev.w) / 2));
-          blocks.push({ x, w, row: fall.row, landT: 0.18, perfect: true });
-          height += 1;
-          puff(x + w / 2, rowTop, 12, '#d9a93c');
-          puff(x + w / 2, rowTop, 6, col.accent);
-          addFloat(x + w / 2, rowTop + 10, combo > 1 ? 'PERFECT ×' + combo : 'PERFECT', col.accent);
-          sndPerfect(combo);
-          hooks.onCombo(combo);
-          afterLand();
-        } else if (ov < MIN_W) {
-          // Too thin to stand — it topples straight off
-          tumble(fall.x, rowTop, fall.w, dir);
-          combo = 0;
-          addFloat(fall.x + fall.w / 2, rowTop + 8, 'too thin!', col.faint);
-          sndThud();
+      function answer(correct) {
+        ensureAudio();
+        if (run.active) {
+          run.questions += 1;
+          hooks.onRecords(run.time, run.questions);
+        }
+        if (correct) {
+          streak += 1;
+          const mult = Math.min(2, 1 + 0.25 * (streak - 1));
+          const inches = DRAIN_INCH * mult;
+          const drained = Math.min(level, inches);
+          if (drained > 0.02) {
+            const slicePx = (drained / INCHES) * innerH;
+            level -= drained;
+            settleOff += slicePx; // pile starts high, drops with a wobble
+            valveT = 0.5;
+            const n = 8 + Math.floor(drained * 6);
+            for (let i = 0; i < n; i++) {
+              flushBalls.push({
+                x: TX + TW / 2 + (Math.random() - 0.5) * Math.min(TW * 0.5, 40),
+                y: TB - Math.random() * Math.max(6, slicePx * 0.8),
+                vx: (Math.random() - 0.5) * 60,
+                vy: 160 + Math.random() * 220,
+                r: ballR(), color: randColor(), life: 0.9,
+              });
+            }
+            sndWhoosh();
+            regenTop();
+            addFloat(mult === 1 ? '-1 inch' : '-' + (Math.round(inches * 100) / 100) + ' inches!', col.accent);
+          } else {
+            addFloat('all clear!', col.accent); // nothing to drain — the best place to be
+          }
         } else {
-          // Slice — keep the overlap, the overhang tumbles away
-          const cutW = fall.w - ov;
-          const cutX = dir < 0 ? fall.x : overR;
-          tumble(cutX, rowTop, cutW, dir, 1.3);
-          blocks.push({ x: overL, w: ov, row: fall.row, landT: 0.18, perfect: false });
-          height += 1;
-          combo = 0;
-          puff(dir < 0 ? overL : overR, rowTop, 6, 'rgba(140,140,140,0.8)');
-          addFloat(overL + ov / 2, rowTop + 10, '+1', col.muted);
-          sndThock();
-          afterLand();
-        }
-        fall = null;
-      }
-
-      function afterLand() {
-        hooks.onHeight(height);
-        if (height % 10 === 0) {
-          addFloat(W / 2, topWorldY() + 16, 'Row ' + height + '!', '#d9a93c');
-          hooks.onMilestone(height);
-        }
-      }
-
-      function jolt() {
-        shake(180, 4);
-        sndThud();
-        const t = topBlock();
-        if (t.row > 0) {
-          // the bump knocks the top block off-true — next drop is harder
-          const dir = Math.random() < 0.5 ? -1 : 1;
-          t.x = Math.max(2, Math.min(W - 2 - t.w, t.x + dir * (4 + Math.random() * 4)));
+          streak = 0;
+          shake(160, 3);
+          sndSplash();
+          addFloat('+ splash!', '#e6a817');
+          for (let i = 0; i < 7; i++) spawnBall(SPLASH_INCH / 7, i * 12); // a visible surge from the top
         }
         kick();
       }
 
-      function collapse() {
-        shake(260, 7);
+      function overflow() {
         sndRumble();
-        const top = topBlock().row;
-        const falling = blocks.filter((b) => b.row > 0);
-        falling.forEach((b) => {
-          debris.push({
-            x: b.x, yTop: (b.row + 1) * BH, w: b.w, h: BH,
-            vx: (Math.random() - 0.5) * 170, vy: 30 + Math.random() * 70,
-            rot: 0, vr: (Math.random() - 0.5) * 7,
-            life: 1.7, delay: (top - b.row) * 0.045, // top blocks go first
+        shake(300, 6);
+        for (let i = 0; i < 26; i++) {
+          scatter.push({
+            x: TX + Math.random() * TW,
+            y: TY + Math.random() * 14,
+            vx: (Math.random() - 0.5) * 320,
+            vy: -(120 + Math.random() * 220),
+            r: 3 + Math.random() * 2.5,
+            color: randColor(), life: 1.3,
           });
-        });
-        if (slider) { tumble(sliderX(), (slider.row + 1) * BH, slider.w, 1); slider = null; }
-        if (fall) { tumble(fall.x, fall.yTop, fall.w, -1); fall = null; }
-        blocks = blocks.slice(0, 1);
-        height = 0; combo = 0;
-        collapseUntil = performance.now() + falling.length * 45 + 500;
-        if (falling.length) addFloat(W / 2, BH * 3, 'Timber!', col.muted);
-        hooks.onHeight(0);
-        kick();
-      }
-
-      function earnDrop() {
-        if (!slider && !fall && W >= 10 && performance.now() >= collapseUntil) spawnSlider();
-        else pending += 1;
-        kick();
+        }
+        addFloat('Overflow!', col.text);
+        const badge = document.getElementById('tower-badge');
+        if (badge) {
+          badge.textContent = 'Overflow! 🫧';
+          badge.classList.remove('pop'); void badge.offsetWidth; badge.classList.add('pop');
+        }
+        hooks.onOverflow(run.time, run.questions);
+        level = 0; falling = []; settleOff = 0; settleVel = 0; streak = 0;
+        run = { active: false, time: 0, questions: 0, milestone: 0 };
+        regenTop();
       }
 
       function needsAnim() {
-        return !!(slider || fall || debris.length || parts.length || floats.length || shakeT > 0
-          || Math.abs(camera - camTarget) > 0.5 || (pending > 0 && W >= 10)
-          || blocks.some((b) => b.landT > 0));
+        return !!(hooks.isLive() || falling.length || flushBalls.length || scatter.length
+          || floats.length || shakeT > 0 || valveT > 0
+          || Math.abs(settleOff) > 0.05 || Math.abs(settleVel) > 0.05);
       }
 
       function update(dt, now) {
-        // camera chases the tower top
-        camTarget = Math.max(0, topWorldY() - (H - PADB - BH * 2.6));
-        camera += (camTarget - camera) * Math.min(1, dt * 6);
-
-        if (shakeT > 0) shakeT -= dt;
-        blocks.forEach((b) => { if (b.landT > 0) b.landT = Math.max(0, b.landT - dt); });
-
-        if (pending > 0 && !slider && !fall && W >= 10 && now >= collapseUntil) {
-          pending -= 1;
-          spawnSlider();
-        }
-
-        if (slider) {
-          slider.phase += dt * (Math.PI * 2) / slider.period;
-          slider.x = sliderX();
-          if (now - slider.spawn > AUTO_MS) doDrop(); // answering comes first — it drops itself
-        }
-        if (fall) {
-          fall.vy += 2200 * dt;
-          fall.yTop -= fall.vy * dt;
-          if (fall.yTop <= (fall.row + 1) * BH) {
-            fall.yTop = (fall.row + 1) * BH;
-            land();
+        const live = hooks.isLive();
+        if (live) {
+          if (!run.active) {
+            run = { active: true, time: 0, questions: 0, milestone: 0 };
+            spawnIn = 0.6; // a breath of grace, then the pressure starts
+          }
+          const prevSec = Math.floor(run.time);
+          run.time += dt;
+          if (Math.floor(run.time) !== prevSec) hooks.onRun();
+          if (Math.floor(run.time / 60) > run.milestone) {
+            run.milestone = Math.floor(run.time / 60);
+            addFloat(run.milestone + (run.milestone === 1 ? ' min!' : ' mins!'), col.muted);
+          }
+          spawnIn -= dt;
+          if (spawnIn <= 0) {
+            spawnBall(INCH_PER_BALL, 0);
+            // Tetris curve: the drip speeds up the longer the run survives
+            spawnIn = Math.max(FLOOR_INTERVAL, BASE_INTERVAL * Math.pow(0.94, Math.floor(run.time / 30)));
+          }
+          // quiet rising heartbeat once the pile passes three quarters
+          if (level / INCHES >= 0.75) {
+            nextTick -= dt;
+            if (nextTick <= 0) {
+              sndTick();
+              const p = (level / INCHES - 0.75) / 0.25;
+              nextTick = 1.0 - 0.55 * Math.min(1, p);
+            }
+            warnPhase += dt * 3;
           }
         }
-        debris = debris.filter((d) => {
-          if (d.delay > 0) { d.delay -= dt; return true; }
-          d.vy -= 1900 * dt;
-          d.yTop += d.vy * dt;
-          d.x += d.vx * dt;
-          d.rot += d.vr * dt;
-          d.life -= dt;
-          return d.life > 0 && screenY(d.yTop) < H + 80;
+
+        if (shakeT > 0) shakeT -= dt;
+        if (valveT > 0) valveT -= dt;
+
+        // settle spring — the pile drops into place with a wobble after a drain
+        if (Math.abs(settleOff) > 0.05 || Math.abs(settleVel) > 0.05) {
+          settleVel += (-160 * settleOff - 13 * settleVel) * dt;
+          settleOff += settleVel * dt;
+        } else { settleOff = 0; settleVel = 0; }
+
+        // falling balls — gravity, a small bounce, then absorbed by the pile
+        for (let i = falling.length - 1; i >= 0; i--) {
+          const b = falling[i];
+          b.vy += 1500 * dt;
+          b.y += b.vy * dt;
+          b.x += b.vx * dt;
+          b.x = Math.max(TX + b.r, Math.min(TX + TW - b.r, b.x));
+          const surf = pileTopY() - b.r;
+          if (b.y >= surf) {
+            if (!b.bounced && b.vy > 120) {
+              b.bounced = true;
+              b.y = surf;
+              b.vy *= -0.28;
+              b.vx += (Math.random() - 0.5) * 30;
+            } else {
+              falling.splice(i, 1);
+              landBall(b, now);
+            }
+          }
+        }
+
+        flushBalls = flushBalls.filter((f) => {
+          f.vy += 1300 * dt;
+          f.y += f.vy * dt;
+          f.x += f.vx * dt;
+          f.life -= dt;
+          return f.life > 0 && f.y < H + 24;
         });
-        parts = parts.filter((p) => {
-          p.vy -= 700 * dt;
-          p.y += p.vy * dt;
-          p.x += p.vx * dt;
-          p.life -= dt;
-          return p.life > 0;
+        scatter = scatter.filter((s) => {
+          s.vy += 900 * dt;
+          s.y += s.vy * dt;
+          s.x += s.vx * dt;
+          s.life -= dt;
+          return s.life > 0 && s.y < H + 24;
         });
-        floats = floats.filter((f) => { f.y += 30 * dt; f.life -= dt * 0.9; return f.life > 0; });
+        floats = floats.filter((f) => { f.y -= 26 * dt; f.life -= dt * 0.9; return f.life > 0; });
       }
 
       function rrect(x, y, w, h, r) {
@@ -1570,36 +1601,13 @@
         ctx.closePath();
       }
 
-      function drawSlab(x, sy, w, h, opts) {
-        opts = opts || {};
-        ctx.save();
-        if (opts.sq > 0) {
-          // squash-and-stretch around the block's base
-          const p = 1 - opts.sq / 0.18;
-          const k = 1 - 0.3 * Math.sin(Math.PI * Math.min(1, p));
-          const cx = x + w / 2, cy = sy + h;
-          ctx.translate(cx, cy);
-          ctx.scale(1 + (1 - k) * 0.9, k);
-          ctx.translate(-cx, -cy);
-        }
-        ctx.shadowColor = 'rgba(110,110,110,0.5)';
-        ctx.shadowBlur = 5; ctx.shadowOffsetX = 2; ctx.shadowOffsetY = 3;
-        ctx.fillStyle = col.bg;
-        rrect(x, sy, w, h, 4); ctx.fill();
-        ctx.shadowColor = 'transparent'; ctx.shadowBlur = 0; ctx.shadowOffsetX = 0; ctx.shadowOffsetY = 0;
-        const gr = ctx.createLinearGradient(0, sy, 0, sy + h);
-        gr.addColorStop(0, 'rgba(255,255,255,0.55)');
-        gr.addColorStop(0.5, 'rgba(255,255,255,0.06)');
-        gr.addColorStop(1, 'rgba(0,0,0,0.07)');
-        ctx.fillStyle = gr; rrect(x, sy, w, h, 4); ctx.fill();
-        if (opts.glow) {
-          ctx.strokeStyle = hexA(col.accent, 0.4);
-          ctx.lineWidth = 1;
-          ctx.shadowColor = col.accent; ctx.shadowBlur = 6;
-          rrect(x + 0.5, sy + 0.5, w - 1, h - 1, 4); ctx.stroke();
-          ctx.shadowColor = 'transparent'; ctx.shadowBlur = 0;
-        }
-        ctx.restore();
+      function drawBall(x, y, r, color, alpha) {
+        ctx.globalAlpha = alpha == null ? 1 : Math.max(0, Math.min(1, alpha));
+        ctx.fillStyle = color;
+        ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = 'rgba(255,255,255,0.3)';
+        ctx.beginPath(); ctx.arc(x - r * 0.3, y - r * 0.3, r * 0.4, 0, Math.PI * 2); ctx.fill();
+        ctx.globalAlpha = 1;
       }
 
       function draw() {
@@ -1610,68 +1618,65 @@
           ctx.translate((Math.random() - 0.5) * 2 * shakeMag, (Math.random() - 0.5) * 2 * shakeMag);
         }
 
-        // milestone bands — a soft glow line every 10 rows
-        for (let r = 10; r <= height; r += 10) {
-          const y = screenY(r * BH);
-          if (y < -10 || y > H + 10) continue;
-          ctx.strokeStyle = hexA(col.accent, 0.16);
-          ctx.lineWidth = 1;
-          ctx.shadowColor = col.accent; ctx.shadowBlur = 5;
-          ctx.beginPath(); ctx.moveTo(4, y); ctx.lineTo(W - 4, y); ctx.stroke();
-          ctx.shadowColor = 'transparent'; ctx.shadowBlur = 0;
+        // tube back — a soft inset channel in the desk material
+        ctx.fillStyle = 'rgba(0,0,0,0.045)';
+        rrect(TX - 3, TY - 3, TW + 6, TB - TY + 10, 10); ctx.fill();
+
+        // inside the tube (clipped): pile, surface balls, warning glow, falling balls
+        ctx.save();
+        rrect(TX, TY, TW, TB - TY, 8); ctx.clip();
+
+        const pTop = pileTopY();
+        if (level > 0.01 || settleOff > 0.5) {
+          ctx.fillStyle = pattern || col.faint;
+          ctx.fillRect(TX, pTop, TW, Math.max(0, TB - pTop));
+          topBalls.forEach((tb) => {
+            drawBall(TX + tb.fx * TW, pTop + tb.jy + 2, ballR() + 0.4, tb.color);
+          });
         }
 
-        // landed tower
-        blocks.forEach((b) => {
-          const sy = screenY((b.row + 1) * BH);
-          if (sy > H + BH || sy + BH < -BH) return;
-          drawSlab(b.x, sy, b.w, BH - 2, { sq: b.landT, glow: b.perfect });
-        });
-
-        // aim ghost + the sliding block
-        if (slider) {
-          const prev = topBlock();
-          const sy = screenY((slider.row + 1) * BH);
-          ctx.fillStyle = 'rgba(0,0,0,0.05)';
-          rrect(prev.x, sy, prev.w, BH - 2, 4); ctx.fill();
-          drawSlab(slider.x, sy - 3, slider.w, BH - 2, {});
+        const lv = level / INCHES;
+        if (lv >= 0.72) {
+          // amber warning glow at the tube's mouth — indicator, kept soft
+          const a = Math.min(0.45, ((lv - 0.72) / 0.28) * 0.45) * (0.75 + 0.25 * Math.sin(warnPhase));
+          const gr = ctx.createLinearGradient(0, TY, 0, TY + 30);
+          gr.addColorStop(0, 'rgba(230,168,23,' + a.toFixed(3) + ')');
+          gr.addColorStop(1, 'rgba(230,168,23,0)');
+          ctx.fillStyle = gr;
+          ctx.fillRect(TX, TY, TW, 30);
         }
 
-        // the falling block — slight vertical stretch
-        if (fall) {
-          const sy = screenY(fall.yTop);
-          ctx.save();
-          const cx = fall.x + fall.w / 2, cy = sy + BH;
-          ctx.translate(cx, cy); ctx.scale(0.97, 1.06); ctx.translate(-cx, -cy);
-          drawSlab(fall.x, sy, fall.w, BH - 2, {});
-          ctx.restore();
+        falling.forEach((b) => drawBall(b.x, b.y, b.r, b.color));
+        ctx.restore();
+
+        // glass shine down the left inside edge
+        const shine = ctx.createLinearGradient(TX, 0, TX + 12, 0);
+        shine.addColorStop(0, 'rgba(255,255,255,0.35)');
+        shine.addColorStop(1, 'rgba(255,255,255,0)');
+        ctx.fillStyle = shine;
+        rrect(TX, TY, 12, TB - TY, 8); ctx.fill();
+
+        // frame
+        ctx.strokeStyle = 'rgba(0,0,0,0.09)';
+        ctx.lineWidth = 2;
+        rrect(TX, TY, TW, TB - TY, 8); ctx.stroke();
+
+        // the valve — a mouth at the bottom that opens on a flush
+        const vw = Math.min(30, TW * 0.5);
+        const vx = TX + TW / 2 - vw / 2;
+        if (valveT > 0) {
+          ctx.strokeStyle = 'rgba(0,0,0,0.18)';
+          ctx.lineWidth = 2;
+          ctx.beginPath(); ctx.moveTo(vx, TB); ctx.lineTo(vx - 4, TB + 7); ctx.stroke();
+          ctx.beginPath(); ctx.moveTo(vx + vw, TB); ctx.lineTo(vx + vw + 4, TB + 7); ctx.stroke();
+        } else {
+          ctx.fillStyle = 'rgba(0,0,0,0.12)';
+          rrect(vx, TB - 1, vw, 4, 2); ctx.fill();
         }
 
-        // debris — sliced overhangs and collapsing blocks
-        debris.forEach((d) => {
-          const sy = screenY(d.yTop);
-          ctx.save();
-          ctx.globalAlpha = Math.max(0, Math.min(1, d.life));
-          ctx.translate(d.x + d.w / 2, sy + d.h / 2);
-          ctx.rotate(d.rot);
-          ctx.shadowColor = 'rgba(110,110,110,0.4)'; ctx.shadowBlur = 4; ctx.shadowOffsetY = 2;
-          ctx.fillStyle = col.bg;
-          rrect(-d.w / 2, -d.h / 2, d.w, d.h - 2, 3); ctx.fill();
-          ctx.shadowColor = 'transparent'; ctx.shadowBlur = 0; ctx.shadowOffsetY = 0;
-          ctx.fillStyle = 'rgba(0,0,0,0.05)';
-          rrect(-d.w / 2, -d.h / 2, d.w, d.h - 2, 3); ctx.fill();
-          ctx.restore();
-        });
-
-        // particles
-        parts.forEach((p) => {
-          ctx.globalAlpha = Math.max(0, Math.min(1, p.life * 1.6));
-          ctx.fillStyle = p.color;
-          ctx.beginPath();
-          ctx.arc(p.x, screenY(p.y), p.r, 0, Math.PI * 2);
-          ctx.fill();
-        });
-        ctx.globalAlpha = 1;
+        // escaping and spilling balls (outside the clip on purpose)
+        flushBalls.forEach((f) => drawBall(f.x, f.y, f.r, f.color, f.life * 1.4));
+        scatter.forEach((s) => drawBall(s.x, s.y, s.r, s.color, s.life));
 
         // floating text
         ctx.textAlign = 'center';
@@ -1679,14 +1684,14 @@
         floats.forEach((f) => {
           ctx.globalAlpha = Math.max(0, Math.min(1, f.life));
           ctx.fillStyle = f.color;
-          ctx.fillText(f.text, f.x, screenY(f.y));
+          ctx.fillText(f.text, f.x, f.y);
         });
         ctx.globalAlpha = 1;
 
         ctx.restore();
       }
 
-      // rAF loop — runs only while something moves; stops flat when idle/hidden
+      // rAF loop — runs while live or animating; stops flat when idle/hidden
       function kick() {
         if (running) return;
         running = true;
@@ -1703,79 +1708,69 @@
         else { running = false; draw(); }
       }
       function wake() {
-        if (slider) slider.spawn = performance.now(); // fresh 4s after coming back
         if (needsAnim()) kick(); else draw();
       }
+      function questionLive() { kick(); }
 
       function init(el) {
         canvas = el;
         ctx = canvas.getContext('2d');
         readPalette();
         resize();
-        canvas.addEventListener('pointerdown', (e) => { e.preventDefault(); tap(); });
       }
 
       return {
-        init, resize, wake, tap, earnDrop, jolt, collapse,
+        init, resize, wake, questionLive, answer, ensureAudio,
         setHooks: (h) => { hooks = Object.assign(hooks, h); },
-        height: () => height,
-        ensureAudio,
+        runTime: () => run.time,
+        runQuestions: () => run.questions,
       };
     })();
 
-    // ── Wiring the game to the quiz ────────────────────────────────────────
-    function updateTowerStats() {
-      $('tw-height').textContent = String(game.height());
-      $('tw-best').textContent = String(state.progress.quiz.bestHeight || 0);
-      $('tw-combo').textContent = '×' + (state.progress.quiz.bestCombo || 0);
-      $('tw-score').textContent = state.sessionCorrect + '/' + state.sessionAnswered;
-      $('tw-topped').textContent = '🏆 ×' + (state.progress.quiz.towersTopped || 0);
+    // ── Wiring the tube to the quiz ────────────────────────────────────────
+    function fmtTime(s) {
+      s = Math.max(0, Math.floor(s));
+      return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0');
+    }
+
+    function updateGameStats() {
+      $('tw-run').textContent = fmtTime(game.runTime());
+      $('tw-runq').textContent = String(game.runQuestions());
+      $('tw-best').textContent = fmtTime(state.progress.quiz.bestRunSeconds || 0);
+      $('tw-bestq').textContent = String(state.progress.quiz.bestRunQuestions || 0);
     }
 
     game.setHooks({
       isMuted: () => !!state.progress.quiz.muted,
-      onHeight: (h) => {
-        if (h > (state.progress.quiz.bestHeight || 0)) {
-          state.progress.quiz.bestHeight = h;
-          saveProgress(); // a new best is worth its own save
-        }
-        updateTowerStats();
+      // The tube fills ONLY while a question is live and unanswered —
+      // reading the "why", loading batches, setup, the explain popup,
+      // the Exam Room and hidden tabs are all free time.
+      isLive: () => state.stage === 'build'
+        && state.buildView === 'question'
+        && !!state.quizQ && !state.quizResolved
+        && setupStrip.classList.contains('hidden')
+        && explainPopup.classList.contains('hidden')
+        && !document.hidden,
+      onRun: () => {
+        $('tw-run').textContent = fmtTime(game.runTime());
+        $('tw-runq').textContent = String(game.runQuestions());
       },
-      onCombo: (c) => {
-        if (c > (state.progress.quiz.bestCombo || 0)) {
-          state.progress.quiz.bestCombo = c;
-          saveProgress();
-        }
-        updateTowerStats();
+      onRecords: (t, q) => {
+        // called once per answered question — the save rides answerQuiz's POST
+        const qz = state.progress.quiz;
+        if (Math.floor(t) > (qz.bestRunSeconds || 0)) qz.bestRunSeconds = Math.floor(t);
+        if (q > (qz.bestRunQuestions || 0)) qz.bestRunQuestions = q;
+        updateGameStats();
       },
-      onMilestone: (h) => {
-        state.progress.quiz.towersTopped = (state.progress.quiz.towersTopped || 0) + 1;
-        const badge = $('tower-badge');
-        badge.textContent = 'Row ' + h + '! 🏆';
-        badge.classList.remove('pop');
-        void badge.offsetWidth;
-        badge.classList.add('pop');
-        updateTowerStats();
-        saveProgress();
+      onOverflow: (t, q) => {
+        const qz = state.progress.quiz;
+        let record = false;
+        if (Math.floor(t) > (qz.bestRunSeconds || 0)) { qz.bestRunSeconds = Math.floor(t); record = true; }
+        if (q > (qz.bestRunQuestions || 0)) { qz.bestRunQuestions = q; record = true; }
+        if (record) saveProgress(); // at most one save per overflow
+        updateGameStats();
       },
     });
-
-    function towerCorrect() {
-      state.tower.wrongRun = 0;
-      game.earnDrop();
-      updateTowerStats();
-    }
-
-    function towerWrong() {
-      state.tower.wrongRun += 1;
-      if (state.tower.wrongRun >= 3) {
-        state.tower.wrongRun = 0;
-        game.collapse();
-      } else {
-        game.jolt();
-      }
-      updateTowerStats();
-    }
 
     $('tower-mute').addEventListener('click', () => {
       state.progress.quiz.muted = !state.progress.quiz.muted;
@@ -1918,7 +1913,10 @@
     const explainPopup = $('explain-popup');
     const explainText  = $('explain-text');
     const explainLinks = $('explain-links');
-    $('explain-close').addEventListener('click', () => explainPopup.classList.add('hidden'));
+    $('explain-close').addEventListener('click', () => {
+      explainPopup.classList.add('hidden');
+      game.wake(); // popup closed — the tube may start dripping again
+    });
 
     async function openExplain(anchorBtn, concept) {
       const btnRect = anchorBtn.getBoundingClientRect();
@@ -1982,7 +1980,7 @@
       renderShelf();
       game.init($('tower-canvas'));
       $('tower-mute').textContent = state.progress.quiz.muted ? '🔇' : '🔈';
-      updateTowerStats();
+      updateGameStats();
       render();
     })();
   })();
