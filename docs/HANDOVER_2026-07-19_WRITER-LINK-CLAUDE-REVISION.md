@@ -50,6 +50,36 @@ her sister's CIPD HR course. Not committed/pushed yet — awaiting Sarah's go.
   (fetch-url + revision routes + /revise page), memory.js (getRevisionPath),
   writer.html (link input + paste-URL + nav link)
 
+## EVENING ROUND (same day) — Sarah's redesign, all pushed
+
+Sarah's feedback after first look: "not going to teach people, it's a lot of
+reading… questions created with answers… a game at the side like tetris or
+jenga… it will have to be clickable… Q creates it, sonnet checks it, opus
+only for the heavy lifting at the end."
+
+Shipped (commits `7960a18`, `5ed6b2e`):
+- **Tiered pipeline** (her design): Q (DeepSeek) WRITES quiz batches →
+  Sonnet (`claude-sonnet-5`) CHECKS every answer key (never serve unchecked;
+  checker down = quiz down) → Opus (`claude-opus-4-8`, effort medium) only
+  in the exam room. `q-claude.js` takes `model` + `effort` + logs per-call
+  timing. Route: `POST /revision/quiz`.
+- **/revise is now two stages.** Build (default): clickable A–D questions,
+  instant right/wrong + one-line WHY, block-tower game at the side (correct
+  = block drops, 5-streak = keystone, wrong = top 2 tumble, 3-in-a-row wrong
+  = full collapse, 10 = topped + 🏆 counter). Mastery = ≥10 answered at ≥85%
+  per topic → unlocks the Exam Room (the original typed+marked flow, intact).
+  Weak topics auto-fed into batch requests.
+- **LIVE BUG FIXED — writer coach dead on Railway** (`7960a18`): my morning
+  wiring put TWO Opus-with-thinking calls inside one /writer/brief request →
+  blew Railway's ~60s proxy window (the documented May 502). Writer accuracy
+  calls now run on SONNET (fits the window, Q still the fallback); exam room
+  stays Opus. LESSON: any single request must fit ~60s — never chain two
+  slow model calls in one route; check `[q-claude]` timing lines in Railway
+  logs when something "isn't working".
+- **AQA: no API exists.** Exampro is a paid teacher product; past papers are
+  copyrighted. NEXT STEP offered: fetch the public AQA Law spec PDF via
+  /writer/fetch-url machinery and ground question generation in it.
+
 ## The real test material (both in C:\Users\sarah\Downloads)
 - **Charlie (Sarah's son, Year 12, A-Level LAW):** `Law revision.docx` — his
   teacher's holiday topic list, 17 topics (ELS: Parliament, delegated
