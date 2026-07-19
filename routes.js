@@ -1228,14 +1228,16 @@ router.get('/writer/tutor', requirePerson, async (req, res) => {
 // askLeadingQuestion in plugins/q-writer.js are no longer on the live path.
 // ─────────────────────────────────────────────────────────────────────────
 
-// POST /writer/brief — analyse the task and build the tutor's brief (two-step in one call)
+// POST /writer/brief — analyse the task and build the tutor's brief.
+// ONE model call for both halves — two chained calls blew Railway's ~60s
+// proxy window and killed the coach on live (19 Jul).
 router.post('/writer/brief', requirePerson, express.json({ limit: '512kb' }), async (req, res) => {
     const taskText = (req.body?.taskText || '').toString().trim();
     if (!taskText) return res.status(400).json({ error: 'taskText required' });
     try {
-        const analysis = await qWriter.analyseTask(taskText);
-        const brief = await qWriter.tutorBrief(analysis);
-        res.json({ ok: true, analysis, brief });
+        const both = await qWriter.analyseAndBrief(taskText);
+        if (!both || !both.analysis || !both.brief) throw new Error('brief came back incomplete — try again');
+        res.json({ ok: true, analysis: both.analysis, brief: both.brief });
     } catch (e) {
         console.error('[writer/brief]', e.message);
         res.status(500).json({ error: e.message });

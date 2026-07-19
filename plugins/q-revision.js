@@ -231,6 +231,33 @@ function normaliseQuizQuestions(raw) {
     return out;
 }
 
+// Structured-outputs schema for quiz batches — the API guarantees the
+// response parses, so a big checked batch can never come back as broken JSON
+// (live failure 19 Jul: truncated Sonnet batch → "Expected ':'" parse error).
+const QUIZ_SCHEMA = {
+    type: 'object',
+    additionalProperties: false,
+    required: ['questions'],
+    properties: {
+        questions: {
+            type: 'array',
+            items: {
+                type: 'object',
+                additionalProperties: false,
+                required: ['question', 'options', 'correctIndex', 'why', 'topicTag', 'difficulty'],
+                properties: {
+                    question: { type: 'string' },
+                    options: { type: 'array', items: { type: 'string' } },
+                    correctIndex: { type: 'integer' },
+                    why: { type: 'string' },
+                    topicTag: { type: 'string' },
+                    difficulty: { type: 'string', enum: ['foundation', 'standard', 'stretch'] },
+                },
+            },
+        },
+    },
+};
+
 const QUIZ_SHAPE = `Return ONLY valid JSON:
 - questions (array): each {
     question (string — one clear multiple-choice question),
@@ -277,7 +304,7 @@ Write the ${n} questions.`;
         console.warn('[q-revision] Q quiz writer failed, Sonnet writing directly: ' + e.message);
     }
     if (!draft || draft.length === 0) {
-        draft = normaliseQuizQuestions(await claudeJSON(writerSystem, writerUser, { maxTokens: 3000, model: SONNET }));
+        draft = normaliseQuizQuestions(await claudeJSON(writerSystem, writerUser, { maxTokens: 6000, model: SONNET, effort: 'medium', schema: QUIZ_SCHEMA }));
         writtenByClaude = true;
     }
     if (draft.length === 0) throw new Error('No usable questions came back — try again.');
@@ -298,7 +325,7 @@ For every question:
 ${QUIZ_SHAPE}`;
 
     const checked = normaliseQuizQuestions(
-        await claudeJSON(checkerSystem, `DRAFT BATCH:\n${JSON.stringify({ questions: draft }, null, 1)}`, { maxTokens: 3500, model: SONNET })
+        await claudeJSON(checkerSystem, `DRAFT BATCH:\n${JSON.stringify({ questions: draft }, null, 1)}`, { maxTokens: 8000, model: SONNET, effort: 'medium', schema: QUIZ_SCHEMA })
     );
     if (checked.length === 0) throw new Error('The checker rejected the whole batch — try again.');
     return { questions: checked, checkedBy: 'sonnet' };

@@ -48,12 +48,13 @@ async function callQ(systemPrompt, userPrompt, { maxTokens = 4096 } = {}) {
 // go to Claude first — Q is the fallback so the writer never goes dark.
 // Voice-flavoured calls (swaps, reframes, leading questions) stay on Q.
 //
-// SONNET, not Opus, on this path: /writer/brief runs TWO of these calls in
-// one HTTP request, and Railway's ~60s proxy window kills anything slower
-// (the documented May 502). Sonnet is fast Claude — accurate and inside the
-// window. Opus is reserved for the exam room's heavy lifting (Sarah's tiers).
+// SONNET at medium effort on this path: every writer request must land
+// inside Railway's ~60s proxy window (the documented May 502; measured 19
+// Jul: a Sonnet call at default effort took ~27s on a real brief). Sonnet
+// is fast Claude — accurate and inside the window. Opus is reserved for the
+// exam room's heavy lifting (Sarah's tiers).
 async function callAccurate(systemPrompt, userPrompt, opts = {}) {
-    return accurateJSON(systemPrompt, userPrompt, { ...opts, model: SONNET, fallback: callQ });
+    return accurateJSON(systemPrompt, userPrompt, { effort: 'medium', ...opts, model: SONNET, fallback: callQ });
 }
 
 async function analyseTask(taskText) {
@@ -147,6 +148,35 @@ Return ONLY valid JSON:
 - voiceSummary (string): one sentence capturing their whole voice — used as a shorthand in prompts`;
 
     return await callQ(system, `WRITING SAMPLE:\n${sampleText.slice(0, 1500)}`, { maxTokens: 400 });
+}
+
+// ONE call for the whole "Q reads your task" step. /writer/brief used to run
+// analyseTask then tutorBrief back-to-back — two model calls in one HTTP
+// request — which blew Railway's ~60s window and killed the coach on live
+// (19 Jul). Same job, half the latency: one call returns both halves.
+async function analyseAndBrief(taskText) {
+    const system = `You are an expert tutor reading a student's assignment brief. The input may be a formatted assessment document — Pearson/university/college/CIPD, with headers, tables, learning outcomes and marking criteria BEFORE the actual task. In CIPD-style briefs the real tasks are often buried pages in, under headers like "Assessment questions" or "Question 1 (AC 1.4)" — scan the WHOLE input and find them; the task is never on page 1.
+
+Do BOTH jobs in one pass — the analysis of the task, and the tutor's brief a great teacher builds before coaching.
+
+CRITICAL: Return ONLY valid JSON — no preamble, no questions, no "I need more info". If you can see ANY assignment content, extract what you can. Never ask for more information.
+
+Return ONLY valid JSON with these two top-level objects:
+- analysis: {
+    task (string): one plain-English sentence — what the student must write, specific to THIS assignment,
+    docType (string): "essay" | "report" | "letter" | "review" | "analysis" | "creative" | "other",
+    subject (string): the subject area,
+    keyConcepts (array of 3-6 strings): specific concepts from THIS brief,
+    gradeBands (object with keys "top", "mid", "low"): one concrete sentence per band for THIS task
+  }
+- brief: {
+    summary (string): 2 sentences — what the student needs to produce,
+    whatItWants (string): one warm, direct sentence spoken TO the student — "OK so you need to...",
+    markedSections (array of 2-6 objects): the sections to write, in order — each { name (string), description (string, 1 sentence), suggestFirstQ (string — the natural leading question a real tutor asks first) },
+    teachersBrief (string): what an examiner rewards in a top answer, in plain language
+  }`;
+
+    return await callAccurate(system, `TASK INPUT:\n${taskText}`, { maxTokens: 2500 });
 }
 
 async function tutorBrief(analysis) {
@@ -491,7 +521,7 @@ Return ONLY valid JSON:
 }
 
 module.exports = {
-    analyseTask, nextQuestion, assembleDocument,
+    analyseTask, analyseAndBrief, nextQuestion, assembleDocument,
     analyseVoice, tutorBrief, askLeadingQuestion, reframeInVoice, suggestWordSwaps, writeStarter,
     formatHarvardRef, suggestReferences, referenceParagraph,
     explainConcept, markSection, improveSectionStep,

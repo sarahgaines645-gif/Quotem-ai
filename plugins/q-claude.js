@@ -27,7 +27,7 @@ function hasClaude() {
 // `effort` matters on Railway: requests must land inside the ~60s proxy
 // window (see docs/HANDOVER_2026-05-17 — slow writer calls 502 at the edge).
 // Small structured calls should pass effort:'medium' or use SONNET.
-async function claudeJSON(systemPrompt, userPrompt, { maxTokens = 4096, model = MODEL, effort = null } = {}) {
+async function claudeJSON(systemPrompt, userPrompt, { maxTokens = 4096, model = MODEL, effort = null, schema = null } = {}) {
     const key = process.env.ANTHROPIC_API_KEY;
     if (!key) throw new Error('ANTHROPIC_API_KEY not set');
 
@@ -36,6 +36,12 @@ async function claudeJSON(systemPrompt, userPrompt, { maxTokens = 4096, model = 
     // 400-token budget doesn't come back as truncated thinking and no JSON.
     const budget = Math.max(maxTokens, 4096);
     const started = Date.now();
+
+    // schema (JSON Schema) → structured outputs: the API guarantees the
+    // response parses. Use it on anything big enough to be truncation-prone.
+    const outputConfig = {};
+    if (effort) outputConfig.effort = effort;
+    if (schema) outputConfig.format = { type: 'json_schema', schema };
 
     const res = await fetch('https://api.anthropic.com/v1/messages', {
         method: 'POST',
@@ -48,7 +54,7 @@ async function claudeJSON(systemPrompt, userPrompt, { maxTokens = 4096, model = 
             model,
             max_tokens: budget,
             thinking: { type: 'adaptive' },
-            ...(effort ? { output_config: { effort } } : {}),
+            ...(Object.keys(outputConfig).length ? { output_config: outputConfig } : {}),
             system: [{ type: 'text', text: systemPrompt, cache_control: { type: 'ephemeral' } }],
             messages: [{ role: 'user', content: userPrompt }],
         }),
@@ -60,6 +66,7 @@ async function claudeJSON(systemPrompt, userPrompt, { maxTokens = 4096, model = 
     }
     const data = await res.json();
     if (data.stop_reason === 'refusal') throw new Error('Claude refused the request');
+    if (data.stop_reason === 'max_tokens') throw new Error(`Claude response truncated at ${budget} tokens — raise maxTokens`);
 
     const text = (data.content || [])
         .filter((b) => b.type === 'text')
@@ -76,10 +83,10 @@ async function claudeJSON(systemPrompt, userPrompt, { maxTokens = 4096, model = 
 }
 
 // Claude first; if anything goes wrong and a fallback was given, use it.
-async function accurateJSON(systemPrompt, userPrompt, { maxTokens = 4096, model = MODEL, effort = null, fallback = null } = {}) {
+async function accurateJSON(systemPrompt, userPrompt, { maxTokens = 4096, model = MODEL, effort = null, schema = null, fallback = null } = {}) {
     if (hasClaude()) {
         try {
-            return await claudeJSON(systemPrompt, userPrompt, { maxTokens, model, effort });
+            return await claudeJSON(systemPrompt, userPrompt, { maxTokens, model, effort, schema });
         } catch (e) {
             console.warn('[q-claude] falling back: ' + e.message);
             if (!fallback) throw e;
