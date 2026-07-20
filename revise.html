@@ -110,6 +110,11 @@
       width: 7px; height: 7px; border-radius: 50%;
       background: #e6a817; flex-shrink: 0;
     }
+    .bank-line {
+      max-width: 760px; margin: 0 auto 14px;
+      font-size: 11px; color: var(--text-faint);
+    }
+    .bank-line.hidden { display: none; }
 
     /* ── Setup card ─────────────────────────────────────────────────────── */
     .setup-strip {
@@ -551,6 +556,9 @@
   <!-- Topic shelf — one chip per topic, medals for mastered, dot for weak -->
   <div class="topic-shelf hidden" id="topic-shelf"></div>
 
+  <!-- Question-bank stock + build progress -->
+  <div class="bank-line hidden" id="bank-line"></div>
+
   <!-- Setup card — shown first, folds away once revising -->
   <div class="setup-strip" id="setup-strip">
     <div class="setup-strip-header">
@@ -774,6 +782,7 @@
           perTopic: {}, towersTopped: 0, examUnlocked: false,
           dayXP: { day: '', points: 0 },
           bestRunSeconds: 0, bestRunQuestions: 0, muted: false,
+          qstate: {}, serveCount: 0,
         },
       },
       stage: 'build',        // 'build' | 'exam'
@@ -785,8 +794,12 @@
       fetchingBatch: false,
       awaitingServe: false,  // student is staring at "thinking" waiting for a batch
       quizQ: null,           // question currently on the paper
+      quizQID: null,         // stable id of the question on the paper
       quizResolved: false,   // an option has been clicked
       avoid: [],             // stems served this session (cap 40)
+      playMode: 'batch',     // 'bank' = play from the library, zero AI calls
+      bank: { questions: [], count: 0, loaded: false },
+      bankBuild: { building: false, topicsDone: 0, topicsTotal: 0, statusCount: 0, ready: false, known: false },
       sessionAnswered: 0,
       sessionCorrect: 0,
 
@@ -1011,6 +1024,8 @@
             bestRunSeconds: qd.bestRunSeconds || 0,
             bestRunQuestions: qd.bestRunQuestions || 0,
             muted: !!qd.muted,
+            qstate: (qd.qstate && typeof qd.qstate === 'object') ? qd.qstate : {},
+            serveCount: qd.serveCount || 0,
           };
         }
       } catch (e) { /* first visit or offline — start fresh, nothing lost */ }
@@ -1048,17 +1063,7 @@
       saveProgress();
       setupStrip.classList.add('hidden');
       setupCog.classList.remove('hidden');
-      // Fresh subject/topic = fresh question queue (tower and tallies stay)
-      state.queue = [];
-      state.avoid = [];
-      state.quizQ = null;
-      state.quizResolved = false;
-      state.stage = 'build';
-      state.awaitingServe = true;
-      $('quiz-thinking-text').textContent = firstBatchText();
-      setBuild('thinking');
-      render();
-      fetchBatch();
+      startPlay();
     });
 
     setupCog.addEventListener('click', () => {
@@ -1112,14 +1117,206 @@
     }
 
     $('btn-quiz-retry').addEventListener('click', () => {
-      state.awaitingServe = true;
       $('quiz-thinking-text').textContent = firstBatchText();
       setBuild('thinking');
-      fetchBatch();
+      serveQuiz(); // plays from the bank if it's stocked, otherwise refetches a batch
     });
+
+    // ── The question bank — build once, play forever, zero AI calls ───────
+    let bankStatusTimer = null, bankRefreshTimer = null;
+
+    function bankQuery() {
+      const s = state.progress.settings;
+      return 'subject=' + encodeURIComponent(s.subject || '')
+        + '&board=' + encodeURIComponent(s.board || '')
+        + '&level=' + encodeURIComponent(s.level || '');
+    }
+
+    function stopBankPolling() {
+      if (bankStatusTimer) { clearInterval(bankStatusTimer); bankStatusTimer = null; }
+      if (bankRefreshTimer) { clearInterval(bankRefreshTimer); bankRefreshTimer = null; }
+    }
+    function startBankPolling() {
+      stopBankPolling();
+      bankStatusTimer = setInterval(pollBankStatus, 20000);
+      // quietly pick up new stock every few minutes while the build runs
+      bankRefreshTimer = setInterval(() => { if (state.bankBuild.building) refreshBank(); }, 180000);
+      pollBankStatus();
+    }
+
+    async function refreshBank() {
+      try {
+        const r = await fetch('/revision/bank?' + bankQuery(), { credentials: 'include' });
+        const d = await r.json();
+        if (d && d.ok && Array.isArray(d.questions)) {
+          const good = [];
+          d.questions.forEach((q) => {
+            if (!q || !q.question || !Array.isArray(q.options) || q.options.length < 2) return;
+            const ci = parseInt(q.correctIndex, 10);
+            if (!(ci >= 0 && ci < q.options.length)) return;
+            good.push(q);
+          });
+          state.bank.questions = good;
+          state.bank.count = good.length;
+          state.bank.loaded = true;
+          state.bankBuild.known = true;
+        }
+      } catch (e) { /* bank unavailable — batch play still works */ }
+      renderBankLine();
+    }
+
+    async function pollBankStatus() {
+      if (document.hidden) return;
+      try {
+        const r = await fetch('/revision/bank/status?' + bankQuery(), { credentials: 'include' });
+        const d = await r.json();
+        if (!d || !d.ok) return;
+        const wasBuilding = state.bankBuild.building;
+        state.bankBuild.building = !!d.building;
+        state.bankBuild.topicsDone = d.topicsDone || 0;
+        state.bankBuild.topicsTotal = d.topicsTotal || 0;
+        state.bankBuild.statusCount = d.count || 0;
+        state.bankBuild.known = true;
+        if (d.building && d.count >= 15 && state.bank.count < 15) refreshBank();
+        if (!d.building) {
+          stopBankPolling();
+          if (wasBuilding) {
+            state.bankBuild.ready = true;
+            setTimeout(() => { state.bankBuild.ready = false; renderBankLine(); }, 8000);
+          }
+          refreshBank();
+        }
+      } catch (e) { /* poll again next tick */ }
+      renderBankLine();
+    }
+
+    function renderBankLine() {
+      const el = $('bank-line');
+      const b = state.bankBuild;
+      if (!state.bank.loaded && !b.known) { el.classList.add('hidden'); return; }
+      el.classList.remove('hidden');
+      const n = Math.max(state.bank.count, b.statusCount || 0);
+      if (b.building) {
+        const est = Math.max(n, (b.topicsTotal || 0) * 10);
+        el.textContent = 'Building your question bank — ' + n + ' of ~' + est + '…';
+      } else if (b.ready) {
+        el.textContent = 'Question bank ready — ' + n + ' questions';
+      } else {
+        el.textContent = 'Bank: ' + n + ' question' + (n === 1 ? '' : 's');
+      }
+    }
+
+    async function startPlay() {
+      stopBankPolling();
+      state.queue = [];
+      state.avoid = [];
+      state.quizQ = null;
+      state.quizQID = null;
+      state.quizResolved = false;
+      state.playMode = 'batch';
+      state.bank = { questions: [], count: 0, loaded: false };
+      state.bankBuild = { building: false, topicsDone: 0, topicsTotal: 0, statusCount: 0, ready: false, known: false };
+      state.stage = 'build';
+      state.awaitingServe = false;
+      $('quiz-thinking-text').textContent = 'Checking your question bank…';
+      setBuild('thinking');
+      render();
+      renderBankLine();
+
+      await refreshBank();
+      if (state.bank.count >= 15) {
+        // Stocked — play from the library, no AI calls at all
+        state.playMode = 'bank';
+        serveQuiz();
+        return;
+      }
+
+      // Thin bank: kick a background build and play on live batches meanwhile
+      // (each batch is auto-banked server-side, so play itself stocks the bank)
+      const s = state.progress.settings;
+      post('/revision/bank/build', {
+        subject: s.subject, board: s.board, level: s.level,
+        topics: s.topic || '', perTopic: 10,
+      }).catch(() => {});
+      startBankPolling();
+      serveQuiz();
+    }
+
+    // ── The redemption memory — wrong answers return until they're beaten ──
+    function hashStem(s) {
+      s = String(s || '');
+      let h = 5381;
+      for (let i = 0; i < s.length; i++) h = (((h << 5) + h) + s.charCodeAt(i)) | 0;
+      return 'h' + (h >>> 0).toString(36);
+    }
+    function qidOf(q) { return (q.id !== undefined && q.id !== null && q.id !== '') ? String(q.id) : hashStem(q.question); }
+
+    function pickFromBank() {
+      const qz = state.progress.quiz;
+      const sc = qz.serveCount || 0;
+      const pool = state.bank.questions;
+      if (!pool.length) return null;
+
+      const info = pool.map((q) => ({ q, st: qz.qstate[qidOf(q)] || null }));
+      // never re-serve the same question within 3 serves
+      const notRecent = info.filter((e) => !e.st || (sc - e.st.last) >= 3);
+
+      // 1. REDEMPTION — answered wrong, not yet beaten; they keep coming back
+      const redemption = notRecent.filter((e) => e.st && e.st.wrong >= 1 && e.st.streak === 0);
+      if (redemption.length) {
+        redemption.sort((a, b) => a.st.last - b.st.last);
+        return redemption[0].q;
+      }
+
+      // 2. UNSEEN — weak topics first, else a random spread across topics
+      const unseen = notRecent.filter((e) => !e.st || e.st.seen === 0);
+      if (unseen.length) {
+        const weak = weakQuizTopics();
+        const weakUnseen = unseen.filter((e) => weak.indexOf((e.q.topicTag || '').trim()) !== -1);
+        if (weakUnseen.length) return weakUnseen[Math.floor(Math.random() * weakUnseen.length)].q;
+        const byTopic = {};
+        unseen.forEach((e) => {
+          const t = (e.q.topicTag || 'General').trim();
+          (byTopic[t] = byTopic[t] || []).push(e);
+        });
+        const topics = Object.keys(byTopic);
+        const bucket = byTopic[topics[Math.floor(Math.random() * topics.length)]];
+        return bucket[Math.floor(Math.random() * bucket.length)].q;
+      }
+
+      // 3. CONSOLIDATION — righted once; back after a longer gap for streak 2
+      const consolidate = notRecent.filter((e) => e.st && e.st.streak === 1 && (sc - e.st.last) >= 8);
+      if (consolidate.length) {
+        consolidate.sort((a, b) => a.st.last - b.st.last);
+        return consolidate[0].q;
+      }
+
+      // 4. Everything else, least-recently-served — endless play, nothing is "done"
+      // (streak-1 questions still inside their 8-serve gap wait their turn)
+      const rest = notRecent.filter((e) => e.st && !(e.st.streak === 1 && (sc - e.st.last) < 8));
+      if (rest.length) {
+        rest.sort((a, b) => a.st.last - b.st.last);
+        const k = Math.min(3, rest.length); // shuffle the stalest few so it never feels like a fixed loop
+        return rest[Math.floor(Math.random() * k)].q;
+      }
+
+      // tiny bank and everything is inside a gap — take the stalest anyway
+      const all = info.filter((e) => e.st);
+      if (all.length) { all.sort((a, b) => a.st.last - b.st.last); return all[0].q; }
+      return info[0].q;
+    }
 
     // ── Serve one quiz question ────────────────────────────────────────────
     function serveQuiz() {
+      // switch to bank play between questions, never mid-question
+      if (state.playMode !== 'bank' && state.bank.count >= 15) state.playMode = 'bank';
+
+      if (state.playMode === 'bank') {
+        const q = pickFromBank();
+        if (q) { presentQuestion(q); return; }
+        state.playMode = 'batch'; // bank came up empty somehow — fall back to live batches
+      }
+
       if (!state.queue.length) {
         state.awaitingServe = true;
         $('quiz-thinking-text').textContent = firstBatchText();
@@ -1127,9 +1324,23 @@
         if (!state.fetchingBatch) fetchBatch();
         return;
       }
-      const q = state.queue.shift();
+      presentQuestion(state.queue.shift());
+      // Prefetch the next batch while they're still answering this one
+      if (state.playMode === 'batch' && state.queue.length <= 3 && !state.fetchingBatch) fetchBatch();
+    }
+
+    function presentQuestion(q) {
       state.quizQ = q;
+      state.quizQID = qidOf(q);
       state.quizResolved = false;
+
+      // mark the serve in the redemption memory (persisted with the next answer)
+      const qz = state.progress.quiz;
+      qz.serveCount = (qz.serveCount || 0) + 1;
+      const st = qz.qstate[state.quizQID] = qz.qstate[state.quizQID]
+        || { seen: 0, right: 0, wrong: 0, streak: 0, last: 0 };
+      st.seen += 1;
+      st.last = qz.serveCount;
 
       const s = state.progress.settings;
       $('qz-number').textContent = 'Question ' + (state.sessionAnswered + 1);
@@ -1166,9 +1377,6 @@
       $('qz-enter-hint').classList.add('hidden');
       setBuild('question');
       game.questionLive(); // the tube starts dripping for this question
-
-      // Prefetch the next batch while they're still answering this one
-      if (state.queue.length <= 3 && !state.fetchingBatch) fetchBatch();
     }
 
     // ── Answer a quiz question ─────────────────────────────────────────────
@@ -1196,6 +1404,14 @@
       // The teaching moment — one sentence, always shown
       $('qz-why').textContent = q.why || '';
       $('qz-why-wrap').classList.remove('hidden');
+
+      // Redemption memory — a wrong answer keeps this question coming back
+      // until it's beaten; rides the per-answer save below
+      const rq = state.progress.quiz;
+      const rst = rq.qstate[state.quizQID] = rq.qstate[state.quizQID]
+        || { seen: 1, right: 0, wrong: 0, streak: 0, last: rq.serveCount || 0 };
+      if (correct) { rst.right += 1; rst.streak += 1; }
+      else { rst.wrong += 1; rst.streak = 0; }
 
       // Tallies (session + lifetime per-topic)
       state.sessionAnswered += 1;

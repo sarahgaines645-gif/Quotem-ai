@@ -1130,18 +1130,74 @@ router.post('/revision/question', requirePerson, express.json({ limit: '256kb' }
 
 // POST /revision/quiz — a checked batch of clickable questions.
 // Q writes them (cheap), Sonnet verifies every answer key (pennies).
+// Every batch is BANKED (write-through) — we never throw away a question
+// we've already paid Sonnet to check.
 router.post('/revision/quiz', requirePerson, express.json({ limit: '256kb' }), async (req, res) => {
     try {
         const qRevision = require('./plugins/q-revision');
+        const qBank = require('./plugins/q-bank');
         const { subject, board, level, topic, count, avoid } = req.body || {};
         if (!subject) return res.status(400).json({ error: 'subject required' });
         const result = await qRevision.generateQuiz({
             subject, board, level, topic, count,
             avoid: Array.isArray(avoid) ? avoid : [],
         });
+        // Bank them (with stable ids) and return the ids to the client
+        const key = qBank.bankKey(subject, board, level);
+        qBank.addQuestions(key, result.questions);
+        result.questions = result.questions.map((q) => ({ id: qBank.questionId(q.question), ...q }));
         res.json({ ok: true, ...result });
     } catch (e) {
         console.error('[revision/quiz]', e.message);
+        res.status(500).json({ error: e.message });
+    }
+});
+
+// ── The question bank — build once, play free ──────────────────────────────
+
+// GET /revision/bank?subject&board&level — the whole library for this
+// subject. Play is served from this client-side: zero AI calls per answer.
+router.get('/revision/bank', requirePerson, (req, res) => {
+    try {
+        const qBank = require('./plugins/q-bank');
+        const key = qBank.bankKey(req.query.subject, req.query.board, req.query.level);
+        const bank = qBank.loadBank(key);
+        res.json({ ok: true, key, count: bank.questions.length, questions: bank.questions });
+    } catch (e) {
+        console.error('[revision/bank]', e.message);
+        res.status(500).json({ error: e.message });
+    }
+});
+
+// POST /revision/bank/build — stock the bank in the background: perTopic
+// checked questions for every topic in the list (or 40 core questions if no
+// list). Safe to call repeatedly — running builds are not duplicated and
+// stocked topics are skipped.
+router.post('/revision/bank/build', requirePerson, express.json({ limit: '64kb' }), (req, res) => {
+    try {
+        const qBank = require('./plugins/q-bank');
+        const qRevision = require('./plugins/q-revision');
+        const { subject, board, level, topics, perTopic } = req.body || {};
+        if (!subject) return res.status(400).json({ error: 'subject required' });
+        const result = qBank.startBuild(
+            { subject, board, level, topics, perTopic: Math.min(parseInt(perTopic, 10) || 10, 20) },
+            qRevision.generateQuiz
+        );
+        res.json({ ok: true, ...result });
+    } catch (e) {
+        console.error('[revision/bank/build]', e.message);
+        res.status(500).json({ error: e.message });
+    }
+});
+
+// GET /revision/bank/status?subject&board&level — build progress + stock levels
+router.get('/revision/bank/status', requirePerson, (req, res) => {
+    try {
+        const qBank = require('./plugins/q-bank');
+        const key = qBank.bankKey(req.query.subject, req.query.board, req.query.level);
+        res.json({ ok: true, ...qBank.buildStatus(key) });
+    } catch (e) {
+        console.error('[revision/bank/status]', e.message);
         res.status(500).json({ error: e.message });
     }
 });

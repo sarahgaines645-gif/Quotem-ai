@@ -242,6 +242,12 @@ function getRevisionPath(personId) {
     return path.join(Q_DATA_DIR, `q-revision-${safeId(personId)}.json`);
 }
 
+// The question bank — GLOBAL (shared, not per-person): Sonnet-checked
+// multiple-choice questions kept forever, keyed by subject+board+level.
+function getBankPath(bankKey) {
+    return path.join(Q_DATA_DIR, `q-bank-${safeId(bankKey)}.json`);
+}
+
 module.exports = {
     loadMemory,
     saveMemory,
@@ -254,5 +260,6 @@ module.exports = {
     getDocPath,
     getTutorPath,
     getRevisionPath,
+    getBankPath,
     migrateLegacyMemory,
 };
