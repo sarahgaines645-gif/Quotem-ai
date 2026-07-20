@@ -299,7 +299,9 @@ Write the ${n} questions.`;
     let draft = null;
     let writtenByClaude = false;
     try {
-        draft = normaliseQuizQuestions(await callQ(writerSystem, writerUser, { maxTokens: 3000 }));
+        // 10 MCQs + why-lines run past 3000 tokens — live 20 Jul: two Q drafts
+        // truncated mid-JSON ("Unterminated string"), forcing Sonnet writes.
+        draft = normaliseQuizQuestions(await callQ(writerSystem, writerUser, { maxTokens: 5000 }));
     } catch (e) {
         console.warn('[q-revision] Q quiz writer failed, Sonnet writing directly: ' + e.message);
     }
