@@ -795,6 +795,22 @@ async function claudeThreadChat({ system, messages, tools, person, maxTokens, st
         }
     }
 
+    // Cache the CASE ITSELF, not just the system prompt. Without this, every
+    // tool-loop iteration re-paid the full documents + history at full price —
+    // a single Check on a fat case burned millions of input tokens (£10+ seen
+    // live, 20 Jul). One breakpoint on the last block of the initial convo:
+    // iteration 1 writes the cache, iterations 2..N (and the no-tools rescue
+    // call) read the whole prefix at ~0.1x. Appended tool turns land AFTER the
+    // breakpoint, so the prefix stays valid for the life of the loop.
+    if (convo.length) {
+        const last = convo[convo.length - 1];
+        if (typeof last.content === 'string') {
+            if (last.content.trim()) last.content = [{ type: 'text', text: last.content, cache_control: { type: 'ephemeral' } }];
+        } else if (Array.isArray(last.content) && last.content.length) {
+            last.content[last.content.length - 1] = { ...last.content[last.content.length - 1], cache_control: { type: 'ephemeral' } };
+        }
+    }
+
     const toolCalls = [];
     let tokensIn = 0, tokensOut = 0, reply = '';
 
@@ -898,6 +914,10 @@ async function claudeThreadChat({ system, messages, tools, person, maxTokens, st
             console.warn('[q-chat] Claude final no-tools call failed: ' + e.message);
         }
     }
+
+    // Every Check/thread run logs what it cost — spend can never hide again.
+    const approxUsd = (tokensIn * 3 + tokensOut * 15) / 1e6;
+    console.log(`[q-chat] claude run done — in:${tokensIn} out:${tokensOut} ≈ $${approxUsd.toFixed(2)}`);
 
     if (!reply || !reply.trim()) return null;
     return {
