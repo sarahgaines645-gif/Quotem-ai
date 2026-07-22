@@ -49,17 +49,15 @@ async function callQ(systemPrompt, userPrompt, { maxTokens = 4096 } = {}) {
     return JSON.parse(cleaned);
 }
 
-// Exam-room calls are Claude-ONLY (Sarah, 19 Jul: "Opus for the heavy
-// lifting"). Opus first at medium effort — short marking jobs don't need
-// deep thinking, and the request must land inside Railway's ~60s proxy
-// window. If Opus fails, Sonnet — still Claude, still accurate. Never
-// DeepSeek for marking: better "try again in a minute" than a lesser
-// model grading the student.
+// Exam-room calls run on SONNET (Sarah, 22 Jul: "opus is too much — use
+// sonnet"). Still Claude, still marked strictly, ~2-4p per question+mark
+// instead of 6-10p. Claude-ONLY either way: if Sonnet is unreachable the
+// student sees "try again in a minute" — DeepSeek never marks anyone.
 async function callAccurate(systemPrompt, userPrompt, opts = {}) {
     return accurateJSON(systemPrompt, userPrompt, {
         ...opts,
+        model: SONNET,
         effort: 'medium',
-        fallback: (s, u, o) => claudeJSON(s, u, { ...(o || {}), model: SONNET }),
     });
 }
 
