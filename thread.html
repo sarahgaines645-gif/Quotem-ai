@@ -232,6 +232,13 @@
   .note-save-btn:disabled { opacity: 0.5; cursor: not-allowed; }
   .chat-input-row { display: flex; gap: 10px; align-items: flex-end; }
   .chat-input-row textarea { flex: 1; border: none; outline: none; resize: none; font-family: inherit; font-size: 14px; color: var(--text); background: var(--bg); padding: 12px 16px; border-radius: 12px; box-shadow: var(--neu-raised-sm); line-height: 1.5; min-height: 44px; max-height: 120px; }
+  .chat-mic { border: none; cursor: pointer; background: var(--bg); color: var(--text-muted); width: 44px; height: 44px; padding: 0; border-radius: 12px; box-shadow: var(--neu-raised-sm); flex-shrink: 0; display: flex; align-items: center; justify-content: center; transition: color 0.15s; }
+  .chat-mic svg { width: 20px; height: 20px; }
+  .chat-mic:hover { color: var(--accent); }
+  .chat-mic.listening { color: var(--accent); box-shadow: var(--neu-inset-sm); animation: chatMicPulse 1.4s infinite; }
+  .chat-mic.processing { box-shadow: var(--neu-inset-sm); opacity: 0.55; cursor: default; }
+  @keyframes chatMicPulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+  .chat-voice-status { font-size: 12px; color: var(--text-muted); font-style: italic; }
   .chat-send { border: none; cursor: pointer; background: var(--accent); color: white; font-family: inherit; font-size: 14px; font-weight: 700; padding: 12px 22px; border-radius: 12px; box-shadow: var(--neu-raised-sm); flex-shrink: 0; }
   .chat-send:hover:not(:disabled) { opacity: 0.9; }
   .chat-send:disabled { opacity: 0.5; cursor: not-allowed; }
@@ -516,12 +523,16 @@
     <div class="chat-typing" id="chat-typing">Q is thinking…</div>
     <div class="chat-input-row">
       <textarea id="chat-input" rows="1" placeholder="Talk to Q about this case — he sees everything in this thread…"></textarea>
+      <button class="chat-mic" id="chat-mic" type="button" aria-label="Speak to Q" title="Click to record. Click again to stop — your words land in the box.">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path><path d="M19 10v2a7 7 0 0 1-14 0v-2"></path><line x1="12" y1="19" x2="12" y2="23"></line><line x1="8" y1="23" x2="16" y2="23"></line></svg>
+      </button>
       <button class="chat-send" id="chat-send">Send</button>
     </div>
     <div class="chat-toggles">
       <button class="chat-deep" id="chat-deep" type="button" title="Deep think — Q reasons at maximum. Slower, sharper.">🧠 Deep</button>
       <button class="chat-toggle-sm" id="chat-verify" type="button" title="Verify — press, then click the message you want Q to check">✓</button>
       <button class="chat-toggle-sm" id="chat-glm" type="button" title="Engine — this thread runs on GLM-5.2 (deep reasoning) by default. Press to force V4 Pro instead.">V4</button>
+      <span class="chat-voice-status" id="chat-voice-status"></span>
     </div>
   </div>
 
@@ -1745,6 +1756,106 @@ $chatInput.addEventListener('input', () => {
   $chatInput.style.height = 'auto';
   $chatInput.style.height = Math.min($chatInput.scrollHeight, 120) + 'px';
 });
+
+// ── Mic — speak to Q about the case ──────────────────────────────
+// Same ear as Q's main chat: record with MediaRecorder, transcribe in the
+// browser with Whisper (no audio leaves the machine, no API key). The words
+// land in the box — she presses Send, so a mis-hear never hits the case record.
+(function () {
+  const $mic    = document.getElementById('chat-mic');
+  const $status = document.getElementById('chat-voice-status');
+  if (!$mic) return;
+
+  const setStatus = (t) => { $status.textContent = t || ''; };
+
+  let whisperPromise = null;
+  function loadWhisper() {
+    if (whisperPromise) return whisperPromise;
+    whisperPromise = (async () => {
+      setStatus('Loading ear…');
+      try {
+        const { pipeline } = await import('https://cdn.jsdelivr.net/npm/@huggingface/transformers@4.2.0');
+        const useGPU = !!navigator.gpu;
+        return await pipeline(
+          'automatic-speech-recognition',
+          'onnx-community/whisper-base',
+          { device: useGPU ? 'webgpu' : 'wasm', dtype: useGPU ? 'fp32' : 'q8' }
+        );
+      } catch (e) {
+        console.warn('[thread/voice] Whisper load failed:', e);
+        whisperPromise = null;
+        return null;
+      }
+    })();
+    return whisperPromise;
+  }
+
+  let recorder = null, stream = null, chunks = [];
+
+  async function start() {
+    if (!navigator.mediaDevices || !window.MediaRecorder) {
+      alert('This browser does not support microphone recording.');
+      return;
+    }
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      chunks = [];
+      recorder = new MediaRecorder(stream);
+      recorder.addEventListener('dataavailable', e => { if (e.data && e.data.size) chunks.push(e.data); });
+      recorder.addEventListener('stop', onStop);
+      recorder.start();
+      $mic.classList.add('listening');
+      setStatus('Listening…');
+    } catch (e) {
+      $mic.classList.remove('listening');
+      setStatus('');
+      alert('Microphone unavailable: ' + e.message);
+    }
+  }
+
+  function stop() {
+    if (recorder && recorder.state !== 'inactive') { try { recorder.stop(); } catch (e) {} }
+    if (stream) { stream.getTracks().forEach(t => t.stop()); stream = null; }
+    $mic.classList.remove('listening');
+  }
+
+  async function onStop() {
+    if (!chunks.length) { setStatus(''); return; }
+    const blob = new Blob(chunks, { type: (recorder && recorder.mimeType) || 'audio/webm' });
+    chunks = [];
+    $mic.classList.add('processing');
+    setStatus('Transcribing…');
+    let url = null;
+    try {
+      const transcriber = await loadWhisper();
+      if (!transcriber) { setStatus('Could not load the ear — try again.'); return; }
+      setStatus('Transcribing…');
+      url = URL.createObjectURL(blob);
+      const out = await transcriber(url, { language: 'en', task: 'transcribe' });
+      const text = ((out && out.text) || '').trim();
+      if (text) {
+        const existing = $chatInput.value.trim();
+        $chatInput.value = existing ? existing + ' ' + text : text;
+        $chatInput.dispatchEvent(new Event('input'));
+        $chatInput.focus();
+        setStatus('');
+      } else {
+        setStatus("Didn't catch that.");
+      }
+    } catch (e) {
+      console.warn('[thread/voice] transcription failed:', e);
+      setStatus('Transcription failed.');
+    } finally {
+      if (url) URL.revokeObjectURL(url);
+      $mic.classList.remove('processing');
+    }
+  }
+
+  $mic.addEventListener('click', () => {
+    if ($mic.classList.contains('processing')) return;
+    if ($mic.classList.contains('listening')) stop(); else start();
+  });
+})();
 
 loadThread();
 
