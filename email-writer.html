@@ -604,12 +604,27 @@ async function showChatCard() {
 }
 
 function parseOptionsBlock(content) {
-  const m = content && content.match(/\[OPTIONS\]([\s\S]*?)\[\/OPTIONS\]\s*$/i);
-  if (!m) return { stripped: content || '', options: [] };
-  const options = m[1].split('\n')
+  if (!content || typeof content !== 'string') return { stripped: content || '', options: [] };
+  // Find the LAST [OPTIONS] block — not anchored to the end. Models often add a
+  // sign-off after [/OPTIONS] or drop the closing tag; the old end-anchored regex
+  // failed-closed on both and dumped the raw [OPTIONS] tags on screen as words.
+  const upper = content.toUpperCase();
+  const open = upper.lastIndexOf('[OPTIONS]');
+  if (open === -1) return { stripped: content, options: [] };
+  const after = content.slice(open + '[OPTIONS]'.length);
+  // A real block has the tag on its own line. An inline "[OPTIONS]" mention in
+  // prose (text on the same line) is not a block — leave it be.
+  if (!/^[^\S\n]*(\r?\n|$)/.test(after)) return { stripped: content, options: [] };
+  const closeRel = after.toUpperCase().indexOf('[/OPTIONS]');
+  const rawOpts = closeRel === -1 ? after : after.slice(0, closeRel);
+  const options = rawOpts.split('\n')
     .map(l => l.replace(/^\s*[-*]\s*/, '').trim())
     .filter(Boolean);
-  return { stripped: content.replace(m[0], '').trim(), options };
+  if (!options.length) return { stripped: content, options: [] };
+  const before = content.slice(0, open).trim();
+  const trailing = closeRel === -1 ? '' : after.slice(closeRel + '[/OPTIONS]'.length).trim();
+  const stripped = (before + (trailing ? '\n\n' + trailing : '')).trim();
+  return { stripped, options };
 }
 
 function appendChatMsg(role, content) {

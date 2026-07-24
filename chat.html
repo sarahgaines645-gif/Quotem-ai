@@ -2723,13 +2723,30 @@ function parseOptionsBlock(content) {
   // thread + email-writer chats use, so Q's tap-to-answer buttons work here too
   // (in APS mode Q ends every reply with this block). Without it the raw tags
   // rendered as plain text.
-  const m = content && content.match(/\[OPTIONS\]([\s\S]*?)\[\/OPTIONS\]\s*$/i);
-  if (!m) return { stripped: content || '', options: [] };
-  const options = m[1]
+  if (!content || typeof content !== 'string') return { stripped: content || '', options: [] };
+  // Find the LAST [OPTIONS] block. Do NOT anchor it to the end of the message:
+  // the reasoning models (GLM-5.2 on threads, V4) routinely add a sign-off after
+  // [/OPTIONS] or drop the closing tag altogether. The old end-anchored regex
+  // failed-closed on both, dumping the raw [OPTIONS] tags on screen as words.
+  const upper = content.toUpperCase();
+  const open = upper.lastIndexOf('[OPTIONS]');
+  if (open === -1) return { stripped: content, options: [] };
+  const after = content.slice(open + '[OPTIONS]'.length);
+  // A real block has the tag on its own line. An inline "[OPTIONS]" mention in
+  // prose (text on the same line) is not a block — leave it be.
+  if (!/^[^\S\n]*(\r?\n|$)/.test(after)) return { stripped: content, options: [] };
+  const closeRel = after.toUpperCase().indexOf('[/OPTIONS]');
+  const rawOpts = closeRel === -1 ? after : after.slice(0, closeRel);
+  const options = rawOpts
     .split('\n')
     .map(l => l.replace(/^\s*[-*]\s*/, '').trim())
     .filter(Boolean);
-  return { stripped: content.replace(m[0], '').trim(), options };
+  // A stray "[OPTIONS]" mention with nothing under it isn't a real block — leave it be.
+  if (!options.length) return { stripped: content, options: [] };
+  const before = content.slice(0, open).trim();
+  const trailing = closeRel === -1 ? '' : after.slice(closeRel + '[/OPTIONS]'.length).trim();
+  const stripped = (before + (trailing ? '\n\n' + trailing : '')).trim();
+  return { stripped, options };
 }
 
 function renderMessage(role, content, animate, images) {
