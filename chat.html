@@ -2643,6 +2643,7 @@ async function send() {
   const typingEl = renderTyping();
   $send.disabled = true;
 
+  const sentAt = Date.now();
   try {
     // Server now manages memory — we only send the new message
     const body = { message: text };
@@ -2670,6 +2671,7 @@ async function send() {
     const data = await response.json();
     typingEl.remove();
     if (data.error) {
+      reportClientError('server-error', data.error, Date.now() - sentAt, response.status);
       renderMessage('q', '(Q hit an error: ' + data.error + ')');
     } else if (data.reply) {
       const msgEl = renderMessage('q', data.reply);
@@ -2689,11 +2691,33 @@ async function send() {
     }
   } catch (err) {
     typingEl.remove();
+    reportClientError('network-error', err.message, Date.now() - sentAt, null);
     renderMessage('q', '(Network error: ' + err.message + ')');
   } finally {
     $send.disabled = false;
     $input.focus();
   }
+}
+
+// DIAGNOSTIC (31 Jul 2026): when a send fails, tell the server what the
+// user's screen saw — error text, how long it waited, whether the browser
+// thought it was online. /client-log needs no auth, so this works even when
+// the session itself is what broke. Wrapped so it can never break chat.
+function reportClientError(stage, err, ms, status) {
+  try {
+    const payload = JSON.stringify({
+      stage: stage,
+      err: String(err == null ? '' : err).slice(0, 300),
+      ms: ms,
+      status: status,
+      online: navigator.onLine,
+      surface: 'chat',
+    });
+    const blob = new Blob([payload], { type: 'application/json' });
+    if (!(navigator.sendBeacon && navigator.sendBeacon('/client-log', blob))) {
+      fetch('/client-log', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: payload, keepalive: true }).catch(function () {});
+    }
+  } catch (_) {}
 }
 
 // Render Q's replies through marked so #, **, lists, > etc. become real

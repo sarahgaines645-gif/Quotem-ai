@@ -309,6 +309,7 @@ const { requirePerson, verifySessionCookie } = require(path.join(ROOT, 'auth'));
 
 const PUBLIC_PATHS = new Set([
     '/health',
+    '/client-log',           // failure beacon — must work precisely when auth/session is broken
     '/q-auth.js',
     '/favicon.svg', '/favicon.ico',
     '/favicon-180.png', '/favicon-192.png', '/favicon-512.png',
@@ -330,10 +331,32 @@ function isPublicPath(p) {
     return PUBLIC_PREFIXES.some(prefix => p.startsWith(prefix));
 }
 
+// ── DIAGNOSTIC (31 Jul 2026): the "Q constantly errors" hunt ───
+// Every arriving POST /chat is logged BEFORE auth. A user-side error
+// with no matching [q-diag] arrive line = the request never reached
+// Railway (device/network side). An arrive line followed by a
+// 401-reject line = session expiry, not Q. Remove once solved.
+app.use((req, res, next) => {
+    if (req.method === 'POST' && (req.path === '/chat' || req.path === '/client-log')) {
+        console.log('[q-diag] arrive ' + JSON.stringify({
+            path: req.path,
+            len: req.headers['content-length'] || null,
+            qsess: /(?:^|;\s*)qsess=/.test(req.headers.cookie || '') ? 'yes' : 'no',
+            ua: String(req.headers['user-agent'] || '').slice(0, 60),
+            ip: String(req.headers['x-forwarded-for'] || req.ip || '').split(',')[0],
+        }));
+    }
+    next();
+});
+
 app.use((req, res, next) => {
     if (isPublicPath(req.path)) return next();
     const person = verifySessionCookie(req);
     if (person) { req.person = person; return next(); }
+    if (req.method === 'POST' && req.path === '/chat') {
+        console.warn('[q-diag] 401-reject /chat — qsess cookie '
+            + (/(?:^|;\s*)qsess=/.test(req.headers.cookie || '') ? 'PRESENT but invalid/EXPIRED (30-day cliff?)' : 'missing'));
+    }
     // Unauthenticated. A top-level browser navigation (Sec-Fetch-Dest: document)
     // gets the public /welcome page, which hosts the sign-in / sign-up overlay —
     // otherwise a logged-out visitor just sees raw "Sign in required" JSON and
@@ -344,6 +367,28 @@ app.use((req, res, next) => {
         return res.redirect(302, '/welcome');
     }
     return res.status(401).json({ error: 'Sign in required.' });
+});
+
+// ── DIAGNOSTIC (31 Jul 2026): client failure beacon ────────────
+// The chat page reports what the USER'S SCREEN saw when a send failed
+// (network error / server error text / how long it waited). No auth on
+// purpose — the whole point is hearing from clients whose session or
+// connection is broken. Logs only, stores nothing, capped per minute.
+let clientLogCount = 0;
+setInterval(() => { clientLogCount = 0; }, 60 * 1000).unref();
+app.post('/client-log', express.json({ limit: '4kb' }), (req, res) => {
+    if (++clientLogCount > 30) return res.status(429).end();
+    const b = req.body || {};
+    console.warn('[q-diag] client-saw ' + JSON.stringify({
+        stage: String(b.stage || '').slice(0, 40),
+        err: String(b.err || '').slice(0, 300),
+        ms: Number(b.ms) || null,
+        status: (typeof b.status === 'number') ? b.status : null,
+        online: b.online === false ? false : true,
+        surface: String(b.surface || '').slice(0, 20),
+        ua: String(req.headers['user-agent'] || '').slice(0, 60),
+    }));
+    res.status(204).end();
 });
 
 // ── Mount Q's existing router under root ───────────────────────

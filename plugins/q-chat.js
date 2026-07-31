@@ -1164,7 +1164,10 @@ async function chat(messages, options = {}) {
                     response = await fetch(`${Q_CONFIG.baseURL}/chat/completions`, reqInit);
                     if (response.ok || !RETRYABLE.has(response.status)) break;
                     status = response.status;
-                    console.warn('[q-chat] upstream HTTP ' + response.status + ' — retry ' + (attempt + 1) + '/' + (MAX_ATTEMPTS - 1));
+                    // DIAGNOSTIC (31 Jul 2026): headers carry Together's request id
+                    // and x-ratelimit-* — log them on every retryable failure.
+                    console.warn('[q-chat] upstream HTTP ' + response.status + ' — retry ' + (attempt + 1) + '/' + (MAX_ATTEMPTS - 1)
+                        + ' hdrs=' + JSON.stringify(Object.fromEntries(response.headers)));
                 } catch (netErr) {
                     response = null;
                     console.warn('[q-chat] upstream network error (attempt ' + (attempt + 1) + '): ' + netErr.message);
@@ -1181,6 +1184,21 @@ async function chat(messages, options = {}) {
             if (!response || !response.ok) {
                 const errText = response ? await response.text() : 'network error (no response)';
                 console.warn('[q-chat] upstream failed after retries — HTTP ' + (response ? response.status : 'net') + ' — ' + errText.substring(0, 500));
+                // DIAGNOSTIC (31 Jul 2026): one greppable line with the FULL
+                // context of the failing call — who/surface/model/size plus every
+                // header Together sent back. A 402 with £17 on the account needs
+                // Together's own request id to challenge with their support.
+                console.warn('[q-diag] upstream-fail ' + JSON.stringify({
+                    status: response ? response.status : 0,
+                    surface: options.surface || null,
+                    person: options.person?.id || null,
+                    model,
+                    maxTokens,
+                    iteration,
+                    msgCount: conversation.length,
+                    reqBytes: reqInit.body.length,
+                    headers: response ? Object.fromEntries(response.headers) : null,
+                }));
                 return {
                     reply: pickFriendlyError(),
                     durationMs: Date.now() - startTime,
