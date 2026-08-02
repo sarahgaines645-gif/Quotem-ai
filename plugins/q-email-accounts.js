@@ -38,7 +38,10 @@ function gmailConfigured() {
 const MS_CLIENT_ID = process.env.MS_CLIENT_ID || process.env.OUTLOOK_CLIENT_ID || '';
 const MS_CLIENT_SECRET = process.env.MS_CLIENT_SECRET || process.env.OUTLOOK_CLIENT_SECRET || '';
 const MS_REDIRECT_URI = process.env.OUTLOOK_REDIRECT_URI || '';
-const MS_SCOPES = 'offline_access https://graph.microsoft.com/Mail.Send https://graph.microsoft.com/User.Read';
+// Mail.ReadWrite powers the inbox (list/read/mark/star/archive/bin). An
+// Outlook account connected BEFORE this scope was added must be reconnected
+// once to grant the read scope — until then reads fail with inbox_scope_missing.
+const MS_SCOPES = 'offline_access https://graph.microsoft.com/Mail.Send https://graph.microsoft.com/Mail.ReadWrite https://graph.microsoft.com/User.Read';
 const MS_AUTH_BASE = 'https://login.microsoftonline.com/common/oauth2/v2.0';
 const GRAPH = 'https://graph.microsoft.com/v1.0';
 
@@ -476,12 +479,13 @@ function saveInboxAccount(email, { address, host, port, user, pass }) {
     }, null, 2), 'utf8');
 }
 function inboxStatus(email) {
-    // The inbox reads from the connected Gmail (via the Gmail API) when the
-    // send account is Gmail — no separate connection, just the read scope
-    // (granted by reconnecting once). Falls back to a standalone IMAP inbox
-    // for non-Gmail providers.
+    // The inbox reads from the connected Gmail (via the Gmail API) or Outlook
+    // (via Microsoft Graph) when that's the send account — no separate
+    // connection, just the read scope (granted by reconnecting once). Falls
+    // back to a standalone IMAP inbox for other providers.
     const send = getAccount(email);
     if (send && send.provider === 'gmail') return { connected: true, provider: 'gmail', email: send.email || null };
+    if (send && send.provider === 'outlook') return { connected: true, provider: 'outlook', email: send.email || null };
     const imap = getInboxAccount(email);
     if (imap) return { connected: true, provider: 'imap', email: imap.email || null };
     return { connected: false, provider: null, email: null };
@@ -741,13 +745,172 @@ async function trashGmailMessage(email, id) {
     return true;
 }
 
+// ── Inbox via the connected Outlook (Microsoft Graph + Mail.ReadWrite) ─────
+// Mirrors the Gmail set above exactly — same return shapes, same coded errors —
+// so the routes and email-writer.html treat both providers identically.
+// Outlook has real folders instead of labels; the Gmail-style ids the client
+// already sends (INBOX/SENT/…) are translated to Graph well-known folder names.
+const OUTLOOK_FOLDERS = { INBOX: 'inbox', SENT: 'sentitems', SPAM: 'junkemail', TRASH: 'deleteditems', DRAFT: 'drafts' };
+
+// Access token for READING via the connected Outlook send account. Reuses
+// outlookAccessToken WITH the email so Microsoft's rotated refresh token is
+// persisted (see the rotation note above — never bypass that).
+async function outlookAccessFor(email) {
+    const acct = getAccount(email);
+    if (!acct || acct.provider !== 'outlook') { const e = new Error('inbox_not_connected'); e.code = 'inbox_not_connected'; throw e; }
+    try { return await outlookAccessToken(email, decrypt(acct.refresh_token)); }
+    catch { const e = new Error('inbox_auth_failed'); e.code = 'inbox_auth_failed'; throw e; }
+}
+// Graph GET → JSON. Maps 403 (missing Mail.ReadWrite — account was connected
+// before the read scope existed) and 404 to the same coded errors as Gmail.
+async function graphApiGet(access, path) {
+    const r = await fetch(`${GRAPH}/${path}`, { headers: { Authorization: `Bearer ${access}` } });
+    if (r.status === 403) { const e = new Error('inbox_scope_missing'); e.code = 'inbox_scope_missing'; throw e; }
+    if (r.status === 404) { const e = new Error('inbox_message_not_found'); e.code = 'inbox_message_not_found'; throw e; }
+    if (!r.ok) { const e = new Error('graph_api_' + r.status + ': ' + (await r.text()).slice(0, 200)); e.code = 'inbox_fetch_failed'; throw e; }
+    return r.json();
+}
+// Dependency-free HTML → readable text, for Outlook mail with no text body
+// (most Outlook mail is HTML-only; Graph doesn't return both body types).
+function stripHtml(html) {
+    return String(html || '')
+        .replace(/<style[\s\S]*?<\/style>/gi, ' ')
+        .replace(/<script[\s\S]*?<\/script>/gi, ' ')
+        .replace(/<br\s*\/?>/gi, '\n')
+        .replace(/<\/(p|div|tr|li|h[1-6])>/gi, '\n')
+        .replace(/<[^>]+>/g, ' ')
+        .replace(/&nbsp;/gi, ' ').replace(/&amp;/gi, '&').replace(/&lt;/gi, '<')
+        .replace(/&gt;/gi, '>').replace(/&quot;/gi, '"').replace(/&#39;/gi, "'")
+        .replace(/[ \t]+/g, ' ')
+        .replace(/\n\s+/g, '\n')
+        .trim();
+}
+// Newest-first list of the user's Outlook inbox (metadata only — fast).
+// Same shape as listGmailInbox: { id, from, fromName, subject, date, seen }.
+async function listOutlookInbox(email, { limit = 25, label = 'INBOX' } = {}) {
+    const access = await outlookAccessFor(email);
+    const query = `?$top=${limit}&$select=id,subject,from,isRead,isDraft,receivedDateTime&$orderby=receivedDateTime%20desc`;
+    const path = (label === 'ALL')
+        ? `me/messages${query}`
+        : `me/mailFolders/${OUTLOOK_FOLDERS[label] || 'inbox'}/messages${query}`;
+    const d = await graphApiGet(access, path);
+    return (d.value || [])
+        .filter(m => label === 'DRAFT' || !m.isDraft)   // Graph lists drafts inside ALL too
+        .map(m => {
+            const addr = m.from?.emailAddress?.address || '';
+            return {
+                id: m.id,
+                from: addr,
+                fromName: m.from?.emailAddress?.name || addr,
+                subject: m.subject || '(no subject)',
+                date: m.receivedDateTime ? new Date(m.receivedDateTime).toISOString() : null,
+                seen: !!m.isRead,
+            };
+        });
+}
+// The Outlook folder set for the folder switcher — Gmail-style ids so the
+// client's switcher works unchanged. Static: Graph well-known folders always
+// exist, so no network call is needed (email is unused, kept for parity).
+function listOutlookFolders(email) {
+    return [
+        { id: 'INBOX', name: 'Inbox' }, { id: 'SENT', name: 'Sent' },
+        { id: 'SPAM', name: 'Spam' }, { id: 'TRASH', name: 'Bin' },
+        { id: 'ALL', name: 'All mail' },
+    ];
+}
+// Full body of one Outlook message by id. Same shape as readGmailMessage.
+async function readOutlookMessage(email, id) {
+    const access = await outlookAccessFor(email);
+    const mid = encodeURIComponent(id);
+    const d = await graphApiGet(access, `me/messages/${mid}?$select=id,subject,from,toRecipients,receivedDateTime,body,bodyPreview,isRead,flag`);
+    const atts = await graphApiGet(access, `me/messages/${mid}/attachments?$select=id,name,contentType,size,isInline`);
+    const addr = d.from?.emailAddress?.address || '';
+    const bodyType = (d.body?.contentType || '').toLowerCase();
+    const content = d.body?.content || '';
+    return {
+        id: d.id,
+        from: addr,
+        fromName: d.from?.emailAddress?.name || addr,
+        to: (d.toRecipients || []).map(r => r.emailAddress?.address || '').filter(Boolean).join(', '),
+        subject: d.subject || '(no subject)',
+        date: d.receivedDateTime ? new Date(d.receivedDateTime).toISOString() : null,
+        starred: d.flag?.flagStatus === 'flagged',
+        seen: !!d.isRead,
+        text: bodyType === 'text' ? content : (content ? stripHtml(content) : (d.bodyPreview || '')),
+        html: bodyType === 'html' ? content : '',
+        attachments: (atts.value || [])
+            .filter(a => !a.isInline)   // inline images are part of the HTML, not files
+            .map(a => ({ filename: a.name || 'attachment', attachmentId: a.id, mimeType: a.contentType || '', size: a.size || 0 })),
+    };
+}
+// Fetch one attachment's bytes. Graph's contentBytes is ALREADY standard
+// base64 (unlike Gmail's base64url) — pass it straight through.
+async function getOutlookAttachment(email, messageId, attachmentId) {
+    const access = await outlookAccessFor(email);
+    const d = await graphApiGet(access, `me/messages/${encodeURIComponent(messageId)}/attachments/${encodeURIComponent(attachmentId)}`);
+    if (!d || !d.contentBytes) { const e = new Error('inbox_message_not_found'); e.code = 'inbox_message_not_found'; throw e; }
+    return { base64: String(d.contentBytes), size: d.size || 0 };
+}
+// Change a message's state. Accepts the Gmail-style label ids the client
+// already sends and translates them to Graph operations:
+//   remove UNREAD → mark read · add UNREAD → mark unread
+//   add STARRED → flag · remove STARRED → unflag
+//   remove INBOX → move to Archive
+// Anything else (custom Gmail labels etc.) has no Outlook equivalent and is
+// deliberately ignored rather than erroring.
+async function modifyOutlookMessage(email, id, { add = [], remove = [] } = {}) {
+    const access = await outlookAccessFor(email);
+    const mid = encodeURIComponent(id);
+    const fail = async (r) => {
+        if (r.status === 403) { const e = new Error('inbox_scope_missing'); e.code = 'inbox_scope_missing'; throw e; }
+        const e = new Error('outlook_modify_' + r.status); e.code = 'inbox_action_failed'; throw e;
+    };
+    const patch = {};
+    if (remove.includes('UNREAD')) patch.isRead = true;
+    if (add.includes('UNREAD')) patch.isRead = false;
+    if (add.includes('STARRED')) patch.flag = { flagStatus: 'flagged' };
+    if (remove.includes('STARRED')) patch.flag = { flagStatus: 'notFlagged' };
+    if (Object.keys(patch).length) {
+        const r = await fetch(`${GRAPH}/me/messages/${mid}`, {
+            method: 'PATCH',
+            headers: { Authorization: `Bearer ${access}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify(patch),
+        });
+        if (!r.ok) await fail(r);
+    }
+    if (remove.includes('INBOX')) {
+        const r = await fetch(`${GRAPH}/me/messages/${mid}/move`, {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${access}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ destinationId: 'archive' }),
+        });
+        if (!r.ok) await fail(r);
+    }
+    return true;
+}
+// Move a message to Bin (Deleted Items) — recoverable, like Gmail's trash.
+async function trashOutlookMessage(email, id) {
+    const access = await outlookAccessFor(email);
+    const r = await fetch(`${GRAPH}/me/messages/${encodeURIComponent(id)}/move`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${access}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ destinationId: 'deleteditems' }),
+    });
+    if (r.status === 403) { const e = new Error('inbox_scope_missing'); e.code = 'inbox_scope_missing'; throw e; }
+    if (!r.ok) { const e = new Error('outlook_trash_' + r.status); e.code = 'inbox_action_failed'; throw e; }
+    return true;
+}
+
 module.exports = {
     gmailConfigured, status, getAccount, disconnect, consentUrl, handleCallback,
     outlookConfigured, outlookConsentUrl, handleOutlookCallback,
     sendEmail, connectSmtp,
     getOutbox, addToOutbox, removeFromOutbox, patchOutboxItem, sendFromOutbox,
-    // Inbox — Gmail API (read scope) for connected Gmail; IMAP for other providers
+    // Inbox — Gmail API (read scope) for connected Gmail; Graph for connected
+    // Outlook; IMAP for other providers
     inboxStatus, getInboxAccount, connectInbox, disconnectInbox, listInbox, readInboxMessage,
     listGmailInbox, readGmailMessage, listGmailLabels, getGmailAttachment,
     modifyGmailMessage, trashGmailMessage,
+    outlookAccessFor, listOutlookInbox, readOutlookMessage, listOutlookFolders,
+    getOutlookAttachment, modifyOutlookMessage, trashOutlookMessage,
 };

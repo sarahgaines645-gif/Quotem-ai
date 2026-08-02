@@ -1779,9 +1779,14 @@ async function checkInboxTool({ limit, unread_only } = {}, personEmail) {
     try {
         const acct = qEmailAccounts.getAccount(personEmail);
         const isGmail = acct && acct.provider === 'gmail';
+        const isOutlook = acct && acct.provider === 'outlook';
         let list;
         if (isGmail) {
             list = await qEmailAccounts.listGmailInbox(personEmail, { limit: n, label: unread_only ? 'UNREAD' : 'INBOX' });
+        } else if (isOutlook) {
+            // Outlook has no UNREAD folder — list the inbox and filter here.
+            list = await qEmailAccounts.listOutlookInbox(personEmail, { limit: n, label: 'INBOX' });
+            if (unread_only) list = list.filter(m => m.seen === false);
         } else {
             list = await qEmailAccounts.listInbox(personEmail, { limit: n });
             if (unread_only) list = list.filter(m => m.seen === false);
@@ -1803,9 +1808,12 @@ async function readEmailTool({ message_id } = {}, personEmail) {
     try {
         const acct = qEmailAccounts.getAccount(personEmail);
         const isGmail = acct && acct.provider === 'gmail';
+        const isOutlook = acct && acct.provider === 'outlook';
         const msg = isGmail
             ? await qEmailAccounts.readGmailMessage(personEmail, String(message_id))
-            : await qEmailAccounts.readInboxMessage(personEmail, message_id);
+            : isOutlook
+                ? await qEmailAccounts.readOutlookMessage(personEmail, String(message_id))
+                : await qEmailAccounts.readInboxMessage(personEmail, message_id);
         return {
             ok: true,
             id: (msg.id != null ? msg.id : msg.uid),
@@ -1824,8 +1832,10 @@ async function readEmailAttachmentTool({ message_id, attachment_id, filename, mi
     if (!message_id || !attachment_id) return { error: 'message_id and attachment_id are required (from read_email).' };
     try {
         const acct = qEmailAccounts.getAccount(personEmail);
-        if (!acct || acct.provider !== 'gmail') return { error: 'Reading attachments currently works with a connected Gmail account — reconnect Gmail on the Email Writer page.' };
-        const att = await qEmailAccounts.getGmailAttachment(personEmail, String(message_id), String(attachment_id));
+        if (!acct || (acct.provider !== 'gmail' && acct.provider !== 'outlook')) return { error: 'Reading attachments works with a connected Gmail or Outlook account — connect one on the Email Writer page.' };
+        const att = acct.provider === 'gmail'
+            ? await qEmailAccounts.getGmailAttachment(personEmail, String(message_id), String(attachment_id))
+            : await qEmailAccounts.getOutlookAttachment(personEmail, String(message_id), String(attachment_id));
         if (!att || !att.base64) return { error: 'Could not fetch that attachment.' };
         const name = String(filename || 'attachment');
         const mime = mime_type || (/\.pdf$/i.test(name) ? 'application/pdf'

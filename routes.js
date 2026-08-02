@@ -596,7 +596,11 @@ router.patch('/email/outbox/:id', requirePerson, express.json({ limit: '20mb' })
     res.json({ ok: true });
 });
 
-// ── Inbox (IMAP, read-only, fetched LIVE on demand — no background poller) ──
+// ── Inbox (read-only, fetched LIVE on demand — no background poller) ───────
+// Gmail via the Gmail API, Outlook via Microsoft Graph (both reuse the send
+// token), anything else via IMAP. All three return identical shapes.
+// Friendly provider name for inbox error messages.
+function inboxProviderName(send) { return (send && send.provider === 'outlook') ? 'Outlook' : 'Gmail'; }
 router.get('/email/inbox/status', requirePerson, (req, res) => {
     res.json(qEmail.inboxStatus(req.person.email));
 });
@@ -617,9 +621,9 @@ router.post('/email/imap/disconnect', requirePerson, (req, res) => {
     qEmail.disconnectInbox(req.person.email);
     res.json({ ok: true });
 });
-// Live list of recent inbox messages. Reads the connected Gmail via the Gmail
-// API (reusing the send token) when the send account is Gmail; otherwise reads
-// a standalone IMAP inbox. Any failure surfaces here — nothing fails silently.
+// Live list of recent inbox messages. Reads the connected Gmail (Gmail API)
+// or Outlook (Microsoft Graph) reusing the send token; otherwise reads a
+// standalone IMAP inbox. Any failure surfaces here — nothing fails silently.
 router.get('/email/inbox', requirePerson, async (req, res) => {
     const send = qEmail.getAccount(req.person.email);
     const label = String(req.query.label || 'INBOX');
@@ -627,18 +631,22 @@ router.get('/email/inbox', requirePerson, async (req, res) => {
         const limit = Math.min(parseInt(req.query.limit, 10) || 50, 100);
         const messages = (send && send.provider === 'gmail')
             ? await qEmail.listGmailInbox(req.person.email, { limit, label })
-            : await qEmail.listInbox(req.person.email, { limit });
+            : (send && send.provider === 'outlook')
+                ? await qEmail.listOutlookInbox(req.person.email, { limit, label })
+                : await qEmail.listInbox(req.person.email, { limit });
         res.json({ messages });
     } catch (e) {
-        if (e.code === 'inbox_scope_missing') return res.status(403).json({ code: 'scope', error: 'Reconnect Gmail to allow reading your inbox — the current connection can only send.' });
+        if (e.code === 'inbox_scope_missing') return res.status(403).json({ code: 'scope', error: `Reconnect ${inboxProviderName(send)} to allow reading your inbox — the current connection can only send.` });
         if (e.code === 'inbox_not_connected') return res.status(409).json({ error: 'No inbox connected — connect Gmail (or an inbox) first.' });
         console.error('[inbox] list:', e.message);
         res.status(502).json({ error: 'Could not read your inbox — the connection may need reconnecting.' });
     }
 });
-// The user's Gmail folders/labels for the folder switcher (Gmail only).
+// The user's folders/labels for the folder switcher (Gmail's live label list;
+// Outlook's fixed well-known folder set; empty for IMAP).
 router.get('/email/inbox/labels', requirePerson, async (req, res) => {
     const send = qEmail.getAccount(req.person.email);
+    if (send && send.provider === 'outlook') return res.json({ labels: qEmail.listOutlookFolders(req.person.email) });
     if (!send || send.provider !== 'gmail') return res.json({ labels: [] });
     try {
         res.json({ labels: await qEmail.listGmailLabels(req.person.email) });
@@ -648,44 +656,50 @@ router.get('/email/inbox/labels', requirePerson, async (req, res) => {
         res.json({ labels: [] });
     }
 });
-// Full body of one message by id (Gmail message id, or IMAP uid).
+// Full body of one message by id (Gmail/Outlook message id, or IMAP uid).
 router.get('/email/inbox/:id', requirePerson, async (req, res) => {
     const send = qEmail.getAccount(req.person.email);
     try {
         const message = (send && send.provider === 'gmail')
             ? await qEmail.readGmailMessage(req.person.email, req.params.id)
-            : await qEmail.readInboxMessage(req.person.email, req.params.id);
+            : (send && send.provider === 'outlook')
+                ? await qEmail.readOutlookMessage(req.person.email, req.params.id)
+                : await qEmail.readInboxMessage(req.person.email, req.params.id);
         res.json({ message });
     } catch (e) {
-        if (e.code === 'inbox_scope_missing') return res.status(403).json({ code: 'scope', error: 'Reconnect Gmail to allow reading.' });
+        if (e.code === 'inbox_scope_missing') return res.status(403).json({ code: 'scope', error: `Reconnect ${inboxProviderName(send)} to allow reading.` });
         if (e.code === 'inbox_not_connected') return res.status(409).json({ error: 'No inbox connected.' });
         if (e.code === 'inbox_message_not_found') return res.status(404).json({ error: 'That message could not be found.' });
         console.error('[inbox] read:', e.message);
         res.status(502).json({ error: 'Could not open that message.' });
     }
 });
-// Change a message's labels (mark read/unread, star, archive) — Gmail only.
+// Change a message's labels (mark read/unread, star, archive) — Gmail or
+// Outlook (Outlook translates the Gmail-style label ids to Graph operations).
 router.post('/email/inbox/:id/modify', requirePerson, express.json({ limit: '16kb' }), async (req, res) => {
     const send = qEmail.getAccount(req.person.email);
-    if (!send || send.provider !== 'gmail') return res.status(400).json({ error: 'Inbox actions need a connected Gmail account.' });
+    if (!send || (send.provider !== 'gmail' && send.provider !== 'outlook')) return res.status(400).json({ error: 'Inbox actions need a connected Gmail or Outlook account.' });
     try {
-        await qEmail.modifyGmailMessage(req.person.email, req.params.id, { add: req.body.add || [], remove: req.body.remove || [] });
+        const changes = { add: req.body.add || [], remove: req.body.remove || [] };
+        if (send.provider === 'outlook') await qEmail.modifyOutlookMessage(req.person.email, req.params.id, changes);
+        else await qEmail.modifyGmailMessage(req.person.email, req.params.id, changes);
         res.json({ ok: true });
     } catch (e) {
-        if (e.code === 'inbox_scope_missing') return res.status(403).json({ code: 'scope', error: 'Reconnect Gmail to manage your inbox (grant the newer permission).' });
+        if (e.code === 'inbox_scope_missing') return res.status(403).json({ code: 'scope', error: `Reconnect ${inboxProviderName(send)} to manage your inbox (grant the newer permission).` });
         console.error('[inbox] modify:', e.message);
         res.status(502).json({ error: 'Could not update that message.' });
     }
 });
-// Move a message to Bin — Gmail only.
+// Move a message to Bin — Gmail or Outlook.
 router.post('/email/inbox/:id/trash', requirePerson, async (req, res) => {
     const send = qEmail.getAccount(req.person.email);
-    if (!send || send.provider !== 'gmail') return res.status(400).json({ error: 'Inbox actions need a connected Gmail account.' });
+    if (!send || (send.provider !== 'gmail' && send.provider !== 'outlook')) return res.status(400).json({ error: 'Inbox actions need a connected Gmail or Outlook account.' });
     try {
-        await qEmail.trashGmailMessage(req.person.email, req.params.id);
+        if (send.provider === 'outlook') await qEmail.trashOutlookMessage(req.person.email, req.params.id);
+        else await qEmail.trashGmailMessage(req.person.email, req.params.id);
         res.json({ ok: true });
     } catch (e) {
-        if (e.code === 'inbox_scope_missing') return res.status(403).json({ code: 'scope', error: 'Reconnect Gmail to manage your inbox (grant the newer permission).' });
+        if (e.code === 'inbox_scope_missing') return res.status(403).json({ code: 'scope', error: `Reconnect ${inboxProviderName(send)} to manage your inbox (grant the newer permission).` });
         console.error('[inbox] trash:', e.message);
         res.status(502).json({ error: 'Could not delete that message.' });
     }
