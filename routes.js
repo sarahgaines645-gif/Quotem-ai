@@ -399,6 +399,28 @@ router.get('/email/gmail/callback', async (req, res) => {
     }
 });
 
+router.get('/email/outlook/start', requirePerson, (req, res) => {
+    if (!qEmail.outlookConfigured()) {
+        return res.status(503).json({ error: 'Outlook isn\'t set up on the server yet (missing Microsoft OAuth credentials).' });
+    }
+    res.json({ url: qEmail.outlookConsentUrl(req.person.email) });
+});
+
+// Microsoft redirects here — NO requirePerson (identity rides the signed state).
+router.get('/email/outlook/callback', async (req, res) => {
+    const { code, state, error } = req.query;
+    if (error) return res.redirect('/email-writer?email=denied');
+    if (!code || !state) return res.redirect('/email-writer?email=error');
+    try {
+        await qEmail.handleOutlookCallback(code, state);
+        return res.redirect('/email-writer?email=connected');
+    } catch (e) {
+        console.error('[email] outlook callback:', e.message);
+        const q = e.message === 'no_refresh_token' ? 'noaccess' : (e.message === 'bad_state' ? 'badstate' : 'error');
+        return res.redirect('/email-writer?email=' + q);
+    }
+});
+
 // Disconnect the send account (Gmail or SMTP). For Gmail this also revokes
 // the token at Google, so this server can no longer act as that address.
 router.post('/email/disconnect', requirePerson, async (req, res) => {

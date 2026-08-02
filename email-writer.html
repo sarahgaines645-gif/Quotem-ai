@@ -251,6 +251,7 @@
     <span class="section-label" style="margin:0;">📧 Your email</span>
     <span class="status" id="email-conn-status">Checking…</span>
     <button class="btn-sm" id="email-connect-btn" style="display:none;">Connect Gmail</button>
+    <button class="btn-sm" id="email-outlook-btn" style="display:none;">Connect Outlook</button>
     <button class="btn-sm" id="email-other-btn" style="display:none;">Connect other email</button>
     <button class="btn-sm" id="email-disconnect-btn" style="display:none;">Disconnect</button>
     <div id="smtp-form" style="display:none;width:100%;margin-top:6px;">
@@ -778,6 +779,7 @@ function escapeHtml(s) {
   const $connBtn  = document.getElementById('email-connect-btn');
   const $disconBtn = document.getElementById('email-disconnect-btn');
   const $otherBtn = document.getElementById('email-other-btn');
+  const $outlookBtn = document.getElementById('email-outlook-btn');
   const $smtpForm = document.getElementById('smtp-form');
   const $smtpEmail = document.getElementById('smtp-email');
   const $smtpPass = document.getElementById('smtp-pass');
@@ -797,12 +799,14 @@ function escapeHtml(s) {
         $connStat.textContent = '✓ Sending as ' + (d.email || d.provider);
         $connBtn.textContent = 'Reconnect Gmail';
         $connBtn.style.display = (d.provider === 'gmail') ? '' : 'none';
+        if ($outlookBtn) { $outlookBtn.textContent = 'Reconnect Outlook'; $outlookBtn.style.display = (d.provider === 'outlook') ? '' : 'none'; }
         $disconBtn.style.display = '';
         $otherBtn.style.display = 'none'; $smtpForm.style.display = 'none';
       } else {
         $connStat.textContent = 'Not connected';
         $connBtn.textContent = 'Connect Gmail';
         $connBtn.style.display = d.gmailAvailable ? '' : 'none';
+        if ($outlookBtn) { $outlookBtn.textContent = 'Connect Outlook'; $outlookBtn.style.display = d.outlookAvailable ? '' : 'none'; }
         $disconBtn.style.display = 'none';
         $otherBtn.style.display = '';
       }
@@ -811,6 +815,10 @@ function escapeHtml(s) {
   if ($connBtn) $connBtn.addEventListener('click', async () => {
     try { const r = await apiFetch('/email/gmail/start'); const d = await r.json(); if (d.url) location.href = d.url; else showToast(d.error || 'Could not start Gmail connect'); }
     catch { showToast('Could not start Gmail connect'); }
+  });
+  if ($outlookBtn) $outlookBtn.addEventListener('click', async () => {
+    try { const r = await apiFetch('/email/outlook/start'); const d = await r.json(); if (d.url) location.href = d.url; else showToast(d.error || 'Could not start Outlook connect'); }
+    catch { showToast('Could not start Outlook connect'); }
   });
   if ($otherBtn) $otherBtn.addEventListener('click', () => {
     $smtpForm.style.display = $smtpForm.style.display === 'none' ? '' : 'none';
@@ -831,7 +839,7 @@ function escapeHtml(s) {
     const port = ($smtpPort.value || '').trim() || '587';
     if (!user || !pass) return showToast('Enter your email address and password');
     if (/@(gmail|googlemail)\./i.test(user)) return showToast('For Gmail use the Connect Gmail button instead');
-    if (/@(outlook|hotmail|live|msn)\./i.test(user)) return showToast('Outlook/Hotmail can\'t connect this way — Microsoft only allows its own sign-in');
+    if (/@(outlook|hotmail|live|msn)\./i.test(user)) return showToast('Outlook/Hotmail can\'t connect this way — use the Connect Outlook button instead');
     if (!host) return showToast('Enter your mail server (e.g. smtp.btinternet.com)');
     $smtpSave.disabled = true; $smtpSave.textContent = 'Connecting…';
     try {

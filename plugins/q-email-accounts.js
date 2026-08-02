@@ -29,6 +29,23 @@ function gmailConfigured() {
     return !!(CLIENT_ID && CLIENT_SECRET && REDIRECT_URI);
 }
 
+// ── Microsoft (Outlook / Hotmail / Office 365) ────────────────────────────
+// Microsoft retired password/app-password sign-in for outside apps (2026), so
+// Outlook connects ONLY via its own OAuth — mirrors the Quoteapp flow. Same
+// env names as Quoteapp, so ONE Entra app registration serves both apps (just
+// add each app's redirect URI to it). Personal + work accounts both work via
+// the v2 "common" endpoint; send goes through the Graph API.
+const MS_CLIENT_ID = process.env.MS_CLIENT_ID || process.env.OUTLOOK_CLIENT_ID || '';
+const MS_CLIENT_SECRET = process.env.MS_CLIENT_SECRET || process.env.OUTLOOK_CLIENT_SECRET || '';
+const MS_REDIRECT_URI = process.env.OUTLOOK_REDIRECT_URI || '';
+const MS_SCOPES = 'offline_access https://graph.microsoft.com/Mail.Send https://graph.microsoft.com/User.Read';
+const MS_AUTH_BASE = 'https://login.microsoftonline.com/common/oauth2/v2.0';
+const GRAPH = 'https://graph.microsoft.com/v1.0';
+
+function outlookConfigured() {
+    return !!(MS_CLIENT_ID && MS_CLIENT_SECRET && MS_REDIRECT_URI);
+}
+
 // ── encryption (AES-256-GCM) ──────────────────────────────────────────────
 const KEY = crypto.createHash('sha256')
     .update(process.env.EMAIL_TOKEN_KEY || process.env.Q_AUTH_PEPPER || 'quotem-ai-email-fallback-key')
@@ -64,6 +81,14 @@ function getAccount(email) {
 function saveGmail(email, { address, refreshToken }) {
     fs.writeFileSync(accountFile(email), JSON.stringify({
         provider: 'gmail',
+        email: address || '',
+        refresh_token: encrypt(refreshToken),
+        updated_at: new Date().toISOString(),
+    }, null, 2), 'utf8');
+}
+function saveOutlook(email, { address, refreshToken }) {
+    fs.writeFileSync(accountFile(email), JSON.stringify({
+        provider: 'outlook',
         email: address || '',
         refresh_token: encrypt(refreshToken),
         updated_at: new Date().toISOString(),
@@ -111,7 +136,7 @@ async function disconnect(email) {
 }
 function status(email) {
     const a = getAccount(email);
-    return { connected: !!a, provider: a?.provider || null, email: a?.email || null, gmailAvailable: gmailConfigured() };
+    return { connected: !!a, provider: a?.provider || null, email: a?.email || null, gmailAvailable: gmailConfigured(), outlookAvailable: outlookConfigured() };
 }
 
 // ── OAuth state (HMAC-signed; mirrors auth.js, no jsonwebtoken) ────────────
@@ -182,6 +207,63 @@ async function gmailAccessToken(refreshToken) {
     return data.access_token;
 }
 
+// ── Microsoft OAuth ────────────────────────────────────────────────────────
+function outlookConsentUrl(email) {
+    return `${MS_AUTH_BASE}/authorize?` + new URLSearchParams({
+        client_id: MS_CLIENT_ID,
+        redirect_uri: MS_REDIRECT_URI,
+        response_type: 'code',
+        response_mode: 'query',
+        scope: MS_SCOPES,
+        prompt: 'select_account',
+        state: signState(email),
+    });
+}
+// Exchange the authorization code → store the encrypted refresh token.
+// Returns the connected address, or throws ('bad_state' | 'no_refresh_token').
+async function handleOutlookCallback(code, state) {
+    const email = verifyState(state);
+    if (!email) throw new Error('bad_state');
+    const tr = await fetch(`${MS_AUTH_BASE}/token`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({ code, client_id: MS_CLIENT_ID, client_secret: MS_CLIENT_SECRET, redirect_uri: MS_REDIRECT_URI, grant_type: 'authorization_code', scope: MS_SCOPES }),
+    });
+    const tok = await tr.json();
+    if (!tok.refresh_token) throw new Error('no_refresh_token');
+    let address = '';
+    try {
+        const ur = await fetch(`${GRAPH}/me?$select=mail,userPrincipalName`, { headers: { Authorization: `Bearer ${tok.access_token}` } });
+        const me = await ur.json();
+        address = me.mail || me.userPrincipalName || '';
+    } catch { /* address is nice-to-have */ }
+    saveOutlook(email, { address, refreshToken: tok.refresh_token });
+    return address;
+}
+// Microsoft ROTATES refresh tokens — every refresh returns a NEW one and the
+// old one eventually dies. Persist the rotation or the connection silently
+// expires after a few weeks.
+async function outlookAccessToken(email, refreshToken) {
+    const r = await fetch(`${MS_AUTH_BASE}/token`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({ client_id: MS_CLIENT_ID, client_secret: MS_CLIENT_SECRET, refresh_token: refreshToken, grant_type: 'refresh_token', scope: MS_SCOPES }),
+    });
+    const data = await r.json();
+    if (!data.access_token) throw new Error('outlook_token_refresh_failed');
+    if (data.refresh_token && email) {
+        try {
+            const acct = getAccount(email);
+            if (acct && acct.provider === 'outlook') {
+                acct.refresh_token = encrypt(data.refresh_token);
+                acct.updated_at = new Date().toISOString();
+                fs.writeFileSync(accountFile(email), JSON.stringify(acct, null, 2), 'utf8');
+            }
+        } catch { /* best effort — the old token usually survives a while */ }
+    }
+    return data.access_token;
+}
+
 // Send an email through the user's connected account (Gmail or SMTP).
 // attachments: [{ filename, base64, mimeType }] — optional file attachments.
 // Returns the from address. Throws Error with .code='not_connected' if none.
@@ -248,6 +330,46 @@ async function sendEmail(email, { to, subject, text, attachments = [] }) {
             body: JSON.stringify({ raw }),
         });
         if (!gr.ok) throw new Error('gmail_send_failed: ' + (await gr.text()).slice(0, 200));
+        return from;
+    }
+    if (acct.provider === 'outlook') {
+        const access = await outlookAccessToken(email, decrypt(acct.refresh_token));
+        const from = acct.email || '';
+        const boundary = 'qm-' + crypto.randomBytes(10).toString('hex');
+        const lines = [
+            from ? `From: ${from}` : null,
+            `To: ${to}`,
+            `Subject: ${encodeHeader(subject)}`,
+            'MIME-Version: 1.0',
+        ];
+        if (attachments && attachments.length) {
+            lines.push(`Content-Type: multipart/mixed; boundary="${boundary}"`, '');
+            const parts = [`--${boundary}`, 'Content-Type: text/plain; charset=UTF-8', '', text || ''];
+            for (const att of attachments) {
+                const safe = String(att.filename || 'attachment').replace(/"/g, '');
+                parts.push(
+                    `--${boundary}`,
+                    `Content-Type: ${att.mimeType || 'application/octet-stream'}`,
+                    'Content-Transfer-Encoding: base64',
+                    `Content-Disposition: attachment; filename="${safe}"`,
+                    '',
+                    String(att.base64 || '').replace(/\s/g, ''),
+                );
+            }
+            parts.push(`--${boundary}--`);
+            lines.push(parts.join('\r\n'));
+        } else {
+            lines.push('Content-Type: text/plain; charset=UTF-8', '', text || '');
+        }
+        const message = lines.filter(v => v !== null).join('\r\n');
+        // Graph accepts raw MIME as STANDARD base64 (not base64url) with
+        // Content-Type: text/plain. Success is a bare 202.
+        const gr = await fetch(`${GRAPH}/me/sendMail`, {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${access}`, 'Content-Type': 'text/plain' },
+            body: Buffer.from(message).toString('base64'),
+        });
+        if (!gr.ok) throw new Error('outlook_send_failed: ' + (await gr.text()).slice(0, 200));
         return from;
     }
     if (acct.provider === 'smtp') {
@@ -621,6 +743,7 @@ async function trashGmailMessage(email, id) {
 
 module.exports = {
     gmailConfigured, status, getAccount, disconnect, consentUrl, handleCallback,
+    outlookConfigured, outlookConsentUrl, handleOutlookCallback,
     sendEmail, connectSmtp,
     getOutbox, addToOutbox, removeFromOutbox, patchOutboxItem, sendFromOutbox,
     // Inbox — Gmail API (read scope) for connected Gmail; IMAP for other providers
