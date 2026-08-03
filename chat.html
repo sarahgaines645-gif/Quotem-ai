@@ -407,6 +407,13 @@
     box-shadow: var(--neu-inset-xs);
   }
   .message-body img:hover { opacity: 0.92; }
+  /* QR codes are generated at 360px so they stay sharp if you save or print
+     one — but at that size they fill the chat like a poster. Show them small;
+     they still scan fine, and clicking one expands it like any other image. */
+  .message-body img[alt*="QR" i] {
+    max-width: 160px;
+    max-height: 160px;
+  }
   /* Click-to-expand: when an image has the .expanded class (toggled by JS
      below) it breaks out to natural size. */
   .message-body img.expanded {
