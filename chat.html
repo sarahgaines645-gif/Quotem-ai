@@ -1354,6 +1354,50 @@
   }
   .call-modal .row { display: flex; gap: 8px; justify-content: center; }
 
+  /* Send-from-phone QR. Backdrop is SOLID var(--bg) — never a dimmed scrim. */
+  .phone-drop-modal {
+    position: fixed; inset: 0; z-index: 120;
+    background: var(--bg);
+    display: none;
+    align-items: center; justify-content: center;
+    padding: 20px;
+  }
+  .phone-drop-modal.open { display: flex; }
+  .phone-drop-modal .card {
+    background: var(--bg);
+    border-radius: 24px;
+    box-shadow: 0 18px 46px rgba(0,0,0,0.16);
+    border: 1px solid var(--shadow-dark);
+    padding: 26px 24px 22px;
+    max-width: 340px; width: 100%;
+    text-align: center;
+  }
+  .phone-drop-modal h3 {
+    font-size: 17px; font-weight: 800; color: var(--text); margin-bottom: 6px;
+  }
+  .phone-drop-modal .pd-sub {
+    font-size: 12px; color: var(--text-muted); line-height: 1.5; margin-bottom: 18px;
+  }
+  .phone-drop-modal .pd-qr {
+    width: 210px; height: 210px;
+    border-radius: 14px;
+    box-shadow: var(--neu-raised-sm);
+    background: #ffffff;
+    margin: 0 auto 14px;
+    display: block;
+  }
+  .phone-drop-modal .pd-status {
+    font-size: 12px; color: var(--text-muted); margin-bottom: 16px; min-height: 18px;
+  }
+  .phone-drop-modal .pd-status.got { color: var(--accent); font-weight: 700; }
+  .phone-drop-modal .pd-close {
+    background: var(--bg); border: none; cursor: pointer;
+    padding: 10px 22px; border-radius: 12px;
+    box-shadow: var(--neu-raised-sm);
+    font-family: inherit; font-size: 12px; font-weight: 700; color: var(--text);
+  }
+  .phone-drop-modal .pd-close:active { box-shadow: var(--neu-inset-xs); }
+
   /* Phones — stop the input bar crowding to one side (the wide footer padding
      + buttons were squeezing the textarea), and let bubbles use the full row. */
   @media (max-width: 600px) {
@@ -1534,6 +1578,9 @@
       placeholder="Message Q…"
       spellcheck="true" autocapitalize="sentences" autocorrect="on" autofocus></textarea>
     <span class="voice-status" id="voice-status"><span class="dot"></span><span id="voice-status-text"></span></span>
+    <button class="input-btn" id="phone-drop" aria-label="Send photos from your phone" title="Send photos from your phone — scan the code and they land here">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="2" width="14" height="20" rx="2"/><path d="M12 16V9"/><path d="M9 12l3-3 3 3"/></svg>
+    </button>
     <button class="input-btn" id="attach" aria-label="Attach image" title="Attach image (or paste / drag-drop)">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"></path></svg>
     </button>
@@ -1556,6 +1603,19 @@
 </div><!-- /.chat-card -->
 
 <div class="drop-overlay" id="drop-overlay">Drop a file to attach (image · PDF · Word · .txt)</div>
+
+<!-- Send-from-phone QR. Same doc-drop plugin the finance page uses: create a
+     session, show its token as a QR, poll until the phone posts the files,
+     then hand them to the normal attachment path. Solid backdrop, no scrim. -->
+<div class="phone-drop-modal" id="phone-drop-modal" aria-hidden="true">
+  <div class="card" role="dialog" aria-modal="true" aria-labelledby="pd-title">
+    <h3 id="pd-title">Send photos from your phone</h3>
+    <p class="pd-sub">Point your phone camera at this code, then pick or take your photos. They land straight in the box here.</p>
+    <img class="pd-qr" id="pd-qr" alt="Upload QR code">
+    <div class="pd-status" id="pd-status">Waiting for your photos…</div>
+    <button class="pd-close" id="pd-close" type="button">Close</button>
+  </div>
+</div>
 
 <!-- Change-password modal — hidden until the key icon in the header is clicked. -->
 <div class="pwd-overlay" id="pwd-overlay" aria-hidden="true">
@@ -2423,6 +2483,115 @@ $mic.addEventListener('click', () => {
     listening ? stopRecording() : startRecording();
   }
 });
+
+// ─── SEND PHOTOS FROM YOUR PHONE ──────────────────────────────────────────
+// Scan the QR, the phone opens the drop page, the photos land here. Same
+// doc-drop plugin and the same /api/doc-drop routes the finance page uses —
+// create a session, poll it, then hand whatever arrives to addImageFiles()
+// so a phone photo behaves exactly like one added with the paperclip.
+const $phoneDropBtn   = document.getElementById('phone-drop');
+const $phoneDropModal = document.getElementById('phone-drop-modal');
+const $pdQr           = document.getElementById('pd-qr');
+const $pdStatus       = document.getElementById('pd-status');
+
+let pdSessionId = null;
+let pdKnownFiles = new Set();
+let pdTimer = null;
+
+function pdSetStatus(text, got) {
+  $pdStatus.textContent = text;
+  $pdStatus.classList.toggle('got', !!got);
+}
+
+async function openPhoneDrop() {
+  $phoneDropModal.classList.add('open');
+  $phoneDropModal.setAttribute('aria-hidden', 'false');
+  pdSetStatus('Making your code…');
+  $pdQr.removeAttribute('src');
+  try {
+    const r = await fetch('/api/doc-drop/sessions', {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ label: 'Photos for Q', meta: { type: 'chat-photo' } }),
+    });
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    const { session } = await r.json();
+    pdSessionId = session.id;
+    pdKnownFiles = new Set((session.files || []).map(f => f.id));
+
+    // Force the apex host: Railway's cert only covers quotem-ai.co.uk, so a
+    // "www." URL in the QR gives the phone a "not private" warning and the
+    // upload page never loads. (Same fix as the finance page.)
+    const uploadUrl = location.origin.replace(/\/\/www\./i, '//') + '/doc-drop/' + session.token;
+
+    if (typeof qrcode === 'function') {
+      const qr = qrcode(0, 'M');
+      qr.addData(uploadUrl);
+      qr.make();
+      $pdQr.src = qr.createDataURL(6, 1);
+    } else {
+      pdSetStatus("Couldn't draw the code — use the paperclip instead");
+      return;
+    }
+    pdSetStatus('Waiting for your photos…');
+    pdTimer = setInterval(pollPhoneDrop, 3000);
+  } catch (e) {
+    console.warn('[q/phone-drop] could not start:', e);
+    pdSetStatus("Couldn't start the upload link — try again");
+  }
+}
+
+function closePhoneDrop() {
+  $phoneDropModal.classList.remove('open');
+  $phoneDropModal.setAttribute('aria-hidden', 'true');
+  if (pdTimer) { clearInterval(pdTimer); pdTimer = null; }
+  pdSessionId = null;
+  pdKnownFiles = new Set();
+}
+
+// base64 from the API → a real File, so the normal attachment path handles it
+// (size checks, PDF text extraction, OCR fallback — all of it).
+function pdToFile(base64, mimeType, name) {
+  const bin = atob(base64);
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  return new File([bytes], name || 'photo.jpg', { type: mimeType || 'image/jpeg' });
+}
+
+async function pollPhoneDrop() {
+  if (!pdSessionId) return;
+  try {
+    const r = await fetch('/api/doc-drop/sessions/' + pdSessionId, { credentials: 'include' });
+    if (!r.ok) return;
+    const { session } = await r.json();
+    const fresh = (session.files || []).filter(f => !pdKnownFiles.has(f.id));
+    if (!fresh.length) return;
+    fresh.forEach(f => pdKnownFiles.add(f.id));
+    pdSetStatus(`Got ${fresh.length} — adding…`, true);
+
+    const files = [];
+    for (const f of fresh) {
+      const fr = await fetch('/api/doc-drop/sessions/' + pdSessionId + '/files/' + f.id, { credentials: 'include' });
+      if (!fr.ok) continue;
+      const { base64, mimeType } = await fr.json();
+      files.push(pdToFile(base64, mimeType, f.name || f.filename));
+    }
+    if (files.length) {
+      await addImageFiles(files);
+      pdSetStatus(`${files.length} added — send more, or close and ask Q about them`, true);
+    }
+  } catch (e) {
+    console.warn('[q/phone-drop] poll failed:', e);
+  }
+}
+
+$phoneDropBtn.addEventListener('click', () => {
+  if ($phoneDropModal.classList.contains('open')) closePhoneDrop();
+  else openPhoneDrop();
+});
+document.getElementById('pd-close').addEventListener('click', closePhoneDrop);
+$phoneDropModal.addEventListener('click', (e) => { if (e.target === $phoneDropModal) closePhoneDrop(); });
 
 // ─── IMAGE ATTACHMENTS ────────────────────────────────────────────────────
 // Paste from clipboard, drag-drop onto the page, or click the paperclip.
