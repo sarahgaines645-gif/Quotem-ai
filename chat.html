@@ -165,11 +165,24 @@
      the way round. On phones the card goes full-bleed (see the 600px
      media query) so nothing is lost to margins on a small screen. */
   .chat-card {
-    flex: 1;
+    /* Aim for 820px tall and SHRINK on shorter screens — never grow to fill
+       the viewport. That's the whole point: full height made the card
+       invisible as a card, and pinned the composer to the very bottom edge
+       of the screen, which is a reach and reads as "the chat is the page".
+       `margin: auto` then soaks up the leftover space top AND bottom, so the
+       card floats with air around it and the input sits well clear of the
+       bottom. */
+    flex: 0 1 820px;
+    /* Cap against the VIEWPORT, not just the leftover space. Without this the
+       card simply grew to fill a laptop screen — 820px of basis is more than
+       a 800px-tall display has, so it never floated and the composer stayed
+       welded to the bottom edge. Leaving 150px guarantees free space for the
+       auto margins to split above and below on every screen size. */
+    max-height: calc(100vh - 190px);
     min-height: 0;
     width: calc(100% - 56px);
-    max-width: 880px;
-    margin: 0 auto 26px;
+    max-width: 860px;
+    margin: auto;
     display: flex;
     flex-direction: column;
     position: relative;
@@ -1411,7 +1424,7 @@
     /* Phones: the card goes full-bleed. A framed card inside a 375px screen
        just eats the reading width, so on mobile the chat fills the page as
        it always did — no side margins, no rounded frame, no outer shadow. */
-    .chat-card { width: 100%; margin: 0; border-radius: 0; box-shadow: none; }
+    .chat-card { flex: 1; width: 100%; margin: 0; border-radius: 0; box-shadow: none; }
     .top-fade { border-radius: 0; height: 44px; }
     main { padding-top: 18px; }
     footer { padding: 12px 12px 14px; padding-bottom: max(14px, env(safe-area-inset-bottom, 14px)); }
