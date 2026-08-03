@@ -34,6 +34,7 @@ const qMusic = require('./q-music');
 const qVideo = require('./q-video');
 const { speakAsVoice } = require('./q-voice-clone');
 const qLife = require('./q-life');
+const qTravel = require('./q-travel');
 
 // Q's voice — every user has their own override. The bundled default is a
 // shared fallback (it's just the stock voice and is identical for everyone).
@@ -258,6 +259,67 @@ const TOOL_DEFINITIONS = [
                     heading: { type: 'integer', description: 'Compass direction the camera faces, 0-359 (0=N, 90=E, 180=S, 270=W). Optional — omit to let it auto-face the road.' },
                     pitch: { type: 'integer', description: 'Up/down angle -90..90. 0 = level (default). Use +10..20 to catch a high-mounted sign.' },
                 },
+            },
+        },
+    },
+    {
+        type: 'function',
+        function: {
+            name: 'search_hotels',
+            description: 'Search LIVE hotel availability and prices for real dates — either for a destination (city/area) or for one hotel by name. Use this whenever the user asks what a hotel or a stay would cost, whether somewhere has rooms free, or asks you to compare places to stay. You must have real check-in and check-out dates and the room set-up (how many rooms, how many adults, ages of any children) — ask for them rather than assuming. Every price comes back WITH its currency and results can be in DIFFERENT currencies, so always quote the currency and never add prices together or convert without saying so. If nothing comes back, say nothing was found — never invent a hotel, a price or an availability status. LIMITATION you must tell the user about: UK package holiday operators (Jet2, TUI, loveholidays, On the Beach) publish NO public API, so a package price cannot be looked up here at all. The honest answer is to price the flight (search_flights) and the hotel (this tool) separately and say plainly that a package may work out cheaper or dearer — do NOT guess a package price.',
+            parameters: {
+                type: 'object',
+                properties: {
+                    destination:  { type: 'string', description: 'Where they want to stay — city, town, island or area, e.g. "Malaga", "Lake District", "Tenerife South". Use this OR hotel_name.' },
+                    hotel_name:   { type: 'string', description: 'A specific hotel by name, e.g. "Hotel Riu Palace Tenerife". Use this instead of destination when the user names a hotel.' },
+                    check_in:     { type: 'string', description: 'Check-in date, YYYY-MM-DD. Required — never guess it; ask the user.' },
+                    check_out:    { type: 'string', description: 'Check-out date, YYYY-MM-DD. Required, must be after check_in.' },
+                    rooms:        { type: 'integer', description: 'How many rooms. Default 1.', minimum: 1, maximum: 8 },
+                    adults:       { type: 'integer', description: 'Total number of adults across all the rooms. Default 2.', minimum: 1, maximum: 30 },
+                    children_ages:{ type: 'array', items: { type: 'integer' }, description: 'Ages of any children, e.g. [4, 9]. Hotel pricing needs the AGES, not just the count — ask if the user has not said.' },
+                    currency:     { type: 'string', description: 'ISO currency to price in, e.g. "GBP". Default GBP. The service may still return some results in other currencies.' },
+                    max_results:  { type: 'integer', description: 'How many hotels to return (1-20). Default 8.', minimum: 1, maximum: 20 },
+                },
+                required: ['check_in', 'check_out'],
+            },
+        },
+    },
+    {
+        type: 'function',
+        function: {
+            name: 'search_flights',
+            description: 'Search LIVE flight prices between two airports on real dates. Use this when the user asks what flights cost, when comparing airports or dates, or when building a trip alongside search_hotels. Give airport codes where you can (LGW, MAN, AGP); ask the user which airport rather than assuming their nearest. Prices are live fares that move — always quote the currency and say the fare is live. If nothing comes back, say nothing was found; never invent a flight, a time or a fare. Two limitations you must pass on: (1) this prices SCHEDULED flights only — UK package holiday operators (Jet2, TUI, loveholidays, On the Beach) have NO public API, so a package price cannot be looked up and must never be guessed; price flight + hotel separately and say that is what you have done. (2) A cheap fare on a date means nothing if the route only runs on certain days — check flight_schedule before telling anyone a trip works.',
+            parameters: {
+                type: 'object',
+                properties: {
+                    from:        { type: 'string', description: 'Departure airport — IATA code preferred, e.g. "LGW". A city name will also be resolved.' },
+                    to:          { type: 'string', description: 'Arrival airport — IATA code preferred, e.g. "AGP".' },
+                    date:        { type: 'string', description: 'Outbound date, YYYY-MM-DD. Required — never guess; ask.' },
+                    return_date: { type: 'string', description: 'Return date, YYYY-MM-DD. Omit for a one-way search.' },
+                    adults:      { type: 'integer', description: 'Number of adults. Default 1.', minimum: 1, maximum: 9 },
+                    children:    { type: 'integer', description: 'Number of children. Default 0.', minimum: 0, maximum: 8 },
+                    cabin:       { type: 'string', description: 'Cabin class: economy (default), premium_economy, business, first.' },
+                    currency:    { type: 'string', description: 'ISO currency, e.g. "GBP". Default GBP.' },
+                    max_results: { type: 'integer', description: 'How many fares to return (1-20). Default 6.', minimum: 1, maximum: 20 },
+                },
+                required: ['from', 'to', 'date'],
+            },
+        },
+    },
+    {
+        type: 'function',
+        function: {
+            name: 'flight_schedule',
+            description: 'Find out which airlines fly a route AND ON WHICH DAYS OF THE WEEK it actually operates. Use this before telling anyone a trip works — a route that only runs Tuesdays and Saturdays looks perfectly bookable on a price search and then silently kills the trip when they try to come home on the Friday. Also use it when the user asks "is there a direct flight", "who flies there", or "can we go out on the Monday and back on the Thursday". The answer is built from REAL scheduled departures in a real calendar window, and the result tells you exactly which window was checked — say that window to the user, and if no departures were found say exactly that (it may simply run on other days or seasonally). Never state a day of the week that is not in the result, and never invent an airline or a flight time. Note for holiday comparisons: UK package operators (Jet2, TUI, loveholidays, On the Beach) publish no API, so their charter-only routes may not appear here and a package price can never be looked up.',
+            parameters: {
+                type: 'object',
+                properties: {
+                    from:       { type: 'string', description: 'Origin airport — 3-letter IATA (e.g. "LGW") or 4-letter ICAO.' },
+                    to:         { type: 'string', description: 'Destination airport — 3-letter IATA (e.g. "AGP") or 4-letter ICAO. Must match the code type used for `from`.' },
+                    start_date: { type: 'string', description: 'First day of the week to check, YYYY-MM-DD. Defaults to today. Use the week the user is actually travelling.' },
+                    days:       { type: 'integer', description: 'How many consecutive days to check (1-7). Default 7 — a full week, which is what shows the weekly pattern.', minimum: 1, maximum: 7 },
+                },
+                required: ['from', 'to'],
             },
         },
     },
@@ -863,6 +925,53 @@ const TOOL_DEFINITIONS = [
             },
         },
     },
+    {
+        type: 'function',
+        function: {
+            name: 'build_call_qr',
+            description: 'Build a CALL / DIAL QR — a QR code that, when scanned with a phone camera, offers to RING that number. It is a `tel:` QR: scanning it dials. Use it WHENEVER the user wants a QR to phone / call / ring someone, or a scan-to-call code to print, stick on a job sheet, put on a card or send to someone ("give me a QR to call Dave", "QR for the plumber\'s number", "scan-to-call code"). Pass the real number — never invent one; use the number the user gave you, or one already in the conversation / a task\'s contact.',
+            parameters: {
+                type: 'object',
+                properties: {
+                    phone: { type: 'string', description: 'The phone number the QR should dial. Use the real number the user gave you or one already in the conversation — never make one up.' },
+                    name: { type: 'string', description: 'Optional — who the number belongs to, for the caption (e.g. "Dave the plumber").' },
+                },
+                required: ['phone'],
+            },
+        },
+    },
+    {
+        type: 'function',
+        function: {
+            name: 'build_whatsapp_qr',
+            description: 'Build a WHATSAPP QR — a QR code that, when scanned with a phone camera, OPENS WHATSAPP with a chat ready and your message already typed in the box. Use it whenever the user wants to WhatsApp someone, send a WhatsApp, or wants a scannable code that starts a WhatsApp chat ("WhatsApp Dave the materials list", "give me a WhatsApp QR for the site", "send this to the group on WhatsApp"). Give `phone` to open a chat with a specific person; leave it out and the scan opens WhatsApp so they pick who gets it. IMPORTANT and you must say this: it carries TEXT ONLY — WhatsApp\'s link cannot attach a photo, a PDF or a quote, so never imply a file rides along. Never invent a phone number; use the one the user gave you or one already in the conversation.',
+            parameters: {
+                type: 'object',
+                properties: {
+                    phone: { type: 'string', description: 'Optional — the number to open the WhatsApp chat with. Use the real number the user gave you or one already in the conversation; never make one up. Omit it to produce a "pick a contact" QR.' },
+                    message: { type: 'string', description: 'The message pre-typed into WhatsApp, ready to send. Write it properly — this is what the person actually receives.' },
+                    name: { type: 'string', description: 'Optional — who the number belongs to, for the caption (e.g. "Dave the plumber").' },
+                },
+            },
+        },
+    },
+    {
+        type: 'function',
+        function: {
+            name: 'build_email_qr',
+            description: 'Build an EMAIL QR — a `mailto:` QR. Scanning it with a phone camera opens a new email to that address, with the subject and message already written, ready to send. The third of the three contact QRs (the others are build_call_qr for dialling and build_whatsapp_qr for WhatsApp). Use it whenever the user wants a QR to email someone, or a scannable code that hands an email over to whoever scans it. Never invent an address; use the one the user gave you or one already in the conversation.',
+            parameters: {
+                type: 'object',
+                properties: {
+                    email: { type: 'string', description: 'The address the email opens to. A real one from the conversation — never made up.' },
+                    subject: { type: 'string', description: 'Optional — the subject line, pre-filled.' },
+                    body: { type: 'string', description: 'Optional — the message, pre-written in full. Write it properly; this is what actually gets sent.' },
+                    name: { type: 'string', description: 'Optional — whose address it is, for the caption.' },
+                },
+                required: ['email'],
+            },
+        },
+    },
 ];
 
 // ─────────────────────────────────────────────────────────────
@@ -1058,6 +1167,133 @@ async function streetView({ location, lat, lng, heading, pitch } = {}, personEma
     } catch (err) {
         console.warn('[street_view] error:', err.message);
         return { error: 'road imagery unavailable', instruction_for_q: "The road-imagery lookup hit a problem. Tell the user plainly without naming any provider." };
+    }
+}
+
+/**
+ * build_call_qr — a `tel:` QR. Scanning it with a phone camera offers to
+ * DIAL the number. Same capability QB2 has in Quotem (wa-share.buildCallShare),
+ * built here on Q's own QR plugin so he can hand one back inside a reply.
+ * The PNG is stashed like every other generated file, so Q shows it inline
+ * with markdown and the user can tap it to save or print.
+ */
+async function callQrTool({ phone, name } = {}, personEmail) {
+    if (!personEmail) return { error: 'Cannot build a QR without a signed-in user.' };
+    if (!phone) {
+        return {
+            error: 'no number',
+            instruction_for_q: 'Ask the user which number the QR should dial — do NOT guess or invent a number.',
+        };
+    }
+    try {
+        const { buildCallQr } = require('./q-qr');
+        const r = await buildCallQr({ phone, name });
+        if (!r.ok) {
+            return {
+                error: r.error,
+                instruction_for_q: "That doesn't look like a usable phone number. Ask the user to give it again — don't invent one.",
+            };
+        }
+        const stashed = stashFile(r.png, 'png', `call-qr-${(name || r.number)}`, personEmail);
+        const dlUrl = '/download/' + stashed.token;
+        const who = name ? ` for ${name}` : '';
+        return {
+            ok: true,
+            filename: stashed.filename,
+            token: stashed.token,
+            downloadUrl: dlUrl,
+            number: r.number,
+            telUri: r.telUri,
+            instruction_for_q: `Call QR ready${who}. Show it inline exactly like this: ![Call QR](${dlUrl}) — then say in one line that scanning it with a phone camera offers to dial ${r.number}, and that tapping the number dials it straight away. Don't describe the QR, just show it.`,
+        };
+    } catch (e) {
+        console.warn('[build_call_qr] error:', e.message);
+        return { error: 'qr failed', instruction_for_q: "The QR couldn't be drawn just now. Tell the user plainly and offer to try again." };
+    }
+}
+
+/**
+ * build_whatsapp_qr — a `wa.me` QR. Scanning it opens WhatsApp with the chat
+ * ready and the message already typed. Same deep link QB2 uses in Quotem
+ * (wa-share.js), built here on Q's own QR plugin.
+ *
+ * TEXT ONLY: wa.me cannot carry an attachment. The instruction_for_q below
+ * makes Q say that out loud rather than let the user assume a quote or a
+ * photo goes with it.
+ */
+async function whatsappQrTool({ phone, message, name } = {}, personEmail) {
+    if (!personEmail) return { error: 'Cannot build a QR without a signed-in user.' };
+    if (!phone && !message) {
+        return {
+            error: 'nothing to send',
+            instruction_for_q: 'Ask the user who the WhatsApp is for and what it should say — do NOT guess a number or invent the message.',
+        };
+    }
+    try {
+        const { buildWhatsappQr } = require('./q-qr');
+        const r = await buildWhatsappQr({ phone, message, name });
+        if (!r.ok) {
+            return {
+                error: r.error,
+                instruction_for_q: "That doesn't look like a usable WhatsApp number. Ask the user to give it again — don't invent one.",
+            };
+        }
+        const stashed = stashFile(r.png, 'png', `whatsapp-qr-${(name || r.number || 'message')}`, personEmail);
+        const dlUrl = '/download/' + stashed.token;
+        const who = r.number ? `+${r.number}` : 'whoever they choose';
+        return {
+            ok: true,
+            filename: stashed.filename,
+            token: stashed.token,
+            downloadUrl: dlUrl,
+            number: r.number,
+            url: r.url,
+            message: r.message,
+            instruction_for_q: `WhatsApp QR ready. Show it inline exactly like this: ![WhatsApp QR](${dlUrl}) — then say in one line that scanning it opens WhatsApp to ${who} with the message already typed, ready to send. If they asked for a file, quote or photo to go with it, tell them plainly that a WhatsApp link carries text only and they'll need to attach it inside WhatsApp. Don't describe the QR, just show it.`,
+        };
+    } catch (e) {
+        console.warn('[build_whatsapp_qr] error:', e.message);
+        return { error: 'qr failed', instruction_for_q: "The QR couldn't be drawn just now. Tell the user plainly and offer to try again." };
+    }
+}
+
+/**
+ * build_email_qr — a `mailto:` QR. Scanning it opens a new email to that
+ * address with the subject and body already written. The third mode of the
+ * Quotem contact QR (FloatingTodoPanel: mailto / wa.me / tel), same URI
+ * shape so the two apps behave identically.
+ */
+async function emailQrTool({ email, subject, body, name } = {}, personEmail) {
+    if (!personEmail) return { error: 'Cannot build a QR without a signed-in user.' };
+    const to = String(email || '').trim();
+    if (!to || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(to)) {
+        return {
+            error: 'no address',
+            instruction_for_q: 'Ask the user which email address the QR should write to — do NOT invent one.',
+        };
+    }
+    try {
+        const { buildQrPng } = require('./q-qr');
+        const params = [];
+        if (subject) params.push('subject=' + encodeURIComponent(subject));
+        if (body) params.push('body=' + encodeURIComponent(body));
+        const mailto = `mailto:${to}${params.length ? '?' + params.join('&') : ''}`;
+        const png = await buildQrPng(mailto);
+        const stashed = stashFile(png, 'png', `email-qr-${(name || to)}`, personEmail);
+        const dlUrl = '/download/' + stashed.token;
+        const who = name ? `${name} (${to})` : to;
+        return {
+            ok: true,
+            filename: stashed.filename,
+            token: stashed.token,
+            downloadUrl: dlUrl,
+            mailto,
+            address: to,
+            instruction_for_q: `Email QR ready. Show it inline exactly like this: ![Email QR](${dlUrl}) — then say in one line that scanning it opens a new email to ${who}${subject ? ` with the subject "${subject}"` : ''}${body ? ' and the message already written' : ''}, ready to send. Don't describe the QR, just show it.`,
+        };
+    } catch (e) {
+        console.warn('[build_email_qr] error:', e.message);
+        return { error: 'qr failed', instruction_for_q: "The QR couldn't be drawn just now. Tell the user plainly and offer to try again." };
     }
 }
 
@@ -1422,6 +1658,12 @@ async function executeTool(name, argsRaw, personId, personEmail, threadId) {
         case 'web_search':       return await webSearch(args);
         case 'search_images':    return await searchImages(args);
         case 'street_view':      return await streetView(args, personEmail);
+        case 'search_hotels':    return await qTravel.searchHotels(args, personEmail);
+        case 'search_flights':   return await qTravel.searchFlights(args, personEmail);
+        case 'flight_schedule':  return await qTravel.flightSchedule(args, personEmail);
+        case 'build_call_qr':    return await callQrTool(args, personEmail);
+        case 'build_whatsapp_qr': return await whatsappQrTool(args, personEmail);
+        case 'build_email_qr':   return await emailQrTool(args, personEmail);
         case 'add_file_to_thread': return await addFileToThread(args, personEmail);
         case 'calculator':       return calculator(args);
         case 'current_datetime': return currentDatetime(args);
@@ -2243,6 +2485,68 @@ const TRIGGERS = {
         /\b(road|street|junction|signage|signs?|bus gate|restricted (street|route)|yellow lines?|loading bay|box junction)\b[^.?!]{0,30}\b(look|view|imagery|photo|picture|see|signed)\b/i,
         /\b(drove|driving|drive) (down|through|along|into)\b/i,
         /\b(parking|pcn|penalty charge|bus gate|moving[- ]traffic|tribunal|appeal|ticket|fine|contravention|ncp)\b/i,
+    ],
+    // Travel. These are METERED calls to an outside service, so they follow the
+    // street_view pattern rather than ALWAYS_ON: attached only when the message
+    // is clearly about a trip. The package-operator names (Jet2 / TUI /
+    // loveholidays / On the Beach) are triggers on all three — those firms have
+    // no public API, and Q needs the real tools in hand to say "I can price the
+    // flight and the hotel separately, but not the package" instead of guessing.
+    search_hotels: [
+        /\bhotels?\b/i,
+        /\b(place|places|somewhere|anywhere|room|rooms)\b[^.?!]{0,20}\bto stay\b/i,
+        /\b(b\s?&\s?b|bed and breakfast|guest ?house|apart-?hotel|hostel|resort|villa|accommodation)\b/i,
+        /\b(all[- ]inclusive|half[- ]board|full[- ]board|self[- ]catering|room only)\b/i,
+        /\b(book|find|price|cost of|how much (is|are|for))\b[^.?!]{0,30}\b(stay|nights?|staying)\b/i,
+        /\b(check[- ]?in|check[- ]?out)\b[^.?!]{0,25}\b(date|dates|night|nights)\b/i,
+        /\b(jet\s?2|jet2holidays|tui|loveholidays|on the beach|first ?choice|package holiday)\b/i,
+    ],
+    search_flights: [
+        /\bflights?\b/i,
+        /\bfly(ing)?\b[^.?!]{0,15}\b(to|from|out|back|home|there)\b/i,
+        /\b(airfare|air fare|plane ticket|plane tickets|return fare|one[- ]way)\b/i,
+        /\b(cheap|cheapest|price|prices|cost|how much)\b[^.?!]{0,25}\b(fly|flight|flights|flying)\b/i,
+        /\b(gatwick|heathrow|stansted|luton|manchester airport|birmingham airport|bristol airport)\b/i,
+        /\b(jet\s?2|jet2holidays|tui|loveholidays|on the beach|first ?choice|package holiday)\b/i,
+    ],
+    flight_schedule: [
+        /\b(what|which) days\b[^.?!]{0,40}\b(fly|flies|flight|flights|run|runs|operate|operates)\b/i,
+        /\b(direct|non-?stop|indirect) flights?\b/i,
+        /\bwho flies\b/i,
+        /\bflight schedule\b/i,
+        /\b(route|service)\b[^.?!]{0,25}\b(operates?|runs?|days of the week)\b/i,
+        /\b(is there|are there)\b[^.?!]{0,25}\bflights?\b[^.?!]{0,25}\b(on|from|to)\b/i,
+        /\b(out on|back on|home on)\b[^.?!]{0,20}\b(monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b/i,
+        /\b(jet\s?2|jet2holidays|tui|loveholidays|on the beach|first ?choice|package holiday)\b/i,
+    ],
+    // Scan-to-call QR. `qr` on its own is enough — offering it costs nothing
+    // if he doesn't need it, and a bare "give me a QR" is nearly always a
+    // dial one. The other patterns catch the phrasings that describe one
+    // without saying "QR". WhatsApp has its own entry below; a message
+    // mentioning both words gets both tools offered, which is correct.
+    build_call_qr: [
+        /\bqr\b/i,
+        /\bscan[- ]?(to|and)?[- ]?(call|dial|ring)\b/i,
+        /\bscan(nable)?\b[^.?!]{0,30}\b(call|dial|ring|phone|number)\b/i,
+        /\b(call|dial|ring|phone)\b[^.?!]{0,20}\b(code|square)\b/i,
+    ],
+    // WhatsApp QR. Any mention of WhatsApp at all — if he doesn't need it the
+    // tool just goes unused, but missing it means he can't offer to send one.
+    // Email QR — the third contact mode. Shares the bare `qr` trigger with the
+    // other two so all three are on the table whenever the user says QR, and Q
+    // picks the right one from what they're actually asking for.
+    build_email_qr: [
+        /\bqr\b/i,
+        /\bscan[- ]?(to|and)?[- ]?(e-?mail|write)\b/i,
+        /\be-?mail\b[^.?!]{0,20}\b(code|qr|square)\b/i,
+    ],
+    build_whatsapp_qr: [
+        // Bare "qr" too, so a plain "give me a QR for Dave" puts all three
+        // contact QRs (call / WhatsApp / email) in front of Q to choose from.
+        /\bqr\b/i,
+        /\bwhats\s?app\b/i,
+        /\bwa\.me\b/i,
+        /\bscan[- ]?(to|and)?[- ]?(message|text|whats\s?app)\b/i,
     ],
     calculator: [
         /\bcalculate\b/i,
