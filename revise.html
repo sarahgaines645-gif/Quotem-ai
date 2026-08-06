@@ -1258,8 +1258,10 @@
       if (!pool.length) return null;
 
       const info = pool.map((q) => ({ q, st: qz.qstate[qidOf(q)] || null }));
-      // never re-serve the same question within 3 serves
-      const notRecent = info.filter((e) => !e.st || (sc - e.st.last) >= 3);
+      // never re-serve the same question within 8 serves — at 3 the redemption
+      // tier brought a missed question back every few questions and it read as
+      // the quiz repeating itself (Sarah, 6 Aug)
+      const notRecent = info.filter((e) => !e.st || (sc - e.st.last) >= 8);
 
       // 1. REDEMPTION — answered wrong, not yet beaten; they keep coming back
       const redemption = notRecent.filter((e) => e.st && e.st.wrong >= 1 && e.st.streak === 0);
