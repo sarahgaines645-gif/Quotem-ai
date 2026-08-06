@@ -111,9 +111,9 @@ function startBuild({ subject, board, level, topics, perTopic = 10 }, generateQu
     if (builds[key] && builds[key].running) return { key, started: false, alreadyRunning: true };
 
     let topicList = Array.isArray(topics) ? topics : splitTopics(topics);
-    // No topic list → build 40 core-topic questions in one run (Sarah: "40
-    // qs at a time"): four batches, the avoid-list keeps them distinct.
-    if (topicList.length === 0) topicList = ['', '', '', ''];
+    // No topic list → build 50 core-topic questions in one run (Sarah, 6 Aug:
+    // 50, up from 40): five batches, the avoid-list keeps them distinct.
+    if (topicList.length === 0) topicList = ['', '', '', '', ''];
 
     const job = { running: true, topicsDone: 0, topicsTotal: topicList.length, currentTopic: null, added: 0, lastError: null };
     builds[key] = job;

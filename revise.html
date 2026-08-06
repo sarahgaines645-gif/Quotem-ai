@@ -1258,10 +1258,11 @@
       if (!pool.length) return null;
 
       const info = pool.map((q) => ({ q, st: qz.qstate[qidOf(q)] || null }));
-      // never re-serve the same question within 8 serves — at 3 the redemption
-      // tier brought a missed question back every few questions and it read as
-      // the quiz repeating itself (Sarah, 6 Aug)
-      const notRecent = info.filter((e) => !e.st || (sc - e.st.last) >= 8);
+      // never re-serve the same question within 20 serves — Sarah, 6 Aug: 3
+      // read as the quiz repeating itself, 8 was still too few. In a bank
+      // smaller than ~21 the tiny-bank fallback below cycles oldest-first
+      // until the build stocks past that.
+      const notRecent = info.filter((e) => !e.st || (sc - e.st.last) >= 20);
 
       // 1. REDEMPTION — answered wrong, not yet beaten; they keep coming back
       const redemption = notRecent.filter((e) => e.st && e.st.wrong >= 1 && e.st.streak === 0);
@@ -1287,15 +1288,16 @@
       }
 
       // 3. CONSOLIDATION — righted once; back after a longer gap for streak 2
-      const consolidate = notRecent.filter((e) => e.st && e.st.streak === 1 && (sc - e.st.last) >= 8);
+      // (gap tracks the base window: was 8 over 3, now 40 over 20)
+      const consolidate = notRecent.filter((e) => e.st && e.st.streak === 1 && (sc - e.st.last) >= 40);
       if (consolidate.length) {
         consolidate.sort((a, b) => a.st.last - b.st.last);
         return consolidate[0].q;
       }
 
       // 4. Everything else, least-recently-served — endless play, nothing is "done"
-      // (streak-1 questions still inside their 8-serve gap wait their turn)
-      const rest = notRecent.filter((e) => e.st && !(e.st.streak === 1 && (sc - e.st.last) < 8));
+      // (streak-1 questions still inside their 40-serve gap wait their turn)
+      const rest = notRecent.filter((e) => e.st && !(e.st.streak === 1 && (sc - e.st.last) < 40));
       if (rest.length) {
         rest.sort((a, b) => a.st.last - b.st.last);
         const k = Math.min(3, rest.length); // shuffle the stalest few so it never feels like a fixed loop
