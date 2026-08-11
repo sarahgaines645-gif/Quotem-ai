@@ -972,6 +972,21 @@ const TOOL_DEFINITIONS = [
             },
         },
     },
+    {
+        type: 'function',
+        function: {
+            name: 'build_link_qr',
+            description: 'Build a LINK QR — a QR code that, when scanned with a phone camera, OPENS THAT WEB ADDRESS in the browser. The fourth QR kind (the others dial, WhatsApp and email). Use it whenever the user wants a QR for a website, page, advert, listing, review link, booking link, form, map location, video — any URL ("QR for my website", "QR that opens the advert", "make this link scannable"). Pass the real link — never invent one; use the URL the user gave you, one already in the conversation, or one you just found with web_search and confirmed.',
+            parameters: {
+                type: 'object',
+                properties: {
+                    url: { type: 'string', description: 'The web address the QR opens. A real, full URL from the user or the conversation — never made up. If they gave a bare domain like quotem.co.uk, https:// is added automatically.' },
+                    label: { type: 'string', description: 'Optional — what the link is, for the caption (e.g. "the flat advert", "our reviews page").' },
+                },
+                required: ['url'],
+            },
+        },
+    },
 ];
 
 // ─────────────────────────────────────────────────────────────
@@ -1293,6 +1308,54 @@ async function emailQrTool({ email, subject, body, name } = {}, personEmail) {
         };
     } catch (e) {
         console.warn('[build_email_qr] error:', e.message);
+        return { error: 'qr failed', instruction_for_q: "The QR couldn't be drawn just now. Tell the user plainly and offer to try again." };
+    }
+}
+
+/**
+ * build_link_qr — a plain URL QR. Scanning it opens the address in the
+ * phone's browser. The kind people mean most often by "a QR code" — for an
+ * advert, a reviews page, a booking link, a form — and the one kind Q
+ * didn't have (only call / WhatsApp / email existed, so "QR for my website"
+ * left him tool-less — Sarah, 11 Aug).
+ */
+async function linkQrTool({ url, label } = {}, personEmail) {
+    if (!personEmail) return { error: 'Cannot build a QR without a signed-in user.' };
+    let addr = String(url || '').trim();
+    if (!addr) {
+        return {
+            error: 'no url',
+            instruction_for_q: 'Ask the user which link the QR should open — do NOT invent one.',
+        };
+    }
+    // A bare domain is fine — give it a scheme. Anything that still doesn't
+    // parse as http(s) is refused rather than encoded wrong.
+    if (!/^[a-z][a-z0-9+.-]*:/i.test(addr)) addr = 'https://' + addr;
+    try {
+        const u = new URL(addr);
+        if (u.protocol !== 'http:' && u.protocol !== 'https:') throw new Error('not a web link');
+    } catch {
+        return {
+            error: 'bad url',
+            instruction_for_q: 'That does not look like a usable web address. Ask the user to give the link exactly as it appears in the browser bar.',
+        };
+    }
+    try {
+        const { buildQrPng } = require('./q-qr');
+        const png = await buildQrPng(addr);
+        const stashed = stashFile(png, 'png', `link-qr-${(label || 'link')}`, personEmail);
+        const dlUrl = '/download/' + stashed.token;
+        const what = label ? `${label} (${addr})` : addr;
+        return {
+            ok: true,
+            filename: stashed.filename,
+            token: stashed.token,
+            downloadUrl: dlUrl,
+            url: addr,
+            instruction_for_q: `Link QR ready. Show it inline exactly like this: ![Link QR](${dlUrl}) — then say in one line that scanning it opens ${what} in the browser. Don't describe the QR, just show it.`,
+        };
+    } catch (e) {
+        console.warn('[build_link_qr] error:', e.message);
         return { error: 'qr failed', instruction_for_q: "The QR couldn't be drawn just now. Tell the user plainly and offer to try again." };
     }
 }
@@ -1664,6 +1727,7 @@ async function executeTool(name, argsRaw, personId, personEmail, threadId) {
         case 'build_call_qr':    return await callQrTool(args, personEmail);
         case 'build_whatsapp_qr': return await whatsappQrTool(args, personEmail);
         case 'build_email_qr':   return await emailQrTool(args, personEmail);
+        case 'build_link_qr':    return await linkQrTool(args, personEmail);
         case 'add_file_to_thread': return await addFileToThread(args, personEmail);
         case 'calculator':       return calculator(args);
         case 'current_datetime': return currentDatetime(args);
@@ -2541,12 +2605,20 @@ const TRIGGERS = {
         /\be-?mail\b[^.?!]{0,20}\b(code|qr|square)\b/i,
     ],
     build_whatsapp_qr: [
-        // Bare "qr" too, so a plain "give me a QR for Dave" puts all three
-        // contact QRs (call / WhatsApp / email) in front of Q to choose from.
+        // Bare "qr" too, so a plain "give me a QR for Dave" puts all four
+        // QR kinds (call / WhatsApp / email / link) in front of Q to choose from.
         /\bqr\b/i,
         /\bwhats\s?app\b/i,
         /\bwa\.me\b/i,
         /\bscan[- ]?(to|and)?[- ]?(message|text|whats\s?app)\b/i,
+    ],
+    // Link QR — the kind people usually mean by "a QR code": one that opens a
+    // web page. Bare `qr` like the others, plus the phrasings that describe it.
+    build_link_qr: [
+        /\bqr\b/i,
+        /\bscan[- ]?(to|and)?[- ]?(open|visit|view|see)\b/i,
+        /\b(link|website|web ?page|url|advert|listing|page)\b[^.?!]{0,20}\b(code|square|scannable)\b/i,
+        /\bmake (this|that|the|my)? ?(link|url|website|page|advert) scannable\b/i,
     ],
     calculator: [
         /\bcalculate\b/i,
@@ -2657,6 +2729,15 @@ const DOC_EDITOR_TOOLS = new Set([
 
 function selectActiveTools(userMessage, options = {}) {
     const msg = String(userMessage || '');
+    // Triggers test the CURRENT message plus a bounded window of the recent
+    // conversation (options.recentText, built by the caller). Gating on the
+    // current message alone broke every multi-turn flow: "make me a QR" put
+    // the QR tools in Q's hand, he asked "which number?", and the answer
+    // ("07700…") contained no trigger word — so the tools VANISHED on the
+    // exact turn he needed them and Q flailed (Sarah, 11 Aug). The window is
+    // small, so gated tools still stay off unrelated prompts (the Together
+    // 429 bloat the gate exists to prevent).
+    const win = msg + '\n' + String(options.recentText || '');
     return TOOL_DEFINITIONS.filter(t => {
         const name = t.function?.name;
         if (!name) return false;
@@ -2689,7 +2770,7 @@ function selectActiveTools(userMessage, options = {}) {
         // token rate limit on big cases.
         const triggers = TRIGGERS[name];
         if (!triggers) return false;
-        return triggers.some(rx => rx.test(msg));
+        return triggers.some(rx => rx.test(win));
     });
 }
 

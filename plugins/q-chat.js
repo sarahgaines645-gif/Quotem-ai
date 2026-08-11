@@ -16,6 +16,18 @@ const { listFacts } = require('../facts');
 const { logCall } = require('../cost-tracker');
 const { cleanModelOutput } = require('./cjk-filter');
 
+// The last few turns as trigger fodder for selectActiveTools. A tool flow
+// spans turns — "make me a QR" → Q asks "which number?" → "07700…" — and
+// gating on the current message alone dropped the tool on the delivery turn.
+// Bounded (last 4 string messages, last 2400 chars) so gated tools still
+// stay off unrelated prompts.
+const recentTriggerText = (messages) => (Array.isArray(messages) ? messages : [])
+    .filter(m => m && (m.role === 'user' || m.role === 'assistant') && typeof m.content === 'string')
+    .slice(-4)
+    .map(m => m.content)
+    .join('\n')
+    .slice(-2400);
+
 // ─────────────────────────────────────────────────────────────
 //  DSML TOOL-CALL PARSER
 // ─────────────────────────────────────────────────────────────
@@ -1083,7 +1095,7 @@ async function chat(messages, options = {}) {
         const claudeResult = await claudeThreadChat({
             system: systemContent + '\n\n---\n\n' + Q_THREAD_CLAUDE_VOICE,
             messages: outboundMessages,
-            tools: selectActiveTools(msgText, { docEditor: false, advocate: true, surface: options.surface, firstTurn: options.firstTurn }),
+            tools: selectActiveTools(msgText, { docEditor: false, advocate: true, surface: options.surface, firstTurn: options.firstTurn, recentText: recentTriggerText(messages) }),
             person: options.person,
             maxTokens,
             startTime,
@@ -1133,7 +1145,7 @@ async function chat(messages, options = {}) {
                         tools: (() => {
                             const lastUser = [...messages].reverse().find(m => m.role === 'user');
                             const msgText = typeof lastUser?.content === 'string' ? lastUser.content : '';
-                            let activeTools = selectActiveTools(msgText, { docEditor: options.surface === 'doc-editor', advocate: isAdvocateSurface, surface: options.surface, firstTurn: options.firstTurn });
+                            let activeTools = selectActiveTools(msgText, { docEditor: options.surface === 'doc-editor', advocate: isAdvocateSurface, surface: options.surface, firstTurn: options.firstTurn, recentText: recentTriggerText(messages) });
                             // Once Q has used his search budget for this turn, take
                             // web_search off the table so he stops bursting the rate
                             // limit and synthesises what he already gathered.
