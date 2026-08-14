@@ -104,7 +104,7 @@ async function geminiVision({ prompt, base64, mimeType = 'image/jpeg', maxTokens
 // transport/timeout/parse as geminiVision — just no image. This is how
 // the WHOLE finance import runs on Gemini; Together is never touched
 // until Q (chat) sees the finished data.
-async function geminiText(prompt, { maxTokens = 8000 } = {}) {
+async function geminiText(prompt, { maxTokens = 8000, thinkingBudget } = {}) {
     const key = process.env.GEMINI_API_KEY;
     if (!key) throw new Error('GEMINI_API_KEY not configured');
     const ctrl = new AbortController();
@@ -116,7 +116,14 @@ async function geminiText(prompt, { maxTokens = 8000 } = {}) {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 contents: [{ parts: [{ text: prompt }] }],
-                generationConfig: { temperature: 0.0, maxOutputTokens: maxTokens },
+                // 2.5-flash is a thinking model: on big mechanical jobs
+                // (categorising 120 rows) the thinking eats the whole output
+                // budget and the JSON truncates. Callers doing sorting-not-
+                // reasoning pass thinkingBudget: 0 to switch thinking off.
+                generationConfig: {
+                    temperature: 0.0, maxOutputTokens: maxTokens,
+                    ...(thinkingBudget != null && { thinkingConfig: { thinkingBudget } }),
+                },
             }),
             signal: ctrl.signal,
         });
@@ -251,10 +258,12 @@ Categories:
   health           — pharmacy, GP, dentist, optician
   children         — school meals, kids' activities, kids' clothing
   holidays         — flights, hotels, travel bookings
-  savings_transfer — transfers to savings, ISA contributions
+  savings_transfer — transfers to savings, ISA contributions, moves to/from the person's OWN pots or own other accounts (e.g. a "pot", the account holder's own name, "MONEY" top-ups between own banks)
   income           — wages, HMRC credits, benefits, refunds
   fees_charges     — bank charges, overdraft fees, late fees
   other            — anything that doesn't fit above
+
+Self-transfers matter: money moved between the person's own accounts or pots is savings_transfer in BOTH directions (out AND back in) — it is never income and never real spending.
 
 Return a JSON array — same order as input — each item:
 { "id": "<the id field from input>", "category": "<category>", "recurring": true|false }
@@ -265,6 +274,10 @@ Return ONLY the JSON array.`;
 async function categoriseTransactions(transactions) {
     if (!transactions.length) return transactions;
 
+    // Rows the parser already labelled from the bank's own data (e.g. Monzo
+    // "Pot transfer" → savings_transfer) are ground truth — never re-guessed.
+    const todo = transactions.filter(t => !t.category || t.category === 'other');
+
     // Batch — one giant call over a 3-month statement (565 txns) blew the
     // 90s timeout and the throw discarded the WHOLE import. Small batches
     // each finish fast, and a failed batch only loses that batch's
@@ -272,8 +285,8 @@ async function categoriseTransactions(transactions) {
     const BATCH = 120;   // Gemini is fast & reliable — bigger batches, far fewer calls
     const catMap = {};
 
-    for (let i = 0; i < transactions.length; i += BATCH) {
-        const slice = transactions.slice(i, i + BATCH);
+    for (let i = 0; i < todo.length; i += BATCH) {
+        const slice = todo.slice(i, i + BATCH);
         const input = slice.map(t => ({
             id:          t.id,
             description: t.description,
@@ -281,19 +294,29 @@ async function categoriseTransactions(transactions) {
             amount:      t.amount,
         }));
         try {
-            const raw = cleanModelOutput(await geminiText(`${CATEGORISE_SYSTEM}\n\n${JSON.stringify(input)}`, { maxTokens: 8000 }));
-            const m = raw.match(/\[[\s\S]*\]/);
-            for (const c of (m ? JSON.parse(m[0]) : [])) catMap[c.id] = c;
+            // thinkingBudget 0: this is sorting, not reasoning. With thinking
+            // on, 2.5-flash burned the whole 8000-token budget deliberating
+            // and truncated the JSON (MAX_TOKENS) on nearly every batch.
+            const raw = cleanModelOutput(await geminiText(`${CATEGORISE_SYSTEM}\n\n${JSON.stringify(input)}`, { maxTokens: 8000, thinkingBudget: 0 }));
+            // Salvage object-by-object rather than requiring one complete
+            // array — a truncated response still yields every whole item.
+            let got = 0;
+            for (const objStr of (raw.match(/\{[^{}]*\}/g) || [])) {
+                try { const c = JSON.parse(objStr); if (c && c.id) { catMap[c.id] = c; got++; } } catch { /* partial trailing object */ }
+            }
+            if (got < slice.length) console.warn(`[finance] categorise batch ${i}-${i + slice.length}: ${got}/${slice.length} labelled — rest stay 'other'`);
         } catch (e) {
             console.warn(`[finance] categorise batch ${i}-${i + slice.length} failed (${e.message}) — those rows stay 'other'`);
         }
     }
 
-    return transactions.map(t => ({
-        ...t,
-        category:  catMap[t.id]?.category  || 'other',
-        recurring: catMap[t.id]?.recurring || false,
-    }));
+    return transactions.map(t => (t.category && t.category !== 'other')
+        ? t
+        : {
+            ...t,
+            category:  catMap[t.id]?.category  || 'other',
+            recurring: catMap[t.id]?.recurring || false,
+        });
 }
 
 
@@ -396,6 +419,11 @@ function parseCsvStatement(text) {
     const idxDebit  = cols.findIndex(h => /debit|paid\s*out|money\s*out|withdrawn/.test(h));
     const idxCredit = cols.findIndex(h => /credit|paid\s*in|money\s*in|deposit/.test(h));
     const idxDesc   = cols.findIndex(h => /description|details|narrative|reference|counter\s*party|payee|particulars|memo|name/.test(h));
+    // The bank's own transaction-type column (Monzo "Type", others
+    // "Transaction Type"). Ground truth for self-transfers: a pot transfer is
+    // the user moving their OWN money, and counting it as spending AND income
+    // is exactly what made the headline totals read as lies.
+    const idxType   = cols.findIndex(h => /^type$|transaction\s*type/.test(h));
 
     const hasSingle = idxAmt !== -1;
     const hasSplit  = idxDebit !== -1 && idxCredit !== -1;
@@ -418,7 +446,15 @@ function parseCsvStatement(text) {
         if (amount == null || Number.isNaN(amount)) continue;
         const desc = (idxDesc !== -1 && f[idxDesc] ? f[idxDesc]
             : f.filter((_, j) => ![idxDate, idxAmt, idxDebit, idxCredit].includes(j)).join(' ')).trim();
-        rows.push({ date, description: desc, merchant: desc, amount });
+        const row = { date, description: desc, merchant: desc, amount };
+        // Narrow on purpose: only the unambiguous self-move type. "Faster
+        // payment" / "Monzo-to-Monzo" can be real payments to real people —
+        // those stay with the AI categoriser.
+        if (idxType !== -1 && /pot\s*transfer/i.test(f[idxType] || '')) {
+            row.category = 'savings_transfer';
+            row.recurring = false;
+        }
+        rows.push(row);
     }
     return rows.length ? rows : null;
 }
@@ -468,20 +504,23 @@ async function saveRows(email, parsed) {
 
     // Stamp each parsed row with an id before categorising
     const stamped = parsed.map(t => ({ ...t, id: uid(), bucket: null, flagged: false }));
-    // Defence in depth: categorisation must NEVER lose a successfully-read
-    // statement. If it fails wholesale, save the rows uncategorised — the
-    // user can re-categorise, but they never lose their transactions.
-    let categorised;
-    try {
-        categorised = await categoriseTransactions(stamped);
-    } catch (e) {
-        console.warn(`[finance] categorisation failed wholesale (${e.message}) — saving ${stamped.length} rows as 'other'`);
-        categorised = stamped.map(t => ({ ...t, category: 'other', recurring: false }));
-    }
+
+    // SAVE FIRST. Categorisation is an AI pass that can be slow or flaky;
+    // holding the save hostage to it is what produced the false "Import
+    // failed: unknown error" — the phone gave up while the server was still
+    // labelling batches. Rows land immediately (parser-set categories kept,
+    // the rest 'other'), the response returns at once, and the labels fill
+    // themselves in in the background. A statement is NEVER lost or delayed
+    // because of categorisation.
+    const uncategorised = stamped.map(t => ({
+        ...t,
+        category:  t.category  || 'other',
+        recurring: t.recurring || false,
+    }));
 
     // Apply existing merchant assignments
     const assignments = getAssignments(email);
-    const withBuckets = categorised.map(t => {
+    const withBuckets = uncategorised.map(t => {
         const key = merchantKey(t.merchant || t.description);
         const asgn = assignments[key];
         return asgn ? { ...t, bucket: asgn.label } : t;
@@ -495,7 +534,55 @@ async function saveRows(email, parsed) {
     merged.sort((a, b) => (b.date || '').localeCompare(a.date || ''));
 
     saveTransactions(email, merged);
+
+    // Background label pass over the rows that just landed as 'other'.
+    // Patches by id, and only where the row is STILL 'other' — a category
+    // the user or the parser has set is never overwritten.
+    const toLabel = fresh.filter(t => !t.category || t.category === 'other');
+    if (toLabel.length) {
+        (async () => {
+            try {
+                const labelled = await categoriseTransactions(toLabel);
+                const byId = new Map(labelled.filter(t => t.category && t.category !== 'other').map(t => [t.id, t]));
+                if (byId.size) {
+                    const current = getTransactions(email);
+                    const updated = current.map(t => (byId.has(t.id) && (!t.category || t.category === 'other'))
+                        ? { ...t, category: byId.get(t.id).category, recurring: byId.get(t.id).recurring || false }
+                        : t);
+                    saveTransactions(email, updated);
+                }
+                console.log(`[finance] background categorise done — ${byId.size}/${toLabel.length} rows labelled`);
+            } catch (e) {
+                console.warn(`[finance] background categorise failed (${e.message}) — rows stay 'other' (Sort categories can rerun it)`);
+            }
+        })();
+    }
+
     return { added: fresh.length, total: merged.length };
+}
+
+// Re-run the label pass over every stored row still sitting in 'other'.
+// Powers the "Sort categories" button — for imports whose background pass
+// was interrupted (deploy, restart) or that predate the save-first change.
+// Only rows still 'other' are touched; user-set categories are safe.
+async function recategoriseOther(email) {
+    const all = getTransactions(email);
+    const todo = all.filter(t => !t.category || t.category === 'other');
+    if (!todo.length) return { updated: 0, remaining_other: 0, total: all.length };
+    const labelled = await categoriseTransactions(todo);
+    const byId = new Map(labelled.filter(t => t.category && t.category !== 'other').map(t => [t.id, t]));
+    let updated = 0;
+    const next = getTransactions(email).map(t => {
+        if (byId.has(t.id) && (!t.category || t.category === 'other')) {
+            updated++;
+            return { ...t, category: byId.get(t.id).category, recurring: byId.get(t.id).recurring || false };
+        }
+        return t;
+    });
+    if (updated) saveTransactions(email, next);
+    const remaining = next.filter(t => !t.category || t.category === 'other').length;
+    console.log(`[finance] recategorise — ${updated} rows labelled, ${remaining} still 'other'`);
+    return { updated, remaining_other: remaining, total: next.length };
 }
 
 function dedupKey(t) {
@@ -1067,8 +1154,18 @@ function getSpendingGraphData(email) {
     }
     const subscriptions = Object.values(subMap).sort((a, b) => b.amount - a.amount);
 
-    const totalSpend  = debits.reduce((s, t) => s + Math.abs(t.amount), 0);
-    const totalIncome = txns.filter(t => t.amount > 0).reduce((s, t) => s + t.amount, 0);
+    // Self-transfers (savings_transfer) are the user's own money moving
+    // between their own places — pots, savings, their other bank. Counting
+    // them made the headline figures lies (£1.5k of pot shuffling read as
+    // spending AND income). They stay visible in the category breakdown;
+    // they are excluded from the headline totals, which must be TRUE.
+    const isSelfMove  = t => t.category === 'savings_transfer';
+    const totalSpend  = debits.filter(t => !isSelfMove(t)).reduce((s, t) => s + Math.abs(t.amount), 0);
+    const totalIncome = txns.filter(t => t.amount > 0 && !isSelfMove(t)).reduce((s, t) => s + t.amount, 0);
+    const movedToSavings = debits.filter(isSelfMove).reduce((s, t) => s + Math.abs(t.amount), 0);
+    // The period the imported data actually covers — without it, 5 months of
+    // statement history reads as "what I've spent lately" and looks wrong.
+    const dates = txns.map(t => t.date).filter(Boolean).sort();
 
     return {
         by_category:    sortObj(byCategory),
@@ -1079,6 +1176,9 @@ function getSpendingGraphData(email) {
             total_income: Math.round(totalIncome * 100) / 100,
             net:          Math.round((totalIncome - totalSpend) * 100) / 100,
             transaction_count: txns.length,
+            moved_to_savings:  Math.round(movedToSavings * 100) / 100,
+            period_from: dates[0] || null,
+            period_to:   dates[dates.length - 1] || null,
         },
     };
 }
@@ -1260,6 +1360,8 @@ module.exports = {
     updateTransaction,
     deleteTransactions,
     categoriseTransactions,
+    recategoriseOther,
+    parseCsvStatement,
 
     // Documents / vision
     extractDocument,

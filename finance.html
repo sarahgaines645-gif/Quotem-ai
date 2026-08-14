@@ -93,7 +93,11 @@
     /* ── Summary bar ── */
     .summary-bar {
       display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px;
-      margin-bottom: 20px;
+      margin-bottom: 6px;
+    }
+    .summary-period {
+      font-size: 11px; color: var(--text-muted);
+      margin: 0 2px 20px; min-height: 14px;
     }
     .stat-box {
       background: var(--bg); border-radius: 12px;
@@ -431,6 +435,7 @@
       <div class="sb-val" id="stat-count">—</div>
     </div>
   </div>
+  <div class="summary-period" id="summary-period"></div>
 
   <!-- GRAPHS -->
   <div class="graphs-row">
@@ -480,7 +485,10 @@
   <div class="section-card">
     <div class="section-header">
       <h3>📋 Transactions</h3>
-      <button class="sec-btn" id="clear-txns-btn" style="color:var(--red)">Clear all</button>
+      <div style="display:flex; gap:8px">
+        <button class="sec-btn" id="sort-cats-btn" title="Label any transactions still marked Other">Sort categories</button>
+        <button class="sec-btn" id="clear-txns-btn" style="color:var(--red)">Clear all</button>
+      </div>
     </div>
     <div class="txn-controls">
       <input class="txn-search" type="search" placeholder="Search…" id="txn-search" />
@@ -671,6 +679,19 @@
     netEl.textContent = (s.net >= 0 ? '+' : '') + '£' + fmt(Math.abs(s.net));
     netEl.className = 'sb-val ' + (s.net >= 0 ? 'pos' : 'neg');
     document.getElementById('stat-count').textContent = s.transaction_count;
+    // The truth line: what period these totals actually cover, and that
+    // money moved to your own pots/savings isn't counted as spending.
+    const bits = [];
+    if (s.period_from && s.period_to) bits.push(ukDate(s.period_from) + ' – ' + ukDate(s.period_to));
+    if (s.moved_to_savings > 0) bits.push('£' + fmt(s.moved_to_savings) + ' moved to savings/pots (not counted)');
+    document.getElementById('summary-period').textContent = bits.join(' · ');
+  }
+
+  function ukDate(iso) {
+    const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso || '');
+    if (!m) return iso || '';
+    const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    return `${+m[3]} ${months[+m[2] - 1]} ${m[1]}`;
   }
 
   function fmt(n) { return Number(n || 0).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ','); }
@@ -1179,21 +1200,50 @@
   async function importText(text) {
     clearUploadResult('uz-statement');
     showUploadProgress('uz-statement', true);
-    const r = await apiFetch('/api/finance/statement', { method: 'POST', body: { text } });
+    showUploadResult('uz-statement', 'Reading your statement…', 'info');
+    let r = null;
+    try { r = await apiFetch('/api/finance/statement', { method: 'POST', body: { text } }); } catch {}
     showUploadProgress('uz-statement', false);
-    if (r.ok) {
+    if (r && r.ok) {
       const result = await r.json();
       if (result.added > 0) {
-        showUploadResult('uz-statement', `✓ ${result.added} new transactions imported (${result.total} total)`, 'ok');
+        showUploadResult('uz-statement', `✓ ${result.added} new transactions imported (${result.total} total) — categories are being sorted in the background`, 'ok');
       } else {
         showUploadResult('uz-statement', `No new transactions found — ${result.total} already in your account`, 'info');
       }
       await loadAll();
     } else {
-      const err = await r.json().catch(() => ({}));
-      showUploadResult('uz-statement', 'Import failed: ' + (err.error || 'unknown error'), 'err');
+      // The connection dropping does NOT mean the import failed — the server
+      // finishes and saves on its own. Say so instead of crying wolf.
+      const err = r ? await r.json().catch(() => ({})) : {};
+      showUploadResult('uz-statement', err.error
+        ? 'Import failed: ' + err.error
+        : 'Connection dropped while importing — give it a minute, then refresh. Your transactions are very likely saved.', 'info');
     }
   }
+
+  // Sort categories — label every transaction still marked "Other".
+  // Synchronous on the server; if the phone stops waiting the server still
+  // finishes and saves, so the fallback message is honest, not alarming.
+  document.getElementById('sort-cats-btn').addEventListener('click', async (e) => {
+    const btn = e.currentTarget;
+    if (btn.disabled) return;
+    btn.disabled = true;
+    const oldLabel = btn.textContent;
+    btn.textContent = 'Sorting…';
+    let r = null;
+    try { r = await apiFetch('/api/finance/recategorise', { method: 'POST', body: {} }); } catch {}
+    btn.disabled = false;
+    btn.textContent = oldLabel;
+    if (r && r.ok) {
+      const j = await r.json().catch(() => ({}));
+      if (j.updated > 0) toast(`✓ ${j.updated} transactions sorted${j.remaining_other ? ` — ${j.remaining_other} still unclear` : ''}`);
+      else toast('Nothing left to sort — all transactions are labelled');
+      await loadAll();
+    } else {
+      toast('Still sorting in the background — refresh in a minute');
+    }
+  });
 
   // Drag and drop
   ['dragover','dragenter'].forEach(ev => uzStatement.addEventListener(ev, e => { e.preventDefault(); uzStatement.classList.add('drag-over'); }));

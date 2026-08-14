@@ -2340,6 +2340,20 @@ router.delete('/api/finance/transactions', requirePerson, (req, res) => {
     res.json({ ok: true });
 });
 
+// Re-run the category labeller over rows still sitting in 'other' — the
+// "Sort categories" button. Only 'other' rows are touched, so nothing a
+// user has hand-set can be overwritten. Synchronous: the server finishes
+// and saves even if the phone stops waiting for the response.
+router.post('/api/finance/recategorise', requirePerson, express.json({ limit: '4kb' }), async (req, res) => {
+    try {
+        const result = await qFinance.recategoriseOther(req.person.email);
+        res.json({ ok: true, ...result });
+    } catch (e) {
+        console.error('[finance] recategorise error', e);
+        res.status(500).json({ error: e.message });
+    }
+});
+
 // Merchant assignment
 router.post('/api/finance/assign', requirePerson, express.json({ limit: '64kb' }), (req, res) => {
     const { merchant, label } = req.body || {};
