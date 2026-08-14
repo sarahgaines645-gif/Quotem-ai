@@ -767,6 +767,7 @@ async function extractDocument(imageBase64, mimeType = 'image/jpeg') {
     const raw = await visionRead({
         prompt:    BILL_PROMPT,
         base64:    imageBase64,
+        mimeType,
         // 8192 is the proven-safe cap. NOTE: raising it to 32000 made LARGE PDF
         // reads (e.g. a 3-month bank statement) fail with a Gemini 400 — a big
         // image/PDF input PLUS a big output reservation tips the request over a
