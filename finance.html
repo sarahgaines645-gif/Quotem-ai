@@ -503,7 +503,7 @@
       </select>
     </div>
     <div class="txn-list" id="txn-list">
-      <div class="txn-empty" id="txn-empty-msg">No transactions yet — import a bank statement above</div>
+      <div class="txn-empty">No transactions yet — import a bank statement above</div>
     </div>
     <button class="show-more-btn hidden" id="show-more-btn">Show more transactions</button>
   </div>
@@ -937,17 +937,18 @@
 
   function renderTransactions() {
     const list     = document.getElementById('txn-list');
-    const emptyMsg = document.getElementById('txn-empty-msg');
     const moreBtn  = document.getElementById('show-more-btn');
     const txns     = filteredTxns();
 
     if (!txns.length) {
-      list.innerHTML = '';
-      emptyMsg.style.display = '';
+      // Re-created inline like the problems/subscriptions lists — the old
+      // separate #txn-empty-msg lived INSIDE #txn-list, so the first
+      // innerHTML render destroyed it and every render after that crashed
+      // on a null element, killing the refresh right after an import.
+      list.innerHTML = '<div class="txn-empty">No transactions yet — import a bank statement above</div>';
       moreBtn.classList.add('hidden');
       return;
     }
-    emptyMsg.style.display = 'none';
     const shown = txns.slice(0, shownCount);
     list.innerHTML = shown.map(t => txnRow(t)).join('');
     if (txns.length > shownCount) {
