@@ -11,6 +11,9 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
+  <!-- Markdown renderer for Q's coach replies (same self-hosted marked the
+       main chat uses) — otherwise headings, bold and tables show as raw text. -->
+  <script src="/marked.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/qrcode@1/build/qrcode.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
   <script>pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';</script>
@@ -285,6 +288,16 @@
     }
     .coach-card .q-msg::-webkit-scrollbar { display: none; }
     .coach-card .q-msg.thinking { font-style: italic; color: var(--text-faint); }
+    /* Rendered-markdown state — pre-wrap would double-space real HTML */
+    .coach-card .q-msg.rendered { white-space: normal; }
+    .q-msg.rendered h1, .q-msg.rendered h2, .q-msg.rendered h3 { font-size: 12px; margin: 8px 0 4px; }
+    .q-msg.rendered p  { margin: 0 0 6px; }
+    .q-msg.rendered ul, .q-msg.rendered ol { margin: 0 0 6px; padding-left: 16px; }
+    .md-table-scroll   { overflow-x: auto; margin: 0 0 6px; }
+    .q-msg.rendered table { border-collapse: collapse; font-size: 11px; min-width: 100%; }
+    .q-msg.rendered th, .q-msg.rendered td { padding: 3px 8px; border-bottom: 1px solid rgba(128,128,128,0.18); text-align: left; white-space: nowrap; }
+    .q-msg.rendered th { color: var(--text-muted); font-weight: 600; }
+    .q-msg.rendered td strong { color: var(--text); }
     .coach-card .q-actions { display: flex; flex-direction: column; gap: 6px; margin-bottom: 8px; }
     .coach-card .q-actions.hidden { display: none; }
     .q-btn {
@@ -1506,9 +1519,32 @@
   }
 
   function qSay(msg, thinking = false) {
-    coachMsg.textContent = msg;
-    coachMsg.className = 'q-msg' + (thinking ? ' thinking' : '');
+    if (thinking) {
+      coachMsg.textContent = msg;
+      coachMsg.className = 'q-msg thinking';
+    } else {
+      // Q's [OPTIONS] block is chat furniture — this card has its own
+      // buttons, so drop it rather than show it as raw text.
+      const clean = String(msg || '').replace(/\[OPTIONS\][\s\S]*?\[\/OPTIONS\]/gi, '').trim();
+      coachMsg.innerHTML = renderQMarkdown(clean);
+      coachMsg.className = 'q-msg rendered';
+    }
     coachMsg.scrollTop = 0;
+  }
+
+  // Same approach as the main chat: pre-escape so any HTML Q emits shows as
+  // literal text, then marked turns #, **, lists and tables into real
+  // formatting. Tables get a scroll wrapper so the card never squashes them.
+  function renderQMarkdown(text) {
+    const safe = esc(String(text == null ? '' : text));
+    if (typeof marked === 'undefined' || !marked.parse) return safe.replace(/\n/g, '<br>');
+    try {
+      return marked.parse(safe, { breaks: true, gfm: true })
+        .replace(/<table>/g, '<div class="md-table-scroll"><table>')
+        .replace(/<\/table>/g, '</table></div>');
+    } catch (e) {
+      return safe.replace(/\n/g, '<br>');
+    }
   }
 
   // ── Utility ───────────────────────────────────────────────────────────────
