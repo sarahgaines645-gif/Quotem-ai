@@ -800,6 +800,30 @@ const TOOL_DEFINITIONS = [
             },
         },
     },
+    {
+        type: 'function',
+        function: {
+            name: 'label_transactions',
+            description: "Label the user's bank transactions on the Finance page. Matches transactions by merchant/description text and sets their category and/or a bucket label (a person or purpose like \"Charlie\", \"Car\", \"Business\"). Use when the user asks to tag, label, recategorise or organise specific transactions — e.g. \"mark everything from Netflix as a subscription\" or \"label Tesco as family food\". A bucket set here also applies to future imports of the same merchant.",
+            parameters: {
+                type: 'object',
+                properties: {
+                    match:    { type: 'string', description: 'Text to match in the merchant/description, case-insensitive — e.g. "netflix", "tesco"' },
+                    category: { type: 'string', enum: ['food_groceries', 'food_dining', 'transport', 'subscriptions', 'utilities', 'housing', 'shopping', 'health', 'children', 'holidays', 'savings_transfer', 'income', 'fees_charges', 'other'], description: 'Category to set on every matching transaction' },
+                    bucket:   { type: 'string', description: 'Bucket / person label to put matching transactions under (e.g. "Charlie", "Car"). Also remembered for future imports of this merchant.' },
+                },
+                required: ['match'],
+            },
+        },
+    },
+    {
+        type: 'function',
+        function: {
+            name: 'sort_categories',
+            description: "Run the automatic category labeller over every transaction on the user's Finance page still marked 'other'. Use when the user asks you to sort, organise or categorise their transactions generally (rather than one specific merchant — use label_transactions for that). Never overwrites categories that are already set.",
+            parameters: { type: 'object', properties: {} },
+        },
+    },
     // ── Push notifications ────────────────────────────────────────
     {
         type: 'function',
@@ -1758,6 +1782,8 @@ async function executeTool(name, argsRaw, personId, personEmail, threadId) {
         case 'update_case_summary':  return updateCaseSummaryTool(args, personEmail);
         case 'read_finance':         return readFinanceTool(personEmail);
         case 'add_finance_problem':  return addFinanceProblemTool(args, personEmail);
+        case 'label_transactions':   return labelTransactionsTool(args, personEmail);
+        case 'sort_categories':      return await sortCategoriesTool(personEmail);
         case 'send_notification':    return await sendNotificationTool(args, personEmail);
         // Life — calendar + tasks
         case 'add_event':            return addEventTool(args, personEmail);
@@ -2255,7 +2281,9 @@ function readFinanceTool(personEmail) {
             hasData: true,
             summary: graph.summary,
             by_category: graph.by_category,
-            subscriptions: graph.subscriptions.slice(0, 15),
+            // Same list the Subscriptions box on /finance shows — Q must see
+            // what the user sees, not a stricter recurring-only variant.
+            subscriptions: qFinance.detectSubscriptions(personEmail).slice(0, 15),
             openProblems: problems.slice(0, 10),
             recentTransactions: recent,
             instruction_for_q: "You now have the user's full financial picture. Speak specifically — name real merchants, real amounts, real categories. If there are open problems, lead with the urgent/high ones.",
@@ -2286,6 +2314,62 @@ function addFinanceProblemTool({ title, provider, amount, dueDate, type, urgency
         };
     } catch (e) {
         return { error: 'Could not add problem: ' + e.message };
+    }
+}
+
+// Q's labelling hands on the Finance page. Thin wrappers over the existing
+// finance plugin — no new data logic lives here.
+function labelTransactionsTool({ match, category, bucket } = {}, personEmail) {
+    if (!personEmail) return { error: 'Cannot label transactions without a signed-in user.' };
+    if (!match) return { error: 'match is required — a merchant name or part of one.' };
+    if (!category && bucket == null) return { error: 'Provide a category, a bucket, or both.' };
+    try {
+        const needle = String(match).toLowerCase();
+        const txns = qFinance.getTransactions(personEmail);
+        const hits = txns.filter(t =>
+            (String(t.merchant || '') + ' ' + String(t.description || '')).toLowerCase().includes(needle));
+        if (!hits.length) {
+            return { ok: false, matched: 0, instruction_for_q: `No transactions matched "${match}". Ask the user for the name exactly as it appears in their transactions list — you can call read_finance to see recent ones.` };
+        }
+        let updated = 0;
+        for (const t of hits) {
+            const updates = {};
+            if (category) updates.category = category;
+            if (bucket != null) updates.bucket = bucket;
+            if (qFinance.updateTransaction(personEmail, t.id, updates)) updated++;
+        }
+        // A bucket is an ongoing assignment — remember it per distinct
+        // merchant so future imports land in the bucket automatically.
+        if (bucket != null) {
+            const seen = new Set();
+            for (const t of hits) {
+                const name = t.merchant || t.description;
+                const key = name.toLowerCase();
+                if (!seen.has(key)) { seen.add(key); qFinance.assignMerchant(personEmail, name, bucket); }
+            }
+        }
+        return {
+            ok: true, matched: hits.length, updated,
+            sample: hits.slice(0, 3).map(t => ({ date: t.date, merchant: t.merchant, amount: t.amount })),
+            instruction_for_q: `Labelled ${updated} transaction(s) matching "${match}"${category ? ` as ${category}` : ''}${bucket != null ? ` under "${bucket}"` : ''}. The Finance page shows it after a refresh. Tell the user what you changed, with the real numbers.`,
+        };
+    } catch (e) {
+        return { error: 'Could not label transactions: ' + e.message };
+    }
+}
+
+async function sortCategoriesTool(personEmail) {
+    if (!personEmail) return { error: 'Cannot sort categories without a signed-in user.' };
+    try {
+        const r = await qFinance.recategoriseOther(personEmail);
+        return {
+            ok: true, ...r,
+            instruction_for_q: r.updated > 0
+                ? `${r.updated} transactions were labelled (${r.remaining_other} still unclear). Summarise what changed for the user — call read_finance if you want the fresh category totals.`
+                : 'Everything is already labelled — nothing was marked "other". Tell the user their transactions are fully sorted.',
+        };
+    } catch (e) {
+        return { error: 'Could not sort categories: ' + e.message };
     }
 }
 
@@ -2490,7 +2574,7 @@ const ALWAYS_ON = new Set([
     'check_inbox', 'read_email', 'read_email_attachment',
     // Finance tools — always available so Q can read and update the finance
     // data store from any page, not just when on /finance.
-    'read_finance', 'add_finance_problem',
+    'read_finance', 'add_finance_problem', 'label_transactions', 'sort_categories',
     'send_notification',
     // Life tools (add_event / list_events / add_task / list_tasks /
     // complete_task / update_life_context) are trigger-gated below — only

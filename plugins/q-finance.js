@@ -1327,7 +1327,11 @@ function deleteTransactions(email) {
 
 function detectSubscriptions(email) {
     const txns = getTransactions(email);
-    const debits = txns.filter(t => t.amount < 0 && t.recurring);
+    // A row belongs here if the labeller flagged it recurring OR categorised
+    // it 'subscriptions'. Requiring the recurring flag alone hid rows the
+    // user could SEE labelled subscriptions in their list — the box looked
+    // blind to its own category.
+    const debits = txns.filter(t => t.amount < 0 && (t.recurring || t.category === 'subscriptions'));
     const byMerchant = {};
     for (const t of debits) {
         const k = merchantKey(t.merchant || t.description);
@@ -1335,7 +1339,7 @@ function detectSubscriptions(email) {
         byMerchant[k].push(t);
     }
     return Object.entries(byMerchant)
-        .filter(([, entries]) => entries.length >= 2)
+        .filter(([, entries]) => entries.length >= 2 || entries[0].category === 'subscriptions')
         .map(([, entries]) => {
             entries.sort((a, b) => (b.date || '').localeCompare(a.date || ''));
             return {
