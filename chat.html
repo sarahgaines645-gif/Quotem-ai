@@ -2623,7 +2623,6 @@ const $attach = document.getElementById('attach');
 const $attachFileInput = document.getElementById('attach-file-input');
 const $imageAttachments = document.getElementById('image-attachments');
 const $dropOverlay = document.getElementById('drop-overlay');
-const MAX_IMAGE_BYTES = 10 * 1024 * 1024; // 10MB per image (warn-only above this)
 
 let attachedImages = [];  // [{ dataUrl, mimeType, name }]
 
@@ -2678,6 +2677,55 @@ function fileToDataUrl(file) {
     reader.onerror = () => reject(reader.error);
     reader.readAsDataURL(file);
   });
+}
+
+// Phone photos arrive at 3–8MB each (12MP, often HEIC). Base64'd raw into the
+// /chat JSON they blow the server's payload limit — the request dies as
+// "Server error" before any model sees it — and they crawl on mobile data.
+// Vision models read documents perfectly well at ~2000px, so every attached
+// image is re-encoded down to that at attach time. The canvas re-encode also
+// turns HEIC into plain JPEG. If the browser can't decode the file, send it
+// untouched — worst case is exactly the old behaviour.
+const MAX_IMAGE_EDGE = 2000;
+async function imageFileToAttachment(f) {
+  try {
+    let source, w0, h0;
+    try {
+      source = await createImageBitmap(f, { imageOrientation: 'from-image' });
+      w0 = source.width; h0 = source.height;
+    } catch (_) {
+      // Older Safari: decode through an <img> instead (honours EXIF rotation).
+      source = await new Promise((resolve, reject) => {
+        const url = URL.createObjectURL(f);
+        const img = new Image();
+        img.onload = () => resolve(img);
+        img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('image decode failed')); };
+        img.src = url;
+      });
+      w0 = source.naturalWidth; h0 = source.naturalHeight;
+    }
+    const scale = Math.min(1, MAX_IMAGE_EDGE / Math.max(w0, h0));
+    const w = Math.max(1, Math.round(w0 * scale));
+    const h = Math.max(1, Math.round(h0 * scale));
+    const canvas = document.createElement('canvas');
+    canvas.width = w; canvas.height = h;
+    const ctx = canvas.getContext('2d');
+    // White base — transparent PNGs (screenshots, cut-outs) go BLACK when
+    // re-encoded to JPEG on a transparent canvas, which ruins the read.
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, w, h);
+    ctx.drawImage(source, 0, 0, w, h);
+    if (source.close) source.close();
+    if (source.src) URL.revokeObjectURL(source.src);
+    const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
+    if (dataUrl.startsWith('data:image/jpeg')) {
+      return { dataUrl, mimeType: 'image/jpeg', name: f.name || 'image' };
+    }
+  } catch (e) {
+    console.warn('[q/vision] downscale failed for ' + (f.name || 'image') + ' — sending original: ' + e.message);
+  }
+  const dataUrl = await fileToDataUrl(f);
+  return { dataUrl, mimeType: f.type, name: f.name || 'image' };
 }
 
 // Read a text-like file (.txt, .md, .csv) and return its decoded contents.
@@ -2786,11 +2834,7 @@ async function addImageFiles(files) {
   for (const f of files) {
     const kind = classifyFile(f);
     if (kind === 'image') {
-      if (f.size > MAX_IMAGE_BYTES) {
-        console.warn('[q/vision] image is large (' + Math.round(f.size / 1024 / 1024) + 'MB) — sending anyway');
-      }
-      const dataUrl = await fileToDataUrl(f);
-      attachedImages.push({ dataUrl, mimeType: f.type, name: f.name || 'image' });
+      attachedImages.push(await imageFileToAttachment(f));
     } else if (kind === 'text') {
       try {
         const content = await fileToText(f);

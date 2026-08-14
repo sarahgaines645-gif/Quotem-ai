@@ -1515,7 +1515,18 @@ router.delete('/push/subscribe', requirePerson, express.json({ limit: '4kb' }), 
 // Q's chat API — uses server-side memory by default
 // Body: { message: "..." } (preferred — uses server memory)
 //   OR: { messages: [...] } (legacy — full history sent each time)
-router.post('/chat', requirePerson, express.json({ limit: '24mb' }), async (req, res) => {
+router.post('/chat', requirePerson, express.json({ limit: '24mb' }),
+    // Oversized payloads (a batch of full-res photos) used to surface as an
+    // unhandled 500 "Server error". Same honest-413 pattern as the finance
+    // statement route — tell the user what's wrong and what to do.
+    (err, req, res, next) => {
+        if (err && err.type === 'entity.too.large') {
+            return res.status(413).json({ error: "That message was too big to send — usually a very large photo. Try again with fewer photos at once, and they'll be shrunk on the way in." });
+        }
+        if (err) return next(err);
+        next();
+    },
+    async (req, res) => {
   try {
     const person = req.person; // attached by requirePerson — { id, name, intro, addedAt }
     const newMessage = req.body?.message;
