@@ -526,7 +526,192 @@
       .paper-actions .paper-btn { flex: 1 1 auto; text-align: center; }
       .opt { padding: 12px; font-size: 13px; }
       .stage-tab { flex: 1; justify-content: center; }
+      header { flex-wrap: wrap; row-gap: 8px; }
+      header .nav-links { margin-left: 0; width: 100%; justify-content: space-between; }
     }
+
+    /* ── Reduced motion — the OS setting, or the "Motion: reduced" switch ── */
+    @media (prefers-reduced-motion: reduce) {
+      .opt.wrong { animation: none; }
+      .tower-badge.pop { animation-duration: 0.01s; }
+      .paper-thinking { animation: none; opacity: 0.8; }
+      .opt, .paper-btn, .stage-tab, .setup-start { transition: none; }
+    }
+    html.reduce-motion .opt.wrong { animation: none; }
+    html.reduce-motion .tower-badge.pop { animation-duration: 0.01s; }
+    html.reduce-motion .paper-thinking { animation: none; opacity: 0.8; }
+
+    /* ── Mode switch (Sensible ↔ Teen) — segmented, neumorphic in sensible ── */
+    .mode-switch {
+      display: inline-flex; border-radius: 14px; padding: 3px;
+      background: var(--bg); box-shadow: var(--neu-inset-sm); gap: 2px;
+    }
+    .mode-switch button {
+      border: none; background: transparent; cursor: pointer;
+      font-family: 'Space Grotesk', sans-serif; font-size: 11px; font-weight: 600;
+      color: var(--text-faint); padding: 5px 10px; border-radius: 11px;
+      letter-spacing: 0.04em; text-transform: uppercase;
+      transition: color 0.15s, box-shadow 0.15s;
+    }
+    .mode-switch button.on { color: var(--text); background: var(--bg); box-shadow: var(--neu-raised-xs); }
+    .mode-switch button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+    /* Save state — a quiet dot next to the bank line; only speaks when something's wrong */
+    .save-note { max-width: 760px; margin: -8px auto 12px; font-size: 11px; color: var(--text-faint); }
+    .save-note.hidden { display: none; }
+    .save-note.warn { color: #e6a817; }
+    .bank-line .bank-err { color: #e6a817; }
+    .bank-line button {
+      margin-left: 8px; padding: 2px 10px; border: none; border-radius: 10px; cursor: pointer;
+      font-family: 'Space Grotesk', sans-serif; font-size: 11px; font-weight: 600;
+      color: var(--text); background: var(--bg); box-shadow: var(--neu-raised-xs);
+    }
+    .bank-line button:active { box-shadow: var(--neu-inset-xs); }
+
+    /* ── Lights — the effects picker (teen mode) ─────────────────────────── */
+    .lights-btn {
+      position: fixed; bottom: 20px; left: 64px; height: 36px; padding: 0 14px;
+      border-radius: 18px; border: none; background: var(--bg); box-shadow: var(--neu-raised-sm);
+      cursor: pointer; display: inline-flex; align-items: center; gap: 6px; z-index: 99;
+      font-family: 'Space Grotesk', sans-serif; font-size: 12px; font-weight: 600; color: var(--text-muted);
+    }
+    .lights-btn .lb-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 6px var(--accent); }
+    .lights-btn.hidden { display: none; }
+    .lights-panel {
+      position: fixed; z-index: 300; left: 16px; bottom: 66px;
+      width: min(360px, calc(100vw - 32px)); max-height: min(70vh, 560px);
+      display: flex; flex-direction: column;
+      background: var(--bg); border-radius: 16px;
+      box-shadow: 10px 10px 28px #ababab, -8px -8px 20px #ffffff;
+      overflow: hidden;
+    }
+    .lights-panel.hidden { display: none; }
+    .lp-head { display: flex; align-items: center; gap: 10px; padding: 12px 14px 8px; }
+    .lp-head .lp-title { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-muted); flex: 1; }
+    .lp-close { border: none; background: transparent; color: var(--text-faint); cursor: pointer; font-size: 16px; line-height: 1; padding: 4px 6px; }
+    .lp-body { overflow-y: auto; padding: 0 14px 14px; scrollbar-width: thin; }
+    .lp-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 8px 0; font-size: 12px; color: var(--text); }
+    .lp-row .lp-lbl { color: var(--text-muted); font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; }
+    .lp-seg { display: inline-flex; border-radius: 12px; padding: 2px; background: var(--bg); box-shadow: var(--neu-inset-xs); gap: 2px; }
+    .lp-seg button { border: none; background: transparent; cursor: pointer; font-family: inherit; font-size: 11px; font-weight: 600; color: var(--text-faint); padding: 4px 9px; border-radius: 10px; }
+    .lp-seg button.on { color: var(--text); background: var(--bg); box-shadow: var(--neu-raised-xs); }
+    .lp-group { margin-top: 10px; }
+    .lp-group h4 { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; color: var(--accent); margin: 8px 0 4px; display: flex; align-items: center; gap: 8px; }
+    .lp-group h4 small { font-weight: 500; text-transform: none; letter-spacing: 0; color: var(--text-faint); }
+    .lp-fx { display: flex; align-items: center; gap: 8px; padding: 5px 0; font-size: 12px; color: var(--text); border-top: 1px solid rgba(0,0,0,0.05); }
+    .lp-fx label { flex: 1; display: flex; align-items: center; gap: 8px; cursor: pointer; min-width: 0; }
+    .lp-fx label span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .lp-fx input[type=checkbox] { width: 15px; height: 15px; accent-color: var(--accent); flex-shrink: 0; margin: 0; }
+    .lp-fx .lp-when { font-size: 10px; color: var(--text-faint); white-space: nowrap; }
+    .lp-fx .lp-test { border: none; padding: 3px 9px; border-radius: 10px; cursor: pointer; font-family: inherit; font-size: 10px; font-weight: 600; color: var(--text); background: var(--bg); box-shadow: var(--neu-raised-xs); flex-shrink: 0; }
+    .lp-fx .lp-test:active { box-shadow: var(--neu-inset-xs); }
+    .lp-note { font-size: 10px; color: var(--text-faint); line-height: 1.5; margin-top: 8px; }
+    .lp-stop { margin-top: 10px; width: 100%; border: none; padding: 7px; border-radius: 12px; cursor: pointer; font-family: inherit; font-size: 11px; font-weight: 600; color: var(--text); background: var(--bg); box-shadow: var(--neu-raised-xs); }
+    @media (max-width: 980px) { .lights-btn { bottom: 185px; } .lights-panel { bottom: 230px; max-height: calc(100vh - 250px); } }
+    @media (max-width: 600px) { .lights-panel { left: 12px; width: calc(100vw - 24px); } }
+
+    /* ══════════════════════════════════════════════════════════════════════
+       TEEN MODE — Sarah, 15 Aug 2026: "I like my design, I'm just going to
+       turn it black and put neon lights over it." Same layout, same DOM:
+       the variables go black + neon, the option cards get glowing outlines,
+       the header becomes a neon sign, THE TUBE turns into a glowing glass
+       tube (the canvas reads these variables), and study-fx.js paints the
+       light show over the top. Sensible mode = everything above, untouched.
+       ══════════════════════════════════════════════════════════════════════ */
+    html.teen {
+      --bg: #050507;
+      --text: #f2f2f6;
+      --text-muted: rgba(242,242,246,0.62);
+      --text-faint: rgba(242,242,246,0.38);
+      --accent: #ff2d95;
+      --neon: #ff2d95; --neon-2: #00f0ff; --neon-3: #b6ff00; --neon-4: #ffb800; --wrong-neon: #ff3b5c;
+      --paper: #0e0e15;
+      --paper-back: #12121b;
+      --paper-shadow: rgba(0,0,0,0.9);
+      --neu-raised-sm: 0 0 0 1px rgba(255,255,255,0.08), 0 14px 34px -14px rgba(0,0,0,0.9);
+      --neu-raised-xs: 0 0 0 1px rgba(255,255,255,0.09), 0 6px 16px -8px rgba(0,0,0,0.8);
+      --neu-inset-sm: inset 0 0 0 1px rgba(255,255,255,0.07), inset 0 2px 10px rgba(0,0,0,0.65);
+      --neu-inset-xs: inset 0 0 0 1px rgba(255,255,255,0.07), inset 0 1px 6px rgba(0,0,0,0.6);
+      --tube-neon: 1;
+    }
+    html.teen body { background: transparent; }  /* the ambient bg canvas sits behind the page */
+    html.teen ::selection { background: rgba(255,45,149,0.35); }
+    /* the header is a neon sign */
+    html.teen header .brand { color: #fff; text-shadow: 0 0 6px #fff, 0 0 18px var(--neon), 0 0 42px var(--neon); }
+    html.teen header .brand .dot { color: var(--neon-2); text-shadow: 0 0 6px #fff, 0 0 18px var(--neon-2), 0 0 42px var(--neon-2); }
+    html.teen header .crumbs { color: var(--neon); text-shadow: 0 0 8px rgba(255,45,149,0.6); letter-spacing: 0.18em; text-transform: uppercase; font-size: 11px; font-weight: 700; }
+    html.teen header a.back:hover { color: var(--neon-2); }
+    html.teen .mode-switch button.on { color: var(--neon); text-shadow: 0 0 8px rgba(255,45,149,0.7); box-shadow: 0 0 0 1px rgba(255,45,149,0.55), 0 0 12px rgba(255,45,149,0.25); }
+    /* progress strip + shelf */
+    html.teen .ladder::before { background: rgba(255,255,255,0.08); }
+    html.teen .rung.done .r-dot { background: rgba(255,255,255,0.35); }
+    html.teen .rung.current .r-dot { background: var(--neon); box-shadow: 0 0 0 4px rgba(255,45,149,0.18), 0 0 14px var(--neon); }
+    html.teen .shelf-chip { box-shadow: 0 0 0 1px rgba(255,255,255,0.1); }
+    html.teen .shelf-chip.mastered { color: var(--neon-3); box-shadow: 0 0 0 1px rgba(182,255,0,0.45), 0 0 10px rgba(182,255,0,0.2); }
+    html.teen .stat-streak-lit { color: var(--neon-4); text-shadow: 0 0 8px rgba(255,184,0,0.6); }
+    /* the paper — same card, black, faint neon margin line */
+    html.teen .paper {
+      background-color: var(--paper);
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 12px;
+      box-shadow: 0 30px 70px -20px rgba(0,0,0,0.9), 0 0 0 1px rgba(0,0,0,0.6), 0 0 40px -12px rgba(255,45,149,0.25);
+      background-image:
+        linear-gradient(to bottom, transparent 0, transparent 95px, rgba(255,255,255,0.05) 95px, rgba(255,255,255,0.05) 96px, transparent 96px),
+        repeating-linear-gradient(to bottom, transparent 0, transparent 31px, rgba(255,255,255,0.03) 31px, rgba(255,255,255,0.03) 32px);
+      transition: transform 0.15s;
+    }
+    html.teen .paper::after { background: rgba(255,45,149,0.28); }
+    html.teen .paper .curl::before { background: rgba(255,45,149,0.25); }
+    html.teen .paper .curl::after { background: linear-gradient(225deg, var(--paper-back) 0%, var(--paper-back) 48%, rgba(255,45,149,0.35) 49%, var(--paper) 50%, var(--paper) 100%); }
+    html.teen .chip { box-shadow: 0 0 0 1px rgba(255,255,255,0.12); }
+    html.teen .why-label, html.teen .missing-label, html.teen .tip-label { color: var(--neon); text-shadow: 0 0 6px rgba(255,45,149,0.6); }
+    html.teen .paper-quiet { color: var(--text-muted); }
+    /* option cards — glowing outlines; right = lime, wrong = neon red */
+    html.teen .opt {
+      background: var(--paper-back); border: 1px solid rgba(255,45,149,0.42); border-left-width: 1px;
+      box-shadow: 0 0 0 0 rgba(255,45,149,0), inset 0 0 12px rgba(255,45,149,0.05);
+      transition: box-shadow 0.15s, border-color 0.15s, transform 0.08s;
+    }
+    html.teen .opt:hover { border-color: rgba(255,45,149,0.9); box-shadow: 0 0 10px rgba(255,45,149,0.28), inset 0 0 12px rgba(255,45,149,0.08); }
+    html.teen .opt:active { transform: scale(0.99); box-shadow: inset 0 0 12px rgba(255,45,149,0.15); }
+    html.teen .opt:disabled:hover { box-shadow: 0 0 0 0 rgba(255,45,149,0), inset 0 0 12px rgba(255,45,149,0.05); }
+    html.teen .opt .opt-letter { color: var(--neon); background: transparent; box-shadow: 0 0 0 1px rgba(255,45,149,0.7); text-shadow: 0 0 6px rgba(255,45,149,0.7); }
+    html.teen .opt.correct { background: var(--paper-back); border-color: var(--neon-3); box-shadow: 0 0 14px rgba(182,255,0,0.45), inset 0 0 14px rgba(182,255,0,0.10); }
+    html.teen .opt.correct:disabled:hover { box-shadow: 0 0 14px rgba(182,255,0,0.45), inset 0 0 14px rgba(182,255,0,0.10); }
+    html.teen .opt.correct .opt-letter { color: var(--neon-3); box-shadow: 0 0 0 1px var(--neon-3); text-shadow: 0 0 6px rgba(182,255,0,0.8); }
+    html.teen .opt.correct .opt-mark { color: var(--neon-3); text-shadow: 0 0 8px rgba(182,255,0,0.9); }
+    html.teen .opt.wrong { background: var(--paper-back); border-color: var(--wrong-neon); box-shadow: 0 0 14px rgba(255,59,92,0.45), inset 0 0 14px rgba(255,59,92,0.10); }
+    html.teen .opt.wrong:disabled:hover { box-shadow: 0 0 14px rgba(255,59,92,0.45), inset 0 0 14px rgba(255,59,92,0.10); }
+    html.teen .opt.wrong .opt-letter { color: var(--wrong-neon); box-shadow: 0 0 0 1px var(--wrong-neon); }
+    html.teen .opt.wrong .opt-mark { color: var(--wrong-neon); }
+    html.teen .opt.dim { opacity: 0.45; }
+    /* buttons, tabs, inputs keep their shapes — dark surfaces, neon state */
+    html.teen .stage-tab.active { color: var(--neon); text-shadow: 0 0 8px rgba(255,45,149,0.6); box-shadow: 0 0 0 1px rgba(255,45,149,0.5), inset 0 0 12px rgba(255,45,149,0.08); }
+    html.teen .paper-btn:hover, html.teen .setup-start:hover { box-shadow: 0 0 0 1px rgba(255,45,149,0.6), 0 0 14px rgba(255,45,149,0.18); }
+    html.teen .quiet-btn { box-shadow: 0 0 0 1px rgba(255,255,255,0.1); }
+    html.teen .quiet-btn:hover { color: var(--neon-2); box-shadow: 0 0 0 1px rgba(0,240,255,0.5); }
+    html.teen .setup-input, html.teen .setup-select, html.teen .answer-area { background: #000; color: var(--text); box-shadow: inset 0 0 0 1px rgba(255,255,255,0.1); }
+    html.teen .setup-input:focus, html.teen .answer-area:focus { box-shadow: inset 0 0 0 1px rgba(0,240,255,0.5), 0 0 12px rgba(0,240,255,0.15); }
+    html.teen .setup-select option { background: #0e0e15; }
+    html.teen .grade-band[data-grade="red"]   { background: rgba(255,59,92,0.10); border-left-color: var(--wrong-neon); }
+    html.teen .grade-band[data-grade="amber"] { background: rgba(255,184,0,0.10); border-left-color: var(--neon-4); }
+    html.teen .grade-band[data-grade="green"] { background: rgba(182,255,0,0.10); border-left-color: var(--neon-3); }
+    html.teen .model-answer { border-left-color: rgba(255,255,255,0.15); }
+    html.teen .missing-list li::before { color: var(--neon-2); }
+    /* THE TUBE card, popup, cog, lights: dark glass */
+    html.teen .tower-card, html.teen .explain-popup, html.teen .lights-panel {
+      box-shadow: 0 0 0 1px rgba(255,255,255,0.09), 0 24px 60px -18px rgba(0,0,0,0.95), 0 0 30px -12px rgba(0,240,255,0.25);
+    }
+    html.teen .tower-title { color: var(--neon-2); text-shadow: 0 0 8px rgba(0,240,255,0.5); }
+    html.teen .tower-well { background: #000; box-shadow: inset 0 0 0 1px rgba(0,240,255,0.25), inset 0 0 18px rgba(0,240,255,0.08); }
+    html.teen .tower-badge { color: #fff; text-shadow: 0 0 8px var(--neon-2); box-shadow: 0 0 0 1px rgba(0,240,255,0.55), 0 0 12px rgba(0,240,255,0.3); }
+    html.teen .setup-cog:hover, html.teen .lights-btn:hover { color: var(--neon-2); }
+    html.teen .lp-fx { border-top-color: rgba(255,255,255,0.06); }
+    html.teen .lp-group h4 { text-shadow: 0 0 6px rgba(255,45,149,0.5); }
+    html.teen .lp-fx input[type=checkbox] { accent-color: var(--neon-3); }
+    html.teen .lights-btn .lb-dot { background: var(--neon-2); box-shadow: 0 0 8px var(--neon-2), 0 0 16px var(--neon-2); }
+    html.teen .save-note.warn { color: var(--neon-4); }
+    html.teen .bank-line .bank-err { color: var(--neon-4); }
   </style>
 </head>
 <body>
@@ -534,6 +719,10 @@
     <div class="brand">Q<span class="dot">.</span></div>
     <div class="crumbs">Revision</div>
     <div class="nav-links">
+      <div class="mode-switch" id="mode-switch" role="group" aria-label="Look">
+        <button type="button" data-mode="sensible" class="on">Sensible</button>
+        <button type="button" data-mode="teen">Teen</button>
+      </div>
       <a href="/writer" class="back">← Writer</a>
     </div>
   </header>
@@ -558,6 +747,7 @@
 
   <!-- Question-bank stock + build progress -->
   <div class="bank-line hidden" id="bank-line"></div>
+  <div class="save-note hidden" id="save-note"></div>
 
   <!-- Setup card — shown first, folds away once revising -->
   <div class="setup-strip" id="setup-strip">
@@ -610,7 +800,7 @@
     </div>
   </div>
 
-  <!-- Stage tabs: Build (quiz + tower) is the default; Exam Room unlocks with mastery -->
+  <!-- Stage tabs: Build (quiz + the tube) is the default; Exam Room unlocks with mastery -->
   <div class="stage-tabs">
     <button type="button" class="stage-tab active" id="tab-build">Build</button>
     <button type="button" class="stage-tab" id="tab-exam">Exam Room <span class="lock" id="tab-exam-lock">🔒</span></button>
@@ -622,7 +812,7 @@
 
       <!-- BUILD: idle -->
       <div class="view show" id="view-quiz-idle">
-        <p class="paper-quiet">Set your subject above and hit Start. Quick-fire questions land here — right answers build your tower, wrong ones shake it. Master a topic and the Exam Room opens.</p>
+        <p class="paper-quiet">Set your subject above and hit Start. Quick-fire questions land here — a right answer flushes the tube, a wrong one splashes more in. Master a topic and the Exam Room opens.</p>
       </div>
 
       <!-- BUILD: thinking -->
@@ -632,7 +822,7 @@
 
       <!-- BUILD: error -->
       <div class="view" id="view-quiz-error">
-        <p class="err-msg" id="quiz-error-text">Your questions didn't come through — probably a network blip. Your tower and progress are safe.</p>
+        <p class="err-msg" id="quiz-error-text">Your questions didn't come through. Your tube and progress are safe.</p>
         <button type="button" class="paper-btn" id="btn-quiz-retry">↻ Try again</button>
       </div>
 
@@ -662,7 +852,7 @@
 
       <!-- Locked Exam Room notice -->
       <div class="view" id="view-locked">
-        <p class="paper-quiet">Top out a tower with your accuracy up — the Exam Room opens when you've mastered a topic. Mastery is 10 answered on one topic at 85% right; the shelf up top keeps count for you.</p>
+        <p class="paper-quiet">Keep the tube from overflowing with your accuracy up — the Exam Room opens when you've mastered a topic. Mastery is 10 answered on one topic at 85% right; the shelf up top keeps count for you.</p>
         <div class="paper-actions">
           <button type="button" class="paper-btn" id="btn-keep-building">Keep building →</button>
         </div>
@@ -761,6 +951,13 @@
     </svg>
   </button>
 
+  <!-- Lights — teen-mode effects picker (hidden in sensible mode) -->
+  <button type="button" class="lights-btn hidden" id="lights-btn" title="Lights — pick your effects" aria-label="Open the lights picker"><span class="lb-dot"></span>Lights</button>
+  <div class="lights-panel hidden" id="lights-panel" role="dialog" aria-label="Lights">
+    <div class="lp-head"><span class="lp-title">Lights</span><button type="button" class="lp-close" id="lights-close" aria-label="Close">✕</button></div>
+    <div class="lp-body" id="lights-body"></div>
+  </div>
+
   <!-- Explain popup -->
   <div class="explain-popup hidden" id="explain-popup">
     <div class="exp-text" id="explain-text"></div>
@@ -768,6 +965,7 @@
     <button class="exp-close" id="explain-close">close</button>
   </div>
 
+  <script src="/assets/study-fx.js?v=1"></script>
   <script>
   (() => {
     'use strict';
@@ -781,9 +979,14 @@
         quiz: {
           perTopic: {}, towersTopped: 0, examUnlocked: false,
           dayXP: { day: '', points: 0 },
-          bestRunSeconds: 0, bestRunQuestions: 0, muted: false,
+          bestRunSeconds: 0, bestRunQuestions: 0, muted: true,   // sound OFF by default (brief)
           qstate: {}, serveCount: 0,
         },
+        // Exam Room memory — stems asked (last 40) so tomorrow doesn't repeat today
+        examAsked: [],
+        // Per-user look + light show: mode 'sensible' | 'teen'; motion 'auto' | 'full' | 'reduced';
+        // fx = { [effectId]: true|false } picks; ambient loops live in the same map
+        ui: { mode: 'sensible', motion: 'auto', fx: {} },
       },
       stage: 'build',        // 'build' | 'exam'
       buildView: 'idle',     // idle | thinking | question | error
@@ -808,6 +1011,12 @@
       askedSoFar: [],
       sessionCount: 0,
       lastError: null,
+
+      // Light-show bookkeeping (teen mode)
+      fxStreak: 0,        // consecutive correct in this sitting
+      wrongRun: 0,        // consecutive wrong in this sitting
+      lastChosen: null,   // the option button the student tapped
+      saveTimer: null, saveDirty: false, saveFails: 0,
     };
 
     // ── Element refs ───────────────────────────────────────────────────────
@@ -870,7 +1079,12 @@
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
       });
-      return r.json();
+      let d = null;
+      try { d = await r.json(); } catch (e) { d = null; }
+      if (!d || typeof d !== 'object') d = { ok: false, error: r.status === 401 ? 'Sign in required.' : ('The server answered ' + r.status + ' with no detail.') };
+      if (!r.ok && !d.error) d.error = 'The server answered ' + r.status + '.';
+      if (r.status === 401 && !/sign in/i.test(d.error || '')) d.error = 'Sign in required — ' + (d.error || '');
+      return d;
     }
 
     // ── Dates ──────────────────────────────────────────────────────────────
@@ -1023,17 +1237,118 @@
               : { day: '', points: 0 },
             bestRunSeconds: qd.bestRunSeconds || 0,
             bestRunQuestions: qd.bestRunQuestions || 0,
-            muted: !!qd.muted,
+            // sound is OFF unless this person turned it on themselves
+            muted: typeof qd.muted === 'boolean' ? qd.muted : true,
             qstate: (qd.qstate && typeof qd.qstate === 'object') ? qd.qstate : {},
             serveCount: qd.serveCount || 0,
           };
+          state.progress.examAsked = Array.isArray(d.examAsked) ? d.examAsked.slice(-40) : [];
+          const ui = (d.ui && typeof d.ui === 'object') ? d.ui : {};
+          state.progress.ui = {
+            mode: ui.mode === 'teen' ? 'teen' : 'sensible',
+            motion: ['auto', 'full', 'reduced'].includes(ui.motion) ? ui.motion : 'auto',
+            fx: (ui.fx && typeof ui.fx === 'object') ? ui.fx : {},
+          };
+          mergePerTopic(); // fold "Criminal: causation" / "criminal - causation" into one shelf chip
         }
       } catch (e) { /* first visit or offline — start fresh, nothing lost */ }
     }
 
-    function saveProgress() {
-      post('/revision/progress', state.progress).catch(() => {});
+    // ── Topic tags: one topic, however the model spelt it ─────────────────
+    // Matching key: lower-case, letters/digits only, single spaces. Display
+    // keeps the first spelling seen (usually the teacher's list wording).
+    function normTag(tag) {
+      return String(tag || '').toLowerCase().replace(/&/g, ' and ').replace(/[^a-z0-9]+/g, ' ').replace(/\s+/g, ' ').trim();
     }
+    // Resolve a tag to the perTopic key it belongs to (existing spelling wins).
+    function tagKey(tag) {
+      const t = String(tag || 'General').trim() || 'General';
+      const n = normTag(t);
+      const pt = state.progress.quiz.perTopic;
+      if (pt[t]) return t;
+      for (const k of Object.keys(pt)) if (normTag(k) === n) return k;
+      return t;
+    }
+    function mergePerTopic() {
+      const pt = state.progress.quiz.perTopic;
+      const out = {};
+      Object.keys(pt).forEach((k) => {
+        const n = normTag(k);
+        const existing = Object.keys(out).find((o) => normTag(o) === n);
+        if (existing) { out[existing].answered += pt[k].answered || 0; out[existing].correct += pt[k].correct || 0; }
+        else out[k] = { answered: pt[k].answered || 0, correct: pt[k].correct || 0 };
+      });
+      state.progress.quiz.perTopic = out;
+    }
+
+    // Save the whole book. Never silent: a 413 compacts the redemption memory
+    // (oldest entries first) and retries; anything else retries with backoff and
+    // says so in one small line. The book keeps ~4,000 question memories max —
+    // that's a year of daily play — well under the 512kb save limit.
+    const QSTATE_KEEP = 4000;
+    function compactQstate(keep) {
+      const qs = state.progress.quiz.qstate;
+      const keys = Object.keys(qs);
+      if (keys.length <= keep) return 0;
+      // keep the most recently served; drop the stalest
+      keys.sort((a, b) => (qs[b].last || 0) - (qs[a].last || 0));
+      let dropped = 0;
+      for (let i = keep; i < keys.length; i++) { delete qs[keys[i]]; dropped++; }
+      return dropped;
+    }
+    function saveNote(text, warn) {
+      const el = $('save-note');
+      if (!text) { el.classList.add('hidden'); el.textContent = ''; return; }
+      el.textContent = text; el.classList.toggle('warn', !!warn); el.classList.remove('hidden');
+    }
+    function saveProgress() {
+      state.saveDirty = true;
+      if (state.saveTimer) return;           // coalesce a burst of saves into one
+      state.saveTimer = setTimeout(doSave, 250);
+    }
+    async function doSave() {
+      state.saveTimer = null;
+      state.saveDirty = false;
+      compactQstate(QSTATE_KEEP);
+      if (state.progress.examAsked.length > 40) state.progress.examAsked = state.progress.examAsked.slice(-40);
+      let r;
+      try {
+        r = await fetch('/revision/progress', {
+          method: 'POST', credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(state.progress),
+        });
+      } catch (e) {
+        state.saveFails++;
+        saveNote('Progress not saved yet (offline?) — retrying…', true);
+        state.saveTimer = setTimeout(doSave, Math.min(30000, 2000 * state.saveFails));
+        return;
+      }
+      if (r.status === 413) {
+        // Over the server's limit: halve the memory and go again, one step at a time
+        const dropped = compactQstate(Math.max(500, Math.floor(Object.keys(state.progress.quiz.qstate).length / 2)));
+        if (dropped > 0) { saveNote('Trimming old question memory so your progress fits — saving…', true); state.saveTimer = setTimeout(doSave, 300); }
+        else saveNote('Progress too big to save — tell Sarah.', true);
+        return;
+      }
+      if (!r.ok) {
+        state.saveFails++;
+        let msg = 'server said ' + r.status;
+        try { const d = await r.json(); if (d && d.error) msg = d.error; } catch (e) { /* not json */ }
+        if (r.status === 401) { saveNote('Signed out — sign in again to keep saving progress.', true); return; }
+        saveNote('Progress not saved (' + msg + ') — retrying…', true);
+        state.saveTimer = setTimeout(doSave, Math.min(30000, 2000 * state.saveFails));
+        return;
+      }
+      state.saveFails = 0;
+      saveNote('');
+      if (state.saveDirty) { state.saveTimer = setTimeout(doSave, 250); }
+    }
+    // A save that's still coalescing when the tab closes goes out now
+    window.addEventListener('pagehide', () => {
+      if (!state.saveDirty && !state.saveTimer) return;
+      try { navigator.sendBeacon && navigator.sendBeacon('/revision/progress', new Blob([JSON.stringify(state.progress)], { type: 'application/json' })); } catch (e) { /* best effort */ }
+    });
 
     // ── Setup ──────────────────────────────────────────────────────────────
     function prefillSetup() {
@@ -1054,7 +1369,7 @@
       }
       setupNudge.classList.add('hidden');
       state.progress.settings = {
-        subject,
+        subject: subject.replace(/\s+/g, ' '),
         level: $('setup-level').value,
         board: $('setup-board').value,
         topic: $('setup-topic').value.trim(),
@@ -1109,8 +1424,13 @@
         state.fetchingBatch = false;
         // Only surface the error if the student is actually waiting on us —
         // a failed background prefetch retries itself when the queue runs dry.
+        // The CAUSE is shown, not "network blip": the server strips vendor names.
         if (state.awaitingServe) {
           state.awaitingServe = false;
+          const cause = (e && e.message && e.message !== 'no questions' && e.message !== 'empty batch') ? e.message : '';
+          $('quiz-error-text').textContent = cause
+            ? 'Your questions didn\'t come through — ' + cause + ' Your tube and progress are safe.'
+            : 'Your questions didn\'t come through — the question service didn\'t answer. Your tube and progress are safe.';
           setBuild('error');
         }
       }
@@ -1175,7 +1495,11 @@
         state.bankBuild.building = !!d.building;
         state.bankBuild.topicsDone = d.topicsDone || 0;
         state.bankBuild.topicsTotal = d.topicsTotal || 0;
+        state.bankBuild.topicsSkipped = d.topicsSkipped || 0;
         state.bankBuild.statusCount = d.count || 0;
+        state.bankBuild.failed = d.failed || 0;
+        state.bankBuild.added = d.added || 0;
+        state.bankBuild.lastError = d.lastError || null;
         state.bankBuild.known = true;
         if (d.building && d.count >= 15 && state.bank.count < 15) refreshBank();
         if (!d.building) {
@@ -1196,14 +1520,40 @@
       if (!state.bank.loaded && !b.known) { el.classList.add('hidden'); return; }
       el.classList.remove('hidden');
       const n = Math.max(state.bank.count, b.statusCount || 0);
+      el.innerHTML = '';
+      const txt = (t) => el.appendChild(document.createTextNode(t));
       if (b.building) {
-        const est = Math.max(n, (b.topicsTotal || 0) * 10);
-        el.textContent = 'Building your question bank — ' + n + ' of ~' + est + '…';
+        const est = Math.max(n, ((b.topicsTotal || 0) - (b.topicsSkipped || 0)) * 10 + n);
+        txt('Building your question bank — ' + n + ' of ~' + est + (b.failed ? ' · ' + b.failed + ' topic' + (b.failed === 1 ? '' : 's') + ' failed so far' : '') + '…');
+      } else if (b.failed && b.lastError) {
+        // A build that failed is never invisible: say why, offer the retry
+        const span = document.createElement('span');
+        span.className = 'bank-err';
+        span.textContent = 'Bank: ' + n + ' question' + (n === 1 ? '' : 's') + ' · ' + b.failed + ' topic' + (b.failed === 1 ? '' : 's') + ' didn\'t build — ' + b.lastError;
+        el.appendChild(span);
+        const btn = document.createElement('button');
+        btn.type = 'button'; btn.textContent = '↻ Retry build';
+        btn.addEventListener('click', () => { state.bankBuild.failed = 0; state.bankBuild.lastError = null; kickBankBuild(); renderBankLine(); });
+        el.appendChild(btn);
       } else if (b.ready) {
-        el.textContent = 'Question bank ready — ' + n + ' questions';
+        txt('Question bank ready — ' + n + ' questions');
       } else {
-        el.textContent = 'Bank: ' + n + ' question' + (n === 1 ? '' : 's');
+        txt('Bank: ' + n + ' question' + (n === 1 ? '' : 's'));
       }
+    }
+
+    // Kick (or top up) the bank build. Safe on every visit: the server skips
+    // topics that are already stocked and a full no-list bank costs nothing.
+    function kickBankBuild() {
+      const s = state.progress.settings;
+      post('/revision/bank/build', {
+        subject: s.subject, board: s.board, level: s.level,
+        topics: s.topic || '', perTopic: 10,
+      }).then((d) => {
+        if (d && d.ok && (d.started || d.alreadyRunning)) startBankPolling();
+        else if (d && d.ok && d.stocked) { state.bankBuild.known = true; renderBankLine(); }
+        else if (d && !d.ok) { state.bankBuild.known = true; state.bankBuild.failed = 1; state.bankBuild.lastError = d.error || 'the build request failed'; renderBankLine(); }
+      }).catch(() => {});
     }
 
     async function startPlay() {
@@ -1224,21 +1574,18 @@
       renderBankLine();
 
       await refreshBank();
+      // ALWAYS ask the server to top the bank up — a 17-topic list with only
+      // 15 questions banked used to stop building forever once play switched to
+      // the bank (findings 2.2 #2). Stocked topics are skipped server-side.
+      kickBankBuild();
       if (state.bank.count >= 15) {
         // Stocked — play from the library, no AI calls at all
         state.playMode = 'bank';
         serveQuiz();
         return;
       }
-
-      // Thin bank: kick a background build and play on live batches meanwhile
-      // (each batch is auto-banked server-side, so play itself stocks the bank)
-      const s = state.progress.settings;
-      post('/revision/bank/build', {
-        subject: s.subject, board: s.board, level: s.level,
-        topics: s.topic || '', perTopic: 10,
-      }).catch(() => {});
-      startBankPolling();
+      // Thin bank: play on live batches meanwhile (each batch is auto-banked
+      // server-side, so play itself stocks the bank)
       serveQuiz();
     }
 
@@ -1275,7 +1622,8 @@
       const unseen = notRecent.filter((e) => !e.st || e.st.seen === 0);
       if (unseen.length) {
         const weak = weakQuizTopics();
-        const weakUnseen = unseen.filter((e) => weak.indexOf((e.q.topicTag || '').trim()) !== -1);
+        const weakNorm = weak.map(normTag);
+        const weakUnseen = unseen.filter((e) => weakNorm.indexOf(normTag(e.q.topicTag || '')) !== -1);
         if (weakUnseen.length) return weakUnseen[Math.floor(Math.random() * weakUnseen.length)].q;
         const byTopic = {};
         unseen.forEach((e) => {
@@ -1371,9 +1719,11 @@
         btn.appendChild(letter);
         btn.appendChild(text);
         btn.appendChild(mark);
-        btn.addEventListener('click', () => answerQuiz(i));
+        btn.addEventListener('click', () => { state.lastChosen = btn; answerQuiz(i); });
         wrap.appendChild(btn);
       });
+      state.lastChosen = null;
+      fxEvent('question');
 
       $('qz-why-wrap').classList.add('hidden');
       $('qz-mastery').classList.add('hidden');
@@ -1408,6 +1758,7 @@
       // The teaching moment — one sentence, always shown
       $('qz-why').textContent = q.why || '';
       $('qz-why-wrap').classList.remove('hidden');
+      if (q.why) fxEvent('why');
 
       // Redemption memory — a wrong answer keeps this question coming back
       // until it's beaten; rides the per-answer save below
@@ -1420,7 +1771,8 @@
       // Tallies (session + lifetime per-topic)
       state.sessionAnswered += 1;
       if (correct) state.sessionCorrect += 1;
-      const tag = (q.topicTag || state.progress.settings.subject || 'General').trim();
+      // one topic however it was spelt — "Criminal: causation" == "criminal - causation"
+      const tag = tagKey(q.topicTag || state.progress.settings.subject || 'General');
       const wasMastered = isMastered(tag);
       const pt = state.progress.quiz.perTopic;
       const t = pt[tag] = pt[tag] || { answered: 0, correct: 0 };
@@ -1428,10 +1780,13 @@
       if (correct) t.correct += 1;
 
       // Mastery + the gate
+      let unlockedNow = false, masteredNow = false;
       if (!wasMastered && isMastered(tag)) {
         const line = $('qz-mastery');
+        masteredNow = true;
         if (!state.progress.quiz.examUnlocked) {
           state.progress.quiz.examUnlocked = true;
+          unlockedNow = true;
           line.textContent = '🏅 ' + tag + ' mastered — the Exam Room just unlocked.';
         } else {
           line.textContent = '🏅 ' + tag + ' mastered.';
@@ -1444,6 +1799,11 @@
 
       // The tube reacts first — any new run record rides the same save below
       game.answer(correct);
+
+      // The light show (teen mode only; sensible fires nothing)
+      if (correct) { state.fxStreak += 1; state.wrongRun = 0; } else { state.fxStreak = 0; state.wrongRun += 1; }
+      fxEvent(correct ? 'correct' : 'wrong', { streak: state.fxStreak, wrongRun: state.wrongRun, tag });
+      if (unlockedNow) fxEvent('unlock', { tag }); else if (masteredNow) fxEvent('mastered', { tag });
 
       saveProgress();
       renderStrip();
@@ -1483,7 +1843,9 @@
       const BALL_COLORS = ['#e74c3c', '#f39c12', '#f1c40f', '#2ecc71', '#3498db', '#9b59b6', '#e91e63', '#1abc9c'];
 
       let canvas = null, ctx = null, W = 0, H = 0;
-      let col = { bg: '#e8e8e8', text: '#1a1a1a', accent: '#e91e63', muted: 'rgba(0,0,0,0.55)', faint: 'rgba(0,0,0,0.35)' };
+      let col = { bg: '#e8e8e8', text: '#1a1a1a', accent: '#e91e63', muted: 'rgba(0,0,0,0.55)', faint: 'rgba(0,0,0,0.35)', neon: false };
+      const NEON_BALLS = ['#ff2d95', '#00f0ff', '#b6ff00', '#ffb800', '#a855f7', '#ff5e3a', '#ffffff', '#ff7cc0'];
+      let reducedMotion = false;   // shakes off, drip still animates
       let TX = 0, TY = 4, TW = 0, TB = 0, innerH = 1; // tube geometry
       let pattern = null;                             // packed-ball texture for the settled pile
 
@@ -1567,10 +1929,12 @@
           accent: get('--accent', '#e91e63'),
           muted: get('--text-muted', 'rgba(0,0,0,0.55)'),
           faint: get('--text-faint', 'rgba(0,0,0,0.35)'),
+          neon: get('--tube-neon', '0') === '1',   // teen mode: glowing glass tube
         };
+        pattern = null; // rebuild the packed-ball texture in the new palette
       }
 
-      const randColor = () => BALL_COLORS[Math.floor(Math.random() * BALL_COLORS.length)];
+      const randColor = () => (col.neon ? NEON_BALLS : BALL_COLORS)[Math.floor(Math.random() * (col.neon ? NEON_BALLS : BALL_COLORS).length)];
       const ballR = () => (H < 140 ? 3.6 : 4.4);
       const levelPx = () => (level / INCHES) * innerH;
       const pileTopY = () => TB - levelPx() + settleOff;
@@ -1636,7 +2000,7 @@
           text, color, life: 1,
         });
       }
-      function shake(ms, mag) { shakeT = Math.max(shakeT, ms / 1000); shakeMag = mag; }
+      function shake(ms, mag) { if (reducedMotion) return; shakeT = Math.max(shakeT, ms / 1000); shakeMag = mag; }
 
       function spawnBall(vol, yOff) {
         falling.push({
@@ -1838,8 +2202,8 @@
           ctx.translate((Math.random() - 0.5) * 2 * shakeMag, (Math.random() - 0.5) * 2 * shakeMag);
         }
 
-        // tube back — a soft inset channel in the desk material
-        ctx.fillStyle = 'rgba(0,0,0,0.045)';
+        // tube back — a soft inset channel in the desk material (teen: glass on black)
+        ctx.fillStyle = col.neon ? 'rgba(0,240,255,0.04)' : 'rgba(0,0,0,0.045)';
         rrect(TX - 3, TY - 3, TW + 6, TB - TY + 10, 10); ctx.fill();
 
         // inside the tube (clipped): pile, surface balls, warning glow, falling balls
@@ -1871,26 +2235,35 @@
 
         // glass shine down the left inside edge
         const shine = ctx.createLinearGradient(TX, 0, TX + 12, 0);
-        shine.addColorStop(0, 'rgba(255,255,255,0.35)');
+        shine.addColorStop(0, col.neon ? 'rgba(255,255,255,0.22)' : 'rgba(255,255,255,0.35)');
         shine.addColorStop(1, 'rgba(255,255,255,0)');
         ctx.fillStyle = shine;
         rrect(TX, TY, 12, TB - TY, 8); ctx.fill();
 
-        // frame
-        ctx.strokeStyle = 'rgba(0,0,0,0.09)';
-        ctx.lineWidth = 2;
-        rrect(TX, TY, TW, TB - TY, 8); ctx.stroke();
+        // frame — teen mode: a glowing neon glass tube
+        if (col.neon) {
+          ctx.save();
+          ctx.strokeStyle = 'rgba(0,240,255,0.65)';
+          ctx.lineWidth = 2;
+          ctx.shadowColor = '#00f0ff'; ctx.shadowBlur = 10;
+          rrect(TX, TY, TW, TB - TY, 8); ctx.stroke();
+          ctx.restore();
+        } else {
+          ctx.strokeStyle = 'rgba(0,0,0,0.09)';
+          ctx.lineWidth = 2;
+          rrect(TX, TY, TW, TB - TY, 8); ctx.stroke();
+        }
 
         // the valve — a mouth at the bottom that opens on a flush
         const vw = Math.min(30, TW * 0.5);
         const vx = TX + TW / 2 - vw / 2;
         if (valveT > 0) {
-          ctx.strokeStyle = 'rgba(0,0,0,0.18)';
+          ctx.strokeStyle = col.neon ? 'rgba(0,240,255,0.6)' : 'rgba(0,0,0,0.18)';
           ctx.lineWidth = 2;
           ctx.beginPath(); ctx.moveTo(vx, TB); ctx.lineTo(vx - 4, TB + 7); ctx.stroke();
           ctx.beginPath(); ctx.moveTo(vx + vw, TB); ctx.lineTo(vx + vw + 4, TB + 7); ctx.stroke();
         } else {
-          ctx.fillStyle = 'rgba(0,0,0,0.12)';
+          ctx.fillStyle = col.neon ? 'rgba(0,240,255,0.5)' : 'rgba(0,0,0,0.12)';
           rrect(vx, TB - 1, vw, 4, 2); ctx.fill();
         }
 
@@ -1944,6 +2317,9 @@
         setHooks: (h) => { hooks = Object.assign(hooks, h); },
         runTime: () => run.time,
         runQuestions: () => run.questions,
+        // theme / motion hooks — the page calls these on mode & motion changes
+        retheme: () => { readPalette(); if (canvas) { regenTop(); if (ctx) makePattern(); draw(); } },
+        setReducedMotion: (v) => { reducedMotion = !!v; if (reducedMotion) { shakeT = 0; } },
       };
     })();
 
@@ -2002,7 +2378,10 @@
     document.addEventListener('pointerdown', () => game.ensureAudio(), { once: true });
 
     document.addEventListener('visibilitychange', () => {
-      if (!document.hidden) game.wake();
+      if (document.hidden) return;
+      game.wake();
+      // a bank poll skipped while the tab was in the background runs now, not in 20s
+      if (bankStatusTimer) pollBankStatus();
     });
 
     let resizeTimer = null;
@@ -2027,9 +2406,14 @@
 
         state.currentQ = d;
         state.sessionCount += 1;
-        // Remember a ≤10-word summary so this session never repeats itself
-        state.askedSoFar.push(d.question.split(/\s+/).slice(0, 10).join(' '));
+        // Remember a ≤10-word summary so this session never repeats itself —
+        // and keep the last 40 in the book so tomorrow doesn't either
+        const stem = d.question.split(/\s+/).slice(0, 10).join(' ');
+        state.askedSoFar.push(stem);
         if (state.askedSoFar.length > 30) state.askedSoFar.shift();
+        state.progress.examAsked.push(stem);
+        if (state.progress.examAsked.length > 40) state.progress.examAsked.shift();
+        saveProgress();
 
         $('q-number').textContent = 'Question ' + state.sessionCount;
         $('q-context').textContent = [s.subject, s.board !== 'Other' ? s.board : '', s.level]
@@ -2046,7 +2430,8 @@
         setExam('question');
         answerArea.focus();
       } catch (e) {
-        $('error-text').textContent = 'Couldn\'t fetch your question — probably a network blip. Your progress is safe.';
+        const cause = e && e.message && !/no question/.test(e.message) ? ' — ' + e.message : '';
+        $('error-text').textContent = 'Couldn\'t fetch your question' + cause + '. Your progress is safe.';
         setExam('error');
       }
     }
@@ -2109,7 +2494,7 @@
         // Keep their answer on the paper — just let them resend it
         btnMark.disabled = false;
         btnMark.textContent = '↻ Try marking again';
-        answerHint.textContent = 'Marking didn\'t come back — your answer is still here, hit the button again.';
+        answerHint.textContent = 'Marking didn\'t come back' + (e && e.message && !/no mark/.test(e.message) ? ' (' + e.message + ')' : '') + ' — your answer is still here, hit the button again.';
         answerHint.classList.remove('hidden');
       }
     }
@@ -2192,16 +2577,219 @@
       openExplain(e.currentTarget, concept);
     });
 
+    // ── LOOK & LIGHTS — Sensible ↔ Teen, motion, and the effects picker ─────
+    // Teen = Sarah's layout on black with neon over it (CSS 'teen' class on
+    // <html>) + the light show from /assets/study-fx.js. Sensible = the page
+    // exactly as it is, no effects. Remembered per user in the progress book
+    // (server) and mirrored in localStorage so the black comes on before the
+    // first fetch answers (no white flash for a teen).
+    const fx = window.StudyFX || null;
+    const UI_LS_KEY = 'q-revise-ui';
+    function lsUI(get, val) {
+      try { if (get) return JSON.parse(localStorage.getItem(UI_LS_KEY) || 'null'); localStorage.setItem(UI_LS_KEY, JSON.stringify(val)); } catch (e) { /* private mode */ }
+      return null;
+    }
+    const isTeen = () => state.progress.ui.mode === 'teen';
+
+    // The STARTER SET — what fires by default in teen mode until Sarah ticks
+    // her own picks. Every ported effect is listed by the EVENT it belongs to;
+    // 'on' = default-on. Loops (kind:'loop') under streak/ambient/cursor.
+    const FX_EVENTS = [
+      { id: 'correct', title: 'Correct answer', when: 'every right answer',
+        fx: [
+          { id: 'paint-splat', on: true }, { id: 'sparks', on: true }, { id: 'confetti' }, { id: 'fireworks' }, { id: 'stamp' }, { id: 'sonar' }, { id: 'ink-drop' }, { id: 'coins' }, { id: 'shimmer' },
+        ] },
+      { id: 'streak', title: 'Streak', when: 'while a run is alive',
+        fx: [
+          { id: 'combo-slam', on: true, when: 'streak ≥ 3' }, { id: 'sunburst', on: true, when: 'every 5th' }, { id: 'flame-border', on: true, when: 'grows with streak', loop: true }, { id: 'lightning', when: 'every 5th' }, { id: 'laser', when: 'every 3rd' }, { id: 'marquee', when: 'streak ≥ 5', loop: true }, { id: 'haze', when: 'streak ≥ 7', loop: true },
+        ] },
+      { id: 'wrong', title: 'Wrong answer', when: 'every wrong answer',
+        fx: [
+          { id: 'tomato', on: true }, { id: 'glitch', on: true }, { id: 'shake', on: true }, { id: 'vignette', on: true }, { id: 'shatter', on: true, when: '3 wrong in a row' }, { id: 'smoke' }, { id: 'buzzer-x' }, { id: 'static' },
+        ] },
+      { id: 'unlock', title: 'Exam Room unlock / topic mastered', when: 'mastery moments',
+        fx: [
+          { id: 'sunburst', on: true }, { id: 'neon-flicker', on: true }, { id: 'lightning' }, { id: 'trophy' }, { id: 'stars' }, { id: 'chrome-text' }, { id: 'fireworks' },
+        ] },
+      { id: 'question', title: 'New question', when: 'as each question lands',
+        fx: [
+          { id: 'neon-trace' }, { id: 'laser' }, { id: 'glitch-text' }, { id: 'typewriter', when: 'the WHY line' }, { id: 'wipe' }, { id: 'curtain' }, { id: 'iris' }, { id: 'pixel' },
+        ] },
+      { id: 'ambient', title: 'Ambient (always on while teen)', when: 'off by default — pick one, maybe two',
+        fx: [
+          { id: 'flies', loop: true }, { id: 'fireflies', loop: true }, { id: 'embers', loop: true }, { id: 'dust', loop: true }, { id: 'bubbles', loop: true }, { id: 'aurora', loop: true }, { id: 'starfield', loop: true }, { id: 'synth-grid', loop: true }, { id: 'rain-glass', loop: true }, { id: 'scanlines', loop: true }, { id: 'matrix', loop: true }, { id: 'digital-snow', loop: true },
+        ] },
+      { id: 'cursor', title: 'Cursor & finger', when: 'follows the pointer',
+        fx: [
+          { id: 'comet', loop: true }, { id: 'sparkle-trail', loop: true }, { id: 'ripple', loop: true },
+        ] },
+    ];
+    // pick key = event + effect (the same effect can be on for one event, off for another)
+    const pickKey = (ev, id) => ev + ':' + id;
+    function fxOn(ev, id) {
+      const v = state.progress.ui.fx[pickKey(ev, id)];
+      if (typeof v === 'boolean') return v;
+      const evDef = FX_EVENTS.find((g) => g.id === ev); const d = evDef && evDef.fx.find((f) => f.id === id);
+      return !!(d && d.on);
+    }
+    function setFxOn(ev, id, on) { state.progress.ui.fx[pickKey(ev, id)] = !!on; lsUI(false, state.progress.ui); saveProgress(); }
+
+    // Motion: 'auto' follows the OS; 'reduced' forces it; 'full' overrides the OS.
+    function applyMotion() {
+      const m = state.progress.ui.motion || 'auto';
+      const osReduced = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      const reduced = m === 'reduced' || (m === 'auto' && osReduced);
+      document.documentElement.classList.toggle('reduce-motion', reduced);
+      if (fx) fx.setReducedMotion(m === 'auto' ? null : (m === 'reduced'));
+      game.setReducedMotion(reduced);
+    }
+
+    // The mode switch. Switching INTO teen plays the blackout + neon power-on.
+    function applyMode(mode, opts) {
+      opts = opts || {};
+      const teen = mode === 'teen';
+      state.progress.ui.mode = teen ? 'teen' : 'sensible';
+      document.documentElement.classList.toggle('teen', teen);
+      document.querySelectorAll('#mode-switch button').forEach((b) => b.classList.toggle('on', b.dataset.mode === state.progress.ui.mode));
+      $('lights-btn').classList.toggle('hidden', !teen);
+      if (!teen) $('lights-panel').classList.add('hidden');
+      game.retheme();
+      if (fx) {
+        fx.setEnabled(teen);
+        if (teen) { fx.init(); startAmbient(); if (opts.animate) fx.fire('power-on'); }
+      }
+      if (opts.persist) { lsUI(false, state.progress.ui); saveProgress(); }
+    }
+    function startAmbient() {
+      if (!fx || !isTeen()) return;
+      ['ambient', 'cursor'].forEach((ev) => {
+        const g = FX_EVENTS.find((x) => x.id === ev);
+        g.fx.forEach((f) => { if (fxOn(ev, f.id)) fx.loop(f.id); else fx.stopLoop(f.id); });
+      });
+    }
+    // Game events → effects. Sensible mode: nothing (fx.setEnabled(false)).
+    function fxEvent(ev, info) {
+      if (!fx || !isTeen()) return;
+      info = info || {};
+      const target = state.lastChosen && state.lastChosen.isConnected ? state.lastChosen : null;
+      const on = (id) => fxOn(ev, id);
+      if (ev === 'correct') {
+        ['paint-splat', 'sparks', 'confetti', 'fireworks', 'stamp', 'sonar', 'ink-drop', 'coins', 'shimmer'].forEach((id) => { if (on(id)) fx.fire(id, { target }); });
+        // streak layer
+        const st = info.streak || 0;
+        if (st >= 3 && fxOn('streak', 'combo-slam')) fx.fire('combo-slam', { streak: st });
+        if (st >= 5 && st % 5 === 0 && fxOn('streak', 'sunburst')) fx.fire('sunburst', { label: 'Streak', text: String(st) });
+        if (st >= 5 && st % 5 === 0 && fxOn('streak', 'lightning')) fx.fire('lightning');
+        if (st >= 3 && st % 3 === 0 && fxOn('streak', 'laser')) fx.fire('laser');
+        if (fxOn('streak', 'flame-border')) { if (st >= 2) { fx.loop('flame-border', { streak: Math.min(10, st) }); fx.setLoopParam('flame-border', 'streak', Math.min(10, st)); } else fx.stopLoop('flame-border'); }
+        if (fxOn('streak', 'marquee')) { if (st >= 5) fx.loop('marquee'); else fx.stopLoop('marquee'); }
+        if (fxOn('streak', 'haze')) { if (st >= 7) fx.loop('haze'); else fx.stopLoop('haze'); }
+        $('stat-streak').classList.toggle('stat-streak-lit', st >= 3);
+      } else if (ev === 'wrong') {
+        ['tomato', 'glitch', 'shake', 'vignette', 'smoke', 'buzzer-x', 'static'].forEach((id) => { if (on(id)) fx.fire(id, { target }); });
+        if ((info.wrongRun || 0) >= 3 && on('shatter')) fx.fire('shatter', { target });
+        fx.stopLoop('flame-border'); fx.stopLoop('marquee'); fx.stopLoop('haze');
+        $('stat-streak').classList.remove('stat-streak-lit');
+      } else if (ev === 'unlock' || ev === 'mastered') {
+        const text = ev === 'unlock' ? 'Exam room open' : 'Mastered';
+        ['sunburst', 'neon-flicker', 'lightning', 'trophy', 'stars', 'chrome-text', 'fireworks'].forEach((id) => {
+          if (!fxOn('unlock', id)) return;
+          if (id === 'sunburst') fx.fire('sunburst', { label: ev === 'unlock' ? 'Exam Room' : 'Mastered', text: ev === 'unlock' ? 'OPEN' : '★' });
+          else if (id === 'neon-flicker') fx.fire('neon-flicker', { text });
+          else if (id === 'chrome-text') fx.fire('chrome-text', { text: ev === 'unlock' ? 'Unlocked' : 'Mastered', sub: (info.tag || '').slice(0, 40) });
+          else fx.fire(id);
+        });
+      } else if (ev === 'question') {
+        ['neon-trace', 'laser', 'glitch-text', 'wipe', 'curtain', 'iris', 'pixel'].forEach((id) => { if (on(id)) fx.fire(id); });
+      } else if (ev === 'why') {
+        if (on('typewriter')) fx.fire('typewriter');
+      }
+    }
+
+    // ── The Lights panel: every ported effect, grouped by event, on/off + Test
+    function buildLightsPanel() {
+      const body = $('lights-body'); body.innerHTML = '';
+      const meta = {}; if (fx) fx.list().forEach((d) => { meta[d.id] = d; });
+      const row = (label, seg) => { const r = document.createElement('div'); r.className = 'lp-row'; const l = document.createElement('span'); l.className = 'lp-lbl'; l.textContent = label; r.appendChild(l); r.appendChild(seg); body.appendChild(r); return r; };
+      const segment = (options, current, onPick) => { const s = document.createElement('div'); s.className = 'lp-seg'; options.forEach(([val, txt]) => { const b = document.createElement('button'); b.type = 'button'; b.textContent = txt; b.classList.toggle('on', val === current); b.addEventListener('click', () => { onPick(val); s.querySelectorAll('button').forEach((x) => x.classList.toggle('on', x.textContent === txt)); }); s.appendChild(b); }); return s; };
+      row('Look', segment([['sensible', 'Sensible'], ['teen', 'Teen']], state.progress.ui.mode, (v) => applyMode(v, { animate: v === 'teen', persist: true })));
+      row('Motion', segment([['auto', 'Auto'], ['full', 'Full'], ['reduced', 'Reduced']], state.progress.ui.motion, (v) => { state.progress.ui.motion = v; applyMotion(); lsUI(false, state.progress.ui); saveProgress(); }));
+      row('Sound', segment([['off', 'Off'], ['on', 'On']], state.progress.quiz.muted ? 'off' : 'on', (v) => { state.progress.quiz.muted = v === 'off'; $('tower-mute').textContent = state.progress.quiz.muted ? '🔇' : '🔈'; saveProgress(); }));
+      FX_EVENTS.forEach((g) => {
+        const sec = document.createElement('div'); sec.className = 'lp-group';
+        const h = document.createElement('h4'); h.textContent = g.title; const sm = document.createElement('small'); sm.textContent = g.when; h.appendChild(sm); sec.appendChild(h);
+        g.fx.forEach((f) => {
+          const m = meta[f.id]; if (!m) return;
+          const line = document.createElement('div'); line.className = 'lp-fx';
+          const lab = document.createElement('label'); const cb = document.createElement('input'); cb.type = 'checkbox'; cb.checked = fxOn(g.id, f.id);
+          cb.addEventListener('change', () => { setFxOn(g.id, f.id, cb.checked); if (g.id === 'ambient' || g.id === 'cursor') startAmbient(); if (!cb.checked && f.loop) fx.stopLoop(f.id); });
+          const nm = document.createElement('span'); nm.textContent = (m.star ? '★ ' : '') + m.name; nm.title = m.purpose;
+          lab.appendChild(cb); lab.appendChild(nm); line.appendChild(lab);
+          if (f.when) { const w = document.createElement('span'); w.className = 'lp-when'; w.textContent = f.when; line.appendChild(w); }
+          const t = document.createElement('button'); t.type = 'button'; t.className = 'lp-test'; t.textContent = f.loop ? (fx && fx.isLooping(f.id) ? 'Stop' : 'Try') : 'Test';
+          t.addEventListener('click', () => {
+            if (!fx) return;
+            if (!isTeen()) applyMode('teen', { animate: false, persist: true });
+            const target = state.lastChosen && state.lastChosen.isConnected ? state.lastChosen : (document.querySelector('#qz-options .opt') || null);
+            if (f.loop) { if (fx.isLooping(f.id)) { fx.stopLoop(f.id); t.textContent = 'Try'; } else { fx.loop(f.id); t.textContent = 'Stop'; } }
+            else fx.fire(f.id, { target, streak: 5, text: f.id === 'neon-flicker' ? 'Exam room open' : undefined, label: 'Streak' });
+          });
+          line.appendChild(t); sec.appendChild(line);
+        });
+        body.appendChild(sec);
+      });
+      const note = document.createElement('div'); note.className = 'lp-note'; note.textContent = 'Ticks are saved to your account. Ambient and cursor effects run all the time in Teen — pick one, maybe two, on a phone. Motion “Reduced” trims particles and drops the shakes.'; body.appendChild(note);
+      const stop = document.createElement('button'); stop.type = 'button'; stop.className = 'lp-stop'; stop.textContent = 'Stop everything running now'; stop.addEventListener('click', () => { if (fx) fx.stopAll(); buildLightsPanel(); }); body.appendChild(stop);
+    }
+    $('lights-btn').addEventListener('click', () => { const p = $('lights-panel'); const open = p.classList.contains('hidden'); if (open) buildLightsPanel(); p.classList.toggle('hidden', !open); });
+    $('lights-close').addEventListener('click', () => $('lights-panel').classList.add('hidden'));
+    document.querySelectorAll('#mode-switch button').forEach((b) => b.addEventListener('click', () => {
+      const m = b.dataset.mode; if (m === state.progress.ui.mode) return;
+      applyMode(m, { animate: m === 'teen', persist: true });
+    }));
+    // The tube mute button and the panel's Sound row are the same setting
+    $('tower-mute').addEventListener('click', () => { if (!$('lights-panel').classList.contains('hidden')) buildLightsPanel(); });
+
+    // Apply the last-known look immediately (before the server answers) so a
+    // teen doesn't get a flash of the light page.
+    (function earlyLook() {
+      const ls = lsUI(true);
+      if (ls && ls.mode === 'teen') { state.progress.ui.mode = 'teen'; document.documentElement.classList.add('teen'); }
+      if (ls && ls.motion) state.progress.ui.motion = ls.motion;
+      if (ls && ls.fx && typeof ls.fx === 'object') state.progress.ui.fx = ls.fx;
+    })();
+
+    // ?look=teen|sensible&fx=id,id  — test hooks for headless screenshots (harmless for users)
+    const qs = new URLSearchParams(location.search);
+
     // ── Boot ───────────────────────────────────────────────────────────────
     (async () => {
       await loadProgress();
+      if (qs.get('look') === 'teen') state.progress.ui.mode = 'teen';
+      if (qs.get('look') === 'sensible') state.progress.ui.mode = 'sensible';
+      if (qs.get('motion')) state.progress.ui.motion = qs.get('motion');
       prefillSetup();
       renderStrip();
       renderShelf();
       game.init($('tower-canvas'));
       $('tower-mute').textContent = state.progress.quiz.muted ? '🔇' : '🔈';
       updateGameStats();
+      // seed the Exam Room's "don't repeat" list from the book
+      state.askedSoFar = state.progress.examAsked.slice(-30);
+      if (fx) fx.init({
+        card: () => document.querySelector('.paper'),
+        options: () => Array.from(document.querySelectorAll('#qz-options .opt')),
+        chosen: () => (state.lastChosen && state.lastChosen.isConnected ? state.lastChosen : document.querySelector('#qz-options .opt.wrong, #qz-options .opt.correct')),
+        sign: () => document.querySelector('header .brand'),
+        shake: () => document.querySelector('.desk'),
+        why: () => $('qz-why'),
+        qtext: () => $('qz-text'),
+      });
+      applyMotion();
+      applyMode(state.progress.ui.mode, { animate: false, persist: false });
+      lsUI(false, state.progress.ui);
       render();
+      if (qs.get('fx') && fx) setTimeout(() => qs.get('fx').split(',').forEach((id) => { const d = fx.list().find((x) => x.id === id.trim()); if (!d) return; if (d.kind === 'loop') fx.loop(id.trim()); else fx.fire(id.trim(), { target: document.querySelector('#qz-options .opt') }); }), 400);
     })();
   })();
   </script>

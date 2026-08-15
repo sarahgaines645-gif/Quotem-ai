@@ -162,3 +162,64 @@ behaviour Sarah describes is NOT broken; it does not exist yet. It is THE Phase 
 
 Cost rule unchanged: proving this end to end is paid runs (pennies each on Sonnet) — price it,
 get Sarah's yes, then run.
+
+## ADDENDUM 15 Aug (late) — DRAFTS AND RESUBMISSIONS ARE A FIRST-CLASS CASE
+
+Sarah's live test file was a COMPLETED submission (four written answers, declared word count,
+appendices, assessor-feedback slots) — not a blank brief. Q's brief board picked up facts from
+the ANSWERS ("a medium-sized tech company") and blended them into "what it's asking". A real
+CIPD/degree student will upload drafts and resubmissions constantly. Required:
+1. On upload, detect whether the document contains answers/draft content and/or marker
+   feedback as well as the questions (headings like "Question n (AC x.y)", "Assessor feedback",
+   declared word count, appendices, long prose under each question).
+2. If it does, ask ONE thing before building anything: "This already has answers in it —
+   start fresh, or improve what's here?" (remembered for the session).
+3. Improve mode: the brief = the QUESTIONS only; the existing answers become the student's
+   draft on the page (their words — never the model essay); the marker's feedback (if present)
+   becomes the first coaching target ("the marker said X — let's fix that first"); coverage
+   starts from what the draft already covers.
+4. Start-fresh mode: the brief = the questions only; existing answers are ignored (not shown,
+   not used to write the model essay).
+Never let a student's prior answers seed "what it's asking".
+
+## ADDENDUM 15 Aug (late) — THE TUTOR'S CHALLENGE, and how EDITING works (Sarah, verbatim-ish)
+
+Sarah, on seeing the edit stage say "replace vague phrases with the correct organisational
+terminology: 'career progression'…": *"we are basing my non-existent knowledge on this — useful
+for a person that struggles to learn. So this 'go and find the right terminology' will not help.
+We need him to highlight parts and talk through those sentences. He highlights the sentences he
+wants to change and then there are buttons that will push me to get the right info: find correct
+terminology, find strategies, thesaurus, dictionary, synonyms, case studies, references — any
+tool that will lead you into writing HIS words."*
+
+*"He needs to know his goal is to get your essay to match his as closely as possible. Tell him
+this is a challenge: your aim is to get a user to write your essay out as closely as possible
+without ever telling them what to write. You can encourage, teach, steer, explain, look up — the
+closer they get to your essay, the tutor is winning. They should take pride in having the skill to
+transfer their skills without ever writing the words. They are a pro. A skilled tutor no human
+could match, and they are going to improve the lives of the people that struggle to have nice
+lives like the people that can easily do this."*
+
+Therefore:
+- **The tutor's mission goes into every writer system prompt** (probe, stuck, edit, mark) in
+  those terms. Winning = the student's essay converging on the hidden model essay, brick by
+  brick, with the student writing every word. Never tells them what to write. Encourages,
+  teaches, steers, explains, looks things up.
+- **Editing = highlight + tools, not replacements.** After coaching: Q highlights, one at a
+  time, the sentence he would change (in the document itself), says in one plain line WHY
+  ("this is your opinion — the marker wants the concept named"), and offers TOOL BUTTONS that
+  lead the student to write it themselves: **Terminology** (the right term + a plain one-line
+  meaning + an everyday example — then "now say your sentence using it"), **Thesaurus /
+  Synonyms**, **Dictionary**, **Strategies / theories** (the relevant framework named with a
+  one-line plain explanation of why it fits here), **Case studies** (from uploaded sources
+  first; Q's knowledge second, flagged), **References** (from uploaded sources; never invented),
+  **Explain what's weak**. The student rewrites the highlighted sentence; Q compares to his
+  target and answers "closer / that's it / one thing still missing" — a visible closeness cue.
+  No ready-made rewritten sentence is ever offered during editing either.
+- Coaching stage stays: he asks, their exact words go on the page, he asks the next thing.
+
+**Sarah, on WHY it's a game (goes into Q's writer prompts, near-verbatim):** *"These are his essays.
+These are his marks. No other AI is managing to be graded by teachers. Yes, it comes easy to an AI
+to write an essay — but are they up to the challenge of writing that essay THROUGH a human, who
+creates the obstacle? That's the challenge. It's not just learning. You're taking the easy part
+and making him work to be smart through a human. That's an achievement."*
