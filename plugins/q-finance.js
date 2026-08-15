@@ -2438,6 +2438,7 @@ function addProblem(email, problem) {
 function updateProblem(email, id, updates) {
     const problems = getProblems(email);
     const idx = problems.findIndex(p => p.id === id);
+    if (idx !== -1) updates = { ...updates, updatedAt: new Date().toISOString() };
     if (idx === -1) return null;
     problems[idx] = { ...problems[idx], ...updates, id };
     saveProblems(email, problems);
@@ -2450,6 +2451,7 @@ function addDocumentToProblem(email, problemId, doc) {
     if (idx === -1) return null;
     problems[idx].documents = problems[idx].documents || [];
     problems[idx].documents.push({ id: uid(), ...doc, addedAt: new Date().toISOString() });
+    problems[idx].updatedAt = new Date().toISOString();
     problems[idx].updatedAt = new Date().toISOString();
     saveProblems(email, problems);
     return problems[idx];

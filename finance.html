@@ -264,18 +264,27 @@
 
     /* ── Problem queue ── */
     .problem-list { display: flex; flex-direction: column; gap: 10px; }
+    /* Compact: WHO is first and bold, the letter's sentence is small
+       underneath, and the time — how long it's sat, how overdue — is on
+       the same line as the amount. Sarah, 16 Aug: "too big, the company
+       isn't obvious, there's no time — it's been sitting here 30 days". */
     .problem-card {
-      border-radius: 12px; padding: 14px 16px;
+      border-radius: 12px; padding: 10px 14px;
       background: var(--bg); box-shadow: var(--neu-raised-xs);
     }
-    .problem-card .pc-top { display: flex; align-items: flex-start; gap: 10px; margin-bottom: 6px; }
-    .problem-card .pc-icon { font-size: 20px; line-height: 1; flex-shrink: 0; margin-top: 1px; }
-    .problem-card .pc-title { font-size: 13px; font-weight: 600; flex: 1; }
-    .problem-card .pc-provider { font-size: 11px; color: var(--text-muted); margin-top: 1px; }
+    .problem-card .pc-top { display: flex; align-items: flex-start; gap: 8px; margin-bottom: 4px; }
+    .problem-card .pc-icon { font-size: 15px; line-height: 1; flex-shrink: 0; margin-top: 2px; }
+    .problem-card .pc-who { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+    .problem-card .pc-provider { font-size: 14px; font-weight: 700; color: var(--text); }
+    .problem-card .pc-title { font-size: 11px; color: var(--text-muted); margin-top: 2px;
+      display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
     .problem-card .pc-meta { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-    .problem-card .pc-amount { font-size: 12px; font-weight: 700; color: var(--red); }
+    .problem-card .pc-amount { font-size: 13px; font-weight: 700; color: var(--red); }
     .problem-card .pc-due { font-size: 11px; color: var(--text-muted); }
-    .problem-card .pc-actions { display: flex; gap: 6px; margin-top: 10px; flex-wrap: wrap; }
+    .problem-card .pc-due.late { color: var(--red); font-weight: 600; }
+    .problem-card .pc-age { font-size: 11px; color: var(--text-muted); }
+    .problem-card .pc-age.stale { color: var(--red); }
+    .problem-card .pc-actions { display: flex; gap: 6px; margin-top: 8px; flex-wrap: wrap; }
     .pc-btn {
       border: none; cursor: pointer; font-family: inherit; font-size: 11px; font-weight: 600;
       padding: 5px 12px; border-radius: 14px; background: var(--bg); color: var(--text);
@@ -1622,21 +1631,48 @@
             <button class="pc-btn" onclick="addDocToProblem('${p.id}')">📎 Add document</button>
             <button class="pc-btn resolve" onclick="resolveProblem('${p.id}')">✓ Mark resolved</button>
           `;
+      // Time, in words. Due: "overdue by 12 days" / "due in 3 days" / "due
+      // today". Age: how long it has sat here, and whether anything has been
+      // done to it since (a document added, a change) — "no action" is the
+      // fact that matters on a debt letter.
+      const DAY = 86400000;
+      const today = new Date(); today.setHours(0, 0, 0, 0);
+      let dueWords = '', dueLate = false;
+      if (p.dueDate) {
+        const d = new Date(p.dueDate); d.setHours(0, 0, 0, 0);
+        const diff = Math.round((d - today) / DAY);
+        if (Number.isFinite(diff)) {
+          if (diff < 0)       { dueWords = `overdue by ${-diff} day${-diff === 1 ? '' : 's'}`; dueLate = true; }
+          else if (diff === 0) dueWords = 'due today';
+          else                 dueWords = `due in ${diff} day${diff === 1 ? '' : 's'}`;
+        } else dueWords = 'due ' + p.dueDate;
+      }
+      const addedMs = Date.parse(p.addedAt || '') || null;
+      const lastMs  = Math.max(Date.parse(p.updatedAt || '') || 0, ...((p.documents || []).map(d => Date.parse(d.addedAt || '') || 0)), addedMs || 0) || null;
+      const ageDays  = addedMs ? Math.floor((Date.now() - addedMs) / DAY) : null;
+      const idleDays = lastMs  ? Math.floor((Date.now() - lastMs)  / DAY) : null;
+      let ageWords = '', stale = false;
+      if (!showingResolved && ageDays != null) {
+        ageWords = ageDays === 0 ? 'added today' : `here ${ageDays} day${ageDays === 1 ? '' : 's'}`;
+        if (idleDays != null && idleDays >= 3) { ageWords += ` · no action for ${idleDays} days`; stale = idleDays >= 14; }
+      }
+      const provider = p.provider || (p.title || '').split(/[—–:-]/)[0].trim().slice(0, 40) || 'Unknown';
       return `
         <div class="problem-card" id="prob-${p.id}">
           <div class="pc-top">
             <span class="pc-icon">${URGENCY_ICON[urg] || '📋'}</span>
-            <div style="flex:1">
-              <div class="pc-title">${esc(p.title)}</div>
-              ${p.provider ? `<div class="pc-provider">${esc(p.provider)}</div>` : ''}
+            <div style="flex:1;min-width:0">
+              <div class="pc-who">
+                <span class="pc-provider">${esc(provider)}</span>
+                ${p.amount ? `<span class="pc-amount">£${fmt(p.amount)}</span>` : ''}
+                ${dueWords ? `<span class="pc-due${dueLate ? ' late' : ''}">${esc(dueWords)}</span>` : ''}
+                ${ageWords ? `<span class="pc-age${stale ? ' stale' : ''}">${esc(ageWords)}</span>` : ''}
+                ${p.documents && p.documents.length ? `<span class="pc-due">${p.documents.length} doc${p.documents.length>1?'s':''}</span>` : ''}
+                ${showingResolved ? statusPill : ''}
+              </div>
+              ${p.title && p.title !== provider ? `<div class="pc-title">${esc(p.title)}</div>` : ''}
             </div>
             <span class="urgency-dot urg-${urg}"></span>
-          </div>
-          <div class="pc-meta">
-            ${statusPill}
-            ${p.amount ? `<span class="pc-amount">£${fmt(p.amount)}</span>` : ''}
-            ${p.dueDate ? `<span class="pc-due">Due ${p.dueDate}</span>` : ''}
-            ${p.documents && p.documents.length ? `<span class="badge badge-amber">${p.documents.length} doc${p.documents.length>1?'s':''}</span>` : ''}
           </div>
           <div class="pc-actions">
             ${actions}
