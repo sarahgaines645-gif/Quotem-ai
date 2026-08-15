@@ -1472,6 +1472,36 @@ router.post('/writer/teach', requirePerson, express.json({ limit: '32kb' }), asy
     }
 });
 
+// POST /writer/place-dots {criterionId, sentences[]} — the dots IN the essay:
+// where each still-needed requirement of the part belongs (sentence index),
+// with one plain line of why. One small call per part when it is finished
+// (and after the mark); cached by (part, sentences, unmet kinds) so a
+// refresh or a re-mark never pays twice for the same text.
+router.post('/writer/place-dots', requirePerson, express.json({ limit: '128kb' }), async (req, res) => {
+    const personId = req.person.id;
+    const t = readTutor(personId);
+    if (!t.brief) return res.status(400).json({ error: 'No brief yet — upload the task first so I know what the marker wants.', code: 'no_brief' });
+    const b = req.body || {};
+    const criterionId = String(b.criterionId || '').replace(/\s+/g, '');
+    const plan = t.plans && t.plans[criterionId];
+    if (!plan) return ukJson(res, { ok: true, placements: [], reason: 'no_plan' });
+    const met = new Set((t.reqMet && t.reqMet[criterionId]) || []);
+    const unmet = (plan.requirements || []).map(x => x.kind).filter(k => !met.has(k));
+    const sentences = (Array.isArray(b.sentences) ? b.sentences : []).map(x => String(x || '').replace(/\s+/g, ' ').trim()).filter(Boolean).slice(0, 120);
+    if (!unmet.length || !sentences.length) return ukJson(res, { ok: true, placements: [], unmet });
+    const key = require('crypto').createHash('sha1').update(unmet.join('|') + '\n' + sentences.join('\n')).digest('hex');
+    const cached = t.dotCache && t.dotCache[criterionId];
+    if (cached && cached.key === key) return ukJson(res, { ok: true, cached: true, placements: cached.placements, unmet });
+    try {
+        const out = await qWriter.placeDots({ brief: t.brief, essay: t.modelEssay || null, plan, criterionId, sentences, unmetKinds: unmet });
+        const t2 = readTutor(personId);
+        writeTutor(personId, { dotCache: { ...(t2.dotCache || {}), [criterionId]: { key, placements: out.placements, at: Date.now() } } });
+        ukJson(res, { ok: true, placements: out.placements, unmet });
+    } catch (e) {
+        writerFail(res, e, '[writer/place-dots]', 'dot placing');
+    }
+});
+
 // POST /writer/labels — plain nicknames for a brief saved before labels
 // existed. ONE tiny call for every criterion; saved to the notebook once.
 router.post('/writer/labels', requirePerson, express.json({ limit: '8kb' }), async (req, res) => {

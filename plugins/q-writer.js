@@ -1305,6 +1305,56 @@ ${bricks.length ? 'THE BRICKS THE ASK IS FISHING FOR (Q\'s eyes only — teach t
     };
 }
 
+// ── DOTS IN THE ESSAY (Sarah, 15 Aug 23:40: "The dots appear IN THE ESSAY
+// where he knows a term / a citation etc. should be — he puts them in after
+// you've finished the question and moved on; he marks it subtly as he goes").
+// One small call per part, when the part is finished (and again after the
+// mark): the part's sentences, numbered, + the requirements still unmet →
+// for each, the ONE sentence it belongs after, and one plain line of why.
+// The page renders them as furniture at the end of that sentence — never in
+// the saved text. Cached per (part, sentences, kinds) by the route.
+const PLACE_SCHEMA = {
+    type: 'object', additionalProperties: false,
+    required: ['placements'],
+    properties: {
+        placements: {
+            type: 'array',
+            description: 'One entry per requirement still needed (at most one per kind). Skip a kind only if NO sentence in this part could carry it.',
+            items: {
+                type: 'object', additionalProperties: false, required: ['sentenceIndex', 'kind', 'why'],
+                properties: {
+                    sentenceIndex: { type: 'integer', description: 'The number of the sentence (as numbered) after which this belongs — the claim that needs the source, the sentence where the term / case / figure should sit.' },
+                    kind: { type: 'string', enum: REQ_KINDS },
+                    why: { type: 'string', description: 'ONE plain line to the student, 12 words or fewer, coach voice, saying what goes right here: "A source to back this claim." / "The case that decided this." / "A number to make this real." Never the answer, never marker language.' },
+                },
+            },
+        },
+    },
+};
+async function placeDots({ brief, essay, plan, criterionId, sentences, unmetKinds }) {
+    const list = (Array.isArray(sentences) ? sentences : []).map(x => String(x || '').replace(/\s+/g, ' ').trim()).filter(Boolean).slice(0, 120);
+    const kinds = (Array.isArray(unmetKinds) ? unmetKinds : []).filter(k => REQ_KINDS.includes(k));
+    if (!list.length || !kinds.length) return { placements: [] };
+    const reqs = (plan && Array.isArray(plan.requirements) ? plan.requirements : []).filter(r => kinds.includes(r.kind));
+    const bricks = essay ? bricksOfCriterion(essay, criterionId) : [];
+    const system = withMission(`You are Q, marking the student's draft of ONE part quietly as they move on. For each thing this part must still contain, say WHERE in their own text it belongs — the sentence after which the citation / reference / case / figure / term / example / recommendation should sit — and one plain line of why. You place a dot; you never write the thing itself.
+Rules: pick the sentence that makes the claim needing support (for a citation / reference / primary source), the sentence describing what the theory / case / statute explains (for theory / case-law / statute), the sentence making a claim that a number / example / diagram would make real (for figure / example / diagram / calculation), the closing sentence for a recommendation. One dot per kind. "why" = one plain line, 12 words or fewer, coach voice — never marker language, never the answer.
+
+THE BRIEF (for context)
+${briefForPrompt(brief).slice(0, 3000)}
+${bricks.length ? 'THE MODEL ANSWER FOR THIS PART (Q\'s eyes only — never quote it):\n' + bricks.map(b => '(' + b.brickId + ') ' + b.gist).join('\n') : ''}`);
+    const user = `THE STUDENT'S SENTENCES FOR THIS PART (numbered):\n${list.map((x, i) => (i + 1) + '. ' + x).join('\n')}\n\nSTILL NEEDED IN THIS PART:\n${reqs.length ? reqs.map(r => '- ' + r.kind + ' (' + r.label + ')').join('\n') : kinds.map(k => '- ' + k + ' (' + (REQ_LABELS[k] || k) + ')').join('\n')}\n\nWhere does each one belong?`;
+    const r = await callAccurate(system, user, { maxTokens: 700, schema: PLACE_SCHEMA, effort: 'low' });
+    const seen = new Set();
+    const placements = (r && Array.isArray(r.placements) ? r.placements : []).map(p => ({
+        sentenceIndex: Math.max(0, Math.min(list.length - 1, (Number.isFinite(Number(p.sentenceIndex)) ? Number(p.sentenceIndex) : 1) - 1)),   // numbered from 1 in the prompt
+        kind: String(p.kind || ''),
+        why: String(p.why || '').replace(/\s+/g, ' ').trim().slice(0, 140),
+    })).filter(p => kinds.includes(p.kind) && !seen.has(p.kind) && seen.add(p.kind))
+      .map(p => ({ ...p, sentence: list[p.sentenceIndex], label: (reqs.find(r => r.kind === p.kind) || {}).label || REQ_LABELS[p.kind] || p.kind, colour: REQ_COLOURS[p.kind] || '#999', why: p.why || ((reqs.find(r => r.kind === p.kind) || {}).label || REQ_LABELS[p.kind] || p.kind) + ' goes here.' }));
+    return { placements };
+}
+
 // ── PLAIN LABELS for briefs saved before criteria[].label existed (Sarah,
 // live: the strip showed "Critically evaluate the effectiveness"). ONE tiny
 // call relabels every criterion at once.
@@ -1798,7 +1848,7 @@ module.exports = {
     planPart, normalisePlan, planForPrompt, tagItems, checkStep, brickById, bricksOfCriterion,
     PLAN_SCHEMA, TAG_SCHEMA, STEP_CHECK_SCHEMA, STEP_KINDS, TAG_COLOURS,
     teachFor, relabelCriteria, labelLooksGenerated, TEACH_SCHEMA, LABELS_SCHEMA,
-    expectationsForPrompt, REQ_KINDS, REQ_COLOURS, REQ_LABELS,
+    expectationsForPrompt, REQ_KINDS, REQ_COLOURS, REQ_LABELS, placeDots, PLACE_SCHEMA,
     analyseTask, analyseAndBrief, nextQuestion, assembleDocument,
     analyseVoice, tutorBrief, askLeadingQuestion, reframeInVoice, suggestWordSwaps, writeStarter,
     formatHarvardRef, suggestReferences, referenceParagraph,

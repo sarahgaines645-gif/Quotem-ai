@@ -920,6 +920,15 @@
     .tb-expect .ex-key .q-dot { width: 9px; height: 9px; cursor: default; }
     .tb-expect .ex-key .todo { color: var(--text); font-weight: 600; }
     .doc-body .q-margin-dots { position: absolute; left: -46px; top: 8px; display: flex; flex-direction: column; gap: 4px; user-select: none; }
+    /* Dots IN the essay (Sarah, 15 Aug 23:40): a small ring at the end of the
+       sentence it belongs to — furniture, never text, never saved. Click →
+       a little popup: what's missing right there + ONE action. */
+    .doc-body .q-idot { display: inline-block; width: 11px; height: 11px; border-radius: 50%; border: 2px solid var(--dc, #999); background: var(--paper, #fbf9f3); box-sizing: border-box; margin: 0 4px 0 3px; vertical-align: middle; cursor: pointer; user-select: none; -webkit-user-select: none; position: relative; top: -1px; box-shadow: 0 0 0 2px rgba(255,255,255,0.7); }
+    .doc-body .q-idot:hover { transform: scale(1.25); }
+    .q-popcard.dotpop { width: 250px; }
+    .q-popcard.dotpop .pc-head { font-size: 12px; font-weight: 600; }
+    .q-popcard.dotpop .pc-dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; border: 2px solid var(--dc, #999); box-sizing: border-box; margin-right: 6px; vertical-align: middle; position: relative; top: -1px; }
+    .q-popcard.dotpop .q-btn { margin-top: 6px; }
     .doc-body p.student-line { position: relative; }
     .q-crit .qc-dots { margin-left: 6px; vertical-align: middle; }
     .tb-worksheet .tb-ws { margin: 4px 0 8px; }
@@ -1301,7 +1310,7 @@
     // coach is the student's own — grade bands are stripped.
     function docPlainText() {
       const clone = docBody.cloneNode(true);
-      clone.querySelectorAll('.grade-band, .q-margin-dots').forEach(n => n.remove());
+      clone.querySelectorAll('.grade-band, .q-margin-dots, .q-idot').forEach(n => n.remove());
       // innerText keeps paragraph breaks; a detached clone has no layout, so
       // put line breaks in by hand for block elements.
       clone.querySelectorAll('div, p, br, li, h1, h2, h3').forEach(n => {
@@ -1694,6 +1703,7 @@
       const st = step === false ? null : (step || currentStepInfo());
       coachStepEl.innerHTML = st ? 'Step ' + st.n + ' of ' + st.N + ' · <span class="q-step-kind">' + escHtml(STEP_KIND_LABEL[st.kind] || st.kind) + '</span>' : '';
       coachHint.textContent = hint || '';
+      if (!thinking && state.pendingDotLine) { coachHint.textContent = (hint ? hint + ' ' : '') + state.pendingDotLine; state.pendingDotLine = null; }
       coachWhere.textContent = where === false ? '' : (typeof where === 'string' ? where : whereText(whereInfo()));
       coachWhere.classList.toggle('has-role', !!(coachWhere.textContent && !role && (planFor(state.currentCriterionId) || {}).role));
       coachWhere.title = coachWhere.classList.contains('has-role') ? 'Tap to re-read what this part asks of you' : '';
@@ -2221,7 +2231,7 @@
 
     function tally(kind, cid) {
       const c = cid || state.currentCriterionId || '_';
-      const t = state.calls[c] || (state.calls[c] = { plan: 0, tag: 0, check: 0, probe: 0, teach: 0 });
+      const t = state.calls[c] || (state.calls[c] = { plan: 0, tag: 0, check: 0, probe: 0, teach: 0, dots: 0, cite: 0 });
       t[kind] = (t[kind] || 0) + 1;
       persist({ calls: state.calls });
     }
@@ -2583,6 +2593,9 @@
     // every part has something.
     function finishPart(cid) {
       state.currentStep = null; state.currentQuestion = '';
+      // Q marks the finished part quietly as they move on: the dots go into
+      // their text where each requirement belongs (one small call, cached).
+      setTimeout(() => { placeInlineDots(cid).catch(() => {}); }, 0);
       const cs = (state.brief && state.brief.criteria) || [];
       const i = cs.findIndex(c => c.id === cid);
       const next = cs.slice(i + 1).find(c => (state.coverage[c.id] || 'none') !== 'covered' && !(planFor(c.id) && ssFor(c.id).stepIndex >= planFor(c.id).steps.length)) || cs.slice(0, i).find(c => (state.coverage[c.id] || 'none') === 'none');
@@ -2753,25 +2766,123 @@
       renderMarginDots();
     }
     // The dots beside the part's paragraphs on the page (first paragraph of each part).
-    function renderMarginDots() {
-      docBody.querySelectorAll('.q-margin-dots').forEach(n => n.remove());
-      const cs = (state.brief && state.brief.criteria) || [];
-      for (const c of cs) {
-        const plan = planFor(c.id); if (!plan || !(plan.requirements || []).length) continue;
-        const first = partParagraphs(c.id)[0]; if (!first) continue;
-        const met = new Set(state.reqMet[c.id] || []);
-        const wrap = document.createElement('span'); wrap.className = 'q-margin-dots'; wrap.contentEditable = 'false'; wrap.setAttribute('data-q-furniture', 'true');
-        wrap.innerHTML = plan.requirements.map(rq => `<span class="q-dot${met.has(rq.kind) ? ' met' : ''}" style="--dc:${rq.colour || REQ_COLOURS[rq.kind] || '#999'}" data-req="${escHtml(rq.kind)}" data-cid="${escHtml(c.id)}" title="${escHtml((rq.label || REQ_LABELS[rq.kind] || rq.kind) + (met.has(rq.kind) ? ' — done' : ' — still needed'))}"></span>`).join('');
-        first.appendChild(wrap);
+    // Margin dots are retired (the dots now sit IN the text; the key lives on
+    // the word board). This only clears any left over from an older session.
+    function renderMarginDots() { docBody.querySelectorAll('.q-margin-dots').forEach(n => n.remove()); }
+
+    // ══ DOTS IN THE ESSAY ═════════════════════════════════════════════════
+    // When a part is finished (and again after the mark) Q asks, in one small
+    // call, WHERE in the student's own text each still-needed requirement
+    // belongs, and puts a dot at the end of that sentence. state.inlineDots
+    // holds {sentence, kind, why} per part (persisted); the dots themselves
+    // are furniture — re-drawn from state, never in the saved text. A dot
+    // clears when a check / the mark says the requirement is met.
+    // The sentences of a part, as they sit on the page (block + offsets).
+    function partBlocks(cid) {
+      const own = partParagraphs(cid);
+      if (own.length) return own;
+      // Legacy / free-typed pages: every block on the page (the whole doc is the part's text).
+      return Array.from(docBody.childNodes).filter(n => (n.nodeType === 1 && !n.closest('.grade-band') && (n.textContent || '').trim()) || (n.nodeType === 3 && n.nodeValue.trim()));
+    }
+    function sentencesOf(cid) {
+      const out = [];
+      for (const block of partBlocks(cid)) {
+        const raw = block.nodeType === 3 ? block.nodeValue : blockText(block);
+        const re = /[^.!?]+[.!?]+["'”’)\]]*|[^.!?]+$/g; let m;
+        while ((m = re.exec(raw))) { const t = m[0].replace(/\s+/g, ' ').trim(); if (t.length > 2) out.push({ text: t }); }
+      }
+      return out;
+    }
+    // A block's text with the furniture left out (dots carry no text anyway).
+    function blockText(el) { const c = el.cloneNode(true); c.querySelectorAll('.q-idot, .q-margin-dots, .grade-band').forEach(n => n.remove()); return c.textContent || ''; }
+    let dotsInFlight = new Set();
+    async function placeInlineDots(cid, { quietLine } = {}) {
+      if (!cid || !planFor(cid) || dotsInFlight.has(cid)) return 0;
+      const plan = planFor(cid); const met = new Set(state.reqMet[cid] || []);
+      const unmet = (plan.requirements || []).map(r => r.kind).filter(k => !met.has(k));
+      const sentences = sentencesOf(cid).map(x => x.text);
+      if (!unmet.length || !sentences.length) { state.inlineDots[cid] = []; renderInlineDots(); persist({ inlineDots: state.inlineDots }); return 0; }
+      dotsInFlight.add(cid);
+      try {
+        const d = await api('/writer/place-dots', { criterionId: cid, sentences }, { timeoutMs: 40000 });
+        if (!d.cached) tally('dots', cid);
+        const placed = (d.placements || []).map(p => ({ sentence: p.sentence || sentences[p.sentenceIndex] || '', kind: p.kind, why: p.why || '', label: p.label || reqOf(cid, p.kind).label })).filter(p => p.sentence && p.kind);
+        state.inlineDots[cid] = placed;
+        persist({ inlineDots: state.inlineDots });
+        renderInlineDots();
+        if (placed.length && quietLine !== false) {
+          const w = whereInfo(cid);
+          const line = 'I\'ve marked ' + (placed.length === 1 ? 'one place' : placed.length + ' places') + (w ? ' in part ' + w.n : ' in that part') + ' — see the dots.';
+          // One quiet line on the card — now if the card is settled, else on its next render.
+          if (coachMsg.classList.contains('thinking')) state.pendingDotLine = line; else { coachHint.textContent = (coachHint.textContent ? coachHint.textContent + ' ' : '') + line; state.pendingDotLine = null; }
+          appendBoardItem({ type: 'note', label: 'dots', text: line, criterionId: cid, quiet: true });
+        }
+        return placed.length;
+      } catch (e) {
+        appendBoardItem({ type: 'note', label: 'dots', text: 'Could not place the dots for this part (' + shortCause(e) + ').', criterionId: cid, quiet: true });
+        return 0;
+      } finally { dotsInFlight.delete(cid); }
+    }
+    // Draw every dot from state: find the sentence on the page, put the dot
+    // after its last character. A sentence that was rewritten away loses its
+    // dot (the next placement puts it back). Met kinds never draw.
+    function renderInlineDots() {
+      docBody.querySelectorAll('.q-idot').forEach(n => n.remove());
+      docBody.normalize();
+      for (const [cid, list] of Object.entries(state.inlineDots || {})) {
+        const met = new Set(state.reqMet[cid] || []);
+        for (const p of (list || [])) {
+          if (!p || met.has(p.kind)) continue;
+          const hit = findInDoc(p.sentence); if (!hit) continue;
+          const rq = reqOf(cid, p.kind);
+          const dot = document.createElement('span');
+          dot.className = 'q-idot q-dot'; dot.contentEditable = 'false'; dot.setAttribute('data-q-furniture', 'true');
+          dot.dataset.req = p.kind; dot.dataset.cid = cid; dot.dataset.why = p.why || ''; dot.dataset.sentence = p.sentence;
+          dot.style.setProperty('--dc', rq.colour); dot.title = rq.label + ' — ' + (p.why || 'goes here');
+          const node = hit.end.node, off = Math.min(hit.end.offset + 1, node.nodeValue.length);
+          const after = node.splitText(off);
+          after.parentNode.insertBefore(dot, after);
+        }
       }
     }
+    // The caret at the end of the dot's sentence (just before the dot).
+    function caretBeforeDot(dot) {
+      const r = document.createRange(); r.setStartBefore(dot); r.collapse(true);
+      const sel = window.getSelection(); sel.removeAllRanges(); sel.addRange(r); docBody.focus();
+      return r;
+    }
+    const DOT_ACTION_LABEL = { cite: 'Auto cite', references: 'References', cases: 'Case studies', strategies: 'Strategies', terminology: 'Terminology', weak: 'What\'s weak', synonyms: 'Synonyms', dictionary: 'Dictionary' };
+    // Click a dot → the popup: what's missing right there + ONE action.
+    function openDotPopup(dot) {
+      const cid = dot.dataset.cid, kind = dot.dataset.req; const rq = reqOf(cid, kind);
+      const tool = REQ_TOOL[kind] || 'weak'; const label = DOT_ACTION_LABEL[tool] || tool;
+      const it = { sentence: dot.dataset.sentence || '', targetBrickId: null, criterionId: cid };
+      showToolPop('<div class="pc-head"><span class="pc-dot" style="--dc:' + rq.colour + '"></span>' + escHtml(rq.label) + '</div><div class="pc-line">' + escHtml(dot.dataset.why || (rq.label + ' goes here.')) + '</div><button type="button" class="q-btn primary" id="dot-action">' + escHtml(label) + '</button>', { anchor: dot, kind: 'Missing here' });
+      toolPopEl.classList.add('dotpop');
+      const btn = toolPopEl.querySelector('#dot-action');
+      btn.addEventListener('click', () => {
+        caretBeforeDot(dot);
+        toolPopEl.classList.remove('dotpop');
+        if (tool === 'cite' && typeof runAutoCite === 'function') { runAutoCite({ sentence: it.sentence, criterionId: cid, anchor: dot, dot }); return; }
+        state.currentCriterionId = cid; state.currentSection = cid;
+        runTool(tool === 'cite' ? 'references' : tool, it, '', { anchor: dot });
+      });
+    }
+    document.addEventListener('click', (e) => {
+      const dot = e.target.closest('.q-idot'); if (!dot) return;
+      e.preventDefault(); e.stopPropagation();
+      openDotPopup(dot);
+    }, true);
+    // A satisfied requirement clears its dots (called when reqMet changes).
+    function clearMetDots() { renderInlineDots(); }
+    window.__qwriterDots = { placeInlineDots, renderInlineDots, sentencesOf, openDotPopup, dots: () => Array.from(docBody.querySelectorAll('.q-idot')).map(d => ({ kind: d.dataset.req, cid: d.dataset.cid, sentence: d.dataset.sentence, why: d.dataset.why, prevText: (d.previousSibling && d.previousSibling.nodeValue || '').slice(-40) })) };
     // Q's checks / the mark say what fits and what is met → the board + page update.
     function applyExpectations(d) {
       if (!d) return;
       let changed = false;
       if (d.termsFit && typeof d.termsFit === 'object') { state.termsFit = d.termsFit; changed = true; }
       if (d.reqMet && typeof d.reqMet === 'object') { state.reqMet = d.reqMet; changed = true; }
-      if (changed) { renderBoard(); renderMarginDots(); refreshExpectations(); }
+      if (changed) { renderBoard(); renderMarginDots(); refreshExpectations(); renderInlineDots(); }
     }
     // A dot pressed: in Mark & fix it opens the matching tool; otherwise it says what it means.
     document.addEventListener('click', (e) => {
@@ -4081,6 +4192,8 @@
         persist({ lastMark: m });
         if (!items.length) { endFixPass({ nothing: true }); return; }
         showEditItem();
+        // Then the dots for every part, quietly, in order (one small call each, cached).
+        (async () => { for (const c of (state.brief.criteria || [])) await placeInlineDots(c.id, { quietLine: false }); })().catch(() => {});
       } catch (e) {
         setCoach({
           msg: 'The marking failed: ' + shortCause(e), section: 'HICCUP', hint: 'Your work is saved.',
@@ -4411,6 +4524,7 @@
       toolPopEl.style.left = left + 'px'; toolPopEl.style.top = top + 'px';
     }
     function showToolPop(html, { anchor, kind } = {}) {
+      toolPopEl.classList.remove('dotpop');
       toolPopEl.innerHTML = '<button type="button" class="pc-close" aria-label="Close">×</button>' + (kind ? '<div class="pc-kind">' + escHtml(kind) + '</div>' : '') + html;
       toolPopEl.querySelector('.pc-close').addEventListener('click', hideToolPop);
       toolPopEl.classList.remove('hidden');
@@ -4533,7 +4647,7 @@
     // anything else. Walks the text nodes, tolerant of collapsed whitespace,
     // and applies the change with execCommand so Ctrl+Z undoes it.
     function docTextMap() {
-      const walker = document.createTreeWalker(docBody, NodeFilter.SHOW_TEXT, { acceptNode: (n) => n.parentElement && n.parentElement.closest('.grade-band, .q-margin-dots') ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_ACCEPT });
+      const walker = document.createTreeWalker(docBody, NodeFilter.SHOW_TEXT, { acceptNode: (n) => n.parentElement && n.parentElement.closest('.grade-band, .q-margin-dots, .q-idot') ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_ACCEPT });
       const chars = []; const map = [];
       let lastSpace = true;
       for (let n = walker.nextNode(); n; n = walker.nextNode()) {
@@ -4651,6 +4765,7 @@
       wordEl.textContent = countWords() + ' words';
       // Legacy grade bands restored from an older session are Q's furniture,
       // not the student's words — strip them.
+      docBody.querySelectorAll('.q-idot, .q-margin-dots').forEach(n => n.remove()); docBody.normalize();
       const bands = docBody.querySelectorAll('.grade-band');
       if (bands.length) { bands.forEach(n => n.remove()); wordEl.textContent = countWords() + ' words'; scheduleAutosave(); }
       setSavedLabel('saved'); savedEl.textContent = 'Restored · ' + (t.updatedAt ? new Date(t.updatedAt).toLocaleString('en-GB', { hour: '2-digit', minute: '2-digit', day: 'numeric', month: 'short' }) : 'earlier');
@@ -4696,7 +4811,7 @@
         // page — counts the opener as done, so the current part runs on its
         // plan (made now, once, cached) and the word board / dots exist.
         if (!state.openerDone && (state.coachHistory.length || docPlainText().trim())) { state.openerDone = true; persist({ openerDone: true }); }
-        setTimeout(() => { try { renderMarginDots(); } catch (_) {} }, 0);
+        setTimeout(() => { try { renderMarginDots(); renderInlineDots(); } catch (_) {} }, 0);
         // Rebuild the teaching board from history, then the live question.
         state.currentCriterionId = t.currentCriterionId || (t.brief.criteria[0] && t.brief.criteria[0].id) || '';
         state.currentSection = state.currentCriterionId;
