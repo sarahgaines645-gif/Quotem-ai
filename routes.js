@@ -2271,6 +2271,12 @@ router.get('/api/finance/rhythm', requirePerson, (req, res) => {
     res.json(qFinance.detectRegulars(req.person.email));
 });
 
+// The accounts the app has recognised from the statements themselves —
+// bank, product, last 4, and each one's live totals.
+router.get('/api/finance/accounts', requirePerson, (req, res) => {
+    res.json(qFinance.getAccountsWithTotals(req.person.email));
+});
+
 // Import statement text (paste or extracted from PDF)
 router.post('/api/finance/statement', requirePerson, express.json({ limit: '2mb' }), async (req, res) => {
     const { text, filename } = req.body || {};

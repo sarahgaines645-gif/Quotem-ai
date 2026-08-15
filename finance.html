@@ -93,6 +93,35 @@
     .uz-btn input[type=file] { position: absolute; inset: 0; opacity: 0; cursor: pointer; font-size: 0; }
     .uz-btn.qr { color: var(--accent); }
 
+    /* ── Accounts strip ──
+       Your accounts, recognised from the statements themselves. These are
+       cards you READ, so they protrude — raised, never inset. */
+    .accounts-strip {
+      display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 14px;
+    }
+    .acct-card {
+      background: var(--bg); border-radius: 12px;
+      box-shadow: var(--neu-raised-sm); padding: 12px 14px;
+      min-width: 172px; flex: 1 1 200px; max-width: 300px;
+      overflow-wrap: anywhere;
+    }
+    .acct-card .ac-top { display: flex; align-items: center; gap: 9px; margin-bottom: 8px; }
+    .acct-mark {
+      width: 30px; height: 30px; border-radius: 8px; flex: 0 0 30px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 12px; font-weight: 700; letter-spacing: -0.03em;
+      box-shadow: var(--neu-inset-xs);
+    }
+    .acct-card .ac-name { font-size: 13px; font-weight: 700; color: var(--text); line-height: 1.2; }
+    .acct-card .ac-sub  { font-size: 10px; color: var(--text-muted); margin-top: 2px; }
+    .acct-card .ac-figs { display: flex; gap: 14px; }
+    .acct-card .ac-fig-l { font-size: 9px; text-transform: uppercase; letter-spacing: 0.07em; color: var(--text-muted); font-weight: 600; }
+    .acct-card .ac-fig-v { font-size: 14px; font-weight: 700; color: var(--text); letter-spacing: -0.03em; }
+    .acct-unattributed {
+      font-size: 11px; color: var(--text-muted);
+      margin: -6px 2px 16px;
+    }
+
     /* ── Summary bar ── */
     .summary-bar {
       display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px;
@@ -502,6 +531,10 @@
     </div>
   </div>
 
+  <!-- YOUR ACCOUNTS — recognised from the statements themselves -->
+  <div class="accounts-strip" id="accounts-strip"></div>
+  <div class="acct-unattributed" id="accounts-unattributed"></div>
+
   <!-- SUMMARY BAR -->
   <div class="summary-bar" id="summary-bar">
     <div class="stat-box">
@@ -726,6 +759,7 @@
   let subscriptions = [];
   let incomeSources = [];
   let rhythmData    = null;
+  let accounts      = [];
   let shownCount    = 40;
   let activeFilter  = '';
   let searchQuery   = '';
@@ -762,13 +796,14 @@
 
   // ── Load data ─────────────────────────────────────────────────────────────
   async function loadAll() {
-    const [txRes, grRes, prRes, subRes, incRes, rhyRes] = await Promise.all([
+    const [txRes, grRes, prRes, subRes, incRes, rhyRes, accRes] = await Promise.all([
       apiFetch('/api/finance/transactions'),
       apiFetch('/api/finance/graph'),
       apiFetch('/api/finance/problems'),
       apiFetch('/api/finance/subscriptions'),
       apiFetch('/api/finance/income'),
       apiFetch('/api/finance/rhythm'),
+      apiFetch('/api/finance/accounts'),
     ]);
     if (txRes.ok)  transactions  = await txRes.json();
     if (grRes.ok)  graphData     = await grRes.json();
@@ -776,10 +811,12 @@
     if (subRes.ok) subscriptions = await subRes.json();
     if (incRes.ok) incomeSources = await incRes.json();
     if (rhyRes.ok) rhythmData    = await rhyRes.json();
+    if (accRes.ok) accounts      = await accRes.json();
     renderAll();
   }
 
   function renderAll() {
+    renderAccounts();
     renderSummary();
     renderCharts();
     renderSubscriptions();
@@ -787,6 +824,57 @@
     renderRhythm();
     renderProblems();
     renderTransactions();
+  }
+
+  // ── Your accounts ─────────────────────────────────────────────────────────
+  // Recognised from the statements themselves — bank, product, last 4. Cards
+  // you read, so they protrude. Nothing renders until an account is actually
+  // recognised: an empty strip is honest, a placeholder is furniture.
+  function renderAccounts() {
+    const strip = document.getElementById('accounts-strip');
+    const note  = document.getElementById('accounts-unattributed');
+    if (!strip) return;
+
+    if (!accounts.length) {
+      strip.innerHTML = '';
+      note.textContent = transactions.length
+        ? 'Your transactions aren’t linked to an account yet — upload each bank’s statement once and they’ll sort themselves.'
+        : '';
+      return;
+    }
+
+    strip.innerHTML = accounts.map(a => {
+      const sub = [
+        a.type === 'credit_card' ? 'Credit card' : a.type === 'savings' ? 'Savings' : a.type === 'business' ? 'Business' : '',
+        a.period_from && a.period_to ? ukDate(a.period_from) + ' – ' + ukDate(a.period_to) : '',
+        a.transaction_count + (a.transaction_count === 1 ? ' transaction' : ' transactions'),
+      ].filter(Boolean).join(' · ');
+      let h = 0;
+      const seed = String(a.bank || a.id);
+      for (let i = 0; i < seed.length; i++) h = (h * 31 + seed.charCodeAt(i)) >>> 0;
+      const hue = h % 360;
+      const init = seed.split(/\s+/).filter(Boolean).slice(0, 2).map(w => w[0]).join('').toUpperCase();
+      return `<div class="acct-card">
+        <div class="ac-top">
+          <span class="acct-mark" style="background:hsl(${hue},45%,86%);color:hsl(${hue},55%,28%)">${esc(init)}</span>
+          <div>
+            <div class="ac-name">${esc(a.bank)}${a.product ? ' ' + esc(a.product) : ''}</div>
+            ${a.last4 ? `<div class="ac-sub">····${esc(a.last4)}</div>` : ''}
+          </div>
+        </div>
+        <div class="ac-figs">
+          <div><div class="ac-fig-l">Out</div><div class="ac-fig-v">£${fmt(a.money_out)}</div></div>
+          <div><div class="ac-fig-l">In</div><div class="ac-fig-v">£${fmt(a.money_in)}</div></div>
+        </div>
+        <div class="ac-sub" style="margin-top:8px">${esc(sub)}</div>
+      </div>`;
+    }).join('');
+
+    // Say plainly how much of the picture these cards do NOT cover.
+    const un = graphData && graphData.summary ? graphData.summary.unattributed_count : 0;
+    note.textContent = un
+      ? un + (un === 1 ? ' transaction isn’t' : ' transactions aren’t') + ' linked to an account yet — upload that bank’s statement once and they’ll sort themselves.'
+      : '';
   }
 
   // ── Summary bar ───────────────────────────────────────────────────────────

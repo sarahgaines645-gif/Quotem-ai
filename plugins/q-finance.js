@@ -489,15 +489,231 @@ function deriveSource(filename, rawText) {
     return 'statement';
 }
 
+
+// ── Account recognition ───────────────────────────────────────────
+// A filename is not an account. "halifax aug.csv" told the app nothing —
+// it could not say which bank a charge left, and cross-bank pairing had
+// only a string to compare. Recognising the ACCOUNT from the statement's
+// own evidence is what makes every figure on the page attributable, and
+// it is the hook the benefits engine hangs on (a Club Lloyds fee line is
+// how the app learns she has a Club Lloyds account).
+
+// UK banks by the names that actually appear in statement headers, CSV
+// preambles and export filenames. Longest/most specific first — "lloyds"
+// must not swallow "club lloyds", and "halifax" must be tested before the
+// Lloyds Banking Group boilerplate that appears in Halifax footers.
+const BANK_FINGERPRINTS = [
+    { slug: 'monzo',       name: 'Monzo',            re: /\bmonzo\b/i },
+    { slug: 'starling',    name: 'Starling Bank',    re: /\bstarling\b/i },
+    { slug: 'halifax',     name: 'Halifax',          re: /\bhalifax\b/i },
+    { slug: 'bankofscot',  name: 'Bank of Scotland', re: /\bbank of scotland\b/i },
+    { slug: 'lloyds',      name: 'Lloyds Bank',      re: /\blloyds\b/i },
+    { slug: 'barclaycard', name: 'Barclaycard',      re: /\bbarclaycard\b/i },
+    { slug: 'barclays',    name: 'Barclays',         re: /\bbarclays\b/i },
+    { slug: 'firstdirect', name: 'first direct',     re: /\bfirst\s?direct\b/i },
+    { slug: 'hsbc',        name: 'HSBC',             re: /\bhsbc\b/i },
+    { slug: 'natwest',     name: 'NatWest',          re: /\bnatwest|national westminster\b/i },
+    { slug: 'rbs',         name: 'Royal Bank of Scotland', re: /\broyal bank of scotland\b/i },
+    { slug: 'santander',   name: 'Santander',        re: /\bsantander\b/i },
+    { slug: 'nationwide',  name: 'Nationwide',       re: /\bnationwide\b/i },
+    { slug: 'tsb',         name: 'TSB',              re: /\btsb\b/i },
+    { slug: 'coop',        name: 'The Co-operative Bank', re: /\bco-?operative bank|\bco-?op bank\b/i },
+    { slug: 'metro',       name: 'Metro Bank',       re: /\bmetro bank\b/i },
+    { slug: 'virgin',      name: 'Virgin Money',     re: /\bvirgin money\b/i },
+    { slug: 'revolut',     name: 'Revolut',          re: /\brevolut\b/i },
+    { slug: 'chase',       name: 'Chase',            re: /\bchase\b/i },
+    { slug: 'monument',    name: 'Monument',         re: /\bmonument bank\b/i },
+    { slug: 'kroo',        name: 'Kroo',             re: /\bkroo\b/i },
+    { slug: 'zopa',        name: 'Zopa',             re: /\bzopa\b/i },
+    { slug: 'marcus',      name: 'Marcus',           re: /\bmarcus by goldman\b/i },
+    { slug: 'tide',        name: 'Tide',             re: /\btide (?:business|platform|bank)\b/i },
+    { slug: 'mettle',      name: 'Mettle',           re: /\bmettle\b/i },
+    { slug: 'wise',        name: 'Wise',             re: /\bwise (?:account|business|payments)\b|\btransferwise\b/i },
+    { slug: 'amex',        name: 'American Express', re: /\bamerican express\b|\bamex\b/i },
+    { slug: 'capitalone',  name: 'Capital One',      re: /\bcapital one\b/i },
+    { slug: 'vanquis',     name: 'Vanquis',          re: /\bvanquis\b/i },
+    { slug: 'mbna',        name: 'MBNA',             re: /\bmbna\b/i },
+    { slug: 'tescobank',   name: 'Tesco Bank',       re: /\btesco bank\b/i },
+    { slug: 'sainsburys',  name: "Sainsbury's Bank", re: /\bsainsbury'?s bank\b/i },
+    { slug: 'postoffice',  name: 'Post Office Money', re: /\bpost office money\b/i },
+];
+
+// Named account products. Recognising the PRODUCT — not just the bank — is
+// what lets the app say "your Club Lloyds account includes Disney+". Kept
+// deliberately small and exact: a guess here would put a false entitlement
+// in front of someone, which is worse than saying nothing.
+const ACCOUNT_PRODUCTS = [
+    { bank: 'lloyds',     product: 'Club Lloyds',              re: /\bclub lloyds\b/i },
+    { bank: 'halifax',    product: 'Ultimate Reward',          re: /\bultimate reward\b/i },
+    { bank: 'halifax',    product: 'Reward Current Account',   re: /\breward current account\b/i },
+    { bank: 'nationwide', product: 'FlexPlus',                 re: /\bflexplus\b/i },
+    { bank: 'nationwide', product: 'FlexDirect',               re: /\bflexdirect\b/i },
+    { bank: 'nationwide', product: 'FlexAccount',              re: /\bflexaccount\b/i },
+    { bank: 'santander',  product: 'Edge Explorer',            re: /\bedge explorer\b/i },
+    { bank: 'santander',  product: 'Edge Up',                  re: /\bedge up\b/i },
+    { bank: 'santander',  product: 'Edge',                     re: /\bsantander edge\b/i },
+    { bank: 'natwest',    product: 'Reward',                   re: /\bnatwest reward\b/i },
+    { bank: 'barclays',   product: 'Blue Rewards',             re: /\bblue rewards\b/i },
+    { bank: 'coop',       product: 'Everyday Extra',           re: /\beveryday extra\b/i },
+];
+
+// An account type changes what the figures MEAN — a credit card's "credit"
+// is a repayment, not income. Detected from the header, never assumed.
+function detectAccountType(text) {
+    if (/\bcredit card\b|\bcard statement\b|\bminimum payment\b|\bcredit limit\b/i.test(text)) return 'credit_card';
+    if (/\bsavings account\b|\bisa\b|\beasy access\b|\bfixed rate saver\b/i.test(text))        return 'savings';
+    if (/\bbusiness (?:current )?account\b/i.test(text))                                      return 'business';
+    return 'current';
+}
+
+// The last 4 of the account number, when the statement shows one. Sort code
+// is deliberately NOT stored — it identifies a branch, adds nothing the user
+// can read, and is one more sensitive number sitting on disk for no gain.
+function detectLast4(text) {
+    // A printed account number, in full — take its last four and keep only
+    // those. "Account number: 12345678" → 5678.
+    let m = text.match(/account\s*(?:number|no\.?|#)?\s*[:\-]?\s*(\d{6,10})\b/i);
+    if (m) return m[1].slice(-4);
+    // Already masked by the bank: "Account ending ****4417", "•••• 5678".
+    m = text.match(/account\s*(?:number|no\.?|#|ending)?\s*[:\-]?\s*(?:\*|x|•|·|\s){2,12}(\d{4})\b(?!\d)/i);
+    if (m) return m[1];
+    m = text.match(/(?:\*{2,}|x{2,}|•{2,}|·{2,})\s*(\d{4})\b(?!\d)/i);
+    if (m) return m[1];
+    // A bare 8-digit account number sitting next to a sort code.
+    m = text.match(/\b\d{2}[-\s]\d{2}[-\s]\d{2}\b[^\d]{0,30}\b\d{4}(\d{4})\b/);
+    if (m) return m[1];
+    return null;
+}
+
+/**
+ * Recognise the account a statement belongs to, from the statement's own
+ * evidence plus the filename. Returns null when there is no real evidence —
+ * an invented account is worse than none, because every later figure would
+ * be attributed to a bank the user does not bank with.
+ *
+ * @returns {{id,bank,bankSlug,product,type,last4,label}|null}
+ */
+function detectAccount(rawText, filename) {
+    // Preamble ONLY — the text above the transactions. A CSV export's first
+    // lines ARE transactions, so scanning them would match a bank's name in a
+    // payee ("TFR TO BARCLAYS") and file the whole export under the wrong
+    // bank. Cut at the column-header row when there is one; a Monzo-style CSV
+    // whose header is line 1 therefore contributes nothing but its filename,
+    // which is the honest outcome.
+    const lines = String(rawText || '').split(/\r?\n/);
+    let cut = Math.min(lines.length, 40);
+    for (let i = 0; i < Math.min(lines.length, 15); i++) {
+        const c = splitCsvLine(lines[i]).map(h => h.toLowerCase());
+        if (c.some(h => /date/.test(h))
+            && c.some(h => /amount|debit|credit|paid\s*(in|out)|money\s*(in|out)|withdrawn|deposit|value/.test(h))) {
+            cut = i;
+            break;
+        }
+    }
+    const head = lines.slice(0, cut).join('\n');
+    const hay  = `${head}\n${String(filename || '').replace(/[_\-()]+/g, ' ')}`;
+
+    const bank = BANK_FINGERPRINTS.find(b => b.re.test(hay));
+    if (!bank) return null;
+
+    const product = (ACCOUNT_PRODUCTS.find(p => p.bank === bank.slug && p.re.test(hay)) || {}).product || null;
+    const last4   = detectLast4(head);
+    const type    = detectAccountType(hay);
+
+    // Stable id: the same bank+last4 re-uploaded next month lands on the same
+    // account rather than creating a second one. Without a last4 the bank's
+    // primary account is assumed — re-uploads still merge, which is the
+    // behaviour that matters.
+    const id = `${bank.slug}${last4 ? '-' + last4 : ''}`;
+
+    return {
+        id,
+        bank:     bank.name,
+        bankSlug: bank.slug,
+        product,
+        type,
+        last4,
+        label:    `${bank.name}${product ? ' ' + product : ''}${last4 ? ' ····' + last4 : ''}`,
+    };
+}
+
+const ACCOUNTS_FILE = 'accounts.json';
+
+function getAccounts(email) {
+    return loadJSON(finPath(email, ACCOUNTS_FILE), []);
+}
+
+function saveAccounts(email, accounts) {
+    saveJSON(finPath(email, ACCOUNTS_FILE), accounts);
+}
+
+// Record (or refresh) an account at import. Never overwrites a field the app
+// already knows with a null — a scanned PDF that yields no last4 must not
+// wipe the last4 a CSV import established.
+function upsertAccount(email, acct, source) {
+    if (!acct || !acct.id) return null;
+    const all = getAccounts(email);
+    const idx = all.findIndex(a => a.id === acct.id);
+    const now = new Date().toISOString();
+    if (idx === -1) {
+        const entry = { ...acct, sources: source ? [source] : [], firstSeen: now, lastSeen: now };
+        all.push(entry);
+        saveAccounts(email, all);
+        console.log(`[finance] new account recognised — ${entry.label}`);
+        return entry;
+    }
+    const cur = all[idx];
+    const next = {
+        ...cur,
+        bank:     acct.bank    || cur.bank,
+        product:  acct.product || cur.product,
+        last4:    acct.last4   || cur.last4,
+        type:     acct.type    || cur.type,
+        label:    acct.product || !cur.product ? acct.label : cur.label,
+        lastSeen: now,
+        sources:  [...new Set([...(cur.sources || []), ...(source ? [source] : [])])].slice(0, 8),
+    };
+    all[idx] = next;
+    saveAccounts(email, all);
+    return next;
+}
+
+// Accounts with their live figures, for the page's account cards. Counts and
+// balances-out are computed from the rows themselves — nothing is stored that
+// could drift out of step with the transactions.
+function getAccountsWithTotals(email) {
+    const accounts = getAccounts(email);
+    if (!accounts.length) return [];
+    const txns = getTransactions(email);
+    return accounts.map(a => {
+        const rows = txns.filter(t => t.account === a.id);
+        const dates = rows.map(t => t.date).filter(Boolean).sort();
+        return {
+            ...a,
+            transaction_count: rows.length,
+            money_out: Math.round(rows.filter(t => t.amount < 0).reduce((s, t) => s + Math.abs(t.amount), 0) * 100) / 100,
+            money_in:  Math.round(rows.filter(t => t.amount > 0).reduce((s, t) => s + t.amount, 0) * 100) / 100,
+            period_from: dates[0] || null,
+            period_to:   dates[dates.length - 1] || null,
+        };
+    }).sort((a, b) => b.transaction_count - a.transaction_count);
+}
+
 async function importStatement(email, rawText, opts = {}) {
     const source = deriveSource(opts.filename, rawText);
+    // Recognise the account before anything is saved, so every row this
+    // import produces carries which account it belongs to.
+    const acct = detectAccount(rawText, opts.filename);
+    if (acct) upsertAccount(email, acct, source);
+    const stamp = r => ({ ...r, source, ...(acct && { account: acct.id }) });
+
     const csvRows = parseCsvStatement(rawText);
     if (csvRows && csvRows.length) {
-        console.log(`[finance] importStatement: ${csvRows.length} rows via deterministic CSV parser (no AI) — source "${source}"`);
-        return saveRows(email, csvRows.map(r => ({ ...r, source })), opts);
+        console.log(`[finance] importStatement: ${csvRows.length} rows via deterministic CSV parser (no AI) — source "${source}"${acct ? `, account "${acct.label}"` : ', account not recognised'}`);
+        return saveRows(email, csvRows.map(stamp), opts);
     }
     const parsed = await parseStatementText(rawText);
-    return saveRows(email, parsed.map(r => ({ ...r, source })), opts);
+    return saveRows(email, parsed.map(stamp), opts);
 }
 
 // Categorise + apply merchant assignments + dedup against existing + save.
@@ -584,6 +800,9 @@ async function saveRows(email, parsed, opts = {}) {
         if (!hit) { fresh.push(t); continue; }
         let touched = false;
         if (t.source && !hit.source) { hit.source = t.source; touched = true; }
+        // The account stamp is the whole point of a re-upload for rows that
+        // predate account recognition — backfill it the same way.
+        if (t.account && !hit.account) { hit.account = t.account; touched = true; }
         if (t.category === 'savings_transfer' && (!hit.category || hit.category === 'other')) {
             hit.category = 'savings_transfer';
             touched = true;
@@ -675,7 +894,15 @@ Return STRICT JSON only — no markdown fences:
 If you cannot read the document, return { "error": "Cannot read document" }.`;
 
 const STATEMENT_IMAGE_PROMPT = `You are reading a bank statement document. Extract EVERY transaction you can see.
-Return them as plain CSV with a header row and one transaction per line:
+
+FIRST, if the document shows which account it belongs to, write ONE line before
+anything else, exactly in this form:
+#ACCOUNT: <bank name> | <account/product name or blank> | <account number or blank>
+Copy what is printed — do not guess a bank, a product or a number. If the
+document does not show it, omit this line entirely.
+
+THEN return the transactions as plain CSV with a header row and one
+transaction per line:
 date,description,amount
 
 Rules:
@@ -707,7 +934,7 @@ function csvToRows(csv) {
     const out = [];
     for (const line of clean.split(/\r?\n/)) {
         const l = line.trim();
-        if (!l || /^"?date"?\s*,/i.test(l)) continue;          // blank or header row
+        if (!l || l.startsWith('#') || /^"?date"?\s*,/i.test(l)) continue;   // blank, #ACCOUNT header, or column header
 
         // Amount = the LAST comma-separated field, validated as a clean money
         // token. The old "last number anywhere on the line" grabbed reference
@@ -750,6 +977,18 @@ function csvToRows(csv) {
     return out;
 }
 
+// The reader is asked to copy the account header ("#ACCOUNT: Lloyds | Club
+// Lloyds | 12345678") ahead of the CSV. Pull those lines out as plain text
+// for detectAccount — which still applies its own fingerprints, so a reader
+// that hallucinates a bank name it never saw cannot invent an account.
+function accountHeaderText(csv) {
+    return String(csv || '')
+        .split(/\r?\n/)
+        .filter(l => l.trim().startsWith('#ACCOUNT'))
+        .join('\n')
+        .replace(/\|/g, ' ');
+}
+
 async function importStatementFromImage(email, imageBase64, mimeType, filename, ownerName) {
     const raw = await visionRead({
         prompt:   STATEMENT_IMAGE_PROMPT,
@@ -759,8 +998,10 @@ async function importStatementFromImage(email, imageBase64, mimeType, filename, 
     });
     if (!raw || raw.trim().length < 20) return { added: 0, total: 0 };
     const source = deriveSource(filename, '');
-    const rows = csvToRows(raw).map(r => ({ ...r, source }));
-    console.log(`[finance] importStatementFromImage: vision ${raw.length} chars → ${rows.length} rows (no re-parse)`);
+    const acct = detectAccount(accountHeaderText(raw), filename);
+    if (acct) upsertAccount(email, acct, source);
+    const rows = csvToRows(raw).map(r => ({ ...r, source, ...(acct && { account: acct.id }) }));
+    console.log(`[finance] importStatementFromImage: vision ${raw.length} chars → ${rows.length} rows (no re-parse)${acct ? `, account "${acct.label}"` : ''}`);
     return saveRows(email, rows, { ownerName });
 }
 
@@ -827,8 +1068,10 @@ async function importStatementFromFile(email, fileBase64, mimeType, onProgress, 
             return { added: 0, total, hint: 'Could not read this PDF — try uploading it again, or a clearer copy.' };
         }
         const source = deriveSource(filename, '');
-        const rows = csvToRows(chunked.csv).map(r => ({ ...r, source }));
-        console.log(`[finance] PDF→Gemini chunked: ${chunked.pageCount} pages → ${rows.length} rows; failed: ${chunked.failed.join(', ') || 'none'}`);
+        const acct = detectAccount(accountHeaderText(chunked.csv), filename);
+        if (acct) upsertAccount(email, acct, source);
+        const rows = csvToRows(chunked.csv).map(r => ({ ...r, source, ...(acct && { account: acct.id }) }));
+        console.log(`[finance] PDF→Gemini chunked: ${chunked.pageCount} pages → ${rows.length} rows; failed: ${chunked.failed.join(', ') || 'none'}${acct ? `; account "${acct.label}"` : ''}`);
         if (!rows.length) {
             return { added: 0, total, hint: 'Could not read transactions from this PDF — try uploading a clearer copy.' };
         }
@@ -1187,6 +1430,13 @@ function pairInternalTransfers(txns) {
     const credits = txns.filter(t => t.amount > 0 && t.category !== 'savings_transfer' && Math.abs(t.amount) >= 5);
     const debits  = txns.filter(t => t.amount < 0 && t.category !== 'savings_transfer' && Math.abs(t.amount) >= 5);
     const usedCredits = new Set();
+    // Two halves of a self-move must come from DIFFERENT accounts. The account
+    // stamp is the real test; the filename is the fallback for rows imported
+    // before accounts were recognised. Same account on both sides means it is
+    // a purchase and its refund, not money moving between her banks.
+    const sameSide = (a, b) => (a.account && b.account)
+        ? a.account === b.account
+        : !!(a.source && b.source && a.source === b.source);
     for (const d of debits) {
         const dT = Date.parse(d.date || '');
         if (!Number.isFinite(dT)) continue;
@@ -1194,7 +1444,7 @@ function pairInternalTransfers(txns) {
             && Math.abs(c.amount + d.amount) < 0.005
             && Number.isFinite(Date.parse(c.date || ''))
             && Math.abs(Date.parse(c.date) - dT) <= 4 * 86400000
-            && !(d.source && c.source && d.source === c.source));
+            && !sameSide(d, c));
         if (match) { usedCredits.add(match.id); paired.add(d.id); paired.add(match.id); }
     }
     return paired;
@@ -1274,6 +1524,11 @@ function getSpendingGraphData(email) {
             // Which statements the data came from — so "three banks" is
             // visible on the page, not a mystery.
             sources: [...new Set(txns.map(t => t.source).filter(Boolean))].slice(0, 5),
+            // How many rows the app cannot yet attribute to an account. This
+            // is the honest counterpart to the account cards: if 1,410 rows
+            // have no account, the page says so instead of implying the
+            // breakdown is complete.
+            unattributed_count: txns.filter(t => !t.account).length,
             // One figure for all own-money movement (pots, savings, and
             // between the user's own banks). moved_to_savings kept as an
             // alias for anything already reading it.
@@ -1620,6 +1875,12 @@ module.exports = {
     // Assignments
     assignMerchant,
     getAssignments,
+
+    // Accounts
+    detectAccount,
+    getAccounts,
+    getAccountsWithTotals,
+    upsertAccount,
 
     // Subscriptions + income + rhythm
     detectSubscriptions,
