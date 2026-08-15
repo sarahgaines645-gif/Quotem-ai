@@ -223,3 +223,40 @@ These are his marks. No other AI is managing to be graded by teachers. Yes, it c
 to write an essay — but are they up to the challenge of writing that essay THROUGH a human, who
 creates the obstacle? That's the challenge. It's not just learning. You're taking the easy part
 and making him work to be smart through a human. That's an achievement."*
+
+## ADDENDUM 15 Aug (later) — SCAFFOLDED COACHING, not question-stacking (Sarah, verbatim-ish)
+
+*"He's supposed to be pushing me into writing the right thing. I still have no idea what we are
+talking about. I'm answering his questions but don't feel I'm getting anywhere. Every question
+is costing money. His goal should be to get me passionately arguing the side he wants and then
+get me to change sides. I don't know if I'm supposed to be redesigning the company or
+scrutinising them. Say he wants pros and cons of flexible benefits and views on the company I
+supposedly work for: I would have said 'list your company's benefits'… then 'now tell me where
+you feel your salary sits and bonuses from where it should be — 30k should be 45; bonus 3k a
+year, deserve 5'. Then he'd highlight your benefits on the list on the teaching sheet and say the
+pink are flexi, the blue are fixed. 'What do you think the pros of your summer party being a fixed
+benefit are?' You answer. 'What are the cons?' You answer. That's how it should be. He's asking
+questions on top of my questions but if I don't know the answer we'll be here all night. If he
+keeps name-dropping trigger words in I will use them back to him."*
+
+Therefore the coaching engine becomes SCAFFOLDED:
+1. **Frame each part in one plain sentence first** — the job, in role terms ("Here you're the
+   critic: judge whether the company's rewards actually work, then say how you'd fix them" /
+   "Here you're the adviser: choose fixed-for-all vs pick-your-own benefits for your company and
+   defend it"). Never let the student wonder whether they're scrutinising or redesigning.
+2. **A visible plan per part** (3–6 concrete steps, generated ONCE per part from the hidden
+   essay, cached) shown on the board as an agenda; the current step is marked. Steps are
+   scaffolds, not questions: BUILD A LIST → PUT NUMBERS ON IT → SORT/TAG IT → PROS/CONS PER
+   ITEM → ARGUE ONE SIDE → SWITCH SIDES → RECOMMEND.
+3. **Board scaffolds Q can drive**: a list the student fills (one item per line), a numbers
+   table (is / should be), tagging (Q colours items on the board and says what the colours mean),
+   a pros/cons grid per item. Their answers fill the scaffold AND land on the page in their words.
+4. **One concrete ask per turn** — a list, a number, one pro, one con — never "do you think…?"
+   on top of "do you think…?". Never stack; never move on until the scaffold step is filled.
+5. **Debate steering** for evaluate/critically-evaluate criteria: get them arguing one side
+   with feeling, then flip them to the other, then ask which wins and why → that's the critical
+   evaluation, in their words.
+6. **No trigger-word dropping.** Jargon appears only when Q is deliberately teaching a term
+   (named once, meaning + everyday example) — never sprinkled into questions to be parroted.
+7. **Cheaper by design**: plan once per part; scaffold steps are mostly deterministic; Q reasons
+   between steps, not on every keystroke.

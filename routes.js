@@ -1133,7 +1133,7 @@ function readStoredDocText(personId) {
 // the notebook by the caller, so a Railway restart mid-poll loses the
 // in-flight job but never a finished one.
 const writerJobs = new Map();
-const WRITER_JOB_STEP = { brief: 'brief step', essay: 'model answer', mark: 'marking', assemble: 'assembly', edit: 'editing pass' };
+const WRITER_JOB_STEP = { brief: 'brief step', essay: 'model answer', mark: 'marking', assemble: 'assembly', edit: 'editing pass', plan: 'part plan' };
 const SOURCE_MAX = 6, SOURCE_CHARS = 80000, SOURCE_TOTAL = 300000;
 
 // The hidden model essay is written server-side after the brief lands (and
@@ -1150,15 +1150,50 @@ function startEssayJob(personId) {
         const voiced = (Array.isArray(t2.voicedBricks) ? t2.voicedBricks : []).filter(id => ids.has(id));
         const { coverage, brickCounts } = qWriter.coverageFromBricks(essay, voiced, t2.coverage || {});
         const t3 = writeTutor(personId, { modelEssay: essay, voicedBricks: voiced, coverage, brickCounts });
+        // The first part's plan follows straight away (one call, cached) so
+        // the page finds it ready — or running — when it asks.
+        const firstId = t3.brief && t3.brief.criteria && t3.brief.criteria[0] ? t3.brief.criteria[0].id : null;
+        if (firstId && !(t3.plans && t3.plans[firstId])) startPlanJob(personId, firstId);
         return { essayReady: true, brickCounts, coverage, bricks: ids.size, notes: essay.notes, match: matchFor(t3) };
     });
 }
+// The PART PLAN (Sarah, 15 Aug late — scaffolded coaching): one plan per
+// criterion, from the hidden essay's bricks, cached in the notebook under
+// plans[criterionId]. Only ever made once per part unless force'd.
+function startPlanJob(personId, criterionId) {
+    const t0 = readTutor(personId);
+    writeTutor(personId, { planWanted: criterionId });
+    return startWriterJob(personId, 'plan', async () => {
+        const t = readTutor(personId);
+        if (!t.brief) throw new Error('No brief yet — upload the task first.');
+        if (!t.modelEssay) throw new Error('The model answer for this part is not written yet — a moment.');
+        const plan = await qWriter.planPart({ brief: t.brief, essay: t.modelEssay, criterionId, yearGroup: t.yearGroup || '', relateAnchor: t.relateAnchor || '' });
+        const t2 = readTutor(personId);
+        const plans = { ...(t2.plans || {}), [criterionId]: plan };
+        writeTutor(personId, { plans });
+        return plan;
+    }, { criterionId });
+}
+function stepOf(t, criterionId, stepId) {
+    const plan = t.plans && t.plans[criterionId];
+    const step = plan && Array.isArray(plan.steps) ? plan.steps.find(s => s.id === stepId) : null;
+    return { plan: plan || null, step: step || null };
+}
+// Bricks voiced → coverage / counts / match, written to the notebook.
+function voiceBricks(personId, brickIds) {
+    const t = readTutor(personId);
+    const voiced = Array.from(new Set([...(Array.isArray(t.voicedBricks) ? t.voicedBricks : []), ...(brickIds || [])]));
+    let coverage = { ...(t.coverage || {}) }, brickCounts = t.brickCounts || {};
+    if (t.modelEssay) ({ coverage, brickCounts } = qWriter.coverageFromBricks(t.modelEssay, voiced, coverage));
+    const t2 = writeTutor(personId, { voicedBricks: voiced, coverage, brickCounts });
+    return { coverage, brickCounts, match: matchFor(t2), voicedBricks: voiced };
+}
 function writerJobKey(personId, kind) { return `${personId}:${kind}`; }
-function startWriterJob(personId, kind, run) {
+function startWriterJob(personId, kind, run, meta) {
     const key = writerJobKey(personId, kind);
     const existing = writerJobs.get(key);
     if (existing && existing.status === 'running') return existing;
-    const job = { kind, status: 'running', startedAt: Date.now(), finishedAt: null, result: null, error: null };
+    const job = { kind, status: 'running', startedAt: Date.now(), finishedAt: null, result: null, error: null, meta: meta || null };
     writerJobs.set(key, job);
     Promise.resolve().then(run).then((result) => {
         job.status = 'done'; job.result = result; job.finishedAt = Date.now();
@@ -1175,7 +1210,7 @@ function startWriterJob(personId, kind, run) {
 function jobView(job) {
     if (!job) return null;
     return {
-        kind: job.kind, status: job.status, startedAt: job.startedAt, finishedAt: job.finishedAt,
+        kind: job.kind, status: job.status, startedAt: job.startedAt, finishedAt: job.finishedAt, meta: job.meta || null,
         elapsedMs: (job.finishedAt || Date.now()) - job.startedAt,
         error: job.error || null,
         result: job.status === 'done' ? job.result : null,
@@ -1199,6 +1234,7 @@ router.get('/writer/job/:kind', requirePerson, (req, res) => {
         : kind === 'mark' ? (t.lastMark || null)
         : kind === 'essay' ? (t.modelEssay ? { essayReady: true, brickCounts: t.brickCounts || {}, coverage: t.coverage || {}, bricks: qWriter.allBrickIds(t.modelEssay).length, notes: t.modelEssay.notes, match: matchFor(t) } : null)
         : kind === 'edit' ? (t.lastEdit || null)
+        : kind === 'plan' ? (t.plans && t.planWanted && t.plans[t.planWanted] ? t.plans[t.planWanted] : null)
         : (t.lastAssembly || null);
     if (saved) return ukJson(res, { ok: true, kind, status: 'done', fromNotebook: true, result: saved, error: null });
     return res.json({ ok: true, kind, status: 'none', result: null, error: null });
@@ -1236,10 +1272,21 @@ router.post('/writer/mark', requirePerson, express.json({ limit: '2mb' }), write
     const personId = req.person.id;
     const job = startWriterJob(personId, 'mark', async () => {
         const r = await qWriter.markLikeMarker({ brief: t.brief, essay: t.modelEssay || null, docText, gradeScheme });
-        const coverage = { ...(t.coverage || {}) };
+        let coverage = { ...(t.coverage || {}) };
         for (const p of r.perCriterion) coverage[p.criterionId] = p.band === 'top' || p.band === 'mid' ? 'covered' : p.band === 'low' ? 'partial' : 'none';
-        writeTutor(personId, { lastMark: { ...r, at: Date.now() }, coverage });
-        return { ...r, coverage };
+        // The mark is the honest read of the page: the voiced-brick tally (and
+        // so the visible score) is rebuilt from it — a filled scaffold counted
+        // as voiced while coaching; the marker says what the draft really says.
+        let brickCounts = t.brickCounts || {};
+        let patch = { lastMark: { ...r, at: Date.now() }, coverage };
+        if (t.modelEssay) {
+            const voiced = Array.from(new Set(r.perCriterion.flatMap(p => p.voicedBrickIds || [])));
+            ({ coverage, brickCounts } = qWriter.coverageFromBricks(t.modelEssay, voiced, coverage));
+            for (const p of r.perCriterion) coverage[p.criterionId] = p.band === 'top' || p.band === 'mid' ? 'covered' : p.band === 'low' ? 'partial' : 'none';
+            patch = { ...patch, voicedBricks: voiced, closeBricks: [], coverage, brickCounts };
+        }
+        const t2 = writeTutor(personId, patch);
+        return { ...r, coverage, brickCounts, match: matchFor(t2) };
     });
     if (req.body?.sync) {
         while (job.status === 'running') await new Promise(r => setTimeout(r, 250));
@@ -1271,7 +1318,13 @@ router.post('/writer/probe', requirePerson, express.json({ limit: '1mb' }), writ
             voiceSignature: b.voiceSignature || null,
             relateAnchor: b.relateAnchor || t.relateAnchor || '',
             yearGroup: b.yearGroup || t.yearGroup || '',
+            plan: (t.plans && t.plans[String(b.criterionId || b.focusCriterionId || t.currentCriterionId || '')]) || null,
+            stepId: b.stepId ? String(b.stepId) : null,
+            studentQuestion: b.studentQuestion ? String(b.studentQuestion) : null,
         });
+        // A question to Q is not a coaching turn: nothing recorded as the
+        // current question, nothing voiced.
+        if (String(b.trigger || '') === 'question') return ukJson(res, { ok: true, ...r, coverage: t.coverage || {}, brickCounts: t.brickCounts || {}, essayReady: !!t.modelEssay, match: matchFor(t) });
         // Fold the coach's read into the notebook: bricks voiced (when the
         // essay exists) drive criterion coverage; otherwise the tally does.
         const voiced = Array.from(new Set([...(Array.isArray(t.voicedBricks) ? t.voicedBricks : []), ...r.voicedBrickIds]));
@@ -1286,6 +1339,143 @@ router.post('/writer/probe', requirePerson, express.json({ limit: '1mb' }), writ
         const cause = qWriter.userFacingCause(e, 'coaching turn');
         console.error('[writer/probe]', e.message, e.primaryCause ? '(first: ' + e.primaryCause + ')' : '');
         res.status(cause.status).json({ ok: false, error: cause.message, code: cause.code, retryable: cause.retryable });
+    }
+});
+
+// ── SCAFFOLDED COACHING (Sarah, 15 Aug late) ──────────────────────────────
+// POST /writer/plan {criterionId, force?} — the ONE plan for a part. Cached
+// in the notebook (plans[criterionId]); made once from the hidden essay's
+// bricks. Reply: {status:'done', result: plan, cached:true} when it exists,
+// else the job view (poll GET /writer/job/plan). 409 essay_pending while the
+// model answer is still being written (the page waits on the essay job).
+router.post('/writer/plan', requirePerson, express.json({ limit: '16kb' }), async (req, res) => {
+    const personId = req.person.id;
+    const t = readTutor(personId);
+    if (!t.brief) return res.status(400).json({ error: 'No brief yet — upload the task first so I know what the marker wants.', code: 'no_brief' });
+    const criterionId = String(req.body?.criterionId || t.currentCriterionId || (t.brief.criteria[0] && t.brief.criteria[0].id) || '').replace(/\s+/g, '');
+    if (!t.brief.criteria.some(c => c.id === criterionId)) return res.status(400).json({ error: 'That part is not in the brief.', code: 'bad_part' });
+    if (!req.body?.force && t.plans && t.plans[criterionId]) return ukJson(res, { ok: true, kind: 'plan', status: 'done', cached: true, result: t.plans[criterionId], meta: { criterionId } });
+    if (!t.modelEssay) {
+        const ej = writerJobs.get(writerJobKey(personId, 'essay'));
+        return res.status(409).json({ ok: false, error: 'Q is still writing the answer in his head for this part — a moment.', code: 'essay_pending', retryable: true, essayJob: ej ? { status: ej.status, startedAt: ej.startedAt } : null });
+    }
+    const running = writerJobs.get(writerJobKey(personId, 'plan'));
+    if (running && running.status === 'running' && running.meta && running.meta.criterionId !== criterionId) {
+        return res.status(409).json({ ok: false, error: 'Q is finishing the plan for another part — a moment.', code: 'plan_busy', retryable: true });
+    }
+    const job = startPlanJob(personId, criterionId);
+    if (req.body?.sync) {
+        while (job.status === 'running') await new Promise(r => setTimeout(r, 250));
+        return res.status(job.status === 'done' ? 200 : (job.error?.status || 502)).json(qWriter.ukPolishResponse({ ok: job.status === 'done', ...jobView(job) }));
+    }
+    ukJson(res, { ok: true, ...jobView(job) });
+});
+
+// POST /writer/tag {criterionId, stepId, items[]} — Q sorts the student's own
+// list into the step's tags (one small call; the result is cached per items
+// so a refresh never pays twice).
+router.post('/writer/tag', requirePerson, express.json({ limit: '64kb' }), async (req, res) => {
+    const personId = req.person.id;
+    const t = readTutor(personId);
+    if (!t.brief) return res.status(400).json({ error: 'No brief yet — upload the task first so I know what the marker wants.', code: 'no_brief' });
+    const b = req.body || {};
+    const criterionId = String(b.criterionId || '').replace(/\s+/g, ''), stepId = String(b.stepId || '').replace(/\s+/g, '');
+    const { plan, step } = stepOf(t, criterionId, stepId);
+    if (!step) return res.status(400).json({ error: 'That step is not in the plan for this part.', code: 'bad_step' });
+    const items = (Array.isArray(b.items) ? b.items : []).map(x => String(x || '').trim()).filter(Boolean).slice(0, 40);
+    const key = criterionId + ':' + stepId;
+    const itemsKey = items.map(x => x.toLowerCase()).join('');
+    const cached = t.stepTags && t.stepTags[key];
+    if (cached && cached.itemsKey === itemsKey) return ukJson(res, { ok: true, cached: true, ...cached.result });
+    try {
+        const r = await qWriter.tagItems({ brief: t.brief, plan, step, items });
+        const t2 = readTutor(personId);
+        writeTutor(personId, { stepTags: { ...(t2.stepTags || {}), [key]: { itemsKey, result: r, at: Date.now() } } });
+        ukJson(res, { ok: true, ...r });
+    } catch (e) {
+        writerFail(res, e, '[writer/tag]', 'sorting');
+    }
+});
+
+// POST /writer/step {criterionId, stepId, done:true} — a scaffold step was
+// filled on the page: its target bricks count as voiced (no model call), the
+// coverage / counts / match come back. With {answer, check:true} (argue /
+// switch / recommend / ask): ONE small call judges the answer against the
+// step's bricks → {voicedBrickIds, filled, ack, followUp}; filled ⇒ every
+// target brick voiced.
+router.post('/writer/step', requirePerson, express.json({ limit: '64kb' }), async (req, res) => {
+    const personId = req.person.id;
+    const t = readTutor(personId);
+    if (!t.brief) return res.status(400).json({ error: 'No brief yet — upload the task first so I know what the marker wants.', code: 'no_brief' });
+    const b = req.body || {};
+    const criterionId = String(b.criterionId || '').replace(/\s+/g, ''), stepId = String(b.stepId || '').replace(/\s+/g, '');
+    const { plan, step } = stepOf(t, criterionId, stepId);
+    if (!step) return res.status(400).json({ error: 'That step is not in the plan for this part.', code: 'bad_step' });
+    try {
+        if (b.check) {
+            const r = await qWriter.checkStep({ brief: t.brief, essay: t.modelEssay || null, plan, step, answer: String(b.answer || ''), earlierAnswers: b.earlierAnswers ? String(b.earlierAnswers) : '' });
+            const toVoice = r.filled ? step.targetBrickIds : r.voicedBrickIds;
+            const v = voiceBricks(personId, toVoice);
+            return ukJson(res, { ok: true, checked: true, ...r, coverage: v.coverage, brickCounts: v.brickCounts, match: v.match });
+        }
+        if (b.done) {
+            const v = voiceBricks(personId, step.targetBrickIds);
+            const t2 = readTutor(personId);
+            const cov = { ...(t2.coverage || {}) };
+            if (!t2.modelEssay && (cov[criterionId] || 'none') === 'none') { cov[criterionId] = 'partial'; writeTutor(personId, { coverage: cov }); v.coverage = cov; }
+            return ukJson(res, { ok: true, coverage: v.coverage, brickCounts: v.brickCounts, match: v.match });
+        }
+        res.status(400).json({ error: 'Nothing to do — send done:true or check:true.', code: 'bad_body' });
+    } catch (e) {
+        writerFail(res, e, '[writer/step]', 'step check');
+    }
+});
+
+// POST /writer/teach {criterionId?, stepId?, question?} — "I don't understand"
+// / "I'm stuck": a mini-lesson for the concept the ask needs + the ask re-put
+// as an apply question. Cached per step (a refresh never pays twice).
+router.post('/writer/teach', requirePerson, express.json({ limit: '32kb' }), async (req, res) => {
+    const personId = req.person.id;
+    const t = readTutor(personId);
+    if (!t.brief) return res.status(400).json({ error: 'No brief yet — upload the task first so I know what the marker wants.', code: 'no_brief' });
+    const b = req.body || {};
+    const criterionId = String(b.criterionId || t.currentCriterionId || '').replace(/\s+/g, ''), stepId = String(b.stepId || '').replace(/\s+/g, '');
+    const { plan, step } = stepOf(t, criterionId, stepId);
+    const question = String(b.question || (step && step.prompt) || t.currentQuestion || '');
+    const key = stepId ? criterionId + ':' + stepId : 'q:' + question.slice(0, 80);
+    const cached = t.teachCache && t.teachCache[key];
+    if (cached && cached.question === question) return ukJson(res, { ok: true, cached: true, ...cached.result });
+    try {
+        const out = await qWriter.teachFor({ brief: t.brief, essay: t.modelEssay || null, plan, step, question, yearGroup: b.yearGroup || t.yearGroup || '', relateAnchor: t.relateAnchor || '' });
+        const t2 = readTutor(personId);
+        const cache = { ...(t2.teachCache || {}) };
+        const keys = Object.keys(cache); if (keys.length > 40) delete cache[keys[0]];
+        cache[key] = { question, result: out, at: Date.now() };
+        writeTutor(personId, { teachCache: cache });
+        ukJson(res, { ok: true, ...out });
+    } catch (e) {
+        writerFail(res, e, '[writer/teach]', 'lesson');
+    }
+});
+
+// POST /writer/labels — plain nicknames for a brief saved before labels
+// existed. ONE tiny call for every criterion; saved to the notebook once.
+router.post('/writer/labels', requirePerson, express.json({ limit: '8kb' }), async (req, res) => {
+    const personId = req.person.id;
+    const t = readTutor(personId);
+    if (!t.brief) return res.status(400).json({ error: 'No brief yet.', code: 'no_brief' });
+    const needs = t.brief.criteria.some(c => qWriter.labelLooksGenerated(c));
+    if (!needs && !req.body?.force) return ukJson(res, { ok: true, cached: true, labels: t.brief.criteria.map(c => ({ id: c.id, label: c.label })) });
+    if (t.labelsFixedAt && !req.body?.force) return ukJson(res, { ok: true, cached: true, labels: t.brief.criteria.map(c => ({ id: c.id, label: c.label })) });
+    try {
+        const labels = await qWriter.relabelCriteria({ brief: t.brief });
+        const t2 = readTutor(personId);
+        const byId = new Map(labels.map(x => [x.id, x.label]));
+        const brief = { ...t2.brief, criteria: t2.brief.criteria.map(c => ({ ...c, label: byId.get(c.id) || c.label })) };
+        writeTutor(personId, { brief, labelsFixedAt: Date.now() });
+        ukJson(res, { ok: true, labels });
+    } catch (e) {
+        writerFail(res, e, '[writer/labels]', 'labels');
     }
 });
 
@@ -1732,6 +1922,10 @@ const TUTOR_KEYS = [
     // Phase 3
     'docHtml', 'docText', 'docTitle', 'sourceName', 'sourceUrl', 'coverage', 'coachHistory', 'currentQuestion', 'currentCriterionId',
     'probeSnapshot', 'settings', 'gradeScheme', 'yearGroup', 'relateAnchor', 'setupDone', 'lastMark', 'lastAssembly', 'qWordsWritten',
+    // scaffolded coaching (15 Aug late): where they are in the part plan, the
+    // filled scaffolds, the page's model-call tally per part. plans[] itself is
+    // written by the plan job only.
+    'stepState', 'currentStep', 'calls', 'openerDone',
 ];
 router.post('/writer/tutor', requirePerson, express.json({ limit: '4mb' }), writerTooLarge('The session is too big to save in one go (over 4 MB). Trim very long pasted text out of the page and it will save again.'), async (req, res) => {
     try {

@@ -707,6 +707,7 @@
       color: var(--text-muted); line-height: 1.3; margin-bottom: 2px;
     }
     .tb-q .tb-label::before { content: '● '; color: var(--accent); }
+    .tb-item.tb-title .tb-label { font-size: 10px; text-transform: none; letter-spacing: 0.02em; color: var(--text); font-weight: 700; margin-bottom: 0; }
     .tb-a { border-left: 2px solid rgba(0,0,0,0.16); padding-left: 8px; }
     .tb-text { font-size: 12px; color: var(--text); line-height: 1.5; min-width: 0; font-style: normal; font-weight: 400; }
     .tb-text p { margin: 0 0 6px; }
@@ -752,6 +753,21 @@
     .meta-btn:hover { box-shadow: var(--neu-raised-sm); }
     .meta-btn:active { box-shadow: var(--neu-inset-sm); }
     .meta-btn:disabled { opacity: 0.5; cursor: default; }
+    .meta-btn.primary { box-shadow: var(--neu-raised-sm); font-weight: 700; }
+    .meta-btn.primary::before { content: '● '; color: var(--accent); }
+    .q-crit { display: flex; flex-direction: column; gap: 4px; margin-bottom: 8px; }
+    .q-crit .qc-row { display: grid; grid-template-columns: 52px 1fr; gap: 6px; font-size: 12px; line-height: 1.45; color: var(--text); }
+    .q-crit .qc-l { font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--accent); margin-top: 3px; }
+    .q-crit .qc-v { overflow-wrap: anywhere; }
+    .q-bands { display: flex; flex-wrap: wrap; gap: 4px 8px; font-size: 10px; color: var(--text-muted); margin-bottom: 6px; }
+    .q-bands b { color: var(--text); }
+    .q-bands .bd { display: inline-block; width: 7px; height: 7px; border-radius: 50%; margin-right: 3px; }
+    .q-bands .bd.top { background: #28a745; } .q-bands .bd.mid { background: #e6a817; } .q-bands .bd.low { background: #dc3545; } .q-bands .bd.missing { background: #999; }
+    .q-lesson { font-size: 12px; line-height: 1.5; color: var(--text); margin-bottom: 8px; padding: 8px 10px; border-radius: 10px; box-shadow: var(--neu-raised-xs); overflow-wrap: anywhere; }
+    .q-lesson .ql-term { font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--accent); margin-bottom: 3px; }
+    .q-lesson .ql-eg { color: var(--text-muted); margin-top: 4px; }
+    .q-lesson .ql-more { margin-top: 6px; font-size: 10px; color: var(--text-muted); }
+    .q-lesson .ql-more a { color: var(--text-muted); margin-right: 8px; }
     #meta-saved.saving { color: var(--text-faint); font-style: italic; }
     #meta-saved.error { color: var(--accent); }
     .coach-card .q-integrity {
@@ -819,6 +835,49 @@
     .edit-item .ed-row { display: flex; gap: 5px; flex-wrap: wrap; }
     .doc-body .student-line { margin: 0; font-style: normal; font-weight: 400; color: var(--text); border-left: 2px solid rgba(233,30,99,0.22); padding-left: 8px; margin-left: -10px; }
 
+
+    /* ── Scaffolded coaching: the agenda + the scaffold widgets on the board ── */
+    .tb-agenda { margin: 0 0 10px; padding: 8px 10px; border-radius: 10px; box-shadow: var(--neu-raised-xs); }
+    .tb-role { font-size: 12px; font-weight: 600; color: var(--text); line-height: 1.45; margin-bottom: 6px; }
+    .tb-steps { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 3px; }
+    .tb-steps li { font-size: 11px; color: var(--text-muted); line-height: 1.4; display: grid; grid-template-columns: 14px 1fr; gap: 4px; align-items: start; }
+    .tb-steps li .st-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-top: 4px; box-shadow: var(--neu-inset-sm); }
+    .tb-steps li.done { color: var(--text-muted); }
+    .tb-steps li.done .st-dot { background: #28a745; box-shadow: none; }
+    .tb-steps li.cur { color: var(--text); font-weight: 600; }
+    .tb-steps li.cur .st-dot { background: var(--accent); box-shadow: none; }
+    .tb-steps li .st-kind { font-size: 9px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-faint); margin-left: 4px; font-weight: 600; }
+    .tb-scaf { margin: 6px 0 4px; }
+    .tb-scaf .sc-empty { font-size: 11px; color: var(--text-faint); }
+    .sc-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+    .sc-list li { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text); line-height: 1.4; padding: 3px 8px; border-radius: 8px; box-shadow: var(--neu-raised-xs); overflow-wrap: anywhere; }
+    .sc-list li .sc-n { font-size: 9px; color: var(--text-faint); font-weight: 700; min-width: 12px; }
+    .sc-list li .sc-x { margin-left: auto; border: none; background: none; color: var(--text-faint); cursor: pointer; font-size: 14px; line-height: 1; padding: 0 2px; }
+    .sc-list li .sc-x:hover { color: var(--accent); }
+    .sc-list li[data-tag] { border-left: 4px solid var(--tagc, transparent); }
+    .sc-list li .sc-tag { font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--tagc, var(--text-muted)); }
+    .sc-legend { display: flex; flex-wrap: wrap; gap: 4px 10px; margin-top: 6px; font-size: 10px; color: var(--text-muted); }
+    .sc-legend span::before { content: '●'; color: var(--tagc); margin-right: 4px; }
+    .sc-line { font-size: 12px; color: var(--text); line-height: 1.45; margin-top: 6px; }
+    .sc-table { width: 100%; border-collapse: collapse; font-size: 11px; }
+    .sc-table th { font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-muted); text-align: left; padding: 2px 4px; }
+    .sc-table td { padding: 2px 4px; vertical-align: middle; color: var(--text); }
+    .sc-table td.sc-lab { font-weight: 600; width: 34%; overflow-wrap: anywhere; }
+    .sc-table input { width: 100%; min-width: 0; font-family: 'Space Grotesk', sans-serif; font-size: 11px; padding: 4px 6px; border: none; border-radius: 8px; background: var(--bg); box-shadow: var(--neu-inset-sm); color: var(--text); outline: none; }
+    .sc-table tr.cur td.sc-lab { color: var(--accent); }
+    .sc-pc { display: flex; flex-direction: column; gap: 6px; }
+    .sc-pc .pc-item { padding: 6px 8px; border-radius: 8px; box-shadow: var(--neu-raised-xs); border-left: 4px solid var(--tagc, rgba(0,0,0,0.12)); }
+    .sc-pc .pc-name { font-size: 12px; font-weight: 600; color: var(--text); margin-bottom: 3px; overflow-wrap: anywhere; }
+    .sc-pc .pc-row { display: grid; grid-template-columns: 34px 1fr; gap: 6px; font-size: 11px; line-height: 1.4; margin-bottom: 2px; }
+    .sc-pc .pc-row .pc-l { font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-muted); margin-top: 2px; }
+    .sc-pc .pc-row .pc-v { color: var(--text); overflow-wrap: anywhere; }
+    .sc-pc .pc-row .pc-v.empty { color: var(--text-faint); }
+    .sc-pc .pc-row.cur .pc-l { color: var(--accent); }
+    .sc-side { font-size: 11px; color: var(--text-muted); margin-top: 4px; }
+    .sc-side b { color: var(--text); }
+    .coach-card .q-step { font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-muted); margin-bottom: 3px; }
+    .coach-card .q-step:empty { display: none; }
+    .coach-card .q-step .q-step-kind { color: var(--accent); }
 
     /* Mobile / narrow (≤700px): no floating windows. The three panels dock as
        a bottom sheet stack (JS sets each panel's `bottom` and the body's
@@ -927,7 +986,7 @@
         <span id="meta-saved" title="Everything on this page is saved to your account as you type">Not yet saved</span>
         <span class="meta-spacer"></span>
         <button type="button" class="meta-btn" id="btn-download" title="Download what is on the page as a Word file">↓ Download</button>
-        <button type="button" class="meta-btn" id="btn-finish" title="Q checks every criterion is covered, then marks it like the marker">Finish &amp; mark →</button>
+        <button type="button" class="meta-btn primary" id="btn-finish" title="Q marks it like the marker, then walks it with you sentence by sentence — highlight, what's missing, the fix, tools, Check it">Mark &amp; fix →</button>
       </div>
       <div class="source-slot" id="source-slot">
         <button type="button" class="source-add" id="source-add-btn"
@@ -1008,6 +1067,7 @@
       <div class="q-score" id="coach-score"></div>
       <div class="q-move" id="coach-move"></div>
       <div class="q-section" id="coach-section"></div>
+      <div class="q-step" id="coach-step"></div>
       <div class="q-msg" id="coach-msg">Drop your task in above and I'll read it. I ask, you write — in your own words. You never have to read the brief.</div>
       <div class="q-integrity" id="coach-integrity">Your words, Q's structure. Q never writes on your page.</div>
       <div class="q-hint" id="coach-hint"></div>
@@ -1088,8 +1148,6 @@
       docSnapshot: '',        // doc text at time Q last asked a question
       qWordsWritten: 0,       // words Q has inserted into the doc this session
       gradeScheme: 'GCSE (9-1)',
-      gradedSections: [],     // [{sectionName, text, grade, gradeLabel}]
-      improveTarget: null,    // section currently being improved in the coach card
       settings: { pauseMs: 7000 },
       brickCounts: {},        // { criterionId: { voiced, total } } — counts only, never the essay
       essayReady: false,
@@ -1103,6 +1161,13 @@
       match: null,            // {overall, perCriterion} — the visible match score (server-computed)
       editing: false,         // the editing stage is on (highlight + tools)
       awaitingWord: null,     // {tool, it} while the coach box is asking "which word?"
+      // Scaffolded coaching (Sarah, 15 Aug late): one PLAN per part, cached
+      // server-side; the page walks its steps and fills the scaffolds.
+      plans: {},              // { criterionId: {role, steps[]} }
+      stepState: {},          // { criterionId: { stepIndex, framed, steps: { stepId: {...} } } }
+      currentStep: null,      // { criterionId, stepId } while a scaffold step is live
+      calls: {},              // { criterionId: { plan, tag, check, probe } } — model calls per part
+      openerDone: false,
     };
     const PROBE_MIN_GAP_MS = 8000;    // never two live probes closer than this (cost + rhythm)
     const PROBE_MIN_NEW_CHARS = 12;   // "genuinely new content" — a few real words
@@ -1456,10 +1521,14 @@
     const coachWhere = document.getElementById('coach-where');
     const coachMove  = document.getElementById('coach-move');
     const coachQuiet = document.getElementById('coach-quiet');
-    function setCoach({ msg, section, hint, actions, inputVisible, thinking, showNudge, where, move }) {
+    const coachStepEl = document.getElementById('coach-step');
+    function setCoach({ msg, section, hint, actions, inputVisible, thinking, showNudge, where, move, step }) {
       coachMsg.classList.toggle('thinking', !!thinking);
       coachMsg.textContent = msg || '';
       coachSection.textContent = section || '';
+      // The step line: "Step 2 of 5 · NUMBERS" while a scaffold step is live.
+      const st = step === false ? null : (step || currentStepInfo());
+      coachStepEl.innerHTML = st ? 'Step ' + st.n + ' of ' + st.N + ' · <span class="q-step-kind">' + escHtml(STEP_KIND_LABEL[st.kind] || st.kind) + '</span>' : '';
       coachHint.textContent = hint || '';
       coachWhere.textContent = where === false ? '' : (typeof where === 'string' ? where : whereText(whereInfo()));
       coachMove.textContent = move || '';
@@ -1508,6 +1577,14 @@
       if (l) return l.split(' ').slice(0, 5).join(' ').replace(/[.:;,]+$/, '');
       const words = String(c.text || '').replace(/^\s*(AC|LO)?\s*\d+(\.\d+)*\s*[:.)-]?\s*/i, '').replace(/\s+/g, ' ').trim().split(' ').filter(Boolean);
       return words.slice(0, 4).join(' ').replace(/[.:;,]+$/, '') || 'this part';
+    }
+    function labelLooksGenerated(c) {
+      const l = String((c && c.label) || '').replace(/\s+/g, ' ').trim();
+      if (!l) return true;
+      const words = String(c.text || '').replace(/^\s*(AC|LO)?\s*\d+(\.\d+)*\s*[:.)-]?\s*/i, '').replace(/\s+/g, ' ').trim().split(' ').filter(Boolean);
+      const first = words.slice(0, 4).join(' ').replace(/[.:;,]+$/, '');
+      if (l.toLowerCase() === first.toLowerCase()) return true;
+      return /^(critically |)(evaluate|discuss|analyse|analyze|assess|explain|describe|examine|justify|compare|outline|identify)\b/i.test(l);
     }
     function labelFor(id) { const c = (state.brief && state.brief.criteria || []).find(x => x.id === id); return c ? criterionLabel(c) : String(id || ''); }
     function whereInfo(critId) {
@@ -1731,6 +1808,7 @@
       state.brief = null; state.analysis = null; state.coverage = {}; state.coachHistory = [];
       state.currentQuestion = ''; state.currentCriterionId = ''; state.currentSection = ''; state.docSnapshot = ''; state.lastMark = null; state.lastProbeAt = 0;
       state.brickCounts = {}; state.essayReady = false; state.sources = []; state.editItems = null; state.editIndex = 0; state.editDone = false;
+      state.plans = {}; state.stepState = {}; state.currentStep = null; state.calls = {}; state.openerDone = false; state.match = null;
       hidePanel('brief'); hidePanel('teach');
       document.getElementById('brief-board-body').innerHTML = '';
       state.boardItems = []; state.boardEarlierOpen = false; renderBoard();
@@ -1856,9 +1934,9 @@
     state.boardEarlierOpen = false;
     const teachBody = document.getElementById('teach-board-body');
     function switchToBoardMode() { showPanel('teach'); }
-    function appendBoardItem({ type, label, text, links, action, criterionId }) {
+    function appendBoardItem({ type, label, text, links, action, criterionId, stepId }) {
       if (!text) return null;
-      const it = { type, label: label || '', text: String(text), links: links || null, action: action || null, criterionId: criterionId || state.currentCriterionId || '' };
+      const it = { type, label: label || '', text: String(text), links: links || null, action: action || null, criterionId: criterionId || state.currentCriterionId || '', stepId: stepId || null };
       state.boardItems.push(it);
       renderBoard();
       switchToBoardMode();
@@ -1879,11 +1957,24 @@
     function paragraphsHtml(text) {
       return paragraphsOf(text).map(p => '<p>' + escHtml(p).replace(/\n/g, '<br>') + '</p>').join('');
     }
-    function boardItemHtml(it, idx, inEarlier) {
+    // The one-line title for the live question (Sarah, 15 Aug: "he's writing
+    // the same thing on the teaching board as he is on the chat"). The card
+    // is where Q talks; the board is the worksheet.
+    const STEP_TITLE_TAIL = { list: 'one per line', numbers: 'is / should be', tag: 'Q colours your list', proscons: 'good / bad for each', argue: 'one side', switch: 'the other side', recommend: 'which wins', ask: 'one question', teach: 'Q teaches, then you apply it' };
+    function questionTitle(it) {
+      const info = currentStepInfo();
+      if (it.stepId && info && it.stepId === info.step.id && it.criterionId === info.cid) return 'Step ' + info.n + ' · ' + (STEP_KIND_LABEL[info.kind] || info.kind) + (STEP_TITLE_TAIL[info.kind] ? ': ' + STEP_TITLE_TAIL[info.kind] : '');
+      const words = String(it.text || '').replace(/\s+/g, ' ').trim().split(' ');
+      return (it.label && /^Q\d*$/.test(it.label) ? 'Q asks · ' : '') + words.slice(0, 8).join(' ') + (words.length > 8 ? '…' : '');
+    }
+    function boardItemHtml(it, idx, inEarlier, titleOnly) {
       const long = (inEarlier ? it.text.length > 120 : it.text.length > 240) && !(it.type === 'question' && !inEarlier);
       const clampCls = long ? ' clampable clamped' : '';
       const more = long ? `<button type="button" class="tb-more" data-more="${idx}">more</button>` : '';
       const click = it.action ? ' tb-click' : '';
+      if (it.type === 'question' && titleOnly) {
+        return `<div class="tb-item tb-q tb-title${click}" data-idx="${idx}"><span class="tb-label">${escHtml(questionTitle(it))}</span></div>`;
+      }
       if (it.type === 'question') {
         return `<div class="tb-item tb-q${click}" data-idx="${idx}"><span class="tb-label">${escHtml(it.label || 'Q')}</span><div class="tb-text tb-qtext${clampCls}">${paragraphsHtml(it.text)}</div>${more}</div>`;
       }
@@ -1904,12 +1995,14 @@
       const current = qi >= 0 ? items.slice(qi) : items.slice();
       const w = whereInfo();
       const whereHtml = w ? `<div class="tb-where">${escHtml(whereText(w))}</div>` : '';
+      const agendaHtml = scaffoldAgendaHtml();
       const earlierHtml = earlier.length
         ? `<details class="tb-earlier" id="tb-earlier"${state.boardEarlierOpen ? ' open' : ''}><summary>Earlier (${earlier.length})</summary><div class="tb-items">${earlier.map((it, i) => boardItemHtml(it, i, true)).join('')}</div></details>`
         : '';
-      const currentHtml = `<div class="tb-current"><div class="tb-items">${current.map((it, i) => boardItemHtml(it, (qi >= 0 ? qi : 0) + i, false)).join('')}</div></div>`;
+      const currentHtml = `<div class="tb-current"><div class="tb-items">${current.map((it, i) => boardItemHtml(it, (qi >= 0 ? qi : 0) + i, false, it.type === 'question' && (state.currentStep ? (it.stepId === state.currentStep.stepId) : (it.text === state.currentQuestion)))).join('')}${scaffoldWidgetHtml()}</div></div>`;
       const stripHtml = state.brief ? `<div class="coverage-strip compact" id="coverage-strip-teach"></div>` : '';
-      teachBody.innerHTML = whereHtml + earlierHtml + currentHtml + stripHtml;
+      teachBody.innerHTML = whereHtml + agendaHtml + earlierHtml + currentHtml + stripHtml;
+      wireScaffold();
       const fold = document.getElementById('tb-earlier');
       if (fold) fold.addEventListener('toggle', () => { state.boardEarlierOpen = fold.open; if (isDocked()) restackDock(); });
       teachBody.querySelectorAll('.tb-more').forEach(btn => {
@@ -1929,6 +2022,521 @@
       teachBody.scrollTop = cur && state.boardEarlierOpen ? Math.max(0, cur.offsetTop - teachBody.offsetTop - 34) : 0;
       if (isDocked()) restackDock();
     }
+
+    // ══════════════════════════════════════════════════════════════════════
+    // SCAFFOLDED COACHING (Sarah, 15 Aug 2026 late): "He's asking questions on
+    // top of my questions… I would have said 'list your company's benefits'…
+    // 'now tell me where your salary sits and where it should be'… he'd
+    // highlight your benefits on the list and say the pink are flexi, the
+    // blue are fixed… 'what are the pros of your summer party being a fixed
+    // benefit?' You answer. 'What are the cons?'" One PLAN per part (made
+    // once, cached server-side): a role sentence framing the job, then 3-6
+    // scaffold steps — LIST → NUMBERS → TAG → PROS/CONS → ARGUE → SWITCH →
+    // RECOMMEND. The page walks the steps deterministically; the model is
+    // called only to make the plan, to tag their items, and to check an
+    // argue / switch / recommend answer. Their words land on the page as
+    // each step fills; Q writes nothing on the page.
+    // ══════════════════════════════════════════════════════════════════════
+    const STEP_KIND_LABEL = { list: 'list', numbers: 'numbers', tag: 'sorting', proscons: 'pros & cons', argue: 'argue it', switch: 'switch sides', recommend: 'recommend', ask: 'question', teach: 'lesson' };
+    const TAG_CSS = { pink: '#e91e63', blue: '#1e88e5', green: '#2e9e4a', amber: '#e6a817', purple: '#8e44ad', teal: '#00897b' };
+    const MAX_FOLLOWUPS = 2;   // per argue / switch / recommend step — then move on (cost + rhythm)
+
+    function tally(kind, cid) {
+      const c = cid || state.currentCriterionId || '_';
+      const t = state.calls[c] || (state.calls[c] = { plan: 0, tag: 0, check: 0, probe: 0, teach: 0 });
+      t[kind] = (t[kind] || 0) + 1;
+      persist({ calls: state.calls });
+    }
+    function planFor(cid) { return state.plans[cid] || null; }
+    function ssFor(cid) { return state.stepState[cid] || (state.stepState[cid] = { stepIndex: 0, framed: false, steps: {} }); }
+    function stepStateOf(cid, stepId) { const ss = ssFor(cid); return ss.steps[stepId] || (ss.steps[stepId] = { items: [], rows: [], tags: null, legend: null, pc: {}, answers: [], followUps: 0, filled: false }); }
+    function currentStepInfo() {
+      const cs = state.currentStep; if (!cs) return null;
+      const plan = planFor(cs.criterionId); if (!plan) return null;
+      const i = plan.steps.findIndex(s => s.id === cs.stepId); if (i < 0) return null;
+      return { n: i + 1, N: plan.steps.length, kind: plan.steps[i].kind, step: plan.steps[i], plan, cid: cs.criterionId, idx: i };
+    }
+    function persistSteps() { persist({ stepState: state.stepState, currentStep: state.currentStep, openerDone: state.openerDone, currentCriterionId: state.currentCriterionId, currentSection: state.currentCriterionId, currentQuestion: state.currentQuestion, lastQuestion: state.currentQuestion }); }
+
+    // ── The plan: cached, or wait for it (the essay first if need be) ──────
+    async function getPlan(cid, { onTick } = {}) {
+      if (planFor(cid)) return planFor(cid);
+      for (let attempt = 0; attempt < 40; attempt++) {
+        let d;
+        try {
+          d = await api('/writer/plan', { criterionId: cid }, { timeoutMs: 40000 });
+        } catch (e) {
+          if (e.code === 'essay_pending') {
+            // The answer in Q's head is still being written — wait for it.
+            if (onTick) onTick('Q is writing the answer in his head first…');
+            try { await waitForJob('essay', { everyMs: 3000, maxMs: 300000, onTick: (secs) => onTick && onTick('Q is writing the answer in his head first… ' + secs + 's') }); }
+            catch (e2) { throw Object.assign(new Error('the answer in Q\'s head did not finish: ' + shortCause(e2)), { retryable: true }); }
+            continue;
+          }
+          if (e.code === 'plan_busy') { await new Promise(r => setTimeout(r, 2500)); continue; }
+          throw e;
+        }
+        let plan = d.result;
+        if (d.status === 'running' || (!plan && d.status !== 'done')) {
+          const job = await waitForJob('plan', { everyMs: 2000, maxMs: 180000, onTick: (secs) => onTick && onTick('Setting out the plan for this part… ' + secs + 's') });
+          plan = job.result;
+        }
+        if (!plan || !Array.isArray(plan.steps) || !plan.steps.length) throw Object.assign(new Error('the plan came back empty'), { retryable: true });
+        if (plan.criterionId && plan.criterionId !== cid) { await new Promise(r => setTimeout(r, 1500)); continue; }   // another part's plan landed first
+        // One plan call per part — made server-side (by the essay job or on
+        // request); counted the first time this session acquires it. A restore
+        // brings plans back from the notebook, so a refresh never counts twice.
+        if (!state.plans[cid]) tally('plan', cid);
+        state.plans[cid] = plan;
+        return plan;
+      }
+      throw Object.assign(new Error('could not get the plan for this part'), { retryable: true });
+    }
+
+    // ── Start (or resume) a part: frame it, then the current step ──────────
+    let partStarting = false;
+    async function startPart(cid, { moveFrom, resume } = {}) {
+      if (!state.brief || !cid || partStarting) return;
+      partStarting = true;
+      const prev = moveFrom || (state.currentCriterionId !== cid ? state.currentCriterionId : '');
+      state.currentCriterionId = cid; state.currentSection = cid;
+      state.currentStep = null;
+      const moved = prev && prev !== cid ? moveLine(prev, cid) : '';
+      const w = whereInfo(cid);
+      setCoach({ msg: (moved ? moved + ' ' : '') + 'Setting out the plan for this part…', thinking: true, inputVisible: false, move: moved, step: false });
+      try {
+        const plan = await getPlan(cid, { onTick: (line) => setCoach({ msg: (moved ? moved + ' ' : '') + line, thinking: true, inputVisible: false, move: moved, step: false }) });
+        const ss = ssFor(cid);
+        ss.framed = true;   // the role sentence lives in the agenda block (the worksheet header)
+        // Resume on the first unfilled step (never re-ask a filled one).
+        let idx = Math.min(ss.stepIndex || 0, plan.steps.length);
+        while (idx < plan.steps.length && stepStateOf(cid, plan.steps[idx].id).filled) idx++;
+        presentStep(cid, idx, { ack: resume ? 'Welcome back.' : '', moved, frame: !resume, restore: !!resume });
+      } catch (e) {
+        partStarting = false;
+        setCoach({
+          msg: 'I could not set out the plan for this part: ' + shortCause(e), section: 'HICCUP',
+          hint: 'Nothing is lost — retry, or carry on with a question instead.',
+          actions: [
+            { label: '↻ Try again', primary: true, onClick: () => startPart(cid, { moveFrom: prev }) },
+            { label: 'Ask me a question instead', onClick: () => askNextQuestion({ trigger: 'focus', focusCriterionId: cid }) },
+          ],
+          inputVisible: false, step: false,
+        });
+        return;
+      }
+      partStarting = false;
+    }
+
+    // Present step idx of the part's plan: the board gets the ask + the
+    // scaffold widget; the coach card carries the ask (with the frame line
+    // the first time) and the right hint for the kind.
+    function presentStep(cid, idx, { ack, moved, frame, restore } = {}) {
+      const plan = planFor(cid); if (!plan) return;
+      if (idx >= plan.steps.length) { finishPart(cid); return; }
+      const step = plan.steps[idx];
+      const ss = ssFor(cid); ss.stepIndex = idx;
+      const st = stepStateOf(cid, step.id);
+      state.currentStep = { criterionId: cid, stepId: step.id };
+      state.currentQuestion = step.prompt;
+      state.currentCriterionId = cid; state.currentSection = cid;
+      state.docSnapshot = docPlainText();
+      // The board: the ask as the current question (once).
+      const last = state.boardItems[state.boardItems.length - 1];
+      const already = state.boardItems.some(it => it.type === 'question' && it.stepId === step.id && it.criterionId === cid);
+      if (!already) state.boardItems.push({ type: 'question', label: 'Step ' + (idx + 1) + ' of ' + plan.steps.length, text: step.prompt, criterionId: cid, stepId: step.id });
+      renderBoard(); switchToBoardMode();
+      const roleLine = frame && idx === 0 ? plan.role + ' ' : '';
+      const pre = (ack ? ack.replace(/\s+$/, '') + ' ' : '') + roleLine;
+      const common = { where: whereText(whereInfo(cid)), move: moved || '', inputVisible: true, showNudge: true };
+      if (step.kind === 'list') {
+        const n = st.items.length;
+        setCoach({ ...common, msg: pre + step.prompt, hint: 'One per line — press Enter after each' + (step.itemHint ? ' (' + step.itemHint + ')' : '') + '. Press Done when the list is finished.' + (n ? ' ' + n + ' on the list so far.' : ''), actions: stepActions(cid, step, st) });
+        coachInput.placeholder = step.itemHint ? step.itemHint : 'One item, then Enter…';
+      } else if (step.kind === 'numbers') {
+        const cell = nextNumbersCell(step, st);
+        setCoach({ ...common, msg: pre + step.prompt, hint: cell ? cellAsk(cell) : 'All filled — press Done.', actions: stepActions(cid, step, st) });
+        coachInput.placeholder = cell ? cellAsk(cell) : 'Done?';
+      } else if (step.kind === 'teach') {
+        // TEACH-THEN-APPLY: the lesson lives on the card now (and moves to the
+        // board history when they press Got it). Nothing from it goes on the page.
+        setCoach({ ...common, msg: pre + step.prompt, hint: '', inputVisible: false, showNudge: false, actions: [{ label: 'Got it →', primary: true, big: true, onClick: () => completeStep(cid, step.id, { ack: '' }) }, { label: 'Skip this', quiet: true, onClick: () => skipStep(cid, step.id) }] });
+        coachActions.insertAdjacentHTML('afterbegin', lessonHtml({ term: step.term, lesson: step.lesson, example: step.example }));
+      } else if (step.kind === 'tag') {
+        setCoach({ ...common, msg: pre + step.prompt, hint: st.tags ? (st.legend || '') : 'Sorting your list…', actions: stepActions(cid, step, st), inputVisible: false });
+        if (!st.tags) runTagStep(cid, step);
+      } else if (step.kind === 'proscons') {
+        const cell = nextPcCell(cid, step, st);
+        setCoach({ ...common, msg: pre + step.prompt, hint: cell ? pcAsk(cell) : 'All done — press Done.', actions: stepActions(cid, step, st) });
+        coachInput.placeholder = cell ? pcAsk(cell) : 'Done?';
+      } else {
+        // argue / switch / recommend / ask — the answer is a paragraph
+        const side = step.side ? ' Side: ' + step.side : '';
+        setCoach({ ...common, msg: pre + (step.supply && !st.answers.length && !st.followUp ? step.supply + '\n\n' : '') + (st.followUp || st.applyAsk || step.prompt), hint: (step.kind === 'argue' || step.kind === 'switch' ? 'Argue it as if you mean it — a reason and an example. As much as you like, then Enter.' : step.kind === 'recommend' ? 'Say which wins and why, then Enter.' : 'Say it in your own words, then Enter.') + (step.hint && step.kind !== 'ask' ? '' : ''), actions: stepActions(cid, step, st) });
+        coachInput.placeholder = step.kind === 'argue' || step.kind === 'switch' ? 'Argue it here…' : 'Your answer…';
+      }
+      persistSteps();
+    }
+    function stepActions(cid, step, st) {
+      const acts = [];
+      if (step.kind === 'teach') return [{ label: 'Got it →', primary: true, big: true, onClick: () => completeStep(cid, step.id, { ack: '' }) }, { label: 'Skip this', quiet: true, onClick: () => skipStep(cid, step.id) }];
+      const filledEnough = step.kind === 'list' ? st.items.length >= 1
+        : step.kind === 'numbers' ? st.rows.some(r => r && (r.is || r.should))
+        : step.kind === 'tag' ? !!st.tags
+        : step.kind === 'proscons' ? Object.values(st.pc || {}).some(v => v && (v.pro || v.con))
+        : st.answers.length >= 1;
+      if (step.kind === 'tag') { if (st.tags) acts.push({ label: 'Next →', primary: true, big: true, onClick: () => completeStep(cid, step.id) }); }
+      else if (filledEnough) acts.push({ label: step.kind === 'list' ? 'Done with the list →' : 'Done →', primary: true, onClick: () => completeStep(cid, step.id) });
+      acts.push({ label: 'Skip this step', quiet: true, onClick: () => skipStep(cid, step.id) });
+      return acts;
+    }
+    function skipStep(cid, stepId) {
+      const plan = planFor(cid); if (!plan) return;
+      const idx = plan.steps.findIndex(s => s.id === stepId);
+      appendBoardItem({ type: 'note', label: 'skipped', text: 'Skipped — we can come back to it.', criterionId: cid, stepId });
+      presentStep(cid, idx + 1, { ack: 'Skipped.' });
+    }
+
+    // ── Their words go on the page as each step fills ─────────────────────
+    function listSentence(items) {
+      const xs = items.map(x => String(x).trim().replace(/[.;,]+$/, '')).filter(Boolean);
+      if (!xs.length) return '';
+      const s = xs.length === 1 ? xs[0] : xs.slice(0, -1).join(', ') + ' and ' + xs[xs.length - 1];
+      return s.charAt(0).toUpperCase() + s.slice(1) + '.';
+    }
+    function stepPageText(step, st) {
+      if (step.kind === 'list') return listSentence(st.items);
+      if (step.kind === 'numbers') return step.rows.map((r, i) => { const v = st.rows[i] || {}; if (!v.is && !v.should) return ''; return r.label + ': ' + (v.is ? v.is + ' now' : '') + (v.is && v.should ? ', ' : '') + (v.should ? 'should be ' + v.should : ''); }).filter(Boolean).join('. ') + (st.rows.some(v => v && (v.is || v.should)) ? '.' : '');
+      if (step.kind === 'proscons') return Object.entries(st.pc || {}).map(([item, v]) => (!v || (!v.pro && !v.con)) ? '' : item + ' — ' + [v.pro ? 'good: ' + v.pro.replace(/[.]+$/, '') : '', v.con ? 'bad: ' + v.con.replace(/[.]+$/, '') : ''].filter(Boolean).join('; ') + '.').filter(Boolean).join(' ');
+      return '';
+    }
+    // One paragraph per step (list / numbers / proscons), replaced in place
+    // when the step changes; argue / switch answers are their own paragraphs.
+    function putStepOnPage(cid, step, text, { append } = {}) {
+      text = String(text || '').trim();
+      const key = cid + ':' + step.id;
+      if (!append) {
+        const existing = docBody.querySelector('p.student-line[data-step="' + CSS.escape(key) + '"]');
+        if (existing) { if (text) existing.textContent = text; else existing.remove(); wordEl.textContent = countWords() + ' words'; scheduleAutosave(); state.docSnapshot = docPlainText(); return existing; }
+      }
+      if (!text) return null;
+      const p = insertQText(text, false, { focus: false });
+      if (p) { p.setAttribute('data-step', key); state.docSnapshot = docPlainText(); }
+      return p;
+    }
+
+    // ── The coach box during a step: the answer fills the scaffold ────────
+    async function handleStepInput(text) {
+      const info = currentStepInfo(); if (!info) return false;
+      const { step, cid } = info; const st = stepStateOf(cid, step.id);
+      const low = text.trim().toLowerCase();
+      if (step.kind === 'list') {
+        if (/^(done|that's it|thats it|finished|next)\.?$/.test(low)) { if (st.items.length) completeStep(cid, step.id); else setCoach({ msg: step.prompt, hint: 'Give me at least one — then Done.', inputVisible: true, showNudge: true, actions: stepActions(cid, step, st) }); return true; }
+        // Several on one line (commas / newlines) → several items.
+        let parts = text.split(/\n|;/).map(x => x.trim()).filter(Boolean);
+        if (parts.length === 1 && (text.match(/,/g) || []).length >= 2) { const cs = text.split(',').map(x => x.trim()).filter(Boolean); if (cs.every(x => x.length <= 40)) parts = cs; }
+        for (const p of parts) if (!st.items.some(x => x.toLowerCase() === p.toLowerCase())) st.items.push(p.slice(0, 160));
+        putStepOnPage(cid, step, stepPageText(step, st));
+        renderBoard(); persistSteps();
+        setCoach({ msg: step.prompt, hint: st.items.length + ' on the list. Another? Enter adds one — Done when the list is finished.', inputVisible: true, showNudge: true, actions: stepActions(cid, step, st) });
+        coachInput.placeholder = step.itemHint || 'Another one, then Enter…';
+        return true;
+      }
+      if (step.kind === 'numbers') {
+        if (/^(done|that's it|thats it|finished|next)\.?$/.test(low)) { completeStep(cid, step.id); return true; }
+        const cell = nextNumbersCell(step, st);
+        if (!cell) { completeStep(cid, step.id); return true; }
+        st.rows[cell.i] = st.rows[cell.i] || {}; st.rows[cell.i][cell.field] = text.trim().slice(0, 80);
+        putStepOnPage(cid, step, stepPageText(step, st));
+        renderBoard(); persistSteps();
+        const next = nextNumbersCell(step, st);
+        if (!next) { completeStep(cid, step.id); return true; }
+        setCoach({ msg: step.prompt, hint: cellAsk(next), inputVisible: true, showNudge: true, actions: stepActions(cid, step, st) });
+        coachInput.placeholder = cellAsk(next);
+        return true;
+      }
+      if (step.kind === 'proscons') {
+        if (/^(done|that's it|thats it|finished|next)\.?$/.test(low)) { completeStep(cid, step.id); return true; }
+        const cell = nextPcCell(cid, step, st);
+        if (!cell) { completeStep(cid, step.id); return true; }
+        st.pc[cell.item] = st.pc[cell.item] || { pro: '', con: '' }; st.pc[cell.item][cell.field] = text.trim().slice(0, 400);
+        putStepOnPage(cid, step, stepPageText(step, st));
+        renderBoard(); persistSteps();
+        const next = nextPcCell(cid, step, st);
+        if (!next) { completeStep(cid, step.id); return true; }
+        setCoach({ msg: pcAsk(next), hint: 'One line is plenty.', inputVisible: true, showNudge: true, actions: stepActions(cid, step, st) });
+        coachInput.placeholder = next.field === 'pro' ? 'One good thing…' : 'One bad thing…';
+        return true;
+      }
+      if (step.kind === 'tag') return false;   // no typing on a tag step
+      // THE BRICK LOOP: "do you know what this is called?" → "no" → Q SUPPLIES
+      // the fact plainly (from the plan — no call) and asks for the sentence.
+      if (step.supply && !st.supplied && /^(no|nope|not sure|don'?t know|dont know|dunno|no idea|not really|never heard|haven'?t a clue|i don'?t|not a clue)\b/i.test(low)) {
+        st.supplied = true; st.followUp = step.thenAsk || step.prompt; state.currentQuestion = st.followUp;
+        state.coachHistory.push({ question: step.prompt, answer: text.trim(), criterionId: cid, stepId: step.id, meta: true });
+        persist({ coachHistory: state.coachHistory }); persistSteps();
+        setCoach({ msg: step.supply + '\n\n' + st.followUp, hint: 'Write it here in your own words — that sentence goes on your page. Nothing I said does.', inputVisible: true, showNudge: true, actions: stepActions(cid, step, st) });
+        coachInput.placeholder = 'Your sentence…';
+        return true;
+      }
+      // argue / switch / recommend / ask: the paragraph goes on the page; then the check.
+      st.answers.push(text.trim());
+      // A BIGGER brick: supply → their view → "now say it as your own sentence" (no call).
+      if (step.thenAsk && !st.thenAsked) {
+        st.thenAsked = true; st.followUp = step.thenAsk; state.currentQuestion = step.thenAsk;
+        appendBoardItem({ type: 'answer', text: text.trim(), criterionId: cid, stepId: step.id });
+        const p0 = putStepOnPage(cid, step, text.trim(), { append: true }); if (p0) offerUndo(p0);
+        state.coachHistory.push({ question: step.prompt, answer: text.trim(), criterionId: cid, stepId: step.id });
+        persist({ coachHistory: state.coachHistory, ...docPatch() }); persistSteps();
+        setCoach({ msg: step.thenAsk, hint: 'Your sentence for the essay — it goes on the page as you write it.', inputVisible: true, showNudge: true, actions: stepActions(cid, step, st) });
+        coachInput.placeholder = 'Your sentence…';
+        return true;
+      }
+      appendBoardItem({ type: 'answer', text: text.trim(), criterionId: cid, stepId: step.id });
+      const p = putStepOnPage(cid, step, text.trim(), { append: true });
+      if (p) offerUndo(p);
+      state.coachHistory.push({ question: st.followUp || step.prompt, answer: text.trim(), criterionId: cid });
+      persist({ coachHistory: state.coachHistory, ...docPatch() });
+      persistSteps();
+      if (step.kind === 'ask' || st.followUps >= MAX_FOLLOWUPS) { completeStep(cid, step.id, { ack: 'Got it — that\'s on the page.' }); return true; }
+      await checkStepAnswer(cid, step, st, text.trim());
+      return true;
+    }
+    async function checkStepAnswer(cid, step, st, answer) {
+      setCoach({ msg: 'Reading that…', thinking: true, inputVisible: false, actions: [] });
+      try {
+        tally('check', cid);
+        const d = await api('/writer/step', { criterionId: cid, stepId: step.id, check: true, answer, earlierAnswers: st.answers.slice(0, -1).join('\n') }, { timeoutMs: 60000 });
+        applyCoverage(d.coverage); applyMatch(d.match); if (d.brickCounts) state.brickCounts = d.brickCounts;
+        if (d.filled || !d.followUp) { st.followUp = null; completeStep(cid, step.id, { ack: d.ack || 'Good — that\'s on the page.' }); return; }
+        st.followUps += 1; st.followUp = d.followUp;
+        state.currentQuestion = d.followUp;
+        // A supplied fact is Q's statement on the card (never on the page), then the sentence request.
+        setCoach({ msg: (d.ack ? d.ack + ' ' : '') + (d.supply ? d.supply + '\n\n' : '') + d.followUp, hint: d.supply ? 'Write your sentence here — it goes on your page. Nothing I said does.' : 'Add that here, then Enter.', inputVisible: true, showNudge: true, actions: stepActions(cid, step, st) });
+        coachInput.focus(); persistSteps();
+      } catch (e) {
+        // A failed check never strands them: their words are on the page — move on.
+        appendBoardItem({ type: 'note', label: 'note', text: 'Could not check that (' + shortCause(e) + ') — your words are on the page, moving on.', criterionId: cid, stepId: step.id });
+        completeStep(cid, step.id, { ack: 'That\'s on the page.' });
+      }
+    }
+
+    // ── A step is filled: bricks voiced (no model call), ack + next step ───
+    async function completeStep(cid, stepId, { ack } = {}) {
+      const plan = planFor(cid); if (!plan) return;
+      const idx = plan.steps.findIndex(s => s.id === stepId); if (idx < 0) return;
+      const step = plan.steps[idx]; const st = stepStateOf(cid, step.id);
+      st.filled = true; st.followUp = null;
+      if (step.kind === 'teach') {
+        // The lesson moves to the board history (once); nothing on the page, no bricks.
+        if (!state.boardItems.some(it => it.type === 'explain' && it.stepId === step.id)) state.boardItems.push({ type: 'explain', text: (step.term ? step.term + ' — ' : '') + step.lesson + (step.example ? ' e.g. ' + step.example : ''), criterionId: cid, stepId: step.id });
+        persistSteps();
+        presentStep(cid, idx + 1, { ack: ack || '' });
+        return;
+      }
+      // The board keeps what they gave (list / numbers / proscons as one answer item).
+      const summary = stepPageText(step, st);
+      if (summary && step.kind !== 'tag' && !state.boardItems.some(it => it.type === 'answer' && it.stepId === step.id && it.summary)) state.boardItems.push({ type: 'answer', text: summary, criterionId: cid, stepId: step.id, summary: true });
+      persistSteps();
+      try {
+        const d = await api('/writer/step', { criterionId: cid, stepId: step.id, done: true }, { timeoutMs: 30000 });
+        applyCoverage(d.coverage); applyMatch(d.match); if (d.brickCounts) state.brickCounts = d.brickCounts;
+      } catch (e) { /* the score catches up on the next call; nothing is lost */ }
+      const pct = state.match && state.match.perCriterion ? state.match.perCriterion[cid] : null;
+      const a = ack || (step.kind === 'list' ? 'Good list.' : step.kind === 'numbers' ? 'Numbers down.' : step.kind === 'tag' ? '' : step.kind === 'proscons' ? 'That\'s the good and the bad.' : 'Got it.');
+      presentStep(cid, idx + 1, { ack: (a ? a + (pct != null ? ' ' + pct + '% on this part.' : '') : '') });
+    }
+    // The part is done: move to the next part with a one-line move, or say
+    // every part has something.
+    function finishPart(cid) {
+      state.currentStep = null; state.currentQuestion = '';
+      const cs = (state.brief && state.brief.criteria) || [];
+      const i = cs.findIndex(c => c.id === cid);
+      const next = cs.slice(i + 1).find(c => (state.coverage[c.id] || 'none') !== 'covered' && !(planFor(c.id) && ssFor(c.id).stepIndex >= planFor(c.id).steps.length)) || cs.slice(0, i).find(c => (state.coverage[c.id] || 'none') === 'none');
+      persistSteps();
+      if (next) { startPart(next.id, { moveFrom: cid }); return; }
+      setCoach({ msg: 'That\'s every part with something on the page. Now I mark it like the marker and we fix it together, sentence by sentence.', section: 'ALL PARTS DONE', actions: [{ label: 'Mark & fix →', primary: true, big: true, onClick: () => markAndFix() }, { label: 'Edit with Q', quiet: true, onClick: () => markAndFix() }, { label: 'Add more on the page first', quiet: true, onClick: () => setCoach({ msg: 'Carry on writing on the page — press Mark & fix when you\'re ready.', inputVisible: true, step: false }) }], inputVisible: true, showNudge: false, step: false });
+    }
+
+    // ── NUMBERS helpers ───────────────────────────────────────────────────
+    function nextNumbersCell(step, st) {
+      for (let i = 0; i < step.rows.length; i++) {
+        const v = st.rows[i] || {};
+        if (!v.is) return { i, field: 'is', row: step.rows[i] };
+        if (!v.should) return { i, field: 'should', row: step.rows[i] };
+      }
+      return null;
+    }
+    function cellAsk(cell) { return cell.row.label + ' — ' + (cell.field === 'is' ? cell.row.isPrompt : cell.row.shouldPrompt) + '?'; }
+    // ── PROS/CONS helpers: the items come from the tag (or list) step ─────
+    function pcItems(cid, step) {
+      const from = step.itemsFrom ? stepStateOf(cid, step.itemsFrom) : null;
+      const plan = planFor(cid); const fromStep = plan && step.itemsFrom ? plan.steps.find(s => s.id === step.itemsFrom) : null;
+      let items = [];
+      if (fromStep && fromStep.kind === 'tag') { const src = fromStep.itemsFrom ? stepStateOf(cid, fromStep.itemsFrom) : null; items = src ? src.items.slice() : []; }
+      else if (from) items = from.items.slice();
+      return items;
+    }
+    function pcTagOf(cid, step, item) {
+      const plan = planFor(cid); const fromStep = plan && step.itemsFrom ? plan.steps.find(s => s.id === step.itemsFrom) : null;
+      if (!fromStep || fromStep.kind !== 'tag') return null;
+      const ts = stepStateOf(cid, fromStep.id); if (!ts.tags) return null;
+      const name = ts.tags[item]; const tag = (fromStep.tags || []).find(t => t.name === name);
+      return tag || null;
+    }
+    function nextPcCell(cid, step, st) {
+      for (const item of pcItems(cid, step)) {
+        const v = st.pc[item] || {};
+        if (!v.pro) return { item, field: 'pro', tag: pcTagOf(cid, step, item) };
+        if (!v.con) return { item, field: 'con', tag: pcTagOf(cid, step, item) };
+      }
+      return null;
+    }
+    function pcAsk(cell) {
+      const tagBit = cell.tag ? ' being ' + cell.tag.name : '';
+      return cell.field === 'pro' ? 'What is one good thing about ' + cell.item + tagBit + '?' : 'And one bad thing about ' + cell.item + tagBit + '?';
+    }
+
+    // ── TAG step: one small call; the board colours their list ────────────
+    async function runTagStep(cid, step) {
+      const st = stepStateOf(cid, step.id);
+      const src = step.itemsFrom ? stepStateOf(cid, step.itemsFrom) : null;
+      const items = src ? src.items : [];
+      if (!items.length) { appendBoardItem({ type: 'note', label: 'note', text: 'Nothing on the list to sort — skipping.', criterionId: cid, stepId: step.id }); completeStep(cid, step.id, { ack: '' }); return; }
+      try {
+        tally('tag', cid);
+        const d = await api('/writer/tag', { criterionId: cid, stepId: step.id, items }, { timeoutMs: 60000 });
+        if (d.cached) { const c = state.calls[cid]; if (c && c.tag > 0) { c.tag -= 1; persist({ calls: state.calls }); } }
+        st.tags = {}; for (const t of (d.tagged || [])) st.tags[t.item] = t.tag;
+        st.legend = d.line || '';
+        renderBoard(); persistSteps();
+        setCoach({ msg: st.legend || step.prompt, hint: 'Look at the colours on the board — then Next.', where: whereText(whereInfo(cid)), inputVisible: false, showNudge: true, actions: stepActions(cid, step, st) });
+      } catch (e) {
+        setCoach({ msg: 'I could not sort the list just now: ' + shortCause(e), hint: 'Nothing lost — retry, or skip the sorting.', actions: [{ label: '↻ Try again', primary: true, onClick: () => runTagStep(cid, step) }, { label: 'Skip the sorting', quiet: true, onClick: () => skipStep(cid, step.id) }], inputVisible: false });
+      }
+    }
+
+    // ── The board: the agenda block + the current step's widget ───────────
+    function scaffoldAgendaHtml() {
+      const cid = state.currentCriterionId; const plan = planFor(cid); if (!plan) return '';
+      const ss = ssFor(cid); const cur = state.currentStep && state.currentStep.criterionId === cid ? state.currentStep.stepId : null;
+      const li = plan.steps.map((s, i) => {
+        const st = ss.steps[s.id]; const done = !!(st && st.filled);
+        const cls = done ? 'done' : (s.id === cur ? 'cur' : '');
+        return `<li class="${cls}"><span class="st-dot"></span><span>${escHtml(s.prompt.length > 70 ? s.prompt.slice(0, 69) + '…' : s.prompt)}<span class="st-kind">${escHtml(STEP_KIND_LABEL[s.kind] || s.kind)}</span></span></li>`;
+      }).join('');
+      return `<div class="tb-agenda" id="tb-agenda"><div class="tb-role">${escHtml(plan.role)}</div><ol class="tb-steps">${li}</ol></div>`;
+    }
+    function scaffoldWidgetHtml() {
+      const info = currentStepInfo(); if (!info) return '';
+      const { step, cid } = info; const st = stepStateOf(cid, step.id);
+      if (step.kind === 'list') {
+        if (!st.items.length) return `<div class="tb-scaf" data-scaf="list"><div class="sc-empty">${escHtml(step.itemHint ? 'e.g. ' + step.itemHint.replace(/^e\.g\.\s*/i, '') : 'Your list builds here — one per line.')}</div></div>`;
+        return `<div class="tb-scaf" data-scaf="list"><ul class="sc-list">${st.items.map((x, i) => `<li><span class="sc-n">${i + 1}</span><span>${escHtml(x)}</span><button type="button" class="sc-x" data-rm="${i}" title="Take it off">×</button></li>`).join('')}</ul></div>`;
+      }
+      if (step.kind === 'tag') {
+        const src = step.itemsFrom ? stepStateOf(cid, step.itemsFrom) : null; const items = src ? src.items : [];
+        const byName = Object.fromEntries((step.tags || []).map(t => [t.name, t]));
+        const li = items.map((x, i) => { const name = st.tags ? st.tags[x] : null; const t = name ? byName[name] : null; const c = t ? TAG_CSS[t.colour] || '#999' : null; return `<li${c ? ` data-tag="${escHtml(name)}" style="--tagc:${c}"` : ''}><span class="sc-n">${i + 1}</span><span>${escHtml(x)}</span>${t ? `<span class="sc-tag">${escHtml(t.name)}</span>` : ''}</li>`; }).join('');
+        const legend = st.tags ? `<div class="sc-legend">${(step.tags || []).map(t => `<span style="--tagc:${TAG_CSS[t.colour] || '#999'}">${escHtml(t.colour)} = ${escHtml(t.name)}${t.meaning ? ' — ' + escHtml(t.meaning) : ''}</span>`).join('')}</div>` : `<div class="sc-empty">Sorting…</div>`;
+        return `<div class="tb-scaf" data-scaf="tag"><ul class="sc-list">${li}</ul>${legend}</div>`;
+      }
+      if (step.kind === 'numbers') {
+        const cell = nextNumbersCell(step, st);
+        const rows = step.rows.map((r, i) => { const v = st.rows[i] || {}; const cur = cell && cell.i === i; return `<tr class="${cur ? 'cur' : ''}"><td class="sc-lab">${escHtml(r.label)}</td><td><input data-row="${i}" data-field="is" value="${escHtml(v.is || '')}" placeholder="${escHtml(r.isPrompt)}" /></td><td><input data-row="${i}" data-field="should" value="${escHtml(v.should || '')}" placeholder="${escHtml(r.shouldPrompt)}" /></td></tr>`; }).join('');
+        return `<div class="tb-scaf" data-scaf="numbers"><table class="sc-table"><thead><tr><th></th><th>is</th><th>should be</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+      }
+      if (step.kind === 'proscons') {
+        const cell = nextPcCell(cid, step, st);
+        const items = pcItems(cid, step);
+        if (!items.length) return `<div class="tb-scaf" data-scaf="proscons"><div class="sc-empty">No items to weigh up yet.</div></div>`;
+        const html = items.map(item => { const v = st.pc[item] || {}; const t = pcTagOf(cid, step, item); const c = t ? TAG_CSS[t.colour] || '#999' : null;
+          const row = (f, label) => `<div class="pc-row${cell && cell.item === item && cell.field === f ? ' cur' : ''}"><span class="pc-l">${label}</span><span class="pc-v${v[f] ? '' : ' empty'}">${escHtml(v[f] || '—')}</span></div>`;
+          return `<div class="pc-item"${c ? ` style="--tagc:${c}"` : ''}><div class="pc-name">${escHtml(item)}${t ? ` <span class="sc-tag" style="--tagc:${c}">${escHtml(t.name)}</span>` : ''}</div>${row('pro', 'good')}${row('con', 'bad')}</div>`; }).join('');
+        return `<div class="tb-scaf" data-scaf="proscons"><div class="sc-pc">${html}</div></div>`;
+      }
+      if (step.side) return `<div class="tb-scaf" data-scaf="${escHtml(step.kind)}"><div class="sc-side">The side: <b>${escHtml(step.side)}</b></div></div>`;
+      return '';
+    }
+    function wireScaffold() {
+      const info = currentStepInfo(); if (!info) return;
+      const { step, cid } = info; const st = stepStateOf(cid, step.id);
+      teachBody.querySelectorAll('.tb-scaf .sc-x').forEach(b => b.addEventListener('click', () => {
+        st.items.splice(Number(b.dataset.rm), 1); putStepOnPage(cid, step, stepPageText(step, st)); renderBoard(); persistSteps();
+        setCoach({ msg: step.prompt, hint: st.items.length + ' on the list.', inputVisible: true, showNudge: true, actions: stepActions(cid, step, st) });
+      }));
+      teachBody.querySelectorAll('.tb-scaf .sc-table input').forEach(inp => {
+        inp.addEventListener('change', () => {
+          const i = Number(inp.dataset.row); st.rows[i] = st.rows[i] || {}; st.rows[i][inp.dataset.field] = inp.value.trim().slice(0, 80);
+          putStepOnPage(cid, step, stepPageText(step, st)); persistSteps();
+          const next = nextNumbersCell(step, st);
+          setCoach({ msg: step.prompt, hint: next ? cellAsk(next) : 'All filled — press Done.', inputVisible: true, showNudge: true, actions: stepActions(cid, step, st) });
+          coachInput.placeholder = next ? cellAsk(next) : 'Done?';
+        });
+        inp.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); inp.blur(); } });
+      });
+    }
+    // Which part to start after the opener: the first, unless the student is
+    // clearly already mid-way (restore handles that).
+    function firstPartId() { const cs = (state.brief && state.brief.criteria) || []; return cs[0] ? cs[0].id : ''; }
+    // Rebuild the board's "earlier" items from filled steps (restore).
+    function boardFromSteps() {
+      const cs = (state.brief && state.brief.criteria) || [];
+      for (const c of cs) {
+        const plan = planFor(c.id); const ss = state.stepState[c.id]; if (!plan || !ss) continue;
+        plan.steps.forEach((s, i) => {
+          const st = ss.steps[s.id]; if (!st || !(st.filled || st.items.length || st.answers.length || (st.rows || []).some(v => v && (v.is || v.should)))) return;
+          if (state.currentStep && state.currentStep.criterionId === c.id && state.currentStep.stepId === s.id) return;   // presentStep adds the live one
+          if (s.kind === 'teach') { if (st.filled) state.boardItems.push({ type: 'explain', text: (s.term ? s.term + ' — ' : '') + s.lesson + (s.example ? ' e.g. ' + s.example : ''), criterionId: c.id, stepId: s.id }); return; }
+          state.boardItems.push({ type: 'question', label: 'Step ' + (i + 1) + ' of ' + plan.steps.length, text: s.prompt, criterionId: c.id, stepId: s.id });
+          const sum = stepPageText(s, st) || (st.answers || []).join('\n\n');
+          if (sum) state.boardItems.push({ type: 'answer', text: sum, criterionId: c.id, stepId: s.id, summary: true });
+        });
+      }
+    }
+    function lessonHtml({ term, lesson, example, links }) {
+      return '<div class="q-lesson">' + (term ? '<div class="ql-term">' + escHtml(term) + '</div>' : '') + escHtml(lesson || '') + (example ? '<div class="ql-eg">e.g. ' + escHtml(example) + '</div>' : '') + (links && links.length ? '<div class="ql-more">If you want more: ' + links.map(l => '<a href="' + escHtml(l.url) + '" target="_blank" rel="noopener">' + escHtml(l.name) + '</a>').join('') + '</div>' : '') + '</div>';
+    }
+    // "I don't understand this" / "I'm stuck" on ANY ask → TEACH, then re-ask
+    // as an apply question (Sarah: "no matter how many questions and hints,
+    // it is not going to teach me"). One small call, cached per step.
+    let teachInFlight = false;
+    async function teachNow() {
+      if (teachInFlight) return;
+      if (!state.brief) return;
+      const info = currentStepInfo();
+      const ask = currentAskText();
+      if (!ask) { setCoach({ msg: 'Nothing on the go to explain yet — drop your task in, or ask me a question.', inputVisible: true }); return; }
+      teachInFlight = true;
+      saveTutor({ lastStuckOn: ask });
+      setCoach({ msg: 'Let me teach you the idea behind that first…', thinking: true, inputVisible: false, actions: [] });
+      try {
+        const d = await api('/writer/teach', { criterionId: info ? info.cid : (state.currentCriterionId || null), stepId: info ? info.step.id : null, question: ask, yearGroup: state.yearGroup || '' }, { timeoutMs: 60000 });
+        if (!d.cached) tally('teach', state.currentCriterionId);
+        const platforms = [
+          { name: 'YouTube', base: 'https://www.youtube.com/results?search_query=' },
+          { name: 'BBC Bitesize', base: 'https://www.bbc.co.uk/bitesize/search?q=' },
+        ];
+        const terms = Array.isArray(d.searchTerms) && d.searchTerms.length ? d.searchTerms : [d.term || ask];
+        const links = platforms.map((p, i) => ({ name: p.name, url: p.base + encodeURIComponent(terms[i] || terms[0]) }));
+        const applyAsk = d.applyAsk || ask;
+        if (info) { const st = stepStateOf(info.cid, info.step.id); st.applyAsk = applyAsk; st.taught = { term: d.term, lesson: d.lesson, example: d.example }; persistSteps(); }
+        else state.currentQuestion = applyAsk;
+        const gotIt = () => {
+          // The lesson moves to the board history (once); the apply ask is the ask now.
+          appendBoardItem({ type: 'explain', text: (d.term ? d.term + ' — ' : '') + d.lesson + (d.example ? ' e.g. ' + d.example : ''), links, stepId: info ? info.step.id : null });
+          if (info) presentStep(info.cid, info.idx, { ack: 'Now apply it.' });
+          else setCoach({ msg: applyAsk, hint: 'Say it in your own words here.', inputVisible: true, showNudge: true });
+          coachInput.focus();
+        };
+        setCoach({ msg: '', section: 'A QUICK LESSON', where: whereText(whereInfo()), hint: 'Then I\'ll ask you to apply it — nothing from the lesson goes on your page.', inputVisible: false, showNudge: false, actions: [{ label: 'Got it — ask me again →', primary: true, big: true, onClick: gotIt }] });
+        coachActions.insertAdjacentHTML('afterbegin', lessonHtml({ term: d.term, lesson: d.lesson, example: d.example, links }));
+      } catch (e) {
+        setCoach({ msg: ask, hint: 'Couldn\'t get the lesson just now (' + shortCause(e) + ') — try again.', inputVisible: true, showNudge: true, actions: info ? stepActions(info.cid, info.step, stepStateOf(info.cid, info.step.id)) : [] });
+      } finally { teachInFlight = false; }
+    }
+    // Test hooks for the harness (no data, no secrets).
+    window.__qwriterSteps = { startPart, presentStep, completeStep, handleStepInput, getPlan, currentStepInfo, calls: () => state.calls, classify: (t) => classifyCoachInput(t) };
 
     // ── The brief lands: say what it found, then LEAD with the opener ──────
     // Q doesn't wait. In plain words: "This is asking you for 3 things…",
@@ -2061,6 +2669,13 @@
         setCoach({ msg: 'Drop your task in first — I need to read the brief before I can coach you on it.', inputVisible: true });
         return;
       }
+      // Scaffolded coaching: once the answer in Q's head exists, a part runs
+      // on its PLAN (cached) — no probe call needed to move on. A live step
+      // keeps running underneath; the probe is only the fallback for it.
+      if (!state.currentStep && state.essayReady && trigger !== 'stuck' && !opts.forceProbe && !partStarting) {
+        startPart(opts.focusCriterionId || state.currentCriterionId || firstPartId(), { resume: trigger !== 'focus' });
+        return;
+      }
       if (state.probeInFlight) return;
       state.probeInFlight = true;
       if (trigger === 'pause') state.lastProbeAt = Date.now();   // only pause-probes start the floor — the opener never blocks the first written answer
@@ -2078,12 +2693,16 @@
           trigger,
           focusCriterionId: opts.focusCriterionId || null,
           lastQuestion: state.currentQuestion || opts.lastQuestion || null,
+          criterionId: state.currentStep ? state.currentStep.criterionId : null,
+          stepId: state.currentStep ? state.currentStep.stepId : null,
           ...voicePayload(),
         }, { timeoutMs: 90000 });
+        tally('probe', state.currentCriterionId);
         const question = d.question;
         const prevCriterionId = state.currentCriterionId;
-        state.currentQuestion   = question;
-        state.currentCriterionId = d.criterionId || state.currentCriterionId;
+        const inStep = !!state.currentStep;
+        if (!inStep) state.currentQuestion   = question;
+        state.currentCriterionId = inStep ? state.currentCriterionId : (d.criterionId || state.currentCriterionId);
         state.currentSection    = state.currentCriterionId;
         state.docSnapshot       = docText;
         if (d.brickCounts) state.brickCounts = d.brickCounts;
@@ -2093,7 +2712,6 @@
 
         // WHERE WE ARE: when Q moves to a new criterion, say so in one line.
         const moved = moveLine(prevCriterionId, state.currentCriterionId);
-        if (moved) appendBoardItem({ type: 'note', label: 'moving on', text: moved });
         state.qCount = (state.qCount || 1) + 1;
         const label = 'Q' + state.qCount;
         appendBoardItem({ type: 'question', label, text: question });
@@ -2101,11 +2719,12 @@
 
         // After a coach-box answer: one short acknowledgement + the question.
         const ack = opts.ack ? String(opts.ack) : (d.acknowledge && trigger === 'answer' ? String(d.acknowledge) : '');
+        const supplied = d.supply ? String(d.supply).trim() + '\n\n' : '';
         setCoach({
-          msg: ack ? ack.replace(/\s+$/, '') + ' Now: ' + question : question,
+          msg: supplied + (ack ? ack.replace(/\s+$/, '') + ' Now: ' + question : question),
           section: d.done ? 'ALL COVERED' : '',
           move: moved,
-          hint: d.done ? 'Every part has something. Finish & mark when you\'re ready.' : (d.hint || ''),
+          hint: d.done ? 'Every part has something. Mark & fix when you\'re ready.' : (d.hint || ''),
           inputVisible: true,
           showNudge: true,
         });
@@ -2158,7 +2777,113 @@
       const text = coachInput.value.trim();
       if (!text) return;
       coachInput.value = '';
+      await submitCoachText(text);
+    });
 
+    // ── What did they mean? (Sarah, live 15 Aug: she typed "how am I doing"
+    // and Q took it as an answer, put it on the page and moved on.) Before
+    // anything is treated as an answer: a question / meta request to Q is
+    // answered, never recorded, never put on the page, never advances.
+    //   progress  — "how am I doing", "where are we"… → answered LOCALLY (no call)
+    //   question  — ends with ?, opens with how/what/why…, "explain", "stuck"…
+    //   ambiguous — ≤3 words that are not clearly an answer → ask which
+    //   answer    — everything else
+    const PROGRESS_RE = /\b(how am i doing|how'?m i doing|where are we|what are we doing|how far (am i|are we|have i)|what'?s left|what is left|how much (more|left)|what'?s next|what is next|what am i (meant|supposed) to|what do i do now|how many (more|left)|am i (nearly |almost )?(done|finished|there))\b/i;
+    const QUESTION_START_RE = /^(how|what|why|where|when|which|who|whom|whose|can you|could you|should i|do i|am i|is this|is that|is it|does|did|would you|will you|are you|are we|have i|explain|tell me|remind me)\b/i;
+    const META_RE = /\b(explain|i don'?t understand|dont understand|not sure what you mean|what does .{1,60} mean|what do you mean|stuck|help me|help\b|why are you asking|what are you asking|say that again|in plain english|meaning of)\b/i;
+    const CLEAR_SHORT_RE = /^(yes|no|yeah|nope|done|next|skip|ok|okay|nothing|none|not sure|n\/a)\b/i;
+    function classifyCoachInput(text) {
+      const t = String(text || '').trim();
+      const words = t.split(/\s+/).filter(Boolean).length;
+      if (PROGRESS_RE.test(t)) return 'progress';
+      if (/\?\s*$/.test(t)) return 'question';
+      if (META_RE.test(t) && words <= 14) return 'question';
+      if (QUESTION_START_RE.test(t) && words <= 12) return 'question';
+      const info = currentStepInfo();
+      const kind = info ? info.step.kind : null;
+      // A list item / a number / a pro or con is normally short — never ambiguous.
+      if (kind === 'list' || kind === 'numbers' || kind === 'proscons') return 'answer';
+      if (words <= 3 && !CLEAR_SHORT_RE.test(t)) return 'ambiguous';
+      return 'answer';
+    }
+    // The current ask, restated (so Q can go "back to it").
+    function currentAskText() {
+      const info = currentStepInfo();
+      if (!info) return state.currentQuestion || '';
+      const st = stepStateOf(info.cid, info.step.id);
+      if (info.step.kind === 'numbers') { const c = nextNumbersCell(info.step, st); return c ? cellAsk(c) : info.step.prompt; }
+      if (info.step.kind === 'proscons') { const c = nextPcCell(info.cid, info.step, st); return c ? pcAsk(c) : info.step.prompt; }
+      return st.followUp || info.step.prompt;
+    }
+    // "How am I doing?" — answered from what the page already knows. No call.
+    function showProgress() {
+      const w = whereInfo(); const info = currentStepInfo();
+      const lines = [];
+      if (w) lines.push(whereText(w) + '.');
+      const plan = planFor(state.currentCriterionId);
+      if (plan && plan.role) lines.push(plan.role);
+      if (info) lines.push('You\'re on step ' + info.n + ' of ' + info.N + ' (' + (STEP_KIND_LABEL[info.kind] || info.kind) + '): ' + info.step.prompt);
+      const m = state.match;
+      if (m && w) lines.push('Match: ' + (m.perCriterion[w.id] != null ? m.perCriterion[w.id] + '% on this part, ' : '') + m.overall + '% overall.');
+      if (plan) {
+        const ss = ssFor(state.currentCriterionId);
+        const left = plan.steps.filter(x => !(ss.steps[x.id] && ss.steps[x.id].filled) && !(info && x.id === info.step.id));
+        if (left.length) lines.push('Still to do on this part: ' + left.map(x => STEP_KIND_LABEL[x.kind] || x.kind).join(' → ') + '.');
+      }
+      const open = uncoveredCriteria().filter(c => c.id !== state.currentCriterionId);
+      if (open.length) lines.push('Parts still open: ' + open.map(criterionLabel).join(', ') + '.');
+      else if (state.brief) lines.push('Every other part has something.');
+      const ask = currentAskText();
+      setCoach({ msg: lines.join('\n') + (ask ? '\n\nBack to it: ' + ask : ''), hint: '', inputVisible: true, showNudge: !!state.brief, actions: info ? stepActions(info.cid, info.step, stepStateOf(info.cid, info.step.id)) : [] });
+    }
+    // A question for Q: answered plainly (one probe call, trigger 'question'),
+    // then the current ask again. Nothing recorded, nothing on the page.
+    async function answerStudentQuestion(text) {
+      if (!state.brief) { await askQ(text); return; }
+      if (/i don'?t understand|dont understand|not sure what you mean|what do you mean|explain|stuck/i.test(text) && (state.currentQuestion || state.currentStep)) { teachNow(); return; }
+      const ask = currentAskText();
+      setCoach({ msg: 'Let me answer that…', thinking: true, inputVisible: false });
+      try {
+        const d = await api('/writer/probe', {
+          docText: docPlainText().slice(-6000), delta: '', trigger: 'question', studentQuestion: text,
+          history: state.coachHistory.slice(-6).map(h => ({ question: h.question, answer: h.answer })),
+          coverage: state.coverage, lastQuestion: ask || null,
+          criterionId: state.currentStep ? state.currentStep.criterionId : (state.currentCriterionId || null),
+          stepId: state.currentStep ? state.currentStep.stepId : null,
+          ...voicePayload(),
+        }, { timeoutMs: 60000 });
+        tally('probe', state.currentCriterionId);
+        const answer = String(d.answer || d.question || '').trim();
+        appendBoardItem({ type: 'explain', text: answer });
+        revealPanel('teach');
+        const info = currentStepInfo();
+        setCoach({ msg: (ask ? 'Back to it: ' + ask : ''), hint: 'I\'ve answered on the board — have a read, then carry on here.', inputVisible: true, showNudge: true, actions: info ? stepActions(info.cid, info.step, stepStateOf(info.cid, info.step.id)) : [] });
+      } catch (e) {
+        setCoach({ msg: 'I couldn\'t answer that just now (' + shortCause(e) + ').' + (ask ? '\n\nBack to it: ' + ask : ''), inputVisible: true, showNudge: true });
+      }
+    }
+    async function submitCoachText(text, { intent } = {}) {
+      const kind = intent || (state.awaitingWord ? 'answer' : classifyCoachInput(text));
+      if (kind === 'progress') { showProgress(); return; }
+      if (kind === 'question') { await answerStudentQuestion(text); return; }
+      if (kind === 'ambiguous') {
+        setCoach({
+          msg: 'Is that your answer, or a question for me?', hint: '"' + text + '"',
+          actions: [
+            { label: 'That\'s my answer', primary: true, onClick: () => submitCoachText(text, { intent: 'answer' }) },
+            { label: 'A question for Q', onClick: () => submitCoachText(text, { intent: 'question' }) },
+          ],
+          inputVisible: true, showNudge: false,
+        });
+        return;
+      }
+
+      // A scaffold step is live: the answer fills the scaffold (list item,
+      // number, pro/con, or the argument) — see handleStepInput.
+      if (state.currentStep && !state.awaitingWord) {
+        const handled = await handleStepInput(text);
+        if (handled) return;
+      }
       // If we have a current leading question, treat this as the answer
       if (state.currentQuestion) {
         const rawAnswer = text;
@@ -2177,16 +2902,18 @@
         state.docSnapshot = docPlainText();
         persist({ coachHistory: state.coachHistory, ...docPatch() });
 
+        // The opener answered → the first PART starts (plan + scaffold steps).
+        if (!state.openerDone) { state.openerDone = true; persistSteps(); startPart(firstPartId()); return; }
         askNextQuestion({ trigger: 'answer', ack: 'Got it — that\'s on the page.' });
       } else {
         // Free chat with Q
         await askQ(text);
       }
-    });
+    }
 
     // "I'm stuck" — Q does NOT write for them (integrity rule). He asks a
     // smaller, easier question toward the same brick instead.
-    btnStartMe.addEventListener('click', () => askNextQuestion({ trigger: 'stuck' }));
+    btnStartMe.addEventListener('click', () => { if (state.brief) teachNow(); else askNextQuestion({ trigger: 'stuck' }); });
 
     // Put the STUDENT'S sentence on the paper as a plain paragraph. Since the
     // integrity rule (Q's own sentences never enter the document) this is only
@@ -2497,6 +3224,8 @@
     // real search links as proper buttons), then re-asks the same question.
     const btnDontUnderstand = document.getElementById('btn-dont-understand');
     btnDontUnderstand.addEventListener('click', async () => {
+      // With a brief in: TEACH the idea, then re-ask as an apply question.
+      if (state.brief && (state.currentStep || state.currentQuestion)) { teachNow(); return; }
       // Prefer the full question text (most specific), fall back to section, then subject
       const concept = state.currentQuestion || state.currentSection || state.analysis?.subject || 'this topic';
       // Record what they were stuck on so Q can recall it from any page
@@ -2531,114 +3260,11 @@
       }
     });
 
-    // ── Section marking + grade bands ─────────────────────────────────────
-    async function markAndInsertGradeBand(sectionName, sectionText) {
-      if (!sectionText || sectionText.length < 20) return;
-      try {
-        const d = await post('/writer/mark-section', {
-          sectionText, sectionName,
-          analysis: state.analysis,
-          gradeScheme: state.gradeScheme,
-        });
-        if (!d.ok) throw new Error(d.error);
-
-        state.gradedSections.push({
-          sectionName, sectionText, grade: d.grade, gradeLabel: d.gradeLabel,
-        });
-
-        // Insert grade band into doc after current content
-        const band = document.createElement('div');
-        band.className = 'grade-band';
-        band.contentEditable = 'false';
-        band.dataset.grade = d.grade;
-        band.dataset.section = sectionName;
-        band.innerHTML = `
-          <div class="gb-dot"></div>
-          <div class="gb-info">
-            <span class="gb-section">${escHtml(sectionName)}</span>
-            <span class="gb-label">${escHtml(d.gradeLabel || d.grade)}</span>
-            <div class="gb-reason">${escHtml(d.nextGradeHint || d.reason || '')}</div>
-          </div>
-          <button class="gb-improve" data-section="${escHtml(sectionName)}">Improve →</button>`;
-
-        band.querySelector('.gb-improve').addEventListener('click', () => {
-          runImproveFlow(sectionName, sectionText, d.grade);
-        });
-
-        docBody.appendChild(band);
-
-        // Add a blank line after so the user can keep writing
-        const next = document.createElement('div');
-        next.innerHTML = '<br>';
-        docBody.appendChild(next);
-
-        // Place cursor in the new blank line
-        const range = document.createRange();
-        const sel = window.getSelection();
-        range.setStart(next, 0); range.collapse(true);
-        sel.removeAllRanges(); sel.addRange(range);
-
-      } catch (e) {
-        // Marking failed silently — don't block writing
-        console.warn('[writer] marking failed:', e.message);
-      }
-    }
-
-    // ── Improve → next grade coaching ─────────────────────────────────────
-    async function runImproveFlow(sectionName, sectionText, currentGrade) {
-      state.improveTarget = { sectionName, sectionText, currentGrade };
-      setCoach({ msg: 'Reading that section…', thinking: true, inputVisible: false });
-
-      try {
-        const d = await post('/writer/improve', {
-          sectionText, sectionName, currentGrade,
-          voiceSignature: state.voiceSignature,
-          analysis: state.analysis,
-          ...voicePayload(),
-        });
-        if (!d.ok || !d.suggestions) throw new Error(d.error || 'improve failed');
-
-        setCoach({
-          msg: 'A few steers for this part:',
-          section: '',
-          hint: '',
-          actions: [],
-          inputVisible: false,
-        });
-
-        // Render suggestions inside the coach card actions area
-        coachActions.classList.remove('hidden');
-        coachActions.innerHTML = '';
-
-        d.suggestions.forEach(s => {
-          const card = document.createElement('div');
-          card.className = 'improve-suggestion';
-          card.innerHTML = `
-            <div class="imp-type">${escHtml(s.type || '')}</div>
-            <div class="imp-text">${escHtml(s.suggestion || '')}</div>
-            ${s.example ? `<div class="imp-example">"${escHtml(s.example)}"</div>` : ''}
-            <button class="imp-tellmore">Tell me more</button>
-            <div class="imp-craft hidden">${escHtml(s.craftLesson || '')}</div>`;
-
-          card.querySelector('.imp-tellmore').addEventListener('click', function() {
-            const craft = card.querySelector('.imp-craft');
-            craft.classList.toggle('hidden');
-            this.textContent = craft.classList.contains('hidden') ? 'Tell me more' : 'Got it';
-          });
-          coachActions.appendChild(card);
-        });
-
-        // Back to coaching button
-        const backBtn = document.createElement('button');
-        backBtn.className = 'q-btn';
-        backBtn.textContent = '← Back to coaching';
-        backBtn.addEventListener('click', () => askNextQuestion());
-        coachActions.appendChild(backBtn);
-
-      } catch (e) {
-        setCoach({ msg: 'Couldn\'t get suggestions — try again.', inputVisible: true });
-      }
-    }
+    // (The legacy per-section grade bands + "Improve →" flow lived here. Removed
+    // 15 Aug 2026 — Sarah, live: "he doesn't highlight anything or help improve…
+    // I've pressed improve this and I get more questions." Marking is now the
+    // MARK & FIX loop below: mark once, then sentence by sentence with a
+    // critique card, tools, Check it and the score climbing.)
 
     // ── Harvard References panel ───────────────────────────────────────────
     const refsToggle   = document.getElementById('refs-toggle');
@@ -3010,122 +3636,86 @@
       askNextQuestion({ trigger: 'pause' });
     }
 
-    // ── Finish & mark: refuse while a criterion is untouched, then mark ─────
+    // ── MARK & FIX (Sarah, 15 Aug: "when you mark it, it should be going
+    // through sentence by sentence with buttons popping up to reference like
+    // we said, and a critique card showing what you're missing and a fix").
+    // ONE mark call → the band per part + the sentence-by-sentence critique
+    // (weakest part first). Then the loop: highlight on the page, a critique
+    // card (Missing / Fix / tools / Check it / Skip), the score climbing
+    // "28% → 34%", next sentence. Repeats until the student stops.
     const btnFinish = document.getElementById('btn-finish');
-    const btnDownload = document.getElementById('btn-download');
-
-    btnFinish.addEventListener('click', () => finishAndMark());
-    async function finishAndMark({ force } = {}) {
+    btnFinish.addEventListener('click', () => markAndFix());
+    const BAND_WORD = { top: 'top band', mid: 'middle band', low: 'lower band', missing: 'missing' };
+    function bandLine(m) {
+      if (!m || !m.overall) return '';
+      return (m.overall.label ? m.overall.label + ' — ' : '') + (BAND_WORD[m.overall.band] || m.overall.band) + ' · ' + (m.perCriterion || []).map(p => labelFor(p.criterionId) + ': ' + (BAND_WORD[p.band] || p.band)).join(' · ');
+    }
+    function bandsHtml(m) {
+      if (!m || !m.overall) return '';
+      return '<div class="q-bands"><b>' + escHtml((m.overall.label ? m.overall.label + ' — ' : '') + (BAND_WORD[m.overall.band] || m.overall.band)) + '</b>' +
+        (m.perCriterion || []).map(p => '<span><span class="bd ' + escHtml(p.band) + '"></span>' + escHtml(labelFor(p.criterionId)) + '</span>').join('') + '</div>';
+    }
+    let markRunning = false;
+    async function markAndFix() {
+      if (markRunning) return;
       if (!state.brief) { setCoach({ msg: 'Drop your task in first — I mark against the brief.', inputVisible: true }); return; }
       const text = docPlainText();
-      if (!text.trim()) { setCoach({ msg: 'There is nothing on the page yet — write your answer first, I read as you go.', inputVisible: true, showNudge: true }); return; }
-      const missing = uncoveredCriteria();
-      if (missing.length && !force) {
-        const first = missing[0];
-        setCoach({
-          msg: 'Not yet — nothing on the page for: ' + missing.map(c => criterionLabel(c)).join(', ') + '. Let\'s get something down for each part first.',
-          section: 'BEFORE WE FINISH',
-          hint: criterionShort(first.text, 140),
-          actions: [
-            { label: '→ Take me to “' + criterionLabel(first) + '”', primary: true, onClick: () => askNextQuestion({ trigger: 'focus', focusCriterionId: first.id }) },
-            { label: 'Mark what I have anyway', onClick: () => finishAndMark({ force: true }) },
-          ],
-          inputVisible: false,
-        });
-        return;
-      }
-      if (!force && !state.editDone) {
-        setCoach({
-          msg: 'Every part has something. Two steps left: editing with me — I highlight a sentence, you make it stronger with the tools, every word still yours — then I mark it.',
-          section: 'READY TO FINISH',
-          actions: [
-            { label: '✎ Edit with Q first', primary: true, onClick: () => runEditPass() },
-            { label: 'Mark it now', quiet: true, onClick: () => finishAndMark({ force: true }) },
-          ],
-          inputVisible: false,
-        });
-        return;
-      }
+      if (!text.trim()) { setCoach({ msg: 'There is nothing on the page yet — answer a step or write on the page first.', inputVisible: true, showNudge: !!state.currentStep }); return; }
+      markRunning = true;
+      clearTimeout(probeTimer);
+      state.currentStep = null; state.awaitingWord = null; persistSteps();
       coachCard.classList.add('wide');
-      setCoach({ msg: 'Marking it like the marker…', section: 'MARKING', thinking: true, inputVisible: false });
+      setCoach({ msg: 'Marking it like the marker…', section: 'MARK & FIX', thinking: true, inputVisible: false, step: false });
       btnFinish.disabled = true;
       try {
         await api('/writer/mark', { docText: text, gradeScheme: state.gradeScheme }, { timeoutMs: 40000 });
-        const job = await waitForJob('mark', { onTick: (secs) => setCoach({ msg: 'Marking it like the marker… ' + secs + 's', section: 'MARKING', thinking: true, inputVisible: false }) });
-        renderMark(job.result);
+        const job = await waitForJob('mark', { onTick: (secs) => setCoach({ msg: 'Marking it like the marker… ' + secs + 's', section: 'MARK & FIX', thinking: true, inputVisible: false, step: false }) });
+        const m = job.result;
+        state.lastMark = m;
+        applyCoverage(m.coverage);
+        if (m.brickCounts) state.brickCounts = m.brickCounts;
+        applyMatch(m.match);   // the marker's honest tally — the score the fix loop climbs from
+        state.markStartPct = state.match ? state.match.overall : null;
+        appendBoardItem({ type: 'note', label: 'marked', text: 'Marked: ' + bandLine(m) + '. ' + (m.overall.summary || '') });
+        const items = (m.critique || []).filter(it => it && it.sentence && (it.missing || it.fix)).map(it => ({ sentence: it.sentence, why: it.missing || '', fix: it.fix || '', targetBrickId: it.targetBrickId || null, suggestedTools: it.suggestedTools || [], criterionId: it.criterionId || '' }));
+        state.editItems = items; state.editIndex = 0; state.editing = true; state.editDone = false; state.markPassChanged = 0;
+        persist({ lastMark: m });
+        if (!items.length) { endFixPass({ nothing: true }); return; }
+        showEditItem();
       } catch (e) {
         setCoach({
           msg: 'The marking failed: ' + shortCause(e), section: 'HICCUP', hint: 'Your work is saved.',
-          actions: [{ label: '↻ Try again', primary: true, onClick: () => finishAndMark({ force: true }) }, { label: '← Back to coaching', onClick: () => askNextQuestion({ trigger: 'answer' }) }],
-          inputVisible: false,
+          actions: [{ label: '↻ Try again', primary: true, onClick: () => markAndFix() }, { label: '← Back to the questions', onClick: () => askNextQuestion({ trigger: 'answer' }) }],
+          inputVisible: false, step: false,
         });
+        coachCard.classList.remove('wide');
       } finally {
-        btnFinish.disabled = false;
+        btnFinish.disabled = false; markRunning = false;
       }
     }
-
-    function renderMark(m) {
-      state.lastMark = m;
-      applyCoverage(m.coverage);
-      const bandWord = { top: 'top band', mid: 'middle band', low: 'lower band', missing: 'missing' };
+    // The end of a pass: the band again, the score climb, mark again / download.
+    function endFixPass({ nothing } = {}) {
+      endEditStage();
+      const m = state.lastMark;
+      const from = state.markStartPct, to = state.match ? state.match.overall : null;
+      const climb = from != null && to != null ? (from === to ? to + '% overall.' : from + '% → ' + to + '% overall.') : '';
       setCoach({
-        msg: (m.overall.label ? m.overall.label + ' — ' : '') + bandWord[m.overall.band] + '. ' + (m.overall.summary || ''),
-        section: 'MARKED LIKE THE MARKER',
-        hint: '',
-        actions: [],
-        inputVisible: false,
+        msg: nothing ? 'Nothing I\'d change — every sentence is doing its job. ' + climb : 'That\'s the pass done — every word on the page still yours. ' + climb + ' Mark it again and I\'ll find the next things, or download it.',
+        section: 'MARK & FIX', move: bandLine(m), hint: '',
+        actions: [
+          { label: '↻ Mark & fix again', primary: true, big: true, onClick: () => markAndFix() },
+          { label: '📄 Assemble & download', onClick: () => assembleAndOffer() },
+          { label: '← Back to the questions', quiet: true, onClick: () => { coachCard.classList.remove('wide'); askNextQuestion({ trigger: 'answer' }); } },
+        ],
+        inputVisible: false, step: false,
       });
-      coachActions.classList.remove('hidden');
-      coachActions.innerHTML = '';
-      const byId = Object.fromEntries((state.brief.criteria || []).map(c => [c.id, c]));
-      m.perCriterion.forEach(p => {
-        const row = document.createElement('div');
-        row.className = 'mark-row'; row.dataset.band = p.band;
-        const need = p.band === 'top' ? 'Top band — nothing missing here.' : (p.missingForTop || '');
-        row.innerHTML = `<div class="mk-head"><span class="mk-dot"></span>${escHtml(labelFor(p.criterionId))} · ${escHtml(bandWord[p.band] || p.band)}</div>
-          <div class="mk-need">${escHtml(need)}</div>`;
-        if (p.band !== 'top') {
-          const go = document.createElement('button');
-          go.className = 'mk-go'; go.textContent = 'Work on “' + labelFor(p.criterionId) + '” →';
-          go.addEventListener('click', () => loopBackTo(p));
-          row.appendChild(go);
-        }
-        row.title = p.criterionId + (byId[p.criterionId] ? ' — ' + byId[p.criterionId].text : '');
-        coachActions.appendChild(row);
-      });
-      const weakest = m.perCriterion.find(p => p.criterionId === m.weakestCriterionId && p.band !== 'top');
-      const rowBtns = document.createElement('div');
-      rowBtns.style.cssText = 'display:flex;flex-direction:column;gap:6px;margin-top:4px';
-      if (weakest) {
-        const b1 = document.createElement('button'); b1.className = 'q-btn primary'; b1.textContent = '→ Push “' + labelFor(weakest.criterionId) + '” to the top band';
-        b1.addEventListener('click', () => loopBackTo(weakest)); rowBtns.appendChild(b1);
-      }
-      const b2 = document.createElement('button'); b2.className = 'q-btn'; b2.textContent = '📄 Assemble & download';
-      b2.addEventListener('click', () => assembleAndOffer()); rowBtns.appendChild(b2);
-      const b3 = document.createElement('button'); b3.className = 'q-btn'; b3.textContent = '← Back to coaching';
-      b3.addEventListener('click', () => { coachCard.classList.remove('wide'); askNextQuestion({ trigger: 'answer' }); }); rowBtns.appendChild(b3);
-      coachActions.appendChild(rowBtns);
-      appendBoardItem({ type: 'note', label: 'marked', text: 'Marked: ' + (m.overall.label || bandWord[m.overall.band]) + '. ' + m.perCriterion.filter(p => p.band !== 'top').map(p => labelFor(p.criterionId) + ' needs: ' + criterionShort(p.missingForTop, 90)).join(' · ') });
+      coachActions.insertAdjacentHTML('afterbegin', bandsHtml(m));
     }
-
-    // The mark's "what the top band still needs" becomes the next question —
-    // straight from the marker, no extra call.
-    function loopBackTo(p) {
-      coachCard.classList.remove('wide');
-      const q = p.nextQuestion || ('What would you add to the part on ' + labelFor(p.criterionId) + ' so it reaches the top band? ' + (p.missingForTop || ''));
-      state.currentQuestion = q; state.currentCriterionId = p.criterionId; state.currentSection = p.criterionId;
-      state.docSnapshot = docPlainText();
-      state.qCount = (state.qCount || 1) + 1;
-      appendBoardItem({ type: 'question', label: 'Q' + state.qCount, text: q });
-      if (p.missingForTop) appendBoardItem({ type: 'note', label: 'top band', text: 'Top band needs: ' + p.missingForTop });
-      renderCoverage();
-      setCoach({ msg: q, section: 'TO THE TOP BAND', hint: p.missingForTop ? criterionShort(p.missingForTop, 160) : '', inputVisible: true, showNudge: true });
-      coachInput.placeholder = 'Type your answer…';
-      coachInput.focus();
-      persist({ currentQuestion: q, currentCriterionId: p.criterionId, lastQuestion: q, currentSection: p.criterionId });
-    }
+    // Kept for older call sites.
+    function finishAndMark() { return markAndFix(); }
 
     // ── Assemble (their words, his structure) + download ───────────────────
+    const btnDownload = document.getElementById('btn-download');
     btnDownload.addEventListener('click', () => offerDownload(docPlainText(), (titleEl.value || '').trim() || (state.brief && state.brief.title) || 'My assignment'));
 
     async function assembleAndOffer() {
@@ -3149,7 +3739,7 @@
           document.execCommand('insertText', false, a.document);
           wordEl.textContent = countWords() + ' words';
           scheduleAutosave();
-          setCoach({ msg: 'Done — arranged version is on the page. Keep polishing, or Finish & mark again.', inputVisible: true, showNudge: true });
+          setCoach({ msg: 'Done — arranged version is on the page. Keep polishing, or Mark & fix again.', inputVisible: true, showNudge: true });
           coachCard.classList.remove('wide');
         });
         mk('← Back', false, () => { coachCard.classList.remove('wide'); askNextQuestion({ trigger: 'answer' }); });
@@ -3217,6 +3807,9 @@
         if (r.coverage) state.coverage = { ...state.coverage, ...r.coverage };
         applyMatch(r.match);
         renderCoverage();
+        // Scaffolded coaching: the opener is answered and no step is live →
+        // the first part starts now (its plan was kicked server-side).
+        if (state.openerDone && !state.currentStep && !partStarting && !state.editing) startPart(state.currentCriterionId || firstPartId());
         if (reason !== 'restore') {
           appendBoardItem({ type: 'note', label: 'plan', text: 'Q now has the full answer in his head — ' + (r.bricks || '?') + ' bricks across ' + (state.brief.criteria || []).length + ' criteria' + (state.sources.length ? ', citing your ' + state.sources.length + ' document' + (state.sources.length === 1 ? '' : 's') : '') + '. Every question from here aims at the next brick you haven\'t voiced yet.' });
         }
@@ -3314,8 +3907,11 @@
       return '';
     }
 
-    async function runEditPass() {
+    // "Edit with Q" = the same Mark & fix loop (one entry, one stage).
+    async function runEditPass() { return markAndFix(); }
+    async function legacyEditPass() {
       if (!state.brief) return;
+      state.currentStep = null; persistSteps();
       const text = docPlainText();
       if (!text.trim()) { setCoach({ msg: 'Nothing on the page to edit yet.', inputVisible: true, showNudge: true }); return; }
       coachCard.classList.add('wide');
@@ -3328,12 +3924,12 @@
         state.editing = true;
         if (!state.editItems.length) {
           state.editDone = true; state.editing = false;
-          setCoach({ msg: 'Nothing I\'d change — it reads well and it\'s yours. Shall I mark it?', section: 'EDIT WITH Q', actions: [{ label: 'Mark it →', primary: true, onClick: () => finishAndMark({ force: true }) }], inputVisible: false });
+          setCoach({ msg: 'Nothing I\'d change — it reads well and it\'s yours. Shall I mark it?', section: 'EDIT WITH Q', actions: [{ label: 'Mark it →', primary: true, onClick: () => markAndFix() }], inputVisible: false });
           return;
         }
         showEditItem();
       } catch (e) {
-        setCoach({ msg: 'The editing pass failed: ' + shortCause(e), section: 'HICCUP', hint: 'Your work is saved.', actions: [{ label: '↻ Try again', primary: true, onClick: runEditPass }, { label: 'Skip to marking', onClick: () => finishAndMark({ force: true }) }], inputVisible: false });
+        setCoach({ msg: 'The editing pass failed: ' + shortCause(e), section: 'HICCUP', hint: 'Your work is saved.', actions: [{ label: '↻ Try again', primary: true, onClick: legacyEditPass }, { label: 'Skip to marking', onClick: () => markAndFix() }], inputVisible: false });
       }
     }
     function endEditStage() {
@@ -3342,7 +3938,7 @@
       coachCard.classList.remove('wide');
     }
     function editWhere(it) {
-      const cid = it && it.targetBrickId ? String(it.targetBrickId).split('-')[0] : state.currentCriterionId;
+      const cid = it && it.criterionId ? it.criterionId : (it && it.targetBrickId ? String(it.targetBrickId).split('-')[0] : state.currentCriterionId);
       const w = whereInfo(cid);
       if (w) { state.currentCriterionId = w.id; state.currentSection = w.id; }
       return whereText(w);
@@ -3351,11 +3947,7 @@
       const items = state.editItems || [];
       const i = state.editIndex;
       state.awaitingWord = null;
-      if (i >= items.length) {
-        endEditStage();
-        setCoach({ msg: 'That\'s the editing done — every word on the page is yours. Now I mark it.', section: 'EDIT WITH Q', actions: [{ label: 'Mark it →', primary: true, onClick: () => finishAndMark({ force: true }) }, { label: '← Back to the questions', quiet: true, onClick: () => askNextQuestion({ trigger: 'answer' }) }], inputVisible: false });
-        return;
-      }
+      if (i >= items.length) { endFixPass(); return; }
       const it = items[i];
       const onPage = highlightSentence(it.sentence);
       if (!onPage) { state.editIndex++; showEditItem({ note }); return; }   // rewritten or gone — next
@@ -3363,17 +3955,21 @@
       const suggested = (it.suggestedTools || []).filter(t => EDIT_TOOL_LABELS[t]);
       const tools = suggested.concat(EDIT_TOOL_ORDER.filter(t => !suggested.includes(t)));
       setCoach({
-        msg: it.why,
-        section: 'SENTENCE ' + (i + 1) + ' OF ' + items.length,
-        where,
+        msg: '',
+        section: 'MARK & FIX · SENTENCE ' + (i + 1) + ' OF ' + items.length,
+        where, move: bandLine(state.lastMark), step: false,
         hint: note || 'It\'s highlighted on the page. Rewrite it there in your own words, then Check it — or press a tool for a steer.',
         actions: [
           { label: '✓ Check it', primary: true, big: true, onClick: () => checkCurrentSentence() },
           { label: 'Skip', quiet: true, onClick: () => { state.editIndex++; showEditItem(); } },
-          { label: 'Stop editing', quiet: true, onClick: () => { endEditStage(); finishAndMark({ force: true }); } },
+          { label: 'Stop for now', quiet: true, onClick: () => endFixPass() },
         ],
         inputVisible: false,
       });
+      // The critique card: what's missing, and the concrete fix.
+      const crit = document.createElement('div'); crit.className = 'q-crit';
+      crit.innerHTML = (it.why ? '<div class="qc-row"><span class="qc-l">Missing</span><span class="qc-v">' + escHtml(it.why) + '</span></div>' : '') + (it.fix ? '<div class="qc-row"><span class="qc-l">Fix</span><span class="qc-v">' + escHtml(it.fix) + '</span></div>' : '');
+      coachActions.insertBefore(crit, coachActions.firstChild);
       // The tool buttons: the suggested ones first.
       const row = document.createElement('div'); row.className = 'q-tools';
       tools.forEach(t => {
@@ -3383,7 +3979,8 @@
         b.addEventListener('click', () => useTool(t, it));
         row.appendChild(b);
       });
-      coachActions.insertBefore(row, coachActions.firstChild);
+      const critEl = coachActions.querySelector('.q-crit');
+      coachActions.insertBefore(row, critEl ? critEl.nextSibling : coachActions.firstChild);
       // Tool help lands here (below the buttons).
       const out = document.createElement('div'); out.className = 'q-tool-out'; out.id = 'q-tool-out';
       coachActions.insertBefore(out, row.nextSibling);
@@ -3443,7 +4040,8 @@
         appendBoardItem({ type: 'note', label: d.closeness === 'match' ? 'that\'s it' : 'closer?', text: cue });
         if (d.closeness === 'match') {
           const wm = whereInfo(); const pct = wm && state.match && state.match.perCriterion ? state.match.perCriterion[wm.id] : null;
-          setCoach({ msg: cue + (pct != null ? ' That took you to ' + pct + '% on this part.' : ''), section: 'SENTENCE ' + (state.editIndex + 1) + ' OF ' + items.length, actions: [{ label: 'Next →', primary: true, big: true, onClick: () => { state.editIndex++; showEditItem(); } }, { label: 'Stop editing', quiet: true, onClick: () => { endEditStage(); finishAndMark({ force: true }); } }], inputVisible: false });
+          state.markPassChanged = (state.markPassChanged || 0) + 1;
+          setCoach({ msg: cue + (pct != null ? ' That took you to ' + pct + '% on this part.' : ''), section: 'MARK & FIX · SENTENCE ' + (state.editIndex + 1) + ' OF ' + items.length, move: bandLine(state.lastMark), step: false, actions: [{ label: 'Next →', primary: true, big: true, onClick: () => { state.editIndex++; showEditItem(); } }, { label: 'Stop for now', quiet: true, onClick: () => endFixPass() }], inputVisible: false });
           clearTimeout(state.editAdvanceTimer);
           state.editAdvanceTimer = setTimeout(() => { if (state.editing && items[state.editIndex] === it) { state.editIndex++; showEditItem(); } }, 2500);
         } else {
@@ -3481,9 +4079,10 @@
       const m = state.match; const w = whereInfo();
       if (!m || !state.brief) { coachScore.innerHTML = ''; return; }
       const part = w && m.perCriterion[w.id] != null ? m.perCriterion[w.id] : null;
+      const climb = state.editing && state.markStartPct != null && state.markStartPct !== m.overall ? `<span class="q-score-sub">${state.markStartPct}% →</span> ` : '';
       coachScore.innerHTML = `<div class="q-score-row"><span class="q-score-label">Match</span>` +
         (part != null ? `<span class="q-score-num">${part}%</span><span class="q-score-sub">this part</span>` : '') +
-        `<span class="q-score-num overall">${m.overall}%</span><span class="q-score-sub">overall</span></div>` +
+        `<span class="q-score-num overall">${climb}${m.overall}%</span><span class="q-score-sub">overall</span></div>` +
         `<div class="q-score-bar"><span style="width:${Math.max(0, Math.min(100, part != null ? part : m.overall))}%"></span></div>`;
     }
 
@@ -3607,13 +4206,10 @@
       if (t.docTitle) titleEl.value = t.docTitle;
       state.qWordsWritten = Number(t.qWordsWritten) || 0;
       wordEl.textContent = countWords() + ' words';
-      // Grade-band "Improve" buttons lose their listeners on restore — re-wire.
-      docBody.querySelectorAll('.grade-band .gb-improve').forEach(btn => {
-        btn.addEventListener('click', () => {
-          const band = btn.closest('.grade-band');
-          runImproveFlow(band ? band.dataset.section : '', docPlainText().slice(-1500), band ? band.dataset.grade : 'amber');
-        });
-      });
+      // Legacy grade bands restored from an older session are Q's furniture,
+      // not the student's words — strip them.
+      const bands = docBody.querySelectorAll('.grade-band');
+      if (bands.length) { bands.forEach(n => n.remove()); wordEl.textContent = countWords() + ' words'; scheduleAutosave(); }
       setSavedLabel('saved'); savedEl.textContent = 'Restored · ' + (t.updatedAt ? new Date(t.updatedAt).toLocaleString('en-GB', { hour: '2-digit', minute: '2-digit', day: 'numeric', month: 'short' }) : 'earlier');
 
       if (t.sourceName) { sourceState.name = t.sourceName; sourceState.text = null; sourceState.stored = true; renderSourceSlot(); }
@@ -3630,6 +4226,24 @@
       if (t.brief && Array.isArray(t.brief.criteria) && t.brief.criteria.length) {
         adoptBrief(t.brief, { announce: false });
         renderSourceSlot();   // now the brief is in, the "+ Add a supporting document" button shows
+        // Plain labels for a brief saved before labels existed (the strip
+        // showed "Critically evaluate the effectiveness"): ONE tiny call, once.
+        if (!t.labelsFixedAt && (t.brief.criteria || []).some(c => labelLooksGenerated(c))) {
+          api('/writer/labels', {}, { timeoutMs: 40000 }).then(d => {
+            if (!d || !Array.isArray(d.labels) || !state.brief) return;
+            const byId = new Map(d.labels.map(x => [x.id, x.label]));
+            state.brief.criteria.forEach(c => { if (byId.get(c.id)) c.label = byId.get(c.id); });
+            setBrief(state.brief); renderBoard(); renderCoverage();
+            const cw = document.getElementById('coach-where'); if (cw && cw.textContent) cw.textContent = whereText(whereInfo());
+          }).catch(() => {});
+        }
+        // Scaffolded coaching: the plans (server-made), the filled scaffolds,
+        // the live step and the call tally come back exactly as they were.
+        state.plans = t.plans && typeof t.plans === 'object' ? t.plans : {};
+        state.stepState = t.stepState && typeof t.stepState === 'object' ? t.stepState : {};
+        state.currentStep = t.currentStep && t.currentStep.criterionId && t.currentStep.stepId && state.plans[t.currentStep.criterionId] ? t.currentStep : null;
+        state.calls = t.calls && typeof t.calls === 'object' ? t.calls : {};
+        state.openerDone = !!t.openerDone;
         // Rebuild the teaching board from history, then the live question.
         state.currentCriterionId = t.currentCriterionId || (t.brief.criteria[0] && t.brief.criteria[0].id) || '';
         state.currentSection = state.currentCriterionId;
@@ -3637,13 +4251,31 @@
         let lastBoardQ = '';
         if (t.brief.opener) { state.qCount = 1; lastBoardQ = t.brief.opener; appendBoardItem({ type: 'question', label: 'Q1', text: t.brief.opener }); }
         state.coachHistory.forEach((h) => {
+          if (h.stepId) return;   // scaffold-step answers are rebuilt from stepState below
           if (h.question && h.question !== lastBoardQ) { state.qCount += 1; lastBoardQ = h.question; appendBoardItem({ type: 'question', label: 'Q' + state.qCount, text: h.question }); }
           if (h.answer) appendBoardItem({ type: 'answer', text: h.answer });
         });
         state.currentQuestion = t.currentQuestion || '';
         state.docSnapshot = t.probeSnapshot && docPlainText().endsWith(t.probeSnapshot) ? docPlainText() : docPlainText();
+        boardFromSteps();
         renderBoard();
         renderCoverage();
+        if (state.currentStep) {
+          // Mid-step: land on the same step, scaffold as it was.
+          const cs = state.currentStep; state.currentCriterionId = cs.criterionId; state.currentSection = cs.criterionId;
+          const plan = state.plans[cs.criterionId]; const idx = Math.max(0, plan.steps.findIndex(x => x.id === cs.stepId));
+          presentStep(cs.criterionId, idx, { ack: 'Welcome back.', restore: true });
+          coachInput.placeholder = 'Type your answer…';
+          state.restored = true;
+          return;
+        }
+        if (state.openerDone && state.essayReady) {
+          // Between steps / parts: resume the current part on its plan.
+          startPart(state.currentCriterionId || firstPartId(), { resume: true });
+          coachInput.placeholder = 'Type your answer…';
+          state.restored = true;
+          return;
+        }
         if (state.currentQuestion) {
           if (state.currentQuestion !== lastBoardQ) { state.qCount += 1; appendBoardItem({ type: 'question', label: 'Q' + state.qCount, text: state.currentQuestion }); }
           setCoach({ msg: 'Welcome back. ' + state.currentQuestion, section: 'WHERE WE WERE', hint: 'Answer here, or keep writing — I read as you go.', inputVisible: true, showNudge: true });
