@@ -1423,6 +1423,20 @@ function detectIncome(email) {
         (byMerchant[k] = byMerchant[k] || []).push(t);
     }
     return Object.values(byMerchant)
+        // Income means income — not every credit. Friends paying back a
+        // meal, refunds, one-off fivers: those stay in Transactions.
+        // A payer shows here when labelled income, when a one-off is
+        // meaningful (£150+, e.g. a first UC payment), or when repeat
+        // payments add up to something real (£100+). A credit the user
+        // labelled as anything else (dining, shopping…) never shows —
+        // that's the direct way to evict a mate's repayments.
+        .filter(entries => {
+            if (entries.some(t => t.category === 'income')) return true;
+            if (entries.every(t => t.category && t.category !== 'other' && t.category !== 'income')) return false;
+            const total = entries.reduce((s, t) => s + t.amount, 0);
+            if (total >= 150) return true;
+            return entries.length >= 2 && total >= 100;
+        })
         .map(entries => {
             entries.sort((a, b) => (b.date || '').localeCompare(a.date || ''));
             return {

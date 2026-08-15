@@ -930,7 +930,8 @@
         <span class="sr-amt in">+£${fmt(s.amount)}</span>
         <button class="sr-flag" onclick="incomeToCalendar('${esc(s.merchant)}', ${Math.abs(s.amount) || 0}, '${esc(s.last_seen || '')}')">📅 calendar</button>
       </div>`;
-    }).join('');
+    }).join('')
+    + '<div class="sr-meta" style="padding-top:6px">Regular payers and one-offs over £150 — friend repayments and refunds stay in Transactions. Label a row as dining/shopping and it leaves here too.</div>';
   }
 
   // ── Money rhythm — weekly / monthly / bills, in and out ───────────────────
