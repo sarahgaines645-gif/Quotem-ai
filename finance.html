@@ -623,13 +623,14 @@
       <div class="sb-val pos" id="stat-income">—</div>
     </div>
     <div class="stat-box">
-      <div class="sb-label">In minus out</div>
-      <div class="sb-val" id="stat-net">—</div>
-      <div class="sb-label" id="stat-net-words" style="margin-top:4px;text-transform:none;letter-spacing:0"></div>
+      <div class="sb-label">You have</div>
+      <div class="sb-val pos" id="stat-have">—</div>
+      <div class="sb-label" id="stat-have-sub" style="margin-top:4px;text-transform:none;letter-spacing:0"></div>
     </div>
     <div class="stat-box">
-      <div class="sb-label">Transactions</div>
-      <div class="sb-val" id="stat-count">—</div>
+      <div class="sb-label">You owe</div>
+      <div class="sb-val neg" id="stat-owe">—</div>
+      <div class="sb-label" id="stat-owe-sub" style="margin-top:4px;text-transform:none;letter-spacing:0"></div>
     </div>
   </div>
   <div class="summary-period" id="summary-period"></div>
@@ -1222,6 +1223,10 @@
       };
     });
 
+    // The headline "You have / You owe" is built from these same balances —
+    // keep it in step whenever the cards re-render.
+    if (graphData) renderSummary();
+
     // Say plainly how much of the picture these cards do NOT cover.
     const un = graphData && graphData.summary ? graphData.summary.unattributed_count : 0;
     note.textContent = un
@@ -1261,21 +1266,41 @@
     const s = graphData.summary;
     document.getElementById('stat-spend').textContent  = '£' + fmt(s.total_spend);
     document.getElementById('stat-income').textContent = '£' + fmt(s.total_income);
-    // Income minus spending over the whole window. NOT "what's left" — the
-    // balances strip is that. Sarah read a red "£29.30" as £29.30 left; the
-    // sign and the words are the difference between a number and a fact.
-    const netEl = document.getElementById('stat-net');
-    netEl.textContent = (s.net >= 0 ? '+' : '−') + '£' + fmt(Math.abs(s.net));
-    netEl.className = 'sb-val ' + (s.net >= 0 ? 'pos' : 'neg');
-    const wordsEl = document.getElementById('stat-net-words');
-    if (wordsEl) wordsEl.textContent = Math.abs(s.net) < 0.005
-      ? 'in and out are level over this period'
-      : (s.net >= 0 ? `£${fmt(Math.abs(s.net))} more came in than went out` : `£${fmt(Math.abs(s.net))} more went out than came in`) + ' — not your balance';
-    document.getElementById('stat-count').textContent = s.transaction_count;
+    // The headline is what she HAS and what she OWES — from her real
+    // balances, never netted against each other (£1,000 in one account and
+    // £900 of overdraft in another is not "£100"). "Net" (in minus out over
+    // the period) sat here before and she read a red £29.30 as her balance;
+    // it now lives in the small line below, in words.
+    const known = (Array.isArray(accounts) ? accounts : []).filter(a => a.balance != null);
+    const haveAcc = known.filter(a => a.balance > 0);
+    const oweAcc  = known.filter(a => a.balance < 0);
+    const have = haveAcc.reduce((t, a) => t + a.balance, 0);
+    const owe  = oweAcc.reduce((t, a) => t + Math.abs(a.balance), 0);
+    const nameOf = a => (a.bank || a.id) + (a.type === 'credit_card' ? ' card' : '');
+    const haveEl = document.getElementById('stat-have'), oweEl = document.getElementById('stat-owe');
+    const haveSub = document.getElementById('stat-have-sub'), oweSub = document.getElementById('stat-owe-sub');
+    if (known.length) {
+      haveEl.textContent = '£' + fmt(have);
+      haveSub.textContent = haveAcc.length ? haveAcc.map(nameOf).join(', ') : 'no account in credit';
+      oweEl.textContent = '£' + fmt(owe);
+      oweSub.textContent = oweAcc.length
+        ? oweAcc.map(a => nameOf(a) + (a.type === 'credit_card' ? '' : ' overdraft')).join(', ')
+        : 'nothing overdrawn';
+      const missing = (accounts || []).length - known.length;
+      if (missing) haveSub.textContent += ` · ${missing} account${missing === 1 ? '' : 's'} without a balance yet`;
+    } else {
+      haveEl.textContent = '—'; oweEl.textContent = '—';
+      haveSub.textContent = 'add a balance (statement or screenshot) to see this';
+      oweSub.textContent = '';
+    }
     // The truth line: what period these totals actually cover, and that
     // money moved to your own pots/savings isn't counted as spending.
     const bits = [];
     if (s.period_from && s.period_to) bits.push(ukDate(s.period_from) + ' – ' + ukDate(s.period_to));
+    bits.push(`${s.transaction_count} transactions`);
+    if (Math.abs(s.net) >= 0.005) bits.push(s.net > 0
+      ? `£${fmt(s.net)} more came in than went out over this period`
+      : `£${fmt(Math.abs(s.net))} more went out than came in over this period`);
     const selfMoves = s.self_transfers != null ? s.self_transfers : s.moved_to_savings;
     if (selfMoves > 0) bits.push('£' + fmt(selfMoves) + ' moved between your own accounts & pots (not counted)');
     if (Array.isArray(s.sources) && s.sources.length) bits.push('statements: ' + s.sources.join(', '));
