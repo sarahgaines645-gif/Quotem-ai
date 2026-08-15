@@ -315,8 +315,22 @@
     .q-tools .q-tool { font-size: 10px; padding: 4px 8px; }
     .q-tools .q-tool.suggested { color: var(--text); font-weight: 600; }
     .q-tools .q-tool.suggested::before { content: '● '; color: var(--accent); }
+    /* Tool help + word meanings are POPUP CARDS (never board text): a raised
+       card anchored beside the coach card / the word button, opaque, no scrim. */
+    .q-popcard { position: fixed; z-index: 260; width: 270px; max-width: calc(100vw - 16px); max-height: 60vh; overflow-y: auto; background: var(--bg); border-radius: 14px; box-shadow: 8px 8px 22px #ababab, -6px -6px 16px #ffffff; padding: 10px 12px 10px; font-family: 'Space Grotesk', sans-serif; font-size: 11px; line-height: 1.45; color: var(--text); overflow-wrap: anywhere; scrollbar-width: thin; }
+    .q-popcard.hidden { display: none; }
+    .q-popcard .pc-close { position: absolute; top: 6px; right: 8px; border: none; background: none; color: var(--text-faint); cursor: pointer; font-size: 15px; line-height: 1; padding: 2px 4px; }
+    .q-popcard .pc-close:hover { color: var(--text); }
+    .q-popcard .pc-kind { font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--accent); margin-bottom: 3px; padding-right: 18px; }
+    .q-popcard .pc-head { font-size: 13px; font-weight: 700; color: var(--text); margin-bottom: 4px; padding-right: 18px; }
+    .q-popcard .pc-line { margin-bottom: 3px; }
+    .q-popcard .pc-eg { color: var(--text-muted); margin-bottom: 4px; }
+    .q-popcard .pc-nudge { color: var(--text-muted); margin-top: 4px; }
+    .q-popcard .pc-list { margin: 0 0 4px 14px; padding: 0; }
+    .q-popcard .pc-list li { margin-bottom: 2px; }
+    .q-popcard.term { width: 230px; pointer-events: none; z-index: 270; }
     .q-tool-out:empty { display: none; }
-    .q-tool-out { border-radius: 10px; box-shadow: var(--neu-raised-xs); padding: 8px 10px; margin-bottom: 8px; font-size: 11px; line-height: 1.45; color: var(--text); overflow-wrap: anywhere; }
+    .q-tool-out { font-size: 11px; color: var(--text-muted); margin-bottom: 6px; }
     .q-tool-head { font-weight: 700; font-size: 12px; margin-bottom: 4px; }
     .q-tool-flag { font-size: 9px; font-weight: 600; color: var(--accent); text-transform: uppercase; letter-spacing: 0.05em; margin-left: 4px; }
     .q-tool-src { font-size: 9px; color: var(--text-faint); margin-left: 4px; }
@@ -333,6 +347,19 @@
       padding: 5px 8px; border-radius: 8px; box-shadow: var(--neu-raised-xs);
     }
     .coach-card .q-move:empty { display: none; }
+    /* Three blocks (Sarah, live 15 Aug: "separate the explaining from the
+       'list all the perks'"): the ROLE (small, muted, its own block — full
+       the first time a part starts, then folded behind the WHERE line), a
+       SUPPLY line (Q's one fact, its own block), then the ASK — the biggest
+       text on the card, its own paragraph — then one quiet hint. */
+    .coach-card .q-role { font-size: 11px; color: var(--text-muted); line-height: 1.45; margin-bottom: 8px; padding: 6px 8px; border-radius: 8px; box-shadow: var(--neu-raised-xs); }
+    .coach-card .q-role:empty { display: none; }
+    .coach-card .q-role .q-role-l { display: block; font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-muted); margin-bottom: 2px; }
+    .coach-card .q-where.has-role { cursor: pointer; text-decoration: underline dotted; text-underline-offset: 3px; }
+    .coach-card .q-supply { font-size: 12px; color: var(--text); line-height: 1.45; margin-bottom: 8px; padding: 6px 8px; border-left: 2px solid var(--accent); }
+    .coach-card .q-supply:empty { display: none; }
+    .coach-card .q-supply .q-supply-l { display: block; font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--accent); margin-bottom: 2px; }
+    .coach-card .q-msg.ask { font-size: 14px; font-weight: 500; line-height: 1.4; }
     .coach-card .q-section {
       font-size: 10px; color: var(--accent);
       text-transform: uppercase; letter-spacing: 0.06em;
@@ -755,10 +782,13 @@
     .meta-btn:disabled { opacity: 0.5; cursor: default; }
     .meta-btn.primary { box-shadow: var(--neu-raised-sm); font-weight: 700; }
     .meta-btn.primary::before { content: '● '; color: var(--accent); }
-    .q-crit { display: flex; flex-direction: column; gap: 4px; margin-bottom: 8px; }
-    .q-crit .qc-row { display: grid; grid-template-columns: 52px 1fr; gap: 6px; font-size: 12px; line-height: 1.45; color: var(--text); }
+    /* The critique card: ONE line "Missing: ● ● ●" (labels on hover) + ONE line fix. */
+    .q-crit { display: flex; flex-direction: column; gap: 3px; margin-bottom: 8px; }
+    .q-crit .qc-row { display: grid; grid-template-columns: 48px 1fr; gap: 6px; font-size: 12px; line-height: 1.4; color: var(--text); align-items: start; }
     .q-crit .qc-l { font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--accent); margin-top: 3px; }
-    .q-crit .qc-v { overflow-wrap: anywhere; }
+    .q-crit .qc-v { overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+    .q-crit .qc-v .q-dots { vertical-align: middle; margin-right: 6px; }
+    .q-crit .qc-v .q-dot { width: 12px; height: 12px; }
     .q-bands { display: flex; flex-wrap: wrap; gap: 4px 8px; font-size: 10px; color: var(--text-muted); margin-bottom: 6px; }
     .q-bands b { color: var(--text); }
     .q-bands .bd { display: inline-block; width: 7px; height: 7px; border-radius: 50%; margin-right: 3px; }
@@ -864,8 +894,16 @@
     .tb-steps li .st-kind { font-size: 9px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-faint); margin-left: 4px; font-weight: 600; }
     .tb-scaf { margin: 6px 0 4px; }
     .tb-worksheet { margin: 0 0 10px; }
-    .tb-expect { margin: 0 0 8px; padding: 8px 10px; border-radius: 10px; box-shadow: var(--neu-raised-xs); }
+    /* THE WORD BOARD (Sarah, 15 Aug 23:40): a card of words as BUTTONS per
+       part — nothing else on it. Hover / long-press a word → a little popup
+       card with the meaning + one everyday example. */
+    .tb-expect { margin: 0 0 10px; padding: 8px 10px; border-radius: 10px; box-shadow: var(--neu-raised-sm); }
+    .tb-expect .ex-title { display: block; font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--accent); margin-bottom: 4px; }
+    .tb-expect .ex-title .ex-part { color: var(--text-muted); text-transform: none; letter-spacing: 0.02em; font-weight: 600; margin-left: 4px; }
     .tb-expect .ex-ask { font-size: 12px; font-weight: 600; color: var(--text); line-height: 1.45; margin-bottom: 6px; }
+    .q-words { display: flex; flex-wrap: wrap; gap: 4px; margin: 2px 0 6px; align-items: center; }
+    .q-words .q-term { font-size: 10px; padding: 3px 8px; }
+    .q-words .q-dots { margin-left: 4px; }
     .tb-expect .ex-terms { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 6px; }
     .q-term { padding: 3px 9px; border: none; border-radius: 10px; cursor: pointer; font-family: 'Space Grotesk', sans-serif; font-size: 11px; font-weight: 500; background: var(--bg); color: var(--text); box-shadow: var(--neu-raised-xs); transition: color 0.15s, box-shadow 0.15s; }
     .q-term:hover { box-shadow: var(--neu-raised-sm); }
@@ -1104,8 +1142,10 @@
       <div class="q-where" id="coach-where"></div>
       <div class="q-score" id="coach-score"></div>
       <div class="q-move" id="coach-move"></div>
+      <div class="q-role" id="coach-role"></div>
       <div class="q-section" id="coach-section"></div>
       <div class="q-step" id="coach-step"></div>
+      <div class="q-supply" id="coach-supply"></div>
       <div class="q-msg" id="coach-msg">Drop your task in above and I'll read it. I ask, you write — in your own words. You never have to read the brief.</div>
       <div class="q-integrity" id="coach-integrity">Your words, Q's structure. Q never writes on your page.</div>
       <div class="q-hint" id="coach-hint"></div>
@@ -1223,11 +1263,17 @@
       openerDone: false,
       termsFit: {},           // { criterionId: [terms Q confirmed fit] }
       reqMet: {},             // { criterionId: [requirement kinds met] }
+      references: [],         // [{key, inText, reference, title, year, fromUpload}] — the Harvard list (kept in sync with the page)
+      inlineDots: {},         // { criterionId: [{sentence, kind, why, action}] } — the dots Q placed IN the essay
     };
-    // Requirement dots: plain, distinct colours + what they mean (mirrors q-writer REQ_COLOURS).
-    const REQ_COLOURS = { citation: '#7b1fa2', reference: '#1565c0', 'case-study': '#00897b', figure: '#ef6c00', theory: '#c2185b', example: '#2e7d32', recommendation: '#5d4037' };
-    const REQ_LABELS = { citation: 'a citation', reference: 'a reference', 'case-study': 'a case study', figure: 'a figure', theory: 'a theory named', example: 'an example', recommendation: 'a recommendation' };
-    const REQ_TOOL = { citation: 'references', reference: 'references', 'case-study': 'cases', figure: 'weak', theory: 'strategies', example: 'weak', recommendation: 'weak' };
+    // Requirement dots: plain, distinct colours + what they mean (mirrors q-writer
+    // REQ_COLOURS). Generic kinds + subject kinds the plan may pick; a plan
+    // requirement carries its own colour + label, these are the fallbacks.
+    const REQ_COLOURS = { citation: '#7b1fa2', reference: '#1565c0', 'case-study': '#00897b', figure: '#ef6c00', theory: '#c2185b', example: '#2e7d32', recommendation: '#5d4037', statute: '#3f51b5', 'case-law': '#9e9d24', 'primary-source': '#f9a825', diagram: '#00acc1', quotation: '#546e7a', calculation: '#d84315', other: '#616161' };
+    const REQ_LABELS = { citation: 'a citation', reference: 'a reference', 'case-study': 'a case study', figure: 'a figure', theory: 'a theory named', example: 'an example', recommendation: 'a recommendation', statute: 'a statute named', 'case-law': 'a case named', 'primary-source': 'a primary source', diagram: 'a diagram', quotation: 'a quotation', calculation: 'a calculation shown', other: 'something the marker expects' };
+    const REQ_TOOL = { citation: 'cite', reference: 'cite', 'case-study': 'cases', figure: 'weak', theory: 'strategies', example: 'weak', recommendation: 'weak', statute: 'references', 'case-law': 'references', 'primary-source': 'references', diagram: 'weak', quotation: 'references', calculation: 'weak', other: 'weak' };
+    // The plan's own colour / label for a requirement kind, else the fallback.
+    function reqOf(cid, kind) { const plan = planFor(cid); const rq = plan && (plan.requirements || []).find(r => r.kind === kind); return { colour: (rq && rq.colour) || REQ_COLOURS[kind] || '#999', label: (rq && rq.label) || REQ_LABELS[kind] || kind }; }
     const PROBE_MIN_GAP_MS = 8000;    // never two live probes closer than this (cost + rhythm)
     const PROBE_MIN_NEW_CHARS = 12;   // "genuinely new content" — a few real words
     const PROBE_RETRY_MS = 1500;      // re-check cadence while a condition is not yet met
@@ -1628,16 +1674,30 @@
     const coachMove  = document.getElementById('coach-move');
     const coachQuiet = document.getElementById('coach-quiet');
     const coachStepEl = document.getElementById('coach-step');
-    function setCoach({ msg, section, hint, actions, inputVisible, thinking, showNudge, where, move, step }) {
+    const coachRole = document.getElementById('coach-role');
+    const coachSupply = document.getElementById('coach-supply');
+    let lastRoleText = '';
+    // role: the framing sentence, its own block — shown in full only when the
+    // caller passes it (the first step of a part); afterwards it folds behind
+    // the WHERE line (tap "Part 1 of 4 — …" to re-read it).
+    // supply: Q's one fact, its own block above the ask. ack: one warm line
+    // (goes in the move slot when there is no move line).
+    function setCoach({ msg, section, hint, actions, inputVisible, thinking, showNudge, where, move, step, role, supply, ack }) {
       coachMsg.classList.toggle('thinking', !!thinking);
       coachMsg.textContent = msg || '';
+      coachMsg.classList.toggle('ask', !thinking && !!msg && !!(state.brief));
       coachSection.textContent = section || '';
+      if (role) { lastRoleText = role; coachRole.innerHTML = '<span class="q-role-l">This part</span>' + escHtml(role); }
+      else coachRole.innerHTML = '';
+      coachSupply.innerHTML = supply ? '<span class="q-supply-l">Q says</span>' + escHtml(supply) : '';
       // The step line: "Step 2 of 5 · NUMBERS" while a scaffold step is live.
       const st = step === false ? null : (step || currentStepInfo());
       coachStepEl.innerHTML = st ? 'Step ' + st.n + ' of ' + st.N + ' · <span class="q-step-kind">' + escHtml(STEP_KIND_LABEL[st.kind] || st.kind) + '</span>' : '';
       coachHint.textContent = hint || '';
       coachWhere.textContent = where === false ? '' : (typeof where === 'string' ? where : whereText(whereInfo()));
-      coachMove.textContent = move || '';
+      coachWhere.classList.toggle('has-role', !!(coachWhere.textContent && !role && (planFor(state.currentCriterionId) || {}).role));
+      coachWhere.title = coachWhere.classList.contains('has-role') ? 'Tap to re-read what this part asks of you' : '';
+      coachMove.textContent = move || ack || '';
       renderScore();
 
       coachNudge.classList.toggle('hidden', !showNudge);
@@ -1672,6 +1732,12 @@
       document.getElementById('coach-body').scrollTop = 0;
     }
 
+    coachWhere.addEventListener('click', () => {
+      const plan = planFor(state.currentCriterionId);
+      if (!plan || !plan.role) return;
+      if (coachRole.innerHTML) { coachRole.innerHTML = ''; return; }
+      coachRole.innerHTML = '<span class="q-role-l">This part</span>' + escHtml(plan.role);
+    });
     // WHERE WE ARE — every question carries its place in the brief.
     const ORDINALS = ['first', 'second', 'third', 'fourth', 'fifth', 'sixth', 'seventh', 'eighth', 'ninth', 'tenth', 'eleventh', 'twelfth'];
     function ordinal(n) { return ORDINALS[n - 1] || (n + 'th'); }
@@ -1914,7 +1980,8 @@
       state.brief = null; state.analysis = null; state.coverage = {}; state.coachHistory = [];
       state.currentQuestion = ''; state.currentCriterionId = ''; state.currentSection = ''; state.docSnapshot = ''; state.lastMark = null; state.lastProbeAt = 0;
       state.brickCounts = {}; state.essayReady = false; state.sources = []; state.editItems = null; state.editIndex = 0; state.editDone = false;
-      state.plans = {}; state.stepState = {}; state.currentStep = null; state.calls = {}; state.openerDone = false; state.match = null; state.termsFit = {}; state.reqMet = {};
+      state.plans = {}; state.stepState = {}; state.currentStep = null; state.calls = {}; state.openerDone = false; state.match = null; state.termsFit = {}; state.reqMet = {}; state.references = []; state.inlineDots = {};
+      hideToolPop(); hideTermPop();
       hidePanel('brief'); hidePanel('teach');
       document.getElementById('brief-board-body').innerHTML = '';
       state.boardItems = []; state.boardEarlierOpen = false; renderBoard();
@@ -2040,9 +2107,9 @@
     state.boardEarlierOpen = false;
     const teachBody = document.getElementById('teach-board-body');
     function switchToBoardMode() { showPanel('teach'); }
-    function appendBoardItem({ type, label, text, links, action, criterionId, stepId, watch }) {
+    function appendBoardItem({ type, label, text, links, action, criterionId, stepId, watch, quiet }) {
       if (!text) return null;
-      const it = { type, label: label || '', text: String(text), links: links || null, action: action || null, criterionId: criterionId || state.currentCriterionId || '', stepId: stepId || null, watch: watch || null };
+      const it = { type, label: label || '', text: String(text), links: links || null, action: action || null, criterionId: criterionId || state.currentCriterionId || '', stepId: stepId || null, watch: watch || null, quiet: !!quiet };
       state.boardItems.push(it);
       renderBoard();
       switchToBoardMode();
@@ -2100,15 +2167,17 @@
       const items = state.boardItems;
       let qi = -1;
       for (let i = items.length - 1; i >= 0; i--) if (items[i].type === 'question') { qi = i; break; }
-      const earlier = qi > 0 ? items.slice(0, qi) : [];
-      const current = qi >= 0 ? items.slice(qi) : items.slice();
+      // Quiet items (a one-line note that a tool was used) always fold into
+      // Earlier — the board never carries help text.
+      const earlier = (qi > 0 ? items.slice(0, qi) : []).concat(items.slice(Math.max(qi, 0)).filter(it => it.quiet && qi >= 0));
+      const current = (qi >= 0 ? items.slice(qi) : items.slice()).filter(it => !it.quiet);
       const w = whereInfo();
       const whereHtml = w ? `<div class="tb-where">${escHtml(whereText(w))}</div>` : '';
-      const agendaHtml = scaffoldAgendaHtml();
+      const agendaHtml = scaffoldAgendaHtml() + expectHtml(state.currentCriterionId);
       const earlierHtml = earlier.length
-        ? `<details class="tb-earlier" id="tb-earlier"${state.boardEarlierOpen ? ' open' : ''}><summary>Earlier (${earlier.length})</summary><div class="tb-items">${earlier.map((it, i) => boardItemHtml(it, i, true)).join('')}</div></details>`
+        ? `<details class="tb-earlier" id="tb-earlier"${state.boardEarlierOpen ? ' open' : ''}><summary>Earlier (${earlier.length})</summary><div class="tb-items">${earlier.map((it) => boardItemHtml(it, items.indexOf(it), true)).join('')}</div></details>`
         : '';
-      const currentHtml = `<div class="tb-current"><div class="tb-items">${current.map((it, i) => boardItemHtml(it, (qi >= 0 ? qi : 0) + i, false, it.type === 'question' && (state.currentStep ? (it.stepId === state.currentStep.stepId) : (it.text === state.currentQuestion)))).join('')}${scaffoldWidgetHtml()}</div></div>`;
+      const currentHtml = `<div class="tb-current"><div class="tb-items">${current.map((it) => boardItemHtml(it, items.indexOf(it), false, it.type === 'question' && (state.currentStep ? (it.stepId === state.currentStep.stepId) : (it.text === state.currentQuestion)))).join('')}${scaffoldWidgetHtml()}</div></div>`;
       const stripHtml = state.brief ? `<div class="coverage-strip compact" id="coverage-strip-teach"></div>` : '';
       teachBody.innerHTML = whereHtml + agendaHtml + worksheetHtml() + earlierHtml + currentHtml + stripHtml;
       wireScaffold();
@@ -2202,6 +2271,19 @@
       throw Object.assign(new Error('could not get the plan for this part'), { retryable: true });
     }
 
+    // Every part gets its plan (word board, dots) — one call per missing part,
+    // in order, cached server-side. A part whose plan fails is skipped (the
+    // mark still runs); nothing is lost.
+    async function ensurePlans(onTick) {
+      const cs = (state.brief && state.brief.criteria) || [];
+      for (let i = 0; i < cs.length; i++) {
+        const c = cs[i]; if (planFor(c.id)) continue;
+        try { await getPlan(c.id, { onTick: (line) => onTick && onTick('Setting out the word board for part ' + (i + 1) + ' of ' + cs.length + '…') }); }
+        catch (e) { appendBoardItem({ type: 'note', label: 'note', text: 'No word board for part ' + (i + 1) + ' yet (' + shortCause(e) + ').', quiet: true }); }
+      }
+      renderBoard();
+    }
+    window.__qwriterPlans = { ensurePlans };
     // ── Start (or resume) a part: frame it, then the current step ──────────
     let partStarting = false;
     async function startPart(cid, { moveFrom, resume } = {}) {
@@ -2255,33 +2337,37 @@
       const already = state.boardItems.some(it => it.type === 'question' && it.stepId === step.id && it.criterionId === cid);
       if (!already) state.boardItems.push({ type: 'question', label: 'Step ' + (idx + 1) + ' of ' + plan.steps.length, text: step.prompt, criterionId: cid, stepId: step.id });
       renderBoard(); switchToBoardMode(); setTimeout(() => { try { renderMarginDots(); } catch (_) {} }, 0);
-      const roleLine = frame && idx === 0 ? plan.role + ' ' : '';
-      const pre = (ack ? ack.replace(/\s+$/, '') + ' ' : '') + roleLine;
-      const common = { where: whereText(whereInfo(cid)), move: moved || '', inputVisible: true, showNudge: true };
+      // THREE BLOCKS (Sarah, live): the role — its own small block, full only
+      // the first time the part starts (then behind the WHERE line); the ASK —
+      // its own paragraph, the biggest text; one quiet hint that never repeats
+      // the ask. A supply line is its own block above the ask.
+      const role = frame && idx === 0 ? plan.role : '';
+      const common = { where: whereText(whereInfo(cid)), move: moved || '', ack: ack || '', role, inputVisible: true, showNudge: true };
       if (step.kind === 'list') {
         const n = st.items.length;
-        setCoach({ ...common, msg: pre + step.prompt, hint: 'One per line — press Enter after each' + (step.itemHint ? ' (' + step.itemHint + ')' : '') + '. Press Done when the list is finished.' + (n ? ' ' + n + ' on the list so far.' : ''), actions: stepActions(cid, step, st) });
+        setCoach({ ...common, msg: step.prompt, hint: 'Enter after each one · Done when finished.' + (n ? ' ' + n + ' so far.' : ''), actions: stepActions(cid, step, st) });
         coachInput.placeholder = step.itemHint ? step.itemHint : 'One item, then Enter…';
       } else if (step.kind === 'numbers') {
         const cell = nextNumbersCell(step, st);
-        setCoach({ ...common, msg: pre + step.prompt, hint: cell ? cellAsk(cell) : 'All filled — press Done.', actions: stepActions(cid, step, st) });
+        setCoach({ ...common, msg: step.prompt, hint: cell ? cellAsk(cell) : 'All filled — press Done.', actions: stepActions(cid, step, st) });
         coachInput.placeholder = cell ? cellAsk(cell) : 'Done?';
       } else if (step.kind === 'teach') {
         // TEACH-THEN-APPLY: the lesson lives on the card now (and moves to the
         // board history when they press Got it). Nothing from it goes on the page.
-        setCoach({ ...common, msg: pre + step.prompt, hint: '', inputVisible: false, showNudge: false, actions: [{ label: 'Got it →', primary: true, big: true, onClick: () => completeStep(cid, step.id, { ack: '' }) }, { label: 'Skip this', quiet: true, onClick: () => skipStep(cid, step.id) }] });
+        setCoach({ ...common, msg: step.prompt, hint: '', inputVisible: false, showNudge: false, actions: [{ label: 'Got it →', primary: true, big: true, onClick: () => completeStep(cid, step.id, { ack: '' }) }, { label: 'Skip this', quiet: true, onClick: () => skipStep(cid, step.id) }] });
         coachActions.insertAdjacentHTML('afterbegin', lessonHtml({ term: step.term, lesson: step.lesson, example: step.example, watch: step.term || null }));
       } else if (step.kind === 'tag') {
-        setCoach({ ...common, msg: pre + step.prompt, hint: st.tags ? (st.legend || '') : 'Sorting your list…', actions: stepActions(cid, step, st), inputVisible: false });
+        setCoach({ ...common, msg: step.prompt, hint: st.tags ? (st.legend || '') : 'Sorting your list…', actions: stepActions(cid, step, st), inputVisible: false });
         if (!st.tags) runTagStep(cid, step);
       } else if (step.kind === 'proscons') {
         const cell = nextPcCell(cid, step, st);
-        setCoach({ ...common, msg: pre + step.prompt, hint: cell ? pcAsk(cell) : 'All done — press Done.', actions: stepActions(cid, step, st) });
+        setCoach({ ...common, msg: step.prompt, hint: cell ? pcAsk(cell) : 'All done — press Done.', actions: stepActions(cid, step, st) });
         coachInput.placeholder = cell ? pcAsk(cell) : 'Done?';
       } else {
-        // argue / switch / recommend / ask — the answer is a paragraph
-        const side = step.side ? ' Side: ' + step.side : '';
-        setCoach({ ...common, msg: pre + (step.supply && !st.answers.length && !st.followUp ? step.supply + '\n\n' : '') + (st.followUp || st.applyAsk || step.prompt), hint: (step.kind === 'argue' || step.kind === 'switch' ? 'Argue it as if you mean it — a reason and an example. As much as you like, then Enter.' : step.kind === 'recommend' ? 'Say which wins and why, then Enter.' : 'Say it in your own words, then Enter.') + (step.hint && step.kind !== 'ask' ? '' : ''), actions: stepActions(cid, step, st) });
+        // argue / switch / recommend / ask — the answer is a paragraph. The
+        // supply (Q's one fact) is its own block above the ask.
+        const supply = step.supply && !st.answers.length && !st.followUp ? step.supply : '';
+        setCoach({ ...common, supply, msg: st.followUp || st.applyAsk || step.prompt, hint: step.kind === 'argue' || step.kind === 'switch' ? 'A reason and an example, then Enter.' : step.kind === 'recommend' ? 'Which wins and why, then Enter.' : 'Your own words, then Enter.', actions: stepActions(cid, step, st) });
         coachInput.placeholder = step.kind === 'argue' || step.kind === 'switch' ? 'Argue it here…' : 'Your answer…';
       }
       persistSteps();
@@ -2348,7 +2434,7 @@
         for (const p of parts) if (!st.items.some(x => x.toLowerCase() === p.toLowerCase())) st.items.push(p.slice(0, 160));
         putStepOnPage(cid, step, stepPageText(step, st));
         renderBoard(); persistSteps();
-        setCoach({ msg: step.prompt, hint: st.items.length + ' on the list. Another? Enter adds one — Done when the list is finished.', inputVisible: true, showNudge: true, actions: stepActions(cid, step, st) });
+        setCoach({ msg: step.prompt, hint: st.items.length + ' on the list · Enter adds one · Done when finished.', inputVisible: true, showNudge: true, actions: stepActions(cid, step, st) });
         coachInput.placeholder = step.itemHint || 'Another one, then Enter…';
         return true;
       }
@@ -2385,7 +2471,7 @@
         st.supplied = true; st.followUp = step.thenAsk || step.prompt; state.currentQuestion = st.followUp;
         state.coachHistory.push({ question: step.prompt, answer: text.trim(), criterionId: cid, stepId: step.id, meta: true });
         persist({ coachHistory: state.coachHistory }); persistSteps();
-        setCoach({ msg: step.supply + '\n\n' + st.followUp, hint: 'Write it here in your own words — that sentence goes on your page. Nothing I said does.', inputVisible: true, showNudge: true, actions: stepActions(cid, step, st) });
+        setCoach({ supply: step.supply, msg: st.followUp, hint: 'Your sentence goes on the page — nothing I said does.', inputVisible: true, showNudge: true, actions: stepActions(cid, step, st) });
         coachInput.placeholder = 'Your sentence…';
         return true;
       }
@@ -2398,7 +2484,7 @@
         const p0 = putStepOnPage(cid, step, text.trim(), { append: true }); if (p0) offerUndo(p0);
         state.coachHistory.push({ question: step.prompt, answer: text.trim(), criterionId: cid, stepId: step.id });
         persist({ coachHistory: state.coachHistory, ...docPatch() }); persistSteps();
-        setCoach({ msg: step.thenAsk, hint: 'Your sentence for the essay — it goes on the page as you write it.', inputVisible: true, showNudge: true, actions: stepActions(cid, step, st) });
+        setCoach({ msg: step.thenAsk, hint: 'It goes on the page as you write it.', inputVisible: true, showNudge: true, actions: stepActions(cid, step, st) });
         coachInput.placeholder = 'Your sentence…';
         return true;
       }
@@ -2423,7 +2509,7 @@
         st.followUps += 1; st.followUp = d.followUp;
         state.currentQuestion = d.followUp;
         // A supplied fact is Q's statement on the card (never on the page), then the sentence request.
-        setCoach({ msg: (d.ack ? d.ack + ' ' : '') + (d.supply ? d.supply + '\n\n' : '') + d.followUp, hint: d.supply ? 'Write your sentence here — it goes on your page. Nothing I said does.' : 'Add that here, then Enter.', inputVisible: true, showNudge: true, actions: stepActions(cid, step, st) });
+        setCoach({ ack: d.ack || '', supply: d.supply || '', msg: d.followUp, hint: d.supply ? 'Your sentence goes on the page — nothing I said does.' : 'Add that here, then Enter.', inputVisible: true, showNudge: true, actions: stepActions(cid, step, st) });
         coachInput.focus(); persistSteps();
       } catch (e) {
         // A failed check never strands them: their words are on the page — move on.
@@ -2502,7 +2588,7 @@
       const next = cs.slice(i + 1).find(c => (state.coverage[c.id] || 'none') !== 'covered' && !(planFor(c.id) && ssFor(c.id).stepIndex >= planFor(c.id).steps.length)) || cs.slice(0, i).find(c => (state.coverage[c.id] || 'none') === 'none');
       persistSteps();
       if (next) { startPart(next.id, { moveFrom: cid }); return; }
-      setCoach({ msg: 'That\'s every part with something on the page. Now I mark it like the marker and we fix it together, sentence by sentence.', section: 'ALL PARTS DONE', actions: [{ label: 'Mark & fix →', primary: true, big: true, onClick: () => markAndFix() }, { label: 'Edit with Q', quiet: true, onClick: () => markAndFix() }, { label: 'Add more on the page first', quiet: true, onClick: () => setCoach({ msg: 'Carry on writing on the page — press Mark & fix when you\'re ready.', inputVisible: true, step: false }) }], inputVisible: true, showNudge: false, step: false });
+      setCoach({ msg: 'Every part has something on the page. Now I mark it and we fix it, sentence by sentence.', section: 'ALL PARTS DONE', actions: [{ label: 'Mark & fix →', primary: true, big: true, onClick: () => markAndFix() }, { label: 'Edit with Q', quiet: true, onClick: () => markAndFix() }, { label: 'Add more on the page first', quiet: true, onClick: () => setCoach({ msg: 'Carry on writing on the page — press Mark & fix when you\'re ready.', inputVisible: true, step: false }) }], inputVisible: true, showNudge: false, step: false });
     }
 
     // ── NUMBERS helpers ───────────────────────────────────────────────────
@@ -2591,8 +2677,7 @@
           blocks.push(`<div class="tb-ws" data-ws="numbers"><table class="sc-table"><thead><tr><th></th><th>is</th><th>should be</th><th>gap</th></tr></thead><tbody>${rows}</tbody></table></div>`);
         }
       }
-      const ex = expectHtml(cid);
-      return (ex || blocks.length) ? `<div class="tb-worksheet"><span class="tb-label">worksheet</span>${ex}${blocks.join('')}</div>` : '';
+      return blocks.length ? `<div class="tb-worksheet"><span class="tb-label">worksheet</span>${blocks.join('')}</div>` : '';
     }
     // ── EXPECTATIONS on the board: the minimal ask, the expected terms as
     // BUTTONS (press → the word goes into your sentence at the caret; light
@@ -2601,14 +2686,38 @@
     function partParagraphs(cid) { return Array.from(docBody.querySelectorAll('p.student-line[data-step^="' + CSS.escape(cid + ':') + '"]')); }
     function partText(cid) { const ps = partParagraphs(cid); return (ps.length ? ps.map(p => p.textContent).join(' ') : docPlainText()).toLowerCase(); }
     function termSeen(cid, term, text) { return (text != null ? text : partText(cid)).includes(String(term).toLowerCase()); }
+    // The word buttons + dots for a part (shared by the board card and the
+    // compact mirror on the coach card during Mark & fix).
+    function termButtonsHtml(cid, { compact } = {}) {
+      const plan = planFor(cid); if (!plan) return '';
+      const text = partText(cid); const fits = new Set((state.termsFit[cid] || []).map(x => x.toLowerCase()));
+      return (plan.expectedTerms || []).map(t => { const cls = fits.has(t.toLowerCase()) ? ' fits' : (termSeen(cid, t, text) ? ' seen' : ''); return `<button type="button" class="q-term${cls}" data-term="${escHtml(t)}" data-cid="${escHtml(cid)}" title="${cls ? (cls.trim() === 'fits' ? 'Q says it fits' : 'On the page — Q will confirm it fits') : 'Press to drop it into your sentence · hover for what it means'}">${escHtml(t)}</button>`; }).join('');
+    }
+    function reqDotsHtml(cid, { withKey } = {}) {
+      const plan = planFor(cid); if (!plan || !(plan.requirements || []).length) return '';
+      const met = new Set(state.reqMet[cid] || []);
+      const dots = plan.requirements.map(rq => `<span class="q-dot${met.has(rq.kind) ? ' met' : ''}" style="--dc:${rq.colour || REQ_COLOURS[rq.kind] || '#999'}" data-req="${escHtml(rq.kind)}" data-cid="${escHtml(cid)}" title="${escHtml(rq.label || REQ_LABELS[rq.kind] || rq.kind)}${met.has(rq.kind) ? ' — done' : ' — still needed'}"></span>`).join('');
+      if (!withKey) return `<span class="q-dots">${dots}</span>`;
+      const key = plan.requirements.map(rq => `<span><span class="q-dot${met.has(rq.kind) ? ' met' : ''}" style="--dc:${rq.colour || REQ_COLOURS[rq.kind] || '#999'}"></span><span class="${met.has(rq.kind) ? '' : 'todo'}">${escHtml(rq.label || REQ_LABELS[rq.kind] || rq.kind)}</span></span>`).join('');
+      return `<div class="ex-left"><span class="q-dots">${dots}</span> <b>must be in this part</b></div><div class="ex-key">${key}</div>`;
+    }
+    // THE WORD BOARD card for a part: the one-line ask, the words as BUTTONS
+    // (nothing else — meanings live on the hover card), "Still to use", the
+    // dots + their key. Rendered on the teaching board for the current part.
     function expectHtml(cid) {
       const plan = planFor(cid); if (!plan || (!plan.minimalAsk && !(plan.expectedTerms || []).length && !(plan.requirements || []).length)) return '';
-      const text = partText(cid); const fits = new Set((state.termsFit[cid] || []).map(x => x.toLowerCase())); const met = new Set(state.reqMet[cid] || []);
-      const terms = (plan.expectedTerms || []).map(t => { const cls = fits.has(t.toLowerCase()) ? ' fits' : (termSeen(cid, t, text) ? ' seen' : ''); return `<button type="button" class="q-term${cls}" data-term="${escHtml(t)}" title="${cls ? (cls.trim() === 'fits' ? 'Q says it fits' : 'On the page — Q will confirm it fits') : 'Press to drop it into your sentence'}">${escHtml(t)}</button>`; }).join('');
+      const text = partText(cid); const fits = new Set((state.termsFit[cid] || []).map(x => x.toLowerCase()));
+      const terms = termButtonsHtml(cid);
       const left = (plan.expectedTerms || []).filter(t => !fits.has(t.toLowerCase()) && !termSeen(cid, t, text));
-      const dots = (plan.requirements || []).map(rq => `<span class="q-dot${met.has(rq.kind) ? ' met' : ''}" style="--dc:${REQ_COLOURS[rq.kind] || '#999'}" data-req="${escHtml(rq.kind)}" title="${escHtml(rq.label || REQ_LABELS[rq.kind] || rq.kind)}${met.has(rq.kind) ? ' — done' : ' — still needed'}"></span>`).join('');
-      const key = (plan.requirements || []).map(rq => `<span><span class="q-dot${met.has(rq.kind) ? ' met' : ''}" style="--dc:${REQ_COLOURS[rq.kind] || '#999'}"></span><span class="${met.has(rq.kind) ? '' : 'todo'}">${escHtml(rq.label || REQ_LABELS[rq.kind] || rq.kind)}</span></span>`).join('');
-      return `<div class="tb-expect" data-cid="${escHtml(cid)}">${plan.minimalAsk ? `<div class="ex-ask">${escHtml(plan.minimalAsk)}</div>` : ''}${terms ? `<div class="ex-terms">${terms}</div>` : ''}${left.length ? `<div class="ex-left"><b>Still to use:</b> ${left.map(escHtml).join(', ')}</div>` : (terms ? '<div class="ex-left"><b>Every expected word is in.</b></div>' : '')}${dots ? `<div class="ex-left"><span class="q-dots">${dots}</span> <b>must be in this part</b></div><div class="ex-key">${key}</div>` : ''}</div>`;
+      const w = whereInfo(cid);
+      return `<div class="tb-expect" data-cid="${escHtml(cid)}"><span class="ex-title">Word board<span class="ex-part">${w ? escHtml('Part ' + w.n + ' — ' + w.label) : ''}</span></span>${plan.minimalAsk ? `<div class="ex-ask">${escHtml(plan.minimalAsk)}</div>` : ''}${terms ? `<div class="ex-terms">${terms}</div>` : ''}${left.length ? `<div class="ex-left"><b>Still to use:</b> ${left.map(escHtml).join(', ')}</div>` : (terms ? '<div class="ex-left"><b>Every expected word is in.</b></div>' : '')}${reqDotsHtml(cid, { withKey: true })}</div>`;
+    }
+    // The compact mirror on the coach card (Mark & fix): buttons + dots only.
+    function coachWordsHtml(cid) {
+      const plan = planFor(cid); if (!plan) return '';
+      const terms = termButtonsHtml(cid, { compact: true }); const dots = reqDotsHtml(cid);
+      if (!terms && !dots) return '';
+      return `<div class="q-words" id="coach-words" data-cid="${escHtml(cid)}">${terms}${dots}</div>`;
     }
     // Press a term → it goes into the sentence at the caret (execCommand keeps
     // Ctrl+Z); no caret in the page → onto the end of this part's last paragraph.
@@ -2635,11 +2744,12 @@
     // Presence check without a full re-render (typing must stay smooth).
     function refreshExpectations() {
       const cid = state.currentCriterionId; const plan = planFor(cid); if (!plan) return;
-      const box = teachBody.querySelector('.tb-expect'); if (!box) return;
       const text = partText(cid); const fits = new Set((state.termsFit[cid] || []).map(x => x.toLowerCase()));
       const left = [];
-      box.querySelectorAll('.q-term').forEach(b => { const t = b.dataset.term; const isFit = fits.has(t.toLowerCase()); const seen = termSeen(cid, t, text); b.classList.toggle('fits', isFit); b.classList.toggle('seen', !isFit && seen); if (!isFit && !seen) left.push(t); });
-      const leftEl = box.querySelector('.ex-left'); if (leftEl && !leftEl.querySelector('.q-dots')) leftEl.innerHTML = left.length ? '<b>Still to use:</b> ' + left.map(escHtml).join(', ') : '<b>Every expected word is in.</b>';
+      const boxes = [teachBody.querySelector('.tb-expect'), document.getElementById('coach-words')].filter(Boolean);
+      for (const box of boxes) box.querySelectorAll('.q-term').forEach(b => { const t = b.dataset.term; const isFit = fits.has(t.toLowerCase()); const seen = termSeen(cid, t, text); b.classList.toggle('fits', isFit); b.classList.toggle('seen', !isFit && seen); if (box === boxes[0] && !isFit && !seen) left.push(t); });
+      const box = boxes[0];
+      const leftEl = box && box.querySelector('.ex-left'); if (leftEl && !leftEl.querySelector('.q-dots')) leftEl.innerHTML = left.length ? '<b>Still to use:</b> ' + left.map(escHtml).join(', ') : '<b>Every expected word is in.</b>';
       renderMarginDots();
     }
     // The dots beside the part's paragraphs on the page (first paragraph of each part).
@@ -2651,7 +2761,7 @@
         const first = partParagraphs(c.id)[0]; if (!first) continue;
         const met = new Set(state.reqMet[c.id] || []);
         const wrap = document.createElement('span'); wrap.className = 'q-margin-dots'; wrap.contentEditable = 'false'; wrap.setAttribute('data-q-furniture', 'true');
-        wrap.innerHTML = plan.requirements.map(rq => `<span class="q-dot${met.has(rq.kind) ? ' met' : ''}" style="--dc:${REQ_COLOURS[rq.kind] || '#999'}" data-req="${escHtml(rq.kind)}" data-cid="${escHtml(c.id)}" title="${escHtml((rq.label || REQ_LABELS[rq.kind] || rq.kind) + (met.has(rq.kind) ? ' — done' : ' — still needed'))}"></span>`).join('');
+        wrap.innerHTML = plan.requirements.map(rq => `<span class="q-dot${met.has(rq.kind) ? ' met' : ''}" style="--dc:${rq.colour || REQ_COLOURS[rq.kind] || '#999'}" data-req="${escHtml(rq.kind)}" data-cid="${escHtml(c.id)}" title="${escHtml((rq.label || REQ_LABELS[rq.kind] || rq.kind) + (met.has(rq.kind) ? ' — done' : ' — still needed'))}"></span>`).join('');
         first.appendChild(wrap);
       }
     }
@@ -2661,17 +2771,44 @@
       let changed = false;
       if (d.termsFit && typeof d.termsFit === 'object') { state.termsFit = d.termsFit; changed = true; }
       if (d.reqMet && typeof d.reqMet === 'object') { state.reqMet = d.reqMet; changed = true; }
-      if (changed) { renderBoard(); renderMarginDots(); }
+      if (changed) { renderBoard(); renderMarginDots(); refreshExpectations(); }
     }
     // A dot pressed: in Mark & fix it opens the matching tool; otherwise it says what it means.
     document.addEventListener('click', (e) => {
-      const term = e.target.closest('.q-term'); if (term && term.dataset.term) { e.preventDefault(); insertTermAtCaret(term.dataset.term); return; }
-      const dot = e.target.closest('.q-dot[data-req]'); if (!dot) return;
+      const term = e.target.closest('.q-term'); if (term && term.dataset.term) { e.preventDefault(); if (termPop.suppressClick) { termPop.suppressClick = false; return; } hideTermPop(); insertTermAtCaret(term.dataset.term); return; }
+      const dot = e.target.closest('.q-dot[data-req]'); if (!dot || dot.classList.contains('q-idot')) return;
       e.preventDefault();
-      const kind = dot.dataset.req; const label = REQ_LABELS[kind] || kind;
+      const kind = dot.dataset.req; const label = reqOf(dot.dataset.cid || state.currentCriterionId, kind).label;
       if (state.editing && state.editItems && state.editItems[state.editIndex]) { useTool(REQ_TOOL[kind] || 'weak', state.editItems[state.editIndex]); return; }
-      coachHint.textContent = 'That dot means this part needs ' + label + '. Mark & fix will check it and open the tool for it.';
+      coachHint.textContent = 'This part needs ' + label + '. When you move on, I mark where it goes.';
     });
+    // ── The word's meaning: a little popup card on hover / long-press ──────
+    // From the plan's glossary (made with the plan — no call). Never on the
+    // board itself: the board is buttons only.
+    const termPopEl = document.createElement('div'); termPopEl.className = 'q-popcard term hidden'; termPopEl.id = 'term-pop'; document.body.appendChild(termPopEl);
+    const termPop = { timer: null, pressTimer: null, suppressClick: false, btn: null };
+    function glossaryFor(cid, term) { const plan = planFor(cid); const g = plan && plan.glossary ? plan.glossary[String(term || '').toLowerCase()] : null; return g || null; }
+    function showTermPop(btn) {
+      const cid = btn.dataset.cid || state.currentCriterionId; const term = btn.dataset.term;
+      const g = glossaryFor(cid, term);
+      termPopEl.innerHTML = '<div class="pc-head">' + escHtml(term) + '</div>' + (g && g.meaning ? '<div class="pc-line">' + escHtml(g.meaning) + '</div>' : '') + (g && g.example ? '<div class="pc-eg">e.g. ' + escHtml(g.example) + '</div>' : '') + '<div class="pc-nudge">' + (btn.classList.contains('fits') ? 'Q says it fits.' : btn.classList.contains('seen') ? 'On the page — press to add it again.' : 'Press to drop it into your sentence.') + '</div>';
+      termPopEl.classList.remove('hidden');
+      const r = btn.getBoundingClientRect(); const w = termPopEl.offsetWidth || 230, h = termPopEl.offsetHeight || 80;
+      let left = r.left, top = r.bottom + 6;
+      if (left + w > window.innerWidth - 8) left = Math.max(8, window.innerWidth - w - 8);
+      if (top + h > window.innerHeight - 8) top = Math.max(8, r.top - h - 6);
+      termPopEl.style.left = left + 'px'; termPopEl.style.top = top + 'px';
+      termPop.btn = btn;
+    }
+    function hideTermPop() { clearTimeout(termPop.timer); termPopEl.classList.add('hidden'); termPop.btn = null; }
+    document.addEventListener('mouseover', (e) => { const b = e.target.closest('.q-term'); if (!b || b === termPop.btn) return; clearTimeout(termPop.timer); termPop.timer = setTimeout(() => showTermPop(b), 220); });
+    document.addEventListener('mouseout', (e) => { const b = e.target.closest('.q-term'); if (!b) return; const to = e.relatedTarget && e.relatedTarget.closest && e.relatedTarget.closest('.q-term'); if (to === b) return; hideTermPop(); });
+    // Touch: long-press shows the meaning (and swallows the press); a tap inserts.
+    document.addEventListener('pointerdown', (e) => { const b = e.target.closest('.q-term'); if (!b || e.pointerType === 'mouse') return; clearTimeout(termPop.pressTimer); termPop.pressTimer = setTimeout(() => { termPop.suppressClick = true; showTermPop(b); }, 450); });
+    document.addEventListener('pointerup', (e) => { clearTimeout(termPop.pressTimer); if (termPop.btn && e.pointerType !== 'mouse') setTimeout(hideTermPop, 1800); });
+    document.addEventListener('pointercancel', () => clearTimeout(termPop.pressTimer));
+    document.addEventListener('scroll', hideTermPop, true);
+    window.__qwriterWords = { showTermPop, hideTermPop, glossaryFor, coachWordsHtml, expectHtml };
     function scaffoldAgendaHtml() {
       const cid = state.currentCriterionId; const plan = planFor(cid); if (!plan) return '';
       const ss = ssFor(cid); const cur = state.currentStep && state.currentStep.criterionId === cid ? state.currentStep.stepId : null;
@@ -2978,9 +3115,10 @@
 
         // After a coach-box answer: one short acknowledgement + the question.
         const ack = opts.ack ? String(opts.ack) : (d.acknowledge && trigger === 'answer' ? String(d.acknowledge) : '');
-        const supplied = d.supply ? String(d.supply).trim() + '\n\n' : '';
         setCoach({
-          msg: supplied + (ack ? ack.replace(/\s+$/, '') + ' Now: ' + question : question),
+          supply: d.supply ? String(d.supply).trim() : '',
+          ack: ack ? ack.replace(/\s+$/, '') : '',
+          msg: question,
           section: d.done ? 'ALL COVERED' : '',
           move: moved,
           hint: d.done ? 'Every part has something. Mark & fix when you\'re ready.' : (d.hint || ''),
@@ -3927,6 +4065,7 @@
       setCoach({ msg: 'Marking it like the marker…', section: 'MARK & FIX', thinking: true, inputVisible: false, step: false });
       btnFinish.disabled = true;
       try {
+        await ensurePlans((line) => setCoach({ msg: line, section: 'MARK & FIX', thinking: true, inputVisible: false, step: false }));
         await api('/writer/mark', { docText: text, gradeScheme: state.gradeScheme }, { timeoutMs: 40000 });
         const job = await waitForJob('mark', { onTick: (secs) => setCoach({ msg: 'Marking it like the marker… ' + secs + 's', section: 'MARK & FIX', thinking: true, inputVisible: false, step: false }) });
         const m = job.result;
@@ -3936,7 +4075,7 @@
         applyMatch(m.match);   // the marker's honest tally — the score the fix loop climbs from
         applyExpectations(m);
         state.markStartPct = state.match ? state.match.overall : null;
-        appendBoardItem({ type: 'note', label: 'marked', text: 'Marked: ' + bandLine(m) + '. ' + (m.overall.summary || '') });
+        appendBoardItem({ type: 'note', label: 'marked', text: 'Marked: ' + bandLine(m) + '. ' + (m.overall.summary || ''), quiet: true });
         const items = (m.critique || []).filter(it => it && it.sentence && (it.missing || it.fix)).map(it => ({ sentence: it.sentence, why: it.missing || '', fix: it.fix || '', targetBrickId: it.targetBrickId || null, suggestedTools: it.suggestedTools || [], criterionId: it.criterionId || '', needs: Array.isArray(it.needs) ? it.needs : [] }));
         state.editItems = items; state.editIndex = 0; state.editing = true; state.editDone = false; state.markPassChanged = 0;
         persist({ lastMark: m });
@@ -4212,13 +4351,15 @@
       const onPage = highlightSentence(it.sentence);
       if (!onPage) { state.editIndex++; showEditItem({ note }); return; }   // rewritten or gone — next
       const where = editWhere(it);
+      renderBoard();   // the board's WHERE line + word board follow the sentence's part
       const suggested = (it.suggestedTools || []).filter(t => EDIT_TOOL_LABELS[t]);
       const tools = suggested.concat(EDIT_TOOL_ORDER.filter(t => !suggested.includes(t)));
+      hideToolPop();
       setCoach({
         msg: '',
         section: 'MARK & FIX · SENTENCE ' + (i + 1) + ' OF ' + items.length,
         where, move: bandLine(state.lastMark), step: false,
-        hint: note || 'It\'s highlighted on the page. Rewrite it there in your own words, then Check it — or press a tool for a steer.',
+        hint: note || 'Rewrite it on the page, then Check it.',
         actions: [
           { label: '✓ Check it', primary: true, big: true, onClick: () => checkCurrentSentence() },
           { label: 'Skip', quiet: true, onClick: () => { state.editIndex++; showEditItem(); } },
@@ -4226,11 +4367,16 @@
         ],
         inputVisible: false,
       });
-      // The critique card: what's missing, and the concrete fix.
+      // The critique card: ONE line "Missing: ● ● ●" (labels on hover; the
+      // one-line why when there are no dots) + ONE line fix. No paragraph.
+      const cid = it.criterionId || state.currentCriterionId;
       const crit = document.createElement('div'); crit.className = 'q-crit';
-      const needDots = (it.needs || []).length ? ' <span class="q-dots qc-dots">' + it.needs.map(k => '<span class="q-dot" style="--dc:' + (REQ_COLOURS[k] || '#999') + '" data-req="' + escHtml(k) + '" title="' + escHtml(REQ_LABELS[k] || k) + '"></span>').join('') + '</span> <span style="color:var(--text-muted)">(' + it.needs.map(k => REQ_LABELS[k] || k).join(' + ') + ' — see the dots)</span>' : '';
-      crit.innerHTML = (it.why ? '<div class="qc-row"><span class="qc-l">Missing</span><span class="qc-v">' + escHtml(it.why) + needDots + '</span></div>' : '') + (it.fix ? '<div class="qc-row"><span class="qc-l">Fix</span><span class="qc-v">' + escHtml(it.fix) + '</span></div>' : '');
+      const needDots = (it.needs || []).length ? '<span class="q-dots qc-dots">' + it.needs.map(k => { const rq = reqOf(cid, k); return '<span class="q-dot" style="--dc:' + rq.colour + '" data-req="' + escHtml(k) + '" data-cid="' + escHtml(cid) + '" title="' + escHtml(rq.label) + '"></span>'; }).join('') + '</span>' : '';
+      const why = String(it.why || '').replace(/\s+/g, ' ').trim();
+      crit.innerHTML = '<div class="qc-row"><span class="qc-l">Missing</span><span class="qc-v" title="' + escHtml(why) + '">' + needDots + (needDots ? '<span style="color:var(--text-muted)">' + escHtml(it.needs.map(k => reqOf(cid, k).label).join(' · ')) + '</span>' : escHtml(why || 'the point, made fully')) + '</span></div>' + (it.fix ? '<div class="qc-row"><span class="qc-l">Fix</span><span class="qc-v" title="' + escHtml(it.fix) + '">' + escHtml(it.fix) + '</span></div>' : '');
       coachActions.insertBefore(crit, coachActions.firstChild);
+      // The word board for this part, compact, on the card.
+      const wb = coachWordsHtml(cid); if (wb) crit.insertAdjacentHTML('beforebegin', wb);
       // The tool buttons: the suggested ones first.
       const row = document.createElement('div'); row.className = 'q-tools';
       tools.forEach(t => {
@@ -4246,6 +4392,43 @@
       const out = document.createElement('div'); out.className = 'q-tool-out'; out.id = 'q-tool-out';
       coachActions.insertBefore(out, row.nextSibling);
     }
+    // The tool popup card: raised, opaque, anchored beside the coach card
+    // (left of it on a desk; above it when docked). One at a time; × closes.
+    const toolPopEl = document.createElement('div'); toolPopEl.className = 'q-popcard hidden'; toolPopEl.id = 'tool-pop'; document.body.appendChild(toolPopEl);
+    function placeToolPop(anchorEl) {
+      const w = toolPopEl.offsetWidth || 270, h = toolPopEl.offsetHeight || 120;
+      let left, top;
+      if (anchorEl && anchorEl.getBoundingClientRect) {
+        const r = anchorEl.getBoundingClientRect();
+        if (isDocked()) { left = 8; top = Math.max(8, r.top - h - 8); }
+        else if (r.left >= w + 16) { left = r.left - w - 8; top = r.top; }
+        else if (window.innerWidth - r.right >= w + 16) { left = r.right + 8; top = r.top; }
+        else { left = Math.max(8, r.left); top = Math.max(8, r.top - h - 8); }
+      } else {
+        const r = coachCard.getBoundingClientRect(); left = r.left >= w + 16 ? r.left - w - 8 : Math.max(8, r.left); top = r.top;
+      }
+      left = Math.max(8, Math.min(left, window.innerWidth - w - 8)); top = Math.max(8, Math.min(top, window.innerHeight - h - 8));
+      toolPopEl.style.left = left + 'px'; toolPopEl.style.top = top + 'px';
+    }
+    function showToolPop(html, { anchor, kind } = {}) {
+      toolPopEl.innerHTML = '<button type="button" class="pc-close" aria-label="Close">×</button>' + (kind ? '<div class="pc-kind">' + escHtml(kind) + '</div>' : '') + html;
+      toolPopEl.querySelector('.pc-close').addEventListener('click', hideToolPop);
+      toolPopEl.classList.remove('hidden');
+      placeToolPop(anchor || coachCard);
+    }
+    function hideToolPop() { toolPopEl.classList.add('hidden'); toolPopEl.innerHTML = ''; }
+    window.addEventListener('resize', () => { if (!toolPopEl.classList.contains('hidden')) placeToolPop(coachCard); });
+    // Tool help, shaped for the card: headline, at most a few short lines,
+    // the example, the nudge. Synonyms / dictionary keep their list.
+    function toolHelpHtml(tool, d) {
+      const listy = tool === 'synonyms' || tool === 'dictionary';
+      const points = (d.points || []).slice(0, listy ? 8 : 3);
+      return '<div class="pc-head">' + escHtml(d.headline || '') + (d.flagged ? ' <span class="q-tool-flag" title="From Q\'s own knowledge, not your uploads — check it">check this</span>' : '') + (d.fromSource ? ' <span class="q-tool-src">from ' + escHtml(d.fromSource) + '</span>' : '') + '</div>'
+        + (points.length ? (listy ? '<ul class="pc-list">' + points.map(p => '<li>' + escHtml(p) + '</li>').join('') + '</ul>' : points.map(p => '<div class="pc-line">' + escHtml(p) + '</div>').join('')) : '')
+        + (d.example ? '<div class="pc-eg">e.g. ' + escHtml(d.example) + '</div>' : '')
+        + '<div class="pc-nudge">' + escHtml(d.nudge || 'Now say your sentence using it.') + '</div>';
+    }
+    window.__qwriterTools = { showToolPop, hideToolPop, toolHelpHtml, runTool: (t, it, w) => runTool(t, it, w) };
     // A tool: one small structured call → help that leads them to write it.
     async function useTool(tool, it) {
       const needsWord = tool === 'synonyms' || tool === 'dictionary';
@@ -4258,26 +4441,24 @@
           // Ask for the word in the coach box — Enter runs the tool.
           state.awaitingWord = { tool, it };
           coachInput.classList.remove('hidden'); coachInput.placeholder = 'Which word? Type it and press Enter'; coachInput.focus();
-          const out = document.getElementById('q-tool-out'); if (out) out.innerHTML = '<div class="q-tool-ask">Which word? Double-click it on the page, or type it below.</div>';
+          showToolPop('<div class="pc-line">Which word? Double-click it on the page, or type it in the box below.</div>', { kind: EDIT_TOOL_LABELS[tool] || tool });
           return;
         }
       }
       await runTool(tool, it, word);
     }
-    async function runTool(tool, it, word) {
-      const out = document.getElementById('q-tool-out');
-      if (out) out.innerHTML = '<div class="q-tool-ask">Looking…</div>';
+    async function runTool(tool, it, word, { anchor } = {}) {
+      const kind = EDIT_TOOL_LABELS[tool] || tool;
+      showToolPop('<div class="pc-line">Looking…</div>', { kind, anchor });
       try {
         const d = await api('/writer/tool', { tool, sentence: it.sentence, word: word || '', brickId: it.targetBrickId || null, yearGroup: state.yearGroup || '' }, { timeoutMs: 60000 });
-        const html = `<div class="q-tool-head">${escHtml(d.headline || '')}${d.flagged ? ' <span class="q-tool-flag" title="From Q\'s own knowledge, not your uploads — check it">check this</span>' : ''}${d.fromSource ? ` <span class="q-tool-src">from ${escHtml(d.fromSource)}</span>` : ''}</div>`
-          + ((d.points || []).length ? `<ul class="q-tool-points">${d.points.map(p => '<li>' + escHtml(p) + '</li>').join('')}</ul>` : '')
-          + (d.example ? `<div class="q-tool-eg">e.g. ${escHtml(d.example)}</div>` : '')
-          + `<div class="q-tool-nudge">${escHtml(d.nudge || 'Now say your sentence using it.')}</div>`;
-        if (out) out.innerHTML = html;
-        // The board keeps it, so it is still there while they rewrite.
-        appendBoardItem({ type: 'note', label: EDIT_TOOL_LABELS[tool] || tool, text: [d.headline, ...(d.points || []), d.example ? 'e.g. ' + d.example : '', d.nudge].filter(Boolean).join('\n') });
+        showToolPop(toolHelpHtml(tool, d), { kind, anchor });
+        // The board keeps ONE quiet line (folded into Earlier) — never the help text.
+        appendBoardItem({ type: 'note', label: kind, text: String(d.headline || '').slice(0, 120), quiet: true });
+        return d;
       } catch (e) {
-        if (out) out.innerHTML = '<div class="q-tool-ask">That tool didn\'t answer (' + escHtml(shortCause(e)) + ') — try again.</div>';
+        showToolPop('<div class="pc-line">That tool didn\'t answer (' + escHtml(shortCause(e)) + ') — try again.</div>', { kind, anchor });
+        return null;
       }
     }
     // The check: their sentence now vs Q's target → closer / that's it / one thing missing.
@@ -4299,7 +4480,7 @@
         if (d.brickCounts) state.brickCounts = d.brickCounts;
         applyExpectations(d);
         const cue = d.closeness === 'match' ? (d.hint || 'That\'s it — next.') : d.closeness === 'closer' ? 'Closer. ' + (d.hint || '') : 'One thing still missing: ' + (d.hint || '');
-        appendBoardItem({ type: 'note', label: d.closeness === 'match' ? 'that\'s it' : 'closer?', text: cue });
+        appendBoardItem({ type: 'note', label: d.closeness === 'match' ? 'that\'s it' : 'closer?', text: cue, quiet: true });
         if (d.closeness === 'match') {
           const wm = whereInfo(); const pct = wm && state.match && state.match.perCriterion ? state.match.perCriterion[wm.id] : null;
           state.markPassChanged = (state.markPassChanged || 0) + 1;
@@ -4508,6 +4689,13 @@
         state.openerDone = !!t.openerDone;
         state.termsFit = t.termsFit && typeof t.termsFit === 'object' ? t.termsFit : {};
         state.reqMet = t.reqMet && typeof t.reqMet === 'object' ? t.reqMet : {};
+        state.references = Array.isArray(t.references) ? t.references : [];
+        state.inlineDots = t.inlineDots && typeof t.inlineDots === 'object' ? t.inlineDots : {};
+        // BACKFILL (Sarah's live session pre-dates the plan engine): a session
+        // that has already started — answers in the history or words on the
+        // page — counts the opener as done, so the current part runs on its
+        // plan (made now, once, cached) and the word board / dots exist.
+        if (!state.openerDone && (state.coachHistory.length || docPlainText().trim())) { state.openerDone = true; persist({ openerDone: true }); }
         setTimeout(() => { try { renderMarginDots(); } catch (_) {} }, 0);
         // Rebuild the teaching board from history, then the live question.
         state.currentCriterionId = t.currentCriterionId || (t.brief.criteria[0] && t.brief.criteria[0].id) || '';

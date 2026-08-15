@@ -1961,6 +1961,9 @@ const TUTOR_KEYS = [
     // filled scaffolds, the page's model-call tally per part. plans[] itself is
     // written by the plan job only.
     'stepState', 'currentStep', 'calls', 'openerDone',
+    // the marking stage (15 Aug 23:40): the Harvard list the page keeps in
+    // sync with the essay, and the dots Q placed inside the student's text.
+    'references', 'inlineDots',
 ];
 router.post('/writer/tutor', requirePerson, express.json({ limit: '4mb' }), writerTooLarge('The session is too big to save in one go (over 4 MB). Trim very long pasted text out of the page and it will save again.'), async (req, res) => {
     try {
