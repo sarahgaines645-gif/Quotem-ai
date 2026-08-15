@@ -161,6 +161,14 @@ All on origin/main and deployed by Railway (push = deploy). Newest first:
 
 ---
 
+## 2b. UPDATE 16 Aug 00:15 — SLICE A SHIPPED (`d27a2e4`)
+Word board (buttons only, hover/long-press popup with meaning + example from a plan glossary),
+tool help as popup not board, one-line critique + dots, three-block coach card, backfill plans
+for pre-plan sessions (one call per part), subject-neutral prompts + extended requirement kinds,
+second-subject (A-level Law) fixture in the harness. 117/117. **The build agent is CONTINUING
+with slices B → C → D and will send SAFE messages; a new session should treat those as its own,
+verify with §4, and push by path.** If no SAFE arrives, `git status` tells you what is on disk.
+
 ## 3. WHAT WAS IN FLIGHT AT HANDOVER — check `git status` in this repo FIRST
 A build agent was working the LAST addendum in four slices, under these rules: no commits;
 no paid AI calls (AI stubbed via a `--require` preload replacing `q-claude.accurateJSON`);
