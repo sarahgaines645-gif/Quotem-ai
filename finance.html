@@ -446,6 +446,11 @@
       display: none; position: fixed; z-index: 300;
       background: var(--bg); border-radius: 14px;
       box-shadow: var(--neu-raised); padding: 14px 16px; min-width: 220px;
+      /* The bucket list grows every time she names a new person. Cap the
+         height and scroll INSIDE the popup, so it can never be taller than
+         the window no matter how many buckets exist. */
+      max-height: min(72vh, 560px); overflow-y: auto;
+      max-width: min(92vw, 340px);
     }
     .assign-popup.show { display: block; }
     .assign-popup label { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-faint); margin-bottom: 6px; display: block; }
@@ -1501,8 +1506,37 @@
     const txn = transactions.find(t => t.id === txnId);
     input.value = txn?.bucket || '';
 
-    popup.style.cssText = `display:block;top:${Math.min(y, window.innerHeight-200)}px;left:${Math.min(x, window.innerWidth-240)}px;`;
+    placePopup(popup, x, y);
     input.focus();
+  }
+
+  // Put a floating popup where it FITS, not where the guess says. The old
+  // code assumed a fixed 200px height; with fourteen buckets the popup is
+  // more than double that, so the clamp did nothing and it ran off the
+  // bottom of the screen. Measure the real thing, then place it.
+  function placePopup(popup, x, y) {
+    const M = 10;                       // breathing room from the window edge
+    popup.style.display = 'block';      // must be visible to measure
+    popup.style.top = '0px';
+    popup.style.left = '0px';
+    const r = popup.getBoundingClientRect();
+    const w = r.width, h = r.height;
+
+    // Prefer below-right of the click. If there isn't room below, flip above
+    // it; if there's no room either way, sit against the bottom edge and let
+    // the popup's own scroll handle the rest.
+    let top = y + 8;
+    if (top + h > window.innerHeight - M) {
+      const above = y - 8 - h;
+      top = (above >= M) ? above : Math.max(M, window.innerHeight - h - M);
+    }
+    let left = x;
+    if (left + w > window.innerWidth - M) left = window.innerWidth - w - M;
+    if (left < M) left = M;
+
+    popup.style.top  = Math.round(top) + 'px';
+    popup.style.left = Math.round(left) + 'px';
+    popup.scrollTop = 0;
   }
 
   document.getElementById('ap-cancel').addEventListener('click', () => {
@@ -1572,7 +1606,7 @@
     presets.innerHTML = buckets.map(b => `<button class="ap-chip" onclick="document.getElementById('ap-input').value='${esc(b)}'">${esc(b)}</button>`).join('');
     input.value = '';
     const r = e.currentTarget.getBoundingClientRect();
-    popup.style.cssText = `display:block;top:${Math.min(r.bottom + 6, window.innerHeight - 220)}px;left:${Math.min(r.left, window.innerWidth - 240)}px;`;
+    placePopup(popup, r.left, r.bottom - 2);
     input.focus();
   });
 
