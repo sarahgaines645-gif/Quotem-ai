@@ -333,6 +333,31 @@
     }
     .drag-handle:active { cursor: grabbing; }
 
+    /* ── Coach big mode — the full chat with its history ── */
+    .coach-card .coach-size {
+      position: absolute; top: 10px; right: 12px;
+      border: none; background: none; cursor: pointer; font-family: inherit;
+      font-size: 14px; line-height: 1; color: var(--text-muted); padding: 2px 4px;
+    }
+    .coach-card .coach-size:hover { color: var(--text); }
+    .coach-card .coach-history { display: none; }
+    .coach-card.big {
+      width: min(720px, 94vw); height: min(78vh, 660px); max-height: 92vh;
+      right: 22px; top: 50%; bottom: auto; transform: translateY(-50%);
+    }
+    .coach-card.big .q-msg { display: none; }
+    .coach-card.big .q-actions { flex-direction: row; flex-wrap: wrap; }
+    .coach-card.big .coach-history {
+      display: block; flex: 1; overflow-y: auto; margin-bottom: 10px; padding-right: 4px;
+    }
+    .coach-history .ch-row { margin-bottom: 10px; font-size: 12px; line-height: 1.45; }
+    .coach-history .ch-row.user { text-align: right; }
+    .coach-history .ch-bubble {
+      display: inline-block; text-align: left; max-width: 86%;
+      padding: 8px 12px; border-radius: 12px; background: var(--bg);
+      box-shadow: var(--neu-raised-xs); white-space: normal;
+    }
+
     /* ── Modals ── */
     .modal-bg {
       display: none; position: fixed; inset: 0;
@@ -590,8 +615,10 @@
 <!-- Q COACH CARD -->
 <div class="coach-card" id="coach-card">
   <div class="drag-handle" id="drag-handle"></div>
+  <button class="coach-size" id="coach-size" title="Open the full chat" aria-label="Open the full chat">⤢</button>
   <div class="q-logo">Q<span class="dot">.</span></div>
   <div class="q-section" id="coach-section">Finance</div>
+  <div class="coach-history" id="coach-history"></div>
   <div class="q-msg" id="coach-msg">Drop in your statement and I'll tell you where your money is going — and what to do about it.</div>
   <div class="q-actions" id="coach-actions">
     <button class="q-btn primary" id="btn-advice">🔍 Get my full picture</button>
@@ -1702,6 +1729,7 @@
   });
 
   async function sendToQ(userMsg, opts = {}) {
+    if (coachHistoryLoaded) { chRow('user', esc(userMsg).replace(/\n/g, '<br>')); coachScrollBottom(); }
     qSay('…', true);
 
     // Prepend live finance state so Q can reference real numbers
@@ -1727,15 +1755,89 @@
     if (thinking) {
       coachMsg.textContent = msg;
       coachMsg.className = 'q-msg thinking';
+      if (coachHistoryLoaded) {
+        coachThinkingRow = chRow('q', '<span style="font-style:italic;color:var(--text-faint)">Q is thinking…</span>');
+        coachScrollBottom();
+      }
     } else {
       // Q's [OPTIONS] block is chat furniture — this card has its own
       // buttons, so drop it rather than show it as raw text.
       const clean = String(msg || '').replace(/\[OPTIONS\][\s\S]*?\[\/OPTIONS\]/gi, '').trim();
-      coachMsg.innerHTML = renderQMarkdown(clean);
+      const html = renderQMarkdown(clean);
+      coachMsg.innerHTML = html;
       coachMsg.className = 'q-msg rendered';
+      if (coachThinkingRow) { coachThinkingRow.remove(); coachThinkingRow = null; }
+      if (coachHistoryLoaded) { chRow('q', html); coachScrollBottom(); }
     }
     coachMsg.scrollTop = 0;
   }
+
+  // ── Coach big mode — the full finance chat with its history ───────────────
+  // Advice used to vanish the moment the next message replaced the card.
+  // The server has kept every finance-surface turn all along
+  // (/chat-history?surface=finance) — the big view simply shows it.
+  let coachBig = false;
+  let coachHistoryLoaded = false;
+  let coachThinkingRow = null;
+  const coachHistoryEl = document.getElementById('coach-history');
+
+  function chRow(role, html) {
+    const row = document.createElement('div');
+    row.className = 'ch-row ' + (role === 'user' ? 'user' : 'q');
+    const b = document.createElement('div');
+    b.className = 'ch-bubble' + (role === 'user' ? '' : ' q-msg rendered');
+    b.innerHTML = html;
+    row.appendChild(b);
+    coachHistoryEl.appendChild(row);
+    return row;
+  }
+  function coachScrollBottom() { coachHistoryEl.scrollTop = coachHistoryEl.scrollHeight; }
+
+  // User turns carry the injected context blocks — strip them for display.
+  function stripCoachContext(s) {
+    return String(s)
+      .replace(/^\[Finance context[\s\S]*?\]\s*/, '')
+      .replace(/^\[The user needs help with this problem[\s\S]*?\]\s*/, '')
+      .trim();
+  }
+
+  async function loadCoachHistory() {
+    if (coachHistoryLoaded) return;
+    coachHistoryLoaded = true;
+    try {
+      const r = await apiFetch('/chat-history?surface=finance');
+      if (!r.ok) return;
+      const data = await r.json();
+      const msgs = Array.isArray(data) ? data : (data.messages || []);
+      coachHistoryEl.innerHTML = '';
+      for (const m of msgs) {
+        if (!m || typeof m.content !== 'string' || !m.content.trim()) continue;
+        if (m.role === 'user') {
+          const shown = stripCoachContext(m.content);
+          if (shown) chRow('user', esc(shown).replace(/\n/g, '<br>'));
+        } else if (m.role === 'assistant') {
+          const clean = String(m.content).replace(/\[OPTIONS\][\s\S]*?\[\/OPTIONS\]/gi, '').trim();
+          if (clean) chRow('q', renderQMarkdown(clean));
+        }
+      }
+      coachScrollBottom();
+    } catch { /* history stays empty — chatting still works */ }
+  }
+
+  function setCoachBig(big) {
+    coachBig = big;
+    const card = document.getElementById('coach-card');
+    card.classList.toggle('big', big);
+    const btn = document.getElementById('coach-size');
+    btn.textContent = big ? '⤡' : '⤢';
+    btn.title = big ? 'Back to the small card' : 'Open the full chat';
+    // Drop any drag positioning so each mode sits where its CSS puts it.
+    card.style.top = ''; card.style.left = ''; card.style.right = ''; card.style.bottom = ''; card.style.transform = '';
+    try { localStorage.setItem('fin_coach_big', big ? '1' : '0'); } catch {}
+    if (big) loadCoachHistory().then(coachScrollBottom);
+  }
+  document.getElementById('coach-size').addEventListener('click', () => setCoachBig(!coachBig));
+  try { if (localStorage.getItem('fin_coach_big') === '1') setCoachBig(true); } catch {}
 
   // Same approach as the main chat: pre-escape so any HTML Q emits shows as
   // literal text, then marked turns #, **, lists and tables into real
