@@ -2261,6 +2261,11 @@ router.get('/api/finance/subscriptions', requirePerson, (req, res) => {
     res.json(qFinance.detectSubscriptions(req.person.email));
 });
 
+// Income sources — credits grouped by payer, self-transfers excluded.
+router.get('/api/finance/income', requirePerson, (req, res) => {
+    res.json(qFinance.detectIncome(req.person.email));
+});
+
 // Import statement text (paste or extracted from PDF)
 router.post('/api/finance/statement', requirePerson, express.json({ limit: '2mb' }), async (req, res) => {
     const { text, filename } = req.body || {};

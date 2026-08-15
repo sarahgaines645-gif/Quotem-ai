@@ -2281,9 +2281,11 @@ function readFinanceTool(personEmail) {
             hasData: true,
             summary: graph.summary,
             by_category: graph.by_category,
-            // Same list the Subscriptions box on /finance shows — Q must see
-            // what the user sees, not a stricter recurring-only variant.
+            // Same lists the /finance boxes show — Q must see what the user
+            // sees. Income excludes self-transfers, so a top-up from the
+            // user's own other bank never reads as income.
             subscriptions: qFinance.detectSubscriptions(personEmail).slice(0, 15),
+            income_sources: qFinance.detectIncome(personEmail).slice(0, 10),
             openProblems: problems.slice(0, 10),
             recentTransactions: recent,
             instruction_for_q: "You now have the user's full financial picture. Speak specifically — name real merchants, real amounts, real categories. If there are open problems, lead with the urgent/high ones. IMPORTANT: summary.self_transfers is the user's OWN money moving between their own accounts, banks and pots (they often upload statements from several banks) — it is already excluded from total_spend and total_income. Call it 'moved between your accounts', never 'savings' and never income or spending.",

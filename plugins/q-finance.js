@@ -1410,6 +1410,33 @@ function detectSubscriptions(email) {
 }
 
 
+// Income sources — credits grouped the way subscriptions are, with
+// self-transfers (pots, savings, cross-account pairs) excluded so a top-up
+// from the user's own other bank never masquerades as income.
+function detectIncome(email) {
+    const txns = getTransactions(email);
+    const paired = pairInternalTransfers(txns);
+    const credits = txns.filter(t => t.amount > 0 && t.category !== 'savings_transfer' && !paired.has(t.id));
+    const byMerchant = {};
+    for (const t of credits) {
+        const k = merchantKey(t.merchant || t.description);
+        (byMerchant[k] = byMerchant[k] || []).push(t);
+    }
+    return Object.values(byMerchant)
+        .map(entries => {
+            entries.sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+            return {
+                merchant:       entries[0].merchant || entries[0].description,
+                amount:         Math.abs(entries[0].amount),
+                last_seen:      entries[0].date,
+                source:         entries[0].source || null,
+                count:          entries.length,
+                total_received: Math.round(entries.reduce((s, t) => s + t.amount, 0) * 100) / 100,
+            };
+        })
+        .sort((a, b) => b.total_received - a.total_received);
+}
+
 module.exports = {
     // Transactions
     importStatement,
@@ -1435,8 +1462,9 @@ module.exports = {
     assignMerchant,
     getAssignments,
 
-    // Subscriptions
+    // Subscriptions + income
     detectSubscriptions,
+    detectIncome,
 
     // Graphs
     getSpendingGraphData,

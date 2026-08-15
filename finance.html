@@ -171,6 +171,7 @@
     .sub-row .sr-name { font-size: 13px; font-weight: 500; overflow-wrap: anywhere; }
     .sub-row .sr-meta { font-size: 10px; color: var(--text-faint); }
     .sub-row .sr-amt  { font-size: 13px; font-weight: 700; color: var(--red); white-space: nowrap; }
+    .sub-row .sr-amt.in { color: var(--green); }
     .sub-row .sr-freq { font-size: 10px; color: var(--text-muted); }
     .sub-row .sr-flag {
       border: none; cursor: pointer; font-family: inherit; font-size: 11px;
@@ -490,6 +491,17 @@
     </div>
   </div>
 
+  <!-- INCOME -->
+  <div class="section-card" id="income-card">
+    <div class="section-header">
+      <h3>💰 Income</h3>
+      <span class="badge badge-green" id="income-badge"></span>
+    </div>
+    <div class="sub-list" id="income-list">
+      <div class="txn-empty">No income found yet — import a bank statement above</div>
+    </div>
+  </div>
+
   <!-- PROBLEM QUEUE -->
   <div class="section-card" id="problems-card">
     <div class="section-header">
@@ -636,6 +648,7 @@
   let graphData     = null;
   let problems      = [];
   let subscriptions = [];
+  let incomeSources = [];
   let shownCount    = 40;
   let activeFilter  = '';
   let searchQuery   = '';
@@ -672,16 +685,18 @@
 
   // ── Load data ─────────────────────────────────────────────────────────────
   async function loadAll() {
-    const [txRes, grRes, prRes, subRes] = await Promise.all([
+    const [txRes, grRes, prRes, subRes, incRes] = await Promise.all([
       apiFetch('/api/finance/transactions'),
       apiFetch('/api/finance/graph'),
       apiFetch('/api/finance/problems'),
       apiFetch('/api/finance/subscriptions'),
+      apiFetch('/api/finance/income'),
     ]);
     if (txRes.ok)  transactions  = await txRes.json();
     if (grRes.ok)  graphData     = await grRes.json();
     if (prRes.ok)  problems      = await prRes.json();
     if (subRes.ok) subscriptions = await subRes.json();
+    if (incRes.ok) incomeSources = await incRes.json();
     renderAll();
   }
 
@@ -689,6 +704,7 @@
     renderSummary();
     renderCharts();
     renderSubscriptions();
+    renderIncome();
     renderProblems();
     renderTransactions();
   }
@@ -824,6 +840,40 @@
     `;
     }).join('');
   }
+
+  // ── Income — who pays in, when, from which statement ──────────────────────
+  function renderIncome() {
+    const list  = document.getElementById('income-list');
+    const badge = document.getElementById('income-badge');
+    if (!incomeSources.length) {
+      list.innerHTML = '<div class="txn-empty">No income found yet — import a bank statement above</div>';
+      badge.textContent = '';
+      return;
+    }
+    badge.textContent = incomeSources.length + (incomeSources.length === 1 ? ' source' : ' sources');
+    list.innerHTML = incomeSources.map(s => {
+      const meta = [
+        s.last_seen ? ukDate(s.last_seen) : '',
+        s.source ? esc(s.source) : '',
+        '£' + fmt(s.total_received) + ' total · ' + s.count + '×',
+      ].filter(Boolean).join(' · ');
+      return `
+      <div class="sub-row">
+        <div class="sr-main">
+          <span class="sr-name">${esc(s.merchant)}</span>
+          <span class="sr-meta">${meta}</span>
+        </div>
+        <span class="sr-amt in">+£${fmt(s.amount)}</span>
+        <button class="sr-flag" onclick="incomeToCalendar('${esc(s.merchant)}', ${Math.abs(s.amount) || 0}, '${esc(s.last_seen || '')}')">📅 calendar</button>
+      </div>`;
+    }).join('');
+  }
+
+  // One press: Q works out the repeat day and puts it on the calendar.
+  window.incomeToCalendar = function(merchant, amount, lastSeen) {
+    sendToQ(`Add my income from ${merchant} to my calendar. It's £${fmt(amount)}, last received ${lastSeen ? ukDate(lastSeen) : 'recently'} — read my finance data to work out the day it usually arrives and how often, then add a repeating calendar reminder named "${merchant} £${fmt(amount)} due" on that day. Confirm exactly what you added.`);
+    document.getElementById('coach-card').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  };
 
   // One press: a recurring charge becomes a bill on the problems queue.
   window.subAddBill = async function(merchant, amount) {
