@@ -1489,17 +1489,27 @@ function getSpendingGraphData(email) {
     const pairedIds = pairInternalTransfers(txns);
     const viewCat = t => pairedIds.has(t.id) ? 'savings_transfer' : (t.category || 'other');
 
-    // Graph 1: category breakdown
+    // Graph 1: category breakdown. "Where your money goes" is a SPENDING
+    // chart, so money moved between the user's own pots and banks is not in
+    // it — it never left. Including it made "Own transfers" the biggest slice
+    // on the page, squashing groceries, children and subscriptions into
+    // slivers and contradicting the headline totals directly beneath it.
+    // Own transfers stay fully visible: the account cards report both
+    // directions, the summary line carries the total, and the transactions
+    // filter still has an "Own transfers / savings" option.
     const byCategory = {};
     for (const t of debits) {
         const cat = viewCat(t);
+        if (cat === 'savings_transfer') continue;
         byCategory[cat] = (byCategory[cat] || 0) + Math.abs(t.amount);
     }
 
-    // Graph 2: bucket/person breakdown (only assigned transactions)
+    // Graph 2: bucket/person breakdown (only assigned transactions). Same
+    // rule — a self-move that happens to carry a bucket label is not money
+    // spent on that person.
     const byBucket = {};
     for (const t of debits) {
-        if (t.bucket) {
+        if (t.bucket && viewCat(t) !== 'savings_transfer') {
             byBucket[t.bucket] = (byBucket[t.bucket] || 0) + Math.abs(t.amount);
         }
     }
