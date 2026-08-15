@@ -1830,20 +1830,52 @@ function _setImportJob(email, patch) {
     return next;
 }
 
-// Starts the import in the background and returns immediately. The job
-// record is the single source of truth the page polls — same fire-and-
-// forget philosophy as the scheduler's worker.
-function startImportJob(email, fileBase64, mimeType, filename, ownerName) {
-    const id = 'imp' + Date.now().toString(36);
-    _setImportJob(email, {
-        id, status: 'running', phase: 'reading',
-        pagesDone: 0, pagesTotal: 0,
-        added: 0, total: getTransactions(email).length,
-        hint: null, error: null,
-        createdAt: new Date().toISOString(),
-    });
+// ── Import queue ─────────────────────────────────────────────────
+// One file after another, per user, in the background. Sarah: "can we make
+// it add more than one doc at a time and just batch it — it's annoying to
+// wait and keep adding." So a drop of five statements is five items on one
+// queue; the server works through them in order (sequential = no Gemini
+// rate-limit storm, and each file's reconciliation lands cleanly), and the
+// page polls ONE record that says which file is being read, how many are
+// waiting, and what each finished one came to. The bytes wait in memory
+// only until their turn; the record is on the volume.
+const importQueues = new Map();   // email -> { items: [...], running: false }
 
-    (async () => {
+function startImportJob(email, fileBase64, mimeType, filename, ownerName) {
+    const id = 'imp' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5);
+    let q = importQueues.get(email);
+    if (!q) { q = { items: [], running: false }; importQueues.set(email, q); }
+    q.items.push({ id, base64: fileBase64, mimeType, filename: filename || null, ownerName });
+
+    // A new BATCH starts when nothing is running or waiting — the finished
+    // list resets so the summary is this batch's, not last week's.
+    const cur = loadJSON(finPath(email, IMPORT_JOB), null) || {};
+    const fresh = !q.running && cur.status !== 'running';
+    _setImportJob(email, {
+        status: 'running',
+        ...(fresh ? {
+            id: null, filename: null, phase: 'queued', pagesDone: 0, pagesTotal: 0,
+            added: 0, hint: null, error: null, finished: [], batchTotal: 0,
+            createdAt: new Date().toISOString(),
+        } : {}),
+        batchTotal: (fresh ? 0 : (cur.batchTotal || 0)) + 1,
+        queued: q.items.map(i => ({ id: i.id, filename: i.filename })),
+        total: getTransactions(email).length,
+    });
+    if (!q.running) _drainImportQueue(email, q);
+    return { jobId: id, status: 'running', queued: q.items.length };
+}
+
+async function _drainImportQueue(email, q) {
+    q.running = true;
+    while (q.items.length) {
+        const item = q.items.shift();
+        _setImportJob(email, {
+            id: item.id, filename: item.filename, status: 'running', phase: 'reading',
+            pagesDone: 0, pagesTotal: 0, added: 0, hint: null, error: null,
+            queued: q.items.map(i => ({ id: i.id, filename: i.filename })),
+        });
+        let entry;
         try {
             const onProgress = (done, totalPages) => {
                 _setImportJob(email, {
@@ -1851,22 +1883,32 @@ function startImportJob(email, fileBase64, mimeType, filename, ownerName) {
                     phase: (totalPages && done >= totalPages) ? 'saving' : 'reading',
                 });
             };
-            const result = await importStatementFromFile(email, fileBase64, mimeType, onProgress, filename, ownerName);
-            _setImportJob(email, {
-                status: 'done', phase: 'done',
-                added: result.added || 0,
-                total: result.total != null ? result.total : getTransactions(email).length,
-                hint: result.hint || null,
-            });
-            console.log(`[finance] import job ${id} done — added:${result.added} total:${result.total}`);
+            const result = await importStatementFromFile(email, item.base64, item.mimeType, onProgress, item.filename, item.ownerName);
+            entry = { id: item.id, filename: item.filename, added: result.added || 0, hint: result.hint || null, error: null,
+                      reconciliation: result.reconciliation ? { ok: !!result.reconciliation.ok, difference: result.reconciliation.difference } : null };
+            console.log(`[finance] import job ${item.id} done — added:${result.added} total:${result.total}${q.items.length ? ` — ${q.items.length} more waiting` : ''}`);
         } catch (e) {
-            console.error(`[finance] import job ${id} failed:`, e.message);
-            _setImportJob(email, { status: 'error', phase: 'error',
-                error: e.message || 'Import failed' });
+            console.error(`[finance] import job ${item.id} failed:`, e.message);
+            entry = { id: item.id, filename: item.filename, added: 0, hint: null, error: e.message || 'Import failed', reconciliation: null };
         }
-    })();
-
-    return { jobId: id, status: 'running' };
+        item.base64 = null;   // free the bytes the moment they're done with
+        const cur = loadJSON(finPath(email, IMPORT_JOB), {}) || {};
+        _setImportJob(email, {
+            added: entry.added, hint: entry.hint, error: entry.error,
+            total: getTransactions(email).length,
+            finished: [...(cur.finished || []), entry],
+        });
+    }
+    q.running = false;
+    const cur = loadJSON(finPath(email, IMPORT_JOB), {}) || {};
+    const fin = cur.finished || [];
+    const allFailed = fin.length > 0 && fin.every(f => f.error);
+    _setImportJob(email, {
+        status: allFailed ? 'error' : 'done', phase: allFailed ? 'error' : 'done',
+        queued: [],
+        added: fin.reduce((s, f) => s + (f.added || 0), 0),
+        total: getTransactions(email).length,
+    });
 }
 
 

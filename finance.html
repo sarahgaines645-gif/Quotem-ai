@@ -575,11 +575,11 @@
     <div class="upload-zone" id="uz-statement">
       <div class="uz-icon">🏦</div>
       <div class="uz-title">Bank statement</div>
-      <div class="uz-sub">Drag a CSV or PDF here, or use a button below</div>
+      <div class="uz-sub">Drag CSVs or PDFs here — as many as you like — or use a button below</div>
       <div class="uz-btns">
         <button class="uz-btn" type="button">
           📁 Choose file
-          <input type="file" id="file-statement" accept=".csv,.pdf,.txt" />
+          <input type="file" id="file-statement" accept=".csv,.pdf,.txt" multiple />
         </button>
         <button class="uz-btn" type="button" id="paste-btn">✏️ Paste text</button>
         <button class="uz-btn qr" type="button" id="qr-statement-btn">📱 Scan from phone</button>
@@ -1937,15 +1937,15 @@
   const uzStatement   = document.getElementById('uz-statement');
 
   fileStatement.addEventListener('change', async e => {
-    const file = e.target.files[0];
-    if (!file) return;
-    await handleStatementFile(file);
+    const files = Array.from(e.target.files || []);
     e.target.value = '';
+    if (files.length) await handleStatementFiles(files);
   });
 
   function showUploadResult(zoneId, msg, type = 'ok') {
     const el = document.getElementById(zoneId + '-result');
     if (!el) return;
+    el.style.whiteSpace = 'pre-line';
     el.textContent = msg;
     el.className = 'uz-result show ' + type;
   }
@@ -1954,16 +1954,29 @@
     if (el) { el.textContent = ''; el.className = 'uz-result'; }
   }
 
-  async function handleStatementFile(file) {
+  async function handleStatementFile(file) { return handleStatementFiles([file]); }
+
+  // Any number of statements at once. CSV/text is exact and instant, so
+  // those go one after another straight to the parser. Every PDF or photo
+  // is handed to the server's queue up front — the server reads them in
+  // order whether or not this tab stays open — and one watcher shows which
+  // file it's on, how many are waiting, and what each came to.
+  async function handleStatementFiles(files) {
+    const isText = f => /\.(csv|txt)$/i.test(f.name) || (f.type && f.type.startsWith('text/'));
+    const texts = files.filter(isText), bins = files.filter(f => !isText(f));
+    for (const f of texts) await importText(await f.text(), f.name);
+    if (!bins.length) return;
     clearUploadResult('uz-statement');
     showUploadProgress('uz-statement', true);
-    if (file.name.toLowerCase().endsWith('.pdf')) {
-      const { b64 } = await readFileAsB64(file);
-      await importStatementBase64(b64, 'application/pdf', file.name, '');
-      return;
+    showUploadResult('uz-statement', bins.length === 1 ? 'Sending your statement…' : `Sending ${bins.length} files…`, 'info');
+    let queued = 0;
+    for (const f of bins) {
+      const { b64 } = await readFileAsB64(f);
+      const mime = f.type || (f.name.toLowerCase().endsWith('.pdf') ? 'application/pdf' : 'image/jpeg');
+      if (await queueStatementFile(b64, mime, f.name)) queued++;
     }
-    const text = await file.text();
-    await importText(text, file.name);
+    if (queued) await watchImportQueue('');
+    else showUploadProgress('uz-statement', false);
   }
 
   // A statement file (PDF or photo) as base64 → the background import job,
@@ -1973,56 +1986,93 @@
   // request and the browser/proxy timed out, showing a false "couldn't
   // read it" while the server was still working. So: start a job, poll it.
   // Resolves when the job has finished (either way).
-  function importStatementBase64(b64, mimeType, filename, fromWhere) {
-    return new Promise(async resolve => {
-      clearUploadResult('uz-statement');
-      showUploadProgress('uz-statement', true);
-      const from = fromWhere ? ' ' + fromWhere : '';
-      try {
-        const r = await apiFetch('/api/finance/statement/pdf', { method: 'POST', body: { imageBase64: b64, mimeType, filename } });
-        if (!r.ok) {
-          const e = await r.json().catch(() => ({}));
-          showUploadProgress('uz-statement', false);
-          showUploadResult('uz-statement', e.error || 'Could not start reading this file — please try again', 'err');
-          return resolve(null);
-        }
-        const startedAt = Date.now();
-        const poll = async () => {
-          let j = null;
-          try { j = await (await apiFetch('/api/finance/statement/job', { method: 'GET' })).json(); } catch {}
-          if (j && j.status === 'running') {
-            if (Date.now() - startedAt > 25 * 60 * 1000) {
-              showUploadProgress('uz-statement', false);
-              showUploadResult('uz-statement', 'Still working on it — check back in a minute and refresh the page.', 'info');
-              return resolve(j);
-            }
-            const msg = (j.phase === 'saving')
-              ? 'Sorting and categorising your transactions…'
-              : (j.pagesTotal ? `Reading your statement${from} — page ${j.pagesDone} of ${j.pagesTotal}…` : `Reading your statement${from}…`);
-            showUploadResult('uz-statement', msg, 'info');
-            return setTimeout(poll, 3000);
-          }
-          showUploadProgress('uz-statement', false);
-          if (j && j.status === 'done') {
-            if (j.added > 0) showUploadResult('uz-statement', `✓ ${j.added} transactions imported${from} (${j.total} total)` + (j.hint ? ' — ' + j.hint : ''), 'ok');
-            else if (j.hint) showUploadResult('uz-statement', j.hint, 'info');
-            else showUploadResult('uz-statement', 'No new transactions found — they may already be imported', 'info');
-            await loadAll();
-          } else if (j && j.status === 'error') {
-            showUploadResult('uz-statement', j.error || 'Could not read this file — please try again', 'err');
-          } else {
-            showUploadResult('uz-statement', 'Could not read this file — please try again', 'err');
-          }
-          resolve(j);
-        };
-        showUploadResult('uz-statement', `Reading your statement${from}…`, 'info');
-        setTimeout(poll, 2500);
-      } catch (err) {
+  async function importStatementBase64(b64, mimeType, filename, fromWhere) {
+    clearUploadResult('uz-statement');
+    showUploadProgress('uz-statement', true);
+    if (await queueStatementFile(b64, mimeType, filename)) return watchImportQueue(fromWhere);
+    showUploadProgress('uz-statement', false);
+    return null;
+  }
+
+  // Hand one file to the server's import queue. Resolves true if it was
+  // accepted. The server reads queued files one after another in the
+  // background — a multi-page PDF takes minutes and must never depend on a
+  // single HTTP request staying open.
+  async function queueStatementFile(b64, mimeType, filename) {
+    try {
+      const r = await apiFetch('/api/finance/statement/pdf', { method: 'POST', body: { imageBase64: b64, mimeType, filename } });
+      if (r.ok) return true;
+      const e = await r.json().catch(() => ({}));
+      showUploadResult('uz-statement', (filename ? filename + ': ' : '') + (e.error || 'Could not start reading this file — please try again'), 'err');
+    } catch {
+      showUploadResult('uz-statement', (filename ? filename + ': ' : '') + 'Could not start the upload — please try again', 'err');
+    }
+    return false;
+  }
+
+  // ONE watcher over the queue record, however many files were handed in
+  // and from wherever (desktop drop, phone scan). Calling it while it is
+  // already watching just returns the same promise.
+  let importWatch = null;
+  function watchImportQueue(fromWhere) {
+    if (importWatch) return importWatch;
+    const from = fromWhere ? ' ' + fromWhere : '';
+    importWatch = new Promise(resolve => {
+      const startedAt = Date.now();
+      const finish = async j => {
+        importWatch = null;
         showUploadProgress('uz-statement', false);
-        showUploadResult('uz-statement', 'Could not start the upload — please try again', 'err');
-        resolve(null);
-      }
+        const fin = (j && Array.isArray(j.finished)) ? j.finished : [];
+        if (j && (j.status === 'done' || j.status === 'error') && fin.length > 1) {
+          // Batch summary — one line per file, the fact and its check.
+          const lines = fin.map(f => {
+            const name = f.filename || 'file';
+            if (f.error) return `✗ ${name}: ${f.error}`;
+            const check = f.reconciliation ? (f.reconciliation.ok ? ' · adds up' : ` · £${Math.abs(f.reconciliation.difference).toFixed(2)} out`) : '';
+            return `${f.added > 0 ? '✓' : '·'} ${name}: ${f.added > 0 ? f.added + ' new' : 'nothing new'}${check}`;
+          });
+          const totalNew = fin.reduce((s, f) => s + (f.added || 0), 0);
+          showUploadResult('uz-statement', `${fin.length} files read${from} — ${totalNew} new transactions (${j.total} total)\n` + lines.join('\n'), fin.some(f => f.error) ? 'info' : 'ok');
+          await loadAll();
+        } else if (j && j.status === 'done') {
+          if (j.added > 0) showUploadResult('uz-statement', `✓ ${j.added} transactions imported${from} (${j.total} total)` + (j.hint ? ' — ' + j.hint : ''), 'ok');
+          else if (j.hint) showUploadResult('uz-statement', j.hint, 'info');
+          else showUploadResult('uz-statement', 'No new transactions found — they may already be imported', 'info');
+          await loadAll();
+        } else if (j && j.status === 'error') {
+          showUploadResult('uz-statement', j.error || 'Could not read this file — please try again', 'err');
+        } else {
+          showUploadResult('uz-statement', 'Could not read this file — please try again', 'err');
+        }
+        resolve(j);
+      };
+      const poll = async () => {
+        let j = null;
+        try { j = await (await apiFetch('/api/finance/statement/job', { method: 'GET' })).json(); } catch {}
+        if (j && j.status === 'running') {
+          if (Date.now() - startedAt > 45 * 60 * 1000) {
+            importWatch = null;
+            showUploadProgress('uz-statement', false);
+            showUploadResult('uz-statement', 'Still working on it — check back in a minute and refresh the page.', 'info');
+            return resolve(j);
+          }
+          const waiting = Array.isArray(j.queued) ? j.queued.length : 0;
+          const doneN = Array.isArray(j.finished) ? j.finished.length : 0;
+          const nth = (j.batchTotal > 1) ? ` (${doneN + 1} of ${j.batchTotal})` : '';
+          const name = j.filename ? ` ${j.filename}` : ` your statement${from}`;
+          const tail = waiting ? ` · ${waiting} more waiting` : '';
+          const msg = (j.phase === 'saving')
+            ? `Sorting and categorising${name}${nth}…${tail}`
+            : (j.pagesTotal ? `Reading${name}${nth} — page ${j.pagesDone} of ${j.pagesTotal}…${tail}` : `Reading${name}${nth}…${tail}`);
+          showUploadResult('uz-statement', msg, 'info');
+          return setTimeout(poll, 3000);
+        }
+        finish(j);
+      };
+      showUploadResult('uz-statement', `Reading your statement${from}…`, 'info');
+      setTimeout(poll, 2000);
     });
+    return importWatch;
   }
 
   async function importText(text, filename) {
@@ -2116,8 +2166,8 @@
   uzStatement.addEventListener('drop', async e => {
     e.preventDefault();
     uzStatement.classList.remove('drag-over');
-    const file = e.dataTransfer.files[0];
-    if (file) await handleStatementFile(file);
+    const files = Array.from(e.dataTransfer.files || []);
+    if (files.length) await handleStatementFiles(files);
   });
 
   // Paste modal
@@ -2615,7 +2665,13 @@
           const text = new TextDecoder('utf-8').decode(bytes);
           await importText(text, filename || 'phone upload.csv');
         } else {
-          await importStatementBase64(base64, mimeType || 'application/pdf', filename || 'phone upload', 'from your phone');
+          clearUploadResult('uz-statement');
+          showUploadProgress('uz-statement', true);
+          if (await queueStatementFile(base64, mimeType || 'application/pdf', filename || 'phone upload')) {
+            watchImportQueue('from your phone');   // one watcher; more files just join the queue
+          } else {
+            showUploadProgress('uz-statement', false);
+          }
         }
       } else {
         // Send to document extractor

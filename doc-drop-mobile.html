@@ -114,11 +114,11 @@
       </button>
       <button class="upload-btn btn-gallery">
         🖼️ Choose from gallery
-        <input type="file" accept="image/*" id="input-gallery" />
+        <input type="file" accept="image/*" id="input-gallery" multiple />
       </button>
       <button class="upload-btn btn-file">
         📁 Choose a file
-        <input type="file" accept="image/*,.pdf,.csv,.txt,.doc,.docx" id="input-file" />
+        <input type="file" accept="image/*,.pdf,.csv,.txt,.doc,.docx" id="input-file" multiple />
       </button>
     </div>
 
@@ -193,11 +193,16 @@
       });
 
     // Wire all three input buttons to the same upload handler
+    // Several at once from the gallery or the file picker: uploaded one
+    // after another, with "2 of 5" on the bar. The desktop page queues
+    // them as they land.
     ['input-camera','input-gallery','input-file'].forEach(id => {
-      document.getElementById(id).addEventListener('change', e => {
-        const file = e.target.files[0];
-        if (file) uploadFile(file);
+      document.getElementById(id).addEventListener('change', async e => {
+        const files = Array.from(e.target.files || []);
         e.target.value = '';
+        for (let i = 0; i < files.length; i++) {
+          await uploadFile(files[i], files.length > 1 ? `${i + 1} of ${files.length}` : '');
+        }
       });
     });
 
@@ -207,14 +212,15 @@
       setTimeout(() => errorMsg.classList.remove('show'), 6000);
     }
 
-    async function uploadFile(file) {
+    async function uploadFile(file, nth) {
       if (!sessionId) { showError('Session not ready — try reloading'); return; }
+      const tag = nth ? ` (${nth})` : '';
 
       btnRow.style.display = 'none';
       progressWrap.classList.add('show');
       successWrap.classList.remove('show');
       progressFill.style.width = '20%';
-      progressLabel.textContent = 'Reading file…';
+      progressLabel.textContent = 'Reading file' + tag + '…';
 
       // Read as base64
       const base64 = await new Promise((resolve, reject) => {
@@ -225,7 +231,7 @@
       });
 
       progressFill.style.width = '60%';
-      progressLabel.textContent = 'Uploading…';
+      progressLabel.textContent = 'Uploading' + tag + '…';
 
       try {
         const r = await fetch('/api/doc-drop/upload/' + token, {
