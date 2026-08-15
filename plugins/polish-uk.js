@@ -38,15 +38,21 @@ function normalisePunctuation(text) {
 // Each entry is a regex that matches the US form and the UK replacement.
 // Patterns are case-aware (initial-cap variants handled too) and word-boundary
 // safe so we don't mangle URLs, code identifiers, or proper nouns.
+// Words that end -ize / -ized / -izing in British English as well — never
+// touched: size, prize, seize, capsize, resize, downsize, maize, baize, Belize.
+const IZE_KEEP = /^(s|pr|se|caps|res|downs|ups|overs|unders|ma|ba|ass|bel)iz/i;
+
 const SPELLING_RULES = [
     // -ize / -ization → -ise / -isation (the big one)
-    [/\b([A-Za-z]+?)izes?\b/g, '$1ises'],     // realize → realise, realizes → realises
-    [/\b([A-Za-z]+?)ized\b/g, '$1ised'],
-    [/\b([A-Za-z]+?)izing\b/g, '$1ising'],
-    [/\b([A-Za-z]+?)ization\b/g, '$1isation'],
-    [/\b([A-Za-z]+?)izations\b/g, '$1isations'],
+    // (15 Aug 2026 fix: the old rule pasted a plural into the replacement —
+    // "organize" became "organises", "size" became "sises" — and had no guard
+    // for words that are -ize in British English too. Live on chat until now.)
+    [/\b([A-Za-z]+?)ize(s?)\b/g, (m, stem, s) => IZE_KEEP.test(m) ? m : stem + 'ise' + s],   // realize → realise, realizes → realises
+    [/\b([A-Za-z]+?)ized\b/g, (m, stem) => IZE_KEEP.test(m) ? m : stem + 'ised'],
+    [/\b([A-Za-z]+?)izing\b/g, (m, stem) => IZE_KEEP.test(m) ? m : stem + 'ising'],
+    [/\b([A-Za-z]+?)ization(s?)\b/g, '$1isation$2'],
     // -yze → -yse (analyse, paralyse, catalyse)
-    [/\b([A-Za-z]+?)yzes?\b/g, '$1yses'],
+    [/\b([A-Za-z]+?)yze(s?)\b/g, '$1yse$2'],
     [/\b([A-Za-z]+?)yzed\b/g, '$1ysed'],
     [/\b([A-Za-z]+?)yzing\b/g, '$1ysing'],
     // -or → -our for the canonical set

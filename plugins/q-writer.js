@@ -35,8 +35,31 @@ const { cleanModelOutput } = require('./cjk-filter');
 const { accurateJSON, SONNET } = require('./q-claude');
 const { timedFetch } = require('./timed-fetch');
 const { logUsage } = require('../cost-tracker');
+const { polishUK } = require('./polish-uk');
+
+// ── House style for EVERY writer prompt (Sarah, 15 Aug 2026 — a UK CIPD
+// essay came back with "paycheck" and "vacation"). One line, prepended to the
+// system prompt of every call below (callQ and callAccurate), so no route can
+// forget it. Stable text at the top ⇒ the prompt cache still serves.
+const UK_LINE = 'House style: British English throughout — UK spelling (organisation, programme, analyse, colour, centre) and UK terms (payslip not paycheck, holiday not vacation, mobile not cell phone, CV not resume, maths not math). Never name an AI vendor or model.';
+
+// ── How every QUESTION to the student is worded (Sarah, 15 Aug 2026: "the
+// way he put it when I said I don't understand should be the way he
+// originally worded it"). The student has not read the brief and never will;
+// each question must stand on its own in plain, everyday words.
+const PLAIN_QUESTION_RULE = `HOW EVERY QUESTION IS WORDED — as if the student had already said "I don't understand":
+- Plain, concrete, everyday British English about real things (a job, a payslip, a boss, a shop, a team, this company). One short question — never more than about 35 words for the question itself. A concrete example or scenario may sit in front of it, in one short sentence.
+- Name the academic term ONCE, in passing, so they learn it — "…that's what the brief calls the 'reward package'" — but never open with the term and never read the brief's jargon back at them ("discuss", "critically evaluate", "with reference to").
+- The student has not read and will not read the brief. Never say "as the brief asks" or "see criterion X" — carry the meaning inside the question itself (the scenario, the example, the term named once) so they never need to open the document or the board.
+- Never a list of questions. One question, one idea.`;
+
+function withHouseStyle(systemPrompt) {
+    const sys = String(systemPrompt || '');
+    return sys.startsWith(UK_LINE) ? sys : UK_LINE + '\n\n' + sys;
+}
 
 async function callQ(systemPrompt, userPrompt, { maxTokens = 4096 } = {}) {
+    systemPrompt = withHouseStyle(systemPrompt);
     const started = Date.now();
     const response = await timedFetch(`${Q_CONFIG.baseURL}/chat/completions`, {
         method: 'POST',
@@ -76,7 +99,7 @@ async function callQ(systemPrompt, userPrompt, { maxTokens = 4096 } = {}) {
 // is fast Claude — accurate and inside the window. Opus is reserved for the
 // exam room's heavy lifting (Sarah's tiers).
 async function callAccurate(systemPrompt, userPrompt, opts = {}) {
-    return accurateJSON(systemPrompt, userPrompt, { effort: 'medium', ...opts, model: SONNET, fallback: callQ, skill: 'writer' });
+    return accurateJSON(withHouseStyle(systemPrompt), userPrompt, { effort: 'medium', ...opts, model: SONNET, fallback: callQ, skill: 'writer' });
 }
 
 async function analyseTask(taskText) {
@@ -207,9 +230,10 @@ const BRIEF_SCHEMA = {
             description: 'EVERY thing the marker will award marks for — one entry per assessment criterion / question / task part. If the brief lists AC codes (AC 1.1, AC 2.2…) use them as ids. Order = the order the student should write them.',
             items: {
                 type: 'object', additionalProperties: false,
-                required: ['id', 'text', 'weight'],
+                required: ['id', 'label', 'text', 'weight'],
                 properties: {
                     id: { type: 'string', description: 'Short stable id — the AC code if present ("AC1.1"), else "C1", "C2"…' },
+                    label: { type: 'string', description: 'A plain-words nickname for this criterion, 4 words or fewer, in everyday English a student who has never seen the brief understands — e.g. "What attracts people", "Pay and perks", "How to measure it". Never the AC code, never jargon.' },
                     text: { type: 'string', description: 'The criterion / question in the marker\'s words, trimmed to one or two sentences.' },
                     weight: nullable('string'),
                 },
@@ -249,6 +273,10 @@ Build the tutor's brief:
 - The grade bands for THIS task, one concrete sentence each.
 - The ideal-answer skeleton — for each criterion, the 3-6 key points a top-band answer makes (models, examples, evidence, evaluation). This is the answer you hold in your head while coaching. Be specific to this brief and subject, never generic.
 - The opener: one warm, concrete question anyone could answer without having read the brief, whose honest answer is the first brick of the ideal answer for the first criterion.
+- A plain-words label (4 words or fewer) for each criterion — the student sees these labels, never the AC codes.
+
+The student will NOT read this brief — you will walk them through it question by question. The opener obeys this rule:
+${PLAIN_QUESTION_RULE}
 
 If you can see ANY assignment content, extract what you can. Never ask for more information — fill what you can and leave the rest empty. Word count and deadline are null if the brief does not state them.`;
     const brief = await callAccurate(system, `ASSIGNMENT BRIEF (full text):\n${taskText}`, { maxTokens: 8000, schema: BRIEF_SCHEMA, effort: 'medium' });
@@ -258,6 +286,14 @@ If you can see ANY assignment content, extract what you can. Never ask for more 
 // The fallback model (no schema) can return an approximate shape. Make it
 // safe for the page: every criterion has an id + text, every skeleton entry
 // points at a real criterion, and the opener exists.
+// The plain nickname the coverage strip shows instead of "AC1.1". Model-given
+// when present; otherwise the first few real words of the criterion.
+function plainLabel(label, text) {
+    const l = String(label || '').replace(/\s+/g, ' ').trim();
+    if (l) return l.split(' ').slice(0, 5).join(' ').replace(/[.:;,]+$/, '');
+    const words = String(text || '').replace(/^\s*(AC|LO)?\s*\d+(\.\d+)*\s*[:.)-]?\s*/i, '').replace(/\s+/g, ' ').trim().split(' ').filter(Boolean);
+    return words.slice(0, 4).join(' ').replace(/[.:;,]+$/, '') || 'this part';
+}
 function normaliseBrief(b) {
     if (!b || typeof b !== 'object') throw new Error('The brief came back empty — try again.');
     const out = { ...b };
@@ -265,7 +301,8 @@ function normaliseBrief(b) {
     out.criteria = crit.map((c, i) => {
         if (typeof c === 'string') return { id: 'C' + (i + 1), text: c, weight: null };
         const id = String(c.id || c.code || ('C' + (i + 1))).replace(/\s+/g, '');
-        return { id, text: String(c.text || c.criterion || c.question || ''), weight: c.weight == null ? null : String(c.weight) };
+        const text = String(c.text || c.criterion || c.question || '');
+        return { id, label: plainLabel(c.label, text), text, weight: c.weight == null ? null : String(c.weight) };
     }).filter(c => c.text);
     if (!out.criteria.length && Array.isArray(b.markedSections)) {
         out.criteria = b.markedSections.map((s, i) => ({ id: 'C' + (i + 1), text: String(s.name || s.description || ''), weight: null })).filter(c => c.text);
@@ -304,7 +341,7 @@ function briefForPrompt(brief) {
     if (brief.wordCount) lines.push(`WORD COUNT: ${brief.wordCount}`);
     lines.push('');
     lines.push('CRITERIA (in writing order):');
-    for (const c of brief.criteria) lines.push(`- [${c.id}] ${c.text}${c.weight ? ` (${c.weight})` : ''}`);
+    for (const c of brief.criteria) lines.push(`- [${c.id}]${c.label ? ` "${c.label}" —` : ''} ${c.text}${c.weight ? ` (${c.weight})` : ''}`);
     lines.push('');
     lines.push('GRADE BANDS:');
     lines.push(`- top: ${brief.gradeBands.top}`);
@@ -378,6 +415,8 @@ HOW YOU COACH
 - Short. Warm. Concrete. One question, one idea. Never a list of questions.
 - If TRIGGER is "stuck": ask a SMALLER, easier question toward the same brick — one concrete thing they can answer from their own experience or the case material. Never give them the sentence.
 - If TRIGGER is "pause": they just wrote in the document and stopped — react to exactly what they wrote.
+
+${PLAIN_QUESTION_RULE}
 ${ageHint}
 ${voiceHint}
 ${relateHint}
@@ -465,7 +504,8 @@ Rules:
 - Every criterion gets a band: top / mid / low / missing (missing = the document does not address it at all).
 - Evidence must be from THEIR text — quote a phrase.
 - "missingForTop" is the exact gap for THAT criterion — concrete: the model, example, evaluation, comparison, or evidence the top band expects and they have not given. Not "develop further".
-- "nextQuestion" is the one question a tutor would ask to pull that missing piece out of the student. Never contains the answer.
+- "nextQuestion" is the one question a tutor would ask to pull that missing piece out of the student. Never contains the answer. It is worded for a student who has NOT read the brief:
+${PLAIN_QUESTION_RULE}
 - Overall band = what this draft would actually get. Be honest; a kind marker still fails a missing criterion.
 
 THE BRIEF
@@ -805,6 +845,8 @@ Rules:
 - If they give a short answer ("no", "boring"), follow up naturally to get more depth.
 - Always suggest they TYPE it into the document — the goal is words on the page.
 
+${PLAIN_QUESTION_RULE}
+
 Return ONLY valid JSON:
 - question (string): the question to ask
 - sectionName (string): which section this is nudging them towards
@@ -851,11 +893,36 @@ Return ONLY valid JSON:
 - reframed (string): the reframed opening in their voice
 - explanation (string): one short line explaining the technique (e.g. "Starting with your reaction pulls the reader straight in")`;
 
-    return await callQ(
+    const out = await callQ(
         system,
         `Q'S QUESTION: "${question}"\n\nSTUDENT'S RAW ANSWER: "${rawAnswer}"\n\nDOCUMENT SO FAR:\n${(context || '').slice(0, 800) || '(blank)'}\n\nReframe their answer in their voice.`,
         { maxTokens: 400 }
     );
+    return normaliseReframe(out);
+}
+
+// The reframe prompt asks for {reframed, explanation} but nothing enforces the
+// shape on this (Together/JSON-by-instruction) path — live 15 Aug 2026 the
+// model answered with a different key, the page showed an empty quote and
+// "Put it on the page" crashed on esc(undefined). Accept the common shapes;
+// if there is genuinely no sentence, fail loudly so the page keeps the answer.
+function normaliseReframe(out) {
+    const o = (out && typeof out === 'object') ? out : {};
+    const pick = (...keys) => {
+        for (const k of keys) {
+            const v = o[k];
+            if (typeof v === 'string' && v.trim()) return v.trim();
+        }
+        return '';
+    };
+    let reframed = pick('reframed', 'reframe', 'reframedSentence', 'reframed_sentence', 'sentence', 'opening', 'text', 'result', 'answer');
+    if (!reframed && typeof out === 'string' && out.trim()) reframed = out.trim();
+    if (!reframed) {
+        const err = new Error('Q gave a shape I could not read for the reframe');
+        err.code = 'garbled';
+        throw err;
+    }
+    return { ...o, reframed, explanation: pick('explanation', 'why', 'technique', 'note') };
 }
 
 async function writeStarter(question, context, voiceSignature, relateAnchor, yearGroup, qWordsWritten) {
@@ -1103,7 +1170,71 @@ Return ONLY valid JSON:
     );
 }
 
+// ── UK English at the route boundary ─────────────────────────────────────
+// The chat surface runs plugins/polish-uk on Q's replies; the writer's
+// dedicated routes did not (Sarah, 15 Aug 2026 — "paycheck", "vacation" on a
+// UK CIPD essay). ukPolishResponse walks a route's JSON reply and polishes
+// ONLY the strings Q wrote for the student. It never touches the student's
+// own words (docText/docHtml/answers/sentences), references (formatted),
+// ids, urls or anything a page-side find/replace must match verbatim.
+const UK_VOCAB = [
+    [/\bpaychecks?\b/gi, (m) => keepCase(m, /s$/i.test(m) ? 'payslips' : 'payslip')],
+    [/\bvacations?\b/gi, (m) => keepCase(m, /s$/i.test(m) ? 'holidays' : 'holiday')],
+    [/\bmath\b/gi, (m) => keepCase(m, 'maths')],
+    [/\bzip codes?\b/gi, (m) => keepCase(m, /s$/i.test(m) ? 'postcodes' : 'postcode')],
+    [/\bcell ?phones?\b/gi, (m) => keepCase(m, /s$/i.test(m) ? 'mobile phones' : 'mobile phone')],
+    [/\bgas stations?\b/gi, (m) => keepCase(m, /s$/i.test(m) ? 'petrol stations' : 'petrol station')],
+    [/\bgasoline\b/gi, (m) => keepCase(m, 'petrol')],
+    [/\bsidewalks?\b/gi, (m) => keepCase(m, /s$/i.test(m) ? 'pavements' : 'pavement')],
+    [/\bparking lots?\b/gi, (m) => keepCase(m, /s$/i.test(m) ? 'car parks' : 'car park')],
+    [/\bfaucets?\b/gi, (m) => keepCase(m, /s$/i.test(m) ? 'taps' : 'tap')],
+    [/\bdiapers?\b/gi, (m) => keepCase(m, /s$/i.test(m) ? 'nappies' : 'nappy')],
+    [/\bflashlights?\b/gi, (m) => keepCase(m, /s$/i.test(m) ? 'torches' : 'torch')],
+];
+function keepCase(m, r) {
+    if (m === m.toUpperCase() && m.length > 1) return r.toUpperCase();
+    if (m[0] === m[0].toUpperCase()) return r[0].toUpperCase() + r.slice(1);
+    return r;
+}
+function ukText(text) {
+    if (typeof text !== 'string' || !text) return text;
+    let out = polishUK(text);
+    for (const [re, fn] of UK_VOCAB) out = out.replace(re, fn);
+    return out;
+}
+// Keys whose string values Q wrote for the student → polished.
+const UK_POLISH_KEYS = new Set([
+    'question', 'hint', 'acknowledge', 'explanation', 'whatItWants', 'youreProducing', 'opener', 'prerequisites',
+    'top', 'mid', 'low', 'label', 'summary', 'missingForTop', 'nextQuestion', 'evidence', 'to', 'why', 'reframed',
+    'word', 'warnings', 'howToImprove', 'relevance', 'gradeLabel', 'reason', 'nextGradeHint', 'type', 'suggestion',
+    'example', 'craftLesson', 'changes', 'currentQuestion', 'lastQuestion', 'notes', 'error', 'teachersBrief',
+    'sectionName', 'description', 'suggestFirstQ', 'task', 'keyConcepts', 'voiceSummary',
+]);
+// 'text' is polished only inside a criteria list; 'title' only on a brief.
+function ukPolishResponse(value, key, parentKey) {
+    if (typeof value === 'string') {
+        if (UK_POLISH_KEYS.has(key)) return ukText(value);
+        if (key === 'text' && parentKey === 'criteria') return ukText(value);
+        return value;
+    }
+    if (Array.isArray(value)) {
+        // An array of strings under a polish key (prerequisites, warnings, changes…)
+        return value.map(v => ukPolishResponse(v, key, parentKey));
+    }
+    if (value && typeof value === 'object') {
+        const isBrief = Array.isArray(value.criteria) && typeof value.whatItWants === 'string';
+        const out = {};
+        for (const k of Object.keys(value)) {
+            if (k === 'title' && isBrief) { out[k] = ukText(value[k]); continue; }
+            out[k] = ukPolishResponse(value[k], k, key);
+        }
+        return out;
+    }
+    return value;
+}
+
 module.exports = {
+    ukPolishResponse, ukText, UK_LINE, PLAIN_QUESTION_RULE, withHouseStyle, plainLabel,
     analyseTask, analyseAndBrief, nextQuestion, assembleDocument,
     analyseVoice, tutorBrief, askLeadingQuestion, reframeInVoice, suggestWordSwaps, writeStarter,
     formatHarvardRef, suggestReferences, referenceParagraph,

@@ -1001,8 +1001,9 @@
       lastMark: null,
       restored: false,
     };
-    const PROBE_MIN_GAP_MS = 20000;   // never two live probes closer than this (cost + rhythm)
-    const PROBE_MIN_NEW_CHARS = 25;   // "genuinely new content" — about five words
+    const PROBE_MIN_GAP_MS = 8000;    // never two live probes closer than this (cost + rhythm)
+    const PROBE_MIN_NEW_CHARS = 12;   // "genuinely new content" — a few real words
+    const PROBE_RETRY_MS = 1500;      // re-check cadence while a condition is not yet met
 
     // ── Element refs ───────────────────────────────────────────────────────
     const docBody    = document.getElementById('doc-body');
@@ -1661,7 +1662,7 @@
       }
       if (state.probeInFlight) return;
       state.probeInFlight = true;
-      state.lastProbeAt = Date.now();   // counts from when we ASK, success or not — the back-off is a cost floor
+      if (trigger === 'pause') state.lastProbeAt = Date.now();   // only pause-probes start the floor — the opener never blocks the first written answer
       const docText = docPlainText();
       const delta = docText.startsWith(state.docSnapshot) ? docText.slice(state.docSnapshot.length).trim() : docText.slice(-1200);
       const quiet = trigger === 'pause';
@@ -1749,6 +1750,7 @@
             ...voicePayload(),
           });
           if (!d.ok) throw new Error(d.error || 'reframe failed');
+          if (!d.reframed || !String(d.reframed).trim()) throw new Error('no sentence came back');
           state.pendingReframe = d;
 
           // The reframe is THEIR sentence in their voice, one notch up. One
@@ -1882,6 +1884,13 @@
     // ever their words — typed, dictated, or reframed in their voice and
     // accepted with a tap — so it is styled like the rest of their writing.
     function insertQText(text, countAsQWords) {
+      // Live 15 Aug 2026: "Put it on the page" reached here with undefined and
+      // crashed on esc(). Nothing goes on the page unless there is a sentence.
+      text = (text == null ? '' : String(text)).trim();
+      if (!text) {
+        setCoach({ msg: 'There was no sentence to put down — say it again in your words and I will read the page.', inputVisible: true });
+        return;
+      }
       const esc = s => s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
       const p = document.createElement('p');
       p.className = 'student-line';
@@ -2672,17 +2681,28 @@
     function endsSentence(text) {
       return /[.?!]["'”’)\]]*\s*$/.test(text);
     }
+    // Q watches the page (Sarah, 15 Aug 2026: "he's supposed to watch me write
+    // and comment"). Idle = no typing for pauseMs, whatever has focus. Every
+    // not-yet condition RE-ARMS a short retry — this never goes silent while
+    // there is unread text on the page. Fires when the sentence is finished
+    // (or a paragraph break), or after a longer pause even without a full stop.
+    let lastInputAt = 0;
+    docBody.addEventListener('input', () => { lastInputAt = Date.now(); });
     function maybeLiveProbe() {
-      if (!state.brief || state.probeInFlight || briefRunning) return;
-      if (document.activeElement !== docBody) return;            // they moved to the coach box or away
+      clearTimeout(probeTimer);
+      if (!state.brief || briefRunning) return;
+      const pauseMs = state.settings.pauseMs || 7000;
+      const rearm = (ms) => { probeTimer = setTimeout(maybeLiveProbe, ms || PROBE_RETRY_MS); };
+      if (state.probeInFlight) return rearm();
       const text = docPlainText();
-      if (!endsSentence(text)) return;                             // mid-sentence — wait for the full stop
       const delta = text.startsWith(state.docSnapshot) ? text.slice(state.docSnapshot.length) : text;
-      if (delta.trim().length < PROBE_MIN_NEW_CHARS) return;       // nothing new to read
-      if (Date.now() - state.lastProbeAt < PROBE_MIN_GAP_MS) {     // too soon — try again after the floor
-        probeTimer = setTimeout(maybeLiveProbe, PROBE_MIN_GAP_MS - (Date.now() - state.lastProbeAt));
-        return;
-      }
+      if (delta.trim().length < PROBE_MIN_NEW_CHARS) return;       // truly nothing new — wait for the next keystroke
+      const idle = Date.now() - (lastInputAt || 0);
+      if (idle < pauseMs) return rearm(pauseMs - idle);
+      const finished = endsSentence(text) || /\n\s*$/.test(text);
+      if (!finished && idle < pauseMs * 2) return rearm();         // mid-sentence — give them a little longer
+      const sinceLast = Date.now() - state.lastProbeAt;
+      if (sinceLast < PROBE_MIN_GAP_MS) return rearm(PROBE_MIN_GAP_MS - sinceLast);
       askNextQuestion({ trigger: 'pause' });
     }
 
