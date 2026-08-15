@@ -44,7 +44,15 @@ function channelsFor(level) {
     if (/gcse|year ?(7|8|9|10|11)|ks[34]|secondary/.test(l)) return CHANNELS.gcse.concat(CHANNELS.common);
     return CHANNELS.common.concat(CHANNELS.gcse, CHANNELS.alevel, CHANNELS.university);
 }
-function hasKey() { return !!process.env.YOUTUBE_API_KEY; }
+// The key. Sarah, 16 Aug: the general Google Cloud key already in Railway
+// (GOOGLE_PLACES_KEY) reaches the YouTube Data API perfectly well — it is the
+// restricted AI Studio key that comes back blocked. So accept the general keys
+// as a fallback rather than sitting silent because one specific name is
+// missing. Same order street_view already uses.
+function apiKey() {
+    return process.env.YOUTUBE_API_KEY || process.env.GOOGLE_PLACES_KEY || process.env.GOOGLE_MAPS_KEY || '';
+}
+function hasKey() { return !!apiKey(); }
 function cacheKey(query, level, subject) { return [String(query || '').trim().toLowerCase(), String(level || '').toLowerCase(), String(subject || '').toLowerCase()].join('|'); }
 
 // The pieces a page needs. embedUrl uses the privacy-enhanced host.
@@ -89,7 +97,7 @@ async function searchTeachingVideo({ query, level, subject } = {}) {
     if (hit && Date.now() - hit.at < CACHE_MS) return hit.result;
     let result = null;
     try {
-        const apiKey = process.env.YOUTUBE_API_KEY;
+        const auth = apiKey();
         const good = channelsFor(level).map(c => c.toLowerCase());
         const rank = (items) => items.map(shape).filter(Boolean).map(v => {
             const ch = v.channel.toLowerCase();
@@ -98,10 +106,10 @@ async function searchTeachingVideo({ query, level, subject } = {}) {
         });
         // Pass 1: short explainers (revision-length), general query + subject.
         const qq = subject && !q.toLowerCase().includes(String(subject).toLowerCase()) ? q + ' ' + subject : q;
-        let ranked = rank(await callSearch({ q: qq + ' explained', videoDuration: 'short' }, apiKey));
+        let ranked = rank(await callSearch({ q: qq + ' explained', videoDuration: 'short' }, auth));
         // Pass 2 (only if nothing from a known channel): any length.
         if (!ranked.some(r => r.score > 0)) {
-            const more = rank(await callSearch({ q: qq }, apiKey));
+            const more = rank(await callSearch({ q: qq }, auth));
             ranked = ranked.concat(more.filter(m => !ranked.some(r => r.v.videoId === m.v.videoId)));
         }
         ranked.sort((a, b) => b.score - a.score);

@@ -712,6 +712,70 @@
     html.teen .lights-btn .lb-dot { background: var(--neon-2); box-shadow: 0 0 8px var(--neon-2), 0 0 16px var(--neon-2); }
     html.teen .save-note.warn { color: var(--neon-4); }
     html.teen .bank-line .bank-err { color: var(--neon-4); }
+
+    /* ── Teaching video card — it plays HERE, on the page ─────────────────
+       Sarah, 16 Aug: "a card for YouTube to be played on inside our page that
+       can be resized and will allow them to learn what they don't understand."
+       So: never a new tab. Drag it by the bar, drag the corner to resize, and
+       it remembers where you put it. */
+    .video-card {
+      position: fixed; z-index: 240; width: 380px; min-width: 260px;
+      background: var(--bg); border-radius: 14px; padding: 10px 12px 12px;
+      box-shadow: 10px 10px 28px #ababab, -8px -8px 20px #ffffff;
+      display: flex; flex-direction: column; gap: 8px;
+    }
+    .video-card.hidden { display: none; }
+    .vc-head { display: flex; align-items: center; gap: 8px; cursor: grab; touch-action: none; }
+    .vc-head:active { cursor: grabbing; }
+    .vc-title {
+      font-size: 11px; font-weight: 700; letter-spacing: 0.06em;
+      text-transform: uppercase; color: var(--text-muted);
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .vc-close {
+      margin-left: auto; border: none; background: transparent; cursor: pointer;
+      font-family: 'Space Grotesk', sans-serif; font-size: 13px; line-height: 1;
+      color: var(--text-faint); padding: 2px 4px;
+    }
+    .vc-close:hover { color: var(--text); }
+    .vc-frame {
+      position: relative; width: 100%; aspect-ratio: 16 / 9;
+      border-radius: 10px; overflow: hidden; background: #000;
+      box-shadow: var(--neu-inset-sm);
+    }
+    .vc-frame iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; }
+    .vc-name { font-size: 12px; font-weight: 600; color: var(--text); line-height: 1.35; overflow-wrap: anywhere; }
+    .vc-foot { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+    .vc-channel { font-size: 10px; color: var(--text-muted); }
+    .vc-open {
+      margin-left: auto; font-size: 10px; color: var(--text-muted);
+      text-decoration: underline; text-underline-offset: 2px;
+    }
+    .vc-open:hover { color: var(--text); }
+    .vc-grip {
+      position: absolute; right: 3px; bottom: 3px; width: 16px; height: 16px;
+      cursor: nwse-resize; touch-action: none; opacity: 0.5;
+      background:
+        linear-gradient(135deg, transparent 45%, var(--text-faint) 45%, var(--text-faint) 55%, transparent 55%),
+        linear-gradient(135deg, transparent 70%, var(--text-faint) 70%, var(--text-faint) 80%, transparent 80%);
+    }
+    .vc-grip:hover { opacity: 1; }
+    html.teen .video-card {
+      box-shadow: 0 0 0 1px rgba(255,255,255,0.09), 0 24px 60px -18px rgba(0,0,0,0.95), 0 0 30px -12px rgba(0,240,255,0.25);
+    }
+    html.teen .vc-title { color: var(--neon-2); text-shadow: 0 0 8px rgba(0,240,255,0.5); }
+    /* The watch button inside the explain popup — the first thing offered. */
+    .exp-links .exp-watch { cursor: pointer; border: none; width: 100%; text-align: left; color: var(--text); font-weight: 600; }
+    .exp-links .exp-watch:hover { color: var(--accent); }
+    .exp-links .exp-watch[disabled] { opacity: 0.6; cursor: wait; }
+    @media (max-width: 600px) {
+      /* On a phone it docks to the bottom, full width — no dragging needed. */
+      .video-card {
+        left: 8px !important; right: 8px; width: auto !important;
+        top: auto !important; bottom: 8px;
+      }
+      .vc-grip { display: none; }
+    }
   </style>
 </head>
 <body>
@@ -963,6 +1027,23 @@
     <div class="exp-text" id="explain-text"></div>
     <div class="exp-links" id="explain-links"></div>
     <button class="exp-close" id="explain-close">close</button>
+  </div>
+
+  <!-- Teaching video — plays on the page; drag the bar, drag the corner -->
+  <div class="video-card hidden" id="video-card" role="dialog" aria-label="Teaching video">
+    <div class="vc-head" id="vc-head">
+      <span class="vc-title">▶ Video</span>
+      <button type="button" class="vc-close" id="vc-close" aria-label="Close the video">✕</button>
+    </div>
+    <div class="vc-frame">
+      <iframe id="vc-frame" title="Teaching video" allow="accelerometer; encrypted-media; gyroscope; picture-in-picture" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe>
+    </div>
+    <div class="vc-name" id="vc-name"></div>
+    <div class="vc-foot">
+      <span class="vc-channel" id="vc-channel"></span>
+      <a class="vc-open" id="vc-open" target="_blank" rel="noopener">open on YouTube</a>
+    </div>
+    <div class="vc-grip" id="vc-grip" title="Drag to resize"></div>
   </div>
 
   <script src="/assets/study-fx.js?v=1"></script>
@@ -2346,6 +2427,9 @@
         && !!state.quizQ && !state.quizResolved
         && setupStrip.classList.contains('hidden')
         && explainPopup.classList.contains('hidden')
+        // Watching a video is not thinking time. Read the DOM, not the const —
+        // the card's const is declared further down and this hook can fire first.
+        && document.getElementById('video-card').classList.contains('hidden')
         && !document.hidden,
       onRun: () => {
         $('tw-run').textContent = fmtTime(game.runTime());
@@ -2542,6 +2626,10 @@
         const terms = (d.searchTerms && d.searchTerms.length) ? d.searchTerms : [concept];
         // Teacher-recommended channel goes first — their videos, this topic
         const channel = (state.progress.settings.channel || '').trim();
+        // THE FIRST OFFER: play it here, on the page. The search links below
+        // stay as the fallback for when there is no key or no good result —
+        // they open a tab, which is the thing we are trying to avoid.
+        watchHereButton(concept, channel);
         if (channel) {
           const a = document.createElement('a');
           a.className = 'exp-link';
@@ -2563,6 +2651,109 @@
       } catch (e) {
         explainText.textContent = 'Couldn\'t get an explanation — try again.';
       }
+    }
+
+    // ── The teaching video, played HERE ───────────────────────────────────
+    // Sarah, 16 Aug: "a card for YouTube to be played on inside our page that
+    // can be resized and will allow them to learn what they don't understand."
+    // A new tab is where revision goes to die, so the video plays on the page,
+    // the tube pauses while it is open (see isLive), and closing it blanks the
+    // frame so nothing rolls on into "up next".
+    const videoCard = $('video-card');
+    const vcFrame   = $('vc-frame');
+    const VC_STORE  = 'q.revise.videoCard';
+
+    function vcClamp(x, y) {
+      const w = videoCard.offsetWidth, h = videoCard.offsetHeight;
+      videoCard.style.left = Math.max(8, Math.min(x, window.innerWidth  - w - 8)) + 'px';
+      videoCard.style.top  = Math.max(8, Math.min(y, window.innerHeight - h - 8)) + 'px';
+    }
+    function vcRestore() {
+      let saved = null;
+      try { saved = JSON.parse(localStorage.getItem(VC_STORE) || 'null'); } catch (_) { saved = null; }
+      const w = Math.min(Math.max((saved && saved.w) || 380, 260), Math.max(260, window.innerWidth - 24));
+      videoCard.style.width = w + 'px';
+      const h = videoCard.offsetHeight || 300;
+      vcClamp(
+        saved && Number.isFinite(saved.x) ? saved.x : window.innerWidth  - w - 20,
+        saved && Number.isFinite(saved.y) ? saved.y : window.innerHeight - h - 20
+      );
+    }
+    function vcRemember() {
+      try {
+        localStorage.setItem(VC_STORE, JSON.stringify({
+          x: parseInt(videoCard.style.left, 10) || 0,
+          y: parseInt(videoCard.style.top, 10) || 0,
+          w: videoCard.offsetWidth,
+        }));
+      } catch (_) {}
+    }
+    function openVideoCard(v) {
+      if (!v || !v.videoId) return false;
+      vcFrame.src = v.embedUrl || ('https://www.youtube-nocookie.com/embed/' + encodeURIComponent(v.videoId) + '?rel=0&modestbranding=1');
+      $('vc-name').textContent = v.title || '';
+      $('vc-channel').textContent = v.channel || '';
+      $('vc-open').href = v.url || ('https://www.youtube.com/watch?v=' + encodeURIComponent(v.videoId));
+      videoCard.classList.remove('hidden');
+      vcRestore();
+      return true;
+    }
+    function closeVideoCard() {
+      vcFrame.src = 'about:blank';   // stops the sound, kills "up next"
+      videoCard.classList.add('hidden');
+      game.wake();
+    }
+    $('vc-close').addEventListener('click', closeVideoCard);
+
+    // Drag by the bar, resize by the corner. Pointer capture keeps the moves
+    // coming even when the cursor crosses the iframe, which swallows events.
+    (function vcHandles() {
+      let mode = null, sx = 0, sy = 0, ox = 0, oy = 0, ow = 0;
+      const grab = (m) => (e) => {
+        if (e.button != null && e.button !== 0) return;
+        mode = m; sx = e.clientX; sy = e.clientY;
+        const r = videoCard.getBoundingClientRect();
+        ox = r.left; oy = r.top; ow = r.width;
+        if (e.currentTarget.setPointerCapture) e.currentTarget.setPointerCapture(e.pointerId);
+        e.preventDefault();
+      };
+      $('vc-head').addEventListener('pointerdown', grab('move'));
+      $('vc-grip').addEventListener('pointerdown', grab('size'));
+      window.addEventListener('pointermove', (e) => {
+        if (!mode) return;
+        if (mode === 'move') { vcClamp(ox + (e.clientX - sx), oy + (e.clientY - sy)); return; }
+        videoCard.style.width = Math.max(260, Math.min(ow + (e.clientX - sx), window.innerWidth - 16)) + 'px';
+        vcClamp(parseInt(videoCard.style.left, 10) || ox, parseInt(videoCard.style.top, 10) || oy);
+      });
+      window.addEventListener('pointerup', () => { if (mode) { mode = null; vcRemember(); } });
+      window.addEventListener('resize', () => {
+        if (!videoCard.classList.contains('hidden')) vcClamp(parseInt(videoCard.style.left, 10) || 0, parseInt(videoCard.style.top, 10) || 0);
+      });
+    })();
+
+    // "Watch it here" inside the explain popup: one lookup, then it plays on
+    // the page. No video (no key, nothing embeddable) → the button disappears
+    // and the search links underneath are still there.
+    function watchHereButton(concept, channel) {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'exp-link exp-watch';
+      btn.textContent = '▶  Finding one…';
+      btn.disabled = true;
+      explainLinks.appendChild(btn);
+      const s = state.progress.settings || {};
+      post('/revision/video', {
+        query: (channel ? channel + ' ' : '') + concept,
+        level: s.level || '',
+        subject: s.subject || '',
+      }).then((d) => {
+        const v = d && d.ok && d.video;
+        if (!v || !v.videoId) { btn.remove(); return; }
+        btn.disabled = false;
+        btn.textContent = '▶  ' + (v.title || 'Watch it here');
+        btn.title = v.channel ? 'From ' + v.channel + ' — plays here on the page' : 'Plays here on the page';
+        btn.addEventListener('click', () => { openVideoCard(v); });
+      }).catch(() => { btn.remove(); });
     }
 
     $('btn-explain').addEventListener('click', (e) => {
