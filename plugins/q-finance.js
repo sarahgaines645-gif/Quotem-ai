@@ -529,6 +529,25 @@ const BANK_FINGERPRINTS = [
     { slug: 'tide',        name: 'Tide',             re: /\btide (?:business|platform|bank)\b/i },
     { slug: 'mettle',      name: 'Mettle',           re: /\bmettle\b/i },
     { slug: 'wise',        name: 'Wise',             re: /\bwise (?:account|business|payments)\b|\btransferwise\b/i },
+    // Business and challenger banks. Sarah runs business accounts alongside
+    // her personal ones; a business account that goes unrecognised is money
+    // sitting outside the picture entirely.
+    { slug: 'anna',        name: 'ANNA Money',       re: /\banna money\b|\banna business\b/i },
+    { slug: 'countingup',  name: 'Countingup',       re: /\bcountingup\b/i },
+    { slug: 'cashplus',    name: 'Cashplus',         re: /\bcashplus\b/i },
+    { slug: 'zempler',     name: 'Zempler Bank',     re: /\bzempler\b/i },
+    { slug: 'allica',      name: 'Allica Bank',      re: /\ballica\b/i },
+    { slug: 'oaknorth',    name: 'OakNorth',         re: /\boaknorth\b/i },
+    { slug: 'shawbrook',   name: 'Shawbrook',        re: /\bshawbrook\b/i },
+    { slug: 'aldermore',   name: 'Aldermore',        re: /\baldermore\b/i },
+    { slug: 'unitytrust',  name: 'Unity Trust Bank', re: /\bunity trust\b/i },
+    { slug: 'handelsbank', name: 'Handelsbanken',    re: /\bhandelsbanken\b/i },
+    { slug: 'cynergy',     name: 'Cynergy Bank',     re: /\bcynergy\b/i },
+    { slug: 'triodos',     name: 'Triodos',          re: /\btriodos\b/i },
+    { slug: 'recognise',   name: 'Recognise Bank',   re: /\brecognise bank\b/i },
+    { slug: 'gbbank',      name: 'GB Bank',          re: /\bgb bank\b/i },
+    { slug: 'atom',        name: 'Atom Bank',        re: /\batom bank\b/i },
+    { slug: 'paypal',      name: 'PayPal',           re: /\bpaypal\b/i },
     { slug: 'amex',        name: 'American Express', re: /\bamerican express\b|\bamex\b/i },
     { slug: 'capitalone',  name: 'Capital One',      re: /\bcapital one\b/i },
     { slug: 'vanquis',     name: 'Vanquis',          re: /\bvanquis\b/i },
@@ -653,7 +672,28 @@ function saveAccounts(email, accounts) {
 function upsertAccount(email, acct, source) {
     if (!acct || !acct.id) return null;
     const all = getAccounts(email);
-    const idx = all.findIndex(a => a.id === acct.id);
+    // Match on the id first. Failing that, match an existing record for the
+    // SAME BANK — because the two records are the same account seen with
+    // different amounts of detail: one import knew the last 4, another (a
+    // filename, or an account she added by hand) did not. Creating a second
+    // card would split her money across two halves of one account. The
+    // EXISTING id always wins so the rows already stamped with it stay
+    // attached; the new detail is merged into it.
+    let idx = all.findIndex(a => a.id === acct.id);
+    if (idx === -1) {
+        // Same bank AND same type. Sarah holds personal and business accounts
+        // at the same banks, so a business account must never be merged into
+        // a personal one just because the brand matches — that would hide a
+        // whole account's money inside another.
+        const sameBank = all.filter(a => a.bankSlug === acct.bankSlug
+            && (a.type === acct.type || !a.type || !acct.type));
+        // Only when it is unambiguous: one candidate, and one of the two is
+        // missing its last 4. Two known-different last 4s are two real
+        // accounts and must stay apart.
+        if (sameBank.length === 1 && (!sameBank[0].last4 || !acct.last4)) {
+            idx = all.indexOf(sameBank[0]);
+        }
+    }
     const now = new Date().toISOString();
     if (idx === -1) {
         const entry = { ...acct, sources: source ? [source] : [], firstSeen: now, lastSeen: now };
@@ -671,11 +711,75 @@ function upsertAccount(email, acct, source) {
         type:     acct.type    || cur.type,
         label:    acct.product || !cur.product ? acct.label : cur.label,
         lastSeen: now,
-        sources:  [...new Set([...(cur.sources || []), ...(source ? [source] : [])])].slice(0, 8),
+        sources:  [...new Set([...(cur.sources || []), ...(source ? [source] : [])])].slice(0, 40),
     };
     all[idx] = next;
     saveAccounts(email, all);
     return next;
+}
+
+// ── Balances from a screenshot ────────────────────────────────────────
+// Typing a balance per account is a chore, and a chore is the thing that
+// doesn't get done. A screenshot of the banking app's home screen already
+// shows every account and what's in it — so read that instead.
+const BALANCE_SCREENSHOT_PROMPT = `You are looking at a screenshot from someone's mobile banking app or online banking. Read the ACCOUNTS and their BALANCES.
+
+Return STRICT JSON only, no markdown fences:
+{ "accounts": [ { "bank": "...", "product": "...", "last4": "...", "balance": 0.00 } ] }
+
+Rules:
+- bank: the bank or building society brand shown (e.g. "Monzo", "NatWest", "Lloyds Bank", "Halifax"). If the brand is not visible anywhere on the screen, use null — do NOT infer it from the colours or the style of the app.
+- product: the account's name as printed ("Club Lloyds", "Current Account", "Ultimate Reward", "Everyday Saver") or null.
+- last4: the last four digits of the account number if shown, else null.
+- balance: the CURRENT balance as a plain number. Money the person HAS is positive; an overdrawn or owed balance is NEGATIVE. A credit card balance the person owes is NEGATIVE.
+- Include every account visible on the screen, including savings accounts and pots. One object each.
+- Never guess a figure that is cut off, blurred, or hidden behind a "show balance" toggle — omit that account entirely instead.
+- If you cannot read any account at all, return { "accounts": [] }.`;
+
+/**
+ * Read balances from a screenshot of a banking app.
+ * The vision reader's answer is never trusted on its own: the bank it claims
+ * is put back through the same fingerprints a statement goes through, so a
+ * misread or invented brand cannot create an account that isn't hers.
+ * @returns {{updated: Array, skipped: number}}
+ */
+async function importBalancesFromScreenshot(email, imageBase64, mimeType) {
+    const raw = await visionRead({
+        prompt:    BALANCE_SCREENSHOT_PROMPT,
+        base64:    imageBase64,
+        mimeType:  mimeType || 'image/jpeg',
+        maxTokens: 2048,
+    });
+    if (!raw || !raw.trim()) return { updated: [], skipped: 0, error: 'Could not read that screenshot.' };
+
+    let parsed;
+    try {
+        const m = raw.match(/\{[\s\S]*\}/);
+        parsed = m ? JSON.parse(m[0]) : null;
+    } catch { parsed = null; }
+    const list = Array.isArray(parsed && parsed.accounts) ? parsed.accounts : [];
+    if (!list.length) return { updated: [], skipped: 0, error: 'No account balances were readable on that screenshot.' };
+
+    const updated = [];
+    let skipped = 0;
+    for (const row of list) {
+        const bal = Number(row && row.balance);
+        // A balance we cannot read is not a balance. Skip rather than store 0,
+        // which would silently claim the account is empty.
+        if (!Number.isFinite(bal)) { skipped++; continue; }
+        // Gate the claimed bank through the real fingerprints.
+        const acct = detectAccount(
+            [row.bank, row.product, row.last4 ? `account number ${row.last4}` : ''].filter(Boolean).join('\n'),
+            null,
+        );
+        if (!acct) { skipped++; continue; }
+        const saved = upsertAccount(email, acct, 'screenshot');
+        if (!saved) { skipped++; continue; }
+        const withBal = setAccountBalance(email, saved.id, bal);
+        if (withBal) updated.push(withBal); else skipped++;
+    }
+    console.log(`[finance] balance screenshot — ${updated.length} account(s) updated, ${skipped} skipped`);
+    return { updated, skipped };
 }
 
 // Record the balance the user can see in their banking app. The statements
@@ -1589,7 +1693,11 @@ function getSpendingGraphData(email) {
             transaction_count: txns.length,
             // Which statements the data came from — so "three banks" is
             // visible on the page, not a mystery.
-            sources: [...new Set(txns.map(t => t.source).filter(Boolean))].slice(0, 5),
+            // Every statement that fed this picture. NOT capped at a handful:
+            // Sarah runs personal and business accounts across several banks,
+            // and a truncated list would quietly imply she'd loaded fewer
+            // statements than she had.
+            sources: [...new Set(txns.map(t => t.source).filter(Boolean))],
             // How many rows the app cannot yet attribute to an account. This
             // is the honest counterpart to the account cards: if 1,410 rows
             // have no account, the page says so instead of implying the
@@ -1948,6 +2056,7 @@ module.exports = {
     getAccountsWithTotals,
     upsertAccount,
     setAccountBalance,
+    importBalancesFromScreenshot,
 
     // Subscriptions + income + rhythm
     detectSubscriptions,

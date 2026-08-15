@@ -117,10 +117,19 @@
     .acct-card .ac-figs { display: flex; gap: 14px; }
     .acct-card .ac-fig-l { font-size: 9px; text-transform: uppercase; letter-spacing: 0.07em; color: var(--text-muted); font-weight: 600; }
     .acct-card .ac-fig-v { font-size: 14px; font-weight: 700; color: var(--text); letter-spacing: -0.03em; }
+    .acct-card .ac-fig-v.neg { color: var(--red); }
     .acct-unattributed {
       font-size: 11px; color: var(--text-muted);
       margin: -6px 2px 16px;
     }
+    .accounts-head {
+      display: flex; align-items: center; justify-content: space-between;
+      gap: 12px; flex-wrap: wrap; margin: 0 2px 10px;
+    }
+    .accounts-total { font-size: 13px; color: var(--text-muted); }
+    .accounts-total strong { font-size: 19px; color: var(--text); font-weight: 700; letter-spacing: -0.03em; }
+    .acct-shot { font-size: 12px; padding: 8px 14px; }
+
     /* Balance entry — the one field on the card you TYPE into, so it is the
        one thing that is inset. Everything else here is read, and protrudes. */
     .ac-bal-row { display: flex; gap: 6px; margin: 5px 0 6px; }
@@ -553,6 +562,12 @@
   </div>
 
   <!-- YOUR ACCOUNTS — recognised from the statements themselves -->
+  <div class="accounts-head">
+    <div class="accounts-total" id="accounts-total"></div>
+    <label class="uz-btn acct-shot">📱 Balances from a screenshot
+      <input type="file" accept="image/*" id="acct-shot-input" />
+    </label>
+  </div>
   <div class="accounts-strip" id="accounts-strip"></div>
   <div class="acct-unattributed" id="accounts-unattributed"></div>
 
@@ -856,6 +871,35 @@
     const note  = document.getElementById('accounts-unattributed');
     if (!strip) return;
 
+    // What you HAVE and what you OWE, kept apart.
+    //
+    // ⚠️ Never net these two together into one figure. £1,000 in one account
+    // and £900 of overdraft in another is NOT "£100" — it is a thousand
+    // pounds you can spend and nine hundred you have to clear, and those are
+    // different facts that need different decisions. Netting them tells
+    // someone living between accounts that they have nothing, which is both
+    // wrong and the exact moment they'd close the page.
+    const totalEl = document.getElementById('accounts-total');
+    const known = accounts.filter(a => a.balance != null);
+    if (totalEl) {
+      if (known.length) {
+        const have  = known.filter(a => a.balance > 0).reduce((s, a) => s + a.balance, 0);
+        const owed  = known.filter(a => a.balance < 0).reduce((s, a) => s + Math.abs(a.balance), 0);
+        const nHave = known.filter(a => a.balance > 0).length;
+        const nOwed = known.filter(a => a.balance < 0).length;
+        const missing = accounts.length - known.length;
+        const parts = [];
+        parts.push(`You have <strong>£${fmt(have)}</strong>` + (nHave ? ` across ${nHave} account${nHave === 1 ? '' : 's'}` : ''));
+        if (owed > 0) parts.push(`overdrawn <strong>£${fmt(owed)}</strong> across ${nOwed} account${nOwed === 1 ? '' : 's'}`);
+        if (missing)  parts.push(`${missing} still without a balance`);
+        totalEl.innerHTML = parts.join(' · ');
+      } else {
+        totalEl.textContent = accounts.length
+          ? 'No balances yet — a screenshot of your banking app fills them all in at once.'
+          : '';
+      }
+    }
+
     if (!accounts.length) {
       strip.innerHTML = '';
       note.textContent = transactions.length
@@ -878,9 +922,13 @@
       const moveStr = (netMove >= 0 ? '+' : '−') + '£' + fmt(Math.abs(netMove));
       let balBlock;
       if (a.balance != null) {
+        // An overdrawn account says so in words and shows the amount as a
+        // plain positive figure. "−£912.40" makes a person do the sign in
+        // their head; "Overdrawn £912.40" just tells them.
+        const od = a.balance < 0;
         balBlock = `<div style="margin-top:10px">
-          <div class="ac-fig-l">Balance${a.balanceAt ? ' · ' + esc(ukDate(a.balanceAt)) : ''}</div>
-          <div class="ac-fig-v" style="font-size:18px">£${fmt(a.balance)}</div>
+          <div class="ac-fig-l">${od ? 'Overdrawn' : 'Balance'}${a.balanceAt ? ' · ' + esc(ukDate(a.balanceAt)) : ''}</div>
+          <div class="ac-fig-v${od ? ' neg' : ''}" style="font-size:18px">£${fmt(Math.abs(a.balance))}</div>
           <div class="ac-sub" style="margin-top:6px">
             ${moveStr} moved since ${a.period_from ? esc(ukDate(a.period_from)) : 'the start'} —
             so this account held <strong>£${fmt(a.implied_opening)}</strong> then.
@@ -895,7 +943,7 @@
             <input class="ac-bal-input" id="bal-${esc(a.id)}" type="text" inputmode="decimal" placeholder="£0.00" />
             <button class="ac-bal-save" data-acct="${esc(a.id)}" type="button">Save</button>
           </div>
-          <div class="ac-sub">A statement only shows what moved. One number and the app can tell you what you've got — and check it read the whole statement.</div>
+          <div class="ac-sub">If you're overdrawn, put a minus in front — it'll be shown as money owed, never mixed in with what you have.</div>
         </div>`;
       }
 
@@ -939,6 +987,15 @@
     strip.querySelectorAll('.ac-bal-input').forEach(inp => {
       inp.onkeydown = e => { if (e.key === 'Enter') saveAccountBalance(inp.id.replace(/^bal-/, '')); };
     });
+    const shotInput = document.getElementById('acct-shot-input');
+    if (shotInput && !shotInput.dataset.wired) {
+      shotInput.dataset.wired = '1';
+      shotInput.addEventListener('change', e => {
+        const f = e.target.files && e.target.files[0];
+        e.target.value = '';
+        balancesFromScreenshot(f);
+      });
+    }
     strip.querySelectorAll('.ac-bal-edit').forEach(btn => {
       btn.onclick = () => {
         const a = accounts.find(x => x.id === btn.dataset.acct);
@@ -2137,6 +2194,55 @@
   // ── Utility ───────────────────────────────────────────────────────────────
   function showUploadProgress(id, on) {
     document.getElementById(id).classList.toggle('loading', on);
+  }
+
+  // Re-encode an image to at most 2000px on the long edge before it goes to
+  // the server. A full-resolution phone screenshot is the exact thing that
+  // once blew the JSON limit and made vision look broken; 2000px keeps a
+  // balance figure perfectly legible. HEIC becomes JPEG for free.
+  function imageToB64Downscaled(file, maxEdge = 2000) {
+    return new Promise((resolve) => {
+      const url = URL.createObjectURL(file);
+      const img = new Image();
+      img.onload = () => {
+        const scale = Math.min(1, maxEdge / Math.max(img.width, img.height));
+        const w = Math.round(img.width * scale), h = Math.round(img.height * scale);
+        const c = document.createElement('canvas');
+        c.width = w; c.height = h;
+        c.getContext('2d').drawImage(img, 0, 0, w, h);
+        URL.revokeObjectURL(url);
+        resolve({ b64: c.toDataURL('image/jpeg', 0.9).split(',')[1], mime: 'image/jpeg' });
+      };
+      img.onerror = () => { URL.revokeObjectURL(url); resolve(null); };
+      img.src = url;
+    });
+  }
+
+  // Balances from a screenshot of the banking app — every account on the
+  // screen in one go, however many there are.
+  async function balancesFromScreenshot(file) {
+    if (!file) return;
+    const note = document.getElementById('accounts-unattributed');
+    const prev = note.textContent;
+    note.textContent = 'Reading that screenshot…';
+    let payload = await imageToB64Downscaled(file);
+    if (!payload) payload = await readFileAsB64(file);
+    const r = await apiFetch('/api/finance/accounts/screenshot', {
+      method: 'POST', body: { imageBase64: payload.b64, mimeType: payload.mime },
+    });
+    if (!r.ok) { note.textContent = "Couldn't read that screenshot — try a clearer one."; return; }
+    const out = await r.json();
+    if (out.error) { note.textContent = out.error; return; }
+    const n = (out.updated || []).length;
+    if (!n) {
+      note.textContent = 'No balances were readable on that screenshot. Make sure the bank name and the amount are both visible.';
+      return;
+    }
+    note.textContent = n + (n === 1 ? ' account updated: ' : ' accounts updated: ')
+      + out.updated.map(a => a.bank + ' £' + fmt(a.balance)).join(', ')
+      + (out.skipped ? ` · ${out.skipped} skipped (couldn't read the bank or the figure)` : '');
+    await loadAll();
+    setTimeout(() => { if (note.textContent.startsWith(String(n))) note.textContent = prev; }, 12000);
   }
 
   function readFileAsB64(file) {

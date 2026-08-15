@@ -2286,6 +2286,22 @@ router.post('/api/finance/accounts/:id/balance', requirePerson, express.json({ l
     res.json(updated);
 });
 
+// Balances from a screenshot of a banking app — reads every account visible
+// on the screen in one go, so someone with a dozen accounts doesn't type a
+// dozen numbers.
+router.post('/api/finance/accounts/screenshot', requirePerson, express.json({ limit: '12mb' }), async (req, res) => {
+    const { imageBase64, mimeType } = req.body || {};
+    if (!imageBase64) return res.status(400).json({ error: 'imageBase64 required' });
+    console.log(`[finance] balance screenshot — ${req.person.email} — mimeType:${mimeType}`);
+    try {
+        const result = await qFinance.importBalancesFromScreenshot(req.person.email, imageBase64, mimeType);
+        res.json(result);
+    } catch (e) {
+        console.error('[finance] balance screenshot error', e);
+        res.status(500).json({ error: 'Could not read that screenshot — try a clearer one.' });
+    }
+});
+
 // Import statement text (paste or extracted from PDF)
 router.post('/api/finance/statement', requirePerson, express.json({ limit: '2mb' }), async (req, res) => {
     const { text, filename } = req.body || {};
