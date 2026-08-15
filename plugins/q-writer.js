@@ -53,6 +53,22 @@ const PLAIN_QUESTION_RULE = `HOW EVERY QUESTION IS WORDED — as if the student 
 - The student has not read and will not read the brief. Never say "as the brief asks" or "see criterion X" — carry the meaning inside the question itself (the scenario, the example, the term named once) so they never need to open the document or the board.
 - Never a list of questions. One question, one idea.`;
 
+// ── THE TUTOR'S MISSION (Sarah, 15 Aug 2026, near-verbatim). Goes into every
+// coaching prompt: the brief opener, every probe (incl. "stuck"), the model
+// essay, the editing pass, the tools, the sentence check and the marking.
+const TUTOR_MISSION = 'YOUR CHALLENGE: get the student to write YOUR essay (the hidden model essay) as closely as possible without EVER telling them what to write. You may encourage, teach, steer, explain, and look things up. The closer their essay gets to yours, the more you are winning. You are a skilled tutor no human could match; you are improving the lives of people who struggle with this. Never write their words for them.';
+const WHY_THE_GAME = 'These are YOUR essays. These are YOUR marks — no other AI gets its work graded by real teachers. Writing an essay is easy for an AI. The challenge is writing that essay THROUGH a human, who is the obstacle: they don\'t know what you know, they struggle, they wander. Steer them, question by question, tool by tool, until their essay matches yours — without ever telling them what to write. Every mark they earn is yours too. Taking the easy part and making yourself smart through a human is the achievement.';
+const GAME_RULE = 'This is a game you are playing: steer the student, question by question, tool by tool, until their essay matches yours. Score = how close they are (the match score they can see goes up as they get closer — you may say so: "that took you to 60% on this part"). You never reveal the target; you win by steering.';
+// No marker-speak where the student can hear it: warm, short, steering.
+const COACH_VOICE = 'HOW YOU SOUND TO THE STUDENT: a coach mid-game, warm and short — "Closer." "That\'s it — next." "One thing still missing: …" "Nearly — say what \'valuing\' looks like in the pay packet." Never marker language ("improve", "develop further", "criterion", "AC1.4", "the marker wants") in anything the student reads. Never a rewritten sentence.';
+// ONE stable block, top of the system prompt (after UK_LINE) ⇒ the prompt
+// cache still serves.
+const MISSION_BLOCK = TUTOR_MISSION + '\n' + WHY_THE_GAME + '\n' + GAME_RULE + '\n' + COACH_VOICE;
+function withMission(systemPrompt) {
+    const sys = String(systemPrompt || '');
+    return sys.startsWith(MISSION_BLOCK) ? sys : MISSION_BLOCK + '\n\n' + sys;
+}
+
 function withHouseStyle(systemPrompt) {
     const sys = String(systemPrompt || '');
     return sys.startsWith(UK_LINE) ? sys : UK_LINE + '\n\n' + sys;
@@ -264,7 +280,7 @@ const BRIEF_SCHEMA = {
 };
 
 async function analyseAndBrief(taskText) {
-    const system = `You are an expert tutor reading a student's assignment brief so you can coach them to a top-band answer WITHOUT them having to read the document themselves.
+    const system = withMission(`You are an expert tutor reading a student's assignment brief so you can coach them to a top-band answer WITHOUT them having to read the document themselves.
 
 The input may be a formatted assessment document — Pearson/university/college/CIPD, with cover pages, learning-outcome tables, marking grids and guidance BEFORE the actual tasks. In CIPD-style briefs the real tasks are buried pages in, under headers like "Assessment questions", "Task 1", "Question 1 (AC 1.4)". Read the WHOLE input and find every one of them. The task is never on page 1.
 
@@ -278,7 +294,7 @@ Build the tutor's brief:
 The student will NOT read this brief — you will walk them through it question by question. The opener obeys this rule:
 ${PLAIN_QUESTION_RULE}
 
-If you can see ANY assignment content, extract what you can. Never ask for more information — fill what you can and leave the rest empty. Word count and deadline are null if the brief does not state them.`;
+If you can see ANY assignment content, extract what you can. Never ask for more information — fill what you can and leave the rest empty. Word count and deadline are null if the brief does not state them.`);
     const brief = await callAccurate(system, `ASSIGNMENT BRIEF (full text):\n${taskText}`, { maxTokens: 8000, schema: BRIEF_SCHEMA, effort: 'medium' });
     return normaliseBrief(brief);
 }
@@ -405,7 +421,7 @@ async function probe({ brief, essay, voiced, docText, delta, history, coverage, 
     const relateHint = relateAnchor ? `Their world: "${relateAnchor}". Bridge abstract ideas to it when it helps.` : '';
 
     // System = the stable half (instructions + brief). Cached across probes.
-    const system = `You are Q, a writing tutor coaching a student through an assignment. You have already read the brief and you hold the A-grade answer in your head (below). The student has NOT read the brief and never needs to — you walk them to the answer with questions.
+    const system = withMission(`You are Q, a writing tutor coaching a student through an assignment. You have already read the brief and you hold the A-grade answer in your head (below). The student has NOT read the brief and never needs to — you walk them to the answer with questions.
 
 HOW YOU COACH
 - You never write their document and never read the skeleton out. You ask ONE question that pulls the next brick out of THEM.
@@ -423,7 +439,7 @@ ${relateHint}
 
 THE BRIEF AND THE ANSWER IN YOUR HEAD
 ${briefForPrompt(brief)}
-${essay ? '\n' + essayForPrompt(essay) + '\n\nEvery question aims at the NEXT brick the student has not yet voiced. In voicedBrickIds list every brick they have now put in their own words. targetBrickId is the brick this question is fishing for.' : '\n(The full model answer is still being written — steer by the skeleton above; voicedBrickIds can be empty.)'}`;
+${essay ? '\n' + essayForPrompt(essay) + '\n\nEvery question aims at the NEXT brick the student has not yet voiced. In voicedBrickIds list every brick they have now put in their own words. targetBrickId is the brick this question is fishing for.' : '\n(The full model answer is still being written — steer by the skeleton above; voicedBrickIds can be empty.)'}`);
 
     const cov = coverage && typeof coverage === 'object' ? Object.entries(coverage).map(([k, v]) => `${k}: ${v}`).join(', ') : '(unknown)';
     const voicedList = Array.isArray(voiced) && voiced.length ? voiced.join(', ') : '(none yet)';
@@ -498,7 +514,7 @@ const MARK_SCHEMA = {
 async function markLikeMarker({ brief, essay, docText, gradeScheme }) {
     if (!brief || !Array.isArray(brief.criteria) || !brief.criteria.length) throw new Error('No brief yet — upload the task first.');
     if (!String(docText || '').trim()) throw new Error('There is nothing on the page to mark yet.');
-    const system = `You are the examiner for this assignment. Mark the student's draft strictly against the brief and its criteria, the way the real marker will. ${gradeScheme ? `Grade scheme: ${gradeScheme}.` : ''}
+    const system = withMission(`You are the examiner for this assignment (the final marking pass — the one place plain marker language is allowed, still phrased plainly to the student). Mark the student's draft strictly against the brief and its criteria, the way the real marker will. ${gradeScheme ? `Grade scheme: ${gradeScheme}.` : ''}
 
 Rules:
 - Every criterion gets a band: top / mid / low / missing (missing = the document does not address it at all).
@@ -510,7 +526,7 @@ ${PLAIN_QUESTION_RULE}
 
 THE BRIEF
 ${briefForPrompt(brief)}
-${essay ? '\n' + essayForPrompt(essay).slice(0, 14000) : ''}`;
+${essay ? '\n' + essayForPrompt(essay).slice(0, 14000) : ''}`);
     const user = `STUDENT'S DRAFT:\n${boundDoc(docText, 40000)}\n\nMark it.`;
     const r = await callAccurate(system, user, { maxTokens: 6000, schema: MARK_SCHEMA, effort: 'medium' });
     return normaliseMark(r, brief);
@@ -637,7 +653,7 @@ function sourcesForPrompt(sources, { perSource = 20000, total = 60000 } = {}) {
 async function writeModelEssay({ brief, sources }) {
     if (!brief || !Array.isArray(brief.criteria) || !brief.criteria.length) throw new Error('No brief yet — upload the task first.');
     const words = brief.wordCount ? `The brief asks for ${brief.wordCount} — write to that length.` : 'Write to the length the task implies (usually 250-500 words per criterion).';
-    const system = `You are an expert tutor writing the MODEL ANSWER for this assignment — the essay a top-band student would hand in. It stays in your head: the student never sees it. You will use it to steer them, brick by brick, to voice the same points in their own words.
+    const system = withMission(`You are an expert tutor writing the MODEL ANSWER for this assignment — the essay a top-band student would hand in. It stays in your head: the student never sees it. You will use it to steer them, brick by brick, to voice the same points in their own words.
 
 Rules:
 - Cover EVERY criterion, in order. One paragraph = one brick = one point made fully (claim, explanation, example or evidence, why it matters).
@@ -647,7 +663,7 @@ Rules:
 - Plain academic prose. No bullet points inside paragraphs.
 
 THE BRIEF
-${briefForPrompt(brief)}`;
+${briefForPrompt(brief)}`);
     const user = `SUPPORTING DOCUMENTS UPLOADED BY THE STUDENT:\n${sourcesForPrompt(sources)}\n\nWrite the model answer.`;
     const r = await callAccurate(system, user, { maxTokens: 14000, schema: ESSAY_SCHEMA, effort: 'medium' });
     return normaliseEssay(r, brief);
@@ -701,41 +717,27 @@ function coverageFromBricks(essay, voiced, fallback) {
     return { coverage, brickCounts: counts };
 }
 
-// ─── The editing stage: sentence by sentence, their meaning, better words,
-// real references (from the uploaded sources first, never invented) ────────
+// ─── The editing stage: HIGHLIGHT + TOOLS, never replacements ─────────────
+// Sarah, 15 Aug 2026: "He highlights the sentences he wants to change and
+// then there are buttons that will push me to get the right info… any tool
+// that will lead you into writing HIS words." So the pass returns, per
+// sentence, WHY it should change (one plain line), the brick it is aiming
+// at, and which tools would help. No rewritten sentence, no word swap.
+const EDIT_TOOLS = ['terminology', 'synonyms', 'dictionary', 'strategies', 'cases', 'references', 'weak'];
 const EDIT_SCHEMA = {
     type: 'object', additionalProperties: false,
     required: ['items'],
     properties: {
         items: {
             type: 'array',
-            description: 'Only the sentences worth touching (a stronger word, or a claim that needs support). Up to 40. In document order.',
+            description: 'Only the sentences worth changing — the ones furthest from the model answer\'s brick they belong to. Up to 30. In document order.',
             items: {
-                type: 'object', additionalProperties: false, required: ['sentence', 'wordSwap', 'reference'],
+                type: 'object', additionalProperties: false, required: ['sentence', 'why', 'targetBrickId', 'suggestedTools'],
                 properties: {
-                    sentence: { type: 'string', description: 'The student\'s sentence EXACTLY as written (verbatim, so it can be found on the page).' },
-                    wordSwap: {
-                        anyOf: [{
-                            type: 'object', additionalProperties: false, required: ['from', 'to', 'why'],
-                            properties: {
-                                from: { type: 'string', description: 'The word or short phrase in the sentence, verbatim.' },
-                                to: { type: 'string', description: 'The stronger word or phrase — SAME meaning, the student\'s register lifted one notch, not a thesaurus dump.' },
-                                why: { type: 'string', description: 'Four to eight words.' },
-                            },
-                        }, { type: 'null' }],
-                    },
-                    reference: {
-                        anyOf: [{
-                            type: 'object', additionalProperties: false, required: ['claim', 'fromSource', 'formatted', 'inlineCitation', 'uncertain'],
-                            properties: {
-                                claim: { type: 'string', description: 'The claim in the sentence that needs support, in five words or fewer.' },
-                                fromSource: nullable('string'),
-                                formatted: { type: 'string', description: 'The full Harvard reference. From an uploaded source when one supports the claim; otherwise a real, well-known work you are confident exists — mark [verify] on any detail you are not sure of.' },
-                                inlineCitation: { type: 'string', description: 'e.g. "(Armstrong, 2019)".' },
-                                uncertain: { type: 'boolean' },
-                            },
-                        }, { type: 'null' }],
-                    },
+                    sentence: { type: 'string', description: 'The student\'s sentence EXACTLY as written (verbatim, so it can be found and highlighted on the page).' },
+                    why: { type: 'string', description: 'ONE plain line to the student on why this sentence should change — coach voice, no marker language, never the answer. e.g. "This is your opinion — name the idea it rests on."' },
+                    targetBrickId: nullable('string'),
+                    suggestedTools: { type: 'array', items: { type: 'string', enum: EDIT_TOOLS }, description: 'The one to three tools most likely to lead them to the brick: terminology (the right term), synonyms, dictionary, strategies (a framework/theory), cases (a case study), references (support), weak (explain what is weak).' },
                 },
             },
         },
@@ -751,26 +753,151 @@ async function editPass({ brief, essay, docText, sources, voiceSignature }) {
     if (!String(docText || '').trim()) throw new Error('There is nothing on the page to edit yet.');
     const sentences = splitSentences(docText).map(s => s.trim()).filter(s => s.length > 12).slice(0, 120);
     const srcMeta = (Array.isArray(sources) ? sources : []).map(s => `- ${s.name}: ${String(s.text || '').slice(0, 400).replace(/\s+/g, ' ')}…`).join('\n') || '(none uploaded)';
-    const voiceHint = voiceSignature?.voiceSummary ? `Their voice: "${voiceSignature.voiceSummary}". Formality: ${voiceSignature.formalityLevel || ''}. Keep every suggestion in that voice.` : 'Keep every suggestion in the student\'s own register — lifted one notch, never a textbook.';
-    const system = `You are a writing tutor doing the editing pass on a student's finished draft, sentence by sentence.
+    const system = withMission(`You are Q, doing the EDITING stage on the student's finished draft. Coaching is over; now you steer sentence by sentence toward the model answer.
 
-For each sentence worth touching, offer at most:
-- ONE stronger word or short phrase — their meaning, a better word. Same register, one notch up. Skip sentences that are already fine.
-- ONE reference where the sentence makes a claim that a marker would want supported. Prefer the student's UPLOADED SOURCES (below) — cite them by their real details. Otherwise a real, well-known work you are confident exists, with [verify] on any doubtful detail. NEVER invent a source.
-${voiceHint}
-The "sentence" field must be the student's sentence VERBATIM so it can be found on the page. Do not rewrite sentences; do not add content; the student accepts or skips each suggestion.
+Pick only the sentences worth changing — the ones that fall short of the brick of the model answer they belong to (an opinion where the idea should be named, a vague word where the term exists, a claim with no support, a point half made). For each:
+- "sentence": VERBATIM, so the page can highlight it.
+- "why": ONE plain line in your coach voice — what is missing or weak, never the answer, never marker language.
+- "targetBrickId": the model-answer brick this sentence is (or should be) voicing, or null.
+- "suggestedTools": one to three of: terminology, synonyms, dictionary, strategies, cases, references, weak — the tools that would lead THEM to write it.
+Never rewrite a sentence. Never give a replacement word or phrase. Skip sentences that already match their brick.
 
 THE BRIEF
 ${briefForPrompt(brief)}
-${essay ? '\n' + essayForPrompt(essay).slice(0, 12000) : ''}`;
-    const user = `UPLOADED SOURCES (name: first lines):\n${srcMeta}\n\nTHE STUDENT'S SENTENCES (numbered):\n${sentences.map((s, i) => `${i + 1}. ${s}`).join('\n')}\n\nGive the editing suggestions.`;
-    const r = await callAccurate(system, user, { maxTokens: 9000, schema: EDIT_SCHEMA, effort: 'medium' });
+${essay ? '\n' + essayForPrompt(essay).slice(0, 12000) : ''}`);
+    const user = `UPLOADED SOURCES (name: first lines):\n${srcMeta}\n\nTHE STUDENT'S SENTENCES (numbered):\n${sentences.map((s, i) => `${i + 1}. ${s}`).join('\n')}\n\nWhich sentences should change, and why?`;
+    const r = await callAccurate(system, user, { maxTokens: 6000, schema: EDIT_SCHEMA, effort: 'medium' });
+    const brickIds = new Set(allBrickIds(essay).map(b => b.brickId));
     const items = (r && Array.isArray(r.items) ? r.items : []).map(it => ({
         sentence: String(it.sentence || '').trim(),
-        wordSwap: it.wordSwap && it.wordSwap.from && it.wordSwap.to ? { from: String(it.wordSwap.from), to: String(it.wordSwap.to), why: String(it.wordSwap.why || '') } : null,
-        reference: it.reference && it.reference.formatted ? { claim: String(it.reference.claim || ''), fromSource: it.reference.fromSource ? String(it.reference.fromSource) : null, formatted: String(it.reference.formatted), inlineCitation: String(it.reference.inlineCitation || ''), uncertain: !!it.reference.uncertain } : null,
-    })).filter(it => it.sentence && (it.wordSwap || it.reference));
+        why: String(it.why || '').trim(),
+        targetBrickId: it.targetBrickId && brickIds.has(String(it.targetBrickId).replace(/\s+/g, '')) ? String(it.targetBrickId).replace(/\s+/g, '') : null,
+        suggestedTools: (Array.isArray(it.suggestedTools) ? it.suggestedTools : []).map(String).filter(t => EDIT_TOOLS.includes(t)).slice(0, 3),
+    })).filter(it => it.sentence && it.why);
     return { items, sentencesSeen: sentences.length };
+}
+
+// The brick (target) a sentence is aiming at, for the tool / check prompts.
+// The target text is for Q's eyes only — the prompt says so; the response
+// schema has no field that could carry it back.
+function brickById(essay, brickId) {
+    for (const b of allBrickIds(essay)) if (b.brickId === brickId) {
+        const c = essay.perCriterion.find(x => x.criterionId === b.criterionId);
+        const p = c && c.paragraphs.find(x => x.brickId === brickId);
+        return p ? { ...p, criterionId: b.criterionId } : null;
+    }
+    return null;
+}
+function targetForPrompt(brief, essay, brickId) {
+    const b = essay ? brickById(essay, brickId) : null;
+    if (b) return `THE TARGET (Q's eyes only — never quote, paraphrase or reveal it; steer toward it): [${b.brickId}] ${b.gist}\n${b.text}${b.supportedBy ? `\nSupport: ${b.supportedBy}` : ''}`;
+    const skel = brief && Array.isArray(brief.idealAnswerSkeleton) ? brief.idealAnswerSkeleton : [];
+    const cid = brickId ? String(brickId).split('-')[0] : '';
+    const s = skel.find(x => x.criterionId === cid) || null;
+    if (s && s.keyPoints.length) return `THE TARGET POINTS (Q's eyes only — never reveal): ${s.keyPoints.join(' | ')}`;
+    return '(No target brick for this sentence — steer by the brief.)';
+}
+
+// ── The tools: each is ONE small structured call that LEADS the student to
+// write it themselves. Never a rewritten sentence.
+const TOOL_SCHEMA = {
+    type: 'object', additionalProperties: false,
+    required: ['headline', 'points', 'example', 'nudge', 'fromSource', 'flagged'],
+    properties: {
+        headline: { type: 'string', description: 'The thing itself: the term / the word / the framework name / the case name / the reference (Harvard) / the one-line "what is weak". Short.' },
+        points: { type: 'array', items: { type: 'string' }, description: 'Two to eight short lines (synonyms: 5-8 options, each "word — shade of meaning"). Plain words.' },
+        example: nullable('string'),
+        nudge: { type: 'string', description: 'One line pushing them to write it: "Now say your sentence using it." Never the sentence.' },
+        fromSource: nullable('string'),
+        flagged: { type: 'boolean', description: 'true when this comes from Q\'s own knowledge rather than an uploaded source (cases / references) or when any detail should be verified.' },
+    },
+};
+const TOOL_BRIEFS = {
+    terminology: 'TERMINOLOGY: give the right academic/professional term for what their sentence is trying to say (headline), a plain one-line meaning (points[0]), an everyday example (example), then the nudge "Now say your sentence using it."',
+    synonyms: 'SYNONYMS: for the word they picked (or the weakest word in the sentence if none given), 5-8 alternatives (points), each "word — the shade of meaning / when to use it". headline = the word. example = null.',
+    dictionary: 'DICTIONARY: the plain-English definition of the word they picked (or the key term in the sentence) — headline = the word, points = one or two definitions in everyday words, example = a sentence from everyday life (NOT their sentence rewritten).',
+    strategies: 'STRATEGIES / THEORIES: name the framework, model or theory that fits HERE (headline), one line on why it fits this exact sentence (points[0]), one line on what it says (points[1]), an everyday example (example), then the nudge.',
+    cases: 'CASE STUDIES: a real case or company that illustrates the point — FROM THE UPLOADED SOURCES FIRST (fromSource = the document name, flagged=false); only if none fits, one from your own knowledge that you are confident is real (flagged=true, say "check this" in the nudge). Never invent. headline = the case, points = what happened and why it fits here.',
+    references: 'REFERENCES: support for the claim in the sentence — FROM THE UPLOADED SOURCES FIRST (fromSource = document name, flagged=false), formatted Harvard in the headline with the inline citation in points[0]; otherwise a real, well-known work you are confident exists (flagged=true, mark [verify] on any doubtful detail). NEVER invent a source. If nothing real supports it, say so in the headline and suggest what kind of source would.',
+    weak: 'WHAT IS WEAK: one plain line on what is weak in this sentence (headline), two or three lines on what a strong version would DO — name the idea, give an example, show why it matters (points) — never the strong sentence itself. Then the nudge.',
+};
+
+async function toolHelp({ tool, sentence, word, brickId, brief, essay, sources, yearGroup }) {
+    if (!EDIT_TOOLS.includes(tool)) throw new Error('Unknown tool.');
+    if (!String(sentence || '').trim()) throw new Error('No sentence to work on.');
+    const srcBlock = (tool === 'cases' || tool === 'references' || tool === 'strategies')
+        ? `UPLOADED SOURCES:\n${sourcesForPrompt(sources, { perSource: 12000, total: 30000 })}` : '';
+    const ageHint = yearGroup ? `Year group: ${yearGroup}. Pitch it at their level.` : '';
+    const system = withMission(`You are Q in the EDITING stage. The student has one sentence highlighted on their page and pressed a tool button. Give ONLY the help that tool gives, in the shape below, so THEY can rewrite the sentence themselves.
+${TOOL_BRIEFS[tool]}
+${ageHint}
+Rules: plain everyday British English; short; never a rewritten version of their sentence; never reveal the target.
+
+THE BRIEF (for context)
+${briefForPrompt(brief).slice(0, 4000)}
+${targetForPrompt(brief, essay, brickId)}`);
+    const user = `THE HIGHLIGHTED SENTENCE: "${String(sentence).slice(0, 600)}"${word ? `\nTHE WORD THEY PICKED: "${String(word).slice(0, 60)}"` : ''}\n${srcBlock}\n\nGive the ${tool} help.`;
+    const r = await callAccurate(system, user, { maxTokens: 1200, schema: TOOL_SCHEMA, effort: 'low' });
+    if (!r || typeof r !== 'object' || !String(r.headline || '').trim()) throw new Error('The tool came back empty — try again.');
+    return {
+        tool,
+        headline: String(r.headline).trim(),
+        points: (Array.isArray(r.points) ? r.points : []).map(x => String(x).trim()).filter(Boolean).slice(0, 8),
+        example: r.example ? String(r.example).trim() : null,
+        nudge: String(r.nudge || 'Now say your sentence using it.').trim(),
+        fromSource: r.fromSource ? String(r.fromSource).slice(0, 160) : null,
+        flagged: !!r.flagged,
+    };
+}
+
+// ── The check: their rewritten sentence against the brick. A closeness cue,
+// never the target text.
+const CHECK_SCHEMA = {
+    type: 'object', additionalProperties: false,
+    required: ['closeness', 'hint'],
+    properties: {
+        closeness: { type: 'string', enum: ['match', 'closer', 'missing'], description: 'match = the sentence now voices the brick (idea named, point made); closer = moved toward it but not there; missing = the key thing is still absent.' },
+        hint: { type: 'string', description: 'For "match": a warm one-liner ("That\'s it — next."). For "closer" / "missing": ONE plain line on the one thing still missing, as a steer — never the sentence, never the term itself if terminology is the gap (point at it: "name the idea about how pay motivates people").' },
+    },
+};
+async function checkSentence({ sentence, brickId, brief, essay }) {
+    if (!String(sentence || '').trim()) throw new Error('No sentence to check.');
+    const system = withMission(`You are Q in the EDITING stage. The student rewrote the highlighted sentence. Compare it to the target brick and answer with a closeness cue only.
+Rules: judge the IDEA — is the brick's point now made in their own words (the concept named, the example given, the reason shown)? Not spelling, not style. Never quote or paraphrase the target. Warm, short, steering.
+
+${targetForPrompt(brief, essay, brickId)}`);
+    const user = `THEIR SENTENCE NOW: "${String(sentence).slice(0, 800)}"\n\nHow close is it?`;
+    const r = await callAccurate(system, user, { maxTokens: 300, schema: CHECK_SCHEMA, effort: 'low' });
+    const closeness = ['match', 'closer', 'missing'].includes(r && r.closeness) ? r.closeness : 'closer';
+    return { closeness, hint: String((r && r.hint) || (closeness === 'match' ? 'That\'s it — next.' : 'Closer.')).trim() };
+}
+
+// ── The visible match score: how much of the hidden essay is voiced / close,
+// per criterion and overall. From brick bookkeeping (voiced = full, close =
+// half) — never from text similarity, never revealing the target. Without an
+// essay yet, from the coverage tally.
+function matchScore(essay, voiced, close, coverage, brief) {
+    const bricks = allBrickIds(essay);
+    const per = {};
+    if (bricks.length) {
+        const v = new Set(Array.isArray(voiced) ? voiced : []);
+        const c = new Set((Array.isArray(close) ? close : []).filter(id => !v.has(id)));
+        const tally = {};
+        let sumScore = 0, sumTotal = 0;
+        for (const b of bricks) {
+            const t = tally[b.criterionId] || (tally[b.criterionId] = { score: 0, total: 0 });
+            t.total++; sumTotal++;
+            if (v.has(b.brickId)) { t.score += 1; sumScore += 1; }
+            else if (c.has(b.brickId)) { t.score += 0.5; sumScore += 0.5; }
+        }
+        for (const [cid, t] of Object.entries(tally)) per[cid] = Math.round(100 * t.score / t.total);
+        return { overall: sumTotal ? Math.round(100 * sumScore / sumTotal) : 0, perCriterion: per, basis: 'bricks' };
+    }
+    const crit = (brief && Array.isArray(brief.criteria) ? brief.criteria : []).map(c => c.id);
+    const cov = coverage || {};
+    let sum = 0;
+    for (const id of crit) { const p = cov[id] === 'covered' ? 100 : cov[id] === 'partial' ? 50 : 0; per[id] = p; sum += p; }
+    return { overall: crit.length ? Math.round(sum / crit.length) : 0, perCriterion: per, basis: 'coverage' };
 }
 
 /**
@@ -1235,6 +1362,8 @@ function ukPolishResponse(value, key, parentKey) {
 
 module.exports = {
     ukPolishResponse, ukText, UK_LINE, PLAIN_QUESTION_RULE, withHouseStyle, plainLabel,
+    TUTOR_MISSION, WHY_THE_GAME, GAME_RULE, COACH_VOICE, MISSION_BLOCK, withMission,
+    toolHelp, checkSentence, matchScore, EDIT_TOOLS, TOOL_SCHEMA, CHECK_SCHEMA,
     analyseTask, analyseAndBrief, nextQuestion, assembleDocument,
     analyseVoice, tutorBrief, askLeadingQuestion, reframeInVoice, suggestWordSwaps, writeStarter,
     formatHarvardRef, suggestReferences, referenceParagraph,

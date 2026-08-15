@@ -1031,13 +1031,24 @@ router.post('/doc-editor/close', requirePerson, (req, res) => {
 });
 
 const qWriter = require('./plugins/q-writer');
+// Every user-facing string Q writes leaves the writer routes in UK English
+// (Sarah, 15 Aug 2026 — "paycheck", "vacation" on a UK CIPD essay). The
+// wrapper polishes ONLY Q's own strings (question, hint, explanations,
+// criteria text/labels, marking evidence, tool help…) — never the student's
+// words / docText / references / ids / urls. See ukPolishResponse.
+function ukJson(res, obj) { return res.json(qWriter.ukPolishResponse(obj)); }
+// The visible match score for a notebook: how much of the hidden essay is
+// voiced (full) / close (half), per criterion + overall.
+function matchFor(t) {
+    return qWriter.matchScore(t.modelEssay || null, Array.isArray(t.voicedBricks) ? t.voicedBricks : [], Array.isArray(t.closeBricks) ? t.closeBricks : [], t.coverage || {}, t.brief || null);
+}
 
 router.post('/writer/analyse', requirePerson, express.json({ limit: '512kb' }), async (req, res) => {
     try {
         const taskText = (req.body?.taskText || '').toString().trim();
         if (!taskText) return res.status(400).json({ error: 'taskText required' });
         const analysis = await qWriter.analyseTask(taskText);
-        res.json({ ok: true, analysis });
+        ukJson(res, { ok: true, analysis });
     } catch (e) {
         writerFail(res, e, '[writer/analyse]', 'task read');
     }
@@ -1049,7 +1060,7 @@ router.post('/writer/next-question', requirePerson, express.json({ limit: '512kb
         const history = Array.isArray(req.body?.history) ? req.body.history : [];
         if (!analysis) return res.status(400).json({ error: 'analysis required' });
         const next = await qWriter.nextQuestion(analysis, history);
-        res.json({ ok: true, ...next });
+        ukJson(res, { ok: true, ...next });
     } catch (e) {
         writerFail(res, e, '[writer/next-question]', 'next question');
     }
@@ -1138,8 +1149,8 @@ function startEssayJob(personId) {
         const ids = new Set(qWriter.allBrickIds(essay).map(b => b.brickId));
         const voiced = (Array.isArray(t2.voicedBricks) ? t2.voicedBricks : []).filter(id => ids.has(id));
         const { coverage, brickCounts } = qWriter.coverageFromBricks(essay, voiced, t2.coverage || {});
-        writeTutor(personId, { modelEssay: essay, voicedBricks: voiced, coverage, brickCounts });
-        return { essayReady: true, brickCounts, coverage, bricks: ids.size, notes: essay.notes };
+        const t3 = writeTutor(personId, { modelEssay: essay, voicedBricks: voiced, coverage, brickCounts });
+        return { essayReady: true, brickCounts, coverage, bricks: ids.size, notes: essay.notes, match: matchFor(t3) };
     });
 }
 function writerJobKey(personId, kind) { return `${personId}:${kind}`; }
@@ -1181,15 +1192,15 @@ router.get('/writer/job/:kind', requirePerson, (req, res) => {
     if (job) {
         const view = jobView(job);
         if (kind === 'brief' && view.result) view.result = publicBrief(view.result);
-        return res.json({ ok: true, ...view });
+        return ukJson(res, { ok: true, ...view });
     }
     const t = readTutor(req.person.id);
     const saved = kind === 'brief' ? (t.brief ? publicBrief(t.brief) : null)
         : kind === 'mark' ? (t.lastMark || null)
-        : kind === 'essay' ? (t.modelEssay ? { essayReady: true, brickCounts: t.brickCounts || {}, coverage: t.coverage || {}, bricks: qWriter.allBrickIds(t.modelEssay).length, notes: t.modelEssay.notes } : null)
+        : kind === 'essay' ? (t.modelEssay ? { essayReady: true, brickCounts: t.brickCounts || {}, coverage: t.coverage || {}, bricks: qWriter.allBrickIds(t.modelEssay).length, notes: t.modelEssay.notes, match: matchFor(t) } : null)
         : kind === 'edit' ? (t.lastEdit || null)
         : (t.lastAssembly || null);
-    if (saved) return res.json({ ok: true, kind, status: 'done', fromNotebook: true, result: saved, error: null });
+    if (saved) return ukJson(res, { ok: true, kind, status: 'done', fromNotebook: true, result: saved, error: null });
     return res.json({ ok: true, kind, status: 'none', result: null, error: null });
 });
 
@@ -1209,9 +1220,9 @@ router.post('/writer/assemble', requirePerson, express.json({ limit: '2mb' }), w
     });
     if (req.body?.sync) {
         while (job.status === 'running') await new Promise(r => setTimeout(r, 250));
-        return res.status(job.status === 'done' ? 200 : (job.error?.status || 502)).json({ ok: job.status === 'done', ...jobView(job) });
+        return res.status(job.status === 'done' ? 200 : (job.error?.status || 502)).json(qWriter.ukPolishResponse({ ok: job.status === 'done', ...jobView(job) }));
     }
-    res.json({ ok: true, ...jobView(job) });
+    ukJson(res, { ok: true, ...jobView(job) });
 });
 
 // POST /writer/mark — mark like the marker: per-criterion band + what the top
@@ -1232,9 +1243,9 @@ router.post('/writer/mark', requirePerson, express.json({ limit: '2mb' }), write
     });
     if (req.body?.sync) {
         while (job.status === 'running') await new Promise(r => setTimeout(r, 250));
-        return res.status(job.status === 'done' ? 200 : (job.error?.status || 502)).json({ ok: job.status === 'done', ...jobView(job) });
+        return res.status(job.status === 'done' ? 200 : (job.error?.status || 502)).json(qWriter.ukPolishResponse({ ok: job.status === 'done', ...jobView(job) }));
     }
-    res.json({ ok: true, ...jobView(job) });
+    ukJson(res, { ok: true, ...jobView(job) });
 });
 
 // POST /writer/probe — ONE probing question toward the ideal answer, from the
@@ -1269,8 +1280,8 @@ router.post('/writer/probe', requirePerson, express.json({ limit: '1mb' }), writ
         if (r.criterionId && !coverage[r.criterionId]) coverage[r.criterionId] = 'partial';
         let brickCounts = t.brickCounts || {};
         if (t.modelEssay) ({ coverage, brickCounts } = qWriter.coverageFromBricks(t.modelEssay, voiced, coverage));
-        writeTutor(req.person.id, { coverage, brickCounts, voicedBricks: voiced, currentQuestion: r.question, currentCriterionId: r.criterionId, lastQuestion: r.question, currentSection: r.criterionId });
-        res.json({ ok: true, ...r, coverage, brickCounts, essayReady: !!t.modelEssay });
+        const t2 = writeTutor(req.person.id, { coverage, brickCounts, voicedBricks: voiced, currentQuestion: r.question, currentCriterionId: r.criterionId, lastQuestion: r.question, currentSection: r.criterionId });
+        ukJson(res, { ok: true, ...r, coverage, brickCounts, essayReady: !!t.modelEssay, match: matchFor(t2) });
     } catch (e) {
         const cause = qWriter.userFacingCause(e, 'coaching turn');
         console.error('[writer/probe]', e.message, e.primaryCause ? '(first: ' + e.primaryCause + ')' : '');
@@ -1316,9 +1327,9 @@ router.post('/writer/essay', requirePerson, express.json({ limit: '16kb' }), asy
     const job = startEssayJob(req.person.id);
     if (req.body?.sync) {
         while (job.status === 'running') await new Promise(r => setTimeout(r, 250));
-        return res.status(job.status === 'done' ? 200 : (job.error?.status || 502)).json({ ok: job.status === 'done', ...jobView(job) });
+        return res.status(job.status === 'done' ? 200 : (job.error?.status || 502)).json(qWriter.ukPolishResponse({ ok: job.status === 'done', ...jobView(job) }));
     }
-    res.json({ ok: true, ...jobView(job) });
+    ukJson(res, { ok: true, ...jobView(job) });
 });
 
 // POST /writer/edit-pass — the editing stage: per sentence, a stronger word
@@ -1337,9 +1348,55 @@ router.post('/writer/edit-pass', requirePerson, express.json({ limit: '2mb' }), 
     });
     if (req.body?.sync) {
         while (job.status === 'running') await new Promise(r => setTimeout(r, 250));
-        return res.status(job.status === 'done' ? 200 : (job.error?.status || 502)).json({ ok: job.status === 'done', ...jobView(job) });
+        return res.status(job.status === 'done' ? 200 : (job.error?.status || 502)).json(qWriter.ukPolishResponse({ ok: job.status === 'done', ...jobView(job) }));
     }
-    res.json({ ok: true, ...jobView(job) });
+    ukJson(res, { ok: true, ...jobView(job) });
+});
+
+// POST /writer/tool — an edit-stage tool button: terminology / synonyms /
+// dictionary / strategies / cases / references / weak. One small structured
+// call that LEADS the student to write it themselves. Body: { tool, sentence,
+// word?, brickId? }. Never a rewritten sentence.
+router.post('/writer/tool', requirePerson, express.json({ limit: '32kb' }), async (req, res) => {
+    const t = readTutor(req.person.id);
+    if (!t.brief) return res.status(400).json({ error: 'No brief yet — upload the task first so I know what the marker wants.', code: 'no_brief' });
+    const b = req.body || {};
+    try {
+        const help = await qWriter.toolHelp({
+            tool: String(b.tool || ''), sentence: String(b.sentence || ''), word: b.word ? String(b.word) : '',
+            brickId: b.brickId ? String(b.brickId) : null,
+            brief: t.brief, essay: t.modelEssay || null, sources: t.sources || [], yearGroup: b.yearGroup || t.yearGroup || '',
+        });
+        ukJson(res, { ok: true, ...help });
+    } catch (e) {
+        writerFail(res, e, '[writer/tool]', 'tool');
+    }
+});
+
+// POST /writer/check-sentence — the student rewrote the highlighted sentence;
+// Q compares it to the brick and answers with a closeness cue (never the
+// target). match ⇒ the brick counts as voiced; closer ⇒ half credit. The
+// visible match score follows. Body: { sentence, brickId? }.
+router.post('/writer/check-sentence', requirePerson, express.json({ limit: '32kb' }), async (req, res) => {
+    const t = readTutor(req.person.id);
+    if (!t.brief) return res.status(400).json({ error: 'No brief yet — upload the task first so I know what the marker wants.', code: 'no_brief' });
+    const b = req.body || {};
+    try {
+        const brickId = b.brickId ? String(b.brickId).replace(/\s+/g, '') : null;
+        const r = await qWriter.checkSentence({ sentence: String(b.sentence || ''), brickId, brief: t.brief, essay: t.modelEssay || null });
+        const voiced = new Set(Array.isArray(t.voicedBricks) ? t.voicedBricks : []);
+        const close = new Set(Array.isArray(t.closeBricks) ? t.closeBricks : []);
+        if (brickId) {
+            if (r.closeness === 'match') { voiced.add(brickId); close.delete(brickId); }
+            else if (r.closeness === 'closer') close.add(brickId);
+        }
+        let coverage = { ...(t.coverage || {}) }, brickCounts = t.brickCounts || {};
+        if (t.modelEssay) ({ coverage, brickCounts } = qWriter.coverageFromBricks(t.modelEssay, Array.from(voiced), coverage));
+        const t2 = writeTutor(req.person.id, { voicedBricks: Array.from(voiced), closeBricks: Array.from(close), coverage, brickCounts });
+        ukJson(res, { ok: true, ...r, brickId, coverage, brickCounts, match: matchFor(t2) });
+    } catch (e) {
+        writerFail(res, e, '[writer/check-sentence]', 'sentence check');
+    }
 });
 
 // POST /writer/download — the student's text as a .docx they can hand in.
@@ -1721,9 +1778,11 @@ router.get('/writer/tutor', requirePerson, async (req, res) => {
         delete out.modelEssay;                       // the answer in Q's head stays in Q's head
         out.essayReady = !!t.modelEssay;
         out.sources = sourcesMeta(t.sources);
+        out.match = matchFor(t);
+        delete out.closeBricks;
         const job = writerJobs.get(writerJobKey(req.person.id, 'brief'));
         const ej = writerJobs.get(writerJobKey(req.person.id, 'essay'));
-        res.json({ ok: true, tutor: out, briefJob: job ? { status: job.status, startedAt: job.startedAt } : null, essayJob: ej ? { status: ej.status, startedAt: ej.startedAt } : null });
+        ukJson(res, { ok: true, tutor: out, briefJob: job ? { status: job.status, startedAt: job.startedAt } : null, essayJob: ej ? { status: ej.status, startedAt: ej.startedAt } : null });
     } catch (e) {
         res.json({ ok: true, tutor: null });
     }
@@ -1784,7 +1843,7 @@ router.post('/writer/brief', requirePerson, express.json({ limit: '8mb' }), writ
     if (req.body?.sync) {
         while (job.status === 'running') await new Promise(r => setTimeout(r, 250));
         const view = jobView(job); if (view.result) view.result = publicBrief(view.result);
-        return res.status(job.status === 'done' ? 200 : (job.error?.status || 502)).json({ ok: job.status === 'done', ...view });
+        return res.status(job.status === 'done' ? 200 : (job.error?.status || 502)).json(qWriter.ukPolishResponse({ ok: job.status === 'done', ...view }));
     }
     res.json({ ok: true, ...jobView(job), result: null, chars: taskText.length });
 });
@@ -1806,7 +1865,7 @@ router.post('/writer/lead', requirePerson, express.json({ limit: '128kb' }), asy
         const result = await qWriter.askLeadingQuestion(
             analysis, brief, history || [], voiceSignature, relateAnchor, yearGroup, docContext
         );
-        res.json({ ok: true, ...result });
+        ukJson(res, { ok: true, ...result });
     } catch (e) {
         writerFail(res, e, '[writer/lead]', 'leading question');
     }
@@ -1820,7 +1879,7 @@ router.post('/writer/reframe', requirePerson, express.json({ limit: '64kb' }), a
         const result = await qWriter.reframeInVoice(
             rawAnswer, question, context, voiceSignature, relateAnchor, yearGroup
         );
-        res.json({ ok: true, ...result });
+        ukJson(res, { ok: true, ...result });
     } catch (e) {
         writerFail(res, e, '[writer/reframe]', 'reframe');
     }
@@ -1832,7 +1891,7 @@ router.post('/writer/words', requirePerson, express.json({ limit: '32kb' }), asy
     if (!word) return res.status(400).json({ error: 'word required' });
     try {
         const result = await qWriter.suggestWordSwaps(word, context, voiceSignature);
-        res.json({ ok: true, ...result });
+        ukJson(res, { ok: true, ...result });
     } catch (e) {
         writerFail(res, e, '[writer/words]', 'word swap');
     }
@@ -1844,7 +1903,7 @@ router.post('/writer/harvard', requirePerson, express.json({ limit: '32kb' }), a
     if (!sourceDescription) return res.status(400).json({ error: 'sourceDescription required' });
     try {
         const result = await qWriter.formatHarvardRef(sourceDescription);
-        res.json({ ok: true, ...result });
+        ukJson(res, { ok: true, ...result });
     } catch (e) {
         writerFail(res, e, '[writer/harvard]', 'reference formatting');
     }
@@ -1855,7 +1914,7 @@ router.post('/writer/refs', requirePerson, express.json({ limit: '64kb' }), asyn
     const { docText, subject, keyConcepts } = req.body || {};
     try {
         const result = await qWriter.suggestReferences(docText, subject, keyConcepts);
-        res.json({ ok: true, ...result });
+        ukJson(res, { ok: true, ...result });
     } catch (e) {
         writerFail(res, e, '[writer/refs]', 'reference suggestions');
     }
@@ -1867,7 +1926,7 @@ router.post('/writer/explain', requirePerson, express.json({ limit: '16kb' }), a
     if (!concept) return res.status(400).json({ error: 'concept required' });
     try {
         const result = await qWriter.explainConcept(concept, subject, yearGroup);
-        res.json({ ok: true, ...result });
+        ukJson(res, { ok: true, ...result });
     } catch (e) {
         writerFail(res, e, '[writer/explain]', 'explanation');
     }
@@ -1879,7 +1938,7 @@ router.post('/writer/mark-section', requirePerson, express.json({ limit: '64kb' 
     if (!sectionText) return res.status(400).json({ error: 'sectionText required' });
     try {
         const result = await qWriter.markSection(sectionText, sectionName, analysis, gradeScheme);
-        res.json({ ok: true, ...result });
+        ukJson(res, { ok: true, ...result });
     } catch (e) {
         writerFail(res, e, '[writer/mark-section]', 'section marking');
     }
@@ -1893,7 +1952,7 @@ router.post('/writer/improve', requirePerson, express.json({ limit: '64kb' }), a
         const result = await qWriter.improveSectionStep(
             sectionText, sectionName, currentGrade, voiceSignature, analysis, relateAnchor, yearGroup
         );
-        res.json({ ok: true, ...result });
+        ukJson(res, { ok: true, ...result });
     } catch (e) {
         writerFail(res, e, '[writer/improve]', 'improvement tips');
     }
@@ -1905,7 +1964,7 @@ router.post('/writer/ref-para', requirePerson, express.json({ limit: '32kb' }), 
     if (!paragraphText) return res.status(400).json({ error: 'paragraphText required' });
     try {
         const result = await qWriter.referenceParagraph(paragraphText, subject, keyConcepts);
-        res.json({ ok: true, ...result });
+        ukJson(res, { ok: true, ...result });
     } catch (e) {
         writerFail(res, e, '[writer/ref-para]', 'paragraph references');
     }
@@ -1918,7 +1977,7 @@ router.post('/writer/starter', requirePerson, express.json({ limit: '32kb' }), a
         const result = await qWriter.writeStarter(
             question || '', context, voiceSignature, relateAnchor, yearGroup, qWordsWritten || 0
         );
-        res.json({ ok: true, ...result });
+        ukJson(res, { ok: true, ...result });
     } catch (e) {
         writerFail(res, e, '[writer/starter]', 'starter sentence');
     }

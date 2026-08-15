@@ -230,39 +230,125 @@
       cursor: pointer;
     }
 
-    /* ── Floating coach card ─────────────────────────────────────────────── */
-    .coach-card {
-      position: fixed; right: 28px; top: 50%; transform: translateY(-50%);
-      width: 210px; min-height: 100px;
+    /* ── Floating panels — brief board, teaching board, coach card ─────────
+       Every panel is a small window: drag by the header, resize by the corner
+       grip, minimise to a pill, always clamped inside the viewport, and long
+       content scrolls INSIDE the panel (the body), never off the page. The
+       CSS vars --ptop / --pleft are set by JS on every move so the panel can
+       never grow past the bottom / right edge. ≤700px: docked (see below). */
+    .qpanel {
+      position: fixed; z-index: 100;
       background: var(--bg); border-radius: 18px;
       box-shadow: 10px 10px 28px #ababab, -8px -8px 20px #ffffff;
-      padding: 14px 16px;
-      display: flex; flex-direction: column;
-      cursor: default; z-index: 100;
-    }
-    .coach-card .q-logo {
+      display: flex; flex-direction: column; overflow: hidden;
+      min-width: 190px;
+      max-width: calc(100vw - var(--pleft, 8px) - 8px);
+      max-height: calc(100vh - var(--ptop, 8px) - 8px);
       font-family: 'Space Grotesk', sans-serif;
-      font-weight: 700; font-size: 20px; color: var(--text);
-      line-height: 1; margin-bottom: 6px;
+    }
+    .qpanel.hidden { display: none; }
+    .qpanel.front { z-index: 120; }
+    .panel-head {
+      display: flex; align-items: center; gap: 8px;
+      padding: 9px 12px 7px; flex-shrink: 0;
+      cursor: grab; user-select: none; -webkit-user-select: none; touch-action: none;
+    }
+    .panel-head:active { cursor: grabbing; }
+    .panel-title {
+      font-size: 10px; font-weight: 700; text-transform: uppercase;
+      letter-spacing: 0.07em; color: var(--accent); flex: 1; min-width: 0;
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+    .panel-min {
+      background: none; border: none; cursor: pointer; flex-shrink: 0;
+      color: var(--text-faint); font-size: 16px; line-height: 1; padding: 0;
+      width: 22px; height: 22px; border-radius: 50%;
+      display: inline-flex; align-items: center; justify-content: center;
+    }
+    .panel-min:hover { color: var(--text); box-shadow: var(--neu-raised-xs); }
+    .panel-body {
+      flex: 1 1 auto; min-height: 0; overflow-y: auto; overflow-x: hidden;
+      overflow-wrap: anywhere; word-break: break-word;
+      padding: 0 12px 12px; scrollbar-width: thin;
+    }
+    .panel-foot { flex-shrink: 0; padding: 4px 12px 12px; }
+    .panel-grip {
+      position: absolute; right: 0; bottom: 0; width: 22px; height: 22px;
+      cursor: nwse-resize; touch-action: none; opacity: 0.55;
+    }
+    .panel-grip::before {
+      content: ''; position: absolute; right: 6px; bottom: 6px; width: 8px; height: 8px;
+      border-right: 2px solid var(--text-faint); border-bottom: 2px solid var(--text-faint);
+      border-radius: 0 0 3px 0;
+    }
+    .qpanel:hover .panel-grip { opacity: 1; }
+    /* Minimised: just the header, as a pill; click it to restore. */
+    .qpanel.min { height: auto !important; min-height: 0; width: auto !important; min-width: 0; max-width: 260px; border-radius: 20px; }
+    .qpanel.min .panel-body, .qpanel.min .panel-grip, .qpanel.min .panel-foot { display: none; }
+    .qpanel.min .panel-head { padding: 8px 14px; cursor: pointer; }
+    .qpanel.min .panel-title { color: var(--text-muted); }
+
+    /* ── The coach card ─────────────────────────────────────────────────── */
+    .coach-card { width: 236px; }
+    .coach-card.wide { width: 320px; }
+    .coach-card .q-logo {
+      font-weight: 700; font-size: 18px; color: var(--text); line-height: 1; flex-shrink: 0;
     }
     .coach-card .q-logo .dot { color: var(--accent); }
+    .coach-card .q-where {
+      font-size: 10px; font-weight: 700; color: var(--text-muted);
+      letter-spacing: 0.02em; margin-bottom: 4px; line-height: 1.35;
+    }
+    .coach-card .q-where:empty { display: none; }
+    .coach-card .q-score { margin-bottom: 6px; }
+    .coach-card .q-score:empty { display: none; }
+    .q-score-row { display: flex; align-items: baseline; gap: 4px; font-size: 9px; color: var(--text-muted); white-space: nowrap; overflow: hidden; }
+    .q-score-label { font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; margin-right: 2px; }
+    .q-score-num { font-size: 12px; font-weight: 700; color: var(--text); }
+    .q-score-num.overall { margin-left: 6px; }
+    .q-score-sub { color: var(--text-faint); }
+    .q-score-bar { height: 5px; border-radius: 3px; box-shadow: var(--neu-inset-sm); overflow: hidden; margin-top: 4px; }
+    .q-score-bar span { display: block; height: 100%; background: var(--accent); border-radius: 3px; transition: width 0.4s ease; }
+    .cov-item .cov-pct { color: var(--text-muted); font-weight: 600; margin-left: 4px; font-size: 10px; }
+    /* Edit stage: the tool buttons + the help they return */
+    .q-tools { display: flex; flex-wrap: wrap; gap: 5px; margin-bottom: 6px; }
+    .q-tools .q-tool { font-size: 10px; padding: 4px 8px; }
+    .q-tools .q-tool.suggested { color: var(--text); font-weight: 600; }
+    .q-tools .q-tool.suggested::before { content: '● '; color: var(--accent); }
+    .q-tool-out:empty { display: none; }
+    .q-tool-out { border-radius: 10px; box-shadow: var(--neu-raised-xs); padding: 8px 10px; margin-bottom: 8px; font-size: 11px; line-height: 1.45; color: var(--text); overflow-wrap: anywhere; }
+    .q-tool-head { font-weight: 700; font-size: 12px; margin-bottom: 4px; }
+    .q-tool-flag { font-size: 9px; font-weight: 600; color: var(--accent); text-transform: uppercase; letter-spacing: 0.05em; margin-left: 4px; }
+    .q-tool-src { font-size: 9px; color: var(--text-faint); margin-left: 4px; }
+    .q-tool-points { margin: 0 0 4px 16px; padding: 0; }
+    .q-tool-points li { margin-bottom: 2px; }
+    .q-tool-eg { font-style: italic; color: var(--text-muted); margin-bottom: 4px; }
+    .q-tool-nudge { color: var(--text-muted); }
+    .q-tool-ask { color: var(--text-muted); font-style: italic; }
+    /* The highlighted sentence on the page (edit stage) */
+    ::highlight(q-edit) { background: rgba(233,30,99,0.16); }
+    .doc-body .q-edit-block { box-shadow: -3px 0 0 var(--accent); padding-left: 6px; margin-left: -9px; background: rgba(233,30,99,0.035); }
+    .coach-card .q-move {
+      font-size: 11px; color: var(--text-muted); line-height: 1.4; margin-bottom: 6px;
+      padding: 5px 8px; border-radius: 8px; box-shadow: var(--neu-raised-xs);
+    }
+    .coach-card .q-move:empty { display: none; }
     .coach-card .q-section {
       font-size: 10px; color: var(--accent);
       text-transform: uppercase; letter-spacing: 0.06em;
-      margin-bottom: 6px; font-weight: 600;
+      margin-bottom: 4px; font-weight: 600;
     }
+    .coach-card .q-section:empty { display: none; }
     .coach-card .q-msg {
-      font-family: 'Space Grotesk', sans-serif;
-      font-size: 12px; color: var(--text-muted); line-height: 1.45;
-      max-height: 200px; overflow-y: auto; margin-bottom: 10px; flex: 1;
-      scrollbar-width: none; -ms-overflow-style: none;
+      font-size: 13px; color: var(--text); line-height: 1.45; margin-bottom: 8px;
+      white-space: pre-wrap;
     }
-    .coach-card .q-msg::-webkit-scrollbar { display: none; }
     .coach-card .q-msg.thinking { font-style: italic; color: var(--text-faint); }
     .coach-card .q-hint {
-      font-size: 11px; color: var(--text-faint); font-style: italic;
+      font-size: 11px; color: var(--text-muted); font-style: italic;
       margin-bottom: 8px; line-height: 1.4;
     }
+    .coach-card .q-hint:empty { display: none; }
     .coach-card .q-actions {
       display: flex; flex-direction: column; gap: 6px; margin-bottom: 8px;
     }
@@ -273,15 +359,32 @@
       background: var(--bg); color: var(--text); cursor: pointer;
       box-shadow: var(--neu-raised-xs);
       transition: box-shadow 0.15s; text-align: left;
+      overflow-wrap: anywhere;
     }
     .q-btn:hover { box-shadow: var(--neu-raised-sm); }
     .q-btn:active { box-shadow: var(--neu-inset-sm); }
-    .q-btn.primary { color: var(--accent); }
+    .q-btn.primary { color: var(--text); font-weight: 600; }
+    .q-btn.primary::before { content: '● '; color: var(--accent); }
+    .q-btn.big { font-size: 13px; padding: 10px 14px; box-shadow: var(--neu-raised-sm); border-radius: 14px; }
+    .q-quiet-row { display: flex; flex-wrap: wrap; gap: 4px 10px; margin: 2px 0 8px; }
+    .q-quiet-row:empty { display: none; }
+    .q-btn.quiet {
+      box-shadow: none; padding: 2px 0; font-size: 11px; color: var(--text-muted);
+      text-decoration: underline; text-underline-offset: 2px; border-radius: 0;
+    }
+    .q-btn.quiet:hover { color: var(--text); box-shadow: none; }
+    .q-undo {
+      display: block; border: none; background: none; cursor: pointer; padding: 0 0 6px;
+      font-family: 'Space Grotesk', sans-serif; font-size: 11px; color: var(--text-muted);
+      text-decoration: underline; text-underline-offset: 2px;
+    }
+    .q-undo.hidden { display: none; }
+    .q-undo:hover { color: var(--accent); }
     .coach-card input.coach-input {
-      width: 100%; border: none; outline: none;
+      width: 100%; border: none; outline: none; min-width: 0;
       background: transparent; box-shadow: none; border-radius: 0;
       padding: 4px 0 5px; border-bottom: 1px solid rgba(0,0,0,0.10);
-      font-family: 'Space Grotesk', sans-serif; font-size: 12px; color: var(--text);
+      font-family: 'Space Grotesk', sans-serif; font-size: 13px; color: var(--text);
       transition: border-color 0.2s;
     }
     .coach-card input.coach-input:focus { border-bottom-color: var(--accent); }
@@ -356,35 +459,6 @@
       text-decoration: underline; align-self: flex-start;
     }
     .improve-suggestion .imp-tellmore:hover { color: var(--accent); }
-
-    /* ── Explain popup ────────────────────────────────────────────────────── */
-    .explain-popup {
-      position: fixed; z-index: 200;
-      background: var(--bg); border-radius: 14px;
-      box-shadow: 10px 10px 28px #ababab, -8px -8px 20px #ffffff;
-      padding: 14px 16px; width: 260px;
-    }
-    .explain-popup.hidden { display: none; }
-    .explain-popup .exp-text {
-      font-size: 12px; color: var(--text); line-height: 1.55;
-      margin-bottom: 10px;
-    }
-    .explain-popup .exp-links { display: flex; flex-direction: column; gap: 5px; }
-    .explain-popup .exp-link {
-      display: flex; align-items: center; gap: 7px;
-      padding: 5px 10px; border-radius: 10px;
-      background: var(--bg); box-shadow: var(--neu-raised-xs);
-      font-family: 'Space Grotesk', sans-serif; font-size: 11px;
-      color: var(--text-muted); text-decoration: none;
-    }
-    .explain-popup .exp-link:hover { color: var(--accent); }
-    .explain-popup .exp-close {
-      display: block; width: 100%; padding: 5px; border: none;
-      font-family: 'Space Grotesk', sans-serif; font-size: 11px;
-      color: var(--text-faint); background: transparent; cursor: pointer;
-      text-align: center; margin-top: 6px;
-    }
-    .explain-popup .exp-close:hover { color: var(--text); }
 
     /* ── Inline reference button (appears on selection) ─────────────────── */
     .inline-ref-btn {
@@ -578,97 +652,94 @@
     }
     .ref-suggestion .ref-row { display: flex; gap: 6px; margin-top: 4px; }
 
-    /* ── Brief Board (Q's whiteboard) ──────────────────────────────────── */
-    .brief-board {
-      position: fixed; left: 28px; top: 14px;
-      width: 480px; max-height: 200px;
-      background: var(--bg); border-radius: 18px;
-      box-shadow: 10px 10px 28px #ababab, -8px -8px 20px #ffffff;
-      display: flex; flex-direction: column; z-index: 101;
-      overflow: hidden; transition: max-height 0.25s ease;
+    /* ── Brief board — one line in Q's words + the coverage strip; the formal
+       brief sits behind "Show the brief" (the student never has to read it) ── */
+    .brief-board { width: 300px; }
+    .brief-board .panel-body { font-size: 12px; color: var(--text); line-height: 1.5; }
+    .bb-line { font-size: 13px; font-weight: 600; color: var(--text); line-height: 1.4; margin-bottom: 8px; }
+    .bb-fold { margin-top: 10px; }
+    .bb-fold > summary {
+      list-style: none; cursor: pointer; font-size: 11px; color: var(--text-muted);
+      text-decoration: underline; text-underline-offset: 2px; user-select: none;
     }
-    .brief-board.hidden { display: none; }
-    .brief-board.minimised { max-height: 40px; }
-    .brief-board.dragged { left: auto; right: auto; transform: none; }
-    .brief-board-head {
-      display: flex; align-items: center; gap: 8px;
-      padding: 9px 14px 7px; flex-shrink: 0;
-      cursor: grab; user-select: none;
-    }
-    .brief-board-head:active { cursor: grabbing; }
-    .brief-board-badge {
+    .bb-fold > summary::-webkit-details-marker { display: none; }
+    .bb-fold > summary:hover { color: var(--text); }
+    .bb-fold[open] > summary { margin-bottom: 8px; }
+    .brief-doctype { font-size: 13px; font-weight: 700; color: var(--text); margin-bottom: 6px; line-height: 1.3; }
+    .brief-asks-label, .brief-producing-label {
       font-size: 10px; font-weight: 700; text-transform: uppercase;
-      letter-spacing: 0.07em; color: var(--accent); flex: 1;
+      letter-spacing: 0.06em; color: var(--text-muted); margin: 8px 0 4px;
     }
-    .brief-board-tog {
-      background: none; border: none; cursor: pointer;
-      color: var(--text-faint); font-size: 16px; line-height: 1; padding: 0;
-      pointer-events: none; transition: color 0.15s;
-    }
-    .brief-board-head:hover .brief-board-tog { color: var(--text); }
-    .brief-board-body {
-      padding: 0 14px 12px; overflow-y: auto;
-      scrollbar-width: none; -ms-overflow-style: none;
-      font-family: 'Space Grotesk', sans-serif;
-      font-size: 12px; color: var(--text); line-height: 1.5;
-      display: grid; grid-template-columns: 1fr 1fr; gap: 0 16px;
-    }
-    .brief-col { min-width: 0; }
-    .brief-board.board-mode .brief-board-body {
-      display: flex; flex-direction: column; grid-template-columns: unset;
-    }
-    .brief-board-body::-webkit-scrollbar { display: none; }
-    .brief-board.board-mode { width: 480px; }
-    .brief-doctype {
-      font-size: 13px; font-weight: 700; color: var(--text);
-      margin-bottom: 6px; line-height: 1.3;
-    }
-    .brief-asks-label {
-      font-size: 10px; font-weight: 700; text-transform: uppercase;
-      letter-spacing: 0.06em; color: var(--text-muted); margin-bottom: 4px;
-    }
-    .brief-asks-list { margin: 0 0 0 12px; padding: 0; list-style: disc; }
-    .brief-asks-list li { font-size: 11px; color: var(--text); margin-bottom: 2px; line-height: 1.4; }
-    .brief-producing-label {
-      font-size: 10px; font-weight: 700; text-transform: uppercase;
-      letter-spacing: 0.06em; color: var(--text-muted); margin-bottom: 4px;
-    }
-    .brief-producing-text {
-      font-size: 11px; color: var(--text); line-height: 1.45; margin-bottom: 8px;
-    }
-    /* grade chips */
-    .brief-grades { display: flex; gap: 4px; flex-wrap: wrap; }
+    .brief-asks-list { margin: 0 0 0 16px; padding: 0; }
+    .brief-asks-list li { font-size: 11px; color: var(--text); margin-bottom: 4px; line-height: 1.4; }
+    .brief-asks-list li .cid { font-weight: 700; color: var(--text-muted); margin-right: 4px; }
+    .brief-producing-text { font-size: 11px; color: var(--text); line-height: 1.45; margin-bottom: 4px; }
+    .brief-grades { display: flex; gap: 4px; flex-wrap: wrap; margin-top: 6px; }
     .brief-grade-chip { font-size: 10px; font-weight: 600; padding: 2px 7px; border-radius: 7px; }
     .brief-grade-chip.top { background: rgba(40,167,69,0.12); color: #28a745; }
     .brief-grade-chip.mid { background: rgba(255,165,0,0.12);  color: #e6a817; }
     .brief-grade-chip.low { background: rgba(220,53,69,0.10);  color: #dc3545; }
+    .brief-meta-line { font-size: 10px; color: var(--text-muted); margin-top: 6px; line-height: 1.4; }
 
-    /* ── Teaching board (board mode replaces brief content) ────────────── */
-    .brief-board.board-mode { max-height: calc(74vh - 20px); }
-    .board-doctype {
-      font-size: 10px; font-weight: 700; color: var(--text-muted);
-      text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 8px;
+    /* ── Teaching board — WHERE WE ARE, the current question + latest hint,
+       everything earlier folded away ── */
+    .teach-board { width: 300px; }
+    .tb-where {
+      font-size: 10px; font-weight: 700; color: var(--text-muted); letter-spacing: 0.02em;
+      margin-bottom: 8px; line-height: 1.35;
     }
-    .board-items { display: flex; flex-direction: column; gap: 8px; }
-    .board-item {
-      display: grid; grid-template-columns: 26px 1fr; gap: 6px; align-items: start;
+    .tb-earlier { margin-bottom: 10px; }
+    .tb-earlier > summary {
+      list-style: none; cursor: pointer; font-size: 11px; color: var(--text-muted);
+      user-select: none; padding: 4px 8px; border-radius: 10px; box-shadow: var(--neu-raised-xs);
+      display: inline-block;
     }
-    .board-item.board-item-note { grid-template-columns: 1fr; }
-    .board-label {
-      font-size: 10px; font-weight: 700; color: #e91e63;
-      margin-top: 3px; line-height: 1;
+    .tb-earlier > summary::-webkit-details-marker { display: none; }
+    .tb-earlier > summary:hover { color: var(--text); }
+    .tb-earlier[open] > summary { box-shadow: var(--neu-inset-sm); margin-bottom: 8px; }
+    /* One rhythm: 12px body, 9px labels, line-height 1.5; no italics; answers
+       in the page's normal ink, marked by the "you" label + a hairline rule. */
+    .tb-items { display: flex; flex-direction: column; gap: 10px; }
+    .tb-item { display: block; min-width: 0; }
+    .tb-item.tb-click { cursor: pointer; }
+    .tb-label {
+      display: block; font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em;
+      color: var(--text-muted); line-height: 1.3; margin-bottom: 2px;
     }
-    .board-ans-label { color: #00b894; }
-    .board-qtext {
-      font-size: 14px; font-weight: 600; color: var(--text); line-height: 1.45;
+    .tb-q .tb-label::before { content: '● '; color: var(--accent); }
+    .tb-a { border-left: 2px solid rgba(0,0,0,0.16); padding-left: 8px; }
+    .tb-text { font-size: 12px; color: var(--text); line-height: 1.5; min-width: 0; font-style: normal; font-weight: 400; }
+    .tb-text p { margin: 0 0 6px; }
+    .tb-text p:last-child { margin-bottom: 0; }
+    .tb-qtext { font-weight: 500; }
+    .tb-atext { color: var(--text); }
+    .tb-ntext { color: var(--text-muted); }
+    .tb-earlier .tb-items { gap: 8px; }
+    .tb-earlier .tb-item { padding: 6px 8px; border-radius: 8px; box-shadow: var(--neu-raised-xs); }
+    .tb-earlier .tb-a { box-shadow: none; border-left: 2px solid rgba(0,0,0,0.16); border-radius: 0; padding: 0 0 0 8px; margin: -2px 0 2px 8px; }
+    .tb-current .tb-q .tb-qtext { font-size: 15px; font-weight: 500; line-height: 1.45; }
+    .tb-current .tb-n .tb-ntext { color: var(--text); }
+    .tb-text.clamped { display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden; }
+    .tb-earlier .tb-text.clamped { -webkit-line-clamp: 3; }
+    .tb-more {
+      display: inline-block; border: none; background: none; cursor: pointer; padding: 0;
+      font-family: 'Space Grotesk', sans-serif; font-size: 10px; color: var(--text-muted);
+      text-decoration: underline; text-underline-offset: 2px; margin-top: 2px;
     }
-    .board-atext {
-      font-size: 14px; color: #00b894; line-height: 1.45; font-style: italic;
+    .tb-more:hover { color: var(--accent); }
+    .tb-links { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+    .tb-link {
+      display: inline-flex; align-items: center; gap: 6px; white-space: nowrap;
+      padding: 5px 11px; border-radius: 12px; background: var(--bg); box-shadow: var(--neu-raised-xs);
+      font-size: 11px; color: var(--text); text-decoration: none; font-weight: 500;
     }
-    .board-note {
-      font-size: 11px; color: #b59a40; font-style: italic; line-height: 1.4;
-      padding-left: 32px;
-    }
+    .tb-link:hover { box-shadow: var(--neu-raised-sm); }
+    .tb-link .ico { color: var(--accent); }
+    .teach-board .coverage-strip { margin-top: 12px; padding-top: 8px; border-top: 1px solid rgba(0,0,0,0.06); flex-direction: row; flex-wrap: wrap; gap: 3px 6px; }
+    .teach-board .cov-item { grid-template-columns: 9px 1fr; gap: 4px; font-size: 10px; padding: 1px 6px 1px 4px; border-radius: 8px; }
+    .teach-board .cov-item.current { box-shadow: var(--neu-inset-sm); }
+    .teach-board .cov-item .cov-dot { width: 7px; height: 7px; margin-top: 3px; }
+    .teach-board .coverage-label { width: 100%; }
 
     /* ── Phase 3: doc-meta buttons, saved label, coverage strip, mark results ── */
     .doc-meta .meta-spacer { flex: 1; }
@@ -687,9 +758,6 @@
       font-size: 10px; color: var(--text-faint); line-height: 1.35;
       margin: -4px 0 8px; letter-spacing: 0.01em;
     }
-    .coach-card.wide { width: 300px; }
-    .coach-card .q-actions { max-height: 46vh; overflow-y: auto; scrollbar-width: none; }
-    .coach-card .q-actions::-webkit-scrollbar { display: none; }
     .brief-meta-line { font-size: 10px; color: var(--text-muted); margin-top: 6px; line-height: 1.4; }
     .coverage-strip { display: flex; flex-direction: column; gap: 3px; margin-top: 8px; }
     .coverage-label {
@@ -704,7 +772,8 @@
     .cov-item .cov-dot { width: 9px; height: 9px; border-radius: 50%; margin-top: 3px; box-shadow: var(--neu-inset-sm); }
     .cov-item[data-cov="covered"] .cov-dot { background: #28a745; box-shadow: none; }
     .cov-item[data-cov="partial"] .cov-dot { background: #e6a817; box-shadow: none; }
-    .cov-item .cov-id { font-weight: 700; color: var(--text-muted); margin-right: 4px; }
+    .cov-item .cov-id { display: none; font-weight: 700; font-size: 9px; color: var(--text-faint); margin-left: 4px; }
+    .cov-item:hover .cov-id, .cov-item.show-id .cov-id { display: inline; }
     .cov-item.current .cov-text { font-weight: 600; }
     .mark-row {
       background: var(--bg); border-radius: 10px; box-shadow: var(--neu-raised-xs);
@@ -748,17 +817,31 @@
     .edit-item .ed-sug { font-size: 11px; color: var(--text-muted); line-height: 1.4; }
     .edit-item .ed-sug b { color: var(--text); }
     .edit-item .ed-row { display: flex; gap: 5px; flex-wrap: wrap; }
-    .doc-body .student-line { margin: 0; }
+    .doc-body .student-line { margin: 0; font-style: normal; font-weight: 400; color: var(--text); border-left: 2px solid rgba(233,30,99,0.22); padding-left: 8px; margin-left: -10px; }
 
 
-    /* Mobile */
+    /* Mobile / narrow (≤700px): no floating windows. The three panels dock as
+       a bottom sheet stack (JS sets each panel's `bottom` and the body's
+       padding); tap a header to open/close it. The document keeps priority:
+       the brief and teaching boards start closed, the coach card open. */
+    @media (max-width: 700px) {
+      body { padding-bottom: 260px; }
+      .setup-cog { left: 12px; width: 32px; height: 32px; }
+      .qpanel {
+        position: fixed !important; left: 8px !important; right: 8px !important;
+        top: auto !important; width: auto !important; height: auto !important;
+        max-width: none; transform: none !important; border-radius: 14px;
+      }
+      .qpanel .panel-grip { display: none; }
+      .qpanel .panel-head { cursor: pointer; }
+      .qpanel .panel-body { max-height: 38vh; }
+      .qpanel.min { max-width: none; }
+    }
     @media (max-width: 600px) {
       .paper { padding: 48px 28px 64px; min-height: 700px; }
       .paper::after { left: 22px; }
       .doc-title { font-size: 22px; }
       .doc-body { font-size: 15px; line-height: 28px; }
-      .coach-card { right: 10px; top: auto; bottom: 14px; transform: none; width: 180px; }
-      .brief-board { left: 10px; right: auto; top: 10px; width: 200px; max-height: 50vh; }
       .setup-strip { padding: 14px 16px; }
     }
   </style>
@@ -898,7 +981,7 @@
 
       <div class="doc-body" id="doc-body"
         contenteditable="true"
-        data-placeholder="Start writing — Q joins in once you do."
+        data-placeholder="Q asks, you write. He's read it — you don't have to."
         spellcheck="true"
         autocomplete="off"></div>
     </div>
@@ -913,40 +996,57 @@
     </svg>
   </button>
 
-  <!-- Floating Q coach card -->
-  <div class="coach-card" id="coach-card">
-    <div class="q-logo">Q<span class="dot">.</span></div>
-    <div class="q-section" id="coach-section"></div>
-    <div class="q-msg" id="coach-msg">Drop your task in above and I'll read it. I'll ask you the questions — you write the answers. Your words, your work.</div>
-    <div class="q-integrity" id="coach-integrity">Your words, Q's structure. Q never writes on your page.</div>
-    <div class="q-hint" id="coach-hint"></div>
-    <div class="q-actions hidden" id="coach-actions"></div>
-    <div class="q-nudge-btns hidden" id="coach-nudge">
-      <button class="q-btn" id="btn-start-me" title="A smaller, easier question toward the same point">I'm stuck</button>
-      <button class="q-btn" id="btn-how-put">How could I put this?</button>
-      <button class="q-btn" id="btn-dont-understand">I don't understand this</button>
+  <!-- Floating Q coach card — a small window: drag the header, corner grip to resize, − to minimise -->
+  <div class="qpanel coach-card" id="coach-card" data-panel="coach">
+    <div class="panel-head" id="coach-head">
+      <span class="q-logo">Q<span class="dot">.</span></span>
+      <span class="panel-title" id="coach-title">Coach</span>
+      <button type="button" class="panel-min" id="coach-min" title="Minimise" aria-label="Minimise the coach card">−</button>
     </div>
-    <div class="coach-input-row">
-      <input class="coach-input" id="coach-input" type="text"
-        placeholder="Ask Q…" autocomplete="off" />
-      <button type="button" class="q-mic" id="coach-mic" title="Tap and talk — your words type themselves into the box. Tap again to stop, then press Enter."><svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg></button>
+    <div class="panel-body" id="coach-body">
+      <div class="q-where" id="coach-where"></div>
+      <div class="q-score" id="coach-score"></div>
+      <div class="q-move" id="coach-move"></div>
+      <div class="q-section" id="coach-section"></div>
+      <div class="q-msg" id="coach-msg">Drop your task in above and I'll read it. I ask, you write — in your own words. You never have to read the brief.</div>
+      <div class="q-integrity" id="coach-integrity">Your words, Q's structure. Q never writes on your page.</div>
+      <div class="q-hint" id="coach-hint"></div>
+      <div class="q-actions hidden" id="coach-actions"></div>
+      <div class="q-quiet-row" id="coach-quiet"></div>
+      <div class="q-nudge-btns hidden" id="coach-nudge">
+        <button class="q-btn" id="btn-start-me" title="A smaller, easier question toward the same point">I'm stuck</button>
+        <button class="q-btn" id="btn-dont-understand">I don't understand this</button>
+      </div>
     </div>
+    <div class="panel-foot">
+      <button type="button" class="q-undo hidden" id="coach-undo">Undo — take that last line off the page</button>
+      <div class="coach-input-row">
+        <input class="coach-input" id="coach-input" type="text"
+          placeholder="Ask Q…" autocomplete="off" />
+        <button type="button" class="q-mic" id="coach-mic" title="Tap and talk — your words type themselves into the box. Tap again to stop, then press Enter."><svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg></button>
+      </div>
+    </div>
+    <div class="panel-grip" title="Drag to resize"></div>
   </div>
 
-  <!-- Q's Brief Board — persistent whiteboard, populated after source is read -->
-  <div class="brief-board hidden" id="brief-board">
-    <div class="brief-board-head" id="brief-board-head">
-      <span class="brief-board-badge" id="brief-board-badge">📋 Your Brief</span>
-      <button type="button" class="brief-board-tog" id="brief-board-tog">−</button>
+  <!-- Q's brief board — one line in Q's words + how far we are; the formal brief behind "Show the brief" -->
+  <div class="qpanel brief-board hidden" id="brief-board" data-panel="brief">
+    <div class="panel-head" id="brief-board-head">
+      <span class="panel-title" id="brief-board-badge">📋 Your brief</span>
+      <button type="button" class="panel-min" id="brief-board-tog" title="Minimise" aria-label="Minimise the brief board">−</button>
     </div>
-    <div class="brief-board-body" id="brief-board-body"></div>
+    <div class="panel-body" id="brief-board-body"></div>
+    <div class="panel-grip" title="Drag to resize"></div>
   </div>
 
-  <!-- Explain concept popup -->
-  <div class="explain-popup hidden" id="explain-popup">
-    <div class="exp-text" id="explain-text"></div>
-    <div class="exp-links" id="explain-links"></div>
-    <button class="exp-close" id="explain-close">close</button>
+  <!-- Q's teaching board — where we are, the current question + latest hint; everything earlier folded -->
+  <div class="qpanel teach-board hidden" id="teach-board" data-panel="teach">
+    <div class="panel-head" id="teach-board-head">
+      <span class="panel-title" id="teach-board-badge">📝 Teaching board</span>
+      <button type="button" class="panel-min" id="teach-board-tog" title="Minimise" aria-label="Minimise the teaching board">−</button>
+    </div>
+    <div class="panel-body" id="teach-board-body"></div>
+    <div class="panel-grip" title="Drag to resize"></div>
   </div>
 
   <!-- Inline reference button — appears when text is selected in the doc -->
@@ -1000,6 +1100,9 @@
       lastProbeAt: 0,
       lastMark: null,
       restored: false,
+      match: null,            // {overall, perCriterion} — the visible match score (server-computed)
+      editing: false,         // the editing stage is on (highlight + tools)
+      awaitingWord: null,     // {tool, it} while the coach box is asking "which word?"
     };
     const PROBE_MIN_GAP_MS = 8000;    // never two live probes closer than this (cost + rhythm)
     const PROBE_MIN_NEW_CHARS = 12;   // "genuinely new content" — a few real words
@@ -1017,7 +1120,6 @@
     const coachInput   = document.getElementById('coach-input');
     const coachNudge   = document.getElementById('coach-nudge');
     const btnStartMe   = document.getElementById('btn-start-me');
-    const btnHowPut    = document.getElementById('btn-how-put');
     const setupStrip   = document.getElementById('setup-strip');
     const setupCog   = document.getElementById('setup-cog');
     const wordPopup  = document.getElementById('word-popup');
@@ -1119,65 +1221,270 @@
       setupStrip.classList.toggle('hidden');
     });
 
-    // Brief board: minimize / expand on header click + drag to reposition
-    const briefBoardEl  = document.getElementById('brief-board');
-    const briefBoardHead = document.getElementById('brief-board-head');
-    const briefBoardTog  = document.getElementById('brief-board-tog');
-    let bbDrag = { on: false, ox: 0, oy: 0, bx: 0, by: 0 };
+    // ── Floating panels behave like windows ────────────────────────────────
+    // Sarah, 15 Aug 2026: "this is coming off the page and I cant move this
+    // and the teaching board around. I cant resize or minamize the teaching
+    // board." Every panel (brief board, teaching board, coach card): drag by
+    // the header (pointer events — mouse + touch), resize by the corner grip,
+    // minimise to a pill (click restores), always CLAMPED inside the viewport
+    // (window resize / rotate snaps them back), and long content scrolls
+    // inside the panel body. Position / size / minimised state is remembered
+    // per person in localStorage. ≤700px: nothing floats — the panels dock as
+    // a bottom-sheet stack and the document keeps priority.
+    const PANEL_M = 8;                 // viewport margin
+    const panels = {};                 // key → panel record
+    let panelUser = 'anon';
+    let panelLayout = {};              // key → { left, top, w, h, min, dockMin, moved, fold }
+    function isDocked() { return window.innerWidth <= 700; }
+    function layoutStoreKey() { return 'q-writer-panels:' + panelUser; }
+    function loadLayout() {
+      try { panelLayout = JSON.parse(localStorage.getItem(layoutStoreKey()) || '{}') || {}; } catch (_) { panelLayout = {}; }
+      if (!panelLayout || typeof panelLayout !== 'object') panelLayout = {};
+    }
+    function saveLayout() { try { localStorage.setItem(layoutStoreKey(), JSON.stringify(panelLayout)); } catch (_) {} }
+    function getL(p) { return panelLayout[p.key] || (panelLayout[p.key] = {}); }
+    const clampNum = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
 
-    briefBoardHead.addEventListener('click', e => {
-      if (bbDrag.moved) { bbDrag.moved = false; return; } // suppress click after drag
-      briefBoardEl.classList.toggle('minimised');
-      briefBoardTog.textContent = briefBoardEl.classList.contains('minimised') ? '+' : '−';
-    });
+    function makePanel(el, key, opts) {
+      const head = el.querySelector('.panel-head');
+      const minBtn = el.querySelector('.panel-min');
+      const grip = el.querySelector('.panel-grip');
+      const p = { el, key, head, minBtn, minW: opts.minW || 200, minH: opts.minH || 120, defaults: opts.defaults, placed: false, suppressClick: false };
+      panels[key] = p;
+      el.addEventListener('pointerdown', () => bringToFront(p), true);
 
-    briefBoardHead.addEventListener('mousedown', e => {
-      const rect = briefBoardEl.getBoundingClientRect();
-      // Convert any CSS transform/right to left+top before dragging
-      briefBoardEl.style.left   = rect.left + 'px';
-      briefBoardEl.style.top    = rect.top  + 'px';
-      briefBoardEl.style.right  = 'auto';
-      briefBoardEl.classList.add('dragged');
-      bbDrag = { on: true, moved: false, ox: e.clientX, oy: e.clientY, bx: rect.left, by: rect.top };
-      document.body.style.userSelect = 'none';
-    });
+      // Drag by the header (not by its buttons)
+      head.addEventListener('pointerdown', (ev) => {
+        if (ev.target.closest('button, input, textarea, a, select')) return;
+        if (isDocked()) return;
+        if (ev.button != null && ev.button !== 0) return;
+        const r = el.getBoundingClientRect();
+        el.style.left = r.left + 'px'; el.style.top = r.top + 'px'; el.style.right = 'auto'; el.style.bottom = 'auto'; el.style.transform = 'none';
+        const d = { id: ev.pointerId, sx: ev.clientX, sy: ev.clientY, bl: r.left, bt: r.top, moved: false };
+        try { head.setPointerCapture(ev.pointerId); } catch (_) {}
+        const move = (e) => {
+          if (e.pointerId !== d.id) return;
+          const dx = e.clientX - d.sx, dy = e.clientY - d.sy;
+          if (Math.abs(dx) > 3 || Math.abs(dy) > 3) d.moved = true;
+          placePanel(p, d.bl + dx, d.bt + dy);
+        };
+        const up = (e) => {
+          if (e.pointerId !== d.id) return;
+          head.removeEventListener('pointermove', move); head.removeEventListener('pointerup', up); head.removeEventListener('pointercancel', up);
+          try { head.releasePointerCapture(d.id); } catch (_) {}
+          if (d.moved) { const l = getL(p); l.moved = true; l.left = parseFloat(el.style.left); l.top = parseFloat(el.style.top); saveLayout(); }
+          p.suppressClick = d.moved;
+        };
+        head.addEventListener('pointermove', move); head.addEventListener('pointerup', up); head.addEventListener('pointercancel', up);
+        ev.preventDefault();
+      });
+      // Click on the header: restore when minimised (desktop), toggle when docked.
+      head.addEventListener('click', (ev) => {
+        if (p.suppressClick) { p.suppressClick = false; return; }
+        if (ev.target.closest('button') && ev.target.closest('button') !== minBtn) return;
+        if (ev.target.closest('button') === minBtn) { setMin(p, !el.classList.contains('min')); return; }
+        if (el.classList.contains('min')) setMin(p, false);
+        else if (isDocked()) setMin(p, true);
+      });
+      // Resize by the corner grip
+      if (grip) grip.addEventListener('pointerdown', (ev) => {
+        if (isDocked() || el.classList.contains('min')) return;
+        const r = el.getBoundingClientRect();
+        const d = { id: ev.pointerId, sx: ev.clientX, sy: ev.clientY, bw: r.width, bh: r.height };
+        el.style.left = r.left + 'px'; el.style.top = r.top + 'px'; el.style.right = 'auto'; el.style.bottom = 'auto'; el.style.transform = 'none';
+        try { grip.setPointerCapture(ev.pointerId); } catch (_) {}
+        const move = (e) => {
+          if (e.pointerId !== d.id) return;
+          const maxW = window.innerWidth - r.left - PANEL_M, maxH = window.innerHeight - r.top - PANEL_M;
+          const w = clampNum(d.bw + (e.clientX - d.sx), p.minW, Math.max(p.minW, maxW));
+          const h = clampNum(d.bh + (e.clientY - d.sy), p.minH, Math.max(p.minH, maxH));
+          el.style.width = w + 'px'; el.style.height = h + 'px';
+        };
+        const up = (e) => {
+          if (e.pointerId !== d.id) return;
+          grip.removeEventListener('pointermove', move); grip.removeEventListener('pointerup', up); grip.removeEventListener('pointercancel', up);
+          try { grip.releasePointerCapture(d.id); } catch (_) {}
+          const l = getL(p); l.w = parseFloat(el.style.width); l.h = parseFloat(el.style.height); saveLayout();
+          clampPanel(p);
+        };
+        grip.addEventListener('pointermove', move); grip.addEventListener('pointerup', up); grip.addEventListener('pointercancel', up);
+        ev.preventDefault(); ev.stopPropagation();
+      });
+      // Content grows → keep it on the page (and restack the dock).
+      if (window.ResizeObserver) new ResizeObserver(() => { if (isDocked()) restackDock(); else clampPanel(p); }).observe(el);
+      return p;
+    }
+    function bringToFront(p) {
+      Object.values(panels).forEach(q => q.el.classList.toggle('front', q === p));
+    }
+    // Put a panel at (left, top), clamped so it stays fully on the page. The
+    // --pleft/--ptop vars cap max-width/max-height so it can never grow past
+    // the right/bottom edge later either.
+    function placePanel(p, left, top) {
+      const el = p.el;
+      const w = el.offsetWidth, h = el.offsetHeight;
+      const L = clampNum(left, PANEL_M, Math.max(PANEL_M, window.innerWidth - w - PANEL_M));
+      const T = clampNum(top, PANEL_M, Math.max(PANEL_M, window.innerHeight - h - PANEL_M));
+      el.style.left = L + 'px'; el.style.top = T + 'px'; el.style.right = 'auto'; el.style.bottom = 'auto'; el.style.transform = 'none';
+      el.style.setProperty('--pleft', L + 'px'); el.style.setProperty('--ptop', T + 'px');
+      p.placed = true;
+    }
+    function clampPanel(p) {
+      if (isDocked() || p.el.classList.contains('hidden')) return;
+      const el = p.el;
+      const maxW = window.innerWidth - 2 * PANEL_M, maxH = window.innerHeight - 2 * PANEL_M;
+      if (el.style.width && parseFloat(el.style.width) > maxW) el.style.width = maxW + 'px';
+      if (el.style.height && parseFloat(el.style.height) > maxH) el.style.height = maxH + 'px';
+      const r = el.getBoundingClientRect();
+      if (!p.placed || r.left < PANEL_M || r.top < PANEL_M || r.right > window.innerWidth - PANEL_M || r.bottom > window.innerHeight - PANEL_M) {
+        placePanel(p, r.left, r.top);
+      }
+    }
+    function setMin(p, on) {
+      p.el.classList.toggle('min', !!on);
+      if (p.minBtn) { p.minBtn.textContent = on ? '+' : '−'; p.minBtn.title = on ? 'Restore' : 'Minimise'; }
+      const l = getL(p);
+      if (isDocked()) l.dockMin = !!on; else l.min = !!on;
+      saveLayout();
+      if (isDocked()) restackDock(); else clampPanel(p);
+    }
+    // First show (or no saved position): the default spot for this screen.
+    function defaultPlace(p) {
+      const d = typeof p.defaults === 'function' ? p.defaults() : (p.defaults || {});
+      if (d.w && !p.el.style.width) p.el.style.width = d.w + 'px';
+      placePanel(p, d.left != null ? d.left : PANEL_M, d.top != null ? d.top : PANEL_M);
+    }
+    function applyLayout(p) {
+      const el = p.el; const l = getL(p);
+      if (isDocked()) {
+        el.style.bottom = ''; el.style.left = ''; el.style.top = ''; el.style.width = ''; el.style.height = ''; el.style.transform = '';
+        const dockMin = l.dockMin != null ? l.dockMin : (p.key !== 'coach');
+        el.classList.toggle('min', dockMin);
+        if (p.minBtn) p.minBtn.textContent = dockMin ? '+' : '−';
+        p.placed = false;
+        restackDock();
+        return;
+      }
+      if (l.w) el.style.width = l.w + 'px';
+      if (l.h) el.style.height = l.h + 'px';
+      el.classList.toggle('min', !!l.min);
+      if (p.minBtn) p.minBtn.textContent = l.min ? '+' : '−';
+      if (l.left != null && l.top != null) placePanel(p, l.left, l.top);
+      else defaultPlace(p);
+      clampPanel(p);
+    }
+    // ≤700px: stack the visible panels from the bottom of the screen and pad
+    // the page so the document can always scroll clear of them.
+    let restackQueued = false;
+    function restackDock() {
+      if (restackQueued) return; restackQueued = true;
+      requestAnimationFrame(() => {
+        restackQueued = false;
+        if (!isDocked()) return;
+        let y = PANEL_M;
+        ['coach', 'teach', 'brief'].forEach(k => {
+          const p = panels[k]; if (!p || p.el.classList.contains('hidden')) return;
+          p.el.style.bottom = y + 'px';
+          y += p.el.offsetHeight + 6;
+        });
+        document.body.style.paddingBottom = (y + 24) + 'px';
+        setupCog.style.bottom = (y + 4) + 'px';
+      });
+    }
+    function showPanel(key) {
+      const p = panels[key]; if (!p) return;
+      const wasHidden = p.el.classList.contains('hidden');
+      p.el.classList.remove('hidden');
+      if (wasHidden || !p.placed) applyLayout(p); else clampPanel(p);
+      if (isDocked()) restackDock();
+    }
+    function hidePanel(key) {
+      const p = panels[key]; if (!p) return;
+      p.el.classList.add('hidden'); p.placed = false;
+      if (isDocked()) restackDock();
+    }
+    // Restore a minimised panel (e.g. an explanation just landed on it).
+    function revealPanel(key) {
+      const p = panels[key]; if (!p) return;
+      showPanel(key);
+      if (p.el.classList.contains('min')) setMin(p, false);
+    }
+    let lastDocked = null;
+    function relayoutAll() {
+      const docked = isDocked();
+      Object.values(panels).forEach(p => {
+        if (docked !== lastDocked) { p.placed = false; if (!docked) { p.el.style.bottom = ''; } }
+        if (p.el.classList.contains('hidden')) return;
+        if (docked) applyLayout(p); else { if (!p.placed) applyLayout(p); else clampPanel(p); }
+      });
+      if (docked) restackDock(); else { document.body.style.paddingBottom = ''; setupCog.style.bottom = ''; }
+      lastDocked = docked;
+    }
+    window.addEventListener('resize', relayoutAll);
+    window.addEventListener('orientationchange', () => setTimeout(relayoutAll, 60));
 
-    document.addEventListener('mousemove', e => {
-      if (!bbDrag.on) return;
-      const dx = e.clientX - bbDrag.ox;
-      const dy = e.clientY - bbDrag.oy;
-      if (Math.abs(dx) > 3 || Math.abs(dy) > 3) bbDrag.moved = true;
-      briefBoardEl.style.left = (bbDrag.bx + dx) + 'px';
-      briefBoardEl.style.top  = (bbDrag.by + dy) + 'px';
+    const coachPanel = makePanel(coachCard, 'coach', {
+      minW: 210, minH: 170,
+      defaults: () => ({ w: 236, left: window.innerWidth - 236 - 16, top: Math.max(PANEL_M, Math.round((window.innerHeight - 260) / 2)) }),
     });
-
-    document.addEventListener('mouseup', () => {
-      if (bbDrag.on) { bbDrag.on = false; document.body.style.userSelect = ''; }
+    const briefPanel = makePanel(document.getElementById('brief-board'), 'brief', {
+      minW: 220, minH: 96,
+      defaults: () => ({ w: 300, left: 12, top: 12 }),
     });
+    const teachPanel = makePanel(document.getElementById('teach-board'), 'teach', {
+      minW: 220, minH: 150,
+      defaults: () => {
+        const b = document.getElementById('brief-board');
+        const under = !b.classList.contains('hidden') ? b.getBoundingClientRect().bottom + 10 : 12;
+        return { w: 300, left: 12, top: Math.min(under, window.innerHeight - 260) };
+      },
+    });
+    // The coach card is visible from the start; boards appear when the brief lands.
+    loadLayout(); relayoutAll();
+    fetch('/whoami', { credentials: 'include' }).then(r => r.json()).then(d => {
+      const id = d && d.person && (d.person.id || d.person.email);
+      if (id) { panelUser = String(id); loadLayout(); Object.values(panels).forEach(p => { p.placed = false; }); relayoutAll(); }
+    }).catch(() => {});
+    // Test hook: the harness drives the panels without a mouse.
+    window.__qwriterPanels = { panels, placePanel, setMin, clampPanel, relayoutAll, isDocked, layout: () => panelLayout };
 
     // ── Coach card rendering ───────────────────────────────────────────────
-    function setCoach({ msg, section, hint, actions, inputVisible, thinking, showNudge }) {
+    // `where` — "Part 2 of 4 — <plain label>" — comes from the current
+    // criterion unless the caller passes where:false. `move` is the one-line
+    // "That's the first part covered — now the second: …" when Q moves on.
+    // Actions: primary/big = the one thing to do; quiet = small text links.
+    const coachWhere = document.getElementById('coach-where');
+    const coachMove  = document.getElementById('coach-move');
+    const coachQuiet = document.getElementById('coach-quiet');
+    function setCoach({ msg, section, hint, actions, inputVisible, thinking, showNudge, where, move }) {
       coachMsg.classList.toggle('thinking', !!thinking);
       coachMsg.textContent = msg || '';
       coachSection.textContent = section || '';
       coachHint.textContent = hint || '';
+      coachWhere.textContent = where === false ? '' : (typeof where === 'string' ? where : whereText(whereInfo()));
+      coachMove.textContent = move || '';
+      renderScore();
 
       coachNudge.classList.toggle('hidden', !showNudge);
 
-      if (actions && actions.length) {
-        coachActions.classList.remove('hidden');
-        coachActions.innerHTML = '';
-        actions.forEach(a => {
-          const btn = document.createElement('button');
-          btn.className = 'q-btn' + (a.primary ? ' primary' : '');
-          btn.textContent = a.label;
-          btn.addEventListener('click', a.onClick);
-          coachActions.appendChild(btn);
-        });
-      } else {
-        coachActions.classList.add('hidden');
-        coachActions.innerHTML = '';
-      }
+      coachActions.innerHTML = ''; coachQuiet.innerHTML = '';
+      const main = (actions || []).filter(a => !a.quiet);
+      const quiet = (actions || []).filter(a => a.quiet);
+      coachActions.classList.toggle('hidden', !main.length);
+      main.forEach(a => {
+        const btn = document.createElement('button');
+        btn.className = 'q-btn' + (a.primary ? ' primary' : '') + (a.big ? ' big' : '');
+        btn.textContent = a.label;
+        btn.addEventListener('click', a.onClick);
+        coachActions.appendChild(btn);
+      });
+      quiet.forEach(a => {
+        const btn = document.createElement('button');
+        btn.className = 'q-btn quiet';
+        btn.textContent = a.label;
+        btn.addEventListener('click', a.onClick);
+        coachQuiet.appendChild(btn);
+      });
 
       const micBtn = document.getElementById('coach-mic');
       if (inputVisible === false) {
@@ -1185,6 +1492,39 @@
       } else {
         coachInput.classList.remove('hidden'); if (micBtn) micBtn.classList.remove('hidden');
       }
+      // A minimised coach card with something new to say: bring it back.
+      if (msg && coachCard.classList.contains('min') && !thinking) setMin(coachPanel, false);
+      document.getElementById('coach-body').scrollTop = 0;
+    }
+
+    // WHERE WE ARE — every question carries its place in the brief.
+    const ORDINALS = ['first', 'second', 'third', 'fourth', 'fifth', 'sixth', 'seventh', 'eighth', 'ninth', 'tenth', 'eleventh', 'twelfth'];
+    function ordinal(n) { return ORDINALS[n - 1] || (n + 'th'); }
+    // The plain nickname for a criterion (mirrors plainLabel in q-writer.js for
+    // briefs saved before labels existed).
+    function criterionLabel(c) {
+      if (!c) return '';
+      const l = String(c.label || '').replace(/\s+/g, ' ').trim();
+      if (l) return l.split(' ').slice(0, 5).join(' ').replace(/[.:;,]+$/, '');
+      const words = String(c.text || '').replace(/^\s*(AC|LO)?\s*\d+(\.\d+)*\s*[:.)-]?\s*/i, '').replace(/\s+/g, ' ').trim().split(' ').filter(Boolean);
+      return words.slice(0, 4).join(' ').replace(/[.:;,]+$/, '') || 'this part';
+    }
+    function labelFor(id) { const c = (state.brief && state.brief.criteria || []).find(x => x.id === id); return c ? criterionLabel(c) : String(id || ''); }
+    function whereInfo(critId) {
+      const cs = (state.brief && state.brief.criteria) || [];
+      const id = critId || state.currentCriterionId;
+      const i = cs.findIndex(c => c.id === id);
+      if (i < 0) return null;
+      return { n: i + 1, N: cs.length, id: cs[i].id, label: criterionLabel(cs[i]), text: cs[i].text };
+    }
+    function whereText(w) { return w ? 'Part ' + w.n + ' of ' + w.N + ' — ' + w.label : ''; }
+    // The one line Q says when he moves from one criterion to the next.
+    function moveLine(prevId, nextId) {
+      if (!prevId || !nextId || prevId === nextId) return '';
+      const a = whereInfo(prevId), b = whereInfo(nextId);
+      if (!b) return '';
+      if (a && (state.coverage[prevId] === 'covered')) return 'That\'s the ' + ordinal(a.n) + ' part covered — now the ' + ordinal(b.n) + ': ' + b.label + '.';
+      return 'Now the ' + ordinal(b.n) + ' part: ' + b.label + '.';
     }
 
     // ── API helpers ────────────────────────────────────────────────────────
@@ -1391,10 +1731,10 @@
       state.brief = null; state.analysis = null; state.coverage = {}; state.coachHistory = [];
       state.currentQuestion = ''; state.currentCriterionId = ''; state.currentSection = ''; state.docSnapshot = ''; state.lastMark = null; state.lastProbeAt = 0;
       state.brickCounts = {}; state.essayReady = false; state.sources = []; state.editItems = null; state.editIndex = 0; state.editDone = false;
-      const board = document.getElementById('brief-board');
-      board.classList.add('hidden'); board.classList.remove('board-mode');
-      document.getElementById('brief-board-badge').textContent = '📋 Your Brief';
+      hidePanel('brief'); hidePanel('teach');
       document.getElementById('brief-board-body').innerHTML = '';
+      state.boardItems = []; state.boardEarlierOpen = false; renderBoard();
+      hideUndo();
       pendingPatch = null;
       try { await api('/writer/tutor', { reset: true }, { timeoutMs: 20000 }); } catch (e) { setSavedLabel('error', shortCause(e)); }
       if (!keepDoc) { docBody.innerHTML = ''; titleEl.value = ''; wordEl.textContent = '0 words'; }
@@ -1416,20 +1756,21 @@
       if (b.wordCount) parts.push('Word count: ' + b.wordCount);
       return parts.filter(Boolean).join('\n');
     }
+    // The brief board. The student never reads the brief (Sarah, 15 Aug 2026:
+    // "I need him to get me to write this essay… having never seen the
+    // questions"), so the board is ONE line in Q's words + the coverage strip;
+    // the formal content sits behind "Show the brief", collapsed by default
+    // and remembered.
     function setBrief(data) {
       const body  = document.getElementById('brief-board-body');
-      const board = document.getElementById('brief-board');
       const esc = escHtml;
-
       const fileFallback = (sourceState.name || '')
         .replace(/\.[a-z0-9]+$/i, '').replace(/[._-]+/g, ' ').trim();
-      const docType = data.title || data.documentType || fileFallback || 'Your Assignment';
+      const docType = data.title || data.documentType || fileFallback || 'Your assignment';
       const criteria = Array.isArray(data.criteria) ? data.criteria : [];
+      const n = criteria.length;
 
-      const leftHtml = `<div class="brief-col">
-        <div class="brief-doctype">${esc(docType)}</div>
-        <div class="brief-asks-label">It's asking you for ${criteria.length} thing${criteria.length === 1 ? '' : 's'}:</div>
-        <div class="coverage-strip" id="coverage-strip"></div></div>`;
+      const line = 'This is asking you for ' + n + ' thing' + (n === 1 ? '' : 's') + ' — I\'ll take you through each.';
 
       const gb = data.gradeBands || {};
       const gradeHtml = (gb.top || gb.mid || gb.low) ? `<div class="brief-grades">
@@ -1441,42 +1782,59 @@
       const metaBits = [];
       if (data.wordCount) metaBits.push('Words: ' + esc(data.wordCount));
       if (data.deadline) metaBits.push('Due: ' + esc(data.deadline));
-      const rightHtml = `<div class="brief-col">
-        <div class="brief-producing-label">You're producing:</div>
-        <div class="brief-producing-text">${esc(producing)}</div>
-        ${gradeHtml}
-        ${metaBits.length ? `<div class="brief-meta-line">${metaBits.join(' · ')}</div>` : ''}</div>`;
+      const listHtml = criteria.map((c, i) => `<li><span class="cid" title="${esc(c.id)}">${i + 1}.</span>${esc(c.text)}</li>`).join('');
+      const foldOpen = !!(panelLayout.brief && panelLayout.brief.fold);
 
-      body.innerHTML = leftHtml + rightHtml;
-      board.classList.remove('hidden');
+      body.innerHTML = `<div class="bb-line">${esc(line)}</div>
+        <div class="coverage-strip" id="coverage-strip"></div>
+        <details class="bb-fold" id="bb-fold"${foldOpen ? ' open' : ''}><summary>Show the brief</summary>
+          <div class="bb-formal">
+            <div class="brief-doctype">${esc(docType)}</div>
+            ${producing ? `<div class="brief-producing-label">You're producing</div><div class="brief-producing-text">${esc(producing)}</div>` : ''}
+            ${data.whatItWants && data.whatItWants !== producing ? `<div class="brief-producing-label">What it wants</div><div class="brief-producing-text">${esc(data.whatItWants)}</div>` : ''}
+            <div class="brief-asks-label">The ${n} thing${n === 1 ? '' : 's'}, as the brief puts ${n === 1 ? 'it' : 'them'}</div>
+            <ol class="brief-asks-list">${listHtml}</ol>
+            ${gradeHtml}
+            ${metaBits.length ? `<div class="brief-meta-line">${metaBits.join(' · ')}</div>` : ''}
+          </div>
+        </details>`;
+      const fold = document.getElementById('bb-fold');
+      fold.addEventListener('toggle', () => {
+        const l = getL(briefPanel); l.fold = fold.open; saveLayout();
+        clampPanel(briefPanel); if (isDocked()) restackDock();
+        // The teaching board sits under the brief by default — keep it there
+        // while the user hasn't moved it.
+        const tl = panelLayout.teach || {};
+        if (!tl.moved && !isDocked() && !teachPanel.el.classList.contains('hidden')) requestAnimationFrame(() => defaultPlace(teachPanel));
+      });
+      showPanel('brief');
       renderCoverage();
     }
 
-    // The coverage strip: one line per criterion, dot = none / partial / covered.
-    // Lives in the brief board's left column; in board mode it moves under the
-    // heading so it is always visible while coaching.
+    // The coverage strip: one line per criterion, dot = none / partial /
+    // covered, the PLAIN label (never "AC1.4" — the id shows on hover). Lives
+    // on the brief board and, compact, at the foot of the teaching board.
+    // Click one to be coached on it.
     function renderCoverage() {
       const b = state.brief; if (!b) return;
-      let strip = document.getElementById('coverage-strip');
-      const board = document.getElementById('brief-board');
-      if (!strip && board.classList.contains('board-mode')) {
-        const body = document.getElementById('brief-board-body');
-        strip = document.createElement('div'); strip.className = 'coverage-strip'; strip.id = 'coverage-strip';
-        const items = document.getElementById('board-items');
-        body.insertBefore(strip, items || null);
-      }
-      if (!strip) return;
+      const strips = Array.from(document.querySelectorAll('.coverage-strip'));
+      if (!strips.length) return;
       const criteria = b.criteria || [];
-      strip.innerHTML = criteria.map(c => {
+      const html = criteria.map((c, i) => {
         const cov = state.coverage[c.id] || 'none';
         const cur = c.id === state.currentCriterionId ? ' current' : '';
         const bc = state.brickCounts && state.brickCounts[c.id];
-        const count = bc && bc.total ? `<span class="cov-count">${bc.voiced}/${bc.total} voiced</span>` : '';
-        return `<div class="cov-item${cur}" data-cov="${cov}" data-id="${escHtml(c.id)}" title="${escHtml(c.text)}">
-          <span class="cov-dot"></span><span class="cov-text"><span class="cov-id">${escHtml(c.id)}</span>${escHtml(criterionShort(c.text))}${count}</span></div>`;
+        const pct = state.match && state.match.perCriterion && state.match.perCriterion[c.id] != null ? state.match.perCriterion[c.id] : null;
+        const count = pct != null ? `<span class="cov-pct">${pct}%</span>` : (bc && bc.total ? `<span class="cov-count">${bc.voiced}/${bc.total}</span>` : '');
+        const title = c.id + ' — ' + String(c.text || '').replace(/\s+/g, ' ').trim() + (pct != null ? ' — match ' + pct + '%' : '');
+        return `<div class="cov-item${cur}" data-cov="${cov}" data-id="${escHtml(c.id)}" title="${escHtml(title)}">
+          <span class="cov-dot"></span><span class="cov-text">${escHtml(criterionLabel(c))}<span class="cov-id">${escHtml(c.id)}</span>${count}</span></div>`;
       }).join('');
-      strip.querySelectorAll('.cov-item').forEach(el => {
-        el.addEventListener('click', () => askNextQuestion({ trigger: 'focus', focusCriterionId: el.dataset.id }));
+      strips.forEach(strip => {
+        strip.innerHTML = html;
+        strip.querySelectorAll('.cov-item').forEach(el => {
+          el.addEventListener('click', () => askNextQuestion({ trigger: 'focus', focusCriterionId: el.dataset.id }));
+        });
       });
     }
     function uncoveredCriteria() {
@@ -1489,44 +1847,87 @@
       renderCoverage();
     }
 
-    // Shared HTML-escape helper
-
-    // Switch the brief board from "summary" mode to "teaching board" mode.
-    // Called on the first coaching question — brief summary collapses to a
-    // single doc-type header and the board items list takes over below it.
-    function switchToBoardMode() {
-      const board = document.getElementById('brief-board');
-      const body  = document.getElementById('brief-board-body');
-      const badge = document.getElementById('brief-board-badge');
-      if (board.classList.contains('board-mode')) return; // already switched
-      badge.textContent = '📝 Teaching Board';
-      const docType = (state.brief && (state.brief.title || state.brief.documentType)) || 'Your Assignment';
-      body.innerHTML = `<div class="board-doctype">${escHtml(docType)}</div>
-        <div class="board-items" id="board-items"></div>`;
-      board.classList.add('board-mode');
-      board.classList.remove('minimised');
-      renderCoverage();
-    }
-
-    // Append a question, answer, or note item to the teaching board.
-    // Switches to board mode on first call.
-    function appendBoardItem({ type, label, text }) {
+    // ── The teaching board ────────────────────────────────────────────────
+    // A list of items {type: question|answer|note|explain, label, text,
+    // links, action}. Rendered as: WHERE WE ARE, "Earlier (n)" folded, then
+    // the CURRENT block (the latest question, its hint, the answer so far),
+    // then the compact coverage strip. Long items clamp with "more".
+    state.boardItems = [];
+    state.boardEarlierOpen = false;
+    const teachBody = document.getElementById('teach-board-body');
+    function switchToBoardMode() { showPanel('teach'); }
+    function appendBoardItem({ type, label, text, links, action, criterionId }) {
+      if (!text) return null;
+      const it = { type, label: label || '', text: String(text), links: links || null, action: action || null, criterionId: criterionId || state.currentCriterionId || '' };
+      state.boardItems.push(it);
+      renderBoard();
       switchToBoardMode();
-      const itemsEl = document.getElementById('board-items');
-      if (!itemsEl || !text) return;
-      const div = document.createElement('div');
-      div.className = 'board-item board-item-' + type;
-      if (type === 'question') {
-        div.innerHTML = `<span class="board-label">${escHtml(label || 'Q')}</span>
-          <span class="board-qtext">${escHtml(text)}</span>`;
-      } else if (type === 'answer') {
-        div.innerHTML = `<span class="board-label board-ans-label">→</span>
-          <span class="board-atext">${escHtml(text)}</span>`;
-      } else if (type === 'note') {
-        div.innerHTML = `<span class="board-note">${escHtml(text)}</span>`;
+      return it;
+    }
+    // Short paragraphs: blank-line paragraphs first; a single long run is
+    // broken into 2-sentence paragraphs so it reads, never a wall.
+    function paragraphsOf(text) {
+      const t = String(text || '').trim();
+      if (!t) return [];
+      let paras = t.split(/\n\s*\n/).map(x => x.trim()).filter(Boolean);
+      if (paras.length === 1 && t.length > 260 && !/\n/.test(t)) {
+        const sentences = t.match(/[^.!?]+[.!?]+["'”’)\]]*\s*|[^.!?]+$/g) || [t];
+        paras = []; for (let i = 0; i < sentences.length; i += 2) paras.push((sentences[i] + (sentences[i + 1] || '')).trim());
       }
-      itemsEl.appendChild(div);
-      div.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      return paras;
+    }
+    function paragraphsHtml(text) {
+      return paragraphsOf(text).map(p => '<p>' + escHtml(p).replace(/\n/g, '<br>') + '</p>').join('');
+    }
+    function boardItemHtml(it, idx, inEarlier) {
+      const long = (inEarlier ? it.text.length > 120 : it.text.length > 240) && !(it.type === 'question' && !inEarlier);
+      const clampCls = long ? ' clampable clamped' : '';
+      const more = long ? `<button type="button" class="tb-more" data-more="${idx}">more</button>` : '';
+      const click = it.action ? ' tb-click' : '';
+      if (it.type === 'question') {
+        return `<div class="tb-item tb-q${click}" data-idx="${idx}"><span class="tb-label">${escHtml(it.label || 'Q')}</span><div class="tb-text tb-qtext${clampCls}">${paragraphsHtml(it.text)}</div>${more}</div>`;
+      }
+      if (it.type === 'answer') {
+        return `<div class="tb-item tb-a${click}" data-idx="${idx}"><span class="tb-label">you</span><div class="tb-text tb-atext${clampCls}">${paragraphsHtml(it.text)}</div>${more}</div>`;
+      }
+      if (it.type === 'explain') {
+        const links = (it.links || []).map(l => `<a class="tb-link" href="${escHtml(l.url)}" target="_blank" rel="noopener"><span class="ico">${escHtml(l.icon || '▶')}</span>${escHtml(l.name)}</a>`).join('');
+        return `<div class="tb-item tb-x${click}" data-idx="${idx}"><span class="tb-label">Q explains</span><div class="tb-text tb-ntext${clampCls}">${paragraphsHtml(it.text)}</div>${more}${links ? `<div class="tb-links">${links}</div>` : ''}</div>`;
+      }
+      return `<div class="tb-item tb-n${click}" data-idx="${idx}"><span class="tb-label">${escHtml(it.label || 'note')}</span><div class="tb-text tb-ntext${clampCls}">${paragraphsHtml(it.text)}</div>${more}</div>`;
+    }
+    function renderBoard() {
+      const items = state.boardItems;
+      let qi = -1;
+      for (let i = items.length - 1; i >= 0; i--) if (items[i].type === 'question') { qi = i; break; }
+      const earlier = qi > 0 ? items.slice(0, qi) : [];
+      const current = qi >= 0 ? items.slice(qi) : items.slice();
+      const w = whereInfo();
+      const whereHtml = w ? `<div class="tb-where">${escHtml(whereText(w))}</div>` : '';
+      const earlierHtml = earlier.length
+        ? `<details class="tb-earlier" id="tb-earlier"${state.boardEarlierOpen ? ' open' : ''}><summary>Earlier (${earlier.length})</summary><div class="tb-items">${earlier.map((it, i) => boardItemHtml(it, i, true)).join('')}</div></details>`
+        : '';
+      const currentHtml = `<div class="tb-current"><div class="tb-items">${current.map((it, i) => boardItemHtml(it, (qi >= 0 ? qi : 0) + i, false)).join('')}</div></div>`;
+      const stripHtml = state.brief ? `<div class="coverage-strip compact" id="coverage-strip-teach"></div>` : '';
+      teachBody.innerHTML = whereHtml + earlierHtml + currentHtml + stripHtml;
+      const fold = document.getElementById('tb-earlier');
+      if (fold) fold.addEventListener('toggle', () => { state.boardEarlierOpen = fold.open; if (isDocked()) restackDock(); });
+      teachBody.querySelectorAll('.tb-more').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const txt = btn.parentElement.querySelector('.tb-text');
+          const open = txt.classList.toggle('clamped');
+          btn.textContent = open ? 'more' : 'less';
+        });
+      });
+      teachBody.querySelectorAll('.tb-item.tb-click').forEach(el => {
+        const it = items[Number(el.dataset.idx)];
+        if (it && it.action) el.addEventListener('click', () => it.action());
+      });
+      if (state.brief) renderCoverage();
+      // Keep the current question in view: the fold sits above it, closed.
+      const cur = teachBody.querySelector('.tb-current');
+      teachBody.scrollTop = cur && state.boardEarlierOpen ? Math.max(0, cur.offsetTop - teachBody.offsetTop - 34) : 0;
+      if (isDocked()) restackDock();
     }
 
     // ── The brief lands: say what it found, then LEAD with the opener ──────
@@ -1558,7 +1959,6 @@
         `This is asking you for ${n} thing${n === 1 ? '' : 's'}:\n${list}${n > 6 ? '\n…and ' + (n - 6) + ' more (see the board)' : ''}` +
         (b.wordCount ? `\n\nAround ${b.wordCount}.` : '') +
         (b.prerequisites && b.prerequisites.length ? `\n\nHave to hand: ${b.prerequisites.slice(0, 3).join('; ')}.` : '');
-      appendBoardItem({ type: 'note', text: found });
       // The opener IS question 1 — no model call, no waiting.
       const opener = b.opener || 'Tell me, in your own words, what you already know about this. One line is plenty.';
       state.currentQuestion = opener;
@@ -1566,11 +1966,12 @@
       state.currentSection = state.currentCriterionId;
       state.docSnapshot = docPlainText();
       state.qCount = 1;
+      appendBoardItem({ type: 'note', label: 'the task', text: found });
       appendBoardItem({ type: 'question', label: 'Q1', text: opener });
       renderCoverage();
       setCoach({
         msg: opener,
-        section: state.currentCriterionId ? 'FIRST BRICK · ' + state.currentCriterionId : 'FIRST BRICK',
+        section: 'FIRST QUESTION',
         hint: 'Answer here, or just start writing on the page — I read as you go.',
         inputVisible: true,
         showNudge: true,
@@ -1642,7 +2043,7 @@
         state.coverage = Object.fromEntries(criteria.map(c => [c.id, 'none']));
         persist({ brief: b, coverage: state.coverage, task: (taskText || '').slice(0, 4000) });
         adoptBrief(b, { announce: true });
-        appendBoardItem({ type: 'note', text: 'Quick read: only the first part of the document was read. Retry the full read from the settings cog when the service is back.' });
+        appendBoardItem({ type: 'note', label: 'note', text: 'Quick read: only the first part of the document was read. Retry the full read from the settings cog when the service is back.' });
       } catch (e) {
         setCoach({ msg: 'The quick read failed too: ' + shortCause(e), actions: [{ label: '↻ Retry the full read', primary: true, onClick: () => runBrief(taskText, sourceState.name, { fromStored: true }) }], inputVisible: false });
       }
@@ -1680,6 +2081,7 @@
           ...voicePayload(),
         }, { timeoutMs: 90000 });
         const question = d.question;
+        const prevCriterionId = state.currentCriterionId;
         state.currentQuestion   = question;
         state.currentCriterionId = d.criterionId || state.currentCriterionId;
         state.currentSection    = state.currentCriterionId;
@@ -1687,16 +2089,23 @@
         if (d.brickCounts) state.brickCounts = d.brickCounts;
         if (d.essayReady) state.essayReady = true;
         applyCoverage(d.coverage);
+        applyMatch(d.match);
 
+        // WHERE WE ARE: when Q moves to a new criterion, say so in one line.
+        const moved = moveLine(prevCriterionId, state.currentCriterionId);
+        if (moved) appendBoardItem({ type: 'note', label: 'moving on', text: moved });
         state.qCount = (state.qCount || 1) + 1;
         const label = 'Q' + state.qCount;
         appendBoardItem({ type: 'question', label, text: question });
-        if (d.hint) appendBoardItem({ type: 'note', text: d.hint });
+        if (d.hint) appendBoardItem({ type: 'note', label: 'hint', text: d.hint });
 
+        // After a coach-box answer: one short acknowledgement + the question.
+        const ack = opts.ack ? String(opts.ack) : (d.acknowledge && trigger === 'answer' ? String(d.acknowledge) : '');
         setCoach({
-          msg: question,
-          section: (d.done ? 'ALL COVERED · ' : '') + (state.currentCriterionId || ''),
-          hint: d.done ? 'Every criterion has something. Finish & mark when you\'re ready.' : (d.hint || ''),
+          msg: ack ? ack.replace(/\s+$/, '') + ' Now: ' + question : question,
+          section: d.done ? 'ALL COVERED' : '',
+          move: moved,
+          hint: d.done ? 'Every part has something. Finish & mark when you\'re ready.' : (d.hint || ''),
           inputVisible: true,
           showNudge: true,
         });
@@ -1720,7 +2129,30 @@
       }
     }
 
-    // ── Handle coach input: user answers leading question ──────────────────
+    // ── Handle coach input: the answer goes on the page, then the next question ──
+    // Sarah, 15 Aug 2026: "he shouldn't be suggesting as we go. he should be
+    // steering and then editing when we are done." So: their EXACT words go
+    // onto the page at once as their own paragraph, the board keeps the
+    // original, and Q asks the next probe — one motion. No reframe, no
+    // rewording, no technique tips during coaching (those live in "Edit with
+    // Q" at the end). A quiet Undo takes the paragraph off again for 10s.
+    const coachUndo = document.getElementById('coach-undo');
+    let undoTimer = null; let lastInsertedPara = null;
+    function hideUndo() { clearTimeout(undoTimer); coachUndo.classList.add('hidden'); lastInsertedPara = null; }
+    function offerUndo(p) {
+      lastInsertedPara = p; coachUndo.classList.remove('hidden');
+      clearTimeout(undoTimer); undoTimer = setTimeout(hideUndo, 10000);
+    }
+    coachUndo.addEventListener('click', () => {
+      if (lastInsertedPara && lastInsertedPara.parentNode === docBody) {
+        lastInsertedPara.remove();
+        wordEl.textContent = countWords() + ' words';
+        scheduleAutosave();
+      }
+      hideUndo();
+      coachHint.textContent = 'Taken off the page — your answer is still on the board.';
+    });
+
     coachInput.addEventListener('keydown', async (ev) => {
       if (ev.key !== 'Enter') return;
       const text = coachInput.value.trim();
@@ -1729,74 +2161,23 @@
 
       // If we have a current leading question, treat this as the answer
       if (state.currentQuestion) {
-        const rawAnswer     = text;
-        const currentQ      = state.currentQuestion;
-        const currentSection = state.currentSection;
+        const rawAnswer = text;
+        const currentQ  = state.currentQuestion;
 
-        // Write student's answer to the teaching board in teal
+        // The board keeps the original, in teal.
         appendBoardItem({ type: 'answer', text: rawAnswer });
-
         state.coachHistory.push({ question: currentQ, answer: rawAnswer, criterionId: state.currentCriterionId || null });
         state.currentQuestion = '';
-        persist({ coachHistory: state.coachHistory });
 
-        setCoach({ msg: 'Thinking how to put that…', thinking: true, inputVisible: false });
+        // Their exact words go on the page as their own paragraph — now.
+        const p = insertQText(rawAnswer, false, { focus: false });
+        if (p) offerUndo(p);
+        // The probe reads the page delta; the answer is on the page now, so
+        // move the snapshot past it (the box exchange goes in history).
+        state.docSnapshot = docPlainText();
+        persist({ coachHistory: state.coachHistory, ...docPatch() });
 
-        try {
-          const d = await post('/writer/reframe', {
-            rawAnswer,
-            question: currentQ,
-            context: (docBody.textContent || '').slice(0, 800),
-            ...voicePayload(),
-          });
-          if (!d.ok) throw new Error(d.error || 'reframe failed');
-          if (!d.reframed || !String(d.reframed).trim()) throw new Error('no sentence came back');
-          state.pendingReframe = d;
-
-          // The reframe is THEIR sentence in their voice, one notch up. One
-          // accept per sentence; nothing goes on the page without a tap.
-          setCoach({
-            msg: '"' + d.reframed + '"',
-            section: 'YOUR SENTENCE, YOUR VOICE',
-            hint: d.explanation || '',
-            actions: [
-              {
-                label: '✓ Put it on the page',
-                primary: true,
-                onClick: () => insertReframe(d.reframed, currentSection, d.reframed),
-              },
-              {
-                label: '↻ Another way',
-                onClick: () => getAnotherReframe(rawAnswer, currentQ),
-              },
-              {
-                label: '✓ Put my words in exactly',
-                onClick: () => {
-                  insertTextAtEnd(rawAnswer);
-                  markAndInsertGradeBand(currentSection || currentQ, rawAnswer);
-                  state.pendingReframe = null;
-                  askNextQuestion();
-                },
-              },
-              {
-                label: 'Not yet — next question',
-                onClick: () => { state.pendingReframe = null; askNextQuestion(); },
-              },
-            ],
-            inputVisible: false,
-          });
-        } catch (e) {
-          // The reframe is a nicety — never lose the answer over it. Their words
-          // go straight in, and coaching continues.
-          setCoach({
-            msg: 'I couldn\'t reshape that just now (' + shortCause(e) + '). Your answer is safe on the board — drop it in as-is or keep going.',
-            actions: [
-              { label: '✓ Put my words in', primary: true, onClick: () => { insertTextAtEnd(rawAnswer); askNextQuestion({ trigger: 'answer' }); } },
-              { label: 'Next question →', onClick: () => askNextQuestion({ trigger: 'answer' }) },
-            ],
-            inputVisible: false,
-          });
-        }
+        askNextQuestion({ trigger: 'answer', ack: 'Got it — that\'s on the page.' });
       } else {
         // Free chat with Q
         await askQ(text);
@@ -1807,89 +2188,17 @@
     // smaller, easier question toward the same brick instead.
     btnStartMe.addEventListener('click', () => askNextQuestion({ trigger: 'stuck' }));
 
-    // "How could I put this?" — reframes what they've typed so far
-    btnHowPut.addEventListener('click', async () => {
-      if (!state.currentQuestion) return;
-      const typed = docPlainText();
-      const sinceSnapshot = (typed.startsWith(state.docSnapshot) ? typed.slice(state.docSnapshot.length) : typed.slice(-800)).trim();
-      if (!sinceSnapshot) {
-        setCoach({
-          msg: 'Type your rough idea first — even one messy sentence — then I\'ll help you say it better.',
-          hint: '',
-          inputVisible: true,
-          showNudge: true,
-        });
-        return;
-      }
-      setCoach({ msg: 'Let me find a better way to say that…', thinking: true, inputVisible: false });
-      try {
-        const d = await post('/writer/reframe', {
-          rawAnswer: sinceSnapshot,
-          question: state.currentQuestion,
-          context: state.docSnapshot.slice(0, 600),
-          ...voicePayload(),
-        });
-        if (!d.ok) throw new Error(d.error);
-        state.pendingReframe = d;
-        setCoach({
-          msg: '"' + d.reframed + '"',
-          section: 'SUGGESTION',
-          hint: d.explanation || '',
-          actions: [
-            { label: '✓ Use it', primary: true, onClick: () => insertReframe(d.reframed) },
-            { label: '↻ Another', onClick: () => btnHowPut.click() },
-            { label: '✗ Keep mine', onClick: () => { state.pendingReframe = null; askNextQuestion(); } },
-          ],
-          inputVisible: false,
-        });
-      } catch (e) {
-        setCoach({ msg: 'Try again.', inputVisible: true, showNudge: true });
-      }
-    });
-
-    async function getAnotherReframe(rawAnswer, question) {
-      setCoach({ msg: 'Let me try another angle…', thinking: true, inputVisible: false });
-      try {
-        const d = await post('/writer/reframe', {
-          rawAnswer,
-          question,
-          context: (docBody.textContent || '').slice(0, 800),
-          ...voicePayload(),
-        });
-        if (!d.ok) throw new Error(d.error);
-        state.pendingReframe = d;
-
-        setCoach({
-          msg: '"' + d.reframed + '"',
-          section: 'SUGGESTION',
-          hint: d.explanation || '',
-          actions: [
-            { label: '✓ Use it', primary: true, onClick: () => insertReframe(d.reframed) },
-            { label: '↻ Another', onClick: () => getAnotherReframe(rawAnswer, question) },
-            { label: '✗ Keep mine', onClick: () => {
-              insertTextAtEnd(rawAnswer);
-              state.pendingReframe = null;
-              askNextQuestion();
-            }},
-          ],
-          inputVisible: false,
-        });
-      } catch (e) {
-        setCoach({ msg: 'Try again — type your answer.' });
-      }
-    }
-
     // Put the STUDENT'S sentence on the paper as a plain paragraph. Since the
     // integrity rule (Q's own sentences never enter the document) this is only
     // ever their words — typed, dictated, or reframed in their voice and
     // accepted with a tap — so it is styled like the rest of their writing.
-    function insertQText(text, countAsQWords) {
+    function insertQText(text, countAsQWords, { focus = true } = {}) {
       // Live 15 Aug 2026: "Put it on the page" reached here with undefined and
       // crashed on esc(). Nothing goes on the page unless there is a sentence.
       text = (text == null ? '' : String(text)).trim();
       if (!text) {
         setCoach({ msg: 'There was no sentence to put down — say it again in your words and I will read the page.', inputVisible: true });
-        return;
+        return null;
       }
       const esc = s => s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
       const p = document.createElement('p');
@@ -1911,19 +2220,20 @@
       range.collapse(true);
       sel.removeAllRanges();
       sel.addRange(range);
-      docBody.focus();
+      if (focus) docBody.focus();
+      scheduleAutosave();
+      return p;
     }
 
-    // Legacy helper still used by "Keep mine" and word-swap paths
+    // Legacy helper still used by the edit stage
     function insertTextIntoDoc(text, countAsQWords) {
       insertQText(text, countAsQWords);
     }
 
-    function insertReframe(text, sectionName, sectionTextForGrade) {
+    // Edit-stage only (Sarah, 15 Aug 2026: steer while writing, edit at the end).
+    function insertReframe(text) {
       insertQText(text, false);
-      if (sectionName) markAndInsertGradeBand(sectionName, sectionTextForGrade || text);
       state.pendingReframe = null;
-      askNextQuestion();
     }
 
     function insertTextAtEnd(text) {
@@ -2183,27 +2493,16 @@
     });
 
     // ── "I don't understand this" ─────────────────────────────────────────
+    // Q explains in plain words ON THE TEACHING BOARD (short paragraphs +
+    // real search links as proper buttons), then re-asks the same question.
     const btnDontUnderstand = document.getElementById('btn-dont-understand');
-    const explainPopup  = document.getElementById('explain-popup');
-    const explainText   = document.getElementById('explain-text');
-    const explainLinks  = document.getElementById('explain-links');
-    document.getElementById('explain-close').addEventListener('click', () => {
-      explainPopup.classList.add('hidden');
-    });
-
     btnDontUnderstand.addEventListener('click', async () => {
       // Prefer the full question text (most specific), fall back to section, then subject
       const concept = state.currentQuestion || state.currentSection || state.analysis?.subject || 'this topic';
       // Record what they were stuck on so Q can recall it from any page
       saveTutor({ lastStuckOn: concept });
-      // Position popup near the button
-      const btnRect = btnDontUnderstand.getBoundingClientRect();
-      explainPopup.style.left = Math.min(btnRect.left, window.innerWidth - 280) + 'px';
-      explainPopup.style.top  = (btnRect.bottom + 8 + window.scrollY) + 'px';
-      explainText.textContent = 'Q is explaining…';
-      explainLinks.innerHTML = '';
-      explainPopup.classList.remove('hidden');
-
+      const question = state.currentQuestion;
+      setCoach({ msg: 'Let me put that another way…', thinking: true, inputVisible: false });
       try {
         const d = await post('/writer/explain', {
           concept,
@@ -2211,27 +2510,24 @@
           yearGroup: state.yearGroup || '',
         });
         if (!d.ok) throw new Error(d.error);
-        explainText.textContent = d.explanation || '';
-        explainLinks.innerHTML = '';
-
-        // Build search links from search terms — real search URLs, no hallucinated links
+        // Real search URLs from search terms — never an invented link.
         const platforms = [
           { name: 'YouTube', icon: '▶', base: 'https://www.youtube.com/results?search_query=' },
           { name: 'Khan Academy', icon: '◆', base: 'https://www.khanacademy.org/search?page_search_query=' },
           { name: 'BBC Bitesize', icon: '●', base: 'https://www.bbc.co.uk/bitesize/search?q=' },
         ];
-        const terms = d.searchTerms || [concept];
-        platforms.forEach((p, i) => {
-          const term = terms[i] || terms[0] || concept;
-          const a = document.createElement('a');
-          a.className = 'exp-link';
-          a.href = p.base + encodeURIComponent(term);
-          a.target = '_blank'; a.rel = 'noopener';
-          a.textContent = p.icon + '  ' + p.name;
-          explainLinks.appendChild(a);
+        const terms = Array.isArray(d.searchTerms) && d.searchTerms.length ? d.searchTerms : [concept];
+        const links = platforms.map((p, i) => ({ name: p.name, icon: p.icon, url: p.base + encodeURIComponent(terms[i] || terms[0] || concept) }));
+        appendBoardItem({ type: 'explain', text: d.explanation || '', links });
+        revealPanel('teach');
+        setCoach({
+          msg: question || 'Have a read on the board, then carry on.',
+          hint: 'I\'ve put it in plain words on the board — have a read, then answer here.',
+          inputVisible: true,
+          showNudge: true,
         });
       } catch (e) {
-        explainText.textContent = 'Couldn\'t get an explanation — try again.';
+        setCoach({ msg: question || '', hint: 'Couldn\'t get an explanation just now (' + shortCause(e) + ') — try again.', inputVisible: true, showNudge: true });
       }
     });
 
@@ -2302,10 +2598,9 @@
         });
         if (!d.ok || !d.suggestions) throw new Error(d.error || 'improve failed');
 
-        const targetLabel = currentGrade === 'red' ? 'merit' : 'top grade';
         setCoach({
-          msg: `To push this to ${targetLabel}:`,
-          section: 'IMPROVE — ' + sectionName.toUpperCase(),
+          msg: 'A few steers for this part:',
+          section: '',
           hint: '',
           actions: [],
           inputVisible: false,
@@ -2504,7 +2799,7 @@
         // Position button just above the selection end
         const rect = sel.getRangeAt(0).getBoundingClientRect();
         inlineRefBtn.style.left = Math.min(rect.left, window.innerWidth - 160) + 'px';
-        inlineRefBtn.style.top  = (rect.top - 34 + window.scrollY) + 'px';
+        inlineRefBtn.style.top  = Math.max(8, rect.top - 34) + 'px';
         inlineRefBtn.classList.remove('hidden');
         // Close the para popup if it was open
         refParaPopup.classList.add('hidden');
@@ -2516,7 +2811,7 @@
       const rect = inlineRefBtn.getBoundingClientRect();
       // Position popup below the button
       refParaPopup.style.left = Math.min(rect.left, window.innerWidth - 300) + 'px';
-      refParaPopup.style.top  = (rect.bottom + 8 + window.scrollY) + 'px';
+      refParaPopup.style.top  = Math.min(rect.bottom + 8, window.innerHeight - 200) + 'px';
       refParaPopup.classList.remove('hidden');
       refParaLoading.style.display = 'block';
       refParaContent.classList.add('hidden');
@@ -2602,6 +2897,8 @@
     }
 
     docBody.addEventListener('dblclick', async (ev) => {
+      // Word swaps belong to the editing stage at the end, not to the writing.
+      if (!state.editing) return;
       // Get the double-clicked word via selection
       const sel = window.getSelection();
       if (!sel || sel.isCollapsed || !sel.toString().trim()) return;
@@ -2614,7 +2911,7 @@
 
       // Position popup just below the word
       wordPopup.style.left = Math.min(rect.left, window.innerWidth - 160) + 'px';
-      wordPopup.style.top  = (rect.bottom + 8 + window.scrollY) + 'px';
+      wordPopup.style.top  = Math.min(rect.bottom + 8, window.innerHeight - 120) + 'px';
       wordPopup.classList.add('show');
 
       // Clear old options
@@ -2694,6 +2991,13 @@
       const pauseMs = state.settings.pauseMs || 7000;
       const rearm = (ms) => { probeTimer = setTimeout(maybeLiveProbe, ms || PROBE_RETRY_MS); };
       if (state.probeInFlight) return rearm();
+      // Editing stage: a pause means "read my rewrite", not a new question.
+      if (state.editing) {
+        const idle = Date.now() - (lastInputAt || 0);
+        if (idle < pauseMs) return rearm(pauseMs - idle);
+        checkCurrentSentence({ fromPause: true });
+        return;
+      }
       const text = docPlainText();
       const delta = text.startsWith(state.docSnapshot) ? text.slice(state.docSnapshot.length) : text;
       if (delta.trim().length < PROBE_MIN_NEW_CHARS) return;       // truly nothing new — wait for the next keystroke
@@ -2719,11 +3023,11 @@
       if (missing.length && !force) {
         const first = missing[0];
         setCoach({
-          msg: 'Not yet — nothing on the page for ' + missing.map(c => c.id).join(', ') + '. The marker won\'t give marks for a criterion that isn\'t there.',
+          msg: 'Not yet — nothing on the page for: ' + missing.map(c => criterionLabel(c)).join(', ') + '. Let\'s get something down for each part first.',
           section: 'BEFORE WE FINISH',
           hint: criterionShort(first.text, 140),
           actions: [
-            { label: '→ Take me to ' + first.id, primary: true, onClick: () => askNextQuestion({ trigger: 'focus', focusCriterionId: first.id }) },
+            { label: '→ Take me to “' + criterionLabel(first) + '”', primary: true, onClick: () => askNextQuestion({ trigger: 'focus', focusCriterionId: first.id }) },
             { label: 'Mark what I have anyway', onClick: () => finishAndMark({ force: true }) },
           ],
           inputVisible: false,
@@ -2732,11 +3036,11 @@
       }
       if (!force && !state.editDone) {
         setCoach({
-          msg: 'Every criterion has something. Two steps left: an editing pass with me (a stronger word here, a real reference there — you accept each one), then I mark it like the marker.',
+          msg: 'Every part has something. Two steps left: editing with me — I highlight a sentence, you make it stronger with the tools, every word still yours — then I mark it.',
           section: 'READY TO FINISH',
           actions: [
             { label: '✎ Edit with Q first', primary: true, onClick: () => runEditPass() },
-            { label: 'Mark it now', onClick: () => finishAndMark({ force: true }) },
+            { label: 'Mark it now', quiet: true, onClick: () => finishAndMark({ force: true }) },
           ],
           inputVisible: false,
         });
@@ -2778,22 +3082,22 @@
         const row = document.createElement('div');
         row.className = 'mark-row'; row.dataset.band = p.band;
         const need = p.band === 'top' ? 'Top band — nothing missing here.' : (p.missingForTop || '');
-        row.innerHTML = `<div class="mk-head"><span class="mk-dot"></span>${escHtml(p.criterionId)} · ${escHtml(bandWord[p.band] || p.band)}</div>
+        row.innerHTML = `<div class="mk-head"><span class="mk-dot"></span>${escHtml(labelFor(p.criterionId))} · ${escHtml(bandWord[p.band] || p.band)}</div>
           <div class="mk-need">${escHtml(need)}</div>`;
         if (p.band !== 'top') {
           const go = document.createElement('button');
-          go.className = 'mk-go'; go.textContent = 'Work on ' + p.criterionId + ' →';
+          go.className = 'mk-go'; go.textContent = 'Work on “' + labelFor(p.criterionId) + '” →';
           go.addEventListener('click', () => loopBackTo(p));
           row.appendChild(go);
         }
-        row.title = byId[p.criterionId] ? byId[p.criterionId].text : '';
+        row.title = p.criterionId + (byId[p.criterionId] ? ' — ' + byId[p.criterionId].text : '');
         coachActions.appendChild(row);
       });
       const weakest = m.perCriterion.find(p => p.criterionId === m.weakestCriterionId && p.band !== 'top');
       const rowBtns = document.createElement('div');
       rowBtns.style.cssText = 'display:flex;flex-direction:column;gap:6px;margin-top:4px';
       if (weakest) {
-        const b1 = document.createElement('button'); b1.className = 'q-btn primary'; b1.textContent = '→ Push ' + weakest.criterionId + ' to the top band';
+        const b1 = document.createElement('button'); b1.className = 'q-btn primary'; b1.textContent = '→ Push “' + labelFor(weakest.criterionId) + '” to the top band';
         b1.addEventListener('click', () => loopBackTo(weakest)); rowBtns.appendChild(b1);
       }
       const b2 = document.createElement('button'); b2.className = 'q-btn'; b2.textContent = '📄 Assemble & download';
@@ -2801,21 +3105,21 @@
       const b3 = document.createElement('button'); b3.className = 'q-btn'; b3.textContent = '← Back to coaching';
       b3.addEventListener('click', () => { coachCard.classList.remove('wide'); askNextQuestion({ trigger: 'answer' }); }); rowBtns.appendChild(b3);
       coachActions.appendChild(rowBtns);
-      appendBoardItem({ type: 'note', text: 'Marked: ' + (m.overall.label || bandWord[m.overall.band]) + '. ' + m.perCriterion.filter(p => p.band !== 'top').map(p => p.criterionId + ' needs: ' + criterionShort(p.missingForTop, 90)).join(' · ') });
+      appendBoardItem({ type: 'note', label: 'marked', text: 'Marked: ' + (m.overall.label || bandWord[m.overall.band]) + '. ' + m.perCriterion.filter(p => p.band !== 'top').map(p => labelFor(p.criterionId) + ' needs: ' + criterionShort(p.missingForTop, 90)).join(' · ') });
     }
 
     // The mark's "what the top band still needs" becomes the next question —
     // straight from the marker, no extra call.
     function loopBackTo(p) {
       coachCard.classList.remove('wide');
-      const q = p.nextQuestion || ('What would you add to ' + p.criterionId + ' so it reaches the top band? ' + (p.missingForTop || ''));
+      const q = p.nextQuestion || ('What would you add to the part on ' + labelFor(p.criterionId) + ' so it reaches the top band? ' + (p.missingForTop || ''));
       state.currentQuestion = q; state.currentCriterionId = p.criterionId; state.currentSection = p.criterionId;
       state.docSnapshot = docPlainText();
       state.qCount = (state.qCount || 1) + 1;
       appendBoardItem({ type: 'question', label: 'Q' + state.qCount, text: q });
-      if (p.missingForTop) appendBoardItem({ type: 'note', text: 'Top band needs: ' + p.missingForTop });
+      if (p.missingForTop) appendBoardItem({ type: 'note', label: 'top band', text: 'Top band needs: ' + p.missingForTop });
       renderCoverage();
-      setCoach({ msg: q, section: 'TO THE TOP BAND · ' + p.criterionId, hint: p.missingForTop ? criterionShort(p.missingForTop, 160) : '', inputVisible: true, showNudge: true });
+      setCoach({ msg: q, section: 'TO THE TOP BAND', hint: p.missingForTop ? criterionShort(p.missingForTop, 160) : '', inputVisible: true, showNudge: true });
       coachInput.placeholder = 'Type your answer…';
       coachInput.focus();
       persist({ currentQuestion: q, currentCriterionId: p.criterionId, lastQuestion: q, currentSection: p.criterionId });
@@ -2905,21 +3209,19 @@
       if (essayWatching) return;
       essayWatching = true;
       try {
-        if (reason === 'restore-kick') { try { await api('/writer/essay', {}, { timeoutMs: 20000 }); } catch (e) { appendBoardItem({ type: 'note', text: 'Q could not start writing his plan: ' + shortCause(e) }); return; } }
+        if (reason === 'restore-kick') { try { await api('/writer/essay', {}, { timeoutMs: 20000 }); } catch (e) { appendBoardItem({ type: 'note', label: 'plan', text: 'Q could not start writing his plan: ' + shortCause(e) }); return; } }
         const job = await waitForJob('essay', { everyMs: 3000, maxMs: 300000 });
         const r = job.result || {};
         state.essayReady = true;
         if (r.brickCounts) state.brickCounts = r.brickCounts;
         if (r.coverage) state.coverage = { ...state.coverage, ...r.coverage };
+        applyMatch(r.match);
         renderCoverage();
         if (reason !== 'restore') {
-          appendBoardItem({ type: 'note', text: 'Q now has the full answer in his head — ' + (r.bricks || '?') + ' bricks across ' + (state.brief.criteria || []).length + ' criteria' + (state.sources.length ? ', citing your ' + state.sources.length + ' document' + (state.sources.length === 1 ? '' : 's') : '') + '. Every question from here aims at the next brick you haven\'t voiced yet.' });
+          appendBoardItem({ type: 'note', label: 'plan', text: 'Q now has the full answer in his head — ' + (r.bricks || '?') + ' bricks across ' + (state.brief.criteria || []).length + ' criteria' + (state.sources.length ? ', citing your ' + state.sources.length + ' document' + (state.sources.length === 1 ? '' : 's') : '') + '. Every question from here aims at the next brick you haven\'t voiced yet.' });
         }
       } catch (e) {
-        appendBoardItem({ type: 'note', text: 'Q\'s plan (the full answer he steers by) didn\'t finish: ' + shortCause(e) + ' — coaching still works from the outline; tap here to retry.' });
-        const items = document.getElementById('board-items');
-        const last = items && items.lastElementChild;
-        if (last) { last.style.cursor = 'pointer'; last.addEventListener('click', () => { essayWatching = false; watchEssay('restore-kick'); }); }
+        appendBoardItem({ type: 'note', label: 'plan', text: 'Q\'s plan (the full answer he steers by) didn\'t finish: ' + shortCause(e) + ' — coaching still works from the outline; tap here to retry.', action: () => { essayWatching = false; watchEssay('restore-kick'); } });
       } finally {
         essayWatching = false;
       }
@@ -2948,7 +3250,7 @@
         const d = await api('/writer/source', { name, text }, { timeoutMs: 40000 });
         state.sources = d.sources || [];
         renderSourceSlot();
-        appendBoardItem({ type: 'note', text: 'Added ' + name + (d.truncated ? ' (first 80,000 characters kept)' : '') + '. Q is reading it into his plan…' });
+        appendBoardItem({ type: 'note', label: 'source', text: 'Added ' + name + (d.truncated ? ' (first 80,000 characters kept)' : '') + '. Q is reading it into his plan…' });
         setCoach({ msg: 'Got ' + name + '. I\'m folding it into the answer in my head — carry on, I\'ll say when it\'s in.', inputVisible: true, showNudge: true });
         if (d.essayJob) { essayWatching = false; watchEssay('source'); }
       } catch (e) {
@@ -2967,24 +3269,66 @@
       }
     }
 
-    // ── Editing stage: sentence by sentence, accept or skip ───────────────
-    // A stronger word (their meaning) and, where a claim needs support, a
-    // real reference — uploaded sources first, never invented. Applied only
-    // on accept; each accept is one undoable edit on the page.
+    // ── Editing stage: HIGHLIGHT + TOOLS, never replacements ──────────────
+    // Sarah, 15 Aug 2026: "He highlights the sentences he wants to change and
+    // then there are buttons that will push me to get the right info… any
+    // tool that will lead you into writing HIS words." Q highlights ONE
+    // sentence on the page (scrolled into view), the card says in one plain
+    // line WHY, and offers tool buttons. The student rewrites the sentence on
+    // the page; "Check it" (or their next pause) compares it to Q's target
+    // and answers with a closeness cue — closer / that's it / one thing still
+    // missing — never the target text. Then the next sentence.
+    const EDIT_TOOL_LABELS = { terminology: 'Terminology', synonyms: 'Synonyms', dictionary: 'Dictionary', strategies: 'Strategies / theories', cases: 'Case studies', references: 'References', weak: 'What\'s weak' };
+    const EDIT_TOOL_ORDER = ['terminology', 'synonyms', 'dictionary', 'strategies', 'cases', 'references', 'weak'];
+    let editHighlight = null;   // { range, block }
+    function clearEditHighlight() {
+      try { if (window.CSS && CSS.highlights) CSS.highlights.delete('q-edit'); } catch (_) {}
+      docBody.querySelectorAll('.q-edit-block').forEach(el => el.classList.remove('q-edit-block'));
+      editHighlight = null;
+    }
+    // Highlight the sentence on the page: the CSS Custom Highlight API where
+    // it exists (no DOM change), plus a soft wash on the paragraph so it
+    // shows everywhere. Scrolls it into view. Returns false if not found.
+    function highlightSentence(sentence) {
+      clearEditHighlight();
+      const hit = findInDoc(sentence);
+      if (!hit) return false;
+      const range = document.createRange();
+      range.setStart(hit.start.node, hit.start.offset);
+      range.setEnd(hit.end.node, hit.end.offset + 1);
+      let block = hit.start.node.parentElement;
+      while (block && block !== docBody && !/^(P|DIV|LI|H1|H2|H3)$/.test(block.tagName)) block = block.parentElement;
+      if (block === docBody) block = null;
+      if (block) block.classList.add('q-edit-block');
+      try { if (window.CSS && CSS.highlights && window.Highlight) CSS.highlights.set('q-edit', new Highlight(range)); } catch (_) {}
+      editHighlight = { range, block, original: sentence };
+      const r = range.getBoundingClientRect();
+      if (r && (r.top < 80 || r.bottom > window.innerHeight - 120)) window.scrollBy({ top: r.top - Math.round(window.innerHeight * 0.35), behavior: 'smooth' });
+      return true;
+    }
+    // The sentence as it is NOW on the page: the highlighted paragraph's text
+    // (they rewrite in place; the original words may be gone).
+    function currentEditText() {
+      if (editHighlight && editHighlight.block && editHighlight.block.isConnected) return (editHighlight.block.textContent || '').replace(/\s+/g, ' ').trim().slice(0, 800);
+      if (editHighlight && editHighlight.range) { try { return editHighlight.range.toString().replace(/\s+/g, ' ').trim().slice(0, 800); } catch (_) {} }
+      return '';
+    }
+
     async function runEditPass() {
       if (!state.brief) return;
       const text = docPlainText();
       if (!text.trim()) { setCoach({ msg: 'Nothing on the page to edit yet.', inputVisible: true, showNudge: true }); return; }
       coachCard.classList.add('wide');
-      setCoach({ msg: 'Reading your sentences for the editing pass…', section: 'EDIT WITH Q', thinking: true, inputVisible: false });
+      setCoach({ msg: 'Reading your sentences…', section: 'EDIT WITH Q', thinking: true, inputVisible: false });
       try {
         await api('/writer/edit-pass', { docText: text, voiceSignature: state.voiceSignature }, { timeoutMs: 40000 });
         const job = await waitForJob('edit', { onTick: (secs) => setCoach({ msg: 'Reading your sentences… ' + secs + 's', section: 'EDIT WITH Q', thinking: true, inputVisible: false }) });
-        state.editItems = (job.result && job.result.items) || [];
+        state.editItems = ((job.result && job.result.items) || []).filter(it => it && it.sentence && it.why);
         state.editIndex = 0;
+        state.editing = true;
         if (!state.editItems.length) {
-          state.editDone = true;
-          setCoach({ msg: 'Nothing I\'d change — the wording is yours and it reads well. Shall I mark it?', section: 'EDIT WITH Q', actions: [{ label: 'Mark like the marker →', primary: true, onClick: () => finishAndMark({ force: true }) }], inputVisible: false });
+          state.editDone = true; state.editing = false;
+          setCoach({ msg: 'Nothing I\'d change — it reads well and it\'s yours. Shall I mark it?', section: 'EDIT WITH Q', actions: [{ label: 'Mark it →', primary: true, onClick: () => finishAndMark({ force: true }) }], inputVisible: false });
           return;
         }
         showEditItem();
@@ -2992,51 +3336,155 @@
         setCoach({ msg: 'The editing pass failed: ' + shortCause(e), section: 'HICCUP', hint: 'Your work is saved.', actions: [{ label: '↻ Try again', primary: true, onClick: runEditPass }, { label: 'Skip to marking', onClick: () => finishAndMark({ force: true }) }], inputVisible: false });
       }
     }
-    function showEditItem() {
+    function endEditStage() {
+      clearEditHighlight();
+      state.editing = false; state.editDone = true; state.awaitingWord = null;
+      coachCard.classList.remove('wide');
+    }
+    function editWhere(it) {
+      const cid = it && it.targetBrickId ? String(it.targetBrickId).split('-')[0] : state.currentCriterionId;
+      const w = whereInfo(cid);
+      if (w) { state.currentCriterionId = w.id; state.currentSection = w.id; }
+      return whereText(w);
+    }
+    function showEditItem({ note } = {}) {
       const items = state.editItems || [];
       const i = state.editIndex;
+      state.awaitingWord = null;
       if (i >= items.length) {
-        state.editDone = true;
-        coachCard.classList.remove('wide');
-        setCoach({ msg: 'Editing pass done — every change on the page is one you accepted. Now I mark it like the marker.', section: 'EDIT WITH Q', actions: [{ label: 'Mark like the marker →', primary: true, onClick: () => finishAndMark({ force: true }) }, { label: '← Back to coaching', onClick: () => askNextQuestion({ trigger: 'answer' }) }], inputVisible: false });
+        endEditStage();
+        setCoach({ msg: 'That\'s the editing done — every word on the page is yours. Now I mark it.', section: 'EDIT WITH Q', actions: [{ label: 'Mark it →', primary: true, onClick: () => finishAndMark({ force: true }) }, { label: '← Back to the questions', quiet: true, onClick: () => askNextQuestion({ trigger: 'answer' }) }], inputVisible: false });
         return;
       }
       const it = items[i];
-      const onPage = findInDoc(it.sentence);
-      setCoach({ msg: 'Sentence ' + (i + 1) + ' of ' + items.length + (onPage ? '' : ' (I can\'t find this one on the page any more — skip it)'), section: 'EDIT WITH Q', hint: '', actions: [], inputVisible: false });
-      coachActions.classList.remove('hidden'); coachActions.innerHTML = '';
-      const card = document.createElement('div'); card.className = 'edit-item';
-      const sen = document.createElement('div'); sen.className = 'ed-sentence'; sen.textContent = '“' + criterionShort(it.sentence, 220) + '”'; card.appendChild(sen);
-      const row = document.createElement('div'); row.className = 'ed-row';
-      const mk = (label, primary, fn) => { const b = document.createElement('button'); b.className = 'q-btn' + (primary ? ' primary' : ''); b.textContent = label; b.addEventListener('click', fn); row.appendChild(b); };
-      if (it.wordSwap) {
-        const sug = document.createElement('div'); sug.className = 'ed-sug';
-        sug.innerHTML = 'Stronger word: <b>' + escHtml(it.wordSwap.from) + '</b> → <b>' + escHtml(it.wordSwap.to) + '</b>' + (it.wordSwap.why ? ' · ' + escHtml(it.wordSwap.why) : '');
-        card.appendChild(sug);
-        mk('✓ Use "' + criterionShort(it.wordSwap.to, 24) + '"', true, () => {
-          const ok = onPage && replaceInDoc(it.sentence, it.sentence.replace(it.wordSwap.from, it.wordSwap.to));
-          if (ok) { it.sentence = it.sentence.replace(it.wordSwap.from, it.wordSwap.to); it.wordSwap = null; scheduleAutosave(); showEditItem(); }
-          else { sug.innerHTML += ' <i>(couldn\'t find that exact wording on the page — skipped)</i>'; it.wordSwap = null; if (!it.reference) { state.editIndex++; } showEditItem(); }
-        });
+      const onPage = highlightSentence(it.sentence);
+      if (!onPage) { state.editIndex++; showEditItem({ note }); return; }   // rewritten or gone — next
+      const where = editWhere(it);
+      const suggested = (it.suggestedTools || []).filter(t => EDIT_TOOL_LABELS[t]);
+      const tools = suggested.concat(EDIT_TOOL_ORDER.filter(t => !suggested.includes(t)));
+      setCoach({
+        msg: it.why,
+        section: 'SENTENCE ' + (i + 1) + ' OF ' + items.length,
+        where,
+        hint: note || 'It\'s highlighted on the page. Rewrite it there in your own words, then Check it — or press a tool for a steer.',
+        actions: [
+          { label: '✓ Check it', primary: true, big: true, onClick: () => checkCurrentSentence() },
+          { label: 'Skip', quiet: true, onClick: () => { state.editIndex++; showEditItem(); } },
+          { label: 'Stop editing', quiet: true, onClick: () => { endEditStage(); finishAndMark({ force: true }); } },
+        ],
+        inputVisible: false,
+      });
+      // The tool buttons: the suggested ones first.
+      const row = document.createElement('div'); row.className = 'q-tools';
+      tools.forEach(t => {
+        const b = document.createElement('button'); b.type = 'button';
+        b.className = 'q-btn q-tool' + (suggested.includes(t) ? ' suggested' : '');
+        b.textContent = EDIT_TOOL_LABELS[t]; b.dataset.tool = t;
+        b.addEventListener('click', () => useTool(t, it));
+        row.appendChild(b);
+      });
+      coachActions.insertBefore(row, coachActions.firstChild);
+      // Tool help lands here (below the buttons).
+      const out = document.createElement('div'); out.className = 'q-tool-out'; out.id = 'q-tool-out';
+      coachActions.insertBefore(out, row.nextSibling);
+    }
+    // A tool: one small structured call → help that leads them to write it.
+    async function useTool(tool, it) {
+      const needsWord = tool === 'synonyms' || tool === 'dictionary';
+      let word = '';
+      if (needsWord) {
+        const sel = window.getSelection();
+        const picked = sel && !sel.isCollapsed ? sel.toString().trim() : '';
+        if (picked && picked.length <= 40 && !/\s/.test(picked)) word = picked;
+        else {
+          // Ask for the word in the coach box — Enter runs the tool.
+          state.awaitingWord = { tool, it };
+          coachInput.classList.remove('hidden'); coachInput.placeholder = 'Which word? Type it and press Enter'; coachInput.focus();
+          const out = document.getElementById('q-tool-out'); if (out) out.innerHTML = '<div class="q-tool-ask">Which word? Double-click it on the page, or type it below.</div>';
+          return;
+        }
       }
-      if (it.reference) {
-        const ref = document.createElement('div'); ref.className = 'ed-sug';
-        ref.innerHTML = 'Support for <b>' + escHtml(it.reference.claim || 'this claim') + '</b>: ' + escHtml(it.reference.formatted) + (it.reference.fromSource ? ' <i>(from your upload: ' + escHtml(it.reference.fromSource) + ')</i>' : '') + (it.reference.uncertain ? ' <i>⚠ verify the details</i>' : '');
-        card.appendChild(ref);
-        mk('✓ Add ' + (it.reference.inlineCitation || 'reference'), !it.wordSwap, () => {
-          const cite = it.reference.inlineCitation ? ' ' + it.reference.inlineCitation : '';
-          const ok = onPage && cite && replaceInDoc(it.sentence, it.sentence.replace(/([.!?]["'”’)\]]*)\s*$/, cite + '$1'));
-          appendReference(it.reference.formatted);
-          if (ok) it.sentence = it.sentence.replace(/([.!?]["'”’)\]]*)\s*$/, cite + '$1');
-          it.reference = null; scheduleAutosave();
-          if (!it.wordSwap) state.editIndex++;
-          showEditItem();
-        });
+      await runTool(tool, it, word);
+    }
+    async function runTool(tool, it, word) {
+      const out = document.getElementById('q-tool-out');
+      if (out) out.innerHTML = '<div class="q-tool-ask">Looking…</div>';
+      try {
+        const d = await api('/writer/tool', { tool, sentence: it.sentence, word: word || '', brickId: it.targetBrickId || null, yearGroup: state.yearGroup || '' }, { timeoutMs: 60000 });
+        const html = `<div class="q-tool-head">${escHtml(d.headline || '')}${d.flagged ? ' <span class="q-tool-flag" title="From Q\'s own knowledge, not your uploads — check it">check this</span>' : ''}${d.fromSource ? ` <span class="q-tool-src">from ${escHtml(d.fromSource)}</span>` : ''}</div>`
+          + ((d.points || []).length ? `<ul class="q-tool-points">${d.points.map(p => '<li>' + escHtml(p) + '</li>').join('')}</ul>` : '')
+          + (d.example ? `<div class="q-tool-eg">e.g. ${escHtml(d.example)}</div>` : '')
+          + `<div class="q-tool-nudge">${escHtml(d.nudge || 'Now say your sentence using it.')}</div>`;
+        if (out) out.innerHTML = html;
+        // The board keeps it, so it is still there while they rewrite.
+        appendBoardItem({ type: 'note', label: EDIT_TOOL_LABELS[tool] || tool, text: [d.headline, ...(d.points || []), d.example ? 'e.g. ' + d.example : '', d.nudge].filter(Boolean).join('\n') });
+      } catch (e) {
+        if (out) out.innerHTML = '<div class="q-tool-ask">That tool didn\'t answer (' + escHtml(shortCause(e)) + ') — try again.</div>';
       }
-      mk('Skip', false, () => { state.editIndex++; showEditItem(); });
-      mk('Stop editing', false, () => { state.editDone = true; coachCard.classList.remove('wide'); finishAndMark({ force: true }); });
-      card.appendChild(row);
-      coachActions.appendChild(card);
+    }
+    // The check: their sentence now vs Q's target → closer / that's it / one thing missing.
+    let checkInFlight = false;
+    async function checkCurrentSentence({ fromPause } = {}) {
+      const items = state.editItems || []; const it = items[state.editIndex];
+      if (!it || checkInFlight) return;
+      const now = currentEditText();
+      if (!now) { showEditItem({ note: 'I can\'t find that sentence on the page any more — rewrite it where it was, or Skip.' }); return; }
+      if (fromPause && now === it.lastChecked) return;
+      checkInFlight = true;
+      const out = document.getElementById('q-tool-out');
+      if (!fromPause) coachHint.textContent = 'Reading it…';
+      try {
+        const d = await api('/writer/check-sentence', { sentence: now, brickId: it.targetBrickId || null }, { timeoutMs: 60000 });
+        it.lastChecked = now;
+        applyMatch(d.match);
+        applyCoverage(d.coverage);
+        if (d.brickCounts) state.brickCounts = d.brickCounts;
+        const cue = d.closeness === 'match' ? (d.hint || 'That\'s it — next.') : d.closeness === 'closer' ? 'Closer. ' + (d.hint || '') : 'One thing still missing: ' + (d.hint || '');
+        appendBoardItem({ type: 'note', label: d.closeness === 'match' ? 'that\'s it' : 'closer?', text: cue });
+        if (d.closeness === 'match') {
+          const wm = whereInfo(); const pct = wm && state.match && state.match.perCriterion ? state.match.perCriterion[wm.id] : null;
+          setCoach({ msg: cue + (pct != null ? ' That took you to ' + pct + '% on this part.' : ''), section: 'SENTENCE ' + (state.editIndex + 1) + ' OF ' + items.length, actions: [{ label: 'Next →', primary: true, big: true, onClick: () => { state.editIndex++; showEditItem(); } }, { label: 'Stop editing', quiet: true, onClick: () => { endEditStage(); finishAndMark({ force: true }); } }], inputVisible: false });
+          clearTimeout(state.editAdvanceTimer);
+          state.editAdvanceTimer = setTimeout(() => { if (state.editing && items[state.editIndex] === it) { state.editIndex++; showEditItem(); } }, 2500);
+        } else {
+          coachMsg.textContent = cue;
+          coachHint.textContent = 'Have another go on the page, then Check it.';
+          if (out && !out.innerHTML) out.innerHTML = '';
+        }
+      } catch (e) {
+        coachHint.textContent = 'Couldn\'t check that (' + shortCause(e) + ') — try again.';
+      } finally {
+        checkInFlight = false;
+      }
+    }
+    // The coach box during editing: a word for synonyms / dictionary.
+    coachInput.addEventListener('keydown', (ev) => {
+      if (ev.key !== 'Enter' || !state.awaitingWord) return;
+      const word = coachInput.value.trim(); if (!word) return;
+      ev.stopImmediatePropagation(); ev.preventDefault();
+      const { tool, it } = state.awaitingWord; state.awaitingWord = null;
+      coachInput.value = ''; coachInput.placeholder = 'Ask Q…'; coachInput.classList.add('hidden');
+      runTool(tool, it, word);
+    }, true);
+
+    // ── The visible match score ───────────────────────────────────────────
+    // {overall, perCriterion} from the server (brick bookkeeping — never text
+    // similarity, never the target). Shown on the coach card and in the
+    // coverage strip; it goes up as they get closer.
+    const coachScore = document.getElementById('coach-score');
+    function applyMatch(m) {
+      if (!m || typeof m !== 'object') return;
+      state.match = { overall: Number(m.overall) || 0, perCriterion: m.perCriterion && typeof m.perCriterion === 'object' ? m.perCriterion : {} };
+      renderScore(); renderCoverage();
+    }
+    function renderScore() {
+      const m = state.match; const w = whereInfo();
+      if (!m || !state.brief) { coachScore.innerHTML = ''; return; }
+      const part = w && m.perCriterion[w.id] != null ? m.perCriterion[w.id] : null;
+      coachScore.innerHTML = `<div class="q-score-row"><span class="q-score-label">Match</span>` +
+        (part != null ? `<span class="q-score-num">${part}%</span><span class="q-score-sub">this part</span>` : '') +
+        `<span class="q-score-num overall">${m.overall}%</span><span class="q-score-sub">overall</span></div>` +
+        `<div class="q-score-bar"><span style="width:${Math.max(0, Math.min(100, part != null ? part : m.overall))}%"></span></div>`;
     }
 
     // Find / replace the student's own sentence on the page without touching
@@ -3175,6 +3623,7 @@
       state.essayReady = !!t.essayReady;
       state.sources = Array.isArray(t.sources) ? t.sources : [];
       state.lastMark = t.lastMark || null;
+      if (t.match) applyMatch(t.match);
       if (t.sourceName) renderSourceSlot();
       if (t.brief && !t.essayReady) watchEssay(d.essayJob && d.essayJob.status === 'running' ? 'restore' : 'restore-kick');
 
@@ -3182,6 +3631,8 @@
         adoptBrief(t.brief, { announce: false });
         renderSourceSlot();   // now the brief is in, the "+ Add a supporting document" button shows
         // Rebuild the teaching board from history, then the live question.
+        state.currentCriterionId = t.currentCriterionId || (t.brief.criteria[0] && t.brief.criteria[0].id) || '';
+        state.currentSection = state.currentCriterionId;
         state.qCount = 0;
         let lastBoardQ = '';
         if (t.brief.opener) { state.qCount = 1; lastBoardQ = t.brief.opener; appendBoardItem({ type: 'question', label: 'Q1', text: t.brief.opener }); }
@@ -3189,14 +3640,13 @@
           if (h.question && h.question !== lastBoardQ) { state.qCount += 1; lastBoardQ = h.question; appendBoardItem({ type: 'question', label: 'Q' + state.qCount, text: h.question }); }
           if (h.answer) appendBoardItem({ type: 'answer', text: h.answer });
         });
-        state.currentCriterionId = t.currentCriterionId || (t.brief.criteria[0] && t.brief.criteria[0].id) || '';
-        state.currentSection = state.currentCriterionId;
         state.currentQuestion = t.currentQuestion || '';
         state.docSnapshot = t.probeSnapshot && docPlainText().endsWith(t.probeSnapshot) ? docPlainText() : docPlainText();
+        renderBoard();
         renderCoverage();
         if (state.currentQuestion) {
           if (state.currentQuestion !== lastBoardQ) { state.qCount += 1; appendBoardItem({ type: 'question', label: 'Q' + state.qCount, text: state.currentQuestion }); }
-          setCoach({ msg: 'Welcome back. ' + state.currentQuestion, section: state.currentCriterionId || 'WHERE WE WERE', hint: 'Answer here, or keep writing — I read as you go.', inputVisible: true, showNudge: true });
+          setCoach({ msg: 'Welcome back. ' + state.currentQuestion, section: 'WHERE WE WERE', hint: 'Answer here, or keep writing — I read as you go.', inputVisible: true, showNudge: true });
         } else {
           setCoach({ msg: 'Welcome back — the brief is on the board. Keep writing, or ask for the next question.', actions: [{ label: 'Next question →', primary: true, onClick: () => askNextQuestion({ trigger: 'answer' }) }], inputVisible: true, showNudge: true });
         }
@@ -3216,46 +3666,10 @@
     restoreSession();
     // Test hooks (no data, no secrets): lets the harness exercise the page-side
     // helpers without a paid call. Harmless in production.
-    window.__qwriterTest = { findInDoc, replaceInDoc, appendReference, docPlainText, splitCheck: (t) => endsSentence(t) };
+    window.__qwriterTest = { findInDoc, replaceInDoc, appendReference, docPlainText, splitCheck: (t) => endsSentence(t), runEditPass, checkCurrentSentence, showEditItem, state: () => state, currentEditText };
 
 
-    // ── Draggable coach card ───────────────────────────────────────────────
-    let drag = null;
-    function startDrag(ev) {
-      if (ev.target === coachInput || ev.target.classList.contains('q-btn')) return;
-      const point = ev.touches ? ev.touches[0] : ev;
-      const rect = coachCard.getBoundingClientRect();
-      coachCard.style.right = 'auto'; coachCard.style.transform = 'none';
-      coachCard.style.left = rect.left + 'px'; coachCard.style.top = rect.top + 'px';
-      drag = { startX: point.clientX, startY: point.clientY, baseLeft: rect.left, baseTop: rect.top };
-      ev.preventDefault();
-    }
-    function moveDrag(ev) {
-      if (!drag) return;
-      const point = ev.touches ? ev.touches[0] : ev;
-      const dx = point.clientX - drag.startX; const dy = point.clientY - drag.startY;
-      const newLeft = Math.max(8, Math.min(window.innerWidth - coachCard.offsetWidth - 8, drag.baseLeft + dx));
-      const newTop  = Math.max(8, Math.min(window.innerHeight - coachCard.offsetHeight - 8, drag.baseTop + dy));
-      coachCard.style.left = newLeft + 'px'; coachCard.style.top = newTop + 'px';
-    }
-    function endDrag() {
-      if (!drag) return; drag = null;
-      try { localStorage.setItem('q-coach-pos', JSON.stringify({ left: coachCard.style.left, top: coachCard.style.top })); } catch (_) {}
-    }
-    coachCard.addEventListener('mousedown', startDrag);
-    coachCard.addEventListener('touchstart', startDrag, { passive: false });
-    window.addEventListener('mousemove', moveDrag);
-    window.addEventListener('touchmove', moveDrag, { passive: false });
-    window.addEventListener('mouseup', endDrag);
-    window.addEventListener('touchend', endDrag);
-
-    try {
-      const saved = JSON.parse(localStorage.getItem('q-coach-pos') || 'null');
-      if (saved && saved.left && saved.top) {
-        coachCard.style.right = 'auto'; coachCard.style.transform = 'none';
-        coachCard.style.left = saved.left; coachCard.style.top = saved.top;
-      }
-    } catch (_) {}
+    // (The old per-card drag code lived here — every panel now goes through makePanel above.)
   })();
   </script>
 </body>
