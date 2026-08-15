@@ -1301,6 +1301,23 @@
     if (Math.abs(s.net) >= 0.005) bits.push(s.net > 0
       ? `£${fmt(s.net)} more came in than went out over this period`
       : `£${fmt(Math.abs(s.net))} more went out than came in over this period`);
+    // "How can more have gone out than in if I have 2k left?" — because the
+    // accounts also took in money from her OWN pots and other accounts the
+    // app hasn't seen the other side of. Say the whole movement and its
+    // parts, from the account cards' own figures, so the page answers it.
+    const withMove = (Array.isArray(accounts) ? accounts : []).filter(a => a.net_movement != null);
+    if (withMove.length) {
+      const moved  = withMove.reduce((t, a) => t + (a.net_movement || 0), 0);
+      const ownIn  = withMove.reduce((t, a) => t + (a.self_transfers_in  || 0), 0);
+      const ownOut = withMove.reduce((t, a) => t + (a.self_transfers_out || 0), 0);
+      const ownNet = ownIn - ownOut;
+      const parts = [];
+      if (Math.abs(ownNet) >= 0.005) parts.push(ownNet > 0
+        ? `£${fmt(ownNet)} came in from your own pots & other accounts`
+        : `£${fmt(Math.abs(ownNet))} went out to your own pots & other accounts`);
+      if (Math.abs(s.net) >= 0.005) parts.push(s.net > 0 ? `£${fmt(s.net)} more in than out` : `£${fmt(Math.abs(s.net))} more out than in`);
+      if (Math.abs(moved) >= 0.005) bits.push(`your accounts ${moved > 0 ? 'went up' : 'went down'} £${fmt(Math.abs(moved))} over this period` + (parts.length ? ' — ' + parts.join(', ') : ''));
+    }
     const selfMoves = s.self_transfers != null ? s.self_transfers : s.moved_to_savings;
     if (selfMoves > 0) bits.push('£' + fmt(selfMoves) + ' moved between your own accounts & pots (not counted)');
     if (Array.isArray(s.sources) && s.sources.length) bits.push('statements: ' + s.sources.join(', '));
