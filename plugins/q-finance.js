@@ -1054,6 +1054,15 @@ anything else, exactly in this form:
 Copy what is printed — do not guess a bank, a product or a number. If the
 document does not show it, omit this line entirely.
 
+SECOND, if the document shows the balance at the start and/or end of the
+statement period (often printed as "Balance on 01 August 2026" and "Balance on
+15 August 2026", or "Opening balance" / "Closing balance"), write ONE line:
+#BALANCE: <opening balance> | <opening date> | <closing balance> | <closing date>
+Amounts exactly as printed, keeping the minus sign for an overdrawn balance.
+Dates in YYYY-MM-DD. Leave a field blank if it is not shown. Omit the whole
+line if no balance appears anywhere. NEVER calculate a balance yourself — only
+copy one that is printed.
+
 THEN return the transactions as plain CSV with a header row and one
 transaction per line:
 date,description,amount
@@ -1142,6 +1151,54 @@ function accountHeaderText(csv) {
         .replace(/\|/g, ' ');
 }
 
+// The opening and closing balance a statement prints on its own front page.
+// This is what makes an import auditable: opening + everything that moved
+// must equal closing, and any gap is exactly the money the reader missed.
+// Only ever a figure COPIED from the page — the prompt forbids calculating
+// one, because a calculated balance would agree with a broken read by
+// construction and the check would always pass.
+function parseBalanceHeader(csv) {
+    const line = String(csv || '').split(/\r?\n/).find(l => l.trim().startsWith('#BALANCE'));
+    if (!line) return null;
+    const parts = line.replace(/^#BALANCE\s*:?\s*/i, '').split('|').map(s => s.trim());
+    const num = s => {
+        if (!s) return null;
+        const v = parseAmount(s);
+        return (Number.isFinite(v) && Math.abs(v) <= MAX_TXN_AMOUNT) ? v : null;
+    };
+    const opening = num(parts[0]);
+    const closing = num(parts[2]);
+    if (opening == null && closing == null) return null;
+    return {
+        opening,
+        openingDate: normDate(parts[1]),
+        closing,
+        closingDate: normDate(parts[3]),
+    };
+}
+
+/**
+ * Does the statement's own arithmetic agree with what we read off it?
+ * closing - opening is what the bank says moved. The rows we extracted are
+ * what we think moved. A difference means pages or lines were missed — the
+ * one failure this pipeline previously had no way to notice, because a short
+ * read simply produced smaller totals and looked just as confident.
+ */
+function reconcileStatement(rows, bal) {
+    if (!bal || bal.opening == null || bal.closing == null) return null;
+    const read     = Math.round(rows.reduce((s, t) => s + (Number(t.amount) || 0), 0) * 100) / 100;
+    const expected = Math.round((bal.closing - bal.opening) * 100) / 100;
+    const diff     = Math.round((read - expected) * 100) / 100;
+    return {
+        opening: bal.opening,
+        closing: bal.closing,
+        expected_movement: expected,
+        read_movement: read,
+        difference: diff,
+        ok: Math.abs(diff) < 0.005,
+    };
+}
+
 async function importStatementFromImage(email, imageBase64, mimeType, filename, ownerName) {
     const raw = await visionRead({
         prompt:   STATEMENT_IMAGE_PROMPT,
@@ -1155,7 +1212,17 @@ async function importStatementFromImage(email, imageBase64, mimeType, filename, 
     if (acct) upsertAccount(email, acct, source);
     const rows = csvToRows(raw).map(r => ({ ...r, source, ...(acct && { account: acct.id }) }));
     console.log(`[finance] importStatementFromImage: vision ${raw.length} chars → ${rows.length} rows (no re-parse)${acct ? `, account "${acct.label}"` : ''}`);
-    return saveRows(email, rows, { ownerName });
+    const result = await saveRows(email, rows, { ownerName });
+    const bal = parseBalanceHeader(raw);
+    const check = reconcileStatement(rows, bal);
+    if (bal && bal.closing != null && acct) setAccountBalance(email, acct.id, bal.closing, bal.closingDate || undefined);
+    if (check) {
+        result.reconciliation = check;
+        if (!check.ok) {
+            result.hint = `⚠️ This statement doesn't add up. The bank's own balances say £${Math.abs(check.difference).toFixed(2)} more moved than I could read — some transactions were missed.`;
+        }
+    }
+    return result;
 }
 
 // Gemini 2.0 Flash caps OUTPUT at ~8192 tokens (~300 CSV rows). A 3-month
@@ -1229,8 +1296,24 @@ async function importStatementFromFile(email, fileBase64, mimeType, onProgress, 
             return { added: 0, total, hint: 'Could not read transactions from this PDF — try uploading a clearer copy.' };
         }
         const result = await saveRows(email, rows, { ownerName });
+
+        // The statement's own front-page balances audit the read, and give
+        // the account a real balance without anyone typing one.
+        const bal = parseBalanceHeader(chunked.csv);
+        const check = reconcileStatement(rows, bal);
+        if (bal && bal.closing != null && acct) {
+            setAccountBalance(email, acct.id, bal.closing, bal.closingDate || undefined);
+        }
+        if (check) {
+            result.reconciliation = check;
+            console.log(`[finance] statement check — bank says ${check.expected_movement}, we read ${check.read_movement}, diff ${check.difference} → ${check.ok ? 'COMPLETE' : 'SHORT'}`);
+        }
+
         if (chunked.failed.length) {
             result.hint = `Imported ${result.added} transactions, but page(s) ${chunked.failed.join(', ')} of ${chunked.pageCount} couldn't be read — upload the same PDF again to retry those.`;
+        } else if (check && !check.ok) {
+            const missing = Math.abs(check.difference);
+            result.hint = `⚠️ This statement doesn't add up. The bank's own balances say £${missing.toFixed(2)} more moved than I could read — some transactions were missed. Try uploading a clearer copy.`;
         }
         return result;
     }
