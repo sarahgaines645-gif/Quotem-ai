@@ -2277,7 +2277,7 @@ router.post('/api/finance/statement', requirePerson, express.json({ limit: '2mb'
     if (!text) return res.status(400).json({ error: 'text required' });
     console.log(`[finance] statement text import — ${req.person.email} — ${text.length} chars — ${filename || '(no filename)'}`);
     try {
-        const result = await qFinance.importStatement(req.person.email, text, { filename });
+        const result = await qFinance.importStatement(req.person.email, text, { filename, ownerName: req.person.name });
         console.log(`[finance] statement done — added:${result.added} total:${result.total}`);
         res.json(result);
     } catch (e) {
@@ -2308,7 +2308,7 @@ router.post('/api/finance/statement/pdf', requirePerson, express.json({ limit: '
         // Multi-page PDFs take minutes — run in the background so the upload
         // request can't time out and falsely report failure. The page polls
         // /api/finance/statement/job for progress and the result.
-        const job = qFinance.startImportJob(req.person.email, imageBase64, mimeType || 'application/pdf', filename);
+        const job = qFinance.startImportJob(req.person.email, imageBase64, mimeType || 'application/pdf', filename, req.person.name);
         res.status(202).json(job);
     } catch (e) {
         console.error('[finance] statement/pdf start error', e);

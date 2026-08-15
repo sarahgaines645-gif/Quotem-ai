@@ -494,10 +494,10 @@ async function importStatement(email, rawText, opts = {}) {
     const csvRows = parseCsvStatement(rawText);
     if (csvRows && csvRows.length) {
         console.log(`[finance] importStatement: ${csvRows.length} rows via deterministic CSV parser (no AI) — source "${source}"`);
-        return saveRows(email, csvRows.map(r => ({ ...r, source })));
+        return saveRows(email, csvRows.map(r => ({ ...r, source })), opts);
     }
     const parsed = await parseStatementText(rawText);
-    return saveRows(email, parsed.map(r => ({ ...r, source })));
+    return saveRows(email, parsed.map(r => ({ ...r, source })), opts);
 }
 
 // Categorise + apply merchant assignments + dedup against existing + save.
@@ -510,7 +510,28 @@ async function importStatement(email, rawText, opts = {}) {
 // funnels through, and to keep already-poisoned stored data out of the totals.
 const MAX_TXN_AMOUNT = 1000000;
 
-async function saveRows(email, parsed) {
+// True when a merchant name is the account holder themselves — "S Gaines",
+// "GAINES SL", "Sarah Gaines" for a person named Sarah Gaines — so their
+// transfers between their own banks are recognised BY THE APP, for every
+// user, with no one hand-labelling anything. Deliberately tight: surname
+// alone or a different initial (a relative) never matches.
+function isOwnName(name, ownerName) {
+    if (!ownerName) return false;
+    const clean = s => String(s || '').toLowerCase().replace(/[^a-z ]/g, ' ').replace(/\s+/g, ' ').trim();
+    const n = clean(name), o = clean(ownerName);
+    if (!n || !o) return false;
+    if (n === o) return true;
+    const op = o.split(' ');
+    if (op.length < 2) return false;
+    const first = op[0], last = op[op.length - 1];
+    const np = n.split(' ');
+    if (!np.includes(last)) return false;
+    const rest = np.filter(w => w !== last).join('');
+    if (!rest) return false;                              // surname alone — too weak
+    return rest === first || (rest[0] === first[0] && rest.length <= 3);  // initials, incl. middle
+}
+
+async function saveRows(email, parsed, opts = {}) {
     if (!parsed.length) return { added: 0, total: 0 };
 
     // Drop impossible amounts BEFORE anything is persisted. This is the single
@@ -536,7 +557,8 @@ async function saveRows(email, parsed) {
     // because of categorisation.
     const uncategorised = stamped.map(t => ({
         ...t,
-        category:  t.category  || 'other',
+        category:  t.category
+            || (isOwnName(t.merchant || t.description, opts.ownerName) ? 'savings_transfer' : 'other'),
         recurring: t.recurring || false,
     }));
 
@@ -548,13 +570,30 @@ async function saveRows(email, parsed) {
         return asgn ? { ...t, bucket: asgn.label } : t;
     });
 
-    // Deduplicate against existing transactions
+    // Deduplicate against existing transactions — but a duplicate is not
+    // useless: it may carry what the stored row is missing. Re-uploading a
+    // statement backfills the source stamp (which bank) and the own-name
+    // recognition onto rows that predate those features, so an upload is
+    // never silently pointless.
     const existing = getTransactions(email);
-    const existingKeys = new Set(existing.map(t => dedupKey(t)));
-    const fresh = withBuckets.filter(t => !existingKeys.has(dedupKey(t)));
+    const existingByKey = new Map(existing.map(t => [dedupKey(t), t]));
+    const fresh = [];
+    let backfilled = 0;
+    for (const t of withBuckets) {
+        const hit = existingByKey.get(dedupKey(t));
+        if (!hit) { fresh.push(t); continue; }
+        let touched = false;
+        if (t.source && !hit.source) { hit.source = t.source; touched = true; }
+        if (t.category === 'savings_transfer' && (!hit.category || hit.category === 'other')) {
+            hit.category = 'savings_transfer';
+            touched = true;
+        }
+        if (touched) backfilled++;
+    }
     const merged = [...existing, ...fresh];
     merged.sort((a, b) => (b.date || '').localeCompare(a.date || ''));
 
+    if (backfilled) console.log(`[finance] dedupe backfill — ${backfilled} existing rows gained source/own-name info`);
     saveTransactions(email, merged);
 
     // Background label pass over the rows that just landed as 'other'.
@@ -580,7 +619,7 @@ async function saveRows(email, parsed) {
         })();
     }
 
-    return { added: fresh.length, total: merged.length };
+    return { added: fresh.length, total: merged.length, backfilled };
 }
 
 // Re-run the label pass over every stored row still sitting in 'other'.
@@ -711,7 +750,7 @@ function csvToRows(csv) {
     return out;
 }
 
-async function importStatementFromImage(email, imageBase64, mimeType, filename) {
+async function importStatementFromImage(email, imageBase64, mimeType, filename, ownerName) {
     const raw = await visionRead({
         prompt:   STATEMENT_IMAGE_PROMPT,
         base64:   imageBase64,
@@ -722,7 +761,7 @@ async function importStatementFromImage(email, imageBase64, mimeType, filename) 
     const source = deriveSource(filename, '');
     const rows = csvToRows(raw).map(r => ({ ...r, source }));
     console.log(`[finance] importStatementFromImage: vision ${raw.length} chars → ${rows.length} rows (no re-parse)`);
-    return saveRows(email, rows);
+    return saveRows(email, rows, { ownerName });
 }
 
 // Gemini 2.0 Flash caps OUTPUT at ~8192 tokens (~300 CSV rows). A 3-month
@@ -774,7 +813,7 @@ async function pdfToCsvChunked(fileBase64, onProgress) {
 // (fragmented/collapsed) and the single-call version (truncated at ~300
 // rows). For everyone, any size, any device — no "go export CSV" ask.
 // Images → vision model as before.
-async function importStatementFromFile(email, fileBase64, mimeType, onProgress, filename) {
+async function importStatementFromFile(email, fileBase64, mimeType, onProgress, filename, ownerName) {
     if (mimeType === 'application/pdf') {
         const total = getTransactions(email).length;
         if (!process.env.GEMINI_API_KEY) {
@@ -793,14 +832,14 @@ async function importStatementFromFile(email, fileBase64, mimeType, onProgress, 
         if (!rows.length) {
             return { added: 0, total, hint: 'Could not read transactions from this PDF — try uploading a clearer copy.' };
         }
-        const result = await saveRows(email, rows);
+        const result = await saveRows(email, rows, { ownerName });
         if (chunked.failed.length) {
             result.hint = `Imported ${result.added} transactions, but page(s) ${chunked.failed.join(', ')} of ${chunked.pageCount} couldn't be read — upload the same PDF again to retry those.`;
         }
         return result;
     }
     // Actual image (JPEG, PNG, WebP, etc.)
-    return importStatementFromImage(email, fileBase64, mimeType || 'image/jpeg', filename);
+    return importStatementFromImage(email, fileBase64, mimeType || 'image/jpeg', filename, ownerName);
 }
 
 
@@ -837,7 +876,7 @@ function _setImportJob(email, patch) {
 // Starts the import in the background and returns immediately. The job
 // record is the single source of truth the page polls — same fire-and-
 // forget philosophy as the scheduler's worker.
-function startImportJob(email, fileBase64, mimeType, filename) {
+function startImportJob(email, fileBase64, mimeType, filename, ownerName) {
     const id = 'imp' + Date.now().toString(36);
     _setImportJob(email, {
         id, status: 'running', phase: 'reading',
@@ -855,7 +894,7 @@ function startImportJob(email, fileBase64, mimeType, filename) {
                     phase: (totalPages && done >= totalPages) ? 'saving' : 'reading',
                 });
             };
-            const result = await importStatementFromFile(email, fileBase64, mimeType, onProgress, filename);
+            const result = await importStatementFromFile(email, fileBase64, mimeType, onProgress, filename, ownerName);
             _setImportJob(email, {
                 status: 'done', phase: 'done',
                 added: result.added || 0,

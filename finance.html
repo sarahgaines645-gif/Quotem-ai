@@ -1529,6 +1529,8 @@
       const result = await r.json();
       if (result.added > 0) {
         showUploadResult('uz-statement', `✓ ${result.added} new transactions imported (${result.total} total) — categories are being sorted in the background`, 'ok');
+      } else if (result.backfilled > 0) {
+        showUploadResult('uz-statement', `Already imported — but this upload stamped the statement name onto ${result.backfilled} existing transactions`, 'ok');
       } else {
         showUploadResult('uz-statement', `No new transactions found — ${result.total} already in your account`, 'info');
       }
