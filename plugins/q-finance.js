@@ -286,6 +286,8 @@ Read the NATURE of a payment, not just the name:
 
 Self-transfers matter: money moved between the person's own accounts or pots is savings_transfer in BOTH directions (out AND back in) — it is never income and never real spending. People often upload statements from SEVERAL of their own banks: a top-up arriving from the person's own name, "MONEY", or another of their banks is savings_transfer, not income.
 
+Credit cards: a payment RECEIVED onto a credit card ("PAYMENT RECEIVED — THANK YOU", "DIRECT DEBIT PAYMENT", a payment from the person's own bank) is savings_transfer, never income — it is the person paying their own card. A purchase on the card is categorised by what was bought, exactly like a debit card.
+
 Return a JSON array — same order as input — each item:
 { "id": "<the id field from input>", "category": "<category>", "recurring": true|false }
 
@@ -569,6 +571,12 @@ const BANK_FINGERPRINTS = [
     { slug: 'tescobank',   name: 'Tesco Bank',       re: /\btesco bank\b/i },
     { slug: 'sainsburys',  name: "Sainsbury's Bank", re: /\bsainsbury'?s bank\b/i },
     { slug: 'postoffice',  name: 'Post Office Money', re: /\bpost office money\b/i },
+    // Card-only issuers. Their name in a bank debit's description IS the
+    // evidence that the debit is a card payment (see CARD_ONLY_ISSUERS).
+    { slug: 'newday',      name: 'NewDay',           re: /\bnewday\b|\baqua card\b|\bmarbles card\b|\bfluid card\b/i },
+    { slug: 'jaja',        name: 'Jaja',             re: /\bjaja\b/i },
+    { slug: 'zable',       name: 'Zable',            re: /\bzable\b/i },
+    { slug: 'johnlewis',   name: 'John Lewis Money', re: /\bjohn lewis (?:money|finance|partnership card)\b/i },
 ];
 
 // Named account products. Recognising the PRODUCT — not just the bank — is
@@ -616,6 +624,117 @@ function detectLast4(text) {
     m = text.match(/\b\d{2}[-\s]\d{2}[-\s]\d{2}\b[^\d]{0,30}\b\d{4}(\d{4})\b/);
     if (m) return m[1];
     return null;
+}
+
+// ── Credit cards ──────────────────────────────────────────────────
+// A credit card is where the SAME POUND is most easily counted twice: the
+// purchase is spending on the card statement, and the payment that clears it
+// is a debit on the bank statement. Loaded together, both count. The rule
+// mirrors the transfer rule — paying a card you hold is moving your own money
+// to cover spending that is already recorded — and every piece of it below is
+// keyed off the accounts the user has actually loaded, never a guessed list.
+
+// A payment landing ON a card, in the card's own words.
+const CARD_PAYMENT_RECEIVED_RE = /\bpayment\s*(?:received|recvd|-\s*thank\s*you|thank\s*you)|\bthank\s*you\b[^a-z]{0,6}\bpayment|\bdirect\s*debit\s*(?:payment|received|collected)|\bpayment\s+by\s+(?:direct\s+debit|faster\s+payment|bank\s+transfer)|\bdd\s+payment\b|\bpayment\s+in\b/i;
+
+// Issuers who only do cards — their name alone in a bank debit says "card
+// payment". Every other bank on the list also runs current and savings
+// accounts, so for those the description must ALSO say it is a card ("LLOYDS
+// BANK CARD", "HALIFAX CREDIT CARD DD"), or a £5 "CLUB LLOYDS" fee, or a move
+// to a Lloyds savings pot, would be filed as a card payment.
+const CARD_ONLY_ISSUERS = new Set(['barclaycard', 'amex', 'capitalone', 'vanquis', 'mbna', 'newday', 'jaja', 'zable', 'johnlewis']);
+const CARD_WORD_RE = /\b(?:credit\s*card|card|c\/card|cc|visa|mastercard|m\/card)\b/i;
+
+function isCardPaymentReceived(t) {
+    return t.amount > 0 && CARD_PAYMENT_RECEIVED_RE.test(String(t.merchant || t.description || ''));
+}
+
+// Card statements print purchases as plain figures and payments as "CR" —
+// the opposite of a bank statement — so a reader that copies what is printed
+// files every purchase as INCOME. The prompt says which way round; this is
+// the check that the read obeyed it, from the statement's OWN evidence, in
+// order of strength: (1) the payment lines — money arriving on a card can only
+// be positive; (2) the printed opening/closing balances, which only add up one
+// way round. No evidence → left alone and said so in the log, never guessed.
+// Also stamps a payment received onto the card as savings_transfer — ground
+// truth from the statement, so it is never sent to the categoriser as a
+// candidate for "income".
+function normaliseCardRows(rows, acct, bal) {
+    if (!acct || acct.type !== 'credit_card' || !rows.length) return { rows, flipped: false, evidence: null };
+    const desc = r => String(r.merchant || r.description || '');
+    let flip = null, evidence = null;
+    const payLines = rows.filter(r => CARD_PAYMENT_RECEIVED_RE.test(desc(r)) && Number.isFinite(r.amount) && r.amount !== 0);
+    if (payLines.length) {
+        const neg = payLines.filter(r => r.amount < 0).length;
+        const pos = payLines.length - neg;
+        if (neg !== pos) { flip = neg > pos; evidence = `payment lines ${flip ? 'negative' : 'positive'} (${payLines.length})`; }
+    }
+    if (flip === null && bal && bal.opening != null && bal.closing != null) {
+        const read     = Math.round(rows.reduce((s, t) => s + (Number(t.amount) || 0), 0) * 100) / 100;
+        const expected = Math.round((bal.closing - bal.opening) * 100) / 100;
+        if (Math.abs(read - expected) < 0.005)       { flip = false; evidence = 'balance arithmetic'; }
+        else if (Math.abs(-read - expected) < 0.005) { flip = true;  evidence = 'balance arithmetic'; }
+    }
+    if (flip === null) console.log(`[finance] credit card "${acct.label}" — no payment line and no usable balances, so the sign convention could not be checked; rows kept as read`);
+    else if (flip) console.log(`[finance] credit card "${acct.label}" — read with the card's own signs (evidence: ${evidence}); flipped ${rows.length} rows so purchases are money out`);
+    let out = flip ? rows.map(r => ({ ...r, amount: -r.amount })) : rows;
+    out = out.map(r => (!r.category && isCardPaymentReceived(r)) ? { ...r, category: 'savings_transfer' } : r);
+    return { rows: out, flipped: !!flip, evidence };
+}
+
+// A card's printed balance is what is OWED, so in this app it is negative
+// (law: never net what she has against what she owes — a card debt sits with
+// the overdrafts, never in "You have"). Only an explicit "CR" makes it money
+// in her favour. Applied to the statement's #BALANCE figures before they are
+// used for reconciliation or stored on the account.
+function normaliseCardBalance(bal, acct) {
+    if (!bal || !acct || acct.type !== 'credit_card') return bal;
+    const owed = (v, cr) => (v == null) ? null : (cr ? Math.abs(v) : -Math.abs(v));
+    return { ...bal, opening: owed(bal.opening, bal.openingCr), closing: owed(bal.closing, bal.closingCr) };
+}
+
+// Bank debits that are payments to a card the user holds, plus payments
+// received on the card itself. Read-time, like transfer pairing — the stored
+// rows are never rewritten. Two conditions, both from her own data:
+//   1. the card is a loaded account (type credit_card), and the debit names
+//      its issuer (a card-only issuer by name; any other bank only with a
+//      card word alongside);
+//   2. the card's own rows COVER that date (± a week). A card statement for
+//      June must not turn every card payment from March into "not spending" —
+//      for months the card is not loaded, the payment is still the truest
+//      figure the app has for what was spent on it.
+function cardPaymentIds(txns, accounts) {
+    const out = new Set();
+    const cards = (accounts || []).filter(a => a && a.type === 'credit_card');
+    if (!cards.length) return out;
+    const cardIds = new Set(cards.map(c => c.id));
+    const WEEK = 7 * 86400000;
+    const cover = new Map();
+    for (const c of cards) {
+        const ts = txns.filter(t => t.account === c.id).map(t => Date.parse(t.date || '')).filter(Number.isFinite);
+        if (ts.length) cover.set(c.id, [Math.min(...ts) - WEEK, Math.max(...ts) + WEEK]);
+    }
+    const desc = t => String(t.merchant || t.description || '');
+    for (const t of txns) {
+        if (cardIds.has(t.account)) {
+            if (isCardPaymentReceived(t)) out.add(t.id);
+            continue;
+        }
+        if (!(t.amount < 0)) continue;
+        const dT = Date.parse(t.date || '');
+        if (!Number.isFinite(dT)) continue;
+        const d = desc(t);
+        for (const c of cards) {
+            const win = cover.get(c.id);
+            if (!win || dT < win[0] || dT > win[1]) continue;
+            const fp = BANK_FINGERPRINTS.find(b => b.slug === c.bankSlug);
+            if (!fp || !fp.re.test(d)) continue;
+            if (!CARD_ONLY_ISSUERS.has(c.bankSlug) && !CARD_WORD_RE.test(d)) continue;
+            out.add(t.id);
+            break;
+        }
+    }
+    return out;
 }
 
 /**
@@ -832,7 +951,7 @@ function getAccountsWithTotals(email) {
     const txns = getTransactions(email);
     // Pairing is cross-account by definition, so it must be computed over the
     // whole set, not per account.
-    const paired = pairInternalTransfers(txns);
+    const paired = pairInternalTransfers(txns, getAccounts(email));
     const isSelfMove = t => t.category === 'savings_transfer' || paired.has(t.id);
     return accounts.map(a => {
         const rows  = txns.filter(t => t.account === a.id);
@@ -1095,6 +1214,13 @@ Rules:
   reference/year/number inside the description field; the third field must be
   the money value alone.
 - If a line has no clear single money amount, skip that line entirely.
+- CREDIT CARD statements run the other way from a bank account and you must
+  NOT copy their sign convention: a purchase, cash withdrawal, interest line or
+  fee is money LEAVING and must be NEGATIVE even though the card prints it as a
+  plain figure; a payment received, a refund or any "CR" line is money coming
+  in and must be POSITIVE. In the #BALANCE line for a credit card, a balance
+  the person OWES is written with a minus sign (-450.00) and a balance in
+  credit is written with CR after it (12.50 CR).
 - Do NOT include balance columns, opening/closing balance totals, or header/footer rows
 - If multiple pages are visible, extract ALL of them
 - Return ONLY the CSV. No explanation, no markdown.`;
@@ -1185,9 +1311,12 @@ function parseBalanceHeader(csv) {
         const v = parseAmount(s);
         return (Number.isFinite(v) && Math.abs(v) <= MAX_TXN_AMOUNT) ? v : null;
     };
+    const cr = s => /\bCR\b/i.test(String(s || ''));           // credit card "in credit" marker
     const parsed = lines.map(l => {
-        const p = l.replace(/^#BALANCE\s*:?\s*/i, '').split('|').map(s => s.trim());
-        return { opening: num(p[0]), openingDate: normDate(p[1]), closing: num(p[2]), closingDate: normDate(p[3]) };
+        const rawP = l.replace(/^#BALANCE\s*:?\s*/i, '').split('|');
+        const p = rawP.map(s => s.trim().replace(/\s*\bCR\b\s*/i, ''));
+        return { opening: num(p[0]), openingDate: normDate(p[1]), closing: num(p[2]), closingDate: normDate(p[3]),
+                 openingCr: cr(rawP[0]), closingCr: cr(rawP[2]) };
     });
     const firstWithOpening = parsed.find(p => p.opening != null);
     const lastWithClosing  = [...parsed].reverse().find(p => p.closing != null);
@@ -1195,8 +1324,10 @@ function parseBalanceHeader(csv) {
     return {
         opening:     firstWithOpening ? firstWithOpening.opening : null,
         openingDate: firstWithOpening ? firstWithOpening.openingDate : null,
+        openingCr:   firstWithOpening ? firstWithOpening.openingCr : false,
         closing:     lastWithClosing ? lastWithClosing.closing : null,
         closingDate: lastWithClosing ? lastWithClosing.closingDate : null,
+        closingCr:   lastWithClosing ? lastWithClosing.closingCr : false,
         chunks:      parsed.length,
     };
 }
@@ -1234,10 +1365,12 @@ async function importStatementFromImage(email, imageBase64, mimeType, filename, 
     const source = deriveSource(filename, '');
     const acct = detectAccount(accountHeaderText(raw), filename);
     if (acct) upsertAccount(email, acct, source);
-    const rows = csvToRows(raw).map(r => ({ ...r, source, ...(acct && { account: acct.id }) }));
+    const bal = normaliseCardBalance(parseBalanceHeader(raw), acct);
+    // Card statements: check the signs against the statement's own evidence
+    // BEFORE anything is saved (see normaliseCardRows).
+    const rows = normaliseCardRows(csvToRows(raw).map(r => ({ ...r, source, ...(acct && { account: acct.id }) })), acct, bal).rows;
     console.log(`[finance] importStatementFromImage: vision ${raw.length} chars → ${rows.length} rows (no re-parse)${acct ? `, account "${acct.label}"` : ''}`);
     const result = await saveRows(email, rows, { ownerName });
-    const bal = parseBalanceHeader(raw);
     const check = reconcileStatement(rows, bal);
     if (bal && bal.closing != null && acct) setAccountBalance(email, acct.id, bal.closing, bal.closingDate || undefined);
     if (check) {
@@ -1314,16 +1447,18 @@ async function importStatementFromFile(email, fileBase64, mimeType, onProgress, 
         const source = deriveSource(filename, '');
         const acct = detectAccount(accountHeaderText(chunked.csv), filename);
         if (acct) upsertAccount(email, acct, source);
-        const rows = csvToRows(chunked.csv).map(r => ({ ...r, source, ...(acct && { account: acct.id }) }));
+        // The statement's own front-page balances audit the read, and give
+        // the account a real balance without anyone typing one. Read first:
+        // on a credit card they are also the evidence for which way round the
+        // rows were read (normaliseCardRows).
+        const bal = normaliseCardBalance(parseBalanceHeader(chunked.csv), acct);
+        const rows = normaliseCardRows(csvToRows(chunked.csv).map(r => ({ ...r, source, ...(acct && { account: acct.id }) })), acct, bal).rows;
         console.log(`[finance] PDF→Gemini chunked: ${chunked.pageCount} pages → ${rows.length} rows; failed: ${chunked.failed.join(', ') || 'none'}${acct ? `; account "${acct.label}"` : ''}`);
         if (!rows.length) {
             return { added: 0, total, hint: 'Could not read transactions from this PDF — try uploading a clearer copy.' };
         }
         const result = await saveRows(email, rows, { ownerName });
 
-        // The statement's own front-page balances audit the read, and give
-        // the account a real balance without anyone typing one.
-        const bal = parseBalanceHeader(chunked.csv);
         const check = reconcileStatement(rows, bal);
         if (bal && bal.closing != null && acct) {
             setAccountBalance(email, acct.id, bal.closing, bal.closingDate || undefined);
@@ -1691,10 +1826,14 @@ ${String(caseContext || '(none provided)').slice(0, 30000)}`;
 // never two rows from the same statement (same-source pairs are more
 // likely a purchase+refund, which nets out anyway via categories).
 // Computed at read time — the stored rows are never rewritten.
-function pairInternalTransfers(txns) {
-    const paired = new Set();
-    const credits = txns.filter(t => t.amount > 0 && t.category !== 'savings_transfer' && Math.abs(t.amount) >= 5);
-    const debits  = txns.filter(t => t.amount < 0 && t.category !== 'savings_transfer' && Math.abs(t.amount) >= 5);
+//
+// With the user's accounts passed in, the same set also carries payments to
+// a credit card they hold and payments received on it (cardPaymentIds) —
+// the other way the same pound gets counted twice.
+function pairInternalTransfers(txns, accounts) {
+    const paired = cardPaymentIds(txns, accounts);
+    const credits = txns.filter(t => t.amount > 0 && t.category !== 'savings_transfer' && !paired.has(t.id) && Math.abs(t.amount) >= 5);
+    const debits  = txns.filter(t => t.amount < 0 && t.category !== 'savings_transfer' && !paired.has(t.id) && Math.abs(t.amount) >= 5);
     const usedCredits = new Set();
     // Two halves of a self-move must come from DIFFERENT accounts. The account
     // stamp is the real test; the filename is the fallback for rows imported
@@ -1735,7 +1874,7 @@ function getSpendingGraphData(email) {
     // Rows that are two halves of a move between the user's own accounts.
     // They render as "Own transfers" in the breakdown and stay out of the
     // headline totals — same treatment as savings_transfer.
-    const pairedIds = pairInternalTransfers(txns);
+    const pairedIds = pairInternalTransfers(txns, getAccounts(email));
     const viewCat = t => pairedIds.has(t.id) ? 'savings_transfer' : (t.category || 'other');
 
     // Graph 1: category breakdown. "Where your money goes" is a SPENDING
@@ -1975,7 +2114,11 @@ function detectSubscriptions(email) {
     // it 'subscriptions'. Requiring the recurring flag alone hid rows the
     // user could SEE labelled subscriptions in their list — the box looked
     // blind to its own category.
-    const debits = txns.filter(t => t.amount < 0 && (t.recurring || t.category === 'subscriptions'));
+    // Own money moving — a pot transfer, a card payment — is never a
+    // subscription, however regular it is.
+    const paired = pairInternalTransfers(txns, getAccounts(email));
+    const debits = txns.filter(t => t.amount < 0 && (t.recurring || t.category === 'subscriptions')
+        && t.category !== 'savings_transfer' && !paired.has(t.id));
     const byMerchant = {};
     for (const t of debits) {
         const k = merchantKey(t.merchant || t.description);
@@ -2040,7 +2183,7 @@ function twoWayPayers(txns, paired) {
 
 function detectIncome(email) {
     const txns = getTransactions(email);
-    const paired = pairInternalTransfers(txns);
+    const paired = pairInternalTransfers(txns, getAccounts(email));
     const twoWay = twoWayPayers(txns, paired);
     const credits = txns.filter(t => t.amount > 0 && t.category !== 'savings_transfer' && !paired.has(t.id));
     const byMerchant = {};
@@ -2215,7 +2358,7 @@ function addMonthKeepingDay(iso, n, day) {
  */
 function forecastIncome(email, weeks = 12) {
     const txns   = getTransactions(email);
-    const paired = pairInternalTransfers(txns);
+    const paired = pairInternalTransfers(txns, getAccounts(email));
     const twoWay = twoWayPayers(txns, paired);
 
     const credits = txns.filter(t => t.amount > 0
@@ -2337,7 +2480,7 @@ function forecastIncome(email, weeks = 12) {
 const BILL_CATEGORIES = new Set(['utilities', 'subscriptions', 'housing', 'fees_charges']);
 function detectRegulars(email) {
     const txns = getTransactions(email);
-    const paired = pairInternalTransfers(txns);
+    const paired = pairInternalTransfers(txns, getAccounts(email));
     const live = txns.filter(t => t.category !== 'savings_transfer' && !paired.has(t.id) && t.date);
     const groups = {};
     for (const t of live) {
@@ -2435,6 +2578,11 @@ module.exports = {
 
     // Accounts
     detectAccount,
+    cardPaymentIds,
+    normaliseCardRows,
+    normaliseCardBalance,
+    parseBalanceHeader,
+    pairInternalTransfers,
     getAccounts,
     getAccountsWithTotals,
     upsertAccount,

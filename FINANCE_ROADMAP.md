@@ -230,6 +230,7 @@ says "yes, that's my life". Everything else is a bell on a broken clock.
 | 8 | **Balance on the account card** + completeness check (opening + transactions = closing; say so loudly when it doesn't) | Fenn | ⬜ |
 | 9 | Re-read the totals together. Do they match her life? | Both | ⬜ |
 | 10 | Label family payments + own company (~£6.5k currently counted as living costs) | Sarah | ⬜ |
+| 11 | **Credit cards don't double-count** — a payment to a card she holds is a transfer (only for dates the card's rows cover); "payment received" on the card is never income; card statements read purchases as money OUT (checked against the statement's own payment lines / balances); a card's balance is a debt, shown as "owe", never in "You have" | Rowan | ✅ shipped 15 Aug |
 
 **Why 6 matters most:** a transfer is only recognised when the app can see
 BOTH halves. Monzo is fully loaded; the other two banks are 217 rows, almost
