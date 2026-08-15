@@ -1158,22 +1158,32 @@ function accountHeaderText(csv) {
 // one, because a calculated balance would agree with a broken read by
 // construction and the check would always pass.
 function parseBalanceHeader(csv) {
-    const line = String(csv || '').split(/\r?\n/).find(l => l.trim().startsWith('#BALANCE'));
-    if (!line) return null;
-    const parts = line.replace(/^#BALANCE\s*:?\s*/i, '').split('|').map(s => s.trim());
+    // ⚠️ A long PDF is read in 4-page chunks and every chunk is given the
+    // same prompt, so a multi-page statement produces SEVERAL #BALANCE lines
+    // — one per chunk. Taking the first line's pair would compare page 1's
+    // opening against page 1's closing and declare a 40-page statement
+    // "short" on every import. The statement's true opening is the first
+    // opening seen; its true closing is the last closing seen.
+    const lines = String(csv || '').split(/\r?\n/).filter(l => l.trim().startsWith('#BALANCE'));
+    if (!lines.length) return null;
     const num = s => {
         if (!s) return null;
         const v = parseAmount(s);
         return (Number.isFinite(v) && Math.abs(v) <= MAX_TXN_AMOUNT) ? v : null;
     };
-    const opening = num(parts[0]);
-    const closing = num(parts[2]);
-    if (opening == null && closing == null) return null;
+    const parsed = lines.map(l => {
+        const p = l.replace(/^#BALANCE\s*:?\s*/i, '').split('|').map(s => s.trim());
+        return { opening: num(p[0]), openingDate: normDate(p[1]), closing: num(p[2]), closingDate: normDate(p[3]) };
+    });
+    const firstWithOpening = parsed.find(p => p.opening != null);
+    const lastWithClosing  = [...parsed].reverse().find(p => p.closing != null);
+    if (!firstWithOpening && !lastWithClosing) return null;
     return {
-        opening,
-        openingDate: normDate(parts[1]),
-        closing,
-        closingDate: normDate(parts[3]),
+        opening:     firstWithOpening ? firstWithOpening.opening : null,
+        openingDate: firstWithOpening ? firstWithOpening.openingDate : null,
+        closing:     lastWithClosing ? lastWithClosing.closing : null,
+        closingDate: lastWithClosing ? lastWithClosing.closingDate : null,
+        chunks:      parsed.length,
     };
 }
 
@@ -1309,11 +1319,17 @@ async function importStatementFromFile(email, fileBase64, mimeType, onProgress, 
             console.log(`[finance] statement check — bank says ${check.expected_movement}, we read ${check.read_movement}, diff ${check.difference} → ${check.ok ? 'COMPLETE' : 'SHORT'}`);
         }
 
+        // Tell her what happened, in every case. A silent success is what let
+        // a short read look identical to a complete one.
         if (chunked.failed.length) {
             result.hint = `Imported ${result.added} transactions, but page(s) ${chunked.failed.join(', ')} of ${chunked.pageCount} couldn't be read — upload the same PDF again to retry those.`;
         } else if (check && !check.ok) {
             const missing = Math.abs(check.difference);
-            result.hint = `⚠️ This statement doesn't add up. The bank's own balances say £${missing.toFixed(2)} more moved than I could read — some transactions were missed. Try uploading a clearer copy.`;
+            result.hint = `⚠️ This statement doesn't add up. The bank's own closing balance says £${missing.toFixed(2)} ${check.difference < 0 ? 'more' : 'less'} moved than I could read — some transactions were missed. Upload a clearer copy of this one.`;
+        } else if (check && check.ok) {
+            result.hint = `✅ Checked against the bank's own opening and closing balance — every transaction on this statement was read.`;
+        } else if (bal && bal.closing != null) {
+            result.hint = `Balance read from the statement: £${bal.closing.toFixed(2)}. No opening balance printed, so I can't verify the read was complete.`;
         }
         return result;
     }
