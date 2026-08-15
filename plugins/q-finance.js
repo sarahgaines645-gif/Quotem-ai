@@ -259,9 +259,16 @@ Categories:
   children         — school meals, kids' activities, kids' clothing
   holidays         — flights, hotels, travel bookings
   savings_transfer — transfers to savings, ISA contributions, moves to/from the person's OWN pots or own other accounts (e.g. a "pot", the account holder's own name, "MONEY" top-ups between own banks)
-  income           — wages, HMRC credits, benefits, refunds
+  income           — wages, HMRC credits, benefits, child maintenance. NOT refunds. NOT one-off payments from private individuals (a friend paying money over once = other)
   fees_charges     — bank charges, overdraft fees, late fees
   other            — anything that doesn't fit above
+
+A refund, reversal or dispute credit is NEVER income — give it the category of what it refunds (an Adobe refund → subscriptions, a Tesco refund → food_groceries).
+
+Read the NATURE of a payment, not just the name:
+- a small one-off to a council (£1–£10) is parking → transport; a large monthly one to a council is council tax → housing
+- streaming, software, apps, gyms, insurance, phone plans are subscriptions from their FIRST payment — don't wait for repeats
+- recurring = true whenever the payment is the kind that repeats (subscriptions, utilities, rent), even if you only see it once
 
 Self-transfers matter: money moved between the person's own accounts or pots is savings_transfer in BOTH directions (out AND back in) — it is never income and never real spending. People often upload statements from SEVERAL of their own banks: a top-up arriving from the person's own name, "MONEY", or another of their banks is savings_transfer, not income.
 
@@ -1225,6 +1232,9 @@ function getSpendingGraphData(email) {
             total_income: Math.round(totalIncome * 100) / 100,
             net:          Math.round((totalIncome - totalSpend) * 100) / 100,
             transaction_count: txns.length,
+            // Which statements the data came from — so "three banks" is
+            // visible on the page, not a mystery.
+            sources: [...new Set(txns.map(t => t.source).filter(Boolean))].slice(0, 5),
             // One figure for all own-money movement (pots, savings, and
             // between the user's own banks). moved_to_savings kept as an
             // alias for anything already reading it.
@@ -1431,8 +1441,11 @@ function detectIncome(email) {
         // labelled as anything else (dining, shopping…) never shows —
         // that's the direct way to evict a mate's repayments.
         .filter(entries => {
-            if (entries.some(t => t.category === 'income')) return true;
+            // The income label helps but never bypasses the size bar — the
+            // old fast-path let every mislabelled refund and one-off fiver
+            // walk straight into the box.
             if (entries.every(t => t.category && t.category !== 'other' && t.category !== 'income')) return false;
+            if (/refund|reversal|dispute/i.test(entries.map(t => (t.description || '') + ' ' + (t.merchant || '')).join(' '))) return false;
             const total = entries.reduce((s, t) => s + t.amount, 0);
             if (total >= 150) return true;
             return entries.length >= 2 && total >= 100;
@@ -1469,7 +1482,13 @@ function detectRegulars(email) {
     }
     const rhythm = { in: { weekly: [], monthly: [], bills: [] }, out: { weekly: [], monthly: [], bills: [] } };
     for (const [k, entries] of Object.entries(groups)) {
-        if (entries.length < 2) continue;
+        // Bill-natured charges (subscriptions, utilities, housing, fees)
+        // surface from their FIRST payment — the card is Sarah's early
+        // warning for a new charge, and waiting for repeats means "people
+        // get away with 3 payments before I notice". Everything else needs
+        // at least two occurrences to be worth a rhythm look.
+        const isBillNature = entries.some(t => BILL_CATEGORIES.has(t.category));
+        if (entries.length < 2 && !isBillNature) continue;
         entries.sort((a, b) => (a.date || '').localeCompare(b.date || ''));
         const gaps = [];
         for (let i = 1; i < entries.length; i++) {
@@ -1485,8 +1504,15 @@ function detectRegulars(email) {
         // to land a week apart are not "weekly" (that badge was landing on
         // people paid twice, ever). At least 3 payments, median in the band,
         // and most gaps actually inside it — one skipped month survives, a
-        // fluke doesn't.
+        // fluke doesn't. AND the amount must be steady: wages and Spotify
+        // are the same figure every time; parking and Costco runs are
+        // habits with wandering amounts, not commitments, and they were
+        // cluttering the card as "weekly".
+        const amounts = entries.map(t => Math.abs(t.amount)).sort((a, b) => a - b);
+        const medAmt = amounts[Math.floor(amounts.length / 2)] || 0;
+        const steadyAmount = medAmt > 0 && (amounts[amounts.length - 1] - amounts[0]) / medAmt <= 0.25;
         const rhythmic = (lo, hi) => {
+            if (!steadyAmount) return false;
             if (entries.length < 3 || median == null || median < lo || median > hi) return false;
             const inBand = gaps.filter(g => g >= lo && g <= hi).length;
             return inBand >= Math.max(2, Math.ceil(gaps.length * 0.6));
@@ -1495,7 +1521,7 @@ function detectRegulars(email) {
         if (rhythmic(5, 10))        { target = 'weekly';  cadence = 'weekly';      monthlyEquiv = amount * 4.33; }
         else if (rhythmic(11, 18))  { target = 'weekly';  cadence = 'fortnightly'; monthlyEquiv = amount * 2.17; }
         else if (rhythmic(24, 38))  { target = 'monthly'; cadence = 'monthly';     monthlyEquiv = amount; }
-        else if (BILL_CATEGORIES.has(latest.category)) { target = 'bills'; cadence = 'irregular'; }
+        else if (isBillNature) { target = 'bills'; cadence = entries.length === 1 ? 'new' : 'irregular'; }
         if (!target) continue;
         rhythm[dir][target].push({
             merchant:      latest.merchant || latest.description,
@@ -1503,6 +1529,7 @@ function detectRegulars(email) {
             cadence,
             monthly_equiv: monthlyEquiv != null ? Math.round(monthlyEquiv * 100) / 100 : null,
             count:         entries.length,
+            is_new:        entries.length === 1,
             last_seen:     latest.date,
             source:        latest.source || null,
             category:      latest.category || 'other',

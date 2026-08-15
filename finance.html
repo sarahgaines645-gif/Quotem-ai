@@ -235,13 +235,22 @@
     }
     .txn-list { display: flex; flex-direction: column; gap: 4px; }
     .txn-row {
-      display: grid; grid-template-columns: 80px 1fr auto auto auto;
+      display: grid; grid-template-columns: auto 80px 1fr auto auto auto;
       align-items: center; gap: 8px; padding: 8px 10px;
       border-radius: 8px; transition: background 0.1s;
     }
     .txn-row:hover { background: rgba(0,0,0,0.03); }
     .txn-date { font-size: 11px; color: var(--text-muted); }
+    .txn-date .txn-src { display: block; font-size: 9px; color: var(--text-faint); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 80px; }
     .txn-desc { font-size: 12px; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    /* Merchant monogram — consistent colour per name, so the eye can scan.
+       No outside logo service: real logos would mean telling a third party
+       every shop on the statement. */
+    .m-chip {
+      width: 24px; height: 24px; border-radius: 50%; flex: none;
+      display: inline-flex; align-items: center; justify-content: center;
+      font-size: 9px; font-weight: 700; letter-spacing: 0.02em;
+    }
     .txn-bucket { font-size: 10px; color: var(--text-muted); padding: 2px 7px; border-radius: 10px; background: rgba(0,0,0,0.05); cursor: pointer; white-space: nowrap; }
     .txn-bucket:hover { color: var(--accent); }
     .txn-cat {
@@ -421,6 +430,13 @@
     .rhythm-row .rr-amt { font-weight: 700; white-space: nowrap; }
     .rhythm-row .rr-amt.in  { color: var(--green); }
     .rhythm-row .rr-amt.out { color: var(--red); }
+    .rr-new { font-size: 9px; font-weight: 700; color: var(--accent); letter-spacing: 0.06em; }
+    .rg-more.hidden { display: none; }
+    .rg-more-btn {
+      border: none; background: none; cursor: pointer; font-family: inherit;
+      font-size: 11px; color: var(--text-muted); padding: 4px 0;
+    }
+    .rg-more-btn:hover { color: var(--text); }
 
     /* ── Toast ── */
     .toast {
@@ -437,7 +453,7 @@
       .summary-bar   { grid-template-columns: 1fr 1fr; }
       .rhythm-grid   { grid-template-columns: 1fr; }
       .graphs-row    { grid-template-columns: 1fr; }
-      .txn-row       { grid-template-columns: 70px 1fr auto auto; }
+      .txn-row       { grid-template-columns: auto 70px 1fr auto auto; }
       .txn-row .txn-cat { display: none; }
       .coach-card    { right: 10px; bottom: 14px; top: auto; transform: none; width: 185px; }
     }
@@ -789,6 +805,7 @@
     if (s.period_from && s.period_to) bits.push(ukDate(s.period_from) + ' – ' + ukDate(s.period_to));
     const selfMoves = s.self_transfers != null ? s.self_transfers : s.moved_to_savings;
     if (selfMoves > 0) bits.push('£' + fmt(selfMoves) + ' moved between your own accounts & pots (not counted)');
+    if (Array.isArray(s.sources) && s.sources.length) bits.push('statements: ' + s.sources.join(', '));
     document.getElementById('summary-period').textContent = bits.join(' · ');
   }
 
@@ -892,6 +909,7 @@
       ].filter(Boolean).join(' · ');
       return `
       <div class="sub-row">
+        ${mChip(s.merchant)}
         <div class="sr-main">
           <span class="sr-name">${esc(s.merchant)}</span>
           <span class="sr-meta">${meta}</span>
@@ -923,12 +941,13 @@
       ].filter(Boolean).join(' · ');
       return `
       <div class="sub-row">
+        ${mChip(s.merchant)}
         <div class="sr-main">
           <span class="sr-name">${esc(s.merchant)}</span>
           <span class="sr-meta">${meta}</span>
         </div>
         <span class="sr-amt in">+£${fmt(s.amount)}</span>
-        <button class="sr-flag" onclick="incomeToCalendar('${esc(s.merchant)}', ${Math.abs(s.amount) || 0}, '${esc(s.last_seen || '')}')" title="Puts the next 6 months of due dates on your calendar">📅 remind me</button>
+        <button class="sr-flag" onclick="incomeToCalendar('${esc(s.merchant)}', ${Math.abs(s.amount) || 0}, '${esc(s.last_seen || '')}')" title="Adds the next 6 months of expected pay dates to your calendar">📅 pay dates</button>
       </div>`;
     }).join('')
     + '<div class="sr-meta" style="padding-top:6px">Regular payers and one-offs over £150 — friend repayments and refunds stay in Transactions. Label a row as dining/shopping and it leaves here too.</div>';
@@ -957,12 +976,16 @@
         any = true;
         const eq = rows.reduce((s, x) => s + (x.monthly_equiv || 0), 0);
         h += `<div class="rhythm-group"><div class="rg-head"><span>${label}</span><span>${eq > 0 ? '≈£' + fmt(eq) + '/mo' : ''}</span></div>`;
-        h += rows.slice(0, 8).map(x => `
+        const rowHtml = x => `
           <div class="rhythm-row">
-            <span class="rr-name">${esc(x.merchant)}<span class="rr-meta"> · ${x.cadence}${x.source ? ' · ' + esc(x.source) : ''}${x.last_seen ? ' · ' + ukDate(x.last_seen) : ''}</span></span>
+            <span class="rr-name">${esc(x.merchant)}${x.is_new ? ' <span class="rr-new">NEW</span>' : ''}<span class="rr-meta"> · ${x.cadence}${x.source ? ' · ' + esc(x.source) : ''}${x.last_seen ? ' · ' + ukDate(x.last_seen) : ''}</span></span>
             <span class="rr-amt ${dir}">${dir === 'in' ? '+' : '−'}£${fmt(x.amount)}</span>
-          </div>`).join('');
-        if (rows.length > 8) h += `<div class="rr-meta">+${rows.length - 8} more</div>`;
+          </div>`;
+        h += rows.slice(0, 8).map(rowHtml).join('');
+        if (rows.length > 8) {
+          h += `<div class="rg-more hidden">${rows.slice(8).map(rowHtml).join('')}</div>`
+            + `<button class="rg-more-btn" onclick="const m=this.previousElementSibling; m.classList.toggle('hidden'); this.textContent = m.classList.contains('hidden') ? 'show ${rows.length - 8} more ▾' : 'show fewer ▴'">show ${rows.length - 8} more ▾</button>`;
+        }
         h += '</div>';
       }
       if (!any) h += '<div class="txn-empty" style="padding:8px 0">Nothing regular found yet</div>';
@@ -1241,7 +1264,8 @@
       `<span class="txn-bucket" data-txn="${t.id}" data-merchant="${esc(t.merchant || t.description)}" style="opacity:0.4">+ label</span>`;
     return `
       <div class="txn-row${t.flagged ? ' flagged' : ''}" id="txn-${t.id}">
-        <span class="txn-date">${t.date || ''}</span>
+        ${mChip(t.merchant || t.description)}
+        <span class="txn-date">${t.date || ''}${t.source ? `<span class="txn-src" title="${esc(t.source)}">${esc(t.source)}</span>` : ''}</span>
         <span class="txn-desc" title="${esc(t.description)}">${esc(t.merchant || t.description)}</span>
         ${bucketTxt}
         <span class="${catClass}" onclick="pickCategory('${t.id}', event)" title="Change category">${catLabel}</span>
@@ -1928,6 +1952,17 @@
 
   function esc(s) {
     return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+  }
+
+  // Merchant monogram — same name, same colour, every time.
+  function mChip(name) {
+    const n = String(name || '?').trim();
+    let h = 0;
+    for (let i = 0; i < n.length; i++) h = (h * 31 + n.charCodeAt(i)) >>> 0;
+    const hue = h % 360;
+    const parts = n.split(/\s+/).filter(Boolean);
+    const init = (((parts[0] || '?')[0] || '?') + (parts[1] ? (parts[1][0] || '') : ((parts[0] || '')[1] || ''))).toUpperCase();
+    return `<span class="m-chip" style="background:hsl(${hue},45%,86%);color:hsl(${hue},55%,28%)">${esc(init)}</span>`;
   }
 
   let toastTimer = null;
