@@ -931,17 +931,31 @@
     const badge = document.getElementById('charges-badge');
     if (!body) return;
     const c = chargesData;
-    if (!c || (!c.penalties.length && !c.fees.length)) {
+    const unnamed = Array.isArray(c && c.unnamed) ? c.unnamed : [];
+    if (!c || (!c.penalties.length && !c.fees.length && !unnamed.length)) {
       body.innerHTML = '<div class="txn-empty">No charges found — nothing has been taken off you in fees or penalties in the statements loaded.</div>';
       badge.textContent = '';
       return;
     }
     badge.textContent = '£' + fmt(c.total);
 
+    // WHERE: the account each charge left, named as on the account cards.
+    const acctName = id => {
+      if (id === 'unlinked') return 'not linked to an account';
+      const a = (accounts || []).find(x => x.id === id);
+      return a ? (a.bank + (a.product ? ' ' + a.product : '')) : id;
+    };
+    const whereLine = i => {
+      const by = i.by_account || {};
+      const ids = Object.keys(by).sort((x, y) => by[y] - by[x]);
+      if (!ids.length) return '';
+      return ids.map(id => acctName(id) + (ids.length > 1 ? ' £' + fmt(by[id]) : '')).join(' · ');
+    };
     const row = (i, bad) => `<div class="charge-row">
         <div>
           <div class="cr-name">${esc(i.label)}</div>
-          <div class="cr-meta">${i.count}× · ${i.first_seen ? ukDate(i.first_seen) : ''}${i.last_seen && i.last_seen !== i.first_seen ? ' – ' + ukDate(i.last_seen) : ''}</div>
+          <div class="cr-meta">${i.count}× · ${i.first_seen ? ukDate(i.first_seen) : ''}${i.last_seen && i.last_seen !== i.first_seen ? ' – ' + ukDate(i.last_seen) : ''}${whereLine(i) ? ' · ' + esc(whereLine(i)) : ''}</div>
+          ${i.type !== 'unnamed' && Array.isArray(i.examples) && i.examples.length ? `<div class="cr-meta">${esc(i.examples.join(' · '))}</div>` : ''}
         </div>
         <div class="cr-amt${bad ? ' bad' : ''}">£${fmt(i.total)}</div>
       </div>`;
@@ -967,9 +981,14 @@
       html += '<div class="charge-group-label">What the accounts charge to exist</div>'
             + c.fees.map(i => row(i, false)).join('');
     }
-    html += `<div class="ac-sub" style="margin-top:12px">Read from the statement descriptions across ${c.months_covered} months`
-          + (c.unmatched_rows ? ` · ${c.unmatched_rows} charge${c.unmatched_rows === 1 ? '' : 's'} couldn't be named` : '')
-          + `. Free debt advice, if any of this is biting: StepChange, National Debtline, Citizens Advice.</div>`;
+    if (unnamed.length) {
+      // Under the name the bank printed, with the account — so she can see
+      // what the sorter called a charge and whether it is one. Not in the
+      // totals above: listed, not asserted.
+      html += `<div class="charge-group-label">Called a charge by the sorter — £${fmt(c.unnamed_total)} · not counted above</div>`
+            + unnamed.map(i => row(i, false)).join('');
+    }
+    html += `<div class="ac-sub" style="margin-top:12px">Read from the statement descriptions across ${c.months_covered} months. Free debt advice, if any of this is biting: StepChange, National Debtline, Citizens Advice.</div>`;
     body.innerHTML = html;
   }
 

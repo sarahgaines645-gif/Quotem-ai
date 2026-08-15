@@ -2688,26 +2688,36 @@ function detectCharges(email) {
         const text = `${t.description || ''} ${t.merchant || ''}`;
         const hit = CHARGE_PATTERNS.find(p => p.re.test(text));
         // A row the labeller called fees_charges but no pattern matched is
-        // still a charge — count it rather than lose it.
+        // NOT lumped as "Other bank charge" and NOT called a penalty — Sarah
+        // saw "94x GBP295.12 Other bank charge" and asked, rightly, "where
+        // are the charges?". Each is grouped under the name the bank
+        // printed, with its account, so she can see what the sorter called
+        // a charge and whether it is one. Listed, not asserted.
         if (!hit && t.category !== 'fees_charges') continue;
-        const key = hit ? hit.label : 'Other bank charge';
-        const type = hit ? hit.type : 'penalty';
+        const merchant = String(t.merchant || t.description || '').replace(/\s+/g, ' ').trim().slice(0, 40);
+        const key  = hit ? hit.label : ('?' + merchantKey(merchant));
+        const type = hit ? hit.type : 'unnamed';
         if (!hit) uncategorised++;
-        if (!groups.has(key)) groups.set(key, { label: key, type, count: 0, total: 0, last_seen: '', first_seen: '', sources: new Set() });
+        if (!groups.has(key)) groups.set(key, { label: hit ? hit.label : (merchant || 'Unnamed charge'), type, count: 0, total: 0, last_seen: '', first_seen: '', sources: new Set(), by_account: {}, examples: new Map() });
         const g = groups.get(key);
         g.count++;
         g.total += Math.abs(t.amount);
         if (t.date && (!g.last_seen  || t.date > g.last_seen))  g.last_seen  = t.date;
         if (t.date && (!g.first_seen || t.date < g.first_seen)) g.first_seen = t.date;
-        if (t.account) g.sources.add(t.account);
+        const acc = t.account || 'unlinked';
+        g.sources.add(acc);
+        g.by_account[acc] = Math.round(((g.by_account[acc] || 0) + Math.abs(t.amount)) * 100) / 100;
+        if (merchant) g.examples.set(merchant, (g.examples.get(merchant) || 0) + 1);
     }
 
     const items = [...groups.values()]
-        .map(g => ({ ...g, total: Math.round(g.total * 100) / 100, sources: [...g.sources] }))
+        .map(g => ({ ...g, total: Math.round(g.total * 100) / 100, sources: [...g.sources],
+                     examples: [...g.examples.entries()].sort((a, b) => b[1] - a[1]).slice(0, 3).map(([m]) => m) }))
         .sort((a, b) => b.total - a.total);
 
     const penalties = items.filter(i => i.type === 'penalty');
     const fees      = items.filter(i => i.type === 'fee');
+    const unnamed   = items.filter(i => i.type === 'unnamed');
     const sum = arr => Math.round(arr.reduce((s, i) => s + i.total, 0) * 100) / 100;
 
     // Monthly rate, so the figure means something regardless of how much
@@ -2720,9 +2730,11 @@ function detectCharges(email) {
     return {
         penalties,
         fees,
+        unnamed,
+        unnamed_total: sum(unnamed),
         penalty_total: sum(penalties),
         fee_total:     sum(fees),
-        total:         sum(items),
+        total:         sum(penalties) + sum(fees),   // named charges only — the unnamed are listed, not asserted
         penalty_per_month: Math.round((sum(penalties) / months) * 100) / 100,
         penalty_per_year:  Math.round((sum(penalties) / months) * 12 * 100) / 100,
         months_covered: Math.round(months * 10) / 10,
