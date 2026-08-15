@@ -1481,11 +1481,21 @@ function detectRegulars(email) {
         const dir = k.startsWith('in:') ? 'in' : 'out';
         const latest = entries[entries.length - 1];
         const amount = Math.abs(latest.amount);
+        // A rhythm needs EVIDENCE, not coincidence: two payments that happen
+        // to land a week apart are not "weekly" (that badge was landing on
+        // people paid twice, ever). At least 3 payments, median in the band,
+        // and most gaps actually inside it — one skipped month survives, a
+        // fluke doesn't.
+        const rhythmic = (lo, hi) => {
+            if (entries.length < 3 || median == null || median < lo || median > hi) return false;
+            const inBand = gaps.filter(g => g >= lo && g <= hi).length;
+            return inBand >= Math.max(2, Math.ceil(gaps.length * 0.6));
+        };
         let target = null, cadence = null, monthlyEquiv = null;
-        if (median != null && median >= 5 && median <= 10)       { target = 'weekly';  cadence = 'weekly';      monthlyEquiv = amount * 4.33; }
-        else if (median != null && median >= 11 && median <= 18) { target = 'weekly';  cadence = 'fortnightly'; monthlyEquiv = amount * 2.17; }
-        else if (median != null && median >= 24 && median <= 38) { target = 'monthly'; cadence = 'monthly';     monthlyEquiv = amount; }
-        else if (BILL_CATEGORIES.has(latest.category))           { target = 'bills';   cadence = 'irregular'; }
+        if (rhythmic(5, 10))        { target = 'weekly';  cadence = 'weekly';      monthlyEquiv = amount * 4.33; }
+        else if (rhythmic(11, 18))  { target = 'weekly';  cadence = 'fortnightly'; monthlyEquiv = amount * 2.17; }
+        else if (rhythmic(24, 38))  { target = 'monthly'; cadence = 'monthly';     monthlyEquiv = amount; }
+        else if (BILL_CATEGORIES.has(latest.category)) { target = 'bills'; cadence = 'irregular'; }
         if (!target) continue;
         rhythm[dir][target].push({
             merchant:      latest.merchant || latest.description,
