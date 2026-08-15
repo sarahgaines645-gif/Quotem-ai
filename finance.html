@@ -1110,14 +1110,12 @@
         const openStr  = a.implied_opening < 0
           ? (card ? `owed <strong>£${openAbs}</strong>` : `was overdrawn by <strong>£${openAbs}</strong>`)
           : (card ? `was <strong>£${openAbs}</strong> in credit` : `held <strong>£${openAbs}</strong>`);
+        // The card is the numbers. No arithmetic paragraph, no caveats —
+        // Sarah, 16 Aug: "all this is mess. it doesn't need to be there."
+        // The statement checks show at drop time in the upload box.
         balBlock = `<div style="margin-top:10px">
           <div class="ac-fig-l">${balLabel}${a.balanceAt ? ' · ' + esc(ukDate(a.balanceAt)) : ''}</div>
           <div class="ac-fig-v${od ? ' neg' : ''}" style="font-size:18px">£${fmt(Math.abs(a.balance))}</div>
-          <div class="ac-sub" style="margin-top:6px">
-            ${moveStr} moved since ${a.period_from ? esc(ukDate(a.period_from)) : 'the start'} —
-            so this ${card ? 'card' : 'account'} ${openStr} then.
-            If that's wrong, transactions are missing.
-          </div>
           <button class="ac-bal-edit" data-acct="${esc(a.id)}" type="button">Update balance</button>
         </div>`;
       } else {
@@ -1193,10 +1191,7 @@
           <div><div class="ac-fig-l">${a.type === 'credit_card' ? 'Paid off' : 'Received'}</div><div class="ac-fig-v">£${fmt(a.type === 'credit_card' ? (a.self_transfers_in || 0) : a.money_in)}</div></div>
         </div>
         ${balBlock}
-        ${stmtLine ? `<div class="ac-sub" style="margin-top:8px">${stmtLine}</div>` : ''}
-        ${gapLine ? `<div class="ac-sub" style="margin-top:4px">${gapLine}</div>` : ''}
-        ${selfLine ? `<div class="ac-sub" style="margin-top:8px">${selfLine}</div>` : ''}
-        <div class="ac-sub" style="margin-top:${selfLine ? '4px' : '8px'}">${esc(sub)}</div>
+        <div class="ac-sub" style="margin-top:8px">${esc(sub)}</div>
       </div>`;
     }).join('');
 
