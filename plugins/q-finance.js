@@ -678,21 +678,38 @@ function upsertAccount(email, acct, source) {
     return next;
 }
 
-// Accounts with their live figures, for the page's account cards. Counts and
-// balances-out are computed from the rows themselves — nothing is stored that
-// could drift out of step with the transactions.
+// Accounts with their live figures, for the page's account cards. Computed
+// from the rows themselves — nothing is stored that could drift out of step
+// with the transactions.
+//
+// ⚠️ These figures obey the SAME rule as the headline totals: money the user
+// moved between their own pots and their own banks is NOT spending and NOT
+// income. A first version summed every debit and every credit, and a Monzo
+// account full of pot transfers read as £23.9k out / £26k in — gross flow,
+// which Sarah recognised instantly as not her life. Self-moves are shown as
+// their own figure instead of being hidden or double-counted.
 function getAccountsWithTotals(email) {
     const accounts = getAccounts(email);
     if (!accounts.length) return [];
     const txns = getTransactions(email);
+    // Pairing is cross-account by definition, so it must be computed over the
+    // whole set, not per account.
+    const paired = pairInternalTransfers(txns);
+    const isSelfMove = t => t.category === 'savings_transfer' || paired.has(t.id);
     return accounts.map(a => {
-        const rows = txns.filter(t => t.account === a.id);
+        const rows  = txns.filter(t => t.account === a.id);
         const dates = rows.map(t => t.date).filter(Boolean).sort();
+        const real  = rows.filter(t => !isSelfMove(t));
+        const moves = rows.filter(isSelfMove);
         return {
             ...a,
             transaction_count: rows.length,
-            money_out: Math.round(rows.filter(t => t.amount < 0).reduce((s, t) => s + Math.abs(t.amount), 0) * 100) / 100,
-            money_in:  Math.round(rows.filter(t => t.amount > 0).reduce((s, t) => s + t.amount, 0) * 100) / 100,
+            money_out: Math.round(real.filter(t => t.amount < 0).reduce((s, t) => s + Math.abs(t.amount), 0) * 100) / 100,
+            money_in:  Math.round(real.filter(t => t.amount > 0).reduce((s, t) => s + t.amount, 0) * 100) / 100,
+            // Own money in and out of pots / her other banks — real, but never
+            // spending. Shown so the card adds up rather than seeming to lose money.
+            self_transfers_out: Math.round(moves.filter(t => t.amount < 0).reduce((s, t) => s + Math.abs(t.amount), 0) * 100) / 100,
+            self_transfers_in:  Math.round(moves.filter(t => t.amount > 0).reduce((s, t) => s + t.amount, 0) * 100) / 100,
             period_from: dates[0] || null,
             period_to:   dates[dates.length - 1] || null,
         };

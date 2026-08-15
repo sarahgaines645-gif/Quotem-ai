@@ -849,6 +849,8 @@
         a.period_from && a.period_to ? ukDate(a.period_from) + ' – ' + ukDate(a.period_to) : '',
         a.transaction_count + (a.transaction_count === 1 ? ' transaction' : ' transactions'),
       ].filter(Boolean).join(' · ');
+      // Own-money movement, shown as its own line so the card adds up.
+      const selfMoved = Math.max(a.self_transfers_out || 0, a.self_transfers_in || 0);
       let h = 0;
       const seed = String(a.bank || a.id);
       for (let i = 0; i < seed.length; i++) h = (h * 31 + seed.charCodeAt(i)) >>> 0;
@@ -863,10 +865,11 @@
           </div>
         </div>
         <div class="ac-figs">
-          <div><div class="ac-fig-l">Out</div><div class="ac-fig-v">£${fmt(a.money_out)}</div></div>
-          <div><div class="ac-fig-l">In</div><div class="ac-fig-v">£${fmt(a.money_in)}</div></div>
+          <div><div class="ac-fig-l">Spent</div><div class="ac-fig-v">£${fmt(a.money_out)}</div></div>
+          <div><div class="ac-fig-l">Received</div><div class="ac-fig-v">£${fmt(a.money_in)}</div></div>
         </div>
-        <div class="ac-sub" style="margin-top:8px">${esc(sub)}</div>
+        ${selfMoved > 0 ? `<div class="ac-sub" style="margin-top:8px">£${fmt(selfMoved)} moved between your own pots &amp; accounts — not counted</div>` : ''}
+        <div class="ac-sub" style="margin-top:${selfMoved > 0 ? '4px' : '8px'}">${esc(sub)}</div>
       </div>`;
     }).join('');
 
