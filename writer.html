@@ -670,6 +670,87 @@
       padding-left: 32px;
     }
 
+    /* ── Phase 3: doc-meta buttons, saved label, coverage strip, mark results ── */
+    .doc-meta .meta-spacer { flex: 1; }
+    .meta-btn {
+      padding: 4px 11px; border: none; border-radius: 12px; cursor: pointer;
+      font-family: 'Space Grotesk', sans-serif; font-size: 11px; font-weight: 600;
+      background: var(--bg); color: var(--text); box-shadow: var(--neu-raised-xs);
+      transition: box-shadow 0.15s;
+    }
+    .meta-btn:hover { box-shadow: var(--neu-raised-sm); }
+    .meta-btn:active { box-shadow: var(--neu-inset-sm); }
+    .meta-btn:disabled { opacity: 0.5; cursor: default; }
+    #meta-saved.saving { color: var(--text-faint); font-style: italic; }
+    #meta-saved.error { color: var(--accent); }
+    .coach-card .q-integrity {
+      font-size: 10px; color: var(--text-faint); line-height: 1.35;
+      margin: -4px 0 8px; letter-spacing: 0.01em;
+    }
+    .coach-card.wide { width: 300px; }
+    .coach-card .q-actions { max-height: 46vh; overflow-y: auto; scrollbar-width: none; }
+    .coach-card .q-actions::-webkit-scrollbar { display: none; }
+    .brief-meta-line { font-size: 10px; color: var(--text-muted); margin-top: 6px; line-height: 1.4; }
+    .coverage-strip { display: flex; flex-direction: column; gap: 3px; margin-top: 8px; }
+    .coverage-label {
+      font-size: 10px; font-weight: 700; text-transform: uppercase;
+      letter-spacing: 0.06em; color: var(--text-muted); margin-bottom: 2px;
+    }
+    .cov-item {
+      display: grid; grid-template-columns: 12px 1fr; gap: 6px; align-items: start;
+      font-size: 11px; color: var(--text); line-height: 1.35; cursor: pointer;
+    }
+    .cov-item:hover .cov-text { color: var(--accent); }
+    .cov-item .cov-dot { width: 9px; height: 9px; border-radius: 50%; margin-top: 3px; box-shadow: var(--neu-inset-sm); }
+    .cov-item[data-cov="covered"] .cov-dot { background: #28a745; box-shadow: none; }
+    .cov-item[data-cov="partial"] .cov-dot { background: #e6a817; box-shadow: none; }
+    .cov-item .cov-id { font-weight: 700; color: var(--text-muted); margin-right: 4px; }
+    .cov-item.current .cov-text { font-weight: 600; }
+    .mark-row {
+      background: var(--bg); border-radius: 10px; box-shadow: var(--neu-raised-xs);
+      padding: 8px 10px; margin-bottom: 6px; display: flex; flex-direction: column; gap: 3px;
+    }
+    .mark-row .mk-head { display: flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 700; color: var(--text); }
+    .mark-row .mk-dot { width: 9px; height: 9px; border-radius: 50%; }
+    .mark-row[data-band="top"] .mk-dot { background: #28a745; }
+    .mark-row[data-band="mid"] .mk-dot { background: #e6a817; }
+    .mark-row[data-band="low"] .mk-dot { background: #dc3545; }
+    .mark-row[data-band="missing"] .mk-dot { background: #999; }
+    .mark-row .mk-need { font-size: 11px; color: var(--text-muted); line-height: 1.4; }
+    .mark-row .mk-go {
+      align-self: flex-start; padding: 3px 9px; border: none; border-radius: 10px; margin-top: 2px;
+      font-family: 'Space Grotesk', sans-serif; font-size: 10px; font-weight: 600;
+      background: var(--bg); color: var(--text); cursor: pointer; box-shadow: var(--neu-raised-xs);
+    }
+    .mark-row .mk-go:hover { color: var(--accent); }
+    .assembled-preview {
+      font-family: 'Lora', Georgia, serif; font-size: 12px; line-height: 1.5; color: var(--text);
+      background: var(--bg); box-shadow: var(--neu-raised-xs); border-radius: 10px;
+      padding: 8px 10px; margin-bottom: 8px; max-height: 32vh; overflow-y: auto; white-space: pre-wrap;
+    }
+    .q-cause { font-size: 11px; color: var(--text-muted); line-height: 1.4; margin-bottom: 6px; }
+    .coach-input-row { display: flex; align-items: center; gap: 6px; }
+    .coach-input-row input.coach-input { flex: 1; }
+    .q-mic {
+      width: 26px; height: 26px; border-radius: 50%; border: none; flex-shrink: 0;
+      background: var(--bg); color: var(--text-muted); cursor: pointer;
+      box-shadow: var(--neu-raised-xs); display: inline-flex; align-items: center; justify-content: center;
+    }
+    .q-mic:hover { color: var(--accent); }
+    .q-mic.listening { box-shadow: var(--neu-inset-sm); color: var(--accent); }
+    .q-mic.hidden { display: none; }
+    .source-list { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+    .source-chip.support { font-size: 11px; }
+    .source-chip .kind { font-size: 9px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-faint); font-weight: 700; }
+    .cov-item .cov-count { color: var(--text-faint); font-weight: 400; margin-left: 4px; font-size: 10px; }
+    .edit-item { background: var(--bg); border-radius: 10px; box-shadow: var(--neu-raised-xs); padding: 8px 10px; margin-bottom: 8px; display: flex; flex-direction: column; gap: 5px; }
+    .edit-item .ed-sentence { font-family: 'Lora', Georgia, serif; font-size: 12px; line-height: 1.45; color: var(--text); }
+    .edit-item .ed-sug { font-size: 11px; color: var(--text-muted); line-height: 1.4; }
+    .edit-item .ed-sug b { color: var(--text); }
+    .edit-item .ed-row { display: flex; gap: 5px; flex-wrap: wrap; }
+    .doc-body .student-line { margin: 0; }
+
+
     /* Mobile */
     @media (max-width: 600px) {
       .paper { padding: 48px 28px 64px; min-height: 700px; }
@@ -738,6 +819,16 @@
       <textarea class="setup-voice-area hidden" id="setup-voice-area" rows="4"
         placeholder="Paste a paragraph or two they've written before — Q will match their vocabulary and rhythm in every suggestion…"></textarea>
     </div>
+    <div class="setup-row" style="align-items:center">
+      <div class="setup-field" style="flex:2">
+        <div class="setup-label">Q speaks when you pause for</div>
+        <div style="display:flex; align-items:center; gap:8px">
+          <input class="setup-input" id="setup-pause" type="number" min="3" max="60" step="1" value="7" style="width:72px" inputmode="numeric" />
+          <span style="font-size:12px; color:var(--text-muted)">seconds at the end of a sentence</span>
+        </div>
+      </div>
+      <div class="setup-field" style="flex:1; font-size:11px; color:var(--text-faint); line-height:1.4">Q reads what you write and asks the next question when you stop. He never types on your page.</div>
+    </div>
     <div style="display:flex; justify-content:flex-end; gap:10px; align-items:center">
       <span id="setup-voice-status" style="font-size:11px; color:var(--text-faint);"></span>
       <button type="button" class="setup-start" id="setup-start">Start writing →</button>
@@ -750,7 +841,10 @@
       <input type="text" class="doc-title" id="doc-title" placeholder="Untitled document" />
       <div class="doc-meta">
         <span id="meta-words">0 words</span>
-        <span id="meta-saved">Not yet saved</span>
+        <span id="meta-saved" title="Everything on this page is saved to your account as you type">Not yet saved</span>
+        <span class="meta-spacer"></span>
+        <button type="button" class="meta-btn" id="btn-download" title="Download what is on the page as a Word file">↓ Download</button>
+        <button type="button" class="meta-btn" id="btn-finish" title="Q checks every criterion is covered, then marks it like the marker">Finish &amp; mark →</button>
       </div>
       <div class="source-slot" id="source-slot">
         <button type="button" class="source-add" id="source-add-btn"
@@ -824,21 +918,25 @@
     <div class="q-logo">Q<span class="dot">.</span></div>
     <div class="q-section" id="coach-section"></div>
     <div class="q-msg" id="coach-msg">Drop your task in above and I'll read it. I'll ask you the questions — you write the answers. Your words, your work.</div>
+    <div class="q-integrity" id="coach-integrity">Your words, Q's structure. Q never writes on your page.</div>
     <div class="q-hint" id="coach-hint"></div>
     <div class="q-actions hidden" id="coach-actions"></div>
     <div class="q-nudge-btns hidden" id="coach-nudge">
-      <button class="q-btn" id="btn-start-me">Start me off</button>
+      <button class="q-btn" id="btn-start-me" title="A smaller, easier question toward the same point">I'm stuck</button>
       <button class="q-btn" id="btn-how-put">How could I put this?</button>
       <button class="q-btn" id="btn-dont-understand">I don't understand this</button>
     </div>
-    <input class="coach-input" id="coach-input" type="text"
-      placeholder="Ask Q…" autocomplete="off" />
+    <div class="coach-input-row">
+      <input class="coach-input" id="coach-input" type="text"
+        placeholder="Ask Q…" autocomplete="off" />
+      <button type="button" class="q-mic" id="coach-mic" title="Tap and talk — your words type themselves into the box. Tap again to stop, then press Enter."><svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg></button>
+    </div>
   </div>
 
   <!-- Q's Brief Board — persistent whiteboard, populated after source is read -->
   <div class="brief-board hidden" id="brief-board">
     <div class="brief-board-head" id="brief-board-head">
-      <span class="brief-board-badge">📋 Your Brief</span>
+      <span class="brief-board-badge" id="brief-board-badge">📋 Your Brief</span>
       <button type="button" class="brief-board-tog" id="brief-board-tog">−</button>
     </div>
     <div class="brief-board-body" id="brief-board-body"></div>
@@ -879,18 +977,32 @@
       relateAnchor: '',
       yearGroup: '',
       analysis: null,
-      brief: null,
-      coachHistory: [],     // [{question, answer}]
+      brief: null,            // the structured brief (skeleton stays server-side)
+      coverage: {},           // { criterionId: 'none' | 'partial' | 'covered' }
+      coachHistory: [],       // [{question, answer, criterionId}]
       currentQuestion: '',
       currentSection: '',
-      pendingReframe: null, // {reframed, explanation} while [Use it]/[No] visible
+      currentCriterionId: '',
+      pendingReframe: null,   // {reframed, explanation} while [Use it]/[No] visible
       setupDone: false,
-      docSnapshot: '',      // doc text at time Q last asked a question
-      qWordsWritten: 0,     // words Q has inserted into the doc this session
+      docSnapshot: '',        // doc text at time Q last asked a question
+      qWordsWritten: 0,       // words Q has inserted into the doc this session
       gradeScheme: 'GCSE (9-1)',
-      gradedSections: [],   // [{sectionName, text, grade, gradeLabel}]
-      improveTarget: null,  // section currently being improved in the coach card
+      gradedSections: [],     // [{sectionName, text, grade, gradeLabel}]
+      improveTarget: null,    // section currently being improved in the coach card
+      settings: { pauseMs: 7000 },
+      brickCounts: {},        // { criterionId: { voiced, total } } — counts only, never the essay
+      essayReady: false,
+      sources: [],            // [{name, chars}] supporting documents (text lives server-side)
+      editItems: null,        // the editing pass, walked one at a time
+      editIndex: 0,
+      probeInFlight: false,
+      lastProbeAt: 0,
+      lastMark: null,
+      restored: false,
     };
+    const PROBE_MIN_GAP_MS = 20000;   // never two live probes closer than this (cost + rhythm)
+    const PROBE_MIN_NEW_CHARS = 25;   // "genuinely new content" — about five words
 
     // ── Element refs ───────────────────────────────────────────────────────
     const docBody    = document.getElementById('doc-body');
@@ -910,13 +1022,29 @@
     const wordPopup  = document.getElementById('word-popup');
     const swapLoading = document.getElementById('swap-loading');
 
-    // ── Word count ─────────────────────────────────────────────────────────
+    // ── The document text, word count, and the "Q reads as you write" tick ──
+    // The paper holds the student's words plus Q's furniture (grade bands,
+    // Q's italic starters). The text we count, save as text, and send to the
+    // coach is the student's own — grade bands are stripped.
+    function docPlainText() {
+      const clone = docBody.cloneNode(true);
+      clone.querySelectorAll('.grade-band').forEach(n => n.remove());
+      // innerText keeps paragraph breaks; a detached clone has no layout, so
+      // put line breaks in by hand for block elements.
+      clone.querySelectorAll('div, p, br, li, h1, h2, h3').forEach(n => {
+        if (n.tagName === 'BR') n.replaceWith('\n');
+        else n.appendChild(document.createTextNode('\n'));
+      });
+      return (clone.textContent || '').replace(/ /g, ' ').replace(/\n{3,}/g, '\n\n').trim();
+    }
     function countWords() {
-      const t = (docBody.textContent || '').trim();
+      const t = docPlainText();
       return t ? t.split(/\s+/).length : 0;
     }
     docBody.addEventListener('input', () => {
       wordEl.textContent = countWords() + ' words';
+      scheduleAutosave();
+      scheduleLiveProbe();
     });
 
     // ── Setup strip ────────────────────────────────────────────────────────
@@ -944,10 +1072,19 @@
       })
       .catch(() => {});
 
+    const pauseInput = document.getElementById('setup-pause');
+    function readPauseSetting() {
+      const secs = Math.max(3, Math.min(60, Number(pauseInput.value) || 7));
+      pauseInput.value = String(secs);
+      state.settings.pauseMs = secs * 1000;
+    }
+    pauseInput.addEventListener('change', () => { readPauseSetting(); persist({ settings: state.settings }); });
+
     startBtn.addEventListener('click', async () => {
       state.relateAnchor  = relateInput.value.trim();
       state.yearGroup     = yearSelect.value;
       state.gradeScheme   = gradeSchemeSelect.value || 'GCSE (9-1)';
+      readPauseSetting();
       const sample = (voiceArea.value || '').trim();
 
       if (sample.length >= 30) {
@@ -962,15 +1099,18 @@
           if (d.signature) {
             state.voiceSignature = d.signature;
             voiceStatus.textContent = '✓ Voice saved';
+          } else {
+            voiceStatus.textContent = 'Voice not saved: ' + (d.error || ('HTTP ' + r.status));
           }
         } catch (e) {
-          voiceStatus.textContent = '';
+          voiceStatus.textContent = 'Voice not saved: ' + shortCause(e);
         }
       }
 
       state.setupDone = true;
       setupStrip.classList.add('hidden');
       setupCog.classList.remove('hidden');  // cog stays visible always
+      persist({ settings: state.settings, gradeScheme: state.gradeScheme, yearGroup: state.yearGroup, relateAnchor: state.relateAnchor, setupDone: true });
       docBody.focus();
     });
 
@@ -1038,10 +1178,11 @@
         coachActions.innerHTML = '';
       }
 
+      const micBtn = document.getElementById('coach-mic');
       if (inputVisible === false) {
-        coachInput.classList.add('hidden');
+        coachInput.classList.add('hidden'); if (micBtn) micBtn.classList.add('hidden');
       } else {
-        coachInput.classList.remove('hidden');
+        coachInput.classList.remove('hidden'); if (micBtn) micBtn.classList.remove('hidden');
       }
     }
 
@@ -1054,6 +1195,65 @@
       });
       return r.json();
     }
+
+    // api() — like post() but never swallows the cause. Resolves with the JSON
+    // (plus _status); rejects with an Error whose message is the server's
+    // plain-English `error` (or the HTTP status when the body isn't JSON —
+    // e.g. a 502 page from the edge). Every new coach step uses this so a
+    // failure always says WHY.
+    async function api(url, body, { method = 'POST', timeoutMs = 130000 } = {}) {
+      const ctrl = new AbortController();
+      const timer = setTimeout(() => ctrl.abort(), timeoutMs);
+      let r;
+      try {
+        r = await fetch(url, {
+          method, credentials: 'include', signal: ctrl.signal,
+          headers: body !== undefined ? { 'Content-Type': 'application/json' } : undefined,
+          body: body !== undefined ? JSON.stringify(body) : undefined,
+        });
+      } catch (e) {
+        clearTimeout(timer);
+        if (e && e.name === 'AbortError') throw Object.assign(new Error('no answer after ' + Math.round(timeoutMs / 1000) + 's'), { code: 'timeout', retryable: true });
+        throw Object.assign(new Error('no connection — check your internet'), { code: 'network', retryable: true });
+      }
+      clearTimeout(timer);
+      const text = await r.text();
+      let d = null;
+      try { d = JSON.parse(text); } catch (_) { d = null; }
+      if (!d) {
+        const why = r.status === 502 || r.status === 504 ? 'the server took too long (' + r.status + ')' : r.status === 401 ? 'you are signed out — refresh and sign in' : 'unexpected reply (HTTP ' + r.status + ')';
+        throw Object.assign(new Error(why), { code: 'http_' + r.status, status: r.status, retryable: r.status >= 500 });
+      }
+      d._status = r.status;
+      if (!r.ok || d.ok === false) {
+        const err = new Error(d.error || ('HTTP ' + r.status));
+        err.code = d.code || ('http_' + r.status); err.status = r.status; err.retryable = d.retryable !== false && r.status !== 400 && r.status !== 401;
+        throw err;
+      }
+      return d;
+    }
+    function shortCause(e) {
+      const m = (e && e.message) ? String(e.message) : String(e || 'unknown');
+      return m.replace(/\s+/g, ' ').slice(0, 220);
+    }
+    // Poll a server-side job (brief / mark / assemble) until it lands.
+    async function waitForJob(kind, { onTick, everyMs = 2000, maxMs = 240000 } = {}) {
+      const t0 = Date.now();
+      for (;;) {
+        const d = await api('/writer/job/' + kind, undefined, { method: 'GET', timeoutMs: 20000 });
+        if (d.status === 'done') return d;
+        if (d.status === 'failed') {
+          const err = new Error((d.error && d.error.message) || 'failed');
+          err.code = d.error && d.error.code; err.retryable = !d.error || d.error.retryable !== false;
+          throw err;
+        }
+        if (d.status === 'none') { const e = new Error('the job was lost (server restarted) — retry'); e.retryable = true; throw e; }
+        if (Date.now() - t0 > maxMs) { const e = new Error('still running after ' + Math.round(maxMs / 1000) + 's — it will finish in the background; refresh in a minute'); e.retryable = true; throw e; }
+        if (onTick) onTick(Math.round((Date.now() - t0) / 1000), d);
+        await new Promise(res => setTimeout(res, everyMs));
+      }
+    }
+
 
     function voicePayload() {
       return {
@@ -1074,7 +1274,11 @@
       const t = (titleEl.value || '').trim();
       const b = (docBody.textContent || '').trim();
       const srcLimit = sourceChars || 3000;
-      const sourceBlock = sourceState.text
+      // Cost: once the brief exists the source stays server-side; free chat
+      // gets the compact brief, not the document (Phase 1 finding #5).
+      const sourceBlock = state.brief
+        ? `[Assignment brief — Q's own summary]\n${briefSummaryText(state.brief).slice(0, 2500)}\n[end brief]\n\n`
+        : sourceState.text
         ? `[Task/source: "${sourceState.name}"]\n${sourceState.text.slice(0, srcLimit)}\n[end source]\n\n`
         : sourceState.imageDataUrl
           ? `[Image task: "${sourceState.name}". Use vision if relevant.]\n\n`
@@ -1111,56 +1315,177 @@
       return { prose: (reply || '').replace(m[0], '').trim(), data };
     }
 
-    // Persist tutor work to Q's notebook (best-effort, non-blocking) so he can
-    // pick it up next time and recall it from any page via recall_tutor.
-    function saveTutor(patch) {
-      try {
-        fetch('/writer/tutor', {
-          method: 'POST', credentials: 'include',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(patch),
-        });
-      } catch (_) {}
+    // ── Never lose work: everything lives in Q's tutor notebook server-side ──
+    // persist(patch) merges a patch into the notebook and keeps the "Saved ·
+    // 12:04" label honest. Patches queue and coalesce; a failure shows its
+    // cause and retries with backoff. The document itself is saved on a
+    // debounce from the input handler (scheduleAutosave); state changes
+    // (brief, history, question, coverage, settings) save immediately.
+    const savedEl = document.getElementById('meta-saved');
+    let pendingPatch = null;
+    let saveTimer = null;
+    let saveInFlight = false;
+    let saveRetryMs = 2000;
+    let dirtySince = 0;
+
+    function setSavedLabel(kind, extra) {
+      savedEl.classList.remove('saving', 'error');
+      if (kind === 'saving') { savedEl.classList.add('saving'); savedEl.textContent = 'Saving…'; }
+      else if (kind === 'saved') { const d = new Date(); savedEl.textContent = 'Saved · ' + String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0'); }
+      else if (kind === 'error') { savedEl.classList.add('error'); savedEl.textContent = 'Not saved — ' + (extra || 'retrying'); }
+      else if (kind === 'unsaved') { savedEl.textContent = 'Unsaved changes'; }
     }
 
-    // Populate Q's brief board — structured JSON only, no Q chat prose.
-    // Two-column landscape layout: left = what it is + asks; right = producing + grades.
+    function persist(patch) {
+      pendingPatch = Object.assign(pendingPatch || {}, patch || {});
+      if (!dirtySince) dirtySince = Date.now();
+      flushSave();
+    }
+    async function flushSave() {
+      if (saveInFlight || !pendingPatch) return;
+      const patch = pendingPatch; pendingPatch = null;
+      saveInFlight = true;
+      setSavedLabel('saving');
+      try {
+        await api('/writer/tutor', patch, { timeoutMs: 30000 });
+        saveRetryMs = 2000; dirtySince = 0;
+        setSavedLabel('saved');
+      } catch (e) {
+        // Put the patch back (under anything newer) and retry with backoff.
+        pendingPatch = Object.assign(patch, pendingPatch || {});
+        setSavedLabel('error', shortCause(e) + ' — retrying');
+        setTimeout(() => { saveInFlight = false; flushSave(); }, saveRetryMs);
+        saveRetryMs = Math.min(saveRetryMs * 2, 30000);
+        return;
+      }
+      saveInFlight = false;
+      if (pendingPatch) flushSave();
+    }
+    function docPatch() {
+      return { docHtml: docBody.innerHTML.slice(0, 1500000), docText: docPlainText(), docTitle: (titleEl.value || '').trim(), qWordsWritten: state.qWordsWritten };
+    }
+    function scheduleAutosave() {
+      if (!dirtySince) { dirtySince = Date.now(); setSavedLabel('unsaved'); }
+      clearTimeout(saveTimer);
+      saveTimer = setTimeout(() => persist(docPatch()), 1500);
+    }
+    titleEl.addEventListener('input', scheduleAutosave);
+    // Phone lock / tab close / navigation: flush what is pending with keepalive.
+    window.addEventListener('pagehide', () => {
+      clearTimeout(saveTimer);
+      const patch = Object.assign(pendingPatch || {}, dirtySince ? docPatch() : {});
+      pendingPatch = null;
+      if (!Object.keys(patch).length) return;
+      try { fetch('/writer/tutor', { method: 'POST', credentials: 'include', keepalive: true, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(patch) }); } catch (_) {}
+    });
+    document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden' && dirtySince) { clearTimeout(saveTimer); persist(docPatch()); } });
+
+    // Legacy name kept: older call sites patch the notebook through the same queue.
+    function saveTutor(patch) { persist(patch); }
+
+    // A new assignment (source removed / replaced): wipe the notebook and the
+    // coaching state. keepDoc leaves the student's writing on the page.
+    async function resetSession({ keepDoc } = {}) {
+      clearTimeout(probeTimer);
+      state.brief = null; state.analysis = null; state.coverage = {}; state.coachHistory = [];
+      state.currentQuestion = ''; state.currentCriterionId = ''; state.currentSection = ''; state.docSnapshot = ''; state.lastMark = null; state.lastProbeAt = 0;
+      state.brickCounts = {}; state.essayReady = false; state.sources = []; state.editItems = null; state.editIndex = 0; state.editDone = false;
+      const board = document.getElementById('brief-board');
+      board.classList.add('hidden'); board.classList.remove('board-mode');
+      document.getElementById('brief-board-badge').textContent = '📋 Your Brief';
+      document.getElementById('brief-board-body').innerHTML = '';
+      pendingPatch = null;
+      try { await api('/writer/tutor', { reset: true }, { timeoutMs: 20000 }); } catch (e) { setSavedLabel('error', shortCause(e)); }
+      if (!keepDoc) { docBody.innerHTML = ''; titleEl.value = ''; wordEl.textContent = '0 words'; }
+      persist({ settings: state.settings, gradeScheme: state.gradeScheme, yearGroup: state.yearGroup, relateAnchor: state.relateAnchor, setupDone: state.setupDone, ...docPatch() });
+    }
+
+    // Populate Q's brief board from the structured brief — no chat prose.
+    // Left: what it is + the criteria as a coverage strip (this is the
+    // "which bricks are in" view; click one to be coached on it). Right:
+    // what you're producing, word count / deadline, grade chips.
+    function criterionShort(text, n) {
+      const t = String(text || '').replace(/\s+/g, ' ').trim();
+      return t.length > (n || 90) ? t.slice(0, (n || 90) - 1) + '…' : t;
+    }
+    function briefSummaryText(b) {
+      if (!b) return '';
+      const parts = [b.title, b.whatItWants, b.youreProducing];
+      (b.criteria || []).forEach(c => parts.push('- [' + c.id + '] ' + c.text));
+      if (b.wordCount) parts.push('Word count: ' + b.wordCount);
+      return parts.filter(Boolean).join('\n');
+    }
     function setBrief(data) {
       const body  = document.getElementById('brief-board-body');
       const board = document.getElementById('brief-board');
+      const esc = escHtml;
 
-      const esc = s => (s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-
-      // documentType comes from Q's brief. If he omits it, fall back to the
-      // uploaded file's name (extension stripped, separators spaced) rather
-      // than the bare generic "Your Assignment".
       const fileFallback = (sourceState.name || '')
         .replace(/\.[a-z0-9]+$/i, '').replace(/[._-]+/g, ' ').trim();
-      const docType = data.documentType || fileFallback || 'Your Assignment';
+      const docType = data.title || data.documentType || fileFallback || 'Your Assignment';
+      const criteria = Array.isArray(data.criteria) ? data.criteria : [];
 
-      // Left column: document type + "it's asking you to" bullets
-      const asks = (data.asksYouTo || data.markedSections && data.markedSections.map(s => s.name) || []);
-      const askItems = asks.map(a => `<li>${esc(a)}</li>`).join('');
       const leftHtml = `<div class="brief-col">
         <div class="brief-doctype">${esc(docType)}</div>
-        <div class="brief-asks-label">It's asking you to:</div>
-        <ul class="brief-asks-list">${askItems}</ul></div>`;
+        <div class="brief-asks-label">It's asking you for ${criteria.length} thing${criteria.length === 1 ? '' : 's'}:</div>
+        <div class="coverage-strip" id="coverage-strip"></div></div>`;
 
-      // Right column: what you're producing + grade chips
       const gb = data.gradeBands || {};
       const gradeHtml = (gb.top || gb.mid || gb.low) ? `<div class="brief-grades">
-        ${gb.top ? `<span class="brief-grade-chip top">🏆 ${esc(gb.top)}</span>` : ''}
-        ${gb.mid ? `<span class="brief-grade-chip mid">✅ ${esc(gb.mid)}</span>` : ''}
-        ${gb.low ? `<span class="brief-grade-chip low">⚠️ ${esc(gb.low)}</span>` : ''}
+        ${gb.top ? `<span class="brief-grade-chip top" title="${esc(gb.top)}">🏆 top</span>` : ''}
+        ${gb.mid ? `<span class="brief-grade-chip mid" title="${esc(gb.mid)}">✅ mid</span>` : ''}
+        ${gb.low ? `<span class="brief-grade-chip low" title="${esc(gb.low)}">⚠️ low</span>` : ''}
       </div>` : '';
       const producing = data.youreProducing || data.whatItWants || '';
+      const metaBits = [];
+      if (data.wordCount) metaBits.push('Words: ' + esc(data.wordCount));
+      if (data.deadline) metaBits.push('Due: ' + esc(data.deadline));
       const rightHtml = `<div class="brief-col">
         <div class="brief-producing-label">You're producing:</div>
         <div class="brief-producing-text">${esc(producing)}</div>
-        ${gradeHtml}</div>`;
+        ${gradeHtml}
+        ${metaBits.length ? `<div class="brief-meta-line">${metaBits.join(' · ')}</div>` : ''}</div>`;
 
       body.innerHTML = leftHtml + rightHtml;
       board.classList.remove('hidden');
+      renderCoverage();
+    }
+
+    // The coverage strip: one line per criterion, dot = none / partial / covered.
+    // Lives in the brief board's left column; in board mode it moves under the
+    // heading so it is always visible while coaching.
+    function renderCoverage() {
+      const b = state.brief; if (!b) return;
+      let strip = document.getElementById('coverage-strip');
+      const board = document.getElementById('brief-board');
+      if (!strip && board.classList.contains('board-mode')) {
+        const body = document.getElementById('brief-board-body');
+        strip = document.createElement('div'); strip.className = 'coverage-strip'; strip.id = 'coverage-strip';
+        const items = document.getElementById('board-items');
+        body.insertBefore(strip, items || null);
+      }
+      if (!strip) return;
+      const criteria = b.criteria || [];
+      strip.innerHTML = criteria.map(c => {
+        const cov = state.coverage[c.id] || 'none';
+        const cur = c.id === state.currentCriterionId ? ' current' : '';
+        const bc = state.brickCounts && state.brickCounts[c.id];
+        const count = bc && bc.total ? `<span class="cov-count">${bc.voiced}/${bc.total} voiced</span>` : '';
+        return `<div class="cov-item${cur}" data-cov="${cov}" data-id="${escHtml(c.id)}" title="${escHtml(c.text)}">
+          <span class="cov-dot"></span><span class="cov-text"><span class="cov-id">${escHtml(c.id)}</span>${escHtml(criterionShort(c.text))}${count}</span></div>`;
+      }).join('');
+      strip.querySelectorAll('.cov-item').forEach(el => {
+        el.addEventListener('click', () => askNextQuestion({ trigger: 'focus', focusCriterionId: el.dataset.id }));
+      });
+    }
+    function uncoveredCriteria() {
+      const b = state.brief; if (!b) return [];
+      return (b.criteria || []).filter(c => (state.coverage[c.id] || 'none') !== 'covered');
+    }
+    function applyCoverage(cov) {
+      if (!cov || typeof cov !== 'object') return;
+      state.coverage = { ...state.coverage, ...cov };
+      renderCoverage();
     }
 
     // Shared HTML-escape helper
@@ -1174,11 +1499,12 @@
       const badge = document.getElementById('brief-board-badge');
       if (board.classList.contains('board-mode')) return; // already switched
       badge.textContent = '📝 Teaching Board';
-      const docType = (state.brief && state.brief.documentType) || 'Your Assignment';
+      const docType = (state.brief && (state.brief.title || state.brief.documentType)) || 'Your Assignment';
       body.innerHTML = `<div class="board-doctype">${escHtml(docType)}</div>
         <div class="board-items" id="board-items"></div>`;
       board.classList.add('board-mode');
       board.classList.remove('minimised');
+      renderCoverage();
     }
 
     // Append a question, answer, or note item to the teaching board.
@@ -1202,110 +1528,194 @@
       div.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
     }
 
-    // Show the prerequisites check in the coach card after brief is built.
-    // Prereqs come from the brief JSON (things to do before writing starts).
-    // "Yes, let's go" kicks off the first coaching question.
-    function showPrerequisites(b) {
-      const prereqs = b.prerequisites || [];
-      let msg = '';
-      if (prereqs.length) {
-        msg = 'Before we start — have you:\n' + prereqs.map(p => '• ' + p).join('\n');
-      } else {
-        msg = 'Got the brief. Ready when you are.';
-      }
+    // ── The brief lands: say what it found, then LEAD with the opener ──────
+    // Q doesn't wait. In plain words: "This is asking you for 3 things…",
+    // then the opener (from the brief — no extra call) as Q1 on the board.
+    function briefToAnalysis(b) {
+      return {
+        task: b.whatItWants || b.youreProducing || '',
+        docType: b.docType || 'other',
+        subject: b.subject || '',
+        keyConcepts: (b.criteria || []).map(c => c.text).slice(0, 8),
+        gradeBands: b.gradeBands || null,
+      };
+    }
+    function adoptBrief(b, { announce } = {}) {
+      state.brief = b;
+      state.analysis = briefToAnalysis(b);
+      state.taskSummary = b.youreProducing || b.whatItWants || '';
+      const criteria = b.criteria || [];
+      for (const c of criteria) if (!state.coverage[c.id]) state.coverage[c.id] = 'none';
+      setBrief(b);
+      if (announce) startCoaching(b);
+    }
+    function startCoaching(b) {
+      const criteria = b.criteria || [];
+      const n = criteria.length;
+      const list = criteria.slice(0, 6).map((c, i) => (i + 1) + '. ' + criterionShort(c.text, 70)).join('\n');
+      const found = (b.whatItWants ? b.whatItWants + '\n\n' : '') +
+        `This is asking you for ${n} thing${n === 1 ? '' : 's'}:\n${list}${n > 6 ? '\n…and ' + (n - 6) + ' more (see the board)' : ''}` +
+        (b.wordCount ? `\n\nAround ${b.wordCount}.` : '') +
+        (b.prerequisites && b.prerequisites.length ? `\n\nHave to hand: ${b.prerequisites.slice(0, 3).join('; ')}.` : '');
+      appendBoardItem({ type: 'note', text: found });
+      // The opener IS question 1 — no model call, no waiting.
+      const opener = b.opener || 'Tell me, in your own words, what you already know about this. One line is plenty.';
+      state.currentQuestion = opener;
+      state.currentCriterionId = criteria[0] ? criteria[0].id : '';
+      state.currentSection = state.currentCriterionId;
+      state.docSnapshot = docPlainText();
+      state.qCount = 1;
+      appendBoardItem({ type: 'question', label: 'Q1', text: opener });
+      renderCoverage();
       setCoach({
-        msg,
-        section: b.documentType || 'YOUR BRIEF',
-        actions: [{
-          label: 'Yes, let\'s go →',
-          primary: true,
-          onClick: () => askNextQuestion(),
-        }],
-        inputVisible: false,
+        msg: opener,
+        section: state.currentCriterionId ? 'FIRST BRICK · ' + state.currentCriterionId : 'FIRST BRICK',
+        hint: 'Answer here, or just start writing on the page — I read as you go.',
+        inputVisible: true,
+        showNudge: true,
       });
+      coachInput.placeholder = 'Type your answer…';
+      persist({ currentQuestion: opener, currentCriterionId: state.currentCriterionId, coverage: state.coverage, lastQuestion: opener, currentSection: state.currentCriterionId });
     }
 
-    // ── After source loaded: build brief board + prereq check ─────────────
-    async function runBrief(taskText) {
-      setCoach({ msg: 'Reading your task…', thinking: true, inputVisible: false });
+    // ── After source loaded: Q reads the WHOLE brief on the dedicated route ─
+    // POST /writer/brief stores the text and starts the job; we poll. On
+    // failure the CAUSE is shown, with retry, and the general-chat read
+    // (first part of the doc only) is offered as the last resort.
+    let briefRunning = false;
+    async function runBrief(taskText, name, { fromStored } = {}) {
+      if (briefRunning) return;
+      briefRunning = true;
+      const chars = (taskText || '').length;
+      setCoach({ msg: 'Reading your task' + (chars ? ' — all ' + chars.toLocaleString() + ' characters of it' : '') + '…', thinking: true, inputVisible: false });
+      try {
+        // A new brief means a new session in the notebook: keep the page's
+        // writing, drop the old coaching state.
+        if (state.brief) await resetSession({ keepDoc: true });
+        await api('/writer/brief', fromStored ? {} : { taskText, name: name || sourceState.name || 'document' }, { timeoutMs: 40000 });
+        const job = await waitForJob('brief', {
+          onTick: (secs) => setCoach({ msg: 'Reading your task… ' + secs + 's' + (secs > 45 ? ' — long brief, still going' : ''), thinking: true, inputVisible: false }),
+        });
+        const b = job.result;
+        if (!b || !Array.isArray(b.criteria) || !b.criteria.length) throw Object.assign(new Error('the brief came back with no criteria'), { retryable: true });
+        state.coverage = Object.fromEntries(b.criteria.map(c => [c.id, 'none']));
+        adoptBrief(b, { announce: true });
+        persist({ sourceName: sourceState.name || name || '' });
+        watchEssay('brief');
+      } catch (e) {
+        const cause = shortCause(e);
+        const actions = [
+          { label: '↻ Retry', primary: true, onClick: () => runBrief(taskText, name, { fromStored: true }) },
+        ];
+        if (sourceState.text) actions.push({ label: 'Try the quick read (first part only)', onClick: () => runBriefViaChat(sourceState.text) });
+        actions.push({ label: 'Paste the task as text instead', onClick: () => { sourceState.name = null; sourceState.text = null; renderSourceSlot(); setCoach({ msg: 'Paste the task text anywhere on the page.', inputVisible: true }); } });
+        setCoach({ msg: 'The brief step failed: ' + cause, section: 'COULDN’T READ IT', hint: e && e.retryable === false ? '' : 'Nothing is lost — retry picks up where it stopped.', actions, inputVisible: false });
+      } finally {
+        briefRunning = false;
+      }
+    }
 
+    // FALLBACK ONLY: the pre-Phase-3 path — Q's general chat brain reads the
+    // first 12,000 characters and we hunt a fenced writer-brief block out of
+    // prose. Kept because it is better than nothing when the dedicated route
+    // is down; the card says plainly that it only read the first part.
+    async function runBriefViaChat(taskText) {
+      setCoach({ msg: 'Quick read — first part of the document only…', thinking: true, inputVisible: false });
       try {
         const reply = await qWriterChat(
           'I\'ve given you my task above. Read the whole thing, work out what it\'s really asking (the task is often buried after headers and tables), and build my brief.',
           12000, false
         );
-        const { data: b } = parseQBlock(reply, 'writer-brief');
-        if (!b) throw new Error('no brief block');
-
-        state.analysis = { task: b.whatItWants || b.youreProducing || '', gradeBands: b.gradeBands || null };
-        state.brief = b;
-        state.taskSummary = b.youreProducing || b.whatItWants || b.summary || '';
-        state.teachersBrief = b.teachersBrief || '';
-
-        saveTutor({
-          task: (taskText || '').slice(0, 4000),
-          whatItWants: state.taskSummary,
-          teachersBrief: state.teachersBrief,
-          markedSections: b.markedSections || [],
-          gradeBands: b.gradeBands || null,
-        });
-
-        setBrief(b);
-        showPrerequisites(b);
-
+        const { data: raw } = parseQBlock(reply, 'writer-brief');
+        if (!raw) throw new Error('no brief block in the reply');
+        // Coerce the chat shape into the structured one the page runs on.
+        const criteria = (raw.markedSections || raw.asksYouTo || []).map((x, i) => typeof x === 'string' ? { id: 'C' + (i + 1), text: x } : { id: 'C' + (i + 1), text: x.name || x.description || '' }).filter(c => c.text);
+        if (!criteria.length) throw new Error('the quick read found no tasks in the first part');
+        const b = {
+          title: raw.documentType || sourceState.name || 'Your assignment', subject: raw.subject || '', docType: raw.docType || 'other',
+          whatItWants: raw.whatItWants || raw.summary || '', youreProducing: raw.youreProducing || raw.summary || '',
+          wordCount: raw.wordCount || null, deadline: raw.deadline || null, criteria, gradeBands: raw.gradeBands || { top: '', mid: '', low: '' },
+          opener: (criteria[0] && criteria[0].suggestFirstQ) || raw.suggestFirstQ || 'Before we look at the brief — what do you already know about this topic? One line is plenty.',
+          prerequisites: raw.prerequisites || [],
+        };
+        state.coverage = Object.fromEntries(criteria.map(c => [c.id, 'none']));
+        persist({ brief: b, coverage: state.coverage, task: (taskText || '').slice(0, 4000) });
+        adoptBrief(b, { announce: true });
+        appendBoardItem({ type: 'note', text: 'Quick read: only the first part of the document was read. Retry the full read from the settings cog when the service is back.' });
       } catch (e) {
-        setCoach({ msg: 'Couldn\'t read that — try pasting the task as text.' });
+        setCoach({ msg: 'The quick read failed too: ' + shortCause(e), actions: [{ label: '↻ Retry the full read', primary: true, onClick: () => runBrief(taskText, sourceState.name, { fromStored: true }) }], inputVisible: false });
       }
     }
 
-    async function askNextQuestion() {
-      setCoach({ msg: 'Thinking…', thinking: true, inputVisible: false });
-
+    // ── Coaching turns: ONE probing question toward the ideal answer ────────
+    // Dedicated structured route. The brief + skeleton live server-side; we
+    // send the document text, what changed since the last question, compact
+    // history and the coverage tally. Non-blocking: a live probe never steals
+    // the cursor; only an answered-in-the-box turn refocuses the coach input.
+    async function askNextQuestion(opts) {
+      opts = opts || {};
+      const trigger = opts.trigger || 'answer';
+      if (!state.brief) {
+        setCoach({ msg: 'Drop your task in first — I need to read the brief before I can coach you on it.', inputVisible: true });
+        return;
+      }
+      if (state.probeInFlight) return;
+      state.probeInFlight = true;
+      state.lastProbeAt = Date.now();   // counts from when we ASK, success or not — the back-off is a cost floor
+      const docText = docPlainText();
+      const delta = docText.startsWith(state.docSnapshot) ? docText.slice(state.docSnapshot.length).trim() : docText.slice(-1200);
+      const quiet = trigger === 'pause';
+      if (!quiet) setCoach({ msg: 'Thinking…', thinking: true, inputVisible: false });
+      else coachSection.textContent = 'READING…';
       try {
-        const qNum = state.coachHistory.length + 1;
-        const histBlock = state.coachHistory.length
-          ? 'Coaching so far:\n' + state.coachHistory.map((h, i) => `Q${i + 1}: ${h.question}\nA${i + 1}: ${h.answer}`).join('\n\n') + '\n\n'
-          : '';
-        // Inject ideal answer into context so Q knows what he's coaching toward
-        const idealBlock = state.brief && state.brief.idealAnswer
-          ? `[Target: the ideal answer is — ${state.brief.idealAnswer}]\n\n`
-          : '';
-        const reply = await qWriterChat(
-          idealBlock + histBlock + 'Ask the next discovery question — one question, your own warm voice. Don\'t repeat anything already answered.',
-          12000, false
-        );
-        const { prose, data } = parseQBlock(reply, 'writer-question');
-        const question = (data && data.question) || prose;
-        if (!question) throw new Error('no question');
+        const d = await api('/writer/probe', {
+          docText: docText.slice(-12000),
+          delta,
+          history: state.coachHistory.slice(-8).map(h => ({ question: h.question, answer: h.answer })),
+          coverage: state.coverage,
+          trigger,
+          focusCriterionId: opts.focusCriterionId || null,
+          lastQuestion: state.currentQuestion || opts.lastQuestion || null,
+          ...voicePayload(),
+        }, { timeoutMs: 90000 });
+        const question = d.question;
+        state.currentQuestion   = question;
+        state.currentCriterionId = d.criterionId || state.currentCriterionId;
+        state.currentSection    = state.currentCriterionId;
+        state.docSnapshot       = docText;
+        if (d.brickCounts) state.brickCounts = d.brickCounts;
+        if (d.essayReady) state.essayReady = true;
+        applyCoverage(d.coverage);
 
-        state.currentQuestion = question;
-        state.currentSection  = (data && data.sectionName) || '';
-        state.docSnapshot     = (docBody.textContent || '').trim();
-
-        // Write full question to the teaching board
-        const label = 'Q' + qNum;
+        state.qCount = (state.qCount || 1) + 1;
+        const label = 'Q' + state.qCount;
         appendBoardItem({ type: 'question', label, text: question });
-        if (data && data.hint) {
-          appendBoardItem({ type: 'note', text: data.hint });
-        }
+        if (d.hint) appendBoardItem({ type: 'note', text: d.hint });
 
-        // Chat stays SHORT — just orient them toward the board
-        const chatMsg = prose && prose.length < 120 ? prose : label + ' is on the board — have a read.';
         setCoach({
-          msg: chatMsg,
-          section: state.currentSection || '',
+          msg: question,
+          section: (d.done ? 'ALL COVERED · ' : '') + (state.currentCriterionId || ''),
+          hint: d.done ? 'Every criterion has something. Finish & mark when you\'re ready.' : (d.hint || ''),
           inputVisible: true,
           showNudge: true,
         });
         coachInput.placeholder = 'Type your answer…';
-        coachInput.focus();
-        saveTutor({ currentSection: state.currentSection, lastQuestion: question });
+        if (!quiet) coachInput.focus();
+        persist({ currentQuestion: question, currentCriterionId: state.currentCriterionId, coverage: state.coverage, probeSnapshot: docText.slice(-4000), lastQuestion: question, currentSection: state.currentCriterionId });
       } catch (e) {
+        const cause = shortCause(e);
         setCoach({
-          msg: 'Something went wrong — shall I try again?',
-          actions: [{ label: '↻ Try again', primary: true, onClick: askNextQuestion }],
+          msg: 'That coaching turn failed: ' + cause,
+          section: 'HICCUP',
+          hint: 'Your writing and answers are saved — retry keeps everything.',
+          actions: [
+            { label: '↻ Try again', primary: true, onClick: () => askNextQuestion({ ...opts, trigger: opts.trigger === 'pause' ? 'retry' : opts.trigger }) },
+            { label: 'Carry on writing', onClick: () => setCoach({ msg: state.currentQuestion || 'Keep going — I\'ll read as you write.', inputVisible: true, showNudge: true }) },
+          ],
           inputVisible: false,
         });
+      } finally {
+        state.probeInFlight = false;
       }
     }
 
@@ -1325,8 +1735,9 @@
         // Write student's answer to the teaching board in teal
         appendBoardItem({ type: 'answer', text: rawAnswer });
 
-        state.coachHistory.push({ question: currentQ, answer: rawAnswer });
+        state.coachHistory.push({ question: currentQ, answer: rawAnswer, criterionId: state.currentCriterionId || null });
         state.currentQuestion = '';
+        persist({ coachHistory: state.coachHistory });
 
         setCoach({ msg: 'Thinking how to put that…', thinking: true, inputVisible: false });
 
@@ -1340,22 +1751,24 @@
           if (!d.ok) throw new Error(d.error || 'reframe failed');
           state.pendingReframe = d;
 
+          // The reframe is THEIR sentence in their voice, one notch up. One
+          // accept per sentence; nothing goes on the page without a tap.
           setCoach({
             msg: '"' + d.reframed + '"',
-            section: 'SUGGESTION',
+            section: 'YOUR SENTENCE, YOUR VOICE',
             hint: d.explanation || '',
             actions: [
               {
-                label: '✓ Use it',
+                label: '✓ Put it on the page',
                 primary: true,
                 onClick: () => insertReframe(d.reframed, currentSection, d.reframed),
               },
               {
-                label: '↻ Another',
+                label: '↻ Another way',
                 onClick: () => getAnotherReframe(rawAnswer, currentQ),
               },
               {
-                label: '✗ Keep mine',
+                label: '✓ Put my words in exactly',
                 onClick: () => {
                   insertTextAtEnd(rawAnswer);
                   markAndInsertGradeBand(currentSection || currentQ, rawAnswer);
@@ -1363,11 +1776,24 @@
                   askNextQuestion();
                 },
               },
+              {
+                label: 'Not yet — next question',
+                onClick: () => { state.pendingReframe = null; askNextQuestion(); },
+              },
             ],
             inputVisible: false,
           });
         } catch (e) {
-          setCoach({ msg: 'Try again — type your answer.' });
+          // The reframe is a nicety — never lose the answer over it. Their words
+          // go straight in, and coaching continues.
+          setCoach({
+            msg: 'I couldn\'t reshape that just now (' + shortCause(e) + '). Your answer is safe on the board — drop it in as-is or keep going.',
+            actions: [
+              { label: '✓ Put my words in', primary: true, onClick: () => { insertTextAtEnd(rawAnswer); askNextQuestion({ trigger: 'answer' }); } },
+              { label: 'Next question →', onClick: () => askNextQuestion({ trigger: 'answer' }) },
+            ],
+            inputVisible: false,
+          });
         }
       } else {
         // Free chat with Q
@@ -1375,64 +1801,15 @@
       }
     });
 
-    // "Start me off" — Q writes a basic opening sentence (tracks word budget)
-    btnStartMe.addEventListener('click', async () => {
-      const activeQuestion = state.currentQuestion || state.currentSection || 'the current section';
-      setCoach({ msg: 'Let me start you off…', thinking: true, inputVisible: false });
-      try {
-        const d = await post('/writer/starter', {
-          question: activeQuestion,
-          context: (docBody.textContent || '').slice(0, 600),
-          qWordsWritten: state.qWordsWritten,
-          ...voicePayload(),
-        });
-        if (!d.ok) throw new Error(d.error || 'starter failed');
-
-        if (d.tooMuch) {
-          // Q has written enough — nudge them to try
-          setCoach({
-            msg: d.starter,
-            section: 'YOUR TURN',
-            hint: '',
-            inputVisible: true,
-            showNudge: true,
-          });
-          coachInput.placeholder = 'Type your answer…';
-          return;
-        }
-
-        setCoach({
-          msg: '"' + d.starter + '"',
-          section: 'STARTER',
-          hint: 'Q wrote this — build on it in your own words.',
-          actions: [
-            {
-              label: '✓ Use it',
-              primary: true,
-              onClick: () => {
-                insertTextIntoDoc(d.starter, true); // counts against Q word budget
-                state.pendingReframe = null;
-                setCoach({ msg: 'Good — now keep going from there.', inputVisible: true, showNudge: true });
-                coachInput.placeholder = 'Type your answer…';
-              },
-            },
-            {
-              label: '↻ Try another',
-              onClick: () => btnStartMe.click(),
-            },
-          ],
-          inputVisible: false,
-        });
-      } catch (e) {
-        setCoach({ msg: 'Try me again.', inputVisible: true, showNudge: true });
-      }
-    });
+    // "I'm stuck" — Q does NOT write for them (integrity rule). He asks a
+    // smaller, easier question toward the same brick instead.
+    btnStartMe.addEventListener('click', () => askNextQuestion({ trigger: 'stuck' }));
 
     // "How could I put this?" — reframes what they've typed so far
     btnHowPut.addEventListener('click', async () => {
       if (!state.currentQuestion) return;
-      const typed = (docBody.textContent || '').trim();
-      const sinceSnapshot = typed.slice(state.docSnapshot.length).trim();
+      const typed = docPlainText();
+      const sinceSnapshot = (typed.startsWith(state.docSnapshot) ? typed.slice(state.docSnapshot.length) : typed.slice(-800)).trim();
       if (!sinceSnapshot) {
         setCoach({
           msg: 'Type your rough idea first — even one messy sentence — then I\'ll help you say it better.',
@@ -1500,13 +1877,15 @@
       }
     }
 
-    // Append Q's text directly onto the paper as a new paragraph in accent
-    // colour so the student can see what Q contributed vs what they wrote.
+    // Put the STUDENT'S sentence on the paper as a plain paragraph. Since the
+    // integrity rule (Q's own sentences never enter the document) this is only
+    // ever their words — typed, dictated, or reframed in their voice and
+    // accepted with a tap — so it is styled like the rest of their writing.
     function insertQText(text, countAsQWords) {
       const esc = s => s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
       const p = document.createElement('p');
-      p.style.cssText = 'color:var(--accent);font-style:italic;margin:0;';
-      p.setAttribute('data-q', 'true');
+      p.className = 'student-line';
+      p.setAttribute('data-student', 'true');
       p.innerHTML = esc(text);
       if (!docBody.textContent.trim() && !docBody.innerHTML.trim()) {
         docBody.innerHTML = '';
@@ -1567,6 +1946,7 @@
     const sourceFileInput = document.getElementById('source-file-input');
     const dropOverlay = document.getElementById('drop-overlay');
 
+    let sourceMode = 'brief';   // what the next picked file is: the brief, or a supporting doc
     function renderSourceSlot() {
       sourceSlot.innerHTML = '';
       if (!sourceState.name) {
@@ -1574,7 +1954,7 @@
         btn.type = 'button'; btn.className = 'source-add'; btn.id = 'source-add-btn';
         btn.title = 'Drop, paste, or click to add your homework / task';
         btn.innerHTML = '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg><span>Drop your task / homework here — or paste text / click</span>';
-        btn.addEventListener('click', () => sourceFileInput.click());
+        btn.addEventListener('click', () => { sourceMode = 'brief'; sourceFileInput.multiple = false; sourceFileInput.click(); });
         sourceSlot.appendChild(btn);
         // A link, e.g. the course page the assignment lives on
         const linkBtn = document.createElement('button');
@@ -1584,18 +1964,40 @@
         linkBtn.addEventListener('click', () => renderLinkInput());
         sourceSlot.appendChild(linkBtn);
       } else {
+        const list = document.createElement('div'); list.className = 'source-list';
         const chip = document.createElement('div');
         chip.className = 'source-chip';
         const icon = sourceState.imageDataUrl ? '🖼️' : (sourceState.sourceUrl ? '🔗' : '📄');
-        chip.innerHTML = `<span>${icon}</span><span class="name"></span><button class="remove" title="Remove">×</button>`;
+        chip.innerHTML = `<span>${icon}</span><span class="kind">brief</span><span class="name"></span><button class="remove" title="Remove">×</button>`;
         chip.querySelector('.name').textContent = sourceState.name;
         chip.querySelector('.remove').addEventListener('click', () => {
+          if (state.brief && !window.confirm('Remove this task? Q will forget the brief and start fresh. Your writing on the page stays.')) return;
           sourceState.name = null; sourceState.text = null; sourceState.imageDataUrl = null; sourceState.sourceUrl = null;
-          state.analysis = null; state.brief = null;
+          state.sources = [];
+          resetSession({ keepDoc: true });
           renderSourceSlot();
           setCoach({ msg: 'Drop your task in above and I\'ll read it.', inputVisible: true });
         });
-        sourceSlot.appendChild(chip);
+        list.appendChild(chip);
+        // Supporting documents — case studies, module notes, data. Q reads
+        // them into the answer in his head and cites them.
+        (state.sources || []).forEach(src => {
+          const c = document.createElement('div'); c.className = 'source-chip support';
+          c.innerHTML = `<span>📎</span><span class="kind">source</span><span class="name"></span><button class="remove" title="Remove this document">×</button>`;
+          c.querySelector('.name').textContent = src.name + (src.chars ? ' · ' + Math.round(src.chars / 1000) + 'k' : '');
+          c.title = src.name;
+          c.querySelector('.remove').addEventListener('click', () => removeSupportingDoc(src.name));
+          list.appendChild(c);
+        });
+        if (state.brief) {
+          const add = document.createElement('button');
+          add.type = 'button'; add.className = 'source-add';
+          add.title = 'Case study, module notes, data, reading — Q reads it into his plan and cites it';
+          add.innerHTML = '<span>+ Add a supporting document</span>';
+          add.addEventListener('click', () => { sourceMode = 'support'; sourceFileInput.multiple = true; sourceFileInput.click(); });
+          list.appendChild(add);
+        }
+        sourceSlot.appendChild(list);
       }
       sourceSlot.appendChild(sourceFileInput);
     }
@@ -1639,16 +2041,8 @@
         sourceState.text = data.text;
         sourceState.name = data.title ? data.title : host;
         renderSourceSlot();
-
-        // Store full doc on server so Q can navigate it throughout the session
-        await fetch('/writer/doc', {
-          method: 'POST', credentials: 'include',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ text: sourceState.text, name: sourceState.name }),
-        });
-
-        const MAX_TASK = 12000;
-        await runBrief(sourceState.text.slice(0, MAX_TASK));
+        // The WHOLE page text goes to the brief step; the server keeps it.
+        await runBrief(sourceState.text, sourceState.name);
       } catch (e) {
         sourceState.name = null; sourceState.text = null; sourceState.sourceUrl = null;
         renderSourceSlot();
@@ -1687,48 +2081,49 @@
         } else if (lower.endsWith('.pdf') || lower.endsWith('.docx')
                    || file.type === 'application/pdf'
                    || file.type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') {
+          const mb = file.size / (1024 * 1024);
+          if (mb > 36) throw new Error('This file is ' + mb.toFixed(1) + ' MB — over the 36 MB limit. Export the brief as a PDF without images, or upload only the pages with the tasks.');
+          setCoach({ msg: 'Reading the file (' + mb.toFixed(1) + ' MB)…', thinking: true, inputVisible: false });
           const dataUrl = await fileToDataUrl(file);
-          const r = await fetch('/extract-text', {
-            method: 'POST', credentials: 'include',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ dataUrl, name }),
-          });
-          const data = await r.json();
-          if (!r.ok) throw new Error(data.error || 'Could not read that file');
-          sourceState.text = data.text || '';
+          // api() surfaces the server's plain reason (413 too big, 400 corrupt /
+          // unsupported, 401 signed out) instead of a generic line.
+          const data = await api('/extract-text', { dataUrl, name }, { timeoutMs: 120000 });
+          const text = (data.text || '').trim();
+          if (text.length < 200) throw new Error(data.warning || 'That file came back nearly empty (' + text.length + ' characters) — probably scanned images, not text. Try a PDF with real text, or paste the task as text.');
+          sourceState.text = text;
           sourceState.name = name;
         } else if (lower.endsWith('.txt') || lower.endsWith('.md') || file.type.startsWith('text/')) {
           sourceState.text = await fileToText(file);
           sourceState.name = name;
+          if ((sourceState.text || '').trim().length < 40) throw new Error('That text file is nearly empty — paste the task instead.');
+        } else if (lower.endsWith('.doc')) {
+          throw new Error('Old Word .doc files can\'t be read here — open it in Word and save as .docx (or PDF), then try again.');
         } else {
-          throw new Error('Unsupported file type — try PDF, Word, image, or .txt');
+          throw new Error('That file type isn\'t supported — try PDF, Word (.docx), an image, or plain text.');
         }
         renderSourceSlot();
 
-        // Store full doc on server so Q can navigate it throughout the session
+        // The WHOLE extracted text goes to the brief step (it is stored
+        // server-side there); an image task still rides the chat path.
         if (sourceState.text) {
-          await fetch('/writer/doc', {
-            method: 'POST', credentials: 'include',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ text: sourceState.text, name }),
-          });
+          await runBrief(sourceState.text, name);
+        } else if (sourceState.imageDataUrl) {
+          await runBriefViaChat('[image task — Q will use vision]');
         }
-
-        // Brief uses first 12000 chars — Pearson/university briefs bury the task after headers/tables
-        const MAX_TASK = 12000;
-        let taskText = sourceState.text || '[image task — Q will use vision]';
-        if (taskText.length > MAX_TASK) taskText = taskText.slice(0, MAX_TASK);
-        await runBrief(taskText);
       } catch (e) {
         sourceState.name = null; sourceState.text = null; sourceState.imageDataUrl = null;
         renderSourceSlot();
-        setCoach({ msg: 'Couldn\'t load that — try pasting the task as text.', inputVisible: true });
+        setCoach({ msg: 'Couldn\'t load that: ' + shortCause(e), section: 'FILE', hint: 'You can always paste the task as text.', inputVisible: true });
       }
     }
 
     sourceFileInput.addEventListener('change', (ev) => {
-      const f = ev.target.files && ev.target.files[0];
-      if (f) loadSourceFile(f);
+      const files = Array.from(ev.target.files || []);
+      if (files.length) {
+        if (sourceMode === 'support') files.forEach(f => loadSupportingFile(f));
+        else loadSourceFile(files[0]);
+      }
+      sourceMode = 'brief';
       ev.target.value = '';
     });
 
@@ -1752,8 +2147,7 @@
         sourceState.text = text;
         sourceState.name = 'Pasted text (' + text.length + ' chars)';
         renderSourceSlot();
-        const pasteText = text.length > 5000 ? text.slice(0, 5000) : text;
-        runBrief(pasteText);
+        runBrief(text, sourceState.name);
       }
     });
 
@@ -1773,8 +2167,10 @@
     });
     window.addEventListener('drop', (e) => {
       e.preventDefault(); dragDepth = 0; dropOverlay.classList.remove('show');
-      const f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
-      if (f) loadSourceFile(f);
+      const files = Array.from((e.dataTransfer && e.dataTransfer.files) || []);
+      if (!files.length) return;
+      if (state.brief) files.forEach(f => loadSupportingFile(f));   // the brief is in — this is a co-doc
+      else loadSourceFile(files[0]);
     });
 
     // ── "I don't understand this" ─────────────────────────────────────────
@@ -2259,6 +2655,549 @@
     document.addEventListener('mousedown', (e) => {
       if (!wordPopup.contains(e.target)) hideWordPopup();
     });
+
+    // ── Q reads as you write: the pause ────────────────────────────────────
+    // Sarah's spec: when the student stops for ~7 seconds at the END of a
+    // sentence, and there is genuinely new text since Q last spoke, Q reads it
+    // against the answer in his head and asks ONE probing question. Never
+    // mid-flow (any keystroke restarts the clock), one in flight at a time,
+    // a floor between probes so cost stays bounded, never while the brief is
+    // still loading. The setting is per user (setup strip → cog).
+    let probeTimer = null;
+    function scheduleLiveProbe() {
+      clearTimeout(probeTimer);
+      if (!state.brief) return;
+      probeTimer = setTimeout(maybeLiveProbe, state.settings.pauseMs || 7000);
+    }
+    function endsSentence(text) {
+      return /[.?!]["'”’)\]]*\s*$/.test(text);
+    }
+    function maybeLiveProbe() {
+      if (!state.brief || state.probeInFlight || briefRunning) return;
+      if (document.activeElement !== docBody) return;            // they moved to the coach box or away
+      const text = docPlainText();
+      if (!endsSentence(text)) return;                             // mid-sentence — wait for the full stop
+      const delta = text.startsWith(state.docSnapshot) ? text.slice(state.docSnapshot.length) : text;
+      if (delta.trim().length < PROBE_MIN_NEW_CHARS) return;       // nothing new to read
+      if (Date.now() - state.lastProbeAt < PROBE_MIN_GAP_MS) {     // too soon — try again after the floor
+        probeTimer = setTimeout(maybeLiveProbe, PROBE_MIN_GAP_MS - (Date.now() - state.lastProbeAt));
+        return;
+      }
+      askNextQuestion({ trigger: 'pause' });
+    }
+
+    // ── Finish & mark: refuse while a criterion is untouched, then mark ─────
+    const btnFinish = document.getElementById('btn-finish');
+    const btnDownload = document.getElementById('btn-download');
+
+    btnFinish.addEventListener('click', () => finishAndMark());
+    async function finishAndMark({ force } = {}) {
+      if (!state.brief) { setCoach({ msg: 'Drop your task in first — I mark against the brief.', inputVisible: true }); return; }
+      const text = docPlainText();
+      if (!text.trim()) { setCoach({ msg: 'There is nothing on the page yet — write your answer first, I read as you go.', inputVisible: true, showNudge: true }); return; }
+      const missing = uncoveredCriteria();
+      if (missing.length && !force) {
+        const first = missing[0];
+        setCoach({
+          msg: 'Not yet — nothing on the page for ' + missing.map(c => c.id).join(', ') + '. The marker won\'t give marks for a criterion that isn\'t there.',
+          section: 'BEFORE WE FINISH',
+          hint: criterionShort(first.text, 140),
+          actions: [
+            { label: '→ Take me to ' + first.id, primary: true, onClick: () => askNextQuestion({ trigger: 'focus', focusCriterionId: first.id }) },
+            { label: 'Mark what I have anyway', onClick: () => finishAndMark({ force: true }) },
+          ],
+          inputVisible: false,
+        });
+        return;
+      }
+      if (!force && !state.editDone) {
+        setCoach({
+          msg: 'Every criterion has something. Two steps left: an editing pass with me (a stronger word here, a real reference there — you accept each one), then I mark it like the marker.',
+          section: 'READY TO FINISH',
+          actions: [
+            { label: '✎ Edit with Q first', primary: true, onClick: () => runEditPass() },
+            { label: 'Mark it now', onClick: () => finishAndMark({ force: true }) },
+          ],
+          inputVisible: false,
+        });
+        return;
+      }
+      coachCard.classList.add('wide');
+      setCoach({ msg: 'Marking it like the marker…', section: 'MARKING', thinking: true, inputVisible: false });
+      btnFinish.disabled = true;
+      try {
+        await api('/writer/mark', { docText: text, gradeScheme: state.gradeScheme }, { timeoutMs: 40000 });
+        const job = await waitForJob('mark', { onTick: (secs) => setCoach({ msg: 'Marking it like the marker… ' + secs + 's', section: 'MARKING', thinking: true, inputVisible: false }) });
+        renderMark(job.result);
+      } catch (e) {
+        setCoach({
+          msg: 'The marking failed: ' + shortCause(e), section: 'HICCUP', hint: 'Your work is saved.',
+          actions: [{ label: '↻ Try again', primary: true, onClick: () => finishAndMark({ force: true }) }, { label: '← Back to coaching', onClick: () => askNextQuestion({ trigger: 'answer' }) }],
+          inputVisible: false,
+        });
+      } finally {
+        btnFinish.disabled = false;
+      }
+    }
+
+    function renderMark(m) {
+      state.lastMark = m;
+      applyCoverage(m.coverage);
+      const bandWord = { top: 'top band', mid: 'middle band', low: 'lower band', missing: 'missing' };
+      setCoach({
+        msg: (m.overall.label ? m.overall.label + ' — ' : '') + bandWord[m.overall.band] + '. ' + (m.overall.summary || ''),
+        section: 'MARKED LIKE THE MARKER',
+        hint: '',
+        actions: [],
+        inputVisible: false,
+      });
+      coachActions.classList.remove('hidden');
+      coachActions.innerHTML = '';
+      const byId = Object.fromEntries((state.brief.criteria || []).map(c => [c.id, c]));
+      m.perCriterion.forEach(p => {
+        const row = document.createElement('div');
+        row.className = 'mark-row'; row.dataset.band = p.band;
+        const need = p.band === 'top' ? 'Top band — nothing missing here.' : (p.missingForTop || '');
+        row.innerHTML = `<div class="mk-head"><span class="mk-dot"></span>${escHtml(p.criterionId)} · ${escHtml(bandWord[p.band] || p.band)}</div>
+          <div class="mk-need">${escHtml(need)}</div>`;
+        if (p.band !== 'top') {
+          const go = document.createElement('button');
+          go.className = 'mk-go'; go.textContent = 'Work on ' + p.criterionId + ' →';
+          go.addEventListener('click', () => loopBackTo(p));
+          row.appendChild(go);
+        }
+        row.title = byId[p.criterionId] ? byId[p.criterionId].text : '';
+        coachActions.appendChild(row);
+      });
+      const weakest = m.perCriterion.find(p => p.criterionId === m.weakestCriterionId && p.band !== 'top');
+      const rowBtns = document.createElement('div');
+      rowBtns.style.cssText = 'display:flex;flex-direction:column;gap:6px;margin-top:4px';
+      if (weakest) {
+        const b1 = document.createElement('button'); b1.className = 'q-btn primary'; b1.textContent = '→ Push ' + weakest.criterionId + ' to the top band';
+        b1.addEventListener('click', () => loopBackTo(weakest)); rowBtns.appendChild(b1);
+      }
+      const b2 = document.createElement('button'); b2.className = 'q-btn'; b2.textContent = '📄 Assemble & download';
+      b2.addEventListener('click', () => assembleAndOffer()); rowBtns.appendChild(b2);
+      const b3 = document.createElement('button'); b3.className = 'q-btn'; b3.textContent = '← Back to coaching';
+      b3.addEventListener('click', () => { coachCard.classList.remove('wide'); askNextQuestion({ trigger: 'answer' }); }); rowBtns.appendChild(b3);
+      coachActions.appendChild(rowBtns);
+      appendBoardItem({ type: 'note', text: 'Marked: ' + (m.overall.label || bandWord[m.overall.band]) + '. ' + m.perCriterion.filter(p => p.band !== 'top').map(p => p.criterionId + ' needs: ' + criterionShort(p.missingForTop, 90)).join(' · ') });
+    }
+
+    // The mark's "what the top band still needs" becomes the next question —
+    // straight from the marker, no extra call.
+    function loopBackTo(p) {
+      coachCard.classList.remove('wide');
+      const q = p.nextQuestion || ('What would you add to ' + p.criterionId + ' so it reaches the top band? ' + (p.missingForTop || ''));
+      state.currentQuestion = q; state.currentCriterionId = p.criterionId; state.currentSection = p.criterionId;
+      state.docSnapshot = docPlainText();
+      state.qCount = (state.qCount || 1) + 1;
+      appendBoardItem({ type: 'question', label: 'Q' + state.qCount, text: q });
+      if (p.missingForTop) appendBoardItem({ type: 'note', text: 'Top band needs: ' + p.missingForTop });
+      renderCoverage();
+      setCoach({ msg: q, section: 'TO THE TOP BAND · ' + p.criterionId, hint: p.missingForTop ? criterionShort(p.missingForTop, 160) : '', inputVisible: true, showNudge: true });
+      coachInput.placeholder = 'Type your answer…';
+      coachInput.focus();
+      persist({ currentQuestion: q, currentCriterionId: p.criterionId, lastQuestion: q, currentSection: p.criterionId });
+    }
+
+    // ── Assemble (their words, his structure) + download ───────────────────
+    btnDownload.addEventListener('click', () => offerDownload(docPlainText(), (titleEl.value || '').trim() || (state.brief && state.brief.title) || 'My assignment'));
+
+    async function assembleAndOffer() {
+      if (!state.brief) { offerDownload(docPlainText(), (titleEl.value || '').trim() || 'My assignment'); return; }
+      coachCard.classList.add('wide');
+      setCoach({ msg: 'Arranging your words under the criteria — nothing added, only ordered…', section: 'ASSEMBLING', thinking: true, inputVisible: false });
+      try {
+        await api('/writer/assemble', { docText: docPlainText(), history: state.coachHistory.slice(-30), title: (titleEl.value || '').trim() }, { timeoutMs: 40000 });
+        const job = await waitForJob('assemble', { onTick: (secs) => setCoach({ msg: 'Arranging your words… ' + secs + 's', section: 'ASSEMBLING', thinking: true, inputVisible: false }) });
+        const a = job.result;
+        setCoach({ msg: 'Here it is, arranged — ' + a.wordCount + ' words, your sentences.', section: 'ASSEMBLED', hint: (a.changes || []).slice(0, 3).join(' · '), actions: [], inputVisible: false });
+        coachActions.classList.remove('hidden'); coachActions.innerHTML = '';
+        const pre = document.createElement('div'); pre.className = 'assembled-preview'; pre.textContent = a.document; coachActions.appendChild(pre);
+        const title = (titleEl.value || '').trim() || state.brief.title || 'My assignment';
+        const mk = (label, primary, fn) => { const b = document.createElement('button'); b.className = 'q-btn' + (primary ? ' primary' : ''); b.textContent = label; b.addEventListener('click', fn); coachActions.appendChild(b); };
+        mk('↓ Download as Word (.docx)', true, () => downloadDocx(title, a.document));
+        mk('↓ Download as text', false, () => downloadText(title, a.document));
+        mk('Put this version on my page', false, () => {
+          if (!window.confirm('Replace what is on the page with the arranged version? Your current page is saved and can be undone with Ctrl+Z straight after.')) return;
+          document.execCommand('selectAll', false, null);
+          document.execCommand('insertText', false, a.document);
+          wordEl.textContent = countWords() + ' words';
+          scheduleAutosave();
+          setCoach({ msg: 'Done — arranged version is on the page. Keep polishing, or Finish & mark again.', inputVisible: true, showNudge: true });
+          coachCard.classList.remove('wide');
+        });
+        mk('← Back', false, () => { coachCard.classList.remove('wide'); askNextQuestion({ trigger: 'answer' }); });
+      } catch (e) {
+        setCoach({
+          msg: 'The assembly failed: ' + shortCause(e), section: 'HICCUP', hint: 'You can still download the page as it is.',
+          actions: [{ label: '↻ Try again', primary: true, onClick: assembleAndOffer }, { label: '↓ Download the page as-is', onClick: () => offerDownload(docPlainText(), (titleEl.value || '').trim() || 'My assignment') }],
+          inputVisible: false,
+        });
+      }
+    }
+
+    function offerDownload(text, title) {
+      if (!text.trim()) { setCoach({ msg: 'The page is blank — nothing to download yet.', inputVisible: true }); return; }
+      setCoach({
+        msg: 'Download what is on the page (' + text.trim().split(/\s+/).length + ' words):',
+        section: 'DOWNLOAD',
+        actions: [
+          { label: '↓ Word (.docx)', primary: true, onClick: () => downloadDocx(title, text) },
+          { label: '↓ Plain text (.txt)', onClick: () => downloadText(title, text) },
+          ...(state.brief ? [{ label: '📄 Assemble first (their words, Q\'s structure)', onClick: assembleAndOffer }] : []),
+        ],
+        inputVisible: true,
+      });
+    }
+    async function downloadDocx(title, content) {
+      setCoach({ msg: 'Building the Word file…', thinking: true, inputVisible: false });
+      try {
+        const d = await api('/writer/download', { title, content }, { timeoutMs: 40000 });
+        const a = document.createElement('a'); a.href = d.url; a.download = d.filename || 'assignment.docx'; a.rel = 'noopener';
+        document.body.appendChild(a); a.click(); a.remove();
+        setCoach({ msg: 'Downloading ' + (d.filename || 'your file') + '. If nothing happened, tap here:', actions: [{ label: '↓ ' + (d.filename || 'download'), primary: true, onClick: () => window.open(d.url, '_blank') }], inputVisible: true });
+      } catch (e) {
+        setCoach({ msg: 'Couldn\'t build the Word file: ' + shortCause(e), actions: [{ label: '↓ Download as text instead', primary: true, onClick: () => downloadText(title, content) }, { label: '↻ Try Word again', onClick: () => downloadDocx(title, content) }], inputVisible: true });
+      }
+    }
+    function downloadText(title, content) {
+      try {
+        const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a'); a.href = url; a.download = (title || 'assignment').replace(/[^\w\- ]+/g, '').trim().replace(/\s+/g, '-').slice(0, 60) + '.txt';
+        document.body.appendChild(a); a.click(); a.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 5000);
+        setCoach({ msg: 'Downloaded as text.', inputVisible: true, showNudge: !!state.brief });
+      } catch (e) {
+        setCoach({ msg: 'Couldn\'t save the text file: ' + shortCause(e), inputVisible: true });
+      }
+    }
+
+    // ── The answer in Q's head: the model essay job (never shown) ─────────
+    // After the brief lands (and again after a supporting doc is added) Q
+    // writes the full model answer in the back room. The page only ever
+    // learns "ready" + brick counts per criterion; every probe then aims at
+    // the next unvoiced brick. Non-blocking — the opener is already on.
+    let essayWatching = false;
+    async function watchEssay(reason) {
+      if (essayWatching) return;
+      essayWatching = true;
+      try {
+        if (reason === 'restore-kick') { try { await api('/writer/essay', {}, { timeoutMs: 20000 }); } catch (e) { appendBoardItem({ type: 'note', text: 'Q could not start writing his plan: ' + shortCause(e) }); return; } }
+        const job = await waitForJob('essay', { everyMs: 3000, maxMs: 300000 });
+        const r = job.result || {};
+        state.essayReady = true;
+        if (r.brickCounts) state.brickCounts = r.brickCounts;
+        if (r.coverage) state.coverage = { ...state.coverage, ...r.coverage };
+        renderCoverage();
+        if (reason !== 'restore') {
+          appendBoardItem({ type: 'note', text: 'Q now has the full answer in his head — ' + (r.bricks || '?') + ' bricks across ' + (state.brief.criteria || []).length + ' criteria' + (state.sources.length ? ', citing your ' + state.sources.length + ' document' + (state.sources.length === 1 ? '' : 's') : '') + '. Every question from here aims at the next brick you haven\'t voiced yet.' });
+        }
+      } catch (e) {
+        appendBoardItem({ type: 'note', text: 'Q\'s plan (the full answer he steers by) didn\'t finish: ' + shortCause(e) + ' — coaching still works from the outline; tap here to retry.' });
+        const items = document.getElementById('board-items');
+        const last = items && items.lastElementChild;
+        if (last) { last.style.cursor = 'pointer'; last.addEventListener('click', () => { essayWatching = false; watchEssay('restore-kick'); }); }
+      } finally {
+        essayWatching = false;
+      }
+    }
+
+    // ── Supporting documents (case studies, notes, data) ──────────────────
+    async function loadSupportingFile(file) {
+      if (!file) return;
+      const name = file.name || 'document';
+      const lower = name.toLowerCase();
+      setCoach({ msg: 'Reading ' + name + '…', thinking: true, inputVisible: false });
+      try {
+        let text = '';
+        if (lower.endsWith('.pdf') || lower.endsWith('.docx') || file.type === 'application/pdf' || file.type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') {
+          if (file.size / (1024 * 1024) > 36) throw new Error('This file is over 36 MB — upload only the pages that matter.');
+          const data = await api('/extract-text', { dataUrl: await fileToDataUrl(file), name }, { timeoutMs: 120000 });
+          text = (data.text || '').trim();
+          if (text.length < 200) throw new Error(data.warning || 'That file came back nearly empty — probably scanned images. Try a file with real text.');
+        } else if (lower.endsWith('.txt') || lower.endsWith('.md') || lower.endsWith('.csv') || file.type.startsWith('text/')) {
+          text = (await fileToText(file)).trim();
+        } else if (lower.endsWith('.doc')) {
+          throw new Error('Old Word .doc files can\'t be read here — save it as .docx or PDF first.');
+        } else {
+          throw new Error('That file type isn\'t supported for a supporting document — PDF, Word (.docx), or text.');
+        }
+        const d = await api('/writer/source', { name, text }, { timeoutMs: 40000 });
+        state.sources = d.sources || [];
+        renderSourceSlot();
+        appendBoardItem({ type: 'note', text: 'Added ' + name + (d.truncated ? ' (first 80,000 characters kept)' : '') + '. Q is reading it into his plan…' });
+        setCoach({ msg: 'Got ' + name + '. I\'m folding it into the answer in my head — carry on, I\'ll say when it\'s in.', inputVisible: true, showNudge: true });
+        if (d.essayJob) { essayWatching = false; watchEssay('source'); }
+      } catch (e) {
+        setCoach({ msg: 'Couldn\'t add ' + name + ': ' + shortCause(e), section: 'SUPPORTING DOC', inputVisible: true, showNudge: !!state.brief });
+      }
+    }
+    async function removeSupportingDoc(name) {
+      if (!window.confirm('Remove ' + name + ' from this session? Q will rewrite his plan without it.')) return;
+      try {
+        const d = await api('/writer/source', { remove: name }, { timeoutMs: 20000 });
+        state.sources = d.sources || [];
+        renderSourceSlot();
+        if (d.essayJob) { essayWatching = false; watchEssay('source'); }
+      } catch (e) {
+        setCoach({ msg: 'Couldn\'t remove ' + name + ': ' + shortCause(e), inputVisible: true });
+      }
+    }
+
+    // ── Editing stage: sentence by sentence, accept or skip ───────────────
+    // A stronger word (their meaning) and, where a claim needs support, a
+    // real reference — uploaded sources first, never invented. Applied only
+    // on accept; each accept is one undoable edit on the page.
+    async function runEditPass() {
+      if (!state.brief) return;
+      const text = docPlainText();
+      if (!text.trim()) { setCoach({ msg: 'Nothing on the page to edit yet.', inputVisible: true, showNudge: true }); return; }
+      coachCard.classList.add('wide');
+      setCoach({ msg: 'Reading your sentences for the editing pass…', section: 'EDIT WITH Q', thinking: true, inputVisible: false });
+      try {
+        await api('/writer/edit-pass', { docText: text, voiceSignature: state.voiceSignature }, { timeoutMs: 40000 });
+        const job = await waitForJob('edit', { onTick: (secs) => setCoach({ msg: 'Reading your sentences… ' + secs + 's', section: 'EDIT WITH Q', thinking: true, inputVisible: false }) });
+        state.editItems = (job.result && job.result.items) || [];
+        state.editIndex = 0;
+        if (!state.editItems.length) {
+          state.editDone = true;
+          setCoach({ msg: 'Nothing I\'d change — the wording is yours and it reads well. Shall I mark it?', section: 'EDIT WITH Q', actions: [{ label: 'Mark like the marker →', primary: true, onClick: () => finishAndMark({ force: true }) }], inputVisible: false });
+          return;
+        }
+        showEditItem();
+      } catch (e) {
+        setCoach({ msg: 'The editing pass failed: ' + shortCause(e), section: 'HICCUP', hint: 'Your work is saved.', actions: [{ label: '↻ Try again', primary: true, onClick: runEditPass }, { label: 'Skip to marking', onClick: () => finishAndMark({ force: true }) }], inputVisible: false });
+      }
+    }
+    function showEditItem() {
+      const items = state.editItems || [];
+      const i = state.editIndex;
+      if (i >= items.length) {
+        state.editDone = true;
+        coachCard.classList.remove('wide');
+        setCoach({ msg: 'Editing pass done — every change on the page is one you accepted. Now I mark it like the marker.', section: 'EDIT WITH Q', actions: [{ label: 'Mark like the marker →', primary: true, onClick: () => finishAndMark({ force: true }) }, { label: '← Back to coaching', onClick: () => askNextQuestion({ trigger: 'answer' }) }], inputVisible: false });
+        return;
+      }
+      const it = items[i];
+      const onPage = findInDoc(it.sentence);
+      setCoach({ msg: 'Sentence ' + (i + 1) + ' of ' + items.length + (onPage ? '' : ' (I can\'t find this one on the page any more — skip it)'), section: 'EDIT WITH Q', hint: '', actions: [], inputVisible: false });
+      coachActions.classList.remove('hidden'); coachActions.innerHTML = '';
+      const card = document.createElement('div'); card.className = 'edit-item';
+      const sen = document.createElement('div'); sen.className = 'ed-sentence'; sen.textContent = '“' + criterionShort(it.sentence, 220) + '”'; card.appendChild(sen);
+      const row = document.createElement('div'); row.className = 'ed-row';
+      const mk = (label, primary, fn) => { const b = document.createElement('button'); b.className = 'q-btn' + (primary ? ' primary' : ''); b.textContent = label; b.addEventListener('click', fn); row.appendChild(b); };
+      if (it.wordSwap) {
+        const sug = document.createElement('div'); sug.className = 'ed-sug';
+        sug.innerHTML = 'Stronger word: <b>' + escHtml(it.wordSwap.from) + '</b> → <b>' + escHtml(it.wordSwap.to) + '</b>' + (it.wordSwap.why ? ' · ' + escHtml(it.wordSwap.why) : '');
+        card.appendChild(sug);
+        mk('✓ Use "' + criterionShort(it.wordSwap.to, 24) + '"', true, () => {
+          const ok = onPage && replaceInDoc(it.sentence, it.sentence.replace(it.wordSwap.from, it.wordSwap.to));
+          if (ok) { it.sentence = it.sentence.replace(it.wordSwap.from, it.wordSwap.to); it.wordSwap = null; scheduleAutosave(); showEditItem(); }
+          else { sug.innerHTML += ' <i>(couldn\'t find that exact wording on the page — skipped)</i>'; it.wordSwap = null; if (!it.reference) { state.editIndex++; } showEditItem(); }
+        });
+      }
+      if (it.reference) {
+        const ref = document.createElement('div'); ref.className = 'ed-sug';
+        ref.innerHTML = 'Support for <b>' + escHtml(it.reference.claim || 'this claim') + '</b>: ' + escHtml(it.reference.formatted) + (it.reference.fromSource ? ' <i>(from your upload: ' + escHtml(it.reference.fromSource) + ')</i>' : '') + (it.reference.uncertain ? ' <i>⚠ verify the details</i>' : '');
+        card.appendChild(ref);
+        mk('✓ Add ' + (it.reference.inlineCitation || 'reference'), !it.wordSwap, () => {
+          const cite = it.reference.inlineCitation ? ' ' + it.reference.inlineCitation : '';
+          const ok = onPage && cite && replaceInDoc(it.sentence, it.sentence.replace(/([.!?]["'”’)\]]*)\s*$/, cite + '$1'));
+          appendReference(it.reference.formatted);
+          if (ok) it.sentence = it.sentence.replace(/([.!?]["'”’)\]]*)\s*$/, cite + '$1');
+          it.reference = null; scheduleAutosave();
+          if (!it.wordSwap) state.editIndex++;
+          showEditItem();
+        });
+      }
+      mk('Skip', false, () => { state.editIndex++; showEditItem(); });
+      mk('Stop editing', false, () => { state.editDone = true; coachCard.classList.remove('wide'); finishAndMark({ force: true }); });
+      card.appendChild(row);
+      coachActions.appendChild(card);
+    }
+
+    // Find / replace the student's own sentence on the page without touching
+    // anything else. Walks the text nodes, tolerant of collapsed whitespace,
+    // and applies the change with execCommand so Ctrl+Z undoes it.
+    function docTextMap() {
+      const walker = document.createTreeWalker(docBody, NodeFilter.SHOW_TEXT, { acceptNode: (n) => n.parentElement && n.parentElement.closest('.grade-band') ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_ACCEPT });
+      const chars = []; const map = [];
+      let lastSpace = true;
+      for (let n = walker.nextNode(); n; n = walker.nextNode()) {
+        const t = n.nodeValue || '';
+        for (let k = 0; k < t.length; k++) {
+          const ch = /\s/.test(t[k]) || t[k] === ' ' ? ' ' : t[k];
+          if (ch === ' ' && lastSpace) continue;
+          chars.push(ch); map.push({ node: n, offset: k });
+          lastSpace = ch === ' ';
+        }
+        // block boundary counts as a space
+        if (!lastSpace) { chars.push(' '); map.push({ node: n, offset: t.length }); lastSpace = true; }
+      }
+      return { text: chars.join(''), map };
+    }
+    function findInDoc(sentence) {
+      const needle = String(sentence || '').replace(/\s+/g, ' ').trim();
+      if (!needle) return null;
+      const { text, map } = docTextMap();
+      const at = text.indexOf(needle);
+      if (at < 0) return null;
+      return { start: map[at], end: map[at + needle.length - 1] };
+    }
+    function replaceInDoc(sentence, replacement) {
+      const hit = findInDoc(sentence);
+      if (!hit) return false;
+      const range = document.createRange();
+      range.setStart(hit.start.node, hit.start.offset);
+      range.setEnd(hit.end.node, hit.end.offset + 1);
+      const sel = window.getSelection(); sel.removeAllRanges(); sel.addRange(range);
+      docBody.focus();
+      const ok = document.execCommand('insertText', false, replacement);
+      if (!ok) { range.deleteContents(); range.insertNode(document.createTextNode(replacement)); }
+      wordEl.textContent = countWords() + ' words';
+      return true;
+    }
+    function appendReference(formatted) {
+      if (!formatted) return;
+      let refsHead = Array.from(docBody.querySelectorAll('div, p, h2, h3')).find(el => /^references:?$/i.test((el.textContent || '').trim()));
+      if (!refsHead) {
+        const gap = document.createElement('div'); gap.innerHTML = '<br>'; docBody.appendChild(gap);
+        refsHead = document.createElement('div'); refsHead.innerHTML = '<b>References</b>'; docBody.appendChild(refsHead);
+      }
+      const already = Array.from(docBody.querySelectorAll('div, p')).some(el => (el.textContent || '').trim() === formatted.trim());
+      if (already) return;
+      const line = document.createElement('div'); line.className = 'student-line'; line.textContent = formatted;
+      // Insert after the last reference line following the heading.
+      let after = refsHead;
+      while (after.nextElementSibling && (after.nextElementSibling.textContent || '').trim()) after = after.nextElementSibling;
+      after.insertAdjacentElement('afterend', line);
+      wordEl.textContent = countWords() + ' words';
+    }
+
+    // ── Dictation: speak the answer into the coach box ────────────────────
+    // Same ear as the chat page: the browser's own speech recognition
+    // (Edge/Chrome), words appear as you speak, nothing is sent until Enter.
+    // No browser support → the button says so and you type instead.
+    const micBtn = document.getElementById('coach-mic');
+    const SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition;
+    let recognition = null; let dictationBase = '';
+    function stopDictation() {
+      micBtn.classList.remove('listening');
+      if (recognition) { try { recognition.stop(); } catch (_) {} recognition = null; }
+      coachInput.focus();
+    }
+    function startDictation() {
+      recognition = new SpeechRec();
+      recognition.continuous = true; recognition.interimResults = true; recognition.lang = 'en-GB';
+      dictationBase = coachInput.value.trim();
+      let finalText = '';
+      recognition.addEventListener('result', (e) => {
+        let interim = '';
+        for (let i = e.resultIndex; i < e.results.length; i++) {
+          const chunk = e.results[i][0].transcript;
+          if (e.results[i].isFinal) finalText += chunk; else interim += chunk;
+        }
+        const spoken = (finalText + interim).trim();
+        coachInput.value = dictationBase && spoken ? dictationBase + ' ' + spoken : (spoken || dictationBase);
+      });
+      recognition.addEventListener('error', (e) => {
+        stopDictation();
+        const why = e.error === 'not-allowed' || e.error === 'service-not-allowed' ? 'microphone blocked — allow it in the address bar' : e.error === 'no-speech' ? 'didn\'t hear anything' : e.error === 'network' ? 'no connection for dictation' : 'dictation stopped (' + e.error + ')';
+        coachHint.textContent = 'Mic: ' + why + '. Type instead, or tap the mic to retry.';
+      });
+      recognition.addEventListener('end', () => {
+        if (micBtn.classList.contains('listening')) { dictationBase = coachInput.value.trim(); finalText = ''; try { recognition.start(); } catch (_) { stopDictation(); } }
+      });
+      try { recognition.start(); micBtn.classList.add('listening'); coachHint.textContent = 'Listening — say your answer, tap the mic to stop, then press Enter.'; }
+      catch (e) { recognition = null; coachHint.textContent = 'Couldn\'t start the mic: ' + shortCause(e) + ' — type instead.'; }
+    }
+    micBtn.addEventListener('click', () => {
+      if (!SpeechRec) { coachHint.textContent = 'Dictation isn\'t available in this browser — type your answer instead (Edge or Chrome can listen).'; return; }
+      micBtn.classList.contains('listening') ? stopDictation() : startDictation();
+    });
+
+
+    // ── Restore on load: refresh, phone lock, Railway restart lose nothing ──
+    async function restoreSession() {
+      let d;
+      try { d = await api('/writer/tutor', undefined, { method: 'GET', timeoutMs: 20000 }); }
+      catch (e) { setSavedLabel('error', 'couldn\'t load your last session (' + shortCause(e) + ')'); return; }
+      const t = d.tutor;
+      if (t && t.settings && t.settings.pauseMs) { state.settings.pauseMs = t.settings.pauseMs; pauseInput.value = String(Math.round(t.settings.pauseMs / 1000)); }
+      if (t && t.gradeScheme) { state.gradeScheme = t.gradeScheme; gradeSchemeSelect.value = t.gradeScheme; }
+      if (t && t.yearGroup) { state.yearGroup = t.yearGroup; yearSelect.value = t.yearGroup; }
+      if (t && t.relateAnchor) { state.relateAnchor = t.relateAnchor; relateInput.value = t.relateAnchor; }
+      if (t && t.setupDone) { state.setupDone = true; setupStrip.classList.add('hidden'); }
+      if (!t) { setSavedLabel('saved'); savedEl.textContent = 'Nothing saved yet'; return; }
+
+      // The page: HTML (grade bands, Q's starters) or the plain text.
+      if (typeof t.docHtml === 'string' && t.docHtml.trim()) docBody.innerHTML = t.docHtml;
+      else if (typeof t.docText === 'string' && t.docText.trim()) docBody.textContent = t.docText;
+      if (t.docTitle) titleEl.value = t.docTitle;
+      state.qWordsWritten = Number(t.qWordsWritten) || 0;
+      wordEl.textContent = countWords() + ' words';
+      // Grade-band "Improve" buttons lose their listeners on restore — re-wire.
+      docBody.querySelectorAll('.grade-band .gb-improve').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const band = btn.closest('.grade-band');
+          runImproveFlow(band ? band.dataset.section : '', docPlainText().slice(-1500), band ? band.dataset.grade : 'amber');
+        });
+      });
+      setSavedLabel('saved'); savedEl.textContent = 'Restored · ' + (t.updatedAt ? new Date(t.updatedAt).toLocaleString('en-GB', { hour: '2-digit', minute: '2-digit', day: 'numeric', month: 'short' }) : 'earlier');
+
+      if (t.sourceName) { sourceState.name = t.sourceName; sourceState.text = null; sourceState.stored = true; renderSourceSlot(); }
+      state.coachHistory = Array.isArray(t.coachHistory) ? t.coachHistory : [];
+      state.coverage = t.coverage && typeof t.coverage === 'object' ? t.coverage : {};
+      state.brickCounts = t.brickCounts && typeof t.brickCounts === 'object' ? t.brickCounts : {};
+      state.essayReady = !!t.essayReady;
+      state.sources = Array.isArray(t.sources) ? t.sources : [];
+      state.lastMark = t.lastMark || null;
+      if (t.sourceName) renderSourceSlot();
+      if (t.brief && !t.essayReady) watchEssay(d.essayJob && d.essayJob.status === 'running' ? 'restore' : 'restore-kick');
+
+      if (t.brief && Array.isArray(t.brief.criteria) && t.brief.criteria.length) {
+        adoptBrief(t.brief, { announce: false });
+        renderSourceSlot();   // now the brief is in, the "+ Add a supporting document" button shows
+        // Rebuild the teaching board from history, then the live question.
+        state.qCount = 0;
+        let lastBoardQ = '';
+        if (t.brief.opener) { state.qCount = 1; lastBoardQ = t.brief.opener; appendBoardItem({ type: 'question', label: 'Q1', text: t.brief.opener }); }
+        state.coachHistory.forEach((h) => {
+          if (h.question && h.question !== lastBoardQ) { state.qCount += 1; lastBoardQ = h.question; appendBoardItem({ type: 'question', label: 'Q' + state.qCount, text: h.question }); }
+          if (h.answer) appendBoardItem({ type: 'answer', text: h.answer });
+        });
+        state.currentCriterionId = t.currentCriterionId || (t.brief.criteria[0] && t.brief.criteria[0].id) || '';
+        state.currentSection = state.currentCriterionId;
+        state.currentQuestion = t.currentQuestion || '';
+        state.docSnapshot = t.probeSnapshot && docPlainText().endsWith(t.probeSnapshot) ? docPlainText() : docPlainText();
+        renderCoverage();
+        if (state.currentQuestion) {
+          if (state.currentQuestion !== lastBoardQ) { state.qCount += 1; appendBoardItem({ type: 'question', label: 'Q' + state.qCount, text: state.currentQuestion }); }
+          setCoach({ msg: 'Welcome back. ' + state.currentQuestion, section: state.currentCriterionId || 'WHERE WE WERE', hint: 'Answer here, or keep writing — I read as you go.', inputVisible: true, showNudge: true });
+        } else {
+          setCoach({ msg: 'Welcome back — the brief is on the board. Keep writing, or ask for the next question.', actions: [{ label: 'Next question →', primary: true, onClick: () => askNextQuestion({ trigger: 'answer' }) }], inputVisible: true, showNudge: true });
+        }
+        coachInput.placeholder = 'Type your answer…';
+        state.restored = true;
+      } else if (d.briefJob && d.briefJob.status === 'running') {
+        // We refreshed mid-read: pick the job up.
+        setCoach({ msg: 'Still reading your task…', thinking: true, inputVisible: false });
+        try {
+          const job = await waitForJob('brief', { onTick: (secs) => setCoach({ msg: 'Reading your task… ' + secs + 's', thinking: true, inputVisible: false }) });
+          if (job.result) { state.coverage = Object.fromEntries((job.result.criteria || []).map(c => [c.id, 'none'])); adoptBrief(job.result, { announce: true }); }
+        } catch (e) {
+          setCoach({ msg: 'The brief step failed: ' + shortCause(e), actions: [{ label: '↻ Retry', primary: true, onClick: () => runBrief('', sourceState.name, { fromStored: true }) }], inputVisible: false });
+        }
+      }
+    }
+    restoreSession();
+    // Test hooks (no data, no secrets): lets the harness exercise the page-side
+    // helpers without a paid call. Harmless in production.
+    window.__qwriterTest = { findInDoc, replaceInDoc, appendReference, docPlainText, splitCheck: (t) => endsSentence(t) };
+
 
     // ── Draggable coach card ───────────────────────────────────────────────
     let drag = null;

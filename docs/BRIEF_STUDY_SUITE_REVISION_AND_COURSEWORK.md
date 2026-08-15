@@ -113,3 +113,52 @@ Standards: plugin law (reuse; new pieces are new plugins with headers), no vendo
 user surface (Sarah's rule — no "DeepSeek/Gemini/Claude" text visible), no children's data
 leaving the app beyond the AI calls it already makes, cost logged on every call, node -c and a
 real end-to-end run before saying "done". Report short: what's fixed, what's proven, what's owed.
+
+---
+
+## ADDENDUM 15 Aug (evening) — HOW COACHING MUST FEEL, in Sarah's words, from a live run
+
+Sarah uploaded a real CIPD 7HR03 brief on live. First try: "Couldn't read that" (brief block
+missing — the general-chat + regex path). Retry: brief populated. She then typed one sentence
+in the document — *"I think a company that values their employees is attractive."* — and Q
+answered "Something went wrong — shall I try again?" (the coaching turn failed the same way).
+
+Her spec, verbatim: **"Q should be saying right... think of a company, what do you think would
+be good about working for them.... I dont know what the doc is about but he needs to ask
+leading questions and he needs to read you writing and as you get to the end of a sentence...
+say you stop for 7 seconds he will talk and ask questions to probe you in to saying what he's
+written in his head because that's the answer that's worth the A."**
+
+What the code does today (verified 15 Aug): typing in the document ONLY updates the word count
+(`writer.html:918-920`). Q does not read the writing. Coaching is a separate Q&A box
+(`askNextQuestion` → user types in `coachInput`) driven through the general `/chat` surface and
+a regex hunt for a ```` ```writer-question ```` block — same brittle path as the brief. So the
+behaviour Sarah describes is NOT broken; it does not exist yet. It is THE Phase 3 build:
+
+1. **Q has the A-grade answer in his head first.** From the full brief (all of it, via the
+   dedicated Sonnet route, structured output — never regex-hunting a chat reply): the task,
+   every assessment criterion, the marking bands, and an *ideal-answer skeleton* per criterion.
+   That skeleton is what every probe steers toward. The student never sees it raw.
+2. **He opens with a leading question, not a wait.** Immediately after the brief lands, in
+   plain words: what the brief found ("This is asking you for 3 things…") and then a warm,
+   concrete opener that anyone can answer without having read the doc — e.g. *"Think of a
+   company you'd love to work for. What makes it good?"* — chosen because its answer is the
+   first brick of the ideal answer.
+3. **He reads the writing live and speaks in the pause.** Watch the document as it's typed;
+   when the student stops for ~7 seconds at the end of a sentence (`.?!` and new text since
+   the last probe), Q reads what they wrote against the ideal-answer skeleton and asks ONE
+   probing question that pulls the next brick out of them ("You said valuing employees makes a
+   company attractive — what does 'valuing' actually look like in pay and benefits? Give me
+   one example."). Non-blocking, one at a time, never while they're mid-flow, never repeats a
+   covered point. The 7 seconds is a setting.
+4. **Their words, his structure.** He never types into their document. Answers given in the
+   coach box can be offered as a sentence in *their* voice to drop in (existing
+   reframe/word-swap helpers). Coverage against every criterion is tracked; he doesn't let
+   them "finish" with a criterion untouched; at the end he marks like the marker against the
+   rubric and says exactly what the top band still needs.
+5. **Failure is never silent.** No "Something went wrong" without the cause; retry keeps
+   context; autosave every answer + the doc; a refresh, phone lock or Railway restart loses
+   nothing. Assemble + download exists.
+
+Cost rule unchanged: proving this end to end is paid runs (pennies each on Sonnet) — price it,
+get Sarah's yes, then run.

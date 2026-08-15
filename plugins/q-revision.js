@@ -214,15 +214,34 @@ Mark it.`;
 // Accuracy gate: if the Sonnet check can't run, we do NOT serve unchecked
 // questions — a wrong answer key teaches the wrong law. We throw and the
 // page shows "try again".
+// A batch question as the page wants it: options is an ARRAY of exactly 4,
+// correctIndex 0-3. Accepts the wire shape too ({a,b,c,d}) — see QUIZ_SCHEMA.
+// Repairs what it safely can (an over-long option list is trimmed to the
+// first four when the key still lands inside them) and REPORTS every drop,
+// so a batch that comes back smaller than asked is never quiet
+// (STUDY_SUITE_PHASE1_FINDINGS §2.2 #4).
+function optionsArray(opts) {
+    if (Array.isArray(opts)) return asStringArray(opts);
+    if (opts && typeof opts === 'object') {
+        return asStringArray(['a', 'b', 'c', 'd'].map((k) => opts[k]));
+    }
+    return [];
+}
 
 function normaliseQuizQuestions(raw) {
     const list = Array.isArray(raw?.questions) ? raw.questions : [];
     const out = [];
+    let dropped = 0;
     for (const q of list) {
-        const options = asStringArray(q.options);
-        const correctIndex = toInt(q.correctIndex, -1);
-        if (!q.question || options.length !== 4) continue;
-        if (correctIndex < 0 || correctIndex > 3) continue;
+        if (!q || !q.question) { dropped++; continue; }
+        let options = optionsArray(q.options);
+        let correctIndex = toInt(q.correctIndex, -1);
+        // repair: 5+ options with the key inside the first four → trim
+        if (options.length > 4 && correctIndex >= 0 && correctIndex < 4) options = options.slice(0, 4);
+        if (options.length !== 4) { dropped++; continue; }
+        if (correctIndex < 0 || correctIndex > 3) { dropped++; continue; }
+        // repair: two identical option strings make the key ambiguous → drop
+        if (new Set(options.map((o) => o.toLowerCase())).size !== 4) { dropped++; continue; }
         out.push({
             question: String(q.question).trim(),
             options,
@@ -232,12 +251,33 @@ function normaliseQuizQuestions(raw) {
             difficulty: ['foundation', 'standard', 'stretch'].includes(q.difficulty) ? q.difficulty : 'standard',
         });
     }
+    out.dropped = dropped;
     return out;
+}
+
+// The wire shape sent TO the checker: same as the schema, so the checker
+// sees exactly the shape it must return.
+function toWire(questions) {
+    return {
+        questions: questions.map((q) => ({
+            question: q.question,
+            options: { a: q.options[0], b: q.options[1], c: q.options[2], d: q.options[3] },
+            correctIndex: q.correctIndex,
+            why: q.why,
+            topicTag: q.topicTag,
+            difficulty: q.difficulty,
+        })),
+    };
 }
 
 // Structured-outputs schema for quiz batches — the API guarantees the
 // response parses, so a big checked batch can never come back as broken JSON
 // (live failure 19 Jul: truncated Sonnet batch → "Expected ':'" parse error).
+//
+// EXACTLY FOUR OPTIONS is enforced by the schema itself: structured outputs
+// don't support minItems/maxItems, so options is an object with four
+// required string keys (a/b/c/d, additionalProperties:false) and correctIndex
+// is an integer enum 0-3. Nothing else can come back.
 const QUIZ_SCHEMA = {
     type: 'object',
     additionalProperties: false,
@@ -251,8 +291,15 @@ const QUIZ_SCHEMA = {
                 required: ['question', 'options', 'correctIndex', 'why', 'topicTag', 'difficulty'],
                 properties: {
                     question: { type: 'string' },
-                    options: { type: 'array', items: { type: 'string' } },
-                    correctIndex: { type: 'integer' },
+                    options: {
+                        type: 'object',
+                        additionalProperties: false,
+                        required: ['a', 'b', 'c', 'd'],
+                        properties: {
+                            a: { type: 'string' }, b: { type: 'string' }, c: { type: 'string' }, d: { type: 'string' },
+                        },
+                    },
+                    correctIndex: { type: 'integer', enum: [0, 1, 2, 3] },
                     why: { type: 'string' },
                     topicTag: { type: 'string' },
                     difficulty: { type: 'string', enum: ['foundation', 'standard', 'stretch'] },
@@ -265,12 +312,36 @@ const QUIZ_SCHEMA = {
 const QUIZ_SHAPE = `Return ONLY valid JSON:
 - questions (array): each {
     question (string — one clear multiple-choice question),
-    options (array of exactly 4 strings — one right, three genuinely tempting but wrong),
-    correctIndex (integer 0-3),
-    why (string — ONE sentence: why the right answer is right, worded so the student learns something even when they got it right),
-    topicTag (string — short topic label matching the topic list wording where possible),
+    options (object with EXACTLY four keys "a", "b", "c", "d" — each a string; one right, three genuinely tempting but wrong; never fewer or more than four),
+    correctIndex (integer 0-3: 0 = a, 1 = b, 2 = c, 3 = d),
+    why (string — ONE sentence that TEACHES: why the right answer is right AND what makes the closest wrong option wrong, worded so the student learns something even when they got it right),
+    topicTag (string — short topic label; if a topic list was given, use the list's EXACT wording for the topic this question tests),
     difficulty ("foundation" | "standard" | "stretch")
   }`;
+
+// User-safe wording for anything that goes wrong on this path — no vendor
+// names on any student surface (Sarah's rule).
+function publicError(msg) {
+    let s = String(msg || 'unknown error');
+    s = s.replace(/https?:\/\/\S+/g, '');                       // no vendor URLs
+    // Pull the human "message" out of any upstream JSON blob and drop the blob
+    // itself (they can be truncated mid-object, so match from the first brace).
+    const msgs = [];
+    s.replace(/"message"\s*:\s*"((?:[^"\\]|\\.)*)"/g, (m, inner) => { msgs.push(inner.replace(/\\"/g, '"').trim()); return m; });
+    const brace = s.indexOf('{');
+    if (brace >= 0) s = s.slice(0, brace) + (msgs.length ? '(' + msgs.join('; ') + ')' : '');
+    return s
+        .replace(/Claude upstream/gi, 'accuracy service')
+        .replace(/Q upstream/gi, 'question writer')
+        .replace(/ANTHROPIC_API_KEY/gi, 'the accuracy service key')
+        .replace(/TOGETHER_API_KEY/gi, 'the writer key')
+        .replace(/\b(Anthropic|Claude|Sonnet|Opus|DeepSeek|Together|Gemini|OpenAI)\b/gi, 'the AI service')
+        .replace(/\s+([;,.)])/g, '$1')
+        .replace(/\(\s*\)/g, '')
+        .replace(/\s{2,}/g, ' ')
+        .trim()
+        .slice(0, 300);
+}
 
 async function generateQuiz({ subject, board, level, topic, count, avoid } = {}) {
     const n = clamp(toInt(count, 10), 3, 12);
@@ -283,7 +354,7 @@ async function generateQuiz({ subject, board, level, topic, count, avoid } = {})
 
 Rules:
 - Write ${n} questions. Mix difficulties: a couple of "foundation" to build confidence, mostly "standard", one or two "stretch".
-- If a topic list is given, spread across it; keep each question on ONE topic and label it with topicTag.
+- If a topic list is given, spread across it; keep each question on ONE topic and label it with topicTag using the list's exact wording.
 - Wrong options must be genuinely tempting — the classic mix-ups students actually make — never obviously silly.
 - Never repeat or closely rephrase anything in the avoid list.
 - Only test content genuinely on this subject at this level. Real cases, real statutes, real terms — never invented ones, never fake specification codes.
@@ -302,39 +373,73 @@ Write the ${n} questions.`;
     // directly (still cheap, already accurate — the check is then built in).
     let draft = null;
     let writtenByClaude = false;
+    let writerError = null;
     try {
         // 10 MCQs + why-lines run past 3000 tokens — live 20 Jul: two Q drafts
         // truncated mid-JSON ("Unterminated string"), forcing Sonnet writes.
         draft = normaliseQuizQuestions(await callQ(writerSystem, writerUser, { maxTokens: 5000 }));
     } catch (e) {
+        writerError = e.message;
         console.warn('[q-revision] Q quiz writer failed, Sonnet writing directly: ' + e.message);
     }
     if (!draft || draft.length === 0) {
-        draft = normaliseQuizQuestions(await claudeJSON(writerSystem, writerUser, { maxTokens: 6000, model: SONNET, effort: 'medium', schema: QUIZ_SCHEMA, skill: 'revision' }));
+        try {
+            draft = normaliseQuizQuestions(await claudeJSON(writerSystem, writerUser, { maxTokens: 6000, model: SONNET, effort: 'medium', schema: QUIZ_SCHEMA, skill: 'revision' }));
+        } catch (e) {
+            // Both writers failed — say so with both causes, vendor-free.
+            const err = new Error(publicError(`Couldn't write the questions — ${writerError || 'the question writer returned nothing usable'}; ${e.message}`));
+            err.publicMessage = err.message;
+            throw err;
+        }
         writtenByClaude = true;
     }
-    if (draft.length === 0) throw new Error('No usable questions came back — try again.');
-    if (writtenByClaude) return { questions: draft, checkedBy: 'sonnet' };
+    if (draft.length === 0) throw Object.assign(new Error('No usable questions came back — try again.'), { publicMessage: 'No usable questions came back — try again.' });
+    const writerDropped = draft.dropped || 0;
+    if (writtenByClaude) {
+        return { questions: draft, checkedBy: 'sonnet', asked: n, served: draft.length, dropped: { writer: writerDropped, checker: 0 } };
+    }
 
     // Step 2 — Sonnet checks every answer key. No check, no quiz.
-    if (!hasClaude()) throw new Error('Checker unavailable — quiz needs ANTHROPIC_API_KEY.');
+    if (!hasClaude()) throw Object.assign(new Error('Checker unavailable — the accuracy service key is not set on the server.'), { publicMessage: 'Checker unavailable — the accuracy service key is not set on the server.' });
     const checkerSystem = `You are the accuracy checker for a UK revision quiz (${boardLine}, ${level || 'A-Level'}, ${subject || 'General Studies'}). Another model drafted these multiple-choice questions. Your job: make sure a student can NEVER be taught something wrong by this batch.
 
 For every question:
 - Verify the keyed answer (correctIndex) is definitely correct and the ONLY correct option. If the key is wrong, fix correctIndex.
 - Verify the other three options are definitely wrong at this level. If a distractor is arguably right, rewrite it so it is cleanly wrong.
 - Verify cases, statutes, dates, terms are real and correctly stated. Fix small errors in place.
-- Verify the "why" sentence is accurate; rewrite it if not.
+- Verify the "why" sentence is accurate AND actually teaches one thing; rewrite it if it is vague.
 - If a question is beyond repair (ambiguous, off-spec, not genuinely this subject), DROP it entirely rather than keep something doubtful.
-- Do not add new questions. Keep the same JSON shape and field wording style.
+- Do not add new questions. Do not rewrite question stems beyond fixing errors. Keep the same JSON shape and field wording style — every question keeps exactly four options a/b/c/d.
 
 ${QUIZ_SHAPE}`;
 
-    const checked = normaliseQuizQuestions(
-        await claudeJSON(checkerSystem, `DRAFT BATCH:\n${JSON.stringify({ questions: draft }, null, 1)}`, { maxTokens: 8000, model: SONNET, effort: 'medium', schema: QUIZ_SCHEMA, skill: 'revision' })
-    );
-    if (checked.length === 0) throw new Error('The checker rejected the whole batch — try again.');
-    return { questions: checked, checkedBy: 'sonnet' };
+    let checkedRaw;
+    try {
+        checkedRaw = await claudeJSON(checkerSystem, `DRAFT BATCH:\n${JSON.stringify(toWire(draft), null, 1)}`, { maxTokens: 8000, model: SONNET, effort: 'medium', schema: QUIZ_SCHEMA, skill: 'revision' });
+    } catch (e) {
+        const err = new Error(publicError(`The answer-key check didn't run — ${e.message}`));
+        err.publicMessage = err.message;
+        throw err;
+    }
+    const checked = normaliseQuizQuestions(checkedRaw);
+    if (checked.length === 0) throw Object.assign(new Error('The checker rejected the whole batch — try again.'), { publicMessage: 'The checker rejected the whole batch — try again.' });
+
+    // Guard: the checker may DROP but never ADD or swap in new stems. Anything
+    // whose stem isn't (roughly) in the draft is discarded and counted.
+    const draftStems = new Set(draft.map((q) => stemKey(q.question)));
+    const kept = checked.filter((q) => draftStems.has(stemKey(q.question)));
+    const invented = checked.length - kept.length;
+    if (invented > 0) console.warn(`[q-revision] checker returned ${invented} question(s) not in the draft — discarded`);
+    if (kept.length === 0) throw Object.assign(new Error('The checker rejected the whole batch — try again.'), { publicMessage: 'The checker rejected the whole batch — try again.' });
+    const checkerDropped = draft.length - kept.length;
+    if (checkerDropped > 0) console.log(`[q-revision] checker dropped ${checkerDropped} of ${draft.length}`);
+    return { questions: kept, checkedBy: 'sonnet', asked: n, served: kept.length, dropped: { writer: writerDropped, checker: checkerDropped + (checked.dropped || 0) } };
 }
 
-module.exports = { generateQuestion, markAnswer, generateQuiz };
+// A forgiving stem key so a checker that fixed a typo in a stem still matches
+// the draft: first eight words, letters/digits only.
+function stemKey(stem) {
+    return String(stem || '').toLowerCase().replace(/[^a-z0-9\s]+/g, ' ').replace(/\s+/g, ' ').trim().split(' ').slice(0, 8).join(' ');
+}
+
+module.exports = { generateQuestion, markAnswer, generateQuiz, publicError, QUIZ_SCHEMA, normaliseQuizQuestions };

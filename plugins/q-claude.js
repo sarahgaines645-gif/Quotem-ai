@@ -96,6 +96,16 @@ async function accurateJSON(systemPrompt, userPrompt, { maxTokens = 4096, model 
         } catch (e) {
             console.warn('[q-claude] falling back: ' + e.message);
             if (!fallback) throw e;
+            // The fallback ran because Claude failed. If the fallback ALSO
+            // fails, keep Claude's cause on the error so the route can show
+            // the student both halves ("accuracy service refused the key;
+            // the backup timed out") instead of only the last one.
+            try {
+                return await fallback(systemPrompt, userPrompt, { maxTokens });
+            } catch (e2) {
+                e2.primaryCause = e.message;
+                throw e2;
+            }
         }
     } else if (!fallback) {
         throw new Error('ANTHROPIC_API_KEY not set and no fallback given');

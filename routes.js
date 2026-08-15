@@ -1039,8 +1039,7 @@ router.post('/writer/analyse', requirePerson, express.json({ limit: '512kb' }), 
         const analysis = await qWriter.analyseTask(taskText);
         res.json({ ok: true, analysis });
     } catch (e) {
-        console.error('[writer/analyse]', e.message);
-        res.status(500).json({ error: e.message });
+        writerFail(res, e, '[writer/analyse]', 'task read');
     }
 });
 
@@ -1052,23 +1051,311 @@ router.post('/writer/next-question', requirePerson, express.json({ limit: '512kb
         const next = await qWriter.nextQuestion(analysis, history);
         res.json({ ok: true, ...next });
     } catch (e) {
-        console.error('[writer/next-question]', e.message);
-        res.status(500).json({ error: e.message });
+        writerFail(res, e, '[writer/next-question]', 'next question');
     }
 });
 
-router.post('/writer/assemble', requirePerson, express.json({ limit: '512kb' }), async (req, res) => {
-    try {
-        const analysis = req.body?.analysis;
-        const history = Array.isArray(req.body?.history) ? req.body.history : [];
-        if (!analysis || history.length === 0) {
-            return res.status(400).json({ error: 'analysis and history required' });
+// ═══════════════════════════════════════════════════════════════════════════
+// WRITER — PHASE 3 (15 Aug 2026): the coach with the answer in his head.
+// Shared plumbing for the writer routes below: the tutor notebook (one per
+// person, holds the whole session so nothing is lost on refresh / phone lock
+// / restart), background jobs (the brief / mark / assemble calls can outlive
+// Railway's ~60s edge, so they run server-side and the page polls), and a
+// typed 413 so an oversize body never becomes a bare "Server error".
+// ═══════════════════════════════════════════════════════════════════════════
+
+// A body over the route's express.json limit throws entity.too.large BEFORE
+// the handler runs and skips its try/catch. This turns it into the plain
+// sentence the student should read. Mount it right after express.json().
+function writerTooLarge(message) {
+    return (err, req, res, next) => {
+        if (err && err.type === 'entity.too.large') {
+            console.warn(`[writer] 413 ${req.method} ${req.path} — body over ${err.limit || '?'} bytes`);
+            return res.status(413).json({ error: message, code: 'too_large' });
         }
-        const result = await qWriter.assembleDocument(analysis, history);
-        res.json({ ok: true, ...result });
+        if (err) return next(err);
+        next();
+    };
+}
+
+// One failure shape for every writer route: log the raw cause server-side,
+// send the student the plain-English one (no vendor names, real status).
+function writerFail(res, e, tag, step) {
+    const cause = qWriter.userFacingCause(e, step);
+    console.error(tag, e && e.message, e && e.primaryCause ? '(first: ' + e.primaryCause + ')' : '');
+    res.status(cause.status).json({ ok: false, error: cause.message, code: cause.code, retryable: cause.retryable });
+}
+
+// The tutor notebook. Merge-write: only the keys sent are changed.
+function readTutor(personId) {
+    try {
+        const p = getTutorPath(personId);
+        if (!fs.existsSync(p)) return {};
+        return JSON.parse(fs.readFileSync(p, 'utf8')) || {};
+    } catch (_) { return {}; }
+}
+function writeTutor(personId, patch) {
+    const merged = { ...readTutor(personId), ...patch, updatedAt: Date.now() };
+    fs.writeFileSync(getTutorPath(personId), JSON.stringify(merged));
+    return merged;
+}
+// The skeleton is the answer in Q's head — it lives server-side only. The
+// page gets everything else.
+function publicBrief(brief) {
+    if (!brief || typeof brief !== 'object') return null;
+    const { idealAnswerSkeleton, ...rest } = brief;
+    return rest;
+}
+function sourcesMeta(sources) {
+    return (Array.isArray(sources) ? sources : []).map(s => ({ name: s.name, chars: (s.text || '').length, addedAt: s.addedAt || null }));
+}
+function readStoredDocText(personId) {
+    try {
+        const docPath = getDocPath(personId);
+        if (!fs.existsSync(docPath)) return null;
+        const stored = JSON.parse(fs.readFileSync(docPath, 'utf8'));
+        return stored && stored.text ? { text: stored.text, name: stored.name || 'document' } : null;
+    } catch (_) { return null; }
+}
+
+// Background jobs — one per person per kind. `result` is also persisted to
+// the notebook by the caller, so a Railway restart mid-poll loses the
+// in-flight job but never a finished one.
+const writerJobs = new Map();
+const WRITER_JOB_STEP = { brief: 'brief step', essay: 'model answer', mark: 'marking', assemble: 'assembly', edit: 'editing pass' };
+const SOURCE_MAX = 6, SOURCE_CHARS = 80000, SOURCE_TOTAL = 300000;
+
+// The hidden model essay is written server-side after the brief lands (and
+// again when a supporting document is added). Never returned to the page —
+// only brick COUNTS per criterion, so the strip can say "2 of 5 voiced".
+function startEssayJob(personId) {
+    return startWriterJob(personId, 'essay', async () => {
+        const t = readTutor(personId);
+        if (!t.brief) throw new Error('No brief yet — upload the task first.');
+        const essay = await qWriter.writeModelEssay({ brief: t.brief, sources: t.sources || [] });
+        const t2 = readTutor(personId);
+        // Keep bricks already voiced that still exist in the rewritten essay.
+        const ids = new Set(qWriter.allBrickIds(essay).map(b => b.brickId));
+        const voiced = (Array.isArray(t2.voicedBricks) ? t2.voicedBricks : []).filter(id => ids.has(id));
+        const { coverage, brickCounts } = qWriter.coverageFromBricks(essay, voiced, t2.coverage || {});
+        writeTutor(personId, { modelEssay: essay, voicedBricks: voiced, coverage, brickCounts });
+        return { essayReady: true, brickCounts, coverage, bricks: ids.size, notes: essay.notes };
+    });
+}
+function writerJobKey(personId, kind) { return `${personId}:${kind}`; }
+function startWriterJob(personId, kind, run) {
+    const key = writerJobKey(personId, kind);
+    const existing = writerJobs.get(key);
+    if (existing && existing.status === 'running') return existing;
+    const job = { kind, status: 'running', startedAt: Date.now(), finishedAt: null, result: null, error: null };
+    writerJobs.set(key, job);
+    Promise.resolve().then(run).then((result) => {
+        job.status = 'done'; job.result = result; job.finishedAt = Date.now();
+        console.log(`[writer/${kind}] done in ${((job.finishedAt - job.startedAt) / 1000).toFixed(1)}s`);
+    }).catch((e) => {
+        job.status = 'failed'; job.finishedAt = Date.now();
+        job.error = qWriter.userFacingCause(e, WRITER_JOB_STEP[kind] || kind);
+        console.error(`[writer/${kind}] failed after ${((job.finishedAt - job.startedAt) / 1000).toFixed(1)}s: ${e && e.message}${e && e.primaryCause ? ' (first: ' + e.primaryCause + ')' : ''}`);
+    });
+    // Forget finished jobs after half an hour — the notebook holds the result.
+    setTimeout(() => { if (writerJobs.get(key) === job && job.status !== 'running') writerJobs.delete(key); }, 30 * 60 * 1000).unref();
+    return job;
+}
+function jobView(job) {
+    if (!job) return null;
+    return {
+        kind: job.kind, status: job.status, startedAt: job.startedAt, finishedAt: job.finishedAt,
+        elapsedMs: (job.finishedAt || Date.now()) - job.startedAt,
+        error: job.error || null,
+        result: job.status === 'done' ? job.result : null,
+    };
+}
+
+// GET /writer/job/:kind — poll a brief / mark / assemble job. If there is no
+// live job (restart, or the page came back later) the notebook's saved
+// result is returned as done, so a refresh mid-brief still lands the brief.
+router.get('/writer/job/:kind', requirePerson, (req, res) => {
+    const kind = String(req.params.kind || '');
+    if (!WRITER_JOB_STEP[kind]) return res.status(404).json({ error: 'Unknown job kind.' });
+    const job = writerJobs.get(writerJobKey(req.person.id, kind));
+    if (job) {
+        const view = jobView(job);
+        if (kind === 'brief' && view.result) view.result = publicBrief(view.result);
+        return res.json({ ok: true, ...view });
+    }
+    const t = readTutor(req.person.id);
+    const saved = kind === 'brief' ? (t.brief ? publicBrief(t.brief) : null)
+        : kind === 'mark' ? (t.lastMark || null)
+        : kind === 'essay' ? (t.modelEssay ? { essayReady: true, brickCounts: t.brickCounts || {}, coverage: t.coverage || {}, bricks: qWriter.allBrickIds(t.modelEssay).length, notes: t.modelEssay.notes } : null)
+        : kind === 'edit' ? (t.lastEdit || null)
+        : (t.lastAssembly || null);
+    if (saved) return res.json({ ok: true, kind, status: 'done', fromNotebook: true, result: saved, error: null });
+    return res.json({ ok: true, kind, status: 'none', result: null, error: null });
+});
+
+// POST /writer/assemble — THEIR words, HIS structure. Arranges the student's
+// draft (+ coach-box answers) under the criteria. Job: poll GET /writer/job/assemble.
+router.post('/writer/assemble', requirePerson, express.json({ limit: '2mb' }), writerTooLarge('That draft is too long to assemble in one go (over 2 MB of text). Trim it, or assemble a section at a time.'), async (req, res) => {
+    const t = readTutor(req.person.id);
+    if (!t.brief) return res.status(400).json({ error: 'No brief yet — upload the task first so I know what the marker wants.', code: 'no_brief' });
+    const docText = String(req.body?.docText || t.docText || '');
+    const history = Array.isArray(req.body?.history) ? req.body.history : (Array.isArray(t.coachHistory) ? t.coachHistory : []);
+    const title = String(req.body?.title || t.docTitle || t.brief.title || '');
+    const personId = req.person.id;
+    const job = startWriterJob(personId, 'assemble', async () => {
+        const r = await qWriter.assembleFromDraft({ brief: t.brief, docText, history, title });
+        writeTutor(personId, { lastAssembly: { ...r, at: Date.now() } });
+        return r;
+    });
+    if (req.body?.sync) {
+        while (job.status === 'running') await new Promise(r => setTimeout(r, 250));
+        return res.status(job.status === 'done' ? 200 : (job.error?.status || 502)).json({ ok: job.status === 'done', ...jobView(job) });
+    }
+    res.json({ ok: true, ...jobView(job) });
+});
+
+// POST /writer/mark — mark like the marker: per-criterion band + what the top
+// band still needs. Job: poll GET /writer/job/mark.
+router.post('/writer/mark', requirePerson, express.json({ limit: '2mb' }), writerTooLarge('That draft is too long to mark in one go (over 2 MB of text).'), async (req, res) => {
+    const t = readTutor(req.person.id);
+    if (!t.brief) return res.status(400).json({ error: 'No brief yet — upload the task first so I know what the marker wants.', code: 'no_brief' });
+    const docText = String(req.body?.docText || t.docText || '');
+    if (!docText.trim()) return res.status(400).json({ error: 'There is nothing on the page to mark yet.', code: 'empty' });
+    const gradeScheme = String(req.body?.gradeScheme || t.gradeScheme || '');
+    const personId = req.person.id;
+    const job = startWriterJob(personId, 'mark', async () => {
+        const r = await qWriter.markLikeMarker({ brief: t.brief, essay: t.modelEssay || null, docText, gradeScheme });
+        const coverage = { ...(t.coverage || {}) };
+        for (const p of r.perCriterion) coverage[p.criterionId] = p.band === 'top' || p.band === 'mid' ? 'covered' : p.band === 'low' ? 'partial' : 'none';
+        writeTutor(personId, { lastMark: { ...r, at: Date.now() }, coverage });
+        return { ...r, coverage };
+    });
+    if (req.body?.sync) {
+        while (job.status === 'running') await new Promise(r => setTimeout(r, 250));
+        return res.status(job.status === 'done' ? 200 : (job.error?.status || 502)).json({ ok: job.status === 'done', ...jobView(job) });
+    }
+    res.json({ ok: true, ...jobView(job) });
+});
+
+// POST /writer/probe — ONE probing question toward the ideal answer, from the
+// student's live document. The brief + skeleton come from the notebook (never
+// re-sent by the page); the page sends the doc text (bounded server-side),
+// what changed since the last probe, compact history and the coverage tally.
+router.post('/writer/probe', requirePerson, express.json({ limit: '1mb' }), writerTooLarge('That is too much text for one coaching turn (over 1 MB).'), async (req, res) => {
+    const t = readTutor(req.person.id);
+    if (!t.brief) return res.status(400).json({ error: 'No brief yet — upload the task first so I know what the marker wants.', code: 'no_brief' });
+    const b = req.body || {};
+    try {
+        const r = await qWriter.probe({
+            brief: t.brief,
+            essay: t.modelEssay || null,
+            voiced: Array.isArray(t.voicedBricks) ? t.voicedBricks : [],
+            docText: String(b.docText || ''),
+            delta: String(b.delta || ''),
+            history: Array.isArray(b.history) ? b.history.slice(-8) : (Array.isArray(t.coachHistory) ? t.coachHistory.slice(-8) : []),
+            coverage: b.coverage && typeof b.coverage === 'object' ? b.coverage : (t.coverage || {}),
+            trigger: String(b.trigger || 'answer'),
+            focusCriterionId: b.focusCriterionId ? String(b.focusCriterionId) : null,
+            lastQuestion: b.lastQuestion ? String(b.lastQuestion) : (t.currentQuestion || null),
+            voiceSignature: b.voiceSignature || null,
+            relateAnchor: b.relateAnchor || t.relateAnchor || '',
+            yearGroup: b.yearGroup || t.yearGroup || '',
+        });
+        // Fold the coach's read into the notebook: bricks voiced (when the
+        // essay exists) drive criterion coverage; otherwise the tally does.
+        const voiced = Array.from(new Set([...(Array.isArray(t.voicedBricks) ? t.voicedBricks : []), ...r.voicedBrickIds]));
+        let coverage = { ...(t.coverage || {}) };
+        for (const id of r.coveredSoFar) coverage[id] = 'covered';
+        if (r.criterionId && !coverage[r.criterionId]) coverage[r.criterionId] = 'partial';
+        let brickCounts = t.brickCounts || {};
+        if (t.modelEssay) ({ coverage, brickCounts } = qWriter.coverageFromBricks(t.modelEssay, voiced, coverage));
+        writeTutor(req.person.id, { coverage, brickCounts, voicedBricks: voiced, currentQuestion: r.question, currentCriterionId: r.criterionId, lastQuestion: r.question, currentSection: r.criterionId });
+        res.json({ ok: true, ...r, coverage, brickCounts, essayReady: !!t.modelEssay });
     } catch (e) {
-        console.error('[writer/assemble]', e.message);
-        res.status(500).json({ error: e.message });
+        const cause = qWriter.userFacingCause(e, 'coaching turn');
+        console.error('[writer/probe]', e.message, e.primaryCause ? '(first: ' + e.primaryCause + ')' : '');
+        res.status(cause.status).json({ ok: false, error: cause.message, code: cause.code, retryable: cause.retryable });
+    }
+});
+
+// POST /writer/source — a supporting document (case study, module notes,
+// data) for THIS session. Stored server-side, bounded; the model essay is
+// rewritten to cite it. Body: { name, text } to add, { remove: name } to drop.
+router.post('/writer/source', requirePerson, express.json({ limit: '4mb' }), writerTooLarge('That supporting document is too big (over 4 MB of text). Upload the part that matters — a chapter, the case study pages.'), async (req, res) => {
+    const personId = req.person.id;
+    const t = readTutor(personId);
+    const sources = Array.isArray(t.sources) ? t.sources.slice() : [];
+    const b = req.body || {};
+    if (b.remove) {
+        const next = sources.filter(s => s.name !== String(b.remove));
+        writeTutor(personId, { sources: next });
+        if (t.brief && next.length !== sources.length) startEssayJob(personId);
+        return res.json({ ok: true, sources: sourcesMeta(next), essayJob: t.brief ? 'restarted' : null });
+    }
+    const name = String(b.name || '').trim().slice(0, 120);
+    let text = String(b.text || '').trim();
+    if (!name || !text) return res.status(400).json({ error: 'name and text required', code: 'bad_body' });
+    if (text.length < 200) return res.status(400).json({ error: 'That document came back nearly empty (' + text.length + ' characters) — probably scanned images. Try a file with real text.', code: 'empty' });
+    if (sources.length >= SOURCE_MAX) return res.status(400).json({ error: `You already have ${SOURCE_MAX} supporting documents — remove one first.`, code: 'too_many' });
+    let truncated = false;
+    if (text.length > SOURCE_CHARS) { text = text.slice(0, SOURCE_CHARS); truncated = true; }
+    const used = sources.reduce((n, s) => n + (s.text || '').length, 0);
+    if (used + text.length > SOURCE_TOTAL) return res.status(400).json({ error: 'That would take the supporting documents past the 300,000-character limit for one session — remove one, or upload only the pages that matter.', code: 'too_much' });
+    const idx = sources.findIndex(s => s.name === name);
+    const entry = { name, text, addedAt: Date.now() };
+    if (idx >= 0) sources[idx] = entry; else sources.push(entry);
+    writeTutor(personId, { sources });
+    if (t.brief) startEssayJob(personId);
+    res.json({ ok: true, sources: sourcesMeta(sources), truncated, essayJob: t.brief ? 'started' : null });
+});
+
+// POST /writer/essay — (re)write the hidden model answer. Job: GET /writer/job/essay.
+router.post('/writer/essay', requirePerson, express.json({ limit: '16kb' }), async (req, res) => {
+    const t = readTutor(req.person.id);
+    if (!t.brief) return res.status(400).json({ error: 'No brief yet — upload the task first so I know what the marker wants.', code: 'no_brief' });
+    const job = startEssayJob(req.person.id);
+    if (req.body?.sync) {
+        while (job.status === 'running') await new Promise(r => setTimeout(r, 250));
+        return res.status(job.status === 'done' ? 200 : (job.error?.status || 502)).json({ ok: job.status === 'done', ...jobView(job) });
+    }
+    res.json({ ok: true, ...jobView(job) });
+});
+
+// POST /writer/edit-pass — the editing stage: per sentence, a stronger word
+// and a real reference (uploaded sources first). Job: GET /writer/job/edit.
+router.post('/writer/edit-pass', requirePerson, express.json({ limit: '2mb' }), writerTooLarge('That draft is too long to edit in one pass (over 2 MB of text).'), async (req, res) => {
+    const t = readTutor(req.person.id);
+    if (!t.brief) return res.status(400).json({ error: 'No brief yet — upload the task first so I know what the marker wants.', code: 'no_brief' });
+    const docText = String(req.body?.docText || t.docText || '');
+    if (!docText.trim()) return res.status(400).json({ error: 'There is nothing on the page to edit yet.', code: 'empty' });
+    const voiceSignature = req.body?.voiceSignature || null;
+    const personId = req.person.id;
+    const job = startWriterJob(personId, 'edit', async () => {
+        const r = await qWriter.editPass({ brief: t.brief, essay: t.modelEssay || null, docText, sources: t.sources || [], voiceSignature });
+        writeTutor(personId, { lastEdit: { ...r, at: Date.now() } });
+        return r;
+    });
+    if (req.body?.sync) {
+        while (job.status === 'running') await new Promise(r => setTimeout(r, 250));
+        return res.status(job.status === 'done' ? 200 : (job.error?.status || 502)).json({ ok: job.status === 'done', ...jobView(job) });
+    }
+    res.json({ ok: true, ...jobView(job) });
+});
+
+// POST /writer/download — the student's text as a .docx they can hand in.
+// Uses doc-creator (the same generator Q's create_document tool uses); the
+// link resolves only for this person. Body: { title, content }.
+router.post('/writer/download', requirePerson, express.json({ limit: '2mb' }), writerTooLarge('That document is too big to export in one file (over 2 MB of text).'), async (req, res) => {
+    const title = String(req.body?.title || '').trim() || 'My assignment';
+    const content = String(req.body?.content || '');
+    if (!content.trim()) return res.status(400).json({ error: 'There is nothing to download yet — the page is blank.', code: 'empty' });
+    try {
+        const { createDocx } = require('./plugins/doc-creator');
+        const out = await createDocx({ title, content }, req.person.email);
+        res.json({ ok: true, url: '/download/' + out.token, filename: out.filename, sizeBytes: out.sizeBytes });
+    } catch (e) {
+        console.error('[writer/download]', e.message);
+        res.status(500).json({ error: 'Could not build the Word file: ' + String(e.message || '').replace(/[\r\n]+/g, ' ').slice(0, 160) + ' — try Download as text instead.', code: 'docx_failed' });
     }
 });
 
@@ -1095,13 +1382,12 @@ router.post('/writer/voice', requirePerson, express.json({ limit: '64kb' }), asy
         fs.writeFileSync(getVoicePath(req.person.id), JSON.stringify(sig, null, 2), 'utf8');
         res.json({ ok: true, signature: sig });
     } catch (e) {
-        console.error('[writer/voice]', e.message);
-        res.status(500).json({ error: e.message });
+        writerFail(res, e, '[writer/voice]', 'voice read');
     }
 });
 
 // POST /writer/doc — store the full extracted document text for this person
-router.post('/writer/doc', requirePerson, express.json({ limit: '4mb' }), async (req, res) => {
+router.post('/writer/doc', requirePerson, express.json({ limit: '8mb' }), writerTooLarge('That document text is over 8 MB — the coach can hold about 2,000 pages of text. Split the brief, or upload only the part with the tasks and criteria.'), async (req, res) => {
     const { text, name } = req.body || {};
     if (!text) return res.status(400).json({ error: 'text required' });
     try {
@@ -1214,9 +1500,34 @@ router.post('/writer/fetch-url', requirePerson, express.json({ limit: '32kb' }),
 // Active-recall subject revision: one exam-style question at a time, marked
 // strictly against a mark scheme. Engine: plugins/q-revision.js (Claude first
 // via q-claude, Q fallback). Progress lives per-person in q-revision-{id}.json.
+//
+// Every error on this surface goes out through revisionError(): the real
+// cause is kept (so the page can show it), vendor names are stripped
+// (Sarah's rule), and a body-parser 413 is an honest 413 JSON — never the
+// generic "Server error" (STUDY_SUITE_PHASE1_FINDINGS §1.1, §2.2 #1/#6).
+function revisionError(res, tag, e, status) {
+    const qRevision = require('./plugins/q-revision');
+    console.error(`[${tag}]`, e && e.message);
+    const msg = (e && (e.publicMessage || qRevision.publicError(e.message))) || 'Something went wrong.';
+    const upstream = /\b(upstream|service|timed out|timeout|ECONN|fetch failed|401|429|5\d\d)\b/i.test(String(e && e.message));
+    res.status(status || (upstream ? 502 : 500)).json({ error: msg, cause: msg, retryable: upstream });
+}
+// Body-parser errors (too large / bad JSON) skip a route's try/catch and land
+// in the global handler as a 500. This route-level error middleware turns
+// them into an honest, machine-readable answer instead.
+function revisionBodyError(err, req, res, next) {
+    if (!err) return next();
+    if (err.type === 'entity.too.large') {
+        return res.status(413).json({ error: 'That save was too big to store — the page will compact your history and try again.', code: 'too_large', limit: err.limit });
+    }
+    if (err.type === 'entity.parse.failed') {
+        return res.status(400).json({ error: 'That request wasn\'t valid JSON.', code: 'bad_json' });
+    }
+    return next(err);
+}
 
 // POST /revision/question — write the next exam-style question
-router.post('/revision/question', requirePerson, express.json({ limit: '256kb' }), async (req, res) => {
+router.post('/revision/question', requirePerson, express.json({ limit: '256kb' }), revisionBodyError, async (req, res) => {
     try {
         const qRevision = require('./plugins/q-revision');
         const { subject, board, level, topic, askedSoFar, weakAreas } = req.body || {};
@@ -1228,8 +1539,7 @@ router.post('/revision/question', requirePerson, express.json({ limit: '256kb' }
         });
         res.json({ ok: true, ...result });
     } catch (e) {
-        console.error('[revision/question]', e.message);
-        res.status(500).json({ error: e.message });
+        revisionError(res, 'revision/question', e);
     }
 });
 
@@ -1237,7 +1547,7 @@ router.post('/revision/question', requirePerson, express.json({ limit: '256kb' }
 // Q writes them (cheap), Sonnet verifies every answer key (pennies).
 // Every batch is BANKED (write-through) — we never throw away a question
 // we've already paid Sonnet to check.
-router.post('/revision/quiz', requirePerson, express.json({ limit: '256kb' }), async (req, res) => {
+router.post('/revision/quiz', requirePerson, express.json({ limit: '256kb' }), revisionBodyError, async (req, res) => {
     try {
         const qRevision = require('./plugins/q-revision');
         const qBank = require('./plugins/q-bank');
@@ -1247,14 +1557,17 @@ router.post('/revision/quiz', requirePerson, express.json({ limit: '256kb' }), a
             subject, board, level, topic, count,
             avoid: Array.isArray(avoid) ? avoid : [],
         });
-        // Bank them (with stable ids) and return the ids to the client
+        // Snap topicTags onto the teacher's list wording (the page appends a
+        // "(Focus especially on: …)" line — that isn't a topic, strip it), then
+        // bank them (with stable ids) and return the ids to the client.
+        const teacherList = qBank.splitTopics(String(topic || '').split('\n(Focus especially on:')[0]);
+        result.questions = qBank.snapQuestions(result.questions, teacherList);
         const key = qBank.bankKey(subject, board, level);
         qBank.addQuestions(key, result.questions);
         result.questions = result.questions.map((q) => ({ id: qBank.questionId(q.question), ...q }));
         res.json({ ok: true, ...result });
     } catch (e) {
-        console.error('[revision/quiz]', e.message);
-        res.status(500).json({ error: e.message });
+        revisionError(res, 'revision/quiz', e);
     }
 });
 
@@ -1269,16 +1582,16 @@ router.get('/revision/bank', requirePerson, (req, res) => {
         const bank = qBank.loadBank(key);
         res.json({ ok: true, key, count: bank.questions.length, questions: bank.questions });
     } catch (e) {
-        console.error('[revision/bank]', e.message);
-        res.status(500).json({ error: e.message });
+        revisionError(res, 'revision/bank', e);
     }
 });
 
-// POST /revision/bank/build — stock the bank in the background: perTopic
-// checked questions for every topic in the list (or 40 core questions if no
-// list). Safe to call repeatedly — running builds are not duplicated and
-// stocked topics are skipped.
-router.post('/revision/bank/build', requirePerson, express.json({ limit: '64kb' }), (req, res) => {
+// POST /revision/bank/build — stock (or TOP UP) the bank in the background:
+// perTopic checked questions for every topic in the list (or 50 core
+// questions if no list). Safe to call on every visit — running builds are
+// not duplicated, stocked topics are skipped (normalised tag match), a full
+// no-list bank makes zero AI calls.
+router.post('/revision/bank/build', requirePerson, express.json({ limit: '64kb' }), revisionBodyError, (req, res) => {
     try {
         const qBank = require('./plugins/q-bank');
         const qRevision = require('./plugins/q-revision');
@@ -1290,25 +1603,25 @@ router.post('/revision/bank/build', requirePerson, express.json({ limit: '64kb' 
         );
         res.json({ ok: true, ...result });
     } catch (e) {
-        console.error('[revision/bank/build]', e.message);
-        res.status(500).json({ error: e.message });
+        revisionError(res, 'revision/bank/build', e);
     }
 });
 
-// GET /revision/bank/status?subject&board&level — build progress + stock levels
+// GET /revision/bank/status?subject&board&level — build progress + stock
+// levels + failed count + lastError (vendor-free) so the page can show why a
+// build stalled and offer a retry.
 router.get('/revision/bank/status', requirePerson, (req, res) => {
     try {
         const qBank = require('./plugins/q-bank');
         const key = qBank.bankKey(req.query.subject, req.query.board, req.query.level);
         res.json({ ok: true, ...qBank.buildStatus(key) });
     } catch (e) {
-        console.error('[revision/bank/status]', e.message);
-        res.status(500).json({ error: e.message });
+        revisionError(res, 'revision/bank/status', e);
     }
 });
 
 // POST /revision/mark — mark the student's answer against the mark scheme
-router.post('/revision/mark', requirePerson, express.json({ limit: '256kb' }), async (req, res) => {
+router.post('/revision/mark', requirePerson, express.json({ limit: '256kb' }), revisionBodyError, async (req, res) => {
     try {
         const qRevision = require('./plugins/q-revision');
         const { question, markScheme, modelAnswer, marks, answer, level } = req.body || {};
@@ -1316,12 +1629,12 @@ router.post('/revision/mark', requirePerson, express.json({ limit: '256kb' }), a
         const result = await qRevision.markAnswer({ question, markScheme, modelAnswer, marks, answer, level });
         res.json({ ok: true, ...result });
     } catch (e) {
-        console.error('[revision/mark]', e.message);
-        res.status(500).json({ error: e.message });
+        revisionError(res, 'revision/mark', e);
     }
 });
 
-// GET /revision/progress — this person's revision book
+// GET /revision/progress — this person's revision book (includes the
+// per-user `ui` block: teen/sensible mode, motion, effect picks)
 router.get('/revision/progress', requirePerson, (req, res) => {
     try {
         const p = getRevisionPath(req.person.id);
@@ -1332,14 +1645,15 @@ router.get('/revision/progress', requirePerson, (req, res) => {
     }
 });
 
-// POST /revision/progress — save the whole revision book
-router.post('/revision/progress', requirePerson, express.json({ limit: '512kb' }), (req, res) => {
+// POST /revision/progress — save the whole revision book. Over the limit →
+// honest 413 (revisionBodyError) so the page compacts and retries instead of
+// silently losing every save from then on.
+router.post('/revision/progress', requirePerson, express.json({ limit: '512kb' }), revisionBodyError, (req, res) => {
     try {
         fs.writeFileSync(getRevisionPath(req.person.id), JSON.stringify(req.body || {}, null, 2), 'utf8');
-        res.json({ ok: true });
+        res.json({ ok: true, bytes: Buffer.byteLength(JSON.stringify(req.body || {})) });
     } catch (e) {
-        console.error('[revision/progress]', e.message);
-        res.status(500).json({ error: e.message });
+        revisionError(res, 'revision/progress', e);
     }
 });
 
@@ -1348,61 +1662,131 @@ router.post('/revision/progress', requirePerson, express.json({ limit: '512kb' }
 // last thing they were stuck on. Merge-write so partial updates (just the
 // current section, just "stuck on") don't clobber the rest. Read back by the
 // recall_tutor tool from any surface — "what was that question I was stuck on?"
-router.post('/writer/tutor', requirePerson, express.json({ limit: '512kb' }), async (req, res) => {
+// POST /writer/tutor — Q's tutor notebook for this person. Since Phase 3 this
+// is the whole coaching session: the brief (server-only skeleton included),
+// the student's document (HTML + text), title, coverage per criterion, the
+// coach Q&A history, the current question and the per-user settings. The
+// page autosaves here on a debounce; GET restores it on load. Merge-write so
+// partial updates never clobber the rest. Read back by the recall_tutor tool
+// from any surface — "what was that question I was stuck on?"
+const TUTOR_KEYS = [
+    // legacy (recall_tutor reads these)
+    'task', 'whatItWants', 'teachersBrief', 'markedSections', 'gradeBands', 'currentSection', 'lastQuestion', 'lastStuckOn',
+    // Phase 3
+    'docHtml', 'docText', 'docTitle', 'sourceName', 'sourceUrl', 'coverage', 'coachHistory', 'currentQuestion', 'currentCriterionId',
+    'probeSnapshot', 'settings', 'gradeScheme', 'yearGroup', 'relateAnchor', 'setupDone', 'lastMark', 'lastAssembly', 'qWordsWritten',
+];
+router.post('/writer/tutor', requirePerson, express.json({ limit: '4mb' }), writerTooLarge('The session is too big to save in one go (over 4 MB). Trim very long pasted text out of the page and it will save again.'), async (req, res) => {
     try {
-        const tutorPath = getTutorPath(req.person.id);
-        let existing = {};
-        try {
-            if (fs.existsSync(tutorPath)) existing = JSON.parse(fs.readFileSync(tutorPath, 'utf8')) || {};
-        } catch (_) { existing = {}; }
-        // Only overwrite keys the client actually sent.
-        const patch = {};
-        for (const k of ['task', 'whatItWants', 'teachersBrief', 'markedSections', 'gradeBands', 'currentSection', 'lastQuestion', 'lastStuckOn']) {
-            if (req.body && req.body[k] !== undefined) patch[k] = req.body[k];
+        const body = req.body || {};
+        // A new assignment: wipe the notebook (the page asks for this when the
+        // source is removed or replaced). Voice signature lives elsewhere.
+        if (body.reset === true) {
+            fs.writeFileSync(getTutorPath(req.person.id), JSON.stringify({ updatedAt: Date.now() }));
+            return res.json({ ok: true, savedAt: Date.now(), reset: true });
         }
-        const merged = { ...existing, ...patch, updatedAt: Date.now() };
-        fs.writeFileSync(tutorPath, JSON.stringify(merged));
-        res.json({ ok: true });
+        const existing = readTutor(req.person.id);
+        const patch = {};
+        for (const k of TUTOR_KEYS) if (body[k] !== undefined) patch[k] = body[k];
+        // The brief is written by the brief job. A page may re-send it (the
+        // chat fallback path builds one client-side) but never the skeleton —
+        // keep the server's skeleton if the incoming brief lacks one.
+        if (body.brief && typeof body.brief === 'object') {
+            const incoming = { ...body.brief };
+            if (!Array.isArray(incoming.idealAnswerSkeleton) && existing.brief && Array.isArray(existing.brief.idealAnswerSkeleton)) {
+                incoming.idealAnswerSkeleton = existing.brief.idealAnswerSkeleton;
+            }
+            try { patch.brief = qWriter.normaliseBrief(incoming); } catch (_) { /* unusable brief — ignore, keep server's */ }
+        }
+        // A brief arriving from the page (quick-read fallback) still gets the
+        // hidden model answer written behind it.
+        const kickEssay = !!(patch.brief && !existing.brief);
+        if (typeof patch.docText === 'string' && patch.docText.length > 400000) patch.docText = patch.docText.slice(0, 400000);
+        const merged = writeTutor(req.person.id, patch);
+        if (kickEssay) startEssayJob(req.person.id);
+        res.json({ ok: true, savedAt: merged.updatedAt });
     } catch (e) {
         console.error('[writer/tutor store]', e.message);
-        res.status(500).json({ error: e.message });
+        res.status(500).json({ error: 'Could not save the session: ' + String(e.message || '').slice(0, 160), code: 'save_failed' });
     }
 });
 
-// GET /writer/tutor — load the tutor notebook for this person
+// GET /writer/tutor — load the tutor notebook for this person (skeleton stripped).
 router.get('/writer/tutor', requirePerson, async (req, res) => {
     try {
-        const tutorPath = getTutorPath(req.person.id);
-        if (!fs.existsSync(tutorPath)) return res.json({ ok: true, tutor: null });
-        res.json({ ok: true, tutor: JSON.parse(fs.readFileSync(tutorPath, 'utf8')) });
+        const t = readTutor(req.person.id);
+        if (!t || !Object.keys(t).length) return res.json({ ok: true, tutor: null });
+        const out = { ...t };
+        if (out.brief) out.brief = publicBrief(out.brief);
+        delete out.modelEssay;                       // the answer in Q's head stays in Q's head
+        out.essayReady = !!t.modelEssay;
+        out.sources = sourcesMeta(t.sources);
+        const job = writerJobs.get(writerJobKey(req.person.id, 'brief'));
+        const ej = writerJobs.get(writerJobKey(req.person.id, 'essay'));
+        res.json({ ok: true, tutor: out, briefJob: job ? { status: job.status, startedAt: job.startedAt } : null, essayJob: ej ? { status: ej.status, startedAt: ej.startedAt } : null });
     } catch (e) {
         res.json({ ok: true, tutor: null });
     }
 });
 
 // ─────────────────────────────────────────────────────────────────────────
-// DORMANT — replaced 2026-05-17. The brief + leading questions now run through
-// the one /chat brain (surface:'writer', SURFACE_PROMPTS.writer) so Q reads
-// the doc himself like he does everywhere else, instead of a separate
-// JSON-extraction pipeline that silently {}'d on long briefs. Kept in place
-// (not deleted) as a reversible fallback. analyseTask/tutorBrief/
-// askLeadingQuestion in plugins/q-writer.js are no longer on the live path.
+// (History: 2026-05-17 this route was made DORMANT in favour of the general
+// /chat brain + a regex hunt for a fenced ```writer-brief block. Phase 1
+// (15 Aug 2026) proved that path could never see the tasks in a real CIPD
+// brief — the page sent only the first 12,000 chars. Phase 3 puts the brief
+// back on this dedicated, structured route with the WHOLE document.)
 // ─────────────────────────────────────────────────────────────────────────
 
-// POST /writer/brief — analyse the task and build the tutor's brief.
-// ONE model call for both halves — two chained calls blew Railway's ~60s
-// proxy window and killed the coach on live (19 Jul).
-router.post('/writer/brief', requirePerson, express.json({ limit: '512kb' }), async (req, res) => {
-    const taskText = (req.body?.taskText || '').toString().trim();
-    if (!taskText) return res.status(400).json({ error: 'taskText required' });
-    try {
-        const both = await qWriter.analyseAndBrief(taskText);
-        if (!both || !both.analysis || !both.brief) throw new Error('brief came back incomplete — try again');
-        res.json({ ok: true, analysis: both.analysis, brief: both.brief });
-    } catch (e) {
-        console.error('[writer/brief]', e.message);
-        res.status(500).json({ error: e.message });
+// POST /writer/brief — Q reads the WHOLE brief and builds the structured
+// tutor's brief (criteria, bands, ideal-answer skeleton, opener). Runs as a
+// job so a long document cannot die at Railway's ~60s edge; the page polls
+// GET /writer/job/brief. Body: { taskText, name } (stores the doc too) or
+// {} to brief the doc already stored by /writer/doc. { sync:true } waits.
+router.post('/writer/brief', requirePerson, express.json({ limit: '8mb' }), writerTooLarge('That document text is over 8 MB — the coach can hold about 2,000 pages of text. Upload only the part with the tasks and criteria.'), async (req, res) => {
+    const personId = req.person.id;
+    let taskText = String(req.body?.taskText || '').trim();
+    let name = String(req.body?.name || '').trim();
+    if (taskText) {
+        // Store the full text so every later step reads it server-side —
+        // the page never re-sends the source (Phase 1 finding #5).
+        try { fs.writeFileSync(getDocPath(personId), JSON.stringify({ text: taskText, name: name || 'document', savedAt: Date.now() })); } catch (e) { console.warn('[writer/brief] doc store failed:', e.message); }
+    } else {
+        const stored = readStoredDocText(personId);
+        if (!stored) return res.status(400).json({ error: 'There is no task to read yet — drop the brief in first.', code: 'no_doc' });
+        taskText = stored.text; name = name || stored.name;
     }
+    if (taskText.length < 40) return res.status(400).json({ error: 'That is too short to be an assignment brief — paste the whole task, or upload the file with the questions in it.', code: 'too_short' });
+
+    const job = startWriterJob(personId, 'brief', async () => {
+        const brief = await qWriter.analyseAndBrief(taskText);
+        const criteria = brief.criteria || [];
+        writeTutor(personId, {
+            brief,
+            sourceName: name || 'document',
+            coverage: Object.fromEntries(criteria.map(c => [c.id, 'none'])),
+            currentQuestion: brief.opener,
+            currentCriterionId: criteria[0] ? criteria[0].id : null,
+            // legacy keys so recall_tutor still answers from any surface
+            task: taskText.slice(0, 4000),
+            whatItWants: brief.whatItWants,
+            teachersBrief: brief.gradeBands ? brief.gradeBands.top : '',
+            markedSections: criteria.map(c => ({ name: c.id, description: c.text })),
+            gradeBands: brief.gradeBands || null,
+            lastQuestion: brief.opener,
+            currentSection: criteria[0] ? criteria[0].id : null,
+            voicedBricks: [], brickCounts: {}, modelEssay: null,
+        });
+        // The model essay follows in the back room; the student starts on the
+        // opener now and the probes pick the essay up when it lands.
+        startEssayJob(personId);
+        return brief;
+    });
+    if (req.body?.sync) {
+        while (job.status === 'running') await new Promise(r => setTimeout(r, 250));
+        const view = jobView(job); if (view.result) view.result = publicBrief(view.result);
+        return res.status(job.status === 'done' ? 200 : (job.error?.status || 502)).json({ ok: job.status === 'done', ...view });
+    }
+    res.json({ ok: true, ...jobView(job), result: null, chars: taskText.length });
 });
 
 // POST /writer/lead — ask the next leading question for the current section
@@ -1424,8 +1808,7 @@ router.post('/writer/lead', requirePerson, express.json({ limit: '128kb' }), asy
         );
         res.json({ ok: true, ...result });
     } catch (e) {
-        console.error('[writer/lead]', e.message);
-        res.status(500).json({ error: e.message });
+        writerFail(res, e, '[writer/lead]', 'leading question');
     }
 });
 
@@ -1439,8 +1822,7 @@ router.post('/writer/reframe', requirePerson, express.json({ limit: '64kb' }), a
         );
         res.json({ ok: true, ...result });
     } catch (e) {
-        console.error('[writer/reframe]', e.message);
-        res.status(500).json({ error: e.message });
+        writerFail(res, e, '[writer/reframe]', 'reframe');
     }
 });
 
@@ -1452,8 +1834,7 @@ router.post('/writer/words', requirePerson, express.json({ limit: '32kb' }), asy
         const result = await qWriter.suggestWordSwaps(word, context, voiceSignature);
         res.json({ ok: true, ...result });
     } catch (e) {
-        console.error('[writer/words]', e.message);
-        res.status(500).json({ error: e.message });
+        writerFail(res, e, '[writer/words]', 'word swap');
     }
 });
 
@@ -1465,8 +1846,7 @@ router.post('/writer/harvard', requirePerson, express.json({ limit: '32kb' }), a
         const result = await qWriter.formatHarvardRef(sourceDescription);
         res.json({ ok: true, ...result });
     } catch (e) {
-        console.error('[writer/harvard]', e.message);
-        res.status(500).json({ error: e.message });
+        writerFail(res, e, '[writer/harvard]', 'reference formatting');
     }
 });
 
@@ -1477,8 +1857,7 @@ router.post('/writer/refs', requirePerson, express.json({ limit: '64kb' }), asyn
         const result = await qWriter.suggestReferences(docText, subject, keyConcepts);
         res.json({ ok: true, ...result });
     } catch (e) {
-        console.error('[writer/refs]', e.message);
-        res.status(500).json({ error: e.message });
+        writerFail(res, e, '[writer/refs]', 'reference suggestions');
     }
 });
 
@@ -1490,8 +1869,7 @@ router.post('/writer/explain', requirePerson, express.json({ limit: '16kb' }), a
         const result = await qWriter.explainConcept(concept, subject, yearGroup);
         res.json({ ok: true, ...result });
     } catch (e) {
-        console.error('[writer/explain]', e.message);
-        res.status(500).json({ error: e.message });
+        writerFail(res, e, '[writer/explain]', 'explanation');
     }
 });
 
@@ -1503,8 +1881,7 @@ router.post('/writer/mark-section', requirePerson, express.json({ limit: '64kb' 
         const result = await qWriter.markSection(sectionText, sectionName, analysis, gradeScheme);
         res.json({ ok: true, ...result });
     } catch (e) {
-        console.error('[writer/mark-section]', e.message);
-        res.status(500).json({ error: e.message });
+        writerFail(res, e, '[writer/mark-section]', 'section marking');
     }
 });
 
@@ -1518,8 +1895,7 @@ router.post('/writer/improve', requirePerson, express.json({ limit: '64kb' }), a
         );
         res.json({ ok: true, ...result });
     } catch (e) {
-        console.error('[writer/improve]', e.message);
-        res.status(500).json({ error: e.message });
+        writerFail(res, e, '[writer/improve]', 'improvement tips');
     }
 });
 
@@ -1531,8 +1907,7 @@ router.post('/writer/ref-para', requirePerson, express.json({ limit: '32kb' }), 
         const result = await qWriter.referenceParagraph(paragraphText, subject, keyConcepts);
         res.json({ ok: true, ...result });
     } catch (e) {
-        console.error('[writer/ref-para]', e.message);
-        res.status(500).json({ error: e.message });
+        writerFail(res, e, '[writer/ref-para]', 'paragraph references');
     }
 });
 
@@ -1545,8 +1920,7 @@ router.post('/writer/starter', requirePerson, express.json({ limit: '32kb' }), a
         );
         res.json({ ok: true, ...result });
     } catch (e) {
-        console.error('[writer/starter]', e.message);
-        res.status(500).json({ error: e.message });
+        writerFail(res, e, '[writer/starter]', 'starter sentence');
     }
 });
 
@@ -1788,7 +2162,7 @@ router.delete('/chat-history', requirePerson, (req, res) => {
 //
 // Body: { dataUrl: 'data:application/pdf;base64,...', name?: 'whatever.pdf' }
 // Returns: { text, pages?, name }
-router.post('/extract-text', requirePerson, express.json({ limit: '24mb' }), async (req, res) => {
+router.post('/extract-text', requirePerson, express.json({ limit: '50mb' }), writerTooLarge('That file is over 36 MB — too big to read here. Export the brief as a PDF without images, or upload only the pages with the tasks and criteria.'), async (req, res) => {
     const dataUrl = req.body?.dataUrl;
     const name = req.body?.name || 'document';
     if (!dataUrl || typeof dataUrl !== 'string') {
@@ -1815,6 +2189,9 @@ router.post('/extract-text', requirePerson, express.json({ limit: '24mb' }), asy
                 pages: data.numpages || 0,
                 name,
                 kind: 'pdf',
+                // A scanned PDF parses to (almost) nothing — say so, so the
+                // page can refuse politely instead of briefing an empty doc.
+                warning: pdfText.length < 200 ? 'That PDF came back nearly empty — it is probably scanned images, not text. Try a PDF with real text, or paste the task as text.' : undefined,
             });
         }
         // Word .docx (modern Office Open XML)
@@ -1830,9 +2207,13 @@ router.post('/extract-text', requirePerson, express.json({ limit: '24mb' }), asy
                 text: docxText,
                 name,
                 kind: 'docx',
+                warning: docxText.length < 200 ? 'That Word file came back nearly empty — it may be images only. Try a PDF with real text, or paste the task as text.' : undefined,
             });
         }
-        return res.status(400).json({ error: 'Unsupported file type for extraction.' });
+        if (mimeType === 'application/msword' || lowerName.endsWith('.doc')) {
+            return res.status(400).json({ error: 'Old Word .doc files can\'t be read here — open it in Word and save as .docx (or PDF), then try again.', code: 'unsupported' });
+        }
+        return res.status(400).json({ error: 'That file type isn\'t supported — try PDF, Word (.docx), an image, or plain text.', code: 'unsupported' });
     } catch (e) {
         console.warn('[extract-text] failed for ' + name + ': ' + e.message);
         return res.status(500).json({
