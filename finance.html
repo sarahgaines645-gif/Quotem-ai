@@ -167,10 +167,11 @@
       padding: 10px 12px; border-radius: 10px;
       background: var(--bg); box-shadow: var(--neu-raised-xs);
     }
-    .sub-row .sr-name { flex: 1; font-size: 13px; font-weight: 500; }
-    .sub-row .sr-amt  { font-size: 13px; font-weight: 700; color: var(--red); }
+    .sub-row .sr-main { flex: 1; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+    .sub-row .sr-name { font-size: 13px; font-weight: 500; overflow-wrap: anywhere; }
+    .sub-row .sr-meta { font-size: 10px; color: var(--text-faint); }
+    .sub-row .sr-amt  { font-size: 13px; font-weight: 700; color: var(--red); white-space: nowrap; }
     .sub-row .sr-freq { font-size: 10px; color: var(--text-muted); }
-    .sub-row .sr-total { font-size: 10px; color: var(--text-faint); }
     .sub-row .sr-flag {
       border: none; cursor: pointer; font-family: inherit; font-size: 11px;
       padding: 4px 10px; border-radius: 14px; background: var(--bg);
@@ -527,7 +528,7 @@
         <option value="health">Health</option>
         <option value="children">Children</option>
         <option value="holidays">Holidays</option>
-        <option value="savings_transfer">Savings / transfer</option>
+        <option value="savings_transfer">Own transfers / savings</option>
         <option value="income">Income</option>
         <option value="fees_charges">Fees &amp; charges</option>
         <option value="other">Other</option>
@@ -646,7 +647,7 @@
     food_groceries: 'Groceries', food_dining: 'Dining out', transport: 'Transport',
     subscriptions: 'Subscriptions', utilities: 'Utilities', housing: 'Housing',
     shopping: 'Shopping', health: 'Health', children: 'Children',
-    holidays: 'Holidays', savings_transfer: 'Savings', income: 'Income',
+    holidays: 'Holidays', savings_transfer: 'Own transfers', income: 'Income',
     fees_charges: 'Fees', other: 'Other',
   };
   const CAT_COLORS = [
@@ -706,7 +707,8 @@
     // money moved to your own pots/savings isn't counted as spending.
     const bits = [];
     if (s.period_from && s.period_to) bits.push(ukDate(s.period_from) + ' – ' + ukDate(s.period_to));
-    if (s.moved_to_savings > 0) bits.push('£' + fmt(s.moved_to_savings) + ' moved to savings/pots (not counted)');
+    const selfMoves = s.self_transfers != null ? s.self_transfers : s.moved_to_savings;
+    if (selfMoves > 0) bits.push('£' + fmt(selfMoves) + ' moved between your own accounts & pots (not counted)');
     document.getElementById('summary-period').textContent = bits.join(' · ');
   }
 
@@ -802,19 +804,47 @@
       return;
     }
     badge.textContent = subscriptions.length + ' found';
-    list.innerHTML = subscriptions.map(s => `
+    list.innerHTML = subscriptions.map(s => {
+      const meta = [
+        s.last_seen ? ukDate(s.last_seen) : '',
+        s.source ? esc(s.source) : '',
+        '£' + fmt(s.total_paid) + ' total',
+      ].filter(Boolean).join(' · ');
+      return `
       <div class="sub-row">
-        <span class="sr-name">${esc(s.merchant)}</span>
+        <div class="sr-main">
+          <span class="sr-name">${esc(s.merchant)}</span>
+          <span class="sr-meta">${meta}</span>
+        </div>
         <span class="sr-amt">£${fmt(s.amount)}</span>
         <span class="sr-freq">/mo</span>
-        <span class="sr-total">£${fmt(s.total_paid)} total</span>
-        <button class="sr-flag" onclick="flagSubscription('${esc(s.merchant)}')">flag it</button>
+        <button class="sr-flag" onclick="subAddBill('${esc(s.merchant)}', ${Math.abs(s.amount) || 0})">+ bill</button>
+        <button class="sr-flag" onclick="subCheaper('${esc(s.merchant)}', ${Math.abs(s.amount) || 0})">cheaper?</button>
       </div>
-    `).join('');
+    `;
+    }).join('');
   }
 
-  window.flagSubscription = function(merchant) {
-    openAddProblemModal({ type: 'subscription', title: 'Cancel: ' + merchant, provider: merchant });
+  // One press: a recurring charge becomes a bill on the problems queue.
+  window.subAddBill = async function(merchant, amount) {
+    const r = await apiFetch('/api/finance/problems', {
+      method: 'POST',
+      body: { type: 'bill', title: merchant + ' — £' + fmt(amount) + '/mo', provider: merchant, amount: amount || null, urgency: 'medium' },
+    });
+    if (r.ok) {
+      const p = await r.json();
+      problems.unshift(p);
+      renderProblems();
+      toast('📋 ' + merchant + ' added to bills & problems');
+    } else {
+      toast('Could not add it — try again');
+    }
+  };
+
+  // One press: Q hunts a cheaper way with live prices and gives exact steps.
+  window.subCheaper = function(merchant, amount) {
+    sendToQ(`I pay £${fmt(amount)} a month to ${merchant}. Find out if I can get this cheaper — use web_search for current UK prices, cheaper tiers, retention/haggle deals or better alternatives. Tell me what I'd realistically save per month, and the exact steps: who to contact, what to say. If cancelling is the smarter move, say so plainly.`);
+    document.getElementById('coach-card').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
   };
 
   // ── Problems ──────────────────────────────────────────────────────────────
@@ -1177,7 +1207,7 @@
         // it" while the server was actually still working and succeeding.
         // So: start a background job, then poll it for live progress.
         const { b64 } = await readFileAsB64(file);
-        const r = await apiFetch('/api/finance/statement/pdf', { method: 'POST', body: { imageBase64: b64, mimeType: 'application/pdf' } });
+        const r = await apiFetch('/api/finance/statement/pdf', { method: 'POST', body: { imageBase64: b64, mimeType: 'application/pdf', filename: file.name } });
         if (!r.ok) {
           const e = await r.json().catch(() => ({}));
           showUploadProgress('uz-statement', false);
@@ -1221,15 +1251,15 @@
       return;
     }
     const text = await file.text();
-    await importText(text);
+    await importText(text, file.name);
   }
 
-  async function importText(text) {
+  async function importText(text, filename) {
     clearUploadResult('uz-statement');
     showUploadProgress('uz-statement', true);
     showUploadResult('uz-statement', 'Reading your statement…', 'info');
     let r = null;
-    try { r = await apiFetch('/api/finance/statement', { method: 'POST', body: { text } }); } catch {}
+    try { r = await apiFetch('/api/finance/statement', { method: 'POST', body: { text, filename: filename || null } }); } catch {}
     showUploadProgress('uz-statement', false);
     if (r && r.ok) {
       const result = await r.json();

@@ -263,7 +263,7 @@ Categories:
   fees_charges     — bank charges, overdraft fees, late fees
   other            — anything that doesn't fit above
 
-Self-transfers matter: money moved between the person's own accounts or pots is savings_transfer in BOTH directions (out AND back in) — it is never income and never real spending.
+Self-transfers matter: money moved between the person's own accounts or pots is savings_transfer in BOTH directions (out AND back in) — it is never income and never real spending. People often upload statements from SEVERAL of their own banks: a top-up arriving from the person's own name, "MONEY", or another of their banks is savings_transfer, not income.
 
 Return a JSON array — same order as input — each item:
 { "id": "<the id field from input>", "category": "<category>", "recurring": true|false }
@@ -468,14 +468,29 @@ function parseCsvStatement(text) {
  * A recognisable bank CSV is parsed deterministically (no AI, no hang).
  * Only freeform/pasted text that isn't CSV falls back to the AI parser.
  */
-async function importStatement(email, rawText) {
+// Which statement a row came from ("Monzo Data Export", "halifax aug") —
+// the thread that lets cross-account transfers be recognised and lets the
+// page say which account a charge leaves. Filename first (most readable),
+// then a header signature, then a plain fallback.
+function deriveSource(filename, rawText) {
+    if (filename) {
+        const base = String(filename).replace(/\.[a-z0-9]+$/i, '').replace(/[_\-()]+/g, ' ').replace(/\s+/g, ' ').trim();
+        if (base) return base.slice(0, 28);
+    }
+    const head = String(rawText || '').split(/\r?\n/).slice(0, 3).join(' ').toLowerCase();
+    if (head.includes('money out') && head.includes('transaction id')) return 'Monzo';
+    return 'statement';
+}
+
+async function importStatement(email, rawText, opts = {}) {
+    const source = deriveSource(opts.filename, rawText);
     const csvRows = parseCsvStatement(rawText);
     if (csvRows && csvRows.length) {
-        console.log(`[finance] importStatement: ${csvRows.length} rows via deterministic CSV parser (no AI)`);
-        return saveRows(email, csvRows);
+        console.log(`[finance] importStatement: ${csvRows.length} rows via deterministic CSV parser (no AI) — source "${source}"`);
+        return saveRows(email, csvRows.map(r => ({ ...r, source })));
     }
     const parsed = await parseStatementText(rawText);
-    return saveRows(email, parsed);
+    return saveRows(email, parsed.map(r => ({ ...r, source })));
 }
 
 // Categorise + apply merchant assignments + dedup against existing + save.
@@ -689,7 +704,7 @@ function csvToRows(csv) {
     return out;
 }
 
-async function importStatementFromImage(email, imageBase64, mimeType) {
+async function importStatementFromImage(email, imageBase64, mimeType, filename) {
     const raw = await visionRead({
         prompt:   STATEMENT_IMAGE_PROMPT,
         base64:   imageBase64,
@@ -697,7 +712,8 @@ async function importStatementFromImage(email, imageBase64, mimeType) {
         maxTokens: 8000,
     });
     if (!raw || raw.trim().length < 20) return { added: 0, total: 0 };
-    const rows = csvToRows(raw);
+    const source = deriveSource(filename, '');
+    const rows = csvToRows(raw).map(r => ({ ...r, source }));
     console.log(`[finance] importStatementFromImage: vision ${raw.length} chars → ${rows.length} rows (no re-parse)`);
     return saveRows(email, rows);
 }
@@ -751,7 +767,7 @@ async function pdfToCsvChunked(fileBase64, onProgress) {
 // (fragmented/collapsed) and the single-call version (truncated at ~300
 // rows). For everyone, any size, any device — no "go export CSV" ask.
 // Images → vision model as before.
-async function importStatementFromFile(email, fileBase64, mimeType, onProgress) {
+async function importStatementFromFile(email, fileBase64, mimeType, onProgress, filename) {
     if (mimeType === 'application/pdf') {
         const total = getTransactions(email).length;
         if (!process.env.GEMINI_API_KEY) {
@@ -764,7 +780,8 @@ async function importStatementFromFile(email, fileBase64, mimeType, onProgress) 
             console.error('[finance] PDF→Gemini failed:', e.message);
             return { added: 0, total, hint: 'Could not read this PDF — try uploading it again, or a clearer copy.' };
         }
-        const rows = csvToRows(chunked.csv);
+        const source = deriveSource(filename, '');
+        const rows = csvToRows(chunked.csv).map(r => ({ ...r, source }));
         console.log(`[finance] PDF→Gemini chunked: ${chunked.pageCount} pages → ${rows.length} rows; failed: ${chunked.failed.join(', ') || 'none'}`);
         if (!rows.length) {
             return { added: 0, total, hint: 'Could not read transactions from this PDF — try uploading a clearer copy.' };
@@ -776,7 +793,7 @@ async function importStatementFromFile(email, fileBase64, mimeType, onProgress) 
         return result;
     }
     // Actual image (JPEG, PNG, WebP, etc.)
-    return importStatementFromImage(email, fileBase64, mimeType || 'image/jpeg');
+    return importStatementFromImage(email, fileBase64, mimeType || 'image/jpeg', filename);
 }
 
 
@@ -813,7 +830,7 @@ function _setImportJob(email, patch) {
 // Starts the import in the background and returns immediately. The job
 // record is the single source of truth the page polls — same fire-and-
 // forget philosophy as the scheduler's worker.
-function startImportJob(email, fileBase64, mimeType) {
+function startImportJob(email, fileBase64, mimeType, filename) {
     const id = 'imp' + Date.now().toString(36);
     _setImportJob(email, {
         id, status: 'running', phase: 'reading',
@@ -831,7 +848,7 @@ function startImportJob(email, fileBase64, mimeType) {
                     phase: (totalPages && done >= totalPages) ? 'saving' : 'reading',
                 });
             };
-            const result = await importStatementFromFile(email, fileBase64, mimeType, onProgress);
+            const result = await importStatementFromFile(email, fileBase64, mimeType, onProgress, filename);
             _setImportJob(email, {
                 status: 'done', phase: 'done',
                 added: result.added || 0,
@@ -1111,6 +1128,32 @@ ${String(caseContext || '(none provided)').slice(0, 30000)}`;
 
 // ── Spending graphs ───────────────────────────────────────────────
 
+// Cross-account transfer pairing. With statements from several of the
+// user's own banks in one list, their own money hopping between accounts
+// shows as a debit in one statement and an equal credit in another — which
+// read as "spending" and "income" and made the totals lies. Pair them:
+// exact amount, opposite signs, within 4 days, each row used once, and
+// never two rows from the same statement (same-source pairs are more
+// likely a purchase+refund, which nets out anyway via categories).
+// Computed at read time — the stored rows are never rewritten.
+function pairInternalTransfers(txns) {
+    const paired = new Set();
+    const credits = txns.filter(t => t.amount > 0 && t.category !== 'savings_transfer' && Math.abs(t.amount) >= 5);
+    const debits  = txns.filter(t => t.amount < 0 && t.category !== 'savings_transfer' && Math.abs(t.amount) >= 5);
+    const usedCredits = new Set();
+    for (const d of debits) {
+        const dT = Date.parse(d.date || '');
+        if (!Number.isFinite(dT)) continue;
+        const match = credits.find(c => !usedCredits.has(c.id)
+            && Math.abs(c.amount + d.amount) < 0.005
+            && Number.isFinite(Date.parse(c.date || ''))
+            && Math.abs(Date.parse(c.date) - dT) <= 4 * 86400000
+            && !(d.source && c.source && d.source === c.source));
+        if (match) { usedCredits.add(match.id); paired.add(d.id); paired.add(match.id); }
+    }
+    return paired;
+}
+
 function getSpendingGraphData(email) {
     repairTransactions(email);   // clean any pre-hardening poison before totals
     const all = getTransactions(email);
@@ -1127,10 +1170,16 @@ function getSpendingGraphData(email) {
 
     const debits    = txns.filter(t => t.amount < 0); // outgoings only
 
+    // Rows that are two halves of a move between the user's own accounts.
+    // They render as "Own transfers" in the breakdown and stay out of the
+    // headline totals — same treatment as savings_transfer.
+    const pairedIds = pairInternalTransfers(txns);
+    const viewCat = t => pairedIds.has(t.id) ? 'savings_transfer' : (t.category || 'other');
+
     // Graph 1: category breakdown
     const byCategory = {};
     for (const t of debits) {
-        const cat = t.category || 'other';
+        const cat = viewCat(t);
         byCategory[cat] = (byCategory[cat] || 0) + Math.abs(t.amount);
     }
 
@@ -1154,15 +1203,15 @@ function getSpendingGraphData(email) {
     }
     const subscriptions = Object.values(subMap).sort((a, b) => b.amount - a.amount);
 
-    // Self-transfers (savings_transfer) are the user's own money moving
-    // between their own places — pots, savings, their other bank. Counting
-    // them made the headline figures lies (£1.5k of pot shuffling read as
-    // spending AND income). They stay visible in the category breakdown;
-    // they are excluded from the headline totals, which must be TRUE.
-    const isSelfMove  = t => t.category === 'savings_transfer';
+    // Self-transfers — savings_transfer rows AND detected cross-account
+    // pairs — are the user's own money moving between their own places:
+    // pots, savings, their other banks. Counting them made the headline
+    // figures lies. Visible in the breakdown, excluded from the headline
+    // totals, which must be TRUE.
+    const isSelfMove  = t => viewCat(t) === 'savings_transfer';
     const totalSpend  = debits.filter(t => !isSelfMove(t)).reduce((s, t) => s + Math.abs(t.amount), 0);
     const totalIncome = txns.filter(t => t.amount > 0 && !isSelfMove(t)).reduce((s, t) => s + t.amount, 0);
-    const movedToSavings = debits.filter(isSelfMove).reduce((s, t) => s + Math.abs(t.amount), 0);
+    const selfTransfers = debits.filter(isSelfMove).reduce((s, t) => s + Math.abs(t.amount), 0);
     // The period the imported data actually covers — without it, 5 months of
     // statement history reads as "what I've spent lately" and looks wrong.
     const dates = txns.map(t => t.date).filter(Boolean).sort();
@@ -1176,7 +1225,11 @@ function getSpendingGraphData(email) {
             total_income: Math.round(totalIncome * 100) / 100,
             net:          Math.round((totalIncome - totalSpend) * 100) / 100,
             transaction_count: txns.length,
-            moved_to_savings:  Math.round(movedToSavings * 100) / 100,
+            // One figure for all own-money movement (pots, savings, and
+            // between the user's own banks). moved_to_savings kept as an
+            // alias for anything already reading it.
+            self_transfers:    Math.round(selfTransfers * 100) / 100,
+            moved_to_savings:  Math.round(selfTransfers * 100) / 100,
             period_from: dates[0] || null,
             period_to:   dates[dates.length - 1] || null,
         },
@@ -1348,6 +1401,7 @@ function detectSubscriptions(email) {
                 category:    entries[0].category,
                 bucket:      entries[0].bucket,
                 last_seen:   entries[0].date,
+                source:      entries[0].source || null,   // which statement it leaves from
                 count:       entries.length,
                 total_paid:  Math.round(entries.reduce((s, t) => s + Math.abs(t.amount), 0) * 100) / 100,
             };

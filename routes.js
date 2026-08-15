@@ -2263,11 +2263,11 @@ router.get('/api/finance/subscriptions', requirePerson, (req, res) => {
 
 // Import statement text (paste or extracted from PDF)
 router.post('/api/finance/statement', requirePerson, express.json({ limit: '2mb' }), async (req, res) => {
-    const { text } = req.body || {};
+    const { text, filename } = req.body || {};
     if (!text) return res.status(400).json({ error: 'text required' });
-    console.log(`[finance] statement text import — ${req.person.email} — ${text.length} chars`);
+    console.log(`[finance] statement text import — ${req.person.email} — ${text.length} chars — ${filename || '(no filename)'}`);
     try {
-        const result = await qFinance.importStatement(req.person.email, text);
+        const result = await qFinance.importStatement(req.person.email, text, { filename });
         console.log(`[finance] statement done — added:${result.added} total:${result.total}`);
         res.json(result);
     } catch (e) {
@@ -2291,14 +2291,14 @@ router.post('/api/finance/statement/pdf', requirePerson, express.json({ limit: '
         next();
     },
     async (req, res) => {
-    const { imageBase64, mimeType } = req.body || {};
+    const { imageBase64, mimeType, filename } = req.body || {};
     if (!imageBase64) return res.status(400).json({ error: 'imageBase64 required' });
     console.log(`[finance] statement file import — ${req.person.email} — mimeType:${mimeType}`);
     try {
         // Multi-page PDFs take minutes — run in the background so the upload
         // request can't time out and falsely report failure. The page polls
         // /api/finance/statement/job for progress and the result.
-        const job = qFinance.startImportJob(req.person.email, imageBase64, mimeType || 'application/pdf');
+        const job = qFinance.startImportJob(req.person.email, imageBase64, mimeType || 'application/pdf', filename);
         res.status(202).json(job);
     } catch (e) {
         console.error('[finance] statement/pdf start error', e);
