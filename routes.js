@@ -3495,6 +3495,11 @@ router.post('/life/events', requirePerson, express.json({ limit: '16kb' }), (req
     try { res.json(qLife.addEvent(req.body || {}, req.person.email)); }
     catch (e) { res.status(400).json({ error: e.message }); }
 });
+// Repeating series — materialises the next months of dated entries in one go.
+router.post('/life/events/repeat', requirePerson, express.json({ limit: '16kb' }), (req, res) => {
+    try { res.json(qLife.addRepeatingEvent(req.body || {}, req.person.email)); }
+    catch (e) { res.status(400).json({ error: e.message }); }
+});
 router.patch('/life/events/:id', requirePerson, express.json({ limit: '16kb' }), (req, res) => {
     const updated = qLife.updateEvent(req.params.id, req.body || {}, req.person.email);
     if (!updated) return res.status(404).json({ error: 'Not found' });

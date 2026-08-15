@@ -216,6 +216,54 @@ function addEvent(payload, ownerEmail) {
     return event;
 }
 
+// Materialised repeats: "monthly around the 7th" becomes REAL events for
+// the months ahead — no recurrence engine, so the Life page, alerts and
+// Q's list_events all just work. Supported patterns:
+//   weekly / fortnightly — same weekday as the seed date
+//   monthly              — same day-of-month (clamped to short months)
+//   last_weekday         — the seed date's weekday, LAST one of each month
+//                          (e.g. seed on a Friday = last Friday of the month)
+function addRepeatingEvent(payload, ownerEmail) {
+    const repeat = String(payload?.repeat || '').toLowerCase();
+    const months = Math.min(Math.max(parseInt(payload?.months, 10) || 6, 1), 12);
+    const seed = normalDate(payload?.date);
+    if (!seed) throw new Error('date required (YYYY-MM-DD)');
+    if (!['weekly', 'fortnightly', 'monthly', 'last_weekday'].includes(repeat)) {
+        throw new Error('repeat must be weekly | fortnightly | monthly | last_weekday');
+    }
+    const seedD = new Date(seed + 'T12:00:00Z');
+    const until = new Date(seedD);
+    until.setUTCMonth(until.getUTCMonth() + months);
+    const dates = [];
+    if (repeat === 'weekly' || repeat === 'fortnightly') {
+        const step = repeat === 'weekly' ? 7 : 14;
+        for (const d = new Date(seedD); d <= until; d.setUTCDate(d.getUTCDate() + step)) {
+            dates.push(d.toISOString().slice(0, 10));
+        }
+    } else if (repeat === 'monthly') {
+        const day = seedD.getUTCDate();
+        for (let i = 0; ; i++) {
+            const y = seedD.getUTCFullYear(), m = seedD.getUTCMonth() + i;
+            const lastDay = new Date(Date.UTC(y, m + 1, 0, 12)).getUTCDate();
+            const d = new Date(Date.UTC(y, m, Math.min(day, lastDay), 12));
+            if (d > until) break;
+            if (d >= seedD) dates.push(d.toISOString().slice(0, 10));
+        }
+    } else { // last_weekday
+        const wd = seedD.getUTCDay();
+        for (let i = 0; ; i++) {
+            const lastOfMonth = new Date(Date.UTC(seedD.getUTCFullYear(), seedD.getUTCMonth() + i + 1, 0, 12));
+            const diff = (lastOfMonth.getUTCDay() - wd + 7) % 7;
+            const d = new Date(lastOfMonth);
+            d.setUTCDate(lastOfMonth.getUTCDate() - diff);
+            if (d > until) break;
+            if (d >= seedD) dates.push(d.toISOString().slice(0, 10));
+        }
+    }
+    const events = dates.map(date => addEvent({ ...payload, date, source: payload?.source || 'repeat' }, ownerEmail));
+    return { count: events.length, first: dates[0] || null, last: dates[dates.length - 1] || null, repeat, events };
+}
+
 function updateEvent(id, patch, ownerEmail) {
     if (!ownerEmail || !id) return null;
     const events = readArr(calendarFile(ownerEmail));
@@ -429,7 +477,7 @@ module.exports = {
     TAG_COLOURS,
     DEFAULT_TASK_COLOUR,
     STARTER_CATEGORIES,
-    listEvents, addEvent, updateEvent, deleteEvent,
+    listEvents, addEvent, addRepeatingEvent, updateEvent, deleteEvent,
     listTasks, addTask, updateTask, deleteTask,
     listCategories, addCategory, updateCategory, deleteCategory,
     getContext, setContext,

@@ -928,7 +928,7 @@
           <span class="sr-meta">${meta}</span>
         </div>
         <span class="sr-amt in">+£${fmt(s.amount)}</span>
-        <button class="sr-flag" onclick="incomeToCalendar('${esc(s.merchant)}', ${Math.abs(s.amount) || 0}, '${esc(s.last_seen || '')}')">📅 calendar</button>
+        <button class="sr-flag" onclick="incomeToCalendar('${esc(s.merchant)}', ${Math.abs(s.amount) || 0}, '${esc(s.last_seen || '')}')" title="Puts the next 6 months of due dates on your calendar">📅 remind me</button>
       </div>`;
     }).join('')
     + '<div class="sr-meta" style="padding-top:6px">Regular payers and one-offs over £150 — friend repayments and refunds stay in Transactions. Label a row as dining/shopping and it leaves here too.</div>';
@@ -971,10 +971,47 @@
     grid.innerHTML = col('in', 'Coming in') + col('out', 'Going out');
   }
 
-  // One press: Q works out the repeat day and puts it on the calendar.
-  window.incomeToCalendar = function(merchant, amount, lastSeen) {
-    sendToQ(`Add my income from ${merchant} to my calendar. It's £${fmt(amount)}, last received ${lastSeen ? ukDate(lastSeen) : 'recently'} — read my finance data to work out the day it usually arrives and how often, then add a repeating calendar reminder named "${merchant} £${fmt(amount)} due" on that day. Confirm exactly what you added.`);
-    document.getElementById('coach-card').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  // One press, no mystery: works the pattern out from the rhythm data and
+  // ADDS the real dated entries itself — the toast says exactly what landed.
+  window.incomeToCalendar = async function(merchant, amount, lastSeen) {
+    // Cadence from the rhythm engine when it knows this payer; monthly is
+    // the honest default for income when it doesn't.
+    let cadence = 'monthly';
+    if (rhythmData) {
+      for (const g of ['weekly', 'monthly']) {
+        const hit = (rhythmData.in[g] || []).find(x => (x.merchant || '').toLowerCase() === String(merchant).toLowerCase());
+        if (hit) { cadence = (hit.cadence === 'fortnightly') ? 'fortnightly' : g === 'weekly' ? 'weekly' : 'monthly'; break; }
+      }
+    }
+    // First occurrence: roll forward from the last payment until it's ahead
+    // of today (same weekday for weekly, same day-of-month for monthly).
+    const start = lastSeen ? new Date(lastSeen + 'T12:00:00Z') : new Date();
+    const today = new Date();
+    const next = new Date(start);
+    while (next <= today) {
+      if (cadence === 'weekly') next.setUTCDate(next.getUTCDate() + 7);
+      else if (cadence === 'fortnightly') next.setUTCDate(next.getUTCDate() + 14);
+      else next.setUTCMonth(next.getUTCMonth() + 1);
+    }
+    const firstDate = next.toISOString().slice(0, 10);
+    const r = await apiFetch('/life/events/repeat', {
+      method: 'POST',
+      body: {
+        title: `${merchant} £${fmt(amount)} due in`,
+        date: firstDate,
+        repeat: cadence,
+        months: 6,
+        category: 'money',
+        notes: 'Added from the Finance page — income card',
+        source: 'finance',
+      },
+    });
+    if (r.ok) {
+      const j = await r.json();
+      toast(`📅 On your calendar: ${j.count} ${cadence} dates, ${ukDate(j.first)} → ${ukDate(j.last)}`);
+    } else {
+      toast('Could not add it — try again');
+    }
   };
 
   // One press: a recurring charge becomes a bill on the problems queue.

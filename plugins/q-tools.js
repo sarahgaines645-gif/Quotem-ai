@@ -846,16 +846,18 @@ const TOOL_DEFINITIONS = [
         type: 'function',
         function: {
             name: 'add_event',
-            description: 'Add a dated event (appointment, school trip, meeting, deadline-as-a-moment) to the user\'s calendar on the /life page. Returns the created event.',
+            description: 'Add a dated event (appointment, school trip, meeting, deadline-as-a-moment) to the user\'s calendar on the /life page. Set `repeat` for recurring things (payday, benefits, weekly clubs) — it creates the real dated entries for the months ahead in one call, so you CAN set repeating patterns. Returns what was created.',
             parameters: {
                 type: 'object',
                 properties: {
                     title:    { type: 'string', description: 'Short event title.' },
-                    date:     { type: 'string', description: 'Date as YYYY-MM-DD.' },
+                    date:     { type: 'string', description: 'Date as YYYY-MM-DD. For repeats this is the FIRST occurrence.' },
                     time:     { type: 'string', description: 'Time as HH:MM 24h, optional.' },
                     location: { type: 'string', description: 'Where, optional.' },
                     notes:    { type: 'string', description: 'Extra info, optional.' },
                     category: { type: 'string', description: 'Category slug from the user\'s pill row. Defaults are "work", "kids", "home", "health", "money" — they may have added more. Pick the one that fits: a school trip → "kids", a meeting → "work", a bill → "money", a dentist appt → "health". Optional.' },
+                    repeat:   { type: 'string', enum: ['weekly', 'fortnightly', 'monthly', 'last_weekday'], description: 'Repeat pattern, optional. weekly/fortnightly = same weekday as `date`; monthly = same day of month; last_weekday = the LAST <weekday-of-`date`> of each month (e.g. `date` on a Friday → last Friday of every month, common for benefits/pay).' },
+                    months:   { type: 'number', description: 'How many months ahead to fill for a repeat (1–12, default 6).' },
                 },
                 required: ['title', 'date'],
             },
@@ -2409,11 +2411,22 @@ async function sendNotificationTool({ title, body, url } = {}, personEmail) {
 
 // ── Life — calendar + tasks ─────────────────────────────────────────────
 
-function addEventTool({ title, date, time, location, notes, category } = {}, personEmail) {
+function addEventTool({ title, date, time, location, notes, category, repeat, months } = {}, personEmail) {
     if (!personEmail) return { error: 'Cannot add an event without a signed-in user.' };
     if (!title) return { error: 'title is required' };
     if (!date)  return { error: 'date is required (YYYY-MM-DD)' };
     try {
+        if (repeat) {
+            const series = qLife.addRepeatingEvent({ title, date, time, location, notes, category, repeat, months, source: 'chat' }, personEmail);
+            return {
+                ok: true,
+                repeat: series.repeat,
+                count: series.count,
+                first: series.first,
+                last: series.last,
+                instruction_for_q: `Added ${series.count} dated entries (${series.repeat}) from ${series.first} to ${series.last} — the repeating pattern IS set. Tell the user the dates are on their /life calendar.`,
+            };
+        }
         const event = qLife.addEvent({ title, date, time, location, notes, category, source: 'chat' }, personEmail);
         return {
             ok: true,
