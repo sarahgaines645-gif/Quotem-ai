@@ -20,13 +20,13 @@ const { expandItem } = require('./plugins/q-expander');
 const { priceItem, priceItems } = require('./plugins/q-pricer');
 const { chat, claudeReadImage, claudeThreadChat } = require('./plugins/q-chat');
 const { stats: ragStats } = require('./plugins/q-rag');
-const { speakAsVoice } = require('./plugins/q-voice-clone');
+// Voice cloning (q-voice-clone / q-audio-fetch) RETIRED 2026-08-15 — see retired/2026-08-15-voice-clone-and-music/RETIRED.md
 const { runAgent } = require('./plugins/q-agent');
 const { analyzeDocument, webSearch } = require('./plugins/q-tools');
 const qThreads = require('./plugins/q-threads');
 const { generateImage } = require('./plugins/q-image-gen');
 const { vectoriseImage } = require('./plugins/q-graphics');
-const { generateMusic } = require('./plugins/q-music');
+// Music generation (q-music) RETIRED 2026-08-15 — see retired/2026-08-15-voice-clone-and-music/RETIRED.md
 const { generateVideo } = require('./plugins/q-video');
 const { listFacts, searchFacts, deleteFact, clearFacts, getFactsPath } = require('./facts');
 const {
@@ -2037,28 +2037,9 @@ router.post('/graphics/vectorise', express.json({ limit: '24mb' }), async (req, 
     res.json({ svg: result.svg, durationMs: result.durationMs });
 });
 
-// ── Music — text-to-music via ACE-Step HF Space ──────────────────────────
-router.get('/music', (req, res) => {
-    res.sendFile(path.join(__dirname, 'music.html'));
-});
-router.post('/music/generate', express.json({ limit: '64kb' }), async (req, res) => {
-    const prompt = req.body?.prompt;
-    if (!prompt || typeof prompt !== 'string' || !prompt.trim()) {
-        return res.status(400).json({ error: 'Body must include prompt:string' });
-    }
-    const result = await generateMusic(prompt, {
-        lyrics: req.body?.lyrics,
-        duration: req.body?.duration,
-        seed: req.body?.seed,
-    });
-    if (result.error || !result.audio) {
-        return res.status(500).json({ error: result.error || 'No audio returned', durationMs: result.durationMs });
-    }
-    res.setHeader('Content-Type', result.mimeType);
-    res.setHeader('Content-Length', result.audio.length);
-    res.setHeader('X-Generation-Ms', String(result.durationMs));
-    return res.end(result.audio);
-});
+// ── Music — RETIRED 2026-08-15 (GET /music, POST /music/generate). No licensing /
+// commercial-use statement for the generated audio. Page, plugin and HF Space moved
+// to retired/2026-08-15-voice-clone-and-music/ — see RETIRED.md there.
 
 // ── Video — text-to-video via Wan 2.2 HF Space ───────────────────────────
 router.get('/video', (req, res) => {
@@ -2269,6 +2250,11 @@ router.get('/api/finance/income', requirePerson, (req, res) => {
 // The money rhythm — weekly / monthly / bills, in and out.
 router.get('/api/finance/rhythm', requirePerson, (req, res) => {
     res.json(qFinance.detectRegulars(req.person.email));
+});
+
+// What the charges cost — penalties (avoidable) kept apart from account fees.
+router.get('/api/finance/charges', requirePerson, (req, res) => {
+    res.json(qFinance.detectCharges(req.person.email));
 });
 
 // The accounts the app has recognised from the statements themselves —
@@ -3877,128 +3863,16 @@ router.post('/agent/run', requirePerson, express.json({ limit: '256kb' }), async
     res.json(result);
 });
 
-router.get('/voice-clone', (req, res) => {
-    res.sendFile(path.join(__dirname, 'voice-clone.html'));
-});
+// ── Voice cloning — RETIRED 2026-08-15 ─────────────────────────────────────
+// Removed routes: GET /voice-clone, GET /q-voice/status, POST /q-voice/save-from-upload,
+// POST /q-voice/save-from-url, POST /q-voice/reset, POST /voice-clone/from-url,
+// POST /speak-as-voice. Reason: no consent gating; could clone a voice off any URL
+// via yt-dlp (GDPR Art. 9 biometric + passing-off exposure). Everything moved to
+// retired/2026-08-15-voice-clone-and-music/ — see RETIRED.md there.
+// /voices (client-side Kokoro voice PICKER, no cloning) stays.
 
 router.get('/voices', (req, res) => {
     res.sendFile(path.join(__dirname, 'voices.html'));
-});
-
-// ── Q's permanent voice — saved override on the Railway volume ────────────
-const { setQVoiceFromBuffer, clearQVoice, getQVoiceStatus } = require('./plugins/q-tools');
-
-router.get('/q-voice/status', requirePerson, (req, res) => {
-    res.json(getQVoiceStatus(req.person.email));
-});
-
-// Save Q's voice from a file upload (base64 in body).
-router.post('/q-voice/save-from-upload', requirePerson, express.json({ limit: '8mb' }), (req, res) => {
-    const b64 = req.body?.audioBase64;
-    if (!b64 || typeof b64 !== 'string') {
-        return res.status(400).json({ error: 'audioBase64 (string) is required' });
-    }
-    try {
-        const buf = Buffer.from(b64, 'base64');
-        const result = setQVoiceFromBuffer(buf, req.person.email);
-        res.json(result);
-    } catch (e) {
-        res.status(500).json({ error: e.message || 'Failed to save voice' });
-    }
-});
-
-// Save Q's voice from a URL — uses the audio-fetch plugin to grab a clean slice.
-router.post('/q-voice/save-from-url', requirePerson, express.json({ limit: '8kb' }), async (req, res) => {
-    const { url, startTime } = req.body || {};
-    if (!url || typeof url !== 'string') return res.status(400).json({ error: 'url is required' });
-    try {
-        const buf = await fetchAudioClip(url, { startTime });
-        const result = setQVoiceFromBuffer(buf, req.person.email);
-        res.json(result);
-    } catch (e) {
-        res.status(500).json({ error: e.message || 'Failed to fetch and save voice' });
-    }
-});
-
-// Reset Q's voice back to the bundled default.
-router.post('/q-voice/reset', requirePerson, (req, res) => {
-    res.json(clearQVoice(req.person.email));
-});
-
-// Voice cloning from a URL — server-side downloads ~15s of audio from the URL,
-// then forwards to the cloning space. One-shot endpoint: returns audio binary.
-const { fetchAudioClip } = require('./plugins/q-audio-fetch');
-router.post('/voice-clone/from-url', express.json({ limit: '8kb' }), async (req, res) => {
-    const { url, text, exaggeration, cfgWeight, startTime } = req.body || {};
-    console.log(`[voice-clone/from-url] IN  url="${(url || '').slice(0,80)}" startTime=${startTime} textLen=${text?.length}`);
-    if (!url || typeof url !== 'string') return res.status(400).json({ error: 'url is required' });
-    if (!text || typeof text !== 'string') return res.status(400).json({ error: 'text is required' });
-
-    try {
-        console.log(`[voice-clone/from-url] fetching audio clip...`);
-        const refBuf = await fetchAudioClip(url, { startTime });
-        console.log(`[voice-clone/from-url] OK clip fetched, ${refBuf?.length || 0} bytes`);
-
-        console.log(`[voice-clone/from-url] calling speakAsVoice (SPACE_URL=${process.env.CHATTERBOX_SPACE_URL ? 'set' : 'UNSET'})...`);
-        const result = await speakAsVoice(text, refBuf, 'audio/wav', {
-            exaggeration: typeof exaggeration === 'number' ? exaggeration : undefined,
-            cfgWeight:    typeof cfgWeight    === 'number' ? cfgWeight    : undefined,
-        });
-        console.log(`[voice-clone/from-url] speakAsVoice returned: hasAudio=${!!result.audio} (${result.audio?.length || 0}b), error=${JSON.stringify(result.error)}, durationMs=${result.durationMs}`);
-
-        if (result.error || !result.audio) {
-            console.warn(`[voice-clone/from-url] FAIL → 500: ${result.error || 'No audio returned'}`);
-            return res.status(500).json({ error: result.error || 'No audio returned', durationMs: result.durationMs });
-        }
-        res.setHeader('Content-Type', result.mimeType);
-        res.setHeader('Content-Length', result.audio.length);
-        res.setHeader('X-Generation-Ms', String(result.durationMs));
-        return res.end(result.audio);
-    } catch (e) {
-        console.error(`[voice-clone/from-url] THREW: ${e.message}\n${e.stack}`);
-        res.status(500).json({ error: e.message || 'Audio fetch failed' });
-    }
-});
-
-// Voice cloning — POST text + reference audio (base64), get back WAV audio
-// of Q speaking that text in the reference voice. Calls the Chatterbox HF
-// Space (Q_CONFIG.chatterboxSpaceUrl). See q-lab/plugins/q-voice-clone.js.
-//
-// Body: { text, referenceAudioBase64, referenceMimeType, exaggeration?, cfgWeight? }
-// Returns: audio/wav binary stream (or JSON error)
-router.post('/speak-as-voice', express.json({ limit: '8mb' }), async (req, res) => {
-    const text = req.body?.text;
-    const refB64 = req.body?.referenceAudioBase64;
-    const refMime = req.body?.referenceMimeType || 'audio/webm';
-    const exaggeration = typeof req.body?.exaggeration === 'number' ? req.body.exaggeration : undefined;
-    const cfgWeight = typeof req.body?.cfgWeight === 'number' ? req.body.cfgWeight : undefined;
-
-    if (!text || typeof text !== 'string') {
-        return res.status(400).json({ error: 'Body must include text:string' });
-    }
-    if (!refB64 || typeof refB64 !== 'string') {
-        return res.status(400).json({ error: 'Body must include referenceAudioBase64:string' });
-    }
-
-    let refBuf;
-    try {
-        refBuf = Buffer.from(refB64, 'base64');
-    } catch (e) {
-        return res.status(400).json({ error: 'referenceAudioBase64 is not valid base64' });
-    }
-
-    console.log(`[speak-as-voice] IN  textLen=${text.length}, refMime=${refMime}, refBytes=${refBuf.length}, SPACE_URL=${process.env.CHATTERBOX_SPACE_URL ? 'set' : 'UNSET'}`);
-    const result = await speakAsVoice(text, refBuf, refMime, { exaggeration, cfgWeight });
-    console.log(`[speak-as-voice] speakAsVoice returned: hasAudio=${!!result.audio} (${result.audio?.length || 0}b), error=${JSON.stringify(result.error)}, durationMs=${result.durationMs}`);
-
-    if (result.error || !result.audio) {
-        return res.status(500).json({ error: result.error || 'No audio returned', durationMs: result.durationMs });
-    }
-
-    res.setHeader('Content-Type', result.mimeType);
-    res.setHeader('Content-Length', result.audio.length);
-    res.setHeader('X-Generation-Ms', String(result.durationMs));
-    return res.end(result.audio);
 });
 
 module.exports = router;

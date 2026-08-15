@@ -214,6 +214,23 @@
     }
     .section-header h3, .graph-card h3 { cursor: pointer; user-select: none; }
 
+    /* ── Charges ── */
+    .charge-head { display: flex; gap: 26px; flex-wrap: wrap; margin-bottom: 14px; }
+    .charge-head .ch-l { font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-muted); font-weight: 600; margin-bottom: 3px; }
+    .charge-head .ch-v { font-size: 24px; font-weight: 700; color: var(--text); letter-spacing: -0.04em; }
+    .charge-head .ch-v.bad { color: var(--red); }
+    .charge-head .ch-sub { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
+    .charge-row {
+      display: flex; align-items: baseline; justify-content: space-between;
+      gap: 12px; padding: 8px 0; border-top: 1px solid var(--border-subtle);
+      overflow-wrap: anywhere;
+    }
+    .charge-row .cr-name { font-size: 13px; font-weight: 700; color: var(--text); }
+    .charge-row .cr-meta { font-size: 11px; color: var(--text-muted); }
+    .charge-row .cr-amt  { font-size: 15px; font-weight: 700; color: var(--text); white-space: nowrap; }
+    .charge-row .cr-amt.bad { color: var(--red); }
+    .charge-group-label { font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-muted); font-weight: 700; margin: 14px 0 2px; }
+
     /* ── Subscriptions ── */
     .sub-list { display: flex; flex-direction: column; gap: 8px; }
     .sub-row {
@@ -610,6 +627,17 @@
     </div>
   </div>
 
+  <!-- WHAT THE CHARGES COST -->
+  <div class="section-card" id="charges-card">
+    <div class="section-header">
+      <h3>🩸 What the charges cost you</h3>
+      <span class="badge badge-red" id="charges-badge"></span>
+    </div>
+    <div id="charges-body">
+      <div class="txn-empty">No charges found yet — import a statement first</div>
+    </div>
+  </div>
+
   <!-- SUBSCRIPTIONS -->
   <div class="section-card" id="subs-card">
     <div class="section-header">
@@ -796,6 +824,7 @@
   let incomeSources = [];
   let rhythmData    = null;
   let accounts      = [];
+  let chargesData   = null;
   let shownCount    = 40;
   let activeFilter  = '';
   let searchQuery   = '';
@@ -832,7 +861,7 @@
 
   // ── Load data ─────────────────────────────────────────────────────────────
   async function loadAll() {
-    const [txRes, grRes, prRes, subRes, incRes, rhyRes, accRes] = await Promise.all([
+    const [txRes, grRes, prRes, subRes, incRes, rhyRes, accRes, chgRes] = await Promise.all([
       apiFetch('/api/finance/transactions'),
       apiFetch('/api/finance/graph'),
       apiFetch('/api/finance/problems'),
@@ -840,6 +869,7 @@
       apiFetch('/api/finance/income'),
       apiFetch('/api/finance/rhythm'),
       apiFetch('/api/finance/accounts'),
+      apiFetch('/api/finance/charges'),
     ]);
     if (txRes.ok)  transactions  = await txRes.json();
     if (grRes.ok)  graphData     = await grRes.json();
@@ -848,11 +878,64 @@
     if (incRes.ok) incomeSources = await incRes.json();
     if (rhyRes.ok) rhythmData    = await rhyRes.json();
     if (accRes.ok) accounts      = await accRes.json();
+    if (chgRes.ok) chargesData   = await chgRes.json();
     renderAll();
+  }
+
+  // ── What the charges cost ─────────────────────────────────────────────────
+  // The data IS the card: the totals first and big, the list underneath, and
+  // one muted line of method at the bottom. No advice about debt here — that
+  // is regulated territory; this states facts and what each charge is.
+  function renderCharges() {
+    const body  = document.getElementById('charges-body');
+    const badge = document.getElementById('charges-badge');
+    if (!body) return;
+    const c = chargesData;
+    if (!c || (!c.penalties.length && !c.fees.length)) {
+      body.innerHTML = '<div class="txn-empty">No charges found — nothing has been taken off you in fees or penalties in the statements loaded.</div>';
+      badge.textContent = '';
+      return;
+    }
+    badge.textContent = '£' + fmt(c.total);
+
+    const row = (i, bad) => `<div class="charge-row">
+        <div>
+          <div class="cr-name">${esc(i.label)}</div>
+          <div class="cr-meta">${i.count}× · ${i.first_seen ? ukDate(i.first_seen) : ''}${i.last_seen && i.last_seen !== i.first_seen ? ' – ' + ukDate(i.last_seen) : ''}</div>
+        </div>
+        <div class="cr-amt${bad ? ' bad' : ''}">£${fmt(i.total)}</div>
+      </div>`;
+
+    let html = `<div class="charge-head">
+      <div>
+        <div class="ch-l">Penalties</div>
+        <div class="ch-v bad">£${fmt(c.penalty_total)}</div>
+        <div class="ch-sub">£${fmt(c.penalty_per_month)} a month · £${fmt(c.penalty_per_year)} a year at this rate</div>
+      </div>
+      <div>
+        <div class="ch-l">Account &amp; card fees</div>
+        <div class="ch-v">£${fmt(c.fee_total)}</div>
+        <div class="ch-sub">the price of the accounts themselves</div>
+      </div>
+    </div>`;
+
+    if (c.penalties.length) {
+      html += '<div class="charge-group-label">Money lost to timing — avoidable</div>'
+            + c.penalties.map(i => row(i, true)).join('');
+    }
+    if (c.fees.length) {
+      html += '<div class="charge-group-label">What the accounts charge to exist</div>'
+            + c.fees.map(i => row(i, false)).join('');
+    }
+    html += `<div class="ac-sub" style="margin-top:12px">Read from the statement descriptions across ${c.months_covered} months`
+          + (c.unmatched_rows ? ` · ${c.unmatched_rows} charge${c.unmatched_rows === 1 ? '' : 's'} couldn't be named` : '')
+          + `. Free debt advice, if any of this is biting: StepChange, National Debtline, Citizens Advice.</div>`;
+    body.innerHTML = html;
   }
 
   function renderAll() {
     renderAccounts();
+    renderCharges();
     renderSummary();
     renderCharts();
     renderSubscriptions();

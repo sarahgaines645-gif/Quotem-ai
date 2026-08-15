@@ -2044,6 +2044,90 @@ function detectIncome(email) {
         .sort((a, b) => b.total_received - a.total_received);
 }
 
+// ── What the charges cost ─────────────────────────────────────────
+// Sarah's thesis, in her words: "We put things off and we pay charges and
+// that keeps these big businesses ticking." The categoriser has had a
+// fees_charges bucket all along and NOTHING on the page ever showed it.
+//
+// Two groups, deliberately kept apart. A penalty is money lost to timing —
+// it is avoidable and it is the number that should make someone angry. An
+// account fee is the price of a product she chose, and lumping the two
+// together would either understate the penalties or slander the fees.
+const CHARGE_PATTERNS = [
+    // Avoidable — the cost of being late, short, or over.
+    { type: 'penalty', label: 'Unarranged overdraft',   re: /unarranged|unauthoris?ed (?:overdraft|borrowing)/i },
+    { type: 'penalty', label: 'Overdraft interest',     re: /overdraft (?:interest|fee|charge|usage)/i },
+    { type: 'penalty', label: 'Returned payment',       re: /returned (?:item|direct debit|payment|cheque)|unpaid (?:item|direct debit|cheque|transaction)/i },
+    { type: 'penalty', label: 'Late payment',           re: /late payment|missed payment|arrears (?:charge|fee)/i },
+    { type: 'penalty', label: 'Default charge',         re: /default (?:sum|charge|fee)|penalty (?:charge|fee)/i },
+    { type: 'penalty', label: 'Referral fee',           re: /referral fee|paid referral/i },
+    { type: 'penalty', label: 'Interest charged',       re: /interest charged|debit interest/i },
+    // Contractual — the price of the product, not a punishment.
+    { type: 'fee',     label: 'Account fee',            re: /(?:monthly |account |service |maintenance |membership )fee|club lloyds fee|package fee/i },
+    { type: 'fee',     label: 'Card fee',               re: /card (?:replacement |delivery )?fee/i },
+    { type: 'fee',     label: 'Cash withdrawal fee',    re: /(?:atm|cash (?:machine|advance|withdrawal)) fee/i },
+    { type: 'fee',     label: 'Non-sterling fee',       re: /non-?sterling|foreign (?:transaction|currency|exchange) fee/i },
+    { type: 'fee',     label: 'Arrangement fee',        re: /arrangement fee|admin(?:istration)? fee|set-?up fee/i },
+];
+
+/**
+ * Every charge the statements contain, what kind it is, and what it added up
+ * to. Reads the descriptions directly rather than trusting the categoriser —
+ * a charge the labeller filed as 'other' is exactly the charge nobody ever
+ * notices, which is the whole problem this card exists to solve.
+ */
+function detectCharges(email) {
+    const txns = getTransactions(email);
+    const groups = new Map();
+    let uncategorised = 0;
+
+    for (const t of txns) {
+        if (!(t.amount < 0)) continue;                       // a refund of a fee is not a charge
+        const text = `${t.description || ''} ${t.merchant || ''}`;
+        const hit = CHARGE_PATTERNS.find(p => p.re.test(text));
+        // A row the labeller called fees_charges but no pattern matched is
+        // still a charge — count it rather than lose it.
+        if (!hit && t.category !== 'fees_charges') continue;
+        const key = hit ? hit.label : 'Other bank charge';
+        const type = hit ? hit.type : 'penalty';
+        if (!hit) uncategorised++;
+        if (!groups.has(key)) groups.set(key, { label: key, type, count: 0, total: 0, last_seen: '', first_seen: '', sources: new Set() });
+        const g = groups.get(key);
+        g.count++;
+        g.total += Math.abs(t.amount);
+        if (t.date && (!g.last_seen  || t.date > g.last_seen))  g.last_seen  = t.date;
+        if (t.date && (!g.first_seen || t.date < g.first_seen)) g.first_seen = t.date;
+        if (t.account) g.sources.add(t.account);
+    }
+
+    const items = [...groups.values()]
+        .map(g => ({ ...g, total: Math.round(g.total * 100) / 100, sources: [...g.sources] }))
+        .sort((a, b) => b.total - a.total);
+
+    const penalties = items.filter(i => i.type === 'penalty');
+    const fees      = items.filter(i => i.type === 'fee');
+    const sum = arr => Math.round(arr.reduce((s, i) => s + i.total, 0) * 100) / 100;
+
+    // Monthly rate, so the figure means something regardless of how much
+    // history happens to be loaded.
+    const dates = txns.map(t => t.date).filter(Boolean).sort();
+    const months = (dates.length >= 2)
+        ? Math.max(1, (Date.parse(dates[dates.length - 1]) - Date.parse(dates[0])) / (30.44 * 86400000))
+        : 1;
+
+    return {
+        penalties,
+        fees,
+        penalty_total: sum(penalties),
+        fee_total:     sum(fees),
+        total:         sum(items),
+        penalty_per_month: Math.round((sum(penalties) / months) * 100) / 100,
+        penalty_per_year:  Math.round((sum(penalties) / months) * 12 * 100) / 100,
+        months_covered: Math.round(months * 10) / 10,
+        unmatched_rows: uncategorised,
+    };
+}
+
 // The money rhythm — what comes in and goes out weekly / monthly, plus
 // bills that repeat without a clean cadence. Deterministic: cadence from
 // the median gap between a merchant's transactions. Self-transfers are
@@ -2157,10 +2241,11 @@ module.exports = {
     setAccountBalance,
     importBalancesFromScreenshot,
 
-    // Subscriptions + income + rhythm
+    // Subscriptions + income + rhythm + charges
     detectSubscriptions,
     detectIncome,
     detectRegulars,
+    detectCharges,
 
     // Graphs
     getSpendingGraphData,
