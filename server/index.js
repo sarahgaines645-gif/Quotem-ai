@@ -380,6 +380,14 @@ const PUBLIC_PREFIXES = [
     '/assets/',
     '/widgets/',
     '/public-download/',
+    // "Scan from phone": the phone is not signed in — the 160-bit session
+    // token in the URL is its authority, scoped to one owner's session for
+    // 30 minutes (plugins/doc-drop.js). These three were never added when
+    // the gate landed, so every phone scan bounced to the sign-in page and
+    // Sarah went back to emailing statements to herself.
+    '/doc-drop/',
+    '/api/doc-drop/by-token/',
+    '/api/doc-drop/upload/',
 ];
 function isPublicPath(p) {
     if (PUBLIC_PATHS.has(p)) return true;

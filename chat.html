@@ -2297,10 +2297,12 @@ async function openPhoneDrop() {
     pdSessionId = session.id;
     pdKnownFiles = new Set((session.files || []).map(f => f.id));
 
-    // Force the apex host: Railway's cert only covers quotem-ai.co.uk, so a
-    // "www." URL in the QR gives the phone a "not private" warning and the
-    // upload page never loads. (Same fix as the finance page.)
-    const uploadUrl = location.origin.replace(/\/\/www\./i, '//') + '/doc-drop/' + session.token;
+    // The QR must point at the host that answers on a phone: the apex fails
+    // the TLS handshake today (15 Aug 2026), www. is the live host. Same
+    // rule as finance.html's qrUploadUrl().
+    const host = location.hostname.toLowerCase();
+    const qrOrigin = /(^|\.)quotem-ai\.co\.uk$/.test(host) ? 'https://www.quotem-ai.co.uk' : location.origin;
+    const uploadUrl = qrOrigin + '/doc-drop/' + session.token;
 
     if (typeof qrcode === 'function') {
       const qr = qrcode(0, 'M');

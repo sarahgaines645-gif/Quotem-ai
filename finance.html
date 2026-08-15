@@ -1958,19 +1958,33 @@
     clearUploadResult('uz-statement');
     showUploadProgress('uz-statement', true);
     if (file.name.toLowerCase().endsWith('.pdf')) {
+      const { b64 } = await readFileAsB64(file);
+      await importStatementBase64(b64, 'application/pdf', file.name, '');
+      return;
+    }
+    const text = await file.text();
+    await importText(text, file.name);
+  }
+
+  // A statement file (PDF or photo) as base64 → the background import job,
+  // polled to completion. Used by the desktop drop AND the phone scan so the
+  // two can't drift. A multi-page PDF takes minutes (Gemini reads all pages
+  // natively, sequentially, then categorises) — that outlived one HTTP
+  // request and the browser/proxy timed out, showing a false "couldn't
+  // read it" while the server was still working. So: start a job, poll it.
+  // Resolves when the job has finished (either way).
+  function importStatementBase64(b64, mimeType, filename, fromWhere) {
+    return new Promise(async resolve => {
+      clearUploadResult('uz-statement');
+      showUploadProgress('uz-statement', true);
+      const from = fromWhere ? ' ' + fromWhere : '';
       try {
-        // A multi-page PDF takes minutes (Gemini reads all pages natively,
-        // sequentially, then categorises). That outlived the HTTP request
-        // and the browser/proxy timed out — showing a false "couldn't read
-        // it" while the server was actually still working and succeeding.
-        // So: start a background job, then poll it for live progress.
-        const { b64 } = await readFileAsB64(file);
-        const r = await apiFetch('/api/finance/statement/pdf', { method: 'POST', body: { imageBase64: b64, mimeType: 'application/pdf', filename: file.name } });
+        const r = await apiFetch('/api/finance/statement/pdf', { method: 'POST', body: { imageBase64: b64, mimeType, filename } });
         if (!r.ok) {
           const e = await r.json().catch(() => ({}));
           showUploadProgress('uz-statement', false);
-          showUploadResult('uz-statement', e.error || 'Could not start reading this PDF — please try again', 'err');
-          return;
+          showUploadResult('uz-statement', e.error || 'Could not start reading this file — please try again', 'err');
+          return resolve(null);
         }
         const startedAt = Date.now();
         const poll = async () => {
@@ -1980,36 +1994,35 @@
             if (Date.now() - startedAt > 25 * 60 * 1000) {
               showUploadProgress('uz-statement', false);
               showUploadResult('uz-statement', 'Still working on it — check back in a minute and refresh the page.', 'info');
-              return;
+              return resolve(j);
             }
             const msg = (j.phase === 'saving')
               ? 'Sorting and categorising your transactions…'
-              : (j.pagesTotal ? `Reading your statement — page ${j.pagesDone} of ${j.pagesTotal}…` : 'Reading your statement…');
+              : (j.pagesTotal ? `Reading your statement${from} — page ${j.pagesDone} of ${j.pagesTotal}…` : `Reading your statement${from}…`);
             showUploadResult('uz-statement', msg, 'info');
             return setTimeout(poll, 3000);
           }
           showUploadProgress('uz-statement', false);
           if (j && j.status === 'done') {
-            if (j.added > 0) showUploadResult('uz-statement', `✓ ${j.added} transactions imported (${j.total} total)`, 'ok');
+            if (j.added > 0) showUploadResult('uz-statement', `✓ ${j.added} transactions imported${from} (${j.total} total)` + (j.hint ? ' — ' + j.hint : ''), 'ok');
             else if (j.hint) showUploadResult('uz-statement', j.hint, 'info');
             else showUploadResult('uz-statement', 'No new transactions found — they may already be imported', 'info');
             await loadAll();
           } else if (j && j.status === 'error') {
-            showUploadResult('uz-statement', j.error || 'Could not read this PDF — please try again', 'err');
+            showUploadResult('uz-statement', j.error || 'Could not read this file — please try again', 'err');
           } else {
-            showUploadResult('uz-statement', 'Could not read this PDF — please try again', 'err');
+            showUploadResult('uz-statement', 'Could not read this file — please try again', 'err');
           }
+          resolve(j);
         };
-        showUploadResult('uz-statement', 'Reading your statement…', 'info');
+        showUploadResult('uz-statement', `Reading your statement${from}…`, 'info');
         setTimeout(poll, 2500);
       } catch (err) {
         showUploadProgress('uz-statement', false);
         showUploadResult('uz-statement', 'Could not start the upload — please try again', 'err');
+        resolve(null);
       }
-      return;
-    }
-    const text = await file.text();
-    await importText(text, file.name);
+    });
   }
 
   async function importText(text, filename) {
@@ -2553,16 +2566,23 @@
     qrSessionId = session.id;
     qrKnownFiles = new Set(session.files.map(f => f.id));
 
-    // Generate QR code onto the canvas
-    // Strip the "www." prefix from the QR URL — Railway only has a valid
-    // cert for the apex (quotem-ai.co.uk); a "www." URL on the phone hits
-    // a "not private" warning and the upload doesn't load. Force the QR
-    // onto the apex so the camera-scan path works either way Sarah's on.
-    const uploadUrl = location.origin.replace(/\/\/www\./i, '//') + '/doc-drop/' + session.token;
+    // Generate QR code onto the canvas.
+    // The QR must point at the host that actually answers on a phone. That
+    // was once the apex; today the apex fails the TLS handshake outright
+    // (curl exit 35, 15 Aug 2026) and www. is the live host — so the QR is
+    // forced onto www. for the production domain and left alone anywhere
+    // else (localhost, a preview). qrUploadUrl() is the one place this lives.
+    const uploadUrl = qrUploadUrl(session.token);
     QRCode.toCanvas(document.getElementById('qr-canvas'), uploadUrl, { width: 200, margin: 1, color: { dark: '#1a1a1a', light: '#e8e8e8' } });
 
     // Start polling
     qrPollTimer = setInterval(() => pollQrSession(), 3000);
+  }
+
+  function qrUploadUrl(token) {
+    const host = location.hostname.toLowerCase();
+    const origin = /(^|\.)quotem-ai\.co\.uk$/.test(host) ? 'https://www.quotem-ai.co.uk' : location.origin;
+    return origin + '/doc-drop/' + token;
   }
 
   async function pollQrSession() {
@@ -2580,30 +2600,22 @@
     for (const f of newFiles) {
       const fr = await apiFetch('/api/doc-drop/sessions/' + qrSessionId + '/files/' + f.id);
       if (!fr.ok) continue;
-      const { base64, mimeType } = await fr.json();
+      const { base64, mimeType, filename } = await fr.json();
       if (qrSessionType === 'statement') {
-        clearUploadResult('uz-statement');
-        showUploadProgress('uz-statement', true);
-        // Text/CSV from phone → text parser. Images/PDFs → vision.
-        const isTextFile = mimeType && (mimeType.startsWith('text/') || mimeType === 'application/csv');
-        let dr;
+        // Same path as dropping the file on the desktop — including the
+        // FILENAME (a scanned Lloyds PDF is recognised by its name) and the
+        // background job (a PDF outlives one request; the old code posted
+        // and read the 202 "job started" reply as the final result, so it
+        // said "no new transactions found" while the import was still
+        // running). CSV/text goes to the exact parser, decoded as UTF-8.
+        const isTextFile = (mimeType && (mimeType.startsWith('text/') || mimeType === 'application/csv'))
+          || /\.(csv|txt)$/i.test(filename || '');
         if (isTextFile) {
-          const text = atob(base64);
-          dr = await apiFetch('/api/finance/statement', { method: 'POST', body: { text } });
+          const bytes = Uint8Array.from(atob(base64), c => c.charCodeAt(0));
+          const text = new TextDecoder('utf-8').decode(bytes);
+          await importText(text, filename || 'phone upload.csv');
         } else {
-          dr = await apiFetch('/api/finance/statement/pdf', { method: 'POST', body: { imageBase64: base64, mimeType } });
-        }
-        showUploadProgress('uz-statement', false);
-        if (dr.ok) {
-          const result = await dr.json();
-          if (result.added > 0) {
-            showUploadResult('uz-statement', `✓ ${result.added} transactions received from phone (${result.total} total)`, 'ok');
-          } else {
-            showUploadResult('uz-statement', 'File received — no new transactions found', 'info');
-          }
-          await loadAll();
-        } else {
-          showUploadResult('uz-statement', 'Could not read the statement from your phone', 'err');
+          await importStatementBase64(base64, mimeType || 'application/pdf', filename || 'phone upload', 'from your phone');
         }
       } else {
         // Send to document extractor
