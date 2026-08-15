@@ -215,6 +215,13 @@
     .txn-controls {
       display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; align-items: center;
     }
+    /* Live total of whatever the search found — the data IS the box */
+    .search-calc { display: none; font-size: 12px; color: var(--text-muted);
+      padding: 8px 12px; border-radius: 10px; box-shadow: var(--neu-inset-sm); white-space: nowrap; }
+    .search-calc.show { display: block; }
+    .search-calc b { color: var(--text); font-weight: 700; }
+    .search-calc b.neg { color: var(--red); }
+    .search-calc b.pos { color: var(--green); }
     .txn-search {
       flex: 1; min-width: 180px; border: none; outline: none; font-family: inherit;
       font-size: 13px; color: var(--text); background: var(--bg);
@@ -378,6 +385,18 @@
     .assign-popup .ap-chip:hover { color: var(--accent); }
     .assign-popup .ap-actions { display: flex; gap: 6px; justify-content: flex-end; }
 
+    /* ── Money rhythm ── */
+    .rhythm-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+    .rhythm-col h4 { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-muted); margin: 0 0 8px; }
+    .rhythm-group { margin-bottom: 12px; }
+    .rhythm-group .rg-head { display: flex; justify-content: space-between; font-size: 11px; font-weight: 700; color: var(--text); margin-bottom: 4px; }
+    .rhythm-row { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; font-size: 12px; padding: 3px 0; }
+    .rhythm-row .rr-name { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+    .rhythm-row .rr-meta { color: var(--text-faint); font-size: 10px; }
+    .rhythm-row .rr-amt { font-weight: 700; white-space: nowrap; }
+    .rhythm-row .rr-amt.in  { color: var(--green); }
+    .rhythm-row .rr-amt.out { color: var(--red); }
+
     /* ── Toast ── */
     .toast {
       position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
@@ -391,6 +410,7 @@
     @media (max-width: 680px) {
       .upload-strip  { grid-template-columns: 1fr; }
       .summary-bar   { grid-template-columns: 1fr 1fr; }
+      .rhythm-grid   { grid-template-columns: 1fr; }
       .graphs-row    { grid-template-columns: 1fr; }
       .txn-row       { grid-template-columns: 70px 1fr auto auto; }
       .txn-row .txn-cat { display: none; }
@@ -502,6 +522,17 @@
     </div>
   </div>
 
+  <!-- MONEY RHYTHM -->
+  <div class="section-card" id="rhythm-card">
+    <div class="section-header">
+      <h3>📈 Money rhythm</h3>
+      <span class="badge badge-green" id="rhythm-badge"></span>
+    </div>
+    <div class="rhythm-grid" id="rhythm-grid">
+      <div class="txn-empty">Import statements and the rhythm appears — weekly, monthly, and bills</div>
+    </div>
+  </div>
+
   <!-- PROBLEM QUEUE -->
   <div class="section-card" id="problems-card">
     <div class="section-header">
@@ -527,7 +558,9 @@
       </div>
     </div>
     <div class="txn-controls">
-      <input class="txn-search" type="search" placeholder="Search…" id="txn-search" />
+      <input class="txn-search" type="search" placeholder="Search… (e.g. starbucks, costa, cafe nero)" id="txn-search" />
+      <div class="search-calc" id="search-calc"></div>
+      <button class="sec-btn hidden" id="bulk-label-btn" title="Put every result under one label">Label these</button>
       <select class="cat-filter" id="cat-filter">
         <option value="">All categories</option>
         <option value="food_groceries">Food – groceries</option>
@@ -649,6 +682,7 @@
   let problems      = [];
   let subscriptions = [];
   let incomeSources = [];
+  let rhythmData    = null;
   let shownCount    = 40;
   let activeFilter  = '';
   let searchQuery   = '';
@@ -685,18 +719,20 @@
 
   // ── Load data ─────────────────────────────────────────────────────────────
   async function loadAll() {
-    const [txRes, grRes, prRes, subRes, incRes] = await Promise.all([
+    const [txRes, grRes, prRes, subRes, incRes, rhyRes] = await Promise.all([
       apiFetch('/api/finance/transactions'),
       apiFetch('/api/finance/graph'),
       apiFetch('/api/finance/problems'),
       apiFetch('/api/finance/subscriptions'),
       apiFetch('/api/finance/income'),
+      apiFetch('/api/finance/rhythm'),
     ]);
     if (txRes.ok)  transactions  = await txRes.json();
     if (grRes.ok)  graphData     = await grRes.json();
     if (prRes.ok)  problems      = await prRes.json();
     if (subRes.ok) subscriptions = await subRes.json();
     if (incRes.ok) incomeSources = await incRes.json();
+    if (rhyRes.ok) rhythmData    = await rhyRes.json();
     renderAll();
   }
 
@@ -705,6 +741,7 @@
     renderCharts();
     renderSubscriptions();
     renderIncome();
+    renderRhythm();
     renderProblems();
     renderTransactions();
   }
@@ -867,6 +904,43 @@
         <button class="sr-flag" onclick="incomeToCalendar('${esc(s.merchant)}', ${Math.abs(s.amount) || 0}, '${esc(s.last_seen || '')}')">📅 calendar</button>
       </div>`;
     }).join('');
+  }
+
+  // ── Money rhythm — weekly / monthly / bills, in and out ───────────────────
+  function renderRhythm() {
+    const grid  = document.getElementById('rhythm-grid');
+    const badge = document.getElementById('rhythm-badge');
+    const r = rhythmData;
+    const count = r ? ['in', 'out'].reduce((n, d) =>
+      n + ['weekly', 'monthly', 'bills'].reduce((m, g) => m + (r[d][g] || []).length, 0), 0) : 0;
+    if (!count) {
+      grid.innerHTML = '<div class="txn-empty">Import statements and the rhythm appears — weekly, monthly, and bills</div>';
+      badge.textContent = '';
+      return;
+    }
+    badge.textContent = count + ' regulars';
+    const GROUPS = [['weekly', 'Weekly'], ['monthly', 'Monthly'], ['bills', 'Bills (no fixed day)']];
+    const col = (dir, title) => {
+      let h = `<div class="rhythm-col"><h4>${title}</h4>`;
+      let any = false;
+      for (const [key, label] of GROUPS) {
+        const rows = r[dir][key] || [];
+        if (!rows.length) continue;
+        any = true;
+        const eq = rows.reduce((s, x) => s + (x.monthly_equiv || 0), 0);
+        h += `<div class="rhythm-group"><div class="rg-head"><span>${label}</span><span>${eq > 0 ? '≈£' + fmt(eq) + '/mo' : ''}</span></div>`;
+        h += rows.slice(0, 8).map(x => `
+          <div class="rhythm-row">
+            <span class="rr-name">${esc(x.merchant)}<span class="rr-meta"> · ${x.cadence}${x.source ? ' · ' + esc(x.source) : ''}${x.last_seen ? ' · ' + ukDate(x.last_seen) : ''}</span></span>
+            <span class="rr-amt ${dir}">${dir === 'in' ? '+' : '−'}£${fmt(x.amount)}</span>
+          </div>`).join('');
+        if (rows.length > 8) h += `<div class="rr-meta">+${rows.length - 8} more</div>`;
+        h += '</div>';
+      }
+      if (!any) h += '<div class="txn-empty" style="padding:8px 0">Nothing regular found yet</div>';
+      return h + '</div>';
+    };
+    grid.innerHTML = col('in', 'Coming in') + col('out', 'Going out');
   }
 
   // One press: Q works out the repeat day and puts it on the calendar.
@@ -1053,12 +1127,16 @@
     let txns = [...transactions];
     if (activeFilter) txns = txns.filter(t => t.category === activeFilter);
     if (searchQuery) {
-      const q = searchQuery.toLowerCase();
-      txns = txns.filter(t =>
-        (t.description || '').toLowerCase().includes(q) ||
-        (t.merchant || '').toLowerCase().includes(q) ||
-        (t.bucket || '').toLowerCase().includes(q)
-      );
+      // Comma-separated terms: "starbucks, costa, cafe nero" matches ANY of
+      // them — across description, merchant AND bucket label — so one search
+      // can gather a whole habit and the calc box totals it.
+      const terms = searchQuery.toLowerCase().split(',').map(s => s.trim()).filter(Boolean);
+      if (terms.length) {
+        txns = txns.filter(t => {
+          const hay = ((t.description || '') + ' ' + (t.merchant || '') + ' ' + (t.bucket || '')).toLowerCase();
+          return terms.some(q => hay.includes(q));
+        });
+      }
     }
     return txns;
   }
@@ -1067,6 +1145,7 @@
     const list     = document.getElementById('txn-list');
     const moreBtn  = document.getElementById('show-more-btn');
     const txns     = filteredTxns();
+    renderSearchCalc(txns);
 
     if (!txns.length) {
       // Re-created inline like the problems/subscriptions lists — the old
@@ -1162,22 +1241,68 @@
 
   document.getElementById('ap-remove').addEventListener('click', async () => {
     if (!assignTarget) return;
-    await apiFetch('/api/finance/assign', { method: 'POST', body: { merchant: assignTarget.merchant, label: null } });
+    const merchants = assignTarget.bulk ? assignTarget.merchants : [assignTarget.merchant];
+    for (const m of merchants) {
+      await apiFetch('/api/finance/assign', { method: 'POST', body: { merchant: m, label: null } });
+    }
     document.getElementById('assign-popup').style.display = 'none';
     await reloadTransactions();
     reloadGraph();
+    assignTarget = null;
   });
 
   document.getElementById('ap-save').addEventListener('click', async () => {
     if (!assignTarget) return;
     const label = document.getElementById('ap-input').value.trim();
     if (!label) return;
-    await apiFetch('/api/finance/assign', { method: 'POST', body: { merchant: assignTarget.merchant, label } });
+    const merchants = assignTarget.bulk ? assignTarget.merchants : [assignTarget.merchant];
+    for (const m of merchants) {
+      await apiFetch('/api/finance/assign', { method: 'POST', body: { merchant: m, label } });
+    }
     document.getElementById('assign-popup').style.display = 'none';
-    toast(`Tagged "${assignTarget.merchant}" → ${label}`);
+    toast(assignTarget.bulk
+      ? `Tagged ${merchants.length} merchants → ${label}`
+      : `Tagged "${merchants[0]}" → ${label}`);
     await reloadTransactions();
     reloadGraph();
     assignTarget = null;
+  });
+
+  // Live totals for whatever the search/filter found.
+  function renderSearchCalc(txns) {
+    const box = document.getElementById('search-calc');
+    const bulkBtn = document.getElementById('bulk-label-btn');
+    const active = !!(searchQuery.trim() || activeFilter);
+    if (!active) {
+      box.classList.remove('show');
+      bulkBtn.classList.add('hidden');
+      return;
+    }
+    const out = txns.filter(t => t.amount < 0).reduce((s, t) => s - t.amount, 0);
+    const inn = txns.filter(t => t.amount > 0).reduce((s, t) => s + t.amount, 0);
+    box.innerHTML = `<b>${txns.length}</b> found`
+      + (out > 0 ? ` · <b class="neg">−£${fmt(out)}</b>` : '')
+      + (inn > 0 ? ` · <b class="pos">+£${fmt(inn)}</b>` : '');
+    box.classList.add('show');
+    bulkBtn.classList.toggle('hidden', txns.length === 0);
+  }
+
+  // "Label these" — every merchant in the current results goes under one
+  // bucket in a single save (reuses the assign popup in bulk mode).
+  document.getElementById('bulk-label-btn').addEventListener('click', (e) => {
+    const txns = filteredTxns();
+    if (!txns.length) return;
+    const merchants = [...new Set(txns.map(t => t.merchant || t.description).filter(Boolean))];
+    assignTarget = { bulk: true, merchants };
+    const popup = document.getElementById('assign-popup');
+    const input = document.getElementById('ap-input');
+    const presets = document.getElementById('ap-presets');
+    const buckets = [...new Set(transactions.map(t => t.bucket).filter(Boolean))];
+    presets.innerHTML = buckets.map(b => `<button class="ap-chip" onclick="document.getElementById('ap-input').value='${esc(b)}'">${esc(b)}</button>`).join('');
+    input.value = '';
+    const r = e.currentTarget.getBoundingClientRect();
+    popup.style.cssText = `display:block;top:${Math.min(r.bottom + 6, window.innerHeight - 220)}px;left:${Math.min(r.left, window.innerWidth - 240)}px;`;
+    input.focus();
   });
 
   // Filters + search

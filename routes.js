@@ -2266,6 +2266,11 @@ router.get('/api/finance/income', requirePerson, (req, res) => {
     res.json(qFinance.detectIncome(req.person.email));
 });
 
+// The money rhythm — weekly / monthly / bills, in and out.
+router.get('/api/finance/rhythm', requirePerson, (req, res) => {
+    res.json(qFinance.detectRegulars(req.person.email));
+});
+
 // Import statement text (paste or extracted from PDF)
 router.post('/api/finance/statement', requirePerson, express.json({ limit: '2mb' }), async (req, res) => {
     const { text, filename } = req.body || {};

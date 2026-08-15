@@ -1437,6 +1437,62 @@ function detectIncome(email) {
         .sort((a, b) => b.total_received - a.total_received);
 }
 
+// The money rhythm — what comes in and goes out weekly / monthly, plus
+// bills that repeat without a clean cadence. Deterministic: cadence from
+// the median gap between a merchant's transactions. Self-transfers are
+// excluded on both sides. Frequent shop visits (median gap under 5 days —
+// Tesco three times a week) are noise, not a rhythm, and are skipped
+// unless they're a bills-type category.
+const BILL_CATEGORIES = new Set(['utilities', 'subscriptions', 'housing', 'fees_charges']);
+function detectRegulars(email) {
+    const txns = getTransactions(email);
+    const paired = pairInternalTransfers(txns);
+    const live = txns.filter(t => t.category !== 'savings_transfer' && !paired.has(t.id) && t.date);
+    const groups = {};
+    for (const t of live) {
+        const k = (t.amount < 0 ? 'out:' : 'in:') + merchantKey(t.merchant || t.description);
+        (groups[k] = groups[k] || []).push(t);
+    }
+    const rhythm = { in: { weekly: [], monthly: [], bills: [] }, out: { weekly: [], monthly: [], bills: [] } };
+    for (const [k, entries] of Object.entries(groups)) {
+        if (entries.length < 2) continue;
+        entries.sort((a, b) => (a.date || '').localeCompare(b.date || ''));
+        const gaps = [];
+        for (let i = 1; i < entries.length; i++) {
+            const g = (Date.parse(entries[i].date) - Date.parse(entries[i - 1].date)) / 86400000;
+            if (Number.isFinite(g) && g >= 0) gaps.push(g);
+        }
+        gaps.sort((a, b) => a - b);
+        const median = gaps.length ? gaps[Math.floor(gaps.length / 2)] : null;
+        const dir = k.startsWith('in:') ? 'in' : 'out';
+        const latest = entries[entries.length - 1];
+        const amount = Math.abs(latest.amount);
+        let target = null, cadence = null, monthlyEquiv = null;
+        if (median != null && median >= 5 && median <= 10)       { target = 'weekly';  cadence = 'weekly';      monthlyEquiv = amount * 4.33; }
+        else if (median != null && median >= 11 && median <= 18) { target = 'weekly';  cadence = 'fortnightly'; monthlyEquiv = amount * 2.17; }
+        else if (median != null && median >= 24 && median <= 38) { target = 'monthly'; cadence = 'monthly';     monthlyEquiv = amount; }
+        else if (BILL_CATEGORIES.has(latest.category))           { target = 'bills';   cadence = 'irregular'; }
+        if (!target) continue;
+        rhythm[dir][target].push({
+            merchant:      latest.merchant || latest.description,
+            amount:        Math.round(amount * 100) / 100,
+            cadence,
+            monthly_equiv: monthlyEquiv != null ? Math.round(monthlyEquiv * 100) / 100 : null,
+            count:         entries.length,
+            last_seen:     latest.date,
+            source:        latest.source || null,
+            category:      latest.category || 'other',
+            total:         Math.round(entries.reduce((s, t) => s + Math.abs(t.amount), 0) * 100) / 100,
+        });
+    }
+    for (const dir of ['in', 'out']) {
+        for (const g of ['weekly', 'monthly', 'bills']) {
+            rhythm[dir][g].sort((a, b) => (b.monthly_equiv || b.total) - (a.monthly_equiv || a.total));
+        }
+    }
+    return rhythm;
+}
+
 module.exports = {
     // Transactions
     importStatement,
@@ -1462,9 +1518,10 @@ module.exports = {
     assignMerchant,
     getAssignments,
 
-    // Subscriptions + income
+    // Subscriptions + income + rhythm
     detectSubscriptions,
     detectIncome,
+    detectRegulars,
 
     // Graphs
     getSpendingGraphData,
