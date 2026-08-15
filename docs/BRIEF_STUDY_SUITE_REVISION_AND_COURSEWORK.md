@@ -260,3 +260,33 @@ Therefore the coaching engine becomes SCAFFOLDED:
    (named once, meaning + everyday example) — never sprinkled into questions to be parroted.
 7. **Cheaper by design**: plan once per part; scaffold steps are mostly deterministic; Q reasons
    between steps, not on every keystroke.
+
+## ADDENDUM 15 Aug (23:40) — THE MARKING STAGE, PROPERLY (Sarah, verbatim-ish) — DUE TOMORROW NIGHT
+
+*"There should be a board of words — photosynthesis, clouds look like shapes, blue sky — as
+BUTTONS on a card. Q finds the words he expects to see in his essay and puts them up for each
+section/question. The colour dots have a key you can always see. The dots appear IN THE ESSAY
+where he knows a term/button, a citation etc. should be — he puts them in after you've finished
+the question and moved on; he marks it subtly as he goes. When you hover over a terminology
+button there's a little popup card that explains what it means. Put your cursor at the end of a
+sentence and press AUTO CITE: it finds a list of citations you can use; press one and it puts it
+in as a Harvard ref. This has to be ACCURATE. He needs to stop giving a shit-load of info and push
+you into writing the words he wants you to write. Treat it like you're trying to get an 8-year-old
+to write an A-level law essay with referencing and get an A — because that's what I expect this to
+be able to do by tomorrow night."*
+
+Also from her screenshot: the terminology tool dumped long definitions onto the board (twice), the
+critique card was a paragraph — "all too much to try to teach you". And her session pre-dated the
+plan engine, so no plan/worksheet/word buttons/dots ever appeared for her parts.
+
+Required:
+1. **Word board per question**: expected terms as buttons; hover → small popup (meaning + one
+   everyday example); press → inserts at the caret; green when present/fits. Nothing else on it.
+2. **Dots placed in the essay at the right place, quietly, when you move on** from a question:
+   Q marks where a citation / term / case study / figure should sit inside the student's own
+   text; key always visible; a dot clears when satisfied. Not a lecture at the end.
+3. **Auto cite (accurate)**: caret at sentence end → list of real sources — uploaded sources
+   first, then a real academic index (OpenAlex / CrossRef, verified metadata) — press one →
+   correct Harvard in-text citation at the caret + reference list entry. Never invented.
+4. **Critique card = one line + dots + one-line fix.** Tool help = popup card, not board text.
+5. **Sessions without a plan get one on open** (backfill), so the worksheet/buttons/dots exist.
