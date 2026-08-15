@@ -230,6 +230,7 @@ says "yes, that's my life". Everything else is a bell on a broken clock.
 | 8 | **Balance on the account card** + completeness check (opening + transactions = closing; say so loudly when it doesn't) | Fenn | ⬜ |
 | 9 | Re-read the totals together. Do they match her life? | Both | ⬜ |
 | 10 | Label family payments + own company (~£6.5k currently counted as living costs) | Sarah | ⬜ |
+| 12 | **The app does the arithmetic** — reader copies the RUNNING BALANCE beside every row; each row audited against the bank's own step and corrected where the balances either side agree (`auditRowsByBalanceChain`); statements with no front-page totals (NatWest download) get opening/closing from the chain; every statement's verdict kept on the account and shown ("Jun £47 out · Jul 81p out · Aug ✓") plus gaps between consecutive statements; balance never moves backwards in time; dedupe by the bank's Transaction ID / running balance so same-day twins survive (39 Monzo rows recover on next drop) | Rowan | ✅ shipped 15 Aug |
 | 11 | **Credit cards don't double-count** — a payment to a card she holds is a transfer (only for dates the card's rows cover); "payment received" on the card is never income; card statements read purchases as money OUT (checked against the statement's own payment lines / balances); a card's balance is a debt, shown as "owe", never in "You have" | Rowan | ✅ shipped 15 Aug |
 
 **Why 6 matters most:** a transfer is only recognised when the app can see

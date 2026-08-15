@@ -447,6 +447,12 @@ function parseCsvStatement(text) {
     // the user moving their OWN money, and counting it as spending AND income
     // is exactly what made the headline totals read as lies.
     const idxType   = cols.findIndex(h => /^type$|transaction\s*type/.test(h));
+    // The bank's own row id (Monzo "Transaction ID"). Two identical payments
+    // on one day — two bus taps, two round-ups into the same pot — are two
+    // transactions, and only the bank's id tells them apart. Without it the
+    // dedupe collapsed them and 39 of Sarah's Monzo rows never reached the
+    // store.
+    const idxRef    = cols.findIndex(h => /transaction\s*id|^id$|^txn\s*id$/.test(h));
 
     const hasSingle = idxAmt !== -1;
     const hasSplit  = idxDebit !== -1 && idxCredit !== -1;
@@ -470,6 +476,7 @@ function parseCsvStatement(text) {
         const desc = (idxDesc !== -1 && f[idxDesc] ? f[idxDesc]
             : f.filter((_, j) => ![idxDate, idxAmt, idxDebit, idxCredit].includes(j)).join(' ')).trim();
         const row = { date, description: desc, merchant: desc, amount };
+        if (idxRef !== -1 && f[idxRef]) row.bankRef = String(f[idxRef]).trim().slice(0, 64);
         // Narrow on purpose: only the unambiguous self-move type. "Faster
         // payment" / "Monzo-to-Monzo" can be real payments to real people —
         // those stay with the AI categoriser.
@@ -926,13 +933,53 @@ function setAccountBalance(email, id, balance, asAt) {
     if (idx === -1) return null;
     const n = Number(balance);
     if (!Number.isFinite(n) || Math.abs(n) > MAX_TXN_AMOUNT) return null;
+    // A balance never moves BACKWARDS in time. Sarah dropped her July
+    // statement after her August one and the card said "Overdrawn · 31 Jul"
+    // as today's figure. The latest dated figure is the balance; an older
+    // statement's closing is remembered on its statement record, not here.
+    const at = asAt || new Date().toISOString().slice(0, 10);
+    const cur = all[idx];
+    if (cur.balanceAt && at < cur.balanceAt) {
+        console.log(`[finance] balance for ${cur.label} kept at ${cur.balanceAt} — an older figure (${at}) doesn't replace a newer one`);
+        return cur;
+    }
     all[idx] = {
         ...all[idx],
         balance:   Math.round(n * 100) / 100,
-        balanceAt: asAt || new Date().toISOString().slice(0, 10),
+        balanceAt: at,
     };
     saveAccounts(email, all);
     return all[idx];
+}
+
+// Every statement's own audit, remembered on the account, so the card can
+// say "June £47 out · July 81p out · August ✓" rather than only whatever was
+// dropped last. Same period re-uploaded replaces its record. Consecutive
+// statements are also checked against each other: one month's closing must
+// be the next month's opening, or there is a statement missing between.
+function recordStatement(email, id, rec) {
+    const all = getAccounts(email);
+    const idx = all.findIndex(a => a.id === id);
+    if (idx === -1 || !rec || !rec.from || !rec.to) return null;
+    const list = (all[idx].statements || []).filter(s => !(s.from === rec.from && s.to === rec.to));
+    list.push({ ...rec, importedAt: new Date().toISOString() });
+    list.sort((a, b) => String(a.from).localeCompare(String(b.from)));
+    all[idx] = { ...all[idx], statements: list.slice(-36) };
+    saveAccounts(email, all);
+    return all[idx];
+}
+
+// Gaps between consecutive statements on one account: closing of one vs
+// opening of the next. Only where both are printed figures.
+function statementGaps(statements) {
+    const gaps = [];
+    const list = (statements || []).filter(s => s.opening != null && s.closing != null);
+    for (let i = 1; i < list.length; i++) {
+        const prev = list[i - 1], cur = list[i];
+        const diff = Math.round((cur.opening - prev.closing) * 100) / 100;
+        if (Math.abs(diff) >= 0.005) gaps.push({ after: prev.to, before: cur.from, difference: diff });
+    }
+    return gaps;
 }
 
 // Accounts with their live figures, for the page's account cards. Computed
@@ -970,6 +1017,7 @@ function getAccountsWithTotals(email) {
             : null;
         return {
             ...a,
+            statement_gaps:  statementGaps(a.statements),
             net_movement:    netMovement,
             implied_opening: impliedOpening,
             transaction_count: rows.length,
@@ -1078,13 +1126,47 @@ async function saveRows(email, parsed, opts = {}) {
     // recognition onto rows that predate those features, so an upload is
     // never silently pointless.
     const existing = getTransactions(email);
-    const existingByKey = new Map(existing.map(t => [dedupKey(t), t]));
+    // Two ways to recognise a row already stored: the bank's own reference
+    // (Monzo's Transaction ID, or a PDF row's running balance — no two rows
+    // share date+amount+merchant+balance) and, failing that, the legacy
+    // date+amount+merchant key. The legacy key cannot tell same-day twins
+    // apart, so once a stored row has been CLAIMED by one referenced row in
+    // this import, its twin no longer matches it and is added — that is how
+    // the 39 collapsed Monzo rows come back on the next drop, without the
+    // other 1,193 duplicating.
+    const byRef = new Map(existing.filter(t => refKey(t)).map(t => [refKey(t), t]));
+    const byLegacy = new Map();
+    for (const t of existing) {
+        const k = dedupKey(t);
+        if (!byLegacy.has(k)) byLegacy.set(k, []);
+        byLegacy.get(k).push(t);
+    }
+    const claimed = new Set();
     const fresh = [];
-    let backfilled = 0;
+    let backfilled = 0, twins = 0;
     for (const t of withBuckets) {
-        const hit = existingByKey.get(dedupKey(t));
+        const rk = refKey(t);
+        let hit = rk ? byRef.get(rk) : null;
+        if (!hit) {
+            // A row the balance chain corrected carries its as-read amount in
+            // repaired.from — that is the amount the stored (misread) row has.
+            const cands = (byLegacy.get(dedupKey(t)) || []).concat(
+                t.repaired ? (byLegacy.get(dedupKey({ ...t, amount: t.repaired.from })) || []) : []);
+            hit = rk
+                // referenced row: a stored row already claimed by a different
+                // reference, or carrying a different reference, is a twin
+                ? (cands.find(e => !claimed.has(e.id) && (!refKey(e) || refKey(e) === rk)) || null)
+                : (cands[0] || null);
+            if (!hit && rk && cands.length) twins++;
+        }
         if (!hit) { fresh.push(t); continue; }
+        claimed.add(hit.id);
         let touched = false;
+        if (t.bankRef && !hit.bankRef) { hit.bankRef = t.bankRef; touched = true; }
+        if (t.balance != null && hit.balance == null) { hit.balance = t.balance; touched = true; }
+        // A row the balance chain corrected on this read: the stored amount
+        // was the misread one. The bank's step wins.
+        if (t.repaired && hit.amount !== t.amount) { hit.amount = t.amount; hit.repaired = t.repaired; touched = true; }
         if (t.source && !hit.source) { hit.source = t.source; touched = true; }
         // The account stamp is the whole point of a re-upload for rows that
         // predate account recognition — backfill it the same way.
@@ -1098,7 +1180,8 @@ async function saveRows(email, parsed, opts = {}) {
     const merged = [...existing, ...fresh];
     merged.sort((a, b) => (b.date || '').localeCompare(a.date || ''));
 
-    if (backfilled) console.log(`[finance] dedupe backfill — ${backfilled} existing rows gained source/own-name info`);
+    if (backfilled) console.log(`[finance] dedupe backfill — ${backfilled} existing rows gained source/own-name/reference info`);
+    if (twins)      console.log(`[finance] dedupe — ${twins} same-day twin(s) recovered that the old key had collapsed`);
     saveTransactions(email, merged);
 
     // Background label pass over the rows that just landed as 'other'.
@@ -1155,6 +1238,17 @@ function dedupKey(t) {
     return `${t.date}|${Number(t.amount).toFixed(2)}|${merchantKey(t.merchant || t.description)}`;
 }
 
+// The bank's own identity for a row, when it gave one. A Transaction ID is
+// exact; a running balance is as good — no two rows on one statement share
+// date, amount, merchant AND balance. Null when the row has neither.
+function refKey(t) {
+    if (t.bankRef) return `ref:${t.bankRef}`;
+    if (t.balance != null && Number.isFinite(Number(t.balance))) {
+        return `bal:${dedupKey(t)}|${Number(t.balance).toFixed(2)}`;
+    }
+    return null;
+}
+
 function merchantKey(name) {
     return String(name || '').toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 30);
 }
@@ -1198,12 +1292,18 @@ copy one that is printed.
 
 THEN return the transactions as plain CSV with a header row and one
 transaction per line:
-date,description,amount
+date,description,amount,balance
 
 Rules:
 - date: YYYY-MM-DD format
 - description: exact text from the statement
 - amount: NEGATIVE number for money leaving the account (payments/debits), POSITIVE for money coming in (credits/income)
+- balance: the RUNNING BALANCE printed on that same row, when the statement
+  has a balance column (most UK bank statements print one beside every
+  transaction). Copy it exactly as printed as a plain decimal — an overdrawn
+  balance ("D", "OD", "DR" or a minus) is written with a minus sign. If a row
+  prints no balance, leave the field EMPTY (end the line with a comma). NEVER
+  calculate a balance — only copy one that is printed on that row.
 - The amount is ONLY the money value of that one transaction. It is NEVER the
   running balance, an account number, a sort code, a payment reference, a
   customer/NI number, or a date or year. Those belong in the description, not
@@ -1221,8 +1321,9 @@ Rules:
   in and must be POSITIVE. In the #BALANCE line for a credit card, a balance
   the person OWES is written with a minus sign (-450.00) and a balance in
   credit is written with CR after it (12.50 CR).
-- Do NOT include balance columns, opening/closing balance totals, or header/footer rows
-- If multiple pages are visible, extract ALL of them
+- Do NOT include opening/closing balance totals or header/footer rows as
+  transactions (the balance column belongs in the 4th field, never the 3rd)
+- If multiple pages are visible, extract ALL of them, in the order printed
 - Return ONLY the CSV. No explanation, no markdown.`;
 
 // Deterministic CSV → rows. The vision model already returns clean
@@ -1231,9 +1332,22 @@ Rules:
 // pages blow the timeout. Parsing it here is instant and never times out.
 // Robust to commas inside descriptions (date is the first field, amount the
 // trailing number) and to UK date drift (DD/MM/YYYY → YYYY-MM-DD).
+const MONEY_TOKEN_RE = /^-?\d{1,3}(,\d{3})*(\.\d{1,2})?$|^-?\d{1,9}(\.\d{1,2})?$/;
+function moneyToken(field) {
+    const tok = String(field == null ? '' : field).replace(/[£$€\s]/g, '');
+    return MONEY_TOKEN_RE.test(tok) ? parseFloat(tok.replace(/,/g, '')) : null;
+}
+
 function csvToRows(csv) {
     const clean = String(csv || '').replace(/```(?:csv)?/gi, '').trim();
     const out = [];
+    // The reader is asked for date,description,amount,balance. Only when a
+    // header row actually declares the balance column is the last field read
+    // as a balance — otherwise a description that ends in a reference number
+    // ("TESCO, 1234, -12.50" unquoted) would be split as amount 1234 /
+    // balance -12.50. Chunked PDFs carry one header per chunk; any of them
+    // switching the mode on is fine because every chunk gets the same prompt.
+    const balanceMode = /^"?date"?\s*,\s*"?description"?\s*,\s*"?amount"?\s*,\s*"?balance"?/im.test(clean);
     for (const line of clean.split(/\r?\n/)) {
         const l = line.trim();
         if (!l || l.startsWith('#') || /^"?date"?\s*,/i.test(l)) continue;   // blank, #ACCOUNT header, or column header
@@ -1242,13 +1356,21 @@ function csvToRows(csv) {
         // token. The old "last number anywhere on the line" grabbed reference
         // numbers and the statement year when they sat next to the amount —
         // a DWP reference read as £3.7tn, "Interest …2026" as £20,260.05.
-        const fields = splitCsvLine(l);
-        let amount = null;
-        if (fields.length >= 3) {
-            const tok = fields[fields.length - 1].replace(/[£$€\s]/g, '');
-            if (/^-?\d{1,3}(,\d{3})*(\.\d{1,2})?$|^-?\d{1,9}(\.\d{1,2})?$/.test(tok)) {
-                amount = parseFloat(tok.replace(/,/g, ''));
+        // In balance mode the last field is the running balance (or empty)
+        // and the amount is the one before it.
+        let fields = splitCsvLine(l);
+        let amount = null, balance = null;
+        if (balanceMode && fields.length >= 4) {
+            const last = moneyToken(fields[fields.length - 1]);
+            const prev = moneyToken(fields[fields.length - 2]);
+            const lastEmpty = fields[fields.length - 1] === '';
+            if (prev !== null && (last !== null || lastEmpty)) {
+                amount = prev; balance = last;
+                fields = fields.slice(0, -1);              // drop the balance so desc = fields[1..-1]
             }
+        }
+        if (amount === null && fields.length >= 3) {
+            amount = moneyToken(fields[fields.length - 1]);
         }
         if (amount === null) {                                  // non-CSV freeform fallback
             const amtM = l.match(/(-?\d[\d,]*(?:\.\d+)?)\s*$/);
@@ -1274,9 +1396,99 @@ function csvToRows(csv) {
                     .replace(/^[\s,"]+|[\s,"]+$/g, '')
                     .trim();
         }
-        out.push({ date, description: desc, merchant: desc, amount });
+        const row = { date, description: desc, merchant: desc, amount };
+        if (balance !== null && Number.isFinite(balance) && Math.abs(balance) <= MAX_TXN_AMOUNT) row.balance = balance;
+        out.push(row);
     }
     return out;
+}
+
+// ── The running balance is the bank's own arithmetic ─────────────────────
+// A statement that prints a balance beside every row has already done the
+// sum. Balance[i] − balance[i−1] IS what moved in row i, in the bank's
+// figures. So the read can be audited ROW BY ROW instead of only at the
+// statement's ends: where the amount we read disagrees with the bank's step,
+// and the balances either side of that row are consistent with their own
+// neighbours, the bank's step is the truth and the row is corrected. That is
+// what finds an 81p misread in 62 rows and a £47 one in 51 without anyone
+// reading a line. Nothing is invented: every correction is a printed figure.
+//
+// Direction: some statements print oldest-first (Lloyds), some newest-first
+// (a NatWest transaction download). Whichever way the chain agrees with the
+// rows more is the way it runs; if neither agrees for at least half the
+// links, the balances aren't trustworthy and nothing is touched.
+function auditRowsByBalanceChain(rows) {
+    const withBal = rows.filter(r => r.balance != null && Number.isFinite(r.balance));
+    if (withBal.length < 2) return { rows, direction: null, links: 0, agree: 0, repaired: [], breaks: [] };
+    const near = (a, b) => Math.abs(a - b) < 0.005;
+    const r2 = v => Math.round(v * 100) / 100;
+    // Links between consecutive balance-bearing rows (in read order).
+    const idx = rows.map((r, i) => i).filter(i => rows[i].balance != null && Number.isFinite(rows[i].balance));
+    const fwd = [], rev = [];
+    for (let k = 1; k < idx.length; k++) {
+        const a = rows[idx[k - 1]], b = rows[idx[k]];
+        // Rows without a balance between two with one: their amounts belong
+        // to the step too (a merged link). Sum every amount from a's
+        // successor up to and including b (forward) / a (reverse).
+        const between = rows.slice(idx[k - 1] + 1, idx[k]).reduce((s, r) => s + (Number(r.amount) || 0), 0);
+        fwd.push(near(r2(b.balance - a.balance), r2(between + b.amount)));
+        rev.push(near(r2(a.balance - b.balance), r2(between + a.amount)));
+    }
+    const nF = fwd.filter(Boolean).length, nR = rev.filter(Boolean).length;
+    const links = fwd.length;
+    if (Math.max(nF, nR) < Math.ceil(links / 2)) {
+        console.log(`[finance] balance chain — ${links} links, forward agrees ${nF}, reverse ${nR}: balances not trustworthy, rows left as read`);
+        return { rows, direction: null, links, agree: Math.max(nF, nR), repaired: [], breaks: [] };
+    }
+    const forward = nF >= nR;
+    const ok = forward ? fwd : rev;
+    const out = rows.map(r => ({ ...r }));
+    const repaired = [], breaks = [];
+    for (let k = 1; k < idx.length; k++) {
+        if (ok[k - 1]) continue;
+        // The row whose amount this link measures: b (forward) or a (reverse).
+        const rowI = forward ? idx[k] : idx[k - 1];
+        const a = out[idx[k - 1]], b = out[idx[k]];
+        const between = out.slice(idx[k - 1] + 1, idx[k]).reduce((s, r) => s + (Number(r.amount) || 0), 0);
+        const step = forward ? r2(b.balance - a.balance - between) : r2(a.balance - b.balance - between);
+        // Trust the two balances only if each also agrees with its OTHER
+        // neighbour (or is an end of the chain) — a misread balance breaks
+        // two links, a misread amount breaks one.
+        const leftOk  = (k - 2 < 0)          || ok[k - 2];
+        const rightOk = (k >= ok.length)     || ok[k];
+        const row = out[rowI];
+        if (leftOk && rightOk && Number.isFinite(step) && Math.abs(step) <= MAX_TXN_AMOUNT && step !== 0
+            && Math.sign(step) === Math.sign(row.amount)) {
+            repaired.push({ date: row.date, description: String(row.description || '').slice(0, 40), from: row.amount, to: step });
+            row.repaired = { from: row.amount, by: 'balance-chain' };
+            row.amount = step;
+        } else {
+            breaks.push({ date: row.date, description: String(row.description || '').slice(0, 40), read: row.amount, bank_step: step });
+        }
+    }
+    if (repaired.length) console.log(`[finance] balance chain — corrected ${repaired.length} row(s) to the bank's own step: ${repaired.map(x => `${x.date} "${x.description}" ${x.from}→${x.to}`).join('; ')}`);
+    if (breaks.length)   console.log(`[finance] balance chain — ${breaks.length} link(s) don't add up and couldn't be pinned to one row: ${breaks.map(x => `${x.date} "${x.description}" read ${x.read} vs step ${x.bank_step}`).join('; ')}`);
+    return { rows: out, direction: forward ? 'oldest-first' : 'newest-first', links, agree: Math.max(nF, nR), repaired, breaks };
+}
+
+// Opening and closing from the running balances themselves — for a
+// statement (or a transaction download) that prints no front-page totals.
+// closing = the balance on the latest row; opening = the balance on the
+// earliest row minus that row's own amount. Printed figures both, so they
+// stand as a real check, not a tautology: a misread or missed row still
+// shows up as a difference.
+function balancesFromChain(rows, direction) {
+    const withBal = rows.filter(r => r.balance != null && Number.isFinite(r.balance) && r.date);
+    if (withBal.length < 2 || !direction) return null;
+    const first = direction === 'oldest-first' ? withBal[0] : withBal[withBal.length - 1];
+    const last  = direction === 'oldest-first' ? withBal[withBal.length - 1] : withBal[0];
+    return {
+        opening:     Math.round((first.balance - first.amount) * 100) / 100,
+        openingDate: first.date,
+        closing:     last.balance,
+        closingDate: last.date,
+        fromChain:   true,
+    };
 }
 
 // The reader is asked to copy the account header ("#ACCOUNT: Lloyds | Club
@@ -1339,6 +1551,43 @@ function parseBalanceHeader(csv) {
  * one failure this pipeline previously had no way to notice, because a short
  * read simply produced smaller totals and looked just as confident.
  */
+// The words for a statement that doesn't add up. Both figures shown, no
+// claim about direction — "more moved than I could read" was said even when
+// we had read TOO MUCH, which sends her looking for a missing row that isn't.
+function mismatchWords(check) {
+    const money = v => (v < 0 ? '−' : '+') + '£' + Math.abs(v).toFixed(2);
+    return `⚠️ This statement doesn't add up. The bank's own balances say it moved ${money(check.expected_movement)} overall; I read ${money(check.read_movement)} — £${Math.abs(check.difference).toFixed(2)} apart. A row was misread or missed.`;
+}
+
+// Everything that happens once a statement's rows are in: audit against the
+// bank's balances, remember the result on the account, set the balance
+// (latest dated statement wins — never backwards), and say what happened.
+// Shared by the image and PDF paths so they can't drift.
+function finishStatementImport(email, acct, rows, bal, result, source) {
+    const check = reconcileStatement(rows, bal);
+    if (bal && bal.closing != null && acct) {
+        setAccountBalance(email, acct.id, bal.closing, bal.closingDate || undefined);
+    }
+    if (acct && rows.length) {
+        const dates = rows.map(r => r.date).filter(Boolean).sort();
+        recordStatement(email, acct.id, {
+            from: (bal && bal.openingDate) || dates[0],
+            to:   (bal && bal.closingDate) || dates[dates.length - 1],
+            opening: bal ? bal.opening : null,
+            closing: bal ? bal.closing : null,
+            rows: rows.length,
+            source: source || null,
+            check: check ? { expected: check.expected_movement, read: check.read_movement, difference: check.difference, ok: check.ok } : null,
+            repaired: result.repaired || 0,
+        });
+    }
+    if (check) {
+        result.reconciliation = check;
+        console.log(`[finance] statement check — bank says ${check.expected_movement}, we read ${check.read_movement}, diff ${check.difference} → ${check.ok ? 'COMPLETE' : 'SHORT'}`);
+    }
+    return check;
+}
+
 function reconcileStatement(rows, bal) {
     if (!bal || bal.opening == null || bal.closing == null) return null;
     const read     = Math.round(rows.reduce((s, t) => s + (Number(t.amount) || 0), 0) * 100) / 100;
@@ -1365,20 +1614,23 @@ async function importStatementFromImage(email, imageBase64, mimeType, filename, 
     const source = deriveSource(filename, '');
     const acct = detectAccount(accountHeaderText(raw), filename);
     if (acct) upsertAccount(email, acct, source);
-    const bal = normaliseCardBalance(parseBalanceHeader(raw), acct);
+    let bal = normaliseCardBalance(parseBalanceHeader(raw), acct);
     // Card statements: check the signs against the statement's own evidence
     // BEFORE anything is saved (see normaliseCardRows).
-    const rows = normaliseCardRows(csvToRows(raw).map(r => ({ ...r, source, ...(acct && { account: acct.id }) })), acct, bal).rows;
+    let rows = normaliseCardRows(csvToRows(raw).map(r => ({ ...r, source, ...(acct && { account: acct.id }) })), acct, bal).rows;
+    // The running balances audit every row (auditRowsByBalanceChain) and
+    // stand in for missing front-page totals (balancesFromChain).
+    const audit = auditRowsByBalanceChain(rows);
+    rows = audit.rows;
+    if (!bal || bal.opening == null || bal.closing == null) {
+        const fromChain = balancesFromChain(rows, audit.direction);
+        if (fromChain) bal = { ...(fromChain), ...(bal || {}), opening: (bal && bal.opening != null) ? bal.opening : fromChain.opening, openingDate: (bal && bal.openingDate) || fromChain.openingDate, closing: (bal && bal.closing != null) ? bal.closing : fromChain.closing, closingDate: (bal && bal.closingDate) || fromChain.closingDate };
+    }
     console.log(`[finance] importStatementFromImage: vision ${raw.length} chars → ${rows.length} rows (no re-parse)${acct ? `, account "${acct.label}"` : ''}`);
     const result = await saveRows(email, rows, { ownerName });
-    const check = reconcileStatement(rows, bal);
-    if (bal && bal.closing != null && acct) setAccountBalance(email, acct.id, bal.closing, bal.closingDate || undefined);
-    if (check) {
-        result.reconciliation = check;
-        if (!check.ok) {
-            result.hint = `⚠️ This statement doesn't add up. The bank's own balances say £${Math.abs(check.difference).toFixed(2)} more moved than I could read — some transactions were missed.`;
-        }
-    }
+    result.repaired = audit.repaired.length;
+    const check = finishStatementImport(email, acct, rows, bal, result, source);
+    if (check && !check.ok) result.hint = mismatchWords(check);
     return result;
 }
 
@@ -1451,32 +1703,35 @@ async function importStatementFromFile(email, fileBase64, mimeType, onProgress, 
         // the account a real balance without anyone typing one. Read first:
         // on a credit card they are also the evidence for which way round the
         // rows were read (normaliseCardRows).
-        const bal = normaliseCardBalance(parseBalanceHeader(chunked.csv), acct);
-        const rows = normaliseCardRows(csvToRows(chunked.csv).map(r => ({ ...r, source, ...(acct && { account: acct.id }) })), acct, bal).rows;
+        let bal = normaliseCardBalance(parseBalanceHeader(chunked.csv), acct);
+        let rows = normaliseCardRows(csvToRows(chunked.csv).map(r => ({ ...r, source, ...(acct && { account: acct.id }) })), acct, bal).rows;
         console.log(`[finance] PDF→Gemini chunked: ${chunked.pageCount} pages → ${rows.length} rows; failed: ${chunked.failed.join(', ') || 'none'}${acct ? `; account "${acct.label}"` : ''}`);
         if (!rows.length) {
             return { added: 0, total, hint: 'Could not read transactions from this PDF — try uploading a clearer copy.' };
         }
+        // The running balances audit every row (auditRowsByBalanceChain) and
+        // stand in for missing front-page totals (balancesFromChain) — a
+        // NatWest transaction download prints no opening/closing but does
+        // print a balance beside every row.
+        const audit = auditRowsByBalanceChain(rows);
+        rows = audit.rows;
+        if (!bal || bal.opening == null || bal.closing == null) {
+            const fromChain = balancesFromChain(rows, audit.direction);
+            if (fromChain) bal = { ...(bal || {}), opening: (bal && bal.opening != null) ? bal.opening : fromChain.opening, openingDate: (bal && bal.openingDate) || fromChain.openingDate, closing: (bal && bal.closing != null) ? bal.closing : fromChain.closing, closingDate: (bal && bal.closingDate) || fromChain.closingDate, fromChain: true };
+        }
         const result = await saveRows(email, rows, { ownerName });
-
-        const check = reconcileStatement(rows, bal);
-        if (bal && bal.closing != null && acct) {
-            setAccountBalance(email, acct.id, bal.closing, bal.closingDate || undefined);
-        }
-        if (check) {
-            result.reconciliation = check;
-            console.log(`[finance] statement check — bank says ${check.expected_movement}, we read ${check.read_movement}, diff ${check.difference} → ${check.ok ? 'COMPLETE' : 'SHORT'}`);
-        }
+        result.repaired = audit.repaired.length;
+        const check = finishStatementImport(email, acct, rows, bal, result, source);
 
         // Tell her what happened, in every case. A silent success is what let
         // a short read look identical to a complete one.
+        const fixedNote = audit.repaired.length ? ` ${audit.repaired.length} amount${audit.repaired.length === 1 ? ' was' : 's were'} corrected to the bank's own running balance.` : '';
         if (chunked.failed.length) {
             result.hint = `Imported ${result.added} transactions, but page(s) ${chunked.failed.join(', ')} of ${chunked.pageCount} couldn't be read — upload the same PDF again to retry those.`;
         } else if (check && !check.ok) {
-            const missing = Math.abs(check.difference);
-            result.hint = `⚠️ This statement doesn't add up. The bank's own closing balance says £${missing.toFixed(2)} ${check.difference < 0 ? 'more' : 'less'} moved than I could read — some transactions were missed. Upload a clearer copy of this one.`;
+            result.hint = mismatchWords(check) + fixedNote + ' Upload a clearer copy of this one.';
         } else if (check && check.ok) {
-            result.hint = `✅ Checked against the bank's own opening and closing balance — every transaction on this statement was read.`;
+            result.hint = `✅ Checked against the bank's own ${bal.fromChain ? 'running balances' : 'opening and closing balance'} — every transaction on this statement was read.${fixedNote}`;
         } else if (bal && bal.closing != null) {
             result.hint = `Balance read from the statement: £${bal.closing.toFixed(2)}. No opening balance printed, so I can't verify the read was complete.`;
         }
@@ -2578,6 +2833,14 @@ module.exports = {
 
     // Accounts
     detectAccount,
+    csvToRows,
+    auditRowsByBalanceChain,
+    balancesFromChain,
+    recordStatement,
+    statementGaps,
+    refKey,
+    dedupKey,
+    saveRows,
     cardPaymentIds,
     normaliseCardRows,
     normaliseCardBalance,
