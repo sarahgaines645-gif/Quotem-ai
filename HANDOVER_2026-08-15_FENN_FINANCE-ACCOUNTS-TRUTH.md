@@ -194,6 +194,27 @@ logos, price rises, credit health. Do not start them.
 
 ---
 
+## ⚠️ ANOTHER SESSION IS WORKING IN THIS TREE RIGHT NOW
+
+At handover the working tree carries substantial uncommitted changes that are
+NOT this session's: `auth.js`, `chat.html`, `config.js`, `people.js`,
+`nixpacks.toml`, `plugins/q-agent.js`, `plugins/q-chat.js`, `plugins/q-claude.js`
+and more — described in `959f547` as "the rest of the gates work". **Do not
+commit those paths. Do not assume they are yours.**
+
+**I broke production doing exactly this, and it is worth learning from.** My
+commit `fb3cc8f` was made with `git commit -- plugins/q-finance.js ...`, which
+commits the **whole current file**, not just my hunks. That file already held
+seven `logUsage(...)` call sites another session had added, whose definition
+lives in a `cost-tracker.js` they had not committed yet. So live got the callers
+without the function, and every finance AI call threw `logUsage is not a
+function` immediately after the model answered, until `959f547` hotfixed it.
+
+**The rule, for anyone working in this repo:** committing by path is not
+protection when another session shares the tree. Before pushing, run
+`git diff --cached` and read what you are actually shipping — if a hunk isn't
+yours, unstage it (`git restore --staged -p`) rather than shipping it half-built.
+
 ## How to verify anything here
 
 Railway CLI is linked in the repo. `railway logs | grep "commit ="` tells you
