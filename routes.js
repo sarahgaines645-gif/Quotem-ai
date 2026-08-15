@@ -2252,6 +2252,12 @@ router.get('/api/finance/rhythm', requirePerson, (req, res) => {
     res.json(qFinance.detectRegulars(req.person.email));
 });
 
+// What's coming in and when — a forward projection from the observed pattern.
+router.get('/api/finance/forecast', requirePerson, (req, res) => {
+    const weeks = Math.min(52, Math.max(1, parseInt(req.query.weeks, 10) || 12));
+    res.json(qFinance.forecastIncome(req.person.email, weeks));
+});
+
 // What the charges cost — penalties (avoidable) kept apart from account fees.
 router.get('/api/finance/charges', requirePerson, (req, res) => {
     res.json(qFinance.detectCharges(req.person.email));

@@ -214,6 +214,17 @@
     }
     .section-header h3, .graph-card h3 { cursor: pointer; user-select: none; }
 
+    /* ── Forecast ── */
+    .fc-head { margin-bottom: 12px; }
+    .fc-head .fc-v { font-size: 24px; font-weight: 700; color: var(--text); letter-spacing: -0.04em; }
+    .fc-head .fc-l { font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-muted); font-weight: 600; margin-bottom: 3px; }
+    .fc-row { display: flex; align-items: baseline; gap: 12px; padding: 7px 0; border-top: 1px solid var(--border-subtle); overflow-wrap: anywhere; }
+    .fc-when { font-size: 12px; font-weight: 700; color: var(--text); min-width: 92px; }
+    .fc-who  { flex: 1 1 auto; font-size: 13px; color: var(--text); }
+    .fc-meta { font-size: 10px; color: var(--text-muted); }
+    .fc-amt  { font-size: 14px; font-weight: 700; color: var(--green); white-space: nowrap; }
+    .fc-soon { color: var(--green); }
+
     /* ── Charges ── */
     .charge-head { display: flex; gap: 26px; flex-wrap: wrap; margin-bottom: 14px; }
     .charge-head .ch-l { font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-muted); font-weight: 600; margin-bottom: 3px; }
@@ -649,6 +660,17 @@
     </div>
   </div>
 
+  <!-- WHAT'S COMING IN -->
+  <div class="section-card" id="forecast-card">
+    <div class="section-header">
+      <h3>📅 What's coming in</h3>
+      <span class="badge badge-green" id="forecast-badge"></span>
+    </div>
+    <div id="forecast-body">
+      <div class="txn-empty">Nothing to forecast yet — import a statement first</div>
+    </div>
+  </div>
+
   <!-- INCOME -->
   <div class="section-card" id="income-card">
     <div class="section-header">
@@ -825,6 +847,7 @@
   let rhythmData    = null;
   let accounts      = [];
   let chargesData   = null;
+  let forecastData  = null;
   let shownCount    = 40;
   let activeFilter  = '';
   let searchQuery   = '';
@@ -861,7 +884,7 @@
 
   // ── Load data ─────────────────────────────────────────────────────────────
   async function loadAll() {
-    const [txRes, grRes, prRes, subRes, incRes, rhyRes, accRes, chgRes] = await Promise.all([
+    const [txRes, grRes, prRes, subRes, incRes, rhyRes, accRes, chgRes, fcRes] = await Promise.all([
       apiFetch('/api/finance/transactions'),
       apiFetch('/api/finance/graph'),
       apiFetch('/api/finance/problems'),
@@ -870,6 +893,7 @@
       apiFetch('/api/finance/rhythm'),
       apiFetch('/api/finance/accounts'),
       apiFetch('/api/finance/charges'),
+      apiFetch('/api/finance/forecast?weeks=12'),
     ]);
     if (txRes.ok)  transactions  = await txRes.json();
     if (grRes.ok)  graphData     = await grRes.json();
@@ -879,6 +903,7 @@
     if (rhyRes.ok) rhythmData    = await rhyRes.json();
     if (accRes.ok) accounts      = await accRes.json();
     if (chgRes.ok) chargesData   = await chgRes.json();
+    if (fcRes.ok)  forecastData  = await fcRes.json();
     renderAll();
   }
 
@@ -933,9 +958,54 @@
     body.innerHTML = html;
   }
 
+  // ── What's coming in ──────────────────────────────────────────────────────
+  // A forward run of the money, projected from the pattern each payer has
+  // actually shown. Confidence is stated rather than implied — being told the
+  // wrong day is worse than being told nothing.
+  function renderForecast() {
+    const body  = document.getElementById('forecast-body');
+    const badge = document.getElementById('forecast-badge');
+    if (!body) return;
+    const f = forecastData;
+    if (!f || !f.events.length) {
+      body.innerHTML = '<div class="txn-empty">No dependable pattern yet — a payer needs to have paid you at least twice before this can say when they will again.</div>';
+      badge.textContent = '';
+      return;
+    }
+    badge.textContent = '£' + fmt(f.monthly_equivalent) + '/mo';
+
+    const today = new Date(); today.setHours(0,0,0,0);
+    const dayIn = iso => Math.round((new Date(iso + 'T00:00:00') - today) / 86400000);
+    const when = iso => {
+      const d = dayIn(iso);
+      if (d <= 0) return 'today';
+      if (d === 1) return 'tomorrow';
+      if (d < 14)  return 'in ' + d + ' days';
+      return ukDate(iso);
+    };
+
+    let html = `<div class="fc-head">
+      <div class="fc-l">Coming in over the next ${f.weeks} weeks</div>
+      <div class="fc-v">£${fmt(f.total_expected)}</div>
+      <div class="fc-meta">about £${fmt(f.monthly_equivalent)} a month from ${f.streams.length} source${f.streams.length === 1 ? '' : 's'}</div>
+    </div>`;
+
+    html += f.events.slice(0, 14).map(e => `<div class="fc-row">
+        <div class="fc-when${dayIn(e.date) < 8 ? ' fc-soon' : ''}">${esc(when(e.date))}</div>
+        <div class="fc-who">${esc(e.payer)}
+          <div class="fc-meta">${esc(e.cadence_label)}${e.varies ? ' · amount varies' : ''}${e.confidence !== 'high' ? ' · ' + e.confidence + ' confidence' : ''}</div>
+        </div>
+        <div class="fc-amt">£${fmt(e.amount)}</div>
+      </div>`).join('');
+
+    html += `<div class="ac-sub" style="margin-top:12px">Projected from what each payer has actually done, not from what they promised. A date can move if they pay late.</div>`;
+    body.innerHTML = html;
+  }
+
   function renderAll() {
     renderAccounts();
     renderCharges();
+    renderForecast();
     renderSummary();
     renderCharts();
     renderSubscriptions();

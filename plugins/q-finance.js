@@ -24,6 +24,7 @@ const path = require('path');
 const { Q_CONFIG }       = require('../config');
 const { userDataPath }   = require('./user-data');
 const { cleanModelOutput } = require('./cjk-filter');
+const { logUsage }       = require('../cost-tracker');
 
 // Call Together AI via plain fetch — same pattern as q-email-writer.js
 // Pass extra = { response_format, ... } for JSON mode etc.
@@ -32,6 +33,7 @@ async function togetherChat({ model, messages, temperature = 0, max_tokens = 400
     // whole request hang forever and the UI sits on "reading…" indefinitely.
     const ctrl = new AbortController();
     const timer = setTimeout(() => ctrl.abort(), 90_000);
+    const started = Date.now();
     let res;
     try {
         res = await fetch(`${Q_CONFIG.baseURL}/chat/completions`, {
@@ -51,9 +53,11 @@ async function togetherChat({ model, messages, temperature = 0, max_tokens = 400
     }
     if (!res.ok) {
         const err = await res.text();
+        logUsage({ skill: 'finance', provider: 'together', model, started, success: false, error: `HTTP ${res.status}` });
         throw new Error(`Together AI ${res.status}: ${err.slice(0, 300)}`);
     }
     const json = await res.json();
+    logUsage({ skill: 'finance', provider: 'together', model, data: json, started });
     const msg = json.choices?.[0]?.message || {};
     return msg.content || msg.reasoning_content || msg.reasoning || '';
 }
@@ -66,6 +70,7 @@ async function geminiVision({ prompt, base64, mimeType = 'image/jpeg', maxTokens
     if (!key) throw new Error('GEMINI_API_KEY not configured');
     const ctrl = new AbortController();
     const timer = setTimeout(() => ctrl.abort(), 90_000);
+    const started = Date.now();
     let res;
     try {
         res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${key}`, {
@@ -86,8 +91,12 @@ async function geminiVision({ prompt, base64, mimeType = 'image/jpeg', maxTokens
     } finally {
         clearTimeout(timer);
     }
-    if (!res.ok) throw new Error(`Gemini ${res.status}: ${(await res.text()).slice(0, 300)}`);
+    if (!res.ok) {
+        logUsage({ skill: 'finance', provider: 'gemini', model: 'gemini-2.5-flash', started, success: false, error: `HTTP ${res.status}` });
+        throw new Error(`Gemini ${res.status}: ${(await res.text()).slice(0, 300)}`);
+    }
     const json = await res.json();
+    logUsage({ skill: 'finance', provider: 'gemini', model: 'gemini-2.5-flash', data: json, started });
     const cand = json?.candidates?.[0];
     if (cand?.finishReason === 'MAX_TOKENS') {
         console.warn('[finance] Gemini hit MAX_TOKENS — output truncated; very large statement may be incomplete (CSV export is exact)');
@@ -109,6 +118,7 @@ async function geminiText(prompt, { maxTokens = 8000, thinkingBudget } = {}) {
     if (!key) throw new Error('GEMINI_API_KEY not configured');
     const ctrl = new AbortController();
     const timer = setTimeout(() => ctrl.abort(), 90_000);
+    const started = Date.now();
     let res;
     try {
         res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${key}`, {
@@ -133,8 +143,12 @@ async function geminiText(prompt, { maxTokens = 8000, thinkingBudget } = {}) {
     } finally {
         clearTimeout(timer);
     }
-    if (!res.ok) throw new Error(`Gemini ${res.status}: ${(await res.text()).slice(0, 300)}`);
+    if (!res.ok) {
+        logUsage({ skill: 'finance', provider: 'gemini', model: 'gemini-2.5-flash', started, success: false, error: `HTTP ${res.status}` });
+        throw new Error(`Gemini ${res.status}: ${(await res.text()).slice(0, 300)}`);
+    }
     const json = await res.json();
+    logUsage({ skill: 'finance', provider: 'gemini', model: 'gemini-2.5-flash', data: json, started });
     const cand = json?.candidates?.[0];
     if (cand?.finishReason === 'MAX_TOKENS') console.warn('[finance] Gemini text MAX_TOKENS — output truncated');
     const parts = cand?.content?.parts;
@@ -2003,13 +2017,42 @@ function stripRefTokens(name) {
 // Income sources — credits grouped the way subscriptions are, with
 // self-transfers (pots, savings, cross-account pairs) excluded so a top-up
 // from the user's own other bank never masquerades as income.
+// Money you also SEND to someone is not income when it comes back. An
+// employer never receives money from you; the DWP never receives money from
+// you; family does, constantly. A two-way flow is the signature of a person
+// you exchange money with — the exact thing that kept putting Sarah's
+// family into her income list. Computed from her own data, so it works for
+// everyone without anyone labelling anything.
+function twoWayPayers(txns, paired) {
+    const paidTo = new Map();     // merchantKey -> total sent to them
+    for (const t of txns) {
+        if (!(t.amount < 0) || t.category === 'savings_transfer' || paired.has(t.id)) continue;
+        const k = merchantKey(stripRefTokens(t.merchant || t.description));
+        if (!k) continue;
+        paidTo.set(k, (paidTo.get(k) || 0) + Math.abs(t.amount));
+    }
+    // A trivial amount going the other way is noise (a refund, a rounding, a
+    // single fiver). £50 of genuine two-way traffic is a relationship.
+    const out = new Set();
+    for (const [k, total] of paidTo) if (total >= 50) out.add(k);
+    return out;
+}
+
 function detectIncome(email) {
     const txns = getTransactions(email);
     const paired = pairInternalTransfers(txns);
+    const twoWay = twoWayPayers(txns, paired);
     const credits = txns.filter(t => t.amount > 0 && t.category !== 'savings_transfer' && !paired.has(t.id));
     const byMerchant = {};
     for (const t of credits) {
         const k = merchantKey(stripRefTokens(t.merchant || t.description));
+        // Someone she sends real money to is not one of her income sources —
+        // unless she has explicitly labelled these credits as income, which
+        // is her overriding the machine and always wins.
+        if (twoWay.has(k) && !(byMerchant[k] || []).some(x => x.category === 'income')) {
+            const isLabelledIncome = credits.some(c => merchantKey(stripRefTokens(c.merchant || c.description)) === k && c.category === 'income');
+            if (!isLabelledIncome) continue;
+        }
         (byMerchant[k] = byMerchant[k] || []).push(t);
     }
     return Object.values(byMerchant)
@@ -2125,6 +2168,163 @@ function detectCharges(email) {
         penalty_per_year:  Math.round((sum(penalties) / months) * 12 * 100) / 100,
         months_covered: Math.round(months * 10) / 10,
         unmatched_rows: uncategorised,
+    };
+}
+
+// ── Income forecast ───────────────────────────────────────────────
+// "I need a clear run of what's coming in and when, like a forecast."
+//
+// ⚠️ UK benefit cadences are the reason this can't reuse the rhythm card's
+// bands. PIP and Child Benefit land every FOUR WEEKS — 13 payments a year,
+// drifting earlier through the calendar — while Universal Credit and wages
+// are MONTHLY on roughly the same date. The rhythm card lumps 24–38 days
+// into one "monthly" band, which is fine for a badge and useless for a
+// forecast: four-weekly predicted as monthly is wrong by a growing number
+// of days every cycle, and being told the wrong day is worse than being
+// told nothing.
+const CADENCES = [
+    { key: 'weekly',      label: 'weekly',        days: 7,  lo: 6,  hi: 8 },
+    { key: 'fortnightly', label: 'fortnightly',   days: 14, lo: 13, hi: 15 },
+    { key: 'four_weekly', label: 'every 4 weeks', days: 28, lo: 27, hi: 29 },
+    { key: 'monthly',     label: 'monthly',       days: 30, lo: 29, hi: 32 },
+];
+
+function addDays(iso, n) {
+    const d = new Date(iso + 'T00:00:00Z');
+    d.setUTCDate(d.getUTCDate() + n);
+    return d.toISOString().slice(0, 10);
+}
+
+// Monthly means "the same date each month", not "30 days later" — otherwise
+// a wage paid on the 28th drifts to the 26th over a few months.
+function addMonthKeepingDay(iso, n, day) {
+    const d = new Date(iso + 'T00:00:00Z');
+    d.setUTCDate(1);
+    d.setUTCMonth(d.getUTCMonth() + n);
+    const lastDay = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 0)).getUTCDate();
+    d.setUTCDate(Math.min(day, lastDay));
+    return d.toISOString().slice(0, 10);
+}
+
+/**
+ * What is coming in, and when. Projects each recurring income stream forward
+ * from the pattern it has actually shown — never from an assumption about
+ * what a payer "should" do.
+ *
+ * @param {number} weeks  how far ahead to project
+ */
+function forecastIncome(email, weeks = 12) {
+    const txns   = getTransactions(email);
+    const paired = pairInternalTransfers(txns);
+    const twoWay = twoWayPayers(txns, paired);
+
+    const credits = txns.filter(t => t.amount > 0
+        && t.category !== 'savings_transfer'
+        && !paired.has(t.id)
+        && t.date);
+
+    const groups = {};
+    for (const t of credits) {
+        const k = merchantKey(stripRefTokens(t.merchant || t.description));
+        if (!k) continue;
+        if (twoWay.has(k) && t.category !== 'income') continue;   // family, not income
+        (groups[k] = groups[k] || []).push(t);
+    }
+
+    const today   = new Date().toISOString().slice(0, 10);
+    const horizon = addDays(today, weeks * 7);
+    const streams = [];
+    const events  = [];
+
+    for (const entries of Object.values(groups)) {
+        if (entries.length < 2) continue;                 // one payment is not a pattern
+        entries.sort((a, b) => a.date.localeCompare(b.date));
+
+        const gaps = [];
+        for (let i = 1; i < entries.length; i++) {
+            const g = (Date.parse(entries[i].date) - Date.parse(entries[i - 1].date)) / 86400000;
+            if (Number.isFinite(g) && g > 0) gaps.push(g);
+        }
+        if (!gaps.length) continue;
+        const sorted = [...gaps].sort((a, b) => a - b);
+        const median = sorted[Math.floor(sorted.length / 2)];
+
+        const cad = CADENCES.find(c => median >= c.lo && median <= c.hi);
+        if (!cad) continue;                               // no dependable rhythm — don't pretend
+
+        // Most gaps must actually sit in the band; one late payment survives,
+        // a coincidence does not.
+        const inBand = gaps.filter(g => g >= cad.lo && g <= cad.hi).length;
+        if (inBand < Math.max(1, Math.ceil(gaps.length * 0.6))) continue;
+
+        const amounts = entries.map(t => t.amount).sort((a, b) => a - b);
+        const median$ = amounts[Math.floor(amounts.length / 2)];
+        const spread  = median$ > 0 ? (amounts[amounts.length - 1] - amounts[0]) / median$ : 1;
+        const last    = entries[entries.length - 1];
+        const dayOfMonth = Number(last.date.slice(8, 10));
+
+        // Confidence is stated, not implied. A wage paid the same amount on
+        // the same date six times is not the same claim as two payments that
+        // happened to fall four weeks apart.
+        const confidence = (entries.length >= 4 && spread <= 0.1) ? 'high'
+                         : (entries.length >= 3 && spread <= 0.35) ? 'medium'
+                         : 'low';
+
+        const stream = {
+            payer:      stripRefTokens(last.merchant || last.description),
+            cadence:    cad.key,
+            cadence_label: cad.label,
+            amount:     Math.round(median$ * 100) / 100,
+            varies:     spread > 0.1,
+            last_seen:  last.date,
+            count:      entries.length,
+            confidence,
+            source:     last.source || null,
+            account:    last.account || null,
+        };
+        streams.push(stream);
+
+        // Project forward. Monthly keeps its date; everything else steps by
+        // its own day-count, which is what makes four-weekly drift correctly.
+        let next = cad.key === 'monthly'
+            ? addMonthKeepingDay(last.date, 1, dayOfMonth)
+            : addDays(last.date, cad.days);
+        let guard = 0, step = 1;
+        while (next <= horizon && guard++ < 60) {
+            if (next >= today) {
+                events.push({
+                    date: next,
+                    payer: stream.payer,
+                    amount: stream.amount,
+                    cadence: cad.key,
+                    cadence_label: cad.label,
+                    confidence,
+                    varies: stream.varies,
+                });
+            }
+            step++;
+            next = cad.key === 'monthly'
+                ? addMonthKeepingDay(last.date, step, dayOfMonth)
+                : addDays(last.date, cad.days * step);
+        }
+    }
+
+    events.sort((a, b) => a.date.localeCompare(b.date));
+
+    // What it adds up to over the horizon, and a monthly equivalent — the
+    // figure that answers "what am I actually living on".
+    const total = Math.round(events.reduce((s, e) => s + e.amount, 0) * 100) / 100;
+    const perMonth = Math.round((total / (weeks / 4.345)) * 100) / 100;
+
+    return {
+        streams: streams.sort((a, b) => b.amount - a.amount),
+        events,
+        weeks,
+        from: today,
+        to: horizon,
+        total_expected: total,
+        monthly_equivalent: perMonth,
+        next: events[0] || null,
     };
 }
 
@@ -2246,6 +2446,7 @@ module.exports = {
     detectIncome,
     detectRegulars,
     detectCharges,
+    forecastIncome,
 
     // Graphs
     getSpendingGraphData,
