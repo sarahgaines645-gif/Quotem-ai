@@ -169,6 +169,13 @@ second-subject (A-level Law) fixture in the harness. 117/117. **The build agent 
 with slices B → C → D and will send SAFE messages; a new session should treat those as its own,
 verify with §4, and push by path.** If no SAFE arrives, `git status` tells you what is on disk.
 
+## 2c. UPDATE 16 Aug 00:40 — SLICE B SHIPPED (`283b58f`)
+Dots placed IN the student's text at the end of the sentence that needs them (one structured
+call per finished part + per part with unmet kinds after a mark; content-cached), furniture only,
+click → "MISSING HERE · label" + one why line + ONE action; margin dots retired; 128/128.
+**Agent continuing with C (Auto cite) then D.** Slice C's dot action "Auto cite" currently falls
+back to the References tool until C lands.
+
 ## 3. WHAT WAS IN FLIGHT AT HANDOVER — check `git status` in this repo FIRST
 A build agent was working the LAST addendum in four slices, under these rules: no commits;
 no paid AI calls (AI stubbed via a `--require` preload replacing `q-claude.accurateJSON`);
