@@ -2298,6 +2298,28 @@ function looksBinary(s) {
     return sample.length > 0 && bad / sample.length > 0.15;
 }
 
+// Brand marks for the finance page — banks and merchants. Served from
+// Q's own cache so the browser never tells a logo host what's on the
+// statement (see plugins/q-logos.js). 404 = "use the monogram".
+const qLogos = require('./plugins/q-logos');
+router.get('/api/logo', requirePerson, async (req, res) => {
+    const name = String(req.query.name || '').slice(0, 120);
+    const bank = String(req.query.bank || '').slice(0, 40);
+    try {
+        const hit = await qLogos.getLogo({ name, bank });
+        if (!hit) {
+            res.setHeader('Cache-Control', 'private, max-age=86400');
+            return res.status(404).end();
+        }
+        res.setHeader('Content-Type', hit.mime);
+        res.setHeader('Cache-Control', 'private, max-age=604800');
+        res.end(hit.buf);
+    } catch (e) {
+        console.warn('[q-logos]', e.message);
+        res.status(404).end();
+    }
+});
+
 // GET transactions + graph data
 router.get('/api/finance/transactions', requirePerson, (req, res) => {
     res.json(qFinance.getTransactions(req.person.email));

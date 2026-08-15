@@ -325,14 +325,24 @@
     .txn-date { font-size: 11px; color: var(--text-muted); }
     .txn-date .txn-src { display: block; font-size: 9px; color: var(--text-faint); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 80px; }
     .txn-desc { font-size: 12px; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    /* Merchant monogram — consistent colour per name, so the eye can scan.
-       No outside logo service: real logos would mean telling a third party
-       every shop on the statement. */
+    /* Merchant mark — the brand's logo when Q's own server has one, else a
+       monogram in a consistent colour per name so the eye can scan. The
+       browser only ever asks /api/logo on Q; no third party sees the
+       statement (plugins/q-logos.js). */
     .m-chip {
       width: 24px; height: 24px; border-radius: 50%; flex: none;
       display: inline-flex; align-items: center; justify-content: center;
       font-size: 9px; font-weight: 700; letter-spacing: 0.02em;
+      position: relative; overflow: hidden;
     }
+    .m-chip img, .acct-mark img {
+      position: absolute; inset: 0; width: 100%; height: 100%;
+      object-fit: contain; padding: 3px; box-sizing: border-box;
+      background: #fff; display: none;
+    }
+    .m-chip.has-logo img, .acct-mark.has-logo img { display: block; }
+    .acct-mark { position: relative; overflow: hidden; }
+    .acct-mark img { padding: 4px; }
     .txn-bucket { font-size: 10px; color: var(--text-muted); padding: 2px 7px; border-radius: 10px; background: rgba(0,0,0,0.05); cursor: pointer; white-space: nowrap; }
     .txn-bucket:hover { color: var(--accent); }
     .txn-cat {
@@ -1156,7 +1166,7 @@
       const init = seed.split(/\s+/).filter(Boolean).slice(0, 2).map(w => w[0]).join('').toUpperCase();
       return `<div class="acct-card">
         <div class="ac-top">
-          <span class="acct-mark" style="background:hsl(${hue},45%,86%);color:hsl(${hue},55%,28%)">${esc(init)}</span>
+          <span class="acct-mark" style="background:hsl(${hue},45%,86%);color:hsl(${hue},55%,28%)">${logoImg({ bank: a.bankSlug || '', name: a.bank })}${esc(init)}</span>
           <div>
             <div class="ac-name">${esc(a.bank)}${a.product ? ' ' + esc(a.product) : ''}</div>
             ${a.last4 ? `<div class="ac-sub">····${esc(a.last4)}</div>` : ''}
@@ -2475,7 +2485,17 @@
     return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
   }
 
-  // Merchant monogram — same name, same colour, every time.
+  // Small brand logo from Q's own server (/api/logo). Hidden until it loads;
+  // a 404 removes it and the monogram underneath stays. The browser never
+  // fetches from a third-party logo host.
+  function logoImg({ name, bank }) {
+    if (!bank && !String(name || '').trim()) return '';
+    const q = bank ? 'bank=' + encodeURIComponent(bank) + '&name=' + encodeURIComponent(name || '')
+                   : 'name=' + encodeURIComponent(name || '');
+    return `<img src="/api/logo?${q}" alt="" loading="lazy" decoding="async" onload="this.parentNode.classList.add('has-logo')" onerror="this.remove()">`;
+  }
+
+  // Merchant mark — logo if Q has one, else same name, same colour, every time.
   function mChip(name) {
     const n = String(name || '?').trim();
     let h = 0;
@@ -2483,7 +2503,7 @@
     const hue = h % 360;
     const parts = n.split(/\s+/).filter(Boolean);
     const init = (((parts[0] || '?')[0] || '?') + (parts[1] ? (parts[1][0] || '') : ((parts[0] || '')[1] || ''))).toUpperCase();
-    return `<span class="m-chip" style="background:hsl(${hue},45%,86%);color:hsl(${hue},55%,28%)">${esc(init)}</span>`;
+    return `<span class="m-chip" style="background:hsl(${hue},45%,86%);color:hsl(${hue},55%,28%)">${logoImg({ name: n })}${esc(init)}</span>`;
   }
 
   let toastTimer = null;

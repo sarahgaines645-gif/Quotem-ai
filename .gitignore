@@ -34,3 +34,4 @@ desktop.ini
 dist/
 build/
 .cache/
+data/logo-cache/
