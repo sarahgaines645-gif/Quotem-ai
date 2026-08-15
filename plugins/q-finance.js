@@ -1182,6 +1182,28 @@ async function saveRows(email, parsed, opts = {}) {
 
     if (backfilled) console.log(`[finance] dedupe backfill — ${backfilled} existing rows gained source/own-name/reference info`);
     if (twins)      console.log(`[finance] dedupe — ${twins} same-day twin(s) recovered that the old key had collapsed`);
+
+    // A balance line an EARLIER import stored as a transaction (before the
+    // chain audit existed) is taken out now that this read has proved what
+    // it is — matched on date + amount + merchant within the same account,
+    // one stored row per phantom. Set aside in phantoms.json, never
+    // destroyed: her data is never blanked, and this is restorable.
+    let phantomsRemoved = 0;
+    if (Array.isArray(opts.phantoms) && opts.phantoms.length) {
+        const setAside = loadJSON(finPath(email, 'phantoms.json'), []);
+        for (const ph of opts.phantoms) {
+            const k = dedupKey(ph);
+            const i = merged.findIndex(t => dedupKey(t) === k && (!opts.account || !t.account || t.account === opts.account));
+            if (i === -1) continue;
+            const [gone] = merged.splice(i, 1);
+            setAside.push({ ...gone, removedAt: new Date().toISOString(), reason: 'balance line read as a transaction (balance did not move)' });
+            phantomsRemoved++;
+        }
+        if (phantomsRemoved) {
+            saveJSON(finPath(email, 'phantoms.json'), setAside);
+            console.log(`[finance] ${phantomsRemoved} stored row(s) that were balance lines set aside in phantoms.json`);
+        }
+    }
     saveTransactions(email, merged);
 
     // Background label pass over the rows that just landed as 'other'.
@@ -1207,7 +1229,7 @@ async function saveRows(email, parsed, opts = {}) {
         })();
     }
 
-    return { added: fresh.length, total: merged.length, backfilled };
+    return { added: fresh.length, total: merged.length, backfilled, phantoms_removed: phantomsRemoved };
 }
 
 // Re-run the label pass over every stored row still sitting in 'other'.
@@ -1322,7 +1344,11 @@ Rules:
   the person OWES is written with a minus sign (-450.00) and a balance in
   credit is written with CR after it (12.50 CR).
 - Do NOT include opening/closing balance totals or header/footer rows as
-  transactions (the balance column belongs in the 4th field, never the 3rd)
+  transactions (the balance column belongs in the 4th field, never the 3rd).
+  "Balance on 01 July", "Balance brought forward", "Balance carried forward",
+  "Opening balance", "Closing balance" and the Money In / Money Out summary
+  figures are NOT transactions — never write them as a row. A transaction
+  row always moves the balance by exactly its own amount.
 - If multiple pages are visible, extract ALL of them, in the order printed
 - Return ONLY the CSV. No explanation, no markdown.`;
 
@@ -1417,11 +1443,11 @@ function csvToRows(csv) {
 // (a NatWest transaction download). Whichever way the chain agrees with the
 // rows more is the way it runs; if neither agrees for at least half the
 // links, the balances aren't trustworthy and nothing is touched.
-function auditRowsByBalanceChain(rows) {
+function auditRowsByBalanceChain(rows, printed, _pass = 0) {
     const withBal = rows.filter(r => r.balance != null && Number.isFinite(r.balance));
     if (withBal.length < 2) {
         console.log(`[finance] balance chain — ${withBal.length}/${rows.length} rows carry a running balance: nothing to audit against`);
-        return { rows, direction: null, links: 0, agree: 0, repaired: [], breaks: [], with_balance: withBal.length };
+        return { rows, direction: null, links: 0, agree: 0, repaired: [], breaks: [], phantoms: [], with_balance: withBal.length };
     }
     const near = (a, b) => Math.abs(a - b) < 0.005;
     const r2 = v => Math.round(v * 100) / 100;
@@ -1442,10 +1468,44 @@ function auditRowsByBalanceChain(rows) {
     const forward_ = nF >= nR;
     if (Math.max(nF, nR) < Math.ceil(links / 2)) {
         console.log(`[finance] balance chain — ${links} links, forward agrees ${nF}, reverse ${nR}: balances not trustworthy, rows left as read`);
-        return { rows, direction: null, links, agree: Math.max(nF, nR), repaired: [], breaks: [], with_balance: withBal.length };
+        return { rows, direction: null, links, agree: Math.max(nF, nR), repaired: [], breaks: [], phantoms: [], with_balance: withBal.length };
     }
     console.log(`[finance] balance chain — ${withBal.length}/${rows.length} rows carry a balance; ${links} links, ${Math.max(nF, nR)} agree, ${forward_ ? 'oldest-first' : 'newest-first'}`);
     const forward = nF >= nR;
+
+    // ── Balance LINES are not transactions ──
+    // Sarah's July statement: the reader turned "Balance on 01 July −999.30"
+    // into a row "2026-07-01, …, −47.00, −999.30" — and £47 sat in her
+    // spending for a month. The tell is arithmetic, not wording: a real
+    // transaction MOVES the balance by its amount. A row whose amount is not
+    // zero but whose balance is the same as the line before it (or the same
+    // as the printed opening, for the first row) cannot be a transaction —
+    // it is the statement's own balance line, and it goes. Removed rows are
+    // reported so the stored copy from an earlier import can be taken out
+    // too. One pass; the chain is then re-audited on what is left.
+    if (_pass === 0) {
+        const phantom = new Set();
+        const openIdx = forward ? idx[0] : idx[idx.length - 1];
+        const first = rows[openIdx];
+        if (printed && printed.opening != null && Number.isFinite(first.amount) && first.amount !== 0
+            && near(first.balance, printed.opening)) phantom.add(openIdx);
+        for (let k = 1; k < idx.length; k++) {
+            if (idx[k] - idx[k - 1] !== 1) continue;             // rows without a balance in between: leave alone
+            const a = rows[idx[k - 1]], b = rows[idx[k]];
+            const later = forward ? b : a;                       // the row this link measures
+            if (Number.isFinite(later.amount) && later.amount !== 0 && near(a.balance, b.balance)) {
+                phantom.add(forward ? idx[k] : idx[k - 1]);
+            }
+        }
+        if (phantom.size) {
+            const gone = [...phantom].map(i => rows[i]);
+            console.log(`[finance] balance chain — ${gone.length} balance line(s) read as transactions, dropped: ${gone.map(r => `${r.date} "${String(r.description || '').slice(0, 30)}" ${r.amount} @ ${r.balance}`).join('; ')}`);
+            const kept = rows.filter((_, i) => !phantom.has(i));
+            const again = auditRowsByBalanceChain(kept, printed, 1);
+            return { ...again, phantoms: gone };
+        }
+    }
+
     const ok = forward ? fwd : rev;
     const out = rows.map(r => ({ ...r }));
     const repaired = [], breaks = [];
@@ -1473,7 +1533,7 @@ function auditRowsByBalanceChain(rows) {
     }
     if (repaired.length) console.log(`[finance] balance chain — corrected ${repaired.length} row(s) to the bank's own step: ${repaired.map(x => `${x.date} "${x.description}" ${x.from}→${x.to}`).join('; ')}`);
     if (breaks.length)   console.log(`[finance] balance chain — ${breaks.length} link(s) don't add up and couldn't be pinned to one row: ${breaks.map(x => `${x.date} "${x.description}" read ${x.read} vs step ${x.bank_step}`).join('; ')}`);
-    return { rows: out, direction: forward ? 'oldest-first' : 'newest-first', links, agree: Math.max(nF, nR), repaired, breaks, with_balance: withBal.length };
+    return { rows: out, direction: forward ? 'oldest-first' : 'newest-first', links, agree: Math.max(nF, nR), repaired, breaks, phantoms: [], with_balance: withBal.length };
 }
 
 // Where a statement's shortfall sits when every link in the chain agrees:
@@ -1661,14 +1721,14 @@ async function importStatementFromImage(email, imageBase64, mimeType, filename, 
     let rows = normaliseCardRows(csvToRows(raw).map(r => ({ ...r, source, ...(acct && { account: acct.id }) })), acct, bal).rows;
     // The running balances audit every row (auditRowsByBalanceChain) and
     // stand in for missing front-page totals (balancesFromChain).
-    const audit = auditRowsByBalanceChain(rows);
+    const audit = auditRowsByBalanceChain(rows, printed);
     rows = audit.rows;
     if (!bal || bal.opening == null || bal.closing == null) {
         const fromChain = balancesFromChain(rows, audit.direction);
         if (fromChain) bal = { ...(fromChain), ...(bal || {}), opening: (bal && bal.opening != null) ? bal.opening : fromChain.opening, openingDate: (bal && bal.openingDate) || fromChain.openingDate, closing: (bal && bal.closing != null) ? bal.closing : fromChain.closing, closingDate: (bal && bal.closingDate) || fromChain.closingDate };
     }
     console.log(`[finance] importStatementFromImage: vision ${raw.length} chars → ${rows.length} rows (no re-parse)${acct ? `, account "${acct.label}"` : ''}`);
-    const result = await saveRows(email, rows, { ownerName });
+    const result = await saveRows(email, rows, { ownerName, phantoms: audit.phantoms, account: acct && acct.id });
     result.repaired = audit.repaired.length;
     const check = finishStatementImport(email, acct, rows, bal, result, source, audit, printed);
     if (check && !check.ok) result.hint = mismatchWords(check);
@@ -1771,19 +1831,20 @@ async function importStatementFromFile(email, fileBase64, mimeType, onProgress, 
         // stand in for missing front-page totals (balancesFromChain) — a
         // NatWest transaction download prints no opening/closing but does
         // print a balance beside every row.
-        const audit = auditRowsByBalanceChain(rows);
+        const audit = auditRowsByBalanceChain(rows, printed);
         rows = audit.rows;
         if (!bal || bal.opening == null || bal.closing == null) {
             const fromChain = balancesFromChain(rows, audit.direction);
             if (fromChain) bal = { ...(bal || {}), opening: (bal && bal.opening != null) ? bal.opening : fromChain.opening, openingDate: (bal && bal.openingDate) || fromChain.openingDate, closing: (bal && bal.closing != null) ? bal.closing : fromChain.closing, closingDate: (bal && bal.closingDate) || fromChain.closingDate, fromChain: true };
         }
-        const result = await saveRows(email, rows, { ownerName });
+        const result = await saveRows(email, rows, { ownerName, phantoms: audit.phantoms, account: acct && acct.id });
         result.repaired = audit.repaired.length;
         const check = finishStatementImport(email, acct, rows, bal, result, source, audit, printed);
 
         // Tell her what happened, in every case. A silent success is what let
         // a short read look identical to a complete one.
-        const fixedNote = audit.repaired.length ? ` ${audit.repaired.length} amount${audit.repaired.length === 1 ? ' was' : 's were'} corrected to the bank's own running balance.` : '';
+        const fixedNote = (audit.repaired.length ? ` ${audit.repaired.length} amount${audit.repaired.length === 1 ? ' was' : 's were'} corrected to the bank's own running balance.` : '')
+            + (audit.phantoms.length ? ` ${audit.phantoms.length} balance line${audit.phantoms.length === 1 ? '' : 's'} that had been counted as ${audit.phantoms.length === 1 ? 'a transaction' : 'transactions'} (${audit.phantoms.map(p => '£' + Math.abs(p.amount).toFixed(2)).join(', ')}) ${audit.phantoms.length === 1 ? 'was' : 'were'} taken out.` : '');
         if (chunked.failed.length) {
             result.hint = `Imported ${result.added} transactions, but page(s) ${chunked.failed.join(', ')} of ${chunked.pageCount} couldn't be read — upload the same PDF again to retry those.`;
         } else if (check && !check.ok) {
