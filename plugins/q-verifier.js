@@ -25,8 +25,10 @@
 
 const { Q_CONFIG } = require('../config');
 const { cleanModelOutput } = require('./cjk-filter');
+const { timedFetch } = require('./timed-fetch');
+const { logUsage } = require('../cost-tracker');
 
-const VERIFIER_SYSTEM = `You are a strict quality reviewer. Given a user's question and an AI's draft reply, find any way the draft fails to meet the user's actual need.
+const VERIFIER_SYSTEM =`You are a strict quality reviewer. Given a user's question and an AI's draft reply, find any way the draft fails to meet the user's actual need.
 
 Look for:
 - Missed requirements or constraints stated in the question
@@ -82,7 +84,7 @@ ${draftReply}
 Review the draft against the user question and return JSON.`;
 
     try {
-        const response = await fetch(`${Q_CONFIG.baseURL}/chat/completions`, {
+        const response = await timedFetch(`${Q_CONFIG.baseURL}/chat/completions`, {
             method: 'POST',
             headers: {
                 'Authorization': `Bearer ${Q_CONFIG.apiKey}`,
@@ -97,10 +99,11 @@ Review the draft against the user question and return JSON.`;
                     { role: 'user', content: reviewPrompt },
                 ],
             }),
-        });
+        }, { label: 'verifier' });
 
         if (!response.ok) {
             const errText = await response.text();
+            logUsage({ skill: 'verifier', provider: 'together', model: Q_CONFIG.model, started: startTime, success: false, error: `HTTP ${response.status}` });
             return {
                 ...safeFallback,
                 error: `Verifier HTTP ${response.status}: ${errText.substring(0, 200)}`,
@@ -109,6 +112,7 @@ Review the draft against the user question and return JSON.`;
         }
 
         const data = await response.json();
+        logUsage({ skill: 'verifier', provider: 'together', model: Q_CONFIG.model, data, started: startTime });
         const content = data.choices?.[0]?.message?.content || '{}';
 
         let parsed;

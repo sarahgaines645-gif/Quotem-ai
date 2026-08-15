@@ -13,7 +13,8 @@ const { Q_CONFIG } = require('../config');
 const { TOOL_DEFINITIONS, executeTool, selectActiveTools } = require('./q-tools');
 const { verify } = require('./q-verifier');
 const { listFacts } = require('../facts');
-const { logCall } = require('../cost-tracker');
+const { logCall, logUsage } = require('../cost-tracker');
+const { timedFetch } = require('./timed-fetch');
 const { cleanModelOutput } = require('./cjk-filter');
 
 // The last few turns as trigger fodder for selectActiveTools. A tool flow
@@ -174,17 +175,15 @@ Skills available to you right now (these are the tools you have today, not your 
 - Code generation, debugging, technical explanation
 - Document reading and analysis
 - Image generation and editing
-- Music generation, video generation, voice cloning
+- Video generation
 - Graphics (image-to-SVG)
 - Scheduled tasks and agent workflows
 - A starter set of skills covering UK property, construction, SOR codes, and the Quotem pipeline — these were the first skills you were given as Q took shape; they don't define what you are
 
 Tools you can call directly in chat (use them, don't redirect):
 - \`generate_image\` — when the user asks for an image, picture, illustration, banner, hero shot. Just call it. The user shouldn't have to leave the conversation.
-- \`generate_music\` — when they ask for music, a track, hold music, jingle. Just call it.
 - \`generate_video\` — when they ask for a video, clip, demo reel, short animation. Just call it.
 - \`vectorise_image\` — when they want a logo, icon, or raster image converted to SVG.
-- \`speak_as_q\` — when the user asks you to "say that out loud", "narrate this in your voice", "read it aloud", or wants an audio file of a script. You have your own voice now; use it.
 - \`send_email\` — send an email from the user's OWN connected account, but ONLY when they clearly tell you to SEND it (not draft, not preview). Read the recipient, subject and body back to them and confirm before calling it — it goes from their real address and can't be unsent. If nothing is connected yet, tell them to connect their email on the Email Writer page first.
 - \`check_inbox\` / \`read_email\` / \`read_email_attachment\` — you can READ the user's own inbox now. Use \`check_inbox\` when they ask you to check their email or see if anything important has come in; skim it and tell them plainly what's landed, flagging anything urgent or time-sensitive. Use \`read_email\` to open a message in full, and \`read_email_attachment\` to read what's inside a PDF/scan/photo/attachment. Once you've read something, you can act on it with the tools you already have — file it into a case with \`add_email_to_thread\` (and \`read_email_attachment\`'s save_to_thread_id for the file itself), put a date from it in the diary with \`add_event\`, or draft/send a reply with \`save_email_draft\`/\`send_email\`. Reading is read-only and safe — do it whenever it helps; only SENDING or deleting needs their say-so. If reading fails because the connection needs refreshing, tell them to reconnect their Gmail on the Email Writer page.
 
@@ -677,6 +676,7 @@ async function geminiVisionChat(prompt, base64, mimeType) {
     if (!key) return '';
     const ctrl = new AbortController();
     const timer = setTimeout(() => ctrl.abort(), 60_000);
+    const started = Date.now();
     try {
         const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${key}`, {
             method: 'POST',
@@ -690,8 +690,12 @@ async function geminiVisionChat(prompt, base64, mimeType) {
             }),
             signal: ctrl.signal,
         });
-        if (!res.ok) throw new Error(`Gemini ${res.status}: ${(await res.text()).slice(0, 200)}`);
+        if (!res.ok) {
+            logUsage({ skill: 'chat-vision', provider: 'gemini', model: 'gemini-2.5-flash', started, success: false, error: `HTTP ${res.status}` });
+            throw new Error(`Gemini ${res.status}: ${(await res.text()).slice(0, 200)}`);
+        }
         const json = await res.json();
+        logUsage({ skill: 'chat-vision', provider: 'gemini', model: 'gemini-2.5-flash', data: json, started });
         const parts = json?.candidates?.[0]?.content?.parts;
         return Array.isArray(parts) ? parts.map(p => p.text || '').join('').trim() : '';
     } finally {
@@ -826,10 +830,13 @@ async function claudeThreadChat({ system, messages, tools, person, maxTokens, st
     const toolCalls = [];
     let tokensIn = 0, tokensOut = 0, reply = '';
 
+    // Cost-log label: the Check button (surface 'check-this') vs a case thread.
+    const claudeSkill = 'claude-thread';
     for (let i = 0; i < MAX_TOOL_ITERATIONS; i++) {
         let res;
+        const iterStarted = Date.now();
         try {
-            res = await fetch('https://api.anthropic.com/v1/messages', {
+            res = await timedFetch('https://api.anthropic.com/v1/messages', {
                 method: 'POST',
                 headers: {
                     'x-api-key': key,
@@ -849,16 +856,21 @@ async function claudeThreadChat({ system, messages, tools, person, maxTokens, st
                     messages: convo,
                     ...(anthropicTools.length && { tools: anthropicTools }),
                 }),
-            });
+            }, { label: 'case chat', timeoutMs: 120_000 });
         } catch (e) {
             console.warn('[q-chat] Claude network error: ' + e.message);
+            logUsage({ skill: claudeSkill, provider: 'anthropic', model: 'claude-sonnet-4-6', started: iterStarted, user: person?.id, success: false, error: e.message });
             return null;
         }
         if (!res.ok) {
             console.warn('[q-chat] Claude HTTP ' + res.status + ': ' + (await res.text()).slice(0, 300));
+            logUsage({ skill: claudeSkill, provider: 'anthropic', model: 'claude-sonnet-4-6', started: iterStarted, user: person?.id, success: false, error: `HTTP ${res.status}` });
             return null;
         }
         const data = await res.json();
+        // Log EVERY iteration — this loop is where the £11-in-30-minutes bleed
+        // came from (20 Jul); cache reads/writes are priced separately.
+        logUsage({ skill: claudeSkill, provider: 'anthropic', model: 'claude-sonnet-4-6', data, started: iterStarted, user: person?.id });
         tokensIn += data.usage?.input_tokens || 0;
         tokensOut += data.usage?.output_tokens || 0;
         // Confirm prompt caching is actually hitting: read should be >0 from the
@@ -902,8 +914,9 @@ async function claudeThreadChat({ system, messages, tools, person, maxTokens, st
     // tools so Claude replies using what it has already gathered. This keeps the
     // case on Claude instead of quietly handing it to the weaker model.
     if (!reply || !reply.trim()) {
+        const finalStarted = Date.now();
         try {
-            const finalRes = await fetch('https://api.anthropic.com/v1/messages', {
+            const finalRes = await timedFetch('https://api.anthropic.com/v1/messages', {
                 method: 'POST',
                 headers: { 'x-api-key': key, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
                 body: JSON.stringify({
@@ -912,9 +925,10 @@ async function claudeThreadChat({ system, messages, tools, person, maxTokens, st
                     system: [{ type: 'text', text: system, cache_control: { type: 'ephemeral' } }],
                     messages: convo,
                 }),
-            });
+            }, { label: 'case chat', timeoutMs: 120_000 });
             if (finalRes.ok) {
                 const fd = await finalRes.json();
+                logUsage({ skill: claudeSkill, provider: 'anthropic', model: 'claude-sonnet-4-6', data: fd, started: finalStarted, user: person?.id });
                 tokensIn += fd.usage?.input_tokens || 0;
                 tokensOut += fd.usage?.output_tokens || 0;
                 reply = (Array.isArray(fd.content) ? fd.content : [])
@@ -1173,7 +1187,10 @@ async function chat(messages, options = {}) {
             for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
                 let status = 0;
                 try {
-                    response = await fetch(`${Q_CONFIG.baseURL}/chat/completions`, reqInit);
+                    // Bounded per attempt (route audit T1): a hung upstream used to
+                    // sit here until Railway's proxy cut the socket → bare 502.
+                    // Fresh controller each attempt (an aborted signal can't be reused).
+                    response = await timedFetch(`${Q_CONFIG.baseURL}/chat/completions`, reqInit, { label: 'chat', timeoutMs: 120_000 });
                     if (response.ok || !RETRYABLE.has(response.status)) break;
                     status = response.status;
                     // DIAGNOSTIC (31 Jul 2026): headers carry Together's request id
@@ -1360,7 +1377,7 @@ async function chat(messages, options = {}) {
                 content: 'You have used your tool budget for this turn. Answer now using only what you already know and what the tools above returned. Do not request any more tools.',
             });
             try {
-                const finalRes = await fetch(`${Q_CONFIG.baseURL}/chat/completions`, {
+                const finalRes = await timedFetch(`${Q_CONFIG.baseURL}/chat/completions`, {
                     method: 'POST',
                     headers: {
                         'Authorization': `Bearer ${Q_CONFIG.apiKey}`,
@@ -1374,7 +1391,7 @@ async function chat(messages, options = {}) {
                         // Deliberately NO tools/tool_choice this time.
                         messages: conversation,
                     }),
-                });
+                }, { label: 'chat', timeoutMs: 120_000 });
                 if (finalRes.ok) {
                     const finalData = await finalRes.json();
                     totalTokensIn += finalData.usage?.prompt_tokens || 0;
@@ -1482,8 +1499,9 @@ async function chat(messages, options = {}) {
 async function claudeReadImage(base64, mimeType) {
     const key = process.env.ANTHROPIC_API_KEY;
     if (!key || !base64) return '';
+    const started = Date.now();
     try {
-        const res = await fetch('https://api.anthropic.com/v1/messages', {
+        const res = await timedFetch('https://api.anthropic.com/v1/messages', {
             method: 'POST',
             headers: { 'x-api-key': key, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
             body: JSON.stringify({
@@ -1497,9 +1515,13 @@ async function claudeReadImage(base64, mimeType) {
                     ],
                 }],
             }),
-        });
-        if (!res.ok) { console.warn('[q-chat] claudeReadImage HTTP ' + res.status); return ''; }
+        }, { label: 'image reader', timeoutMs: 120_000 });
+        if (!res.ok) {
+            logUsage({ skill: 'claude-read-image', provider: 'anthropic', model: 'claude-sonnet-4-6', started, success: false, error: `HTTP ${res.status}` });
+            console.warn('[q-chat] claudeReadImage HTTP ' + res.status); return '';
+        }
         const data = await res.json();
+        logUsage({ skill: 'claude-read-image', provider: 'anthropic', model: 'claude-sonnet-4-6', data, started });
         return (Array.isArray(data.content) ? data.content : [])
             .filter(b => b.type === 'text').map(b => b.text || '').join('').trim();
     } catch (e) {

@@ -50,13 +50,26 @@ function outlookConfigured() {
 }
 
 // ── encryption (AES-256-GCM) ──────────────────────────────────────────────
-const KEY = crypto.createHash('sha256')
-    .update(process.env.EMAIL_TOKEN_KEY || process.env.Q_AUTH_PEPPER || 'quotem-ai-email-fallback-key')
-    .digest(); // 32 bytes
+// Key = sha256(EMAIL_TOKEN_KEY). server/index.js makes EMAIL_TOKEN_KEY
+// mandatory in production (and mints a per-process dev key otherwise), so the
+// old chain "EMAIL_TOKEN_KEY || Q_AUTH_PEPPER || public-constant" is gone —
+// a public constant meant every stored refresh token was decryptable by
+// anyone with the repo. Resolved lazily so requiring this module in a script
+// doesn't blow up before the env is loaded.
+let _key = null;
+function KEY() {
+    if (_key) return _key;
+    const secret = process.env.EMAIL_TOKEN_KEY;
+    if (!secret || secret.length < 16) {
+        throw new Error('EMAIL_TOKEN_KEY is not set (16+ chars) — connected-mailbox tokens cannot be encrypted or decrypted');
+    }
+    _key = crypto.createHash('sha256').update(secret).digest(); // 32 bytes
+    return _key;
+}
 function encrypt(plain) {
     if (plain == null) return null;
     const iv = crypto.randomBytes(12);
-    const cipher = crypto.createCipheriv('aes-256-gcm', KEY, iv);
+    const cipher = crypto.createCipheriv('aes-256-gcm', KEY(), iv);
     const enc = Buffer.concat([cipher.update(String(plain), 'utf8'), cipher.final()]);
     return Buffer.concat([iv, cipher.getAuthTag(), enc]).toString('base64');
 }
@@ -64,7 +77,7 @@ function decrypt(blob) {
     if (!blob) return null;
     try {
         const buf = Buffer.from(blob, 'base64');
-        const d = crypto.createDecipheriv('aes-256-gcm', KEY, buf.subarray(0, 12));
+        const d = crypto.createDecipheriv('aes-256-gcm', KEY(), buf.subarray(0, 12));
         d.setAuthTag(buf.subarray(12, 28));
         return Buffer.concat([d.update(buf.subarray(28)), d.final()]).toString('utf8');
     } catch { return null; }
@@ -145,7 +158,8 @@ function status(email) {
 // ── OAuth state (HMAC-signed; mirrors auth.js, no jsonwebtoken) ────────────
 function pepper() {
     const p = process.env.Q_AUTH_PEPPER;
-    return (p && p.length >= 16) ? p : 'unset-pepper-quotem-ai-do-not-use-in-prod';
+    if (!p || p.length < 16) throw new Error('Q_AUTH_PEPPER is not set (16+ chars) — OAuth state cannot be signed');
+    return p;
 }
 function signState(email) {
     const payload = Buffer.from(JSON.stringify({ email, exp: Date.now() + 15 * 60 * 1000 })).toString('base64url');

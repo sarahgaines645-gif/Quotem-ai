@@ -16,9 +16,12 @@
 const { Q_CONFIG } = require('../config');
 const { cleanModelOutput } = require('./cjk-filter');
 const { accurateJSON, SONNET } = require('./q-claude');
+const { timedFetch } = require('./timed-fetch');
+const { logUsage } = require('../cost-tracker');
 
 async function callQ(systemPrompt, userPrompt, { maxTokens = 4096 } = {}) {
-    const response = await fetch(`${Q_CONFIG.baseURL}/chat/completions`, {
+    const started = Date.now();
+    const response = await timedFetch(`${Q_CONFIG.baseURL}/chat/completions`, {
         method: 'POST',
         headers: {
             'Authorization': `Bearer ${Q_CONFIG.apiKey}`,
@@ -33,12 +36,14 @@ async function callQ(systemPrompt, userPrompt, { maxTokens = 4096 } = {}) {
                 { role: 'user', content: userPrompt },
             ],
         }),
-    });
+    }, { label: 'writer' });
     if (!response.ok) {
         const errText = await response.text();
+        logUsage({ skill: 'writer', provider: 'together', model: Q_CONFIG.model, started, success: false, error: `HTTP ${response.status}` });
         throw new Error(`Q upstream ${response.status}: ${errText.substring(0, 200)}`);
     }
     const data = await response.json();
+    logUsage({ skill: 'writer', provider: 'together', model: Q_CONFIG.model, data, started });
     const raw = cleanModelOutput(data.choices?.[0]?.message?.content || '{}', 'writer');
     const cleaned = raw.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim();
     return JSON.parse(cleaned);
@@ -54,7 +59,7 @@ async function callQ(systemPrompt, userPrompt, { maxTokens = 4096 } = {}) {
 // is fast Claude — accurate and inside the window. Opus is reserved for the
 // exam room's heavy lifting (Sarah's tiers).
 async function callAccurate(systemPrompt, userPrompt, opts = {}) {
-    return accurateJSON(systemPrompt, userPrompt, { effort: 'medium', ...opts, model: SONNET, fallback: callQ });
+    return accurateJSON(systemPrompt, userPrompt, { effort: 'medium', ...opts, model: SONNET, fallback: callQ, skill: 'writer' });
 }
 
 async function analyseTask(taskText) {

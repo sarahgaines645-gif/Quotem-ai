@@ -13,6 +13,9 @@
  */
 'use strict';
 
+const { timedFetch } = require('./timed-fetch');
+const { logUsage } = require('../cost-tracker');
+
 // Two tiers, used deliberately (Sarah's design — 19 Jul):
 //   OPUS   — the heavy lifting: exam-room marking, brief reading, references.
 //   SONNET — the checker: verifies Q-generated quiz batches for pennies.
@@ -27,7 +30,8 @@ function hasClaude() {
 // `effort` matters on Railway: requests must land inside the ~60s proxy
 // window (see docs/HANDOVER_2026-05-17 — slow writer calls 502 at the edge).
 // Small structured calls should pass effort:'medium' or use SONNET.
-async function claudeJSON(systemPrompt, userPrompt, { maxTokens = 4096, model = MODEL, effort = null, schema = null } = {}) {
+// `skill` names the caller in the cost log (writer / revision / …).
+async function claudeJSON(systemPrompt, userPrompt, { maxTokens = 4096, model = MODEL, effort = null, schema = null, skill = 'claude' } = {}) {
     const key = process.env.ANTHROPIC_API_KEY;
     if (!key) throw new Error('ANTHROPIC_API_KEY not set');
 
@@ -43,7 +47,7 @@ async function claudeJSON(systemPrompt, userPrompt, { maxTokens = 4096, model = 
     if (effort) outputConfig.effort = effort;
     if (schema) outputConfig.format = { type: 'json_schema', schema };
 
-    const res = await fetch('https://api.anthropic.com/v1/messages', {
+    const res = await timedFetch('https://api.anthropic.com/v1/messages', {
         method: 'POST',
         headers: {
             'x-api-key': key,
@@ -58,13 +62,15 @@ async function claudeJSON(systemPrompt, userPrompt, { maxTokens = 4096, model = 
             system: [{ type: 'text', text: systemPrompt, cache_control: { type: 'ephemeral' } }],
             messages: [{ role: 'user', content: userPrompt }],
         }),
-    });
+    }, { label: skill, timeoutMs: 120_000 });
     console.log(`[q-claude] ${model}${effort ? ' effort=' + effort : ''} → ${res.status} in ${((Date.now() - started) / 1000).toFixed(1)}s`);
     if (!res.ok) {
         const errText = await res.text();
+        logUsage({ skill, provider: 'anthropic', model, started, success: false, error: `HTTP ${res.status}` });
         throw new Error(`Claude upstream ${res.status}: ${errText.slice(0, 200)}`);
     }
     const data = await res.json();
+    logUsage({ skill, provider: 'anthropic', model, data, started });
     if (data.stop_reason === 'refusal') throw new Error('Claude refused the request');
     if (data.stop_reason === 'max_tokens') throw new Error(`Claude response truncated at ${budget} tokens — raise maxTokens`);
 
@@ -83,10 +89,10 @@ async function claudeJSON(systemPrompt, userPrompt, { maxTokens = 4096, model = 
 }
 
 // Claude first; if anything goes wrong and a fallback was given, use it.
-async function accurateJSON(systemPrompt, userPrompt, { maxTokens = 4096, model = MODEL, effort = null, schema = null, fallback = null } = {}) {
+async function accurateJSON(systemPrompt, userPrompt, { maxTokens = 4096, model = MODEL, effort = null, schema = null, fallback = null, skill = 'claude' } = {}) {
     if (hasClaude()) {
         try {
-            return await claudeJSON(systemPrompt, userPrompt, { maxTokens, model, effort, schema });
+            return await claudeJSON(systemPrompt, userPrompt, { maxTokens, model, effort, schema, skill });
         } catch (e) {
             console.warn('[q-claude] falling back: ' + e.message);
             if (!fallback) throw e;

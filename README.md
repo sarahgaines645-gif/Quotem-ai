@@ -6,7 +6,7 @@ Lives at **quotem-ai.co.uk**. Shares a parent brand with Quotem the app — noth
 
 ## What Q is
 
-Q is a general-purpose AI assistant. He runs on DeepSeek V4 Pro via Together AI as his text brain, plus Together's vision model for images and various Hugging Face Spaces for music, video, voice cloning, image generation, and image-to-SVG.
+Q is a general-purpose AI assistant. He runs on DeepSeek V4 Pro via Together AI as his text brain, plus Together's vision model for images and various Hugging Face Spaces for video, image generation, and image-to-SVG. (Voice cloning and music generation were retired on 15 Aug 2026 — see `retired/2026-08-15-voice-clone-and-music/RETIRED.md`.)
 
 He's not a SaaS for the public. He's a personal AI for Sarah and the people she trusts (her **Circle**). Each person in the Circle has their own access key. Q knows them by name, remembers what they say, and can reference shared context naturally — *"Sarah mentioned that yesterday"*, *"I was just talking to Emma about this."*
 
@@ -20,7 +20,9 @@ He's not a SaaS for the public. He's a personal AI for Sarah and the people she 
 
 ## Skills available
 
-Chat · Agent · Code · Documents · Image generation · Music · Video · Voice cloning · Graphics (image-to-SVG) · Scheduled tasks · Plus a starter set of property/construction skills carried over from his lab origins. The toolkit will grow with fine-tuning; the persona is the constant.
+Chat · Agent · Code · Documents · Image generation · Video · Graphics (image-to-SVG) · Scheduled tasks · Travel search · Plus a starter set of property/construction skills carried over from his lab origins. The toolkit will grow with fine-tuning; the persona is the constant.
+
+**Travel search** (`plugins/q-travel.js`) gives Q three tools — `search_hotels` (live availability + prices, every price carrying its own currency), `search_flights` (live fares, supplier behind a swappable adapter) and `flight_schedule` (which airlines fly a route and *on which days of the week* — the thing that quietly kills a trip when a route only runs Tuesdays and Saturdays). All three read `RAPIDAPI_KEY` from the environment and stay inert with a friendly "not switched on yet" until it is set. UK package operators (Jet2, TUI, loveholidays, On the Beach) publish no API, so Q prices flight and hotel separately and says so rather than guessing a package price.
 
 ## Running locally
 

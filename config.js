@@ -42,15 +42,12 @@ const Q_CONFIG = {
   threadModel: process.env.QUOTEM_THREAD_MODEL || 'zai-org/GLM-5.2',
   temperature: 0.0,
   maxTokens: 4000,
-  // Voice cloning — set after deploying q-lab/voice-cloning-space/ to a HF Space.
-  // See voice-cloning-space/README.md for setup. URL looks like:
-  //   https://YOUR-USERNAME-q-voice-cloning.hf.space
-  chatterboxSpaceUrl: process.env.CHATTERBOX_SPACE_URL || '',
+  // chatterboxSpaceUrl (voice cloning, CHATTERBOX_SPACE_URL) and aceStepSpaceUrl
+  // (music, ACESTEP_SPACE_URL) RETIRED 2026-08-15 —
+  // see retired/2026-08-15-voice-clone-and-music/RETIRED.md
   // Image generation — runs on Together AI (FLUX.1-schnell-Free, no extra key needed).
   // Graphics — image-to-SVG via StarVector. q-lab/graphics-space/.
   starVectorSpaceUrl: process.env.STARVECTOR_SPACE_URL || '',
-  // Music — text-to-music via ACE-Step. q-lab/music-space/.
-  aceStepSpaceUrl: process.env.ACESTEP_SPACE_URL || '',
   // Video — text-to-video via Wan 2.2. q-lab/video-space/.
   wanSpaceUrl: process.env.WAN_SPACE_URL || '',
 };

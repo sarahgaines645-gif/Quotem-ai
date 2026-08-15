@@ -20,10 +20,10 @@ const REPO_ROOT = path.resolve(__dirname, '..');
 const SECRETS_FILE = path.join(REPO_ROOT, '.hf-secrets');
 
 // image-gen-space removed — image generation now runs via Together AI (FLUX.1-schnell-Free).
+// voice-cloning-space + music-space RETIRED 2026-08-15 — moved to
+// retired/2026-08-15-voice-clone-and-music/ (see RETIRED.md there).
 const SPACES = [
-    { folder: 'voice-cloning-space', name: 'q-voice-cloning', envVar: 'CHATTERBOX_SPACE_URL', sdk: 'gradio' },
     { folder: 'graphics-space',      name: 'q-graphics',      envVar: 'STARVECTOR_SPACE_URL', sdk: 'gradio' },
-    { folder: 'music-space',         name: 'q-music',         envVar: 'ACESTEP_SPACE_URL',    sdk: 'gradio' },
     { folder: 'video-space',         name: 'q-video',         envVar: 'WAN_SPACE_URL',        sdk: 'gradio' },
 ];
 

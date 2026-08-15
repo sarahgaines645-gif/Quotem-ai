@@ -24,14 +24,43 @@ const ROOT = path.join(__dirname, '..');
 if (!process.env.TOGETHER_API_KEY) {
     console.warn('[Q] ⚠️  TOGETHER_API_KEY is not set. Q will fail every request that needs to reason.');
 }
-// ── Security: session signing key must be set ──────────────────
-// Without Q_AUTH_PEPPER the server falls back to a public hardcoded string,
-// meaning anyone who knows it can forge a valid session cookie for any email.
-if (!process.env.Q_AUTH_PEPPER || process.env.Q_AUTH_PEPPER.length < 16) {
-    console.error('[Q] 🔴 SECURITY: Q_AUTH_PEPPER is not set or is too short (need ≥ 16 chars). Session cookies are cryptographically weak — set this in Railway env immediately.');
+// ── Security: session signing key + mailbox-token key are MANDATORY in prod ──
+// Q_AUTH_PEPPER signs every session cookie (auth.js). Without it auth.js
+// used to fall back to a PUBLIC hardcoded string — anyone who read the repo
+// could forge a valid session for any email. EMAIL_TOKEN_KEY encrypts the
+// connected Gmail/Outlook/SMTP credentials at rest (q-email-accounts.js) and
+// used to fall back to the pepper, then to another public string.
+//
+// Production (NODE_ENV=production, or any RAILWAY_* env present) now REFUSES
+// TO BOOT without Q_AUTH_PEPPER. Local dev without those markers gets a
+// throwaway pepper and a loud warning — never a silent public constant.
+//
+// EMAIL_TOKEN_KEY: if the Railway env has NEVER had this var, every existing
+// connected mailbox was encrypted with Q_AUTH_PEPPER (the old fallback), so a
+// missing EMAIL_TOKEN_KEY in production derives from the pepper — same key
+// the data was written with, nothing becomes unreadable — and warns loudly.
+// The public-string fallback that used to sit behind that is gone.
+const IS_PRODUCTION = process.env.NODE_ENV === 'production'
+    || Object.keys(process.env).some(k => k.startsWith('RAILWAY_'));
+const pepperOk = !!process.env.Q_AUTH_PEPPER && process.env.Q_AUTH_PEPPER.length >= 16;
+const emailKeyOk = !!process.env.EMAIL_TOKEN_KEY && process.env.EMAIL_TOKEN_KEY.length >= 16;
+if (!pepperOk) {
+    if (IS_PRODUCTION) {
+        console.error('');
+        console.error('═══════════════════════════════════════════════════════════════');
+        console.error('[Q] 🔴 REFUSING TO BOOT: Q_AUTH_PEPPER not set (must be a random string of 16+ chars).');
+        console.error('[Q]    Q_AUTH_PEPPER signs every session cookie. Set it in Railway → Variables, then redeploy. See .env.example.');
+        console.error('═══════════════════════════════════════════════════════════════');
+        process.exit(1);
+    }
+    // Dev only: mint an ephemeral pepper for this process so nothing runs on
+    // a public constant. Sessions/mailbox tokens will not survive a restart.
+    process.env.Q_AUTH_PEPPER = require('crypto').randomBytes(24).toString('hex');
+    console.warn('[Q] ⚠️  DEV ONLY: Q_AUTH_PEPPER not set — using a random per-process key. Sessions will NOT survive a restart. Never run production like this.');
 }
-if (!process.env.EMAIL_TOKEN_KEY && !process.env.Q_AUTH_PEPPER) {
-    console.error('[Q] 🔴 SECURITY: Neither EMAIL_TOKEN_KEY nor Q_AUTH_PEPPER is set. Gmail refresh tokens are encrypted with a public fallback key and can be decrypted by anyone.');
+if (!emailKeyOk) {
+    process.env.EMAIL_TOKEN_KEY = process.env.Q_AUTH_PEPPER;
+    console.warn('[Q] ⚠️  EMAIL_TOKEN_KEY not set — deriving it from Q_AUTH_PEPPER (the key existing mailbox tokens were written with). Set EMAIL_TOKEN_KEY = the same value as Q_AUTH_PEPPER in Railway → Variables to make this explicit.');
 }
 
 // ── First-run bootstrap: seed Q's memory from the bundled seed file ────
@@ -117,6 +146,31 @@ try {
     try {
         const peopleMod = require(path.join(ROOT, 'people.js'));
         peopleMod.migrateIfLegacy();
+
+        // ── Storage-key migration (2026-08-15) ─────────────────────────
+        // user directories used to be keyed on a lossy email slug (a.b@x and
+        // a-b@x shared one folder → one user could read/wipe another's
+        // finance, threads, docs). The key is now collision-proof; rename
+        // every known person's OLD folder to the NEW key. Idempotent, runs
+        // every boot, never guesses on a collision (logs CRITICAL instead).
+        // Runs BEFORE anything else touches user dirs on this boot.
+        try {
+            const { migrateLegacyUserDirs } = require(path.join(ROOT, 'plugins', 'user-data.js'));
+            const r = migrateLegacyUserDirs(peopleMod.listPeople());
+            if (r.renamed.length || r.skipped.length || r.collisions.length) {
+                console.log(`[migrate] user dirs → hashed keys: renamed=${r.renamed.length} skipped=${r.skipped.length} collisions=${r.collisions.length}`);
+            }
+        } catch (e) { console.error('[migrate] user-dir migration failed:', e.message); }
+
+        // ── Email-verification grandfathering (2026-08-15) ─────────────
+        // Sign-up now requires a verified email. Everyone already in the
+        // Circle (Sarah included) is marked verified once so nobody is
+        // locked out; only NEW sign-ups have to click the link.
+        try {
+            const g = peopleMod.grandfatherVerification();
+            if (g > 0) console.log(`[migrate] marked ${g} existing account(s) as email-verified`);
+        } catch (e) { console.error('[migrate] verification grandfathering failed:', e.message); }
+
         if (peopleMod.listPeople().length === 0) {
             const sarahEmail = process.env.SARAH_EMAIL || 'sarahgaines645@gmail.com';
             const result = await peopleMod.addPerson({
@@ -320,6 +374,7 @@ const PUBLIC_PATHS = new Set([
     '/welcome',              // public sign-in / sign-up landing (hosts the auth overlay)
     '/login', '/signup', '/logout',
     '/forgot-password', '/reset-password',
+    '/verify-email', '/resend-verification',  // sign-up email verification — clicked from the inbox, pre-login
 ]);
 const PUBLIC_PREFIXES = [
     '/assets/',
@@ -349,10 +404,13 @@ app.use((req, res, next) => {
     next();
 });
 
+const { runAs: runAsCostUser } = require(path.join(ROOT, 'cost-tracker'));
 app.use((req, res, next) => {
     if (isPublicPath(req.path)) return next();
     const person = verifySessionCookie(req);
-    if (person) { req.person = person; return next(); }
+    // runAs: every paid AI call made while serving this request is billed to
+    // this person in the cost log, however deep in the plugins it happens.
+    if (person) { req.person = person; return runAsCostUser(person.id, next); }
     if (req.method === 'POST' && req.path === '/chat') {
         console.warn('[q-diag] 401-reject /chat — qsess cookie '
             + (/(?:^|;\s*)qsess=/.test(req.headers.cookie || '') ? 'PRESENT but invalid/EXPIRED (30-day cliff?)' : 'missing'));
@@ -412,10 +470,42 @@ app.use((req, res) => {
 });
 
 // ── Error handler ──────────────────────────────────────────────
+// Typed, not one string for everything (route audit C1): a 413 from
+// express.json's body limit used to come out as "Server error" and the UI
+// said "Could not read this PDF". Now the client gets the real cause.
 app.use((err, req, res, next) => {
-    console.error('[Q] 🔥 Unhandled error:', err.message);
-    console.error(err.stack?.slice(0, 600));
-    res.status(500).json({ error: 'Server error', detail: process.env.NODE_ENV === 'development' ? err.message : undefined });
+    if (res.headersSent) return next(err);
+    if (err && err.type === 'entity.too.large') {
+        console.warn(`[Q] 413 ${req.method} ${req.path} — body over the route's limit (${err.limit || '?'} bytes)`);
+        return res.status(413).json({ error: 'That upload is too large for this request. Try a smaller file, fewer pages, or a CSV export.', code: 'too_large' });
+    }
+    if (err && (err.type === 'entity.parse.failed' || err.type === 'entity.verify.failed')) {
+        return res.status(400).json({ error: 'The request body could not be read (invalid JSON).', code: 'bad_body' });
+    }
+    if (err && err.code === 'UPSTREAM_TIMEOUT') {
+        console.warn(`[Q] 504 ${req.method} ${req.path} — ${err.message}`);
+        return res.status(504).json({ error: err.message, code: 'upstream_timeout' });
+    }
+    console.error(`[Q] 🔥 Unhandled error on ${req.method} ${req.path}:`, err && err.message);
+    console.error(err && err.stack ? err.stack.slice(0, 600) : '(no stack)');
+    const status = (err && Number.isInteger(err.status) && err.status >= 400 && err.status < 600) ? err.status : 500;
+    res.status(status).json({ error: status === 500 ? 'Server error' : (err.message || 'Request failed'), detail: process.env.NODE_ENV === 'development' ? err.message : undefined });
+});
+
+// ── Process-level safety net (route audit U1) ─────────────────
+// A rejected promise nobody caught used to take the whole process down →
+// Railway restart → 502 for everyone mid-request. Log it with the stack
+// and KEEP SERVING. A synchronous uncaught exception means state may be
+// corrupt: log it and exit(1) so Railway restarts us cleanly instead of
+// limping on.
+process.on('unhandledRejection', (reason) => {
+    const msg = reason && reason.stack ? reason.stack : String(reason);
+    console.error('[Q] 🔥 unhandledRejection (kept serving):', msg.slice(0, 1500));
+});
+process.on('uncaughtException', (err) => {
+    console.error('[Q] 💀 uncaughtException — exiting so Railway restarts cleanly:', err && err.stack ? err.stack.slice(0, 1500) : String(err));
+    // Give the log a moment to flush, then exit non-zero.
+    setTimeout(() => process.exit(1), 250).unref();
 });
 
 // ── Background workers ────────────────────────────────────────

@@ -19,6 +19,8 @@
 
 const { Q_CONFIG } = require('../config');
 const { cleanModelOutput } = require('./cjk-filter');
+const { timedFetch } = require('./timed-fetch');
+const { logUsage } = require('../cost-tracker');
 
 const SYSTEM_PROMPT = `You are a senior UK Quantity Surveyor pricing construction work that falls outside a standard Schedule of Rates.
 
@@ -75,7 +77,7 @@ Intent: ${intent || 'replace'}
 Details: ${detail || 'none given'}`;
 
         const startTime = Date.now();
-        const response = await fetch(`${Q_CONFIG.baseURL}/chat/completions`, {
+        const response = await timedFetch(`${Q_CONFIG.baseURL}/chat/completions`, {
             method: 'POST',
             headers: {
                 'Authorization': `Bearer ${Q_CONFIG.apiKey}`,
@@ -101,6 +103,7 @@ Details: ${detail || 'none given'}`;
         }
 
         const data = await response.json();
+        logUsage({ skill: 'qb-pricer', provider: 'together', model: Q_CONFIG.model, data, started: startTime });
         let result = cleanModelOutput(data.choices?.[0]?.message?.content || '{}', 'pricer');
         result = result.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim();
 
@@ -157,7 +160,7 @@ async function priceItems(items) {
         ).join('\n\n');
 
         const startTime = Date.now();
-        const response = await fetch(`${Q_CONFIG.baseURL}/chat/completions`, {
+        const response = await timedFetch(`${Q_CONFIG.baseURL}/chat/completions`, {
             method: 'POST',
             headers: {
                 'Authorization': `Bearer ${Q_CONFIG.apiKey}`,
@@ -183,6 +186,7 @@ async function priceItems(items) {
         }
 
         const data = await response.json();
+        logUsage({ skill: 'qb-pricer', provider: 'together', model: Q_CONFIG.model, data, started: startTime });
         let result = cleanModelOutput(data.choices?.[0]?.message?.content || '{}', 'pricer');
         result = result.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim();
 

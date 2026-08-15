@@ -27,70 +27,17 @@ const { addFact, searchFacts, listFacts } = require('../facts');
 const { getTutorPath } = require('../memory');
 const { createDocx, createPdf, stashFile, resolveToken } = require('./doc-creator');
 const { cleanModelOutput } = require('./cjk-filter');
+const { timedFetch } = require('./timed-fetch');
+const { logUsage } = require('../cost-tracker');
 const docEditor = require('./q-doc-editor');
 const qImageGen = require('./q-image-gen');
 const qGraphics = require('./q-graphics');
-const qMusic = require('./q-music');
+// q-music (generate_music) and q-voice-clone (speak_as_q + the Q-voice override
+// helpers setQVoiceFromBuffer / clearQVoice / getQVoiceStatus / loadQVoiceFor)
+// RETIRED 2026-08-15 — see retired/2026-08-15-voice-clone-and-music/RETIRED.md
 const qVideo = require('./q-video');
-const { speakAsVoice } = require('./q-voice-clone');
 const qLife = require('./q-life');
 const qTravel = require('./q-travel');
-
-// Q's voice — every user has their own override. The bundled default is a
-// shared fallback (it's just the stock voice and is identical for everyone).
-// Personal overrides live under userDataPath(email, 'q-voice/override.wav')
-// so one user can never replace another user's voice.
-const { userDataPath } = require('./user-data');
-const Q_VOICE_DEFAULT = path.join(__dirname, '..', 'assets', 'voice-candidates', 'q-current.mp3');
-
-function _userOverridePath(personEmail) {
-    return userDataPath(personEmail, 'q-voice/override.wav');
-}
-
-/**
- * Load the user's Q voice — their personal override if they've saved one,
- * else the bundled default. Loaded fresh each call so a save takes effect
- * on the next message without a restart.
- */
-function loadQVoiceFor(personEmail) {
-    if (personEmail) {
-        try {
-            const p = _userOverridePath(personEmail);
-            if (fs.existsSync(p)) {
-                return { buffer: fs.readFileSync(p), mimeType: 'audio/wav', source: 'override' };
-            }
-        } catch (e) {
-            console.warn('[q-tools] override read failed for ' + personEmail + ': ' + e.message);
-        }
-    }
-    try {
-        return { buffer: fs.readFileSync(Q_VOICE_DEFAULT), mimeType: 'audio/mpeg', source: 'default' };
-    } catch (e) {
-        return { buffer: null, mimeType: '', source: 'none' };
-    }
-}
-
-function setQVoiceFromBuffer(audioBuffer, personEmail) {
-    if (!personEmail) return { error: 'Cannot save voice without a signed-in user.' };
-    if (!audioBuffer || !audioBuffer.length) return { error: 'Empty audio buffer.' };
-    const p = _userOverridePath(personEmail);
-    fs.writeFileSync(p, audioBuffer);
-    return { ok: true, bytes: audioBuffer.length, source: 'override' };
-}
-
-function clearQVoice(personEmail) {
-    if (!personEmail) return { error: 'Cannot reset voice without a signed-in user.' };
-    try { fs.unlinkSync(_userOverridePath(personEmail)); } catch { /* didn't exist */ }
-    return { ok: true, source: 'default' };
-}
-
-function getQVoiceStatus(personEmail) {
-    const v = loadQVoiceFor(personEmail);
-    return {
-        source: v.source,            // 'override' | 'default' | 'none'
-        bytes: v.buffer ? v.buffer.length : 0,
-    };
-}
 
 // ─────────────────────────────────────────────────────────────
 //  TOOL DEFINITIONS — OpenAI function-calling schema
@@ -638,21 +585,7 @@ const TOOL_DEFINITIONS = [
             },
         },
     },
-    {
-        type: 'function',
-        function: {
-            name: 'generate_music',
-            description: 'Compose a music track from a description. Use this when the user asks for a song, music, tune, jingle, hold music, or background track for a video. Returns a download link to the audio file.',
-            parameters: {
-                type: 'object',
-                properties: {
-                    prompt: { type: 'string', description: 'What kind of music — genre, instruments, mood, tempo, vocals or instrumental.' },
-                    duration_seconds: { type: 'integer', description: 'Length of the track in seconds. Default 30, max 240.' },
-                },
-                required: ['prompt'],
-            },
-        },
-    },
+    // generate_music — RETIRED 2026-08-15 (see retired/2026-08-15-voice-clone-and-music/RETIRED.md)
     {
         type: 'function',
         function: {
@@ -668,20 +601,8 @@ const TOOL_DEFINITIONS = [
             },
         },
     },
-    {
-        type: 'function',
-        function: {
-            name: 'speak_as_q',
-            description: 'Narrate a text passage in Q\'s own voice. Use this when the user asks Q to "say that out loud", "narrate this in your voice", "read it aloud", or wants an audio version of a script for a video. Returns a download link to the audio file Q should embed in his reply.',
-            parameters: {
-                type: 'object',
-                properties: {
-                    text: { type: 'string', description: 'The text to speak. Keep it under ~500 chars per call for snappy results.' },
-                },
-                required: ['text'],
-            },
-        },
-    },
+    // speak_as_q — RETIRED 2026-08-15 with the voice-clone plugin it ran on
+    // (see retired/2026-08-15-voice-clone-and-music/RETIRED.md)
     {
         type: 'function',
         function: {
@@ -1152,7 +1073,11 @@ async function fetchRemoteBinary(url) {
  * a "no imagery here" grey tile.
  */
 async function streetView({ location, lat, lng, heading, pitch } = {}, personEmail) {
-    const apiKey = process.env.GOOGLE_MAPS_KEY;
+    // DEV_QUEUE #9: the code read GOOGLE_MAPS_KEY but the Railway env carried
+    // GOOGLE_PLACES_KEY, so the tool stayed dark. Accept both — the Street
+    // View Static API and Places share one Maps Platform key. GOOGLE_MAPS_KEY
+    // is preferred (it is the name documented in .env.example).
+    const apiKey = process.env.GOOGLE_MAPS_KEY || process.env.GOOGLE_PLACES_KEY;
     if (!apiKey) {
         return {
             error: 'road imagery not enabled',
@@ -1518,8 +1443,9 @@ async function analyzeDocument({ image_url, question }) {
         ? `You are a document-analysis vision model. Identify all fillable form fields in the image. For each field return: label (the nearby text label), type (text_field/checkbox/signature/date/number), and bounding box as {x, y, width, height} in normalised 0-1000 coordinates. Return ONLY valid JSON in the shape: {"summary":"...","fields":[{"label":"...","type":"...","x":0,"y":0,"width":0,"height":0}, ...]}`
         : `You are a document-analysis vision model. Read the image and answer the user's question accurately. If the document contains text, extract the relevant text. Be concise and factual.`;
 
+    const started = Date.now();
     try {
-        const response = await fetch(`${Q_CONFIG.baseURL}/chat/completions`, {
+        const response = await timedFetch(`${Q_CONFIG.baseURL}/chat/completions`, {
             method: 'POST',
             headers: {
                 'Authorization': `Bearer ${Q_CONFIG.apiKey}`,
@@ -1540,14 +1466,16 @@ async function analyzeDocument({ image_url, question }) {
                     },
                 ],
             }),
-        });
+        }, { label: 'document reader' });
 
         if (!response.ok) {
             const errText = await response.text();
+            logUsage({ skill: 'analyze-document', provider: 'together', model: Q_CONFIG.visionModel, started, success: false, error: `HTTP ${response.status}` });
             return { error: `Vision model HTTP ${response.status}: ${errText.substring(0, 200)}` };
         }
 
         const data = await response.json();
+        logUsage({ skill: 'analyze-document', provider: 'together', model: Q_CONFIG.visionModel, data, started });
         const msg = data.choices?.[0]?.message || {};
         // Thinking-mode quirk on Together (Kimi K2.5 / V4 Pro): the answer
         // sometimes lands in reasoning_content/reasoning with content empty.
@@ -1770,12 +1698,11 @@ async function executeTool(name, argsRaw, personId, personEmail, threadId) {
         case 'move_paragraph':    return docEditTool(personId, (b) => docEditor.moveParagraph(b, args.from_index, args.to_index));
         case 'merge_paragraph':   return docEditTool(personId, (b) => docEditor.mergeParagraph(b, args.source_index, args.target_index, args.position || 'end'));
         case 'format_paragraph':  return docEditTool(personId, (b) => docEditor.formatParagraph(b, args.index, args.style));
-        // Creative stack — image, vector, music, video, voice
+        // Creative stack — image, vector, video
+        // (generate_music + speak_as_q RETIRED 2026-08-15 — retired/2026-08-15-voice-clone-and-music/)
         case 'generate_image':    return await generateImageTool(args, personEmail);
         case 'vectorise_image':   return await vectoriseImageTool(args, personEmail);
-        case 'generate_music':    return await generateMusicTool(args, personEmail);
         case 'generate_video':    return await generateVideoTool(args, personEmail);
-        case 'speak_as_q':        return await speakAsQTool(args, personEmail);
         case 'save_situation':       return saveSituation(args, personEmail);
         case 'list_threads':         return listThreadsTool(personEmail);
         case 'read_thread':          return readThreadTool(args, personEmail);
@@ -1954,29 +1881,7 @@ async function vectoriseImageTool({ image_url } = {}, personEmail) {
     }
 }
 
-async function generateMusicTool({ prompt, duration_seconds } = {}, personEmail) {
-    if (!prompt || typeof prompt !== 'string') return { error: 'prompt (string) is required' };
-    if (!personEmail) return { error: 'Cannot generate without a signed-in user.' };
-    try {
-        const dur = Math.min(Math.max(parseInt(duration_seconds) || 30, 5), 240);
-        const result = await qMusic.generateMusic(prompt, { duration: dur });
-        if (result.error || !result.audio) {
-            return { error: result.error || 'Music generation returned nothing.' };
-        }
-        const ext = (result.mimeType && result.mimeType.includes('mp3')) ? 'mp3' : 'wav';
-        const stashed = stashFile(result.audio, ext, prompt, personEmail);
-        const url = '/download/' + stashed.token;
-        return {
-            ok: true,
-            filename: stashed.filename,
-            durationMs: result.durationMs,
-            downloadUrl: url,
-            instruction_for_q: `Tell the user the track is ready with a markdown link: [Listen / download ${stashed.filename}](${url}). One short sentence about the vibe.`,
-        };
-    } catch (e) {
-        return { error: e.message || 'Music generation failed.' };
-    }
-}
+// generateMusicTool — RETIRED 2026-08-15 (retired/2026-08-15-voice-clone-and-music/RETIRED.md)
 
 async function generateVideoTool({ prompt, duration_seconds } = {}, personEmail) {
     if (!prompt || typeof prompt !== 'string') return { error: 'prompt (string) is required' };
@@ -2001,27 +1906,7 @@ async function generateVideoTool({ prompt, duration_seconds } = {}, personEmail)
     }
 }
 
-async function speakAsQTool({ text } = {}, personEmail) {
-    if (!text || typeof text !== 'string') return { error: 'text (string) is required' };
-    const voice = loadQVoiceFor(personEmail);
-    if (!voice.buffer) return { error: "Q's voice reference isn't loaded — assets/voice-candidates/q-current.mp3 missing." };
-    try {
-        const result = await speakAsVoice(text, voice.buffer, voice.mimeType, {});
-        if (result.error || !result.audio) {
-            return { error: result.error || 'Voice generation returned nothing.' };
-        }
-        const stashed = stashFile(result.audio, 'wav', 'q-narration', personEmail);
-        const url = '/download/' + stashed.token;
-        return {
-            ok: true,
-            filename: stashed.filename,
-            downloadUrl: url,
-            instruction_for_q: `Tell the user the narration is ready with a markdown link: [Listen / download ${stashed.filename}](${url}). One short sentence about what you said.`,
-        };
-    } catch (e) {
-        return { error: e.message || 'Voice generation failed.' };
-    }
-}
+// speakAsQTool — RETIRED 2026-08-15 with q-voice-clone (retired/2026-08-15-voice-clone-and-music/RETIRED.md)
 
 /**
  * save_situation — create a Thread (a folder for one ongoing situation) on
@@ -2757,15 +2642,11 @@ const TRIGGERS = {
     vectorise_image: [
         /\b(vector(ise|ize)?|svg|trace|convert .* to (svg|vector))\b/i,
     ],
-    generate_music: [
-        /\b(compose|generate|make|write|create) [^.?!]{0,40}\b(music|song|tune|jingle|track|score|backing track|hold music)\b/i,
-    ],
+    // generate_music trigger RETIRED 2026-08-15 (tool removed)
     generate_video: [
         /\b(generate|make|create|render|produce) [^.?!]{0,40}\b(video|clip|reel|animation)\b/i,
     ],
-    speak_as_q: [
-        /\b(say (that|this)|speak (that|this|it)|narrate|read (that|it|this) aloud|in your (own )?voice|out loud)\b/i,
-    ],
+    // speak_as_q trigger RETIRED 2026-08-15 (tool removed)
     // Doc-editor tools — fire when the user is talking about editing the
     // document on screen. The doc-editor page also passes a flag that
     // unconditionally enables these (see selectActiveTools below).
@@ -2885,8 +2766,6 @@ module.exports = {
     selectActiveTools,
     // Direct callers for routes that want to use a tool without going via Q
     webSearch,
-    // Q voice override controls — used by /q-voice/* routes
-    setQVoiceFromBuffer,
-    clearQVoice,
-    getQVoiceStatus,
+    // setQVoiceFromBuffer / clearQVoice / getQVoiceStatus RETIRED 2026-08-15
+    // with the /q-voice/* routes — retired/2026-08-15-voice-clone-and-music/
 };

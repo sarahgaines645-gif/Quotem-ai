@@ -21,9 +21,12 @@
 const { Q_CONFIG } = require('../config');
 const { cleanModelOutput } = require('./cjk-filter');
 const { accurateJSON, claudeJSON, hasClaude, SONNET } = require('./q-claude');
+const { timedFetch } = require('./timed-fetch');
+const { logUsage } = require('../cost-tracker');
 
 async function callQ(systemPrompt, userPrompt, { maxTokens = 4096 } = {}) {
-    const response = await fetch(`${Q_CONFIG.baseURL}/chat/completions`, {
+    const started = Date.now();
+    const response = await timedFetch(`${Q_CONFIG.baseURL}/chat/completions`, {
         method: 'POST',
         headers: {
             'Authorization': `Bearer ${Q_CONFIG.apiKey}`,
@@ -38,12 +41,14 @@ async function callQ(systemPrompt, userPrompt, { maxTokens = 4096 } = {}) {
                 { role: 'user', content: userPrompt },
             ],
         }),
-    });
+    }, { label: 'revision' });
     if (!response.ok) {
         const errText = await response.text();
+        logUsage({ skill: 'revision', provider: 'together', model: Q_CONFIG.model, started, success: false, error: `HTTP ${response.status}` });
         throw new Error(`Q upstream ${response.status}: ${errText.substring(0, 200)}`);
     }
     const data = await response.json();
+    logUsage({ skill: 'revision', provider: 'together', model: Q_CONFIG.model, data, started });
     const raw = cleanModelOutput(data.choices?.[0]?.message?.content || '{}', 'revision');
     const cleaned = raw.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim();
     return JSON.parse(cleaned);
@@ -58,6 +63,7 @@ async function callAccurate(systemPrompt, userPrompt, opts = {}) {
         ...opts,
         model: SONNET,
         effort: 'medium',
+        skill: 'revision',
     });
 }
 
@@ -304,7 +310,7 @@ Write the ${n} questions.`;
         console.warn('[q-revision] Q quiz writer failed, Sonnet writing directly: ' + e.message);
     }
     if (!draft || draft.length === 0) {
-        draft = normaliseQuizQuestions(await claudeJSON(writerSystem, writerUser, { maxTokens: 6000, model: SONNET, effort: 'medium', schema: QUIZ_SCHEMA }));
+        draft = normaliseQuizQuestions(await claudeJSON(writerSystem, writerUser, { maxTokens: 6000, model: SONNET, effort: 'medium', schema: QUIZ_SCHEMA, skill: 'revision' }));
         writtenByClaude = true;
     }
     if (draft.length === 0) throw new Error('No usable questions came back — try again.');
@@ -325,7 +331,7 @@ For every question:
 ${QUIZ_SHAPE}`;
 
     const checked = normaliseQuizQuestions(
-        await claudeJSON(checkerSystem, `DRAFT BATCH:\n${JSON.stringify({ questions: draft }, null, 1)}`, { maxTokens: 8000, model: SONNET, effort: 'medium', schema: QUIZ_SCHEMA })
+        await claudeJSON(checkerSystem, `DRAFT BATCH:\n${JSON.stringify({ questions: draft }, null, 1)}`, { maxTokens: 8000, model: SONNET, effort: 'medium', schema: QUIZ_SCHEMA, skill: 'revision' })
     );
     if (checked.length === 0) throw new Error('The checker rejected the whole batch — try again.');
     return { questions: checked, checkedBy: 'sonnet' };

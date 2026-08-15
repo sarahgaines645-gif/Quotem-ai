@@ -79,7 +79,8 @@ async function embedText(text) {
     if (!Q_CONFIG.apiKey) throw new Error('TOGETHER_API_KEY not configured');
     if (!text || typeof text !== 'string') throw new Error('Text required for embedding');
 
-    const response = await fetch(`${Q_CONFIG.baseURL}/embeddings`, {
+    const started = Date.now();
+    const response = await require('./timed-fetch').timedFetch(`${Q_CONFIG.baseURL}/embeddings`, {
         method: 'POST',
         headers: {
             'Authorization': `Bearer ${Q_CONFIG.apiKey}`,
@@ -90,14 +91,17 @@ async function embedText(text) {
             // E5 caps at 512 tokens (~2000 chars). Hard-truncate to be safe.
             input: text.substring(0, 1800),
         }),
-    });
+    }, { label: 'embeddings', timeoutMs: 60_000 });
 
     if (!response.ok) {
         const errText = await response.text();
+        require('../cost-tracker').logUsage({ skill: 'rag-embed', provider: 'together', model: EMBEDDING_MODEL, started, success: false, error: `HTTP ${response.status}` });
         throw new Error(`Embedding HTTP ${response.status}: ${errText.substring(0, 200)}`);
     }
 
     const data = await response.json();
+    // Together's embeddings endpoint reports usage.prompt_tokens (output 0).
+    require('../cost-tracker').logUsage({ skill: 'rag-embed', provider: 'together', model: EMBEDDING_MODEL, data, started });
     const vec = data.data?.[0]?.embedding;
     if (!Array.isArray(vec) || vec.length !== EMBEDDING_DIM) {
         throw new Error(`Unexpected embedding shape: ${vec?.length}-dim, expected ${EMBEDDING_DIM}`);

@@ -18,6 +18,8 @@ const fs = require('fs');
 const path = require('path');
 const { Q_CONFIG } = require('../config');
 const { cleanModelOutput } = require('./cjk-filter');
+const { timedFetch } = require('./timed-fetch');
+const { logUsage } = require('../cost-tracker');
 
 let sorFacts = '';
 try {
@@ -59,7 +61,7 @@ async function expandItem(description, breakdownNote = '') {
 
     try {
         const startTime = Date.now();
-        const response = await fetch(`${Q_CONFIG.baseURL}/chat/completions`, {
+        const response = await timedFetch(`${Q_CONFIG.baseURL}/chat/completions`, {
             method: 'POST',
             headers: {
                 'Authorization': `Bearer ${Q_CONFIG.apiKey}`,
@@ -88,6 +90,7 @@ async function expandItem(description, breakdownNote = '') {
         }
 
         const data = await response.json();
+        logUsage({ skill: 'qb-expander', provider: 'together', model: Q_CONFIG.model, data, started: startTime });
         let result = cleanModelOutput(data.choices?.[0]?.message?.content || '{}', 'expander');
         result = result.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim();
 

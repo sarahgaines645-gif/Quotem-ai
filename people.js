@@ -110,6 +110,10 @@ async function addPerson({ id, name, email, intro, password, approved = true }) 
         intro: intro || '',
         passwordHash,
         approved: approved === true,
+        // Admin-added people are vouched for by Sarah → verified. Public
+        // self-signup passes approved:false and must click the emailed link
+        // (see createVerificationToken / consumeVerificationToken).
+        emailVerified: approved === true,
         addedAt: new Date().toISOString(),
     };
     people.push(person);
@@ -248,6 +252,84 @@ function removePerson(id) {
     return true;
 }
 
+// ── Email verification (sign-up) ──────────────────────────────────────────
+// Self-signup used to create a live account against ANY email with no proof
+// the person owned it (audit AUDIT_2026-05-19_USER-DATA-ISOLATION, issue 2).
+// Now: sign-up creates the person with emailVerified:false and a random
+// token whose SHA-256 sits on the record with a 24h expiry. The raw token
+// only ever exists in the emailed link. Login refuses until it is clicked.
+// Sarah's Circle approval is IN ADDITION — both gates must pass.
+
+const VERIFY_TOKEN_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
+
+/**
+ * Mint a fresh verification token for this email. Returns the raw token
+ * (embed in the link) or null if no such account / already verified.
+ */
+function createVerificationToken(email) {
+    const cleanEmail = normaliseEmail(email);
+    const people = loadPeople();
+    const person = people.find(p => normaliseEmail(p.email) === cleanEmail);
+    if (!person) return null;
+    if (isEmailVerified(person)) return null;
+    const raw = crypto.randomBytes(32).toString('hex');
+    person.verifyTokenHash = hashResetToken(raw);
+    person.verifyTokenExpires = new Date(Date.now() + VERIFY_TOKEN_TTL_MS).toISOString();
+    savePeople(people);
+    return raw;
+}
+
+/**
+ * Validate a verification token. On success marks the account verified,
+ * clears the token and returns the safe person. Returns null on unknown /
+ * expired token (an expired one is cleared so it can't be replayed).
+ */
+function consumeVerificationToken(token) {
+    if (!token || typeof token !== 'string' || token.length > 200) return null;
+    const tokenHash = hashResetToken(token);
+    const people = loadPeople();
+    const person = people.find(p => p.verifyTokenHash === tokenHash);
+    if (!person) return null;
+    if (!person.verifyTokenExpires || new Date(person.verifyTokenExpires).getTime() < Date.now()) {
+        delete person.verifyTokenHash;
+        delete person.verifyTokenExpires;
+        savePeople(people);
+        return null;
+    }
+    person.emailVerified = true;
+    person.emailVerifiedAt = new Date().toISOString();
+    delete person.verifyTokenHash;
+    delete person.verifyTokenExpires;
+    savePeople(people);
+    const { passwordHash, resetTokenHash, resetTokenExpires, ...safe } = person;
+    return safe;
+}
+
+/**
+ * Has this person proved they own their email? Records that pre-date the
+ * field (the existing Circle, incl. Sarah) are treated as verified — same
+ * grandfathering as isApproved — and grandfatherVerification() writes the
+ * flag explicitly at boot. Only an explicit false blocks login.
+ */
+function isEmailVerified(person) {
+    return !!person && person.emailVerified !== false;
+}
+
+/**
+ * One-off, idempotent: stamp emailVerified:true on every record that has no
+ * such field, so turning verification on never locks out anyone already in.
+ * Returns how many were stamped.
+ */
+function grandfatherVerification() {
+    const people = loadPeople();
+    let n = 0;
+    for (const p of people) {
+        if (p.emailVerified === undefined) { p.emailVerified = true; n++; }
+    }
+    if (n > 0) savePeople(people);
+    return n;
+}
+
 /**
  * Pick a unique, filename-safe id for a new person. Derived from the local
  * part of their email; if that's already taken, append -2, -3, etc. The id
@@ -288,6 +370,8 @@ async function signupPerson({ name, email, password }) {
         throw new Error('An account with this email already exists. Try signing in instead.');
     }
     const id = generateUniqueId(cleanEmail);
+    // approved:false → addPerson also sets emailVerified:false. The route
+    // then mints a verification token and emails the link.
     const result = await addPerson({ id, name: cleanName, email: cleanEmail, password, approved: false });
     return result.person;
 }
@@ -337,6 +421,11 @@ function approvePerson(id) {
     if (!person) return null;
     person.approved = true;
     person.approvedAt = new Date().toISOString();
+    // Sarah letting someone in is a stronger vouch than a clicked link, and
+    // it is the escape hatch if the verification email never arrived.
+    person.emailVerified = true;
+    delete person.verifyTokenHash;
+    delete person.verifyTokenExpires;
     savePeople(people);
     const { passwordHash, ...safe } = person;
     return safe;
@@ -376,4 +465,8 @@ module.exports = {
     migrateIfLegacy,
     createResetToken,
     consumeResetToken,
+    createVerificationToken,
+    consumeVerificationToken,
+    isEmailVerified,
+    grandfatherVerification,
 };

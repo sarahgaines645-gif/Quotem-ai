@@ -16,8 +16,10 @@
 const { PDFDocument, StandardFonts, PDFName, PDFDict, rgb } = require('pdf-lib');
 const { Q_CONFIG } = require('../config');
 const { cleanModelOutput } = require('./cjk-filter');
+const { timedFetch } = require('./timed-fetch');
+const { logUsage } = require('../cost-tracker');
 
-const EXTRACT_SYSTEM = `You are a form-filling assistant. Your output is ALWAYS a single JSON object — never prose, never markdown, never an explanation.
+const EXTRACT_SYSTEM =`You are a form-filling assistant. Your output is ALWAYS a single JSON object — never prose, never markdown, never an explanation.
 
 You receive:
 1. A list of PDF form fields. Each has a NAME, a TYPE, and CONTEXT — the actual surrounding form text (what comes above/before/after the blank space on the page). The context shows you what the form is really asking for.
@@ -94,9 +96,14 @@ async function readStreamText(response) {
                 // Mirror the fallback in q-chat.js / q-finance.js so it isn't lost.
                 if (delta?.reasoning_content) reasoning += delta.reasoning_content;
                 else if (delta?.reasoning) reasoning += delta.reasoning;
+                // Together sends the token usage on the final SSE chunk (with
+                // stream_options.include_usage). Hang it on the response so the
+                // caller can log the cost of a streamed call.
+                if (chunk.usage) response.streamUsage = chunk.usage;
             } catch { /* ignore */ }
         }
     }
+    if (typeof response.releaseTimer === 'function') response.releaseTimer();
     return (text && text.trim()) ? text : reasoning;
 }
 
@@ -167,8 +174,11 @@ ${infoText || '(none)'}`;
         // response_format:json_object on Together. Vision path streams + uses a
         // multimodal model, so it stays on the strict-prompt path.
         ...(!isVision && { response_format: { type: 'json_object' } }),
+        // Streamed replies only carry token usage if we ask for it.
+        ...(isVision && { stream_options: { include_usage: true } }),
     };
     // Vision path streams; text path relies on the strict system prompt for JSON output.
+    const started = Date.now();
 
     // Hard timeout — a genuinely hung upstream shouldn't wedge the request
     // forever. The old 55s was too tight: V4-Pro reading a real case with several
@@ -199,14 +209,17 @@ ${infoText || '(none)'}`;
 
     if (!response.ok) {
         const err = await response.text();
+        logUsage({ skill: 'form-filler', provider: 'together', model, started, success: false, error: `HTTP ${response.status}` });
         throw new Error(`Q extraction failed ${response.status}: ${err.slice(0, 200)}`);
     }
 
     let raw;
     if (isVision) {
         raw = await readStreamText(response);
+        logUsage({ skill: 'form-filler', provider: 'together', model, data: { usage: response.streamUsage }, started });
     } else {
         const data = await response.json();
+        logUsage({ skill: 'form-filler', provider: 'together', model, data, started });
         const msg = data.choices?.[0]?.message || {};
         // DeepSeek-V4-Pro thinking-mode quirk on Together: the answer sometimes
         // lands in reasoning_content/reasoning with content left empty. Mirror the
@@ -591,7 +604,8 @@ ${documentText || '(no text extracted)'}`;
         ...pageImages.map(url => ({ type: 'image_url', image_url: { url } })),
     ];
 
-    const response = await fetch(`${Q_CONFIG.baseURL}/chat/completions`, {
+    const started = Date.now();
+    const response = await timedFetch(`${Q_CONFIG.baseURL}/chat/completions`, {
         method: 'POST',
         headers: {
             'Authorization': `Bearer ${Q_CONFIG.apiKey}`,
@@ -601,17 +615,20 @@ ${documentText || '(no text extracted)'}`;
             // Vision model — Qwen3.6-Plus on Together. Streaming-only.
             model: Q_CONFIG.visionModel,
             stream: true,
+            stream_options: { include_usage: true },
             max_tokens: 6000,
             temperature: 0.0,
             messages: [{ role: 'user', content }],
         }),
-    });
+    }, { label: 'form labeller' });
 
     if (!response.ok) {
         const err = await response.text();
+        logUsage({ skill: 'form-filler', provider: 'together', model: Q_CONFIG.visionModel, started, success: false, error: `HTTP ${response.status}` });
         throw new Error(`Label upstream ${response.status}: ${err.slice(0, 200)}`);
     }
     const raw = await readStreamText(response);
+    logUsage({ skill: 'form-filler', provider: 'together', model: Q_CONFIG.visionModel, data: { usage: response.streamUsage }, started });
     const cleaned = raw.replace(/```json\s*/gi, '').replace(/```\s*/g, '').trim();
     const start = cleaned.indexOf('{');
     const end = cleaned.lastIndexOf('}');

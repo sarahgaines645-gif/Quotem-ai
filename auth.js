@@ -21,7 +21,11 @@ const SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
 function getPepper() {
     const p = process.env.Q_AUTH_PEPPER;
     if (!p || p.length < 16) {
-        return 'unset-pepper-quotem-ai-do-not-use-in-prod';
+        // server/index.js refuses to boot in production without this and
+        // mints a per-process dev key otherwise, so this is unreachable in
+        // a normal start. It used to fall back to a PUBLIC constant — which
+        // let anyone forge a session cookie. Now it fails closed.
+        throw new Error('Q_AUTH_PEPPER is not set (16+ chars required) — sessions cannot be signed or verified');
     }
     return p;
 }

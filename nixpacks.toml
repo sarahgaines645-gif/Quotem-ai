@@ -1,5 +1,8 @@
 [phases.setup]
-nixPkgs = ["nodejs_22", "npm-9_x", "yt-dlp", "ffmpeg-full"]
+# yt-dlp + ffmpeg-full removed 2026-08-15 — their only consumer was plugins/q-audio-fetch.js
+# (voice-clone URL fetcher), now in retired/2026-08-15-voice-clone-and-music/. Re-add both if
+# that plugin ever comes back.
+nixPkgs = ["nodejs_22", "npm-9_x"]
 
 [phases.install]
 cmds = ["npm ci || npm install"]

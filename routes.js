@@ -46,10 +46,11 @@ const {
 startScheduler();
 const { loadMemory, clearMemory, appendMessage, getRecentMessages, getCircleSummary, getMemoryPath, getVoicePath, getDocPath, getTutorPath, getRevisionPath } = require('./memory');
 const { requirePerson, tryAttachPerson, setSessionCookie, clearSessionCookie } = require('./auth');
-const { listPeople, addPerson, signupPerson, isApproved, approvePerson, isAdmin, getPerson, getPersonByEmail, removePerson, verifyLogin, changePassword, updateName, rotatePassword, createResetToken, consumeResetToken } = require('./people');
+const { listPeople, addPerson, signupPerson, isApproved, approvePerson, isAdmin, getPerson, getPersonByEmail, removePerson, verifyLogin, changePassword, updateName, rotatePassword, createResetToken, consumeResetToken, createVerificationToken, consumeVerificationToken, isEmailVerified } = require('./people');
 const { sendMail, isConfigured: mailerConfigured } = require('./mailer');
 const { resolveToken: resolveGeneratedDoc, resolveTokenAcrossUsers } = require('./plugins/doc-creator');
-const { summarise: summariseCosts, getLogPath: costLogPath } = require('./cost-tracker');
+const { summarise: summariseCosts, getLogPath: costLogPath, logUsage } = require('./cost-tracker');
+const { timedFetch } = require('./plugins/timed-fetch');
 const qPush = require('./plugins/q-push');
 
 // ── Auth: login + logout ────────────────────────────────────────────────────
@@ -61,29 +62,91 @@ router.post('/login', express.json({ limit: '4kb' }), async (req, res) => {
         // Constant-time-ish: still wait roughly as long as a real bcrypt compare
         return res.status(401).json({ error: 'Email or password incorrect.' });
     }
-    // Account must be approved before it can sign in. Credentials are correct
-    // here (we don't leak approval state to wrong passwords) — the account is
-    // simply still waiting for Sarah to approve it.
+    // Two gates, both must pass. Credentials are correct here (we don't leak
+    // either state to wrong passwords).
+    // 1. The person must have proved they own the email (clicked the link).
+    if (!isEmailVerified(person)) {
+        return res.status(403).json({
+            error: 'Please verify your email first — we sent you a link when you signed up. Check your inbox (and spam), or ask for a new link.',
+            code: 'email_unverified',
+        });
+    }
+    // 2. Sarah must have let them into the Circle.
     if (!isApproved(person)) {
-        return res.status(403).json({ error: "Your account is waiting to be approved. You'll be able to sign in once it's been let in." });
+        return res.status(403).json({ error: "Your account is waiting to be approved. You'll be able to sign in once it's been let in.", code: 'pending_approval' });
     }
     setSessionCookie(res, person.email);
     res.json({ ok: true, person });
 });
 
-// Self-signup. Anyone can request an account, but it's created PENDING —
-// Sarah approves it from the admin members page before the person can sign
-// in. We deliberately do NOT set a session cookie here: a pending account
-// gets no access until approved. The client shows an "awaiting approval"
-// message on { pending: true }.
+// ── Sign-up + email verification ─────────────────────────────────────────
+// Self-signup creates the person UNVERIFIED and PENDING, then emails a
+// verification link. Sign-in refuses until (a) the link is clicked and
+// (b) Sarah approves from the members page. No session cookie is set here.
+// The client shows the "check your inbox / awaiting approval" card on
+// { pending: true }.
+function absoluteLink(req, pathAndQuery) {
+    const proto = (req.headers['x-forwarded-proto'] || req.protocol || 'https');
+    const host = req.headers.host || 'www.quotem-ai.co.uk';
+    return `${proto}://${host}${pathAndQuery}`;
+}
+
+async function sendVerificationEmail(req, person) {
+    const token = createVerificationToken(person.email);
+    if (!token) return false;                                   // already verified / unknown
+    if (!mailerConfigured()) {
+        console.warn('[signup] mailer not configured — verification token minted but NO email sent to ' + person.email + '. Sarah can still approve from the members page (approval also marks the email verified).');
+        return false;
+    }
+    const link = absoluteLink(req, `/verify-email?token=${encodeURIComponent(token)}`);
+    const first = (person.name || '').split(' ')[0];
+    const text = `Hi ${first},\n\nThanks for signing up to Q. Click this link within 24 hours to confirm this is your email address:\n${link}\n\nOnce it's confirmed, your account waits for a quick approval and then you're in.\n\nIf you didn't sign up, ignore this email — nothing will happen.\n\n— Q`;
+    const html = `<p>Hi ${first},</p><p>Thanks for signing up to Q. <a href="${link}">Click here to confirm this is your email address</a> — the link is valid for 24 hours.</p><p>Once it's confirmed, your account waits for a quick approval and then you're in.</p><p>If you didn't sign up, ignore this email — nothing will happen.</p><p>— Q</p>`;
+    try {
+        await sendMail({ to: person.email, subject: 'Confirm your email for Q', text, html });
+        return true;
+    } catch (e) {
+        console.warn('[signup] verification sendMail failed:', e.message);
+        return false;
+    }
+}
+
 router.post('/signup', express.json({ limit: '4kb' }), async (req, res) => {
     const { name, email, password } = req.body || {};
     try {
         const person = await signupPerson({ name, email, password });
-        return res.json({ ok: true, pending: true, person });
+        const verifyEmailSent = await sendVerificationEmail(req, person);
+        return res.json({ ok: true, pending: true, verifyEmailSent, person });
     } catch (e) {
         return res.status(400).json({ error: e.message || 'Sign-up failed.' });
     }
+});
+
+// The link in the email. Public (the person is not signed in yet). Lands
+// them back on /welcome with a flag so the sign-in card can say what happened.
+router.get('/verify-email', (req, res) => {
+    const token = String(req.query?.token || '');
+    const person = consumeVerificationToken(token);
+    res.setHeader('Cache-Control', 'no-store');
+    if (!person) return res.redirect(302, '/welcome?verify=invalid');
+    console.log(`[signup] email verified for ${person.id}`);
+    return res.redirect(302, '/welcome?verify=ok');
+});
+
+// "Send me a new link." Always answers ok so it never reveals which emails
+// exist. Throttled per email to one send a minute per process.
+const resendLast = new Map();
+router.post('/resend-verification', express.json({ limit: '4kb' }), async (req, res) => {
+    const email = String(req.body?.email || '').trim().toLowerCase();
+    const respond = () => res.json({ ok: true });
+    if (!email) return respond();
+    const last = resendLast.get(email) || 0;
+    if (Date.now() - last < 60_000) return respond();
+    resendLast.set(email, Date.now());
+    const person = getPersonByEmail(email);
+    if (!person || isEmailVerified(person)) return respond();
+    await sendVerificationEmail(req, person);
+    respond();
 });
 
 router.post('/logout', (req, res) => {
@@ -240,11 +303,13 @@ router.get('/test-glm-tools', async (req, res) => {
         messages: [{ role: 'user', content: 'What is the weather in London today? Use web_search.' }]
     };
     try {
-        const r = await fetch('https://api.together.xyz/v1/chat/completions', {
+        const started = Date.now();
+        const r = await timedFetch('https://api.together.xyz/v1/chat/completions', {
             method: 'POST', headers: { 'Authorization': 'Bearer ' + key, 'Content-Type': 'application/json' },
             body: JSON.stringify(body)
-        });
+        }, { label: 'glm test' });
         const data = await r.json();
+        logUsage({ skill: 'test-glm-tools', provider: 'together', model: body.model, data, started });
         const msg = data.choices?.[0]?.message;
         res.json({
             finish_reason: data.choices?.[0]?.finish_reason,
@@ -436,8 +501,9 @@ router.post('/api/tts-email', requirePerson, express.json({ limit: '64kb' }), as
     if (!text) return res.status(400).json({ error: 'No text provided.' });
     const GEMINI_KEY = process.env.GEMINI_API_KEY;
     if (!GEMINI_KEY) return res.status(503).json({ error: 'tts_unavailable' });
+    const ttsStarted = Date.now();
     try {
-        const gr = await fetch(
+        const gr = await timedFetch(
             `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-tts:generateContent?key=${GEMINI_KEY}`,
             {
                 method: 'POST',
@@ -451,13 +517,16 @@ router.post('/api/tts-email', requirePerson, express.json({ limit: '64kb' }), as
                         },
                     },
                 }),
-            }
+            },
+            { label: 'text-to-speech', timeoutMs: 90_000 }
         );
         if (!gr.ok) {
+            logUsage({ skill: 'tts-email', provider: 'gemini', model: 'gemini-2.5-flash-preview-tts', started: ttsStarted, user: req.person?.id, success: false, error: `HTTP ${gr.status}` });
             console.error('[tts-email] Gemini error:', (await gr.text()).slice(0, 300));
             return res.status(502).json({ error: 'tts_failed' });
         }
         const data = await gr.json();
+        logUsage({ skill: 'tts-email', provider: 'gemini', model: 'gemini-2.5-flash-preview-tts', data, started: ttsStarted, user: req.person?.id });
         const b64 = data?.candidates?.[0]?.content?.parts?.[0]?.inline_data?.data;
         if (!b64) return res.status(502).json({ error: 'no_audio' });
         // Gemini returns raw 16-bit LE PCM at 24 kHz mono. Wrap in a minimal WAV header.

@@ -25,6 +25,8 @@ const fs = require('fs');
 const path = require('path');
 const { Q_CONFIG } = require('../config');
 const { cleanModelOutput } = require('./cjk-filter');
+const { timedFetch } = require('./timed-fetch');
+const { logUsage } = require('../cost-tracker');
 
 // Load SOR facts (data file, not code)
 let sorFacts = '';
@@ -140,7 +142,7 @@ async function checkResults(originalText, workItems, sorResults) {
 
     try {
         const startTime = Date.now();
-        const response = await fetch(`${Q_CONFIG.baseURL}/chat/completions`, {
+        const response = await timedFetch(`${Q_CONFIG.baseURL}/chat/completions`, {
             method: 'POST',
             headers: {
                 'Authorization': `Bearer ${Q_CONFIG.apiKey}`,
@@ -172,6 +174,7 @@ async function checkResults(originalText, workItems, sorResults) {
         }
 
         const data = await response.json();
+        logUsage({ skill: 'qb-checker', provider: 'together', model: Q_CONFIG.model, data, started: startTime });
         let result = cleanModelOutput(data.choices?.[0]?.message?.content || '{}', 'checker');
         result = result.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim();
 

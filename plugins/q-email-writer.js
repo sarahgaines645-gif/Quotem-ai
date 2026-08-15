@@ -12,8 +12,10 @@
 
 const { Q_CONFIG } = require('../config');
 const { cleanModelOutput } = require('./cjk-filter');
+const { timedFetch } = require('./timed-fetch');
+const { logUsage } = require('../cost-tracker');
 
-const ANALYSE_SYSTEM = `You are an expert email reader. The user pastes ONE email or a WHOLE thread (multiple back-and-forth messages). Read everything carefully. Identify the LATEST message — that's what we're replying to.
+const ANALYSE_SYSTEM =`You are an expert email reader. The user pastes ONE email or a WHOLE thread (multiple back-and-forth messages). Read everything carefully. Identify the LATEST message — that's what we're replying to.
 
 Return a SINGLE JSON object — no markdown fences, no prose around it.
 
@@ -80,20 +82,23 @@ async function callQ(systemPrompt, userPrompt, { maxTokens = 2048, temperature =
     ],
   };
 
-  const res = await fetch(`${Q_CONFIG.baseURL}/chat/completions`, {
+  const started = Date.now();
+  const res = await timedFetch(`${Q_CONFIG.baseURL}/chat/completions`, {
     method: 'POST',
     headers: {
       'Authorization': `Bearer ${Q_CONFIG.apiKey}`,
       'Content-Type': 'application/json',
     },
     body: JSON.stringify(body),
-  });
+  }, { label: 'email writer' });
 
   if (!res.ok) {
     const err = await res.text();
+    logUsage({ skill: 'email-writer', provider: 'together', model: Q_CONFIG.model, started, success: false, error: `HTTP ${res.status}` });
     throw new Error(`Q HTTP ${res.status}: ${err.slice(0, 300)}`);
   }
   const json = await res.json();
+  logUsage({ skill: 'email-writer', provider: 'together', model: Q_CONFIG.model, data: json, started });
   const raw = json.choices?.[0]?.message?.content || '';
   return cleanModelOutput(raw).trim();
 }

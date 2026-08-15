@@ -20,8 +20,10 @@
 
 const { Q_CONFIG } = require('../config');
 const { cleanModelOutput } = require('./cjk-filter');
+const { timedFetch } = require('./timed-fetch');
+const { logUsage } = require('../cost-tracker');
 
-const PLOTTER_PROMPT = `You are the Plotter — a precision coordinate AI for document form-filling.
+const PLOTTER_PROMPT =`You are the Plotter — a precision coordinate AI for document form-filling.
 
 YOUR ONLY JOB
 Look at the page image and return the pixel coordinates of every fillable answer space on the form. You return geometry, not language. You plot pins, you do not label them.
@@ -78,9 +80,11 @@ async function readStreamAsResponse(response) {
                 const chunk = JSON.parse(s);
                 const delta = chunk.choices?.[0]?.delta;
                 if (delta?.content) content += delta.content;
+                if (chunk.usage) response.streamUsage = chunk.usage; // final SSE chunk carries usage
             } catch { /* ignore malformed SSE */ }
         }
     }
+    if (typeof response.releaseTimer === 'function') response.releaseTimer();
     return content;
 }
 
@@ -99,7 +103,8 @@ async function plotDots(imageDataUrl, dimensions) {
         throw new Error('dimensions { w, h } required');
     }
 
-    const response = await fetch(`${Q_CONFIG.baseURL}/chat/completions`, {
+    const started = Date.now();
+    const response = await timedFetch(`${Q_CONFIG.baseURL}/chat/completions`, {
         method: 'POST',
         headers: {
             'Authorization': `Bearer ${Q_CONFIG.apiKey}`,
@@ -108,6 +113,7 @@ async function plotDots(imageDataUrl, dimensions) {
         body: JSON.stringify({
             model: Q_CONFIG.visionModel,
             stream: true,                     // Qwen3.6-Plus is streaming-only on Together
+            stream_options: { include_usage: true },
             max_tokens: 4000,
             temperature: 0.0,
             messages: [
@@ -122,14 +128,16 @@ async function plotDots(imageDataUrl, dimensions) {
             ],
             response_format: { type: 'json_object' },
         }),
-    });
+    }, { label: 'plotter' });
 
     if (!response.ok) {
         const errText = await response.text();
+        logUsage({ skill: 'plotter', provider: 'together', model: Q_CONFIG.visionModel, started, success: false, error: `HTTP ${response.status}` });
         throw new Error(`Plotter upstream ${response.status}: ${errText.substring(0, 200)}`);
     }
 
     const text = cleanModelOutput(await readStreamAsResponse(response), 'dot-plotter');
+    logUsage({ skill: 'plotter', provider: 'together', model: Q_CONFIG.visionModel, data: { usage: response.streamUsage }, started });
     const cleaned = text.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim();
     const parsed = JSON.parse(cleaned);
 

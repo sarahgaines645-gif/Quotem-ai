@@ -14,6 +14,8 @@
 
 const { Q_CONFIG } = require('../config');
 const { cleanModelOutput } = require('./cjk-filter');
+const { timedFetch } = require('./timed-fetch');
+const { logUsage } = require('../cost-tracker');
 
 // QS_PERSONA — copied verbatim from server/templates/sor-engine.js
 // Must stay in sync with the source. If sor-engine's persona changes, update this.
@@ -93,7 +95,7 @@ Apply QS principles. Select the ONE item that best matches. Return JSON only.`;
 
     try {
         const startTime = Date.now();
-        const response = await fetch(`${Q_CONFIG.baseURL}/chat/completions`, {
+        const response = await timedFetch(`${Q_CONFIG.baseURL}/chat/completions`, {
             method: 'POST',
             headers: {
                 'Authorization': `Bearer ${Q_CONFIG.apiKey}`,
@@ -122,6 +124,7 @@ Apply QS principles. Select the ONE item that best matches. Return JSON only.`;
         }
 
         const data = await response.json();
+        logUsage({ skill: 'qb-sor-picker', provider: 'together', model: Q_CONFIG.model, data, started: startTime });
         let text = cleanModelOutput(data.choices?.[0]?.message?.content || '{}', 'sor-picker');
         text = text.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim();
 

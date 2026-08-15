@@ -16,6 +16,8 @@
 
 const { Q_CONFIG } = require('../config');
 const { cleanModelOutput } = require('./cjk-filter');
+const { timedFetch } = require('./timed-fetch');
+const { logUsage } = require('../cost-tracker');
 
 const SYSTEM_PROMPT = `You are a personal-admin assistant. The user gives you TEXT (from a school letter, email, message, photo OCR, bank statement, newsletter, or similar). Your job is to read THAT TEXT and pull out two arrays: the events that are happening, and the tasks the user must do for them.
 
@@ -143,15 +145,17 @@ async function extractLifeAdmin(rawText, opts = {}) {
     const userMessage = `TODAY: ${today}${categoriesBlock}${contextBlock}\n\n--- TEXT ---\n${rawText.trim()}\n--- END ---\n\nThink it through, then return the JSON object.`;
 
     let res;
+    const started = Date.now();
+    const model = Q_CONFIG.fastModel || Q_CONFIG.model;
     try {
-        res = await fetch(`${Q_CONFIG.baseURL}/chat/completions`, {
+        res = await timedFetch(`${Q_CONFIG.baseURL}/chat/completions`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
                 'Authorization': `Bearer ${Q_CONFIG.apiKey}`,
             },
             body: JSON.stringify({
-                model: Q_CONFIG.fastModel || Q_CONFIG.model,
+                model,
                 // 4000 was tight — a long PDF can produce more JSON than fits,
                 // the output truncates mid-object, and JSON.parse fails with
                 // the opaque "model returned non-JSON". 8000 leaves room.
@@ -162,18 +166,24 @@ async function extractLifeAdmin(rawText, opts = {}) {
                     { role: 'user', content: userMessage },
                 ],
             }),
-        });
+        }, { label: 'life extractor' });
     } catch (err) {
+        logUsage({ skill: 'life-extract', provider: 'together', model, started, success: false, error: err.message });
         return { events: [], tasks: [], error: `network: ${err.message || String(err)}` };
     }
 
     if (!res.ok) {
         const body = await res.text().catch(() => '');
+        logUsage({ skill: 'life-extract', provider: 'together', model, started, success: false, error: `HTTP ${res.status}` });
         return { events: [], tasks: [], error: `HTTP ${res.status}: ${body.slice(0, 300)}` };
     }
 
     let raw;
-    try { raw = (await res.json()).choices?.[0]?.message?.content || ''; }
+    try {
+        const data = await res.json();
+        logUsage({ skill: 'life-extract', provider: 'together', model, data, started });
+        raw = data.choices?.[0]?.message?.content || '';
+    }
     catch { return { events: [], tasks: [], error: 'response not JSON' }; }
 
     raw = cleanModelOutput(raw, 'event-extractor')
@@ -258,8 +268,9 @@ async function extractFromImage(dataUrl, opts = {}) {
         : '';
 
     let res;
+    const started = Date.now();
     try {
-        res = await fetch(`${Q_CONFIG.baseURL}/chat/completions`, {
+        res = await timedFetch(`${Q_CONFIG.baseURL}/chat/completions`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -282,18 +293,24 @@ async function extractFromImage(dataUrl, opts = {}) {
                     },
                 ],
             }),
-        });
+        }, { label: 'life photo reader' });
     } catch (err) {
+        logUsage({ skill: 'life-extract', provider: 'together', model: Q_CONFIG.visionModel, started, success: false, error: err.message });
         return { events: [], tasks: [], error: `network: ${err.message || String(err)}` };
     }
 
     if (!res.ok) {
         const body = await res.text().catch(() => '');
+        logUsage({ skill: 'life-extract', provider: 'together', model: Q_CONFIG.visionModel, started, success: false, error: `HTTP ${res.status}` });
         return { events: [], tasks: [], error: `HTTP ${res.status}: ${body.slice(0, 300)}` };
     }
 
     let raw;
-    try { raw = (await res.json()).choices?.[0]?.message?.content || ''; }
+    try {
+        const data = await res.json();
+        logUsage({ skill: 'life-extract', provider: 'together', model: Q_CONFIG.visionModel, data, started });
+        raw = data.choices?.[0]?.message?.content || '';
+    }
     catch { return { events: [], tasks: [], error: 'response not JSON' }; }
 
     raw = cleanModelOutput(raw, 'event-extractor')

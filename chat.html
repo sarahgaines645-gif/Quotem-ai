@@ -1456,24 +1456,13 @@
     <div class="voice-wrap">
       <button class="icon-btn" id="voice-toggle" aria-label="Voice settings" title="Voice settings — pick how Q sounds">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><path d="M15.54 8.46a5 5 0 0 1 0 7.07"></path><path d="M19.07 4.93a10 10 0 0 1 0 14.14"></path></svg>
-        <span class="voice-toggle-dot" id="voice-toggle-dot" title="A cloned voice is selected"></span>
       </button>
+      <!-- Cloned voices ("+ Add a voice" recorder → /speak-as-voice) RETIRED 2026-08-15.
+           Only Off / Q's default (client-side Kokoro) remain. See retired/2026-08-15-voice-clone-and-music/ -->
       <div class="voices-panel" id="voices-panel" role="menu" aria-label="Voices">
         <h3>Voice</h3>
         <div class="voice-row" data-voice="off"><span class="voice-name">Off</span></div>
         <div class="voice-row" data-voice="default"><span class="voice-name">Q's default voice</span></div>
-        <div id="voices-list"></div>
-        <div class="voices-divider"></div>
-        <div class="add-voice-row" id="add-voice-show">+ Add a voice</div>
-        <div class="add-voice-form" id="add-voice-form">
-          <input type="text" id="add-voice-name" placeholder="Name (e.g. Nan, Adam)" maxlength="30">
-          <div class="add-voice-actions">
-            <button id="add-voice-record">● Record</button>
-            <button id="add-voice-save" disabled>Save</button>
-            <button id="add-voice-cancel">Cancel</button>
-          </div>
-          <div class="add-voice-hint">Record 5–15 seconds of clear speech.</div>
-        </div>
       </div>
     </div>
     <button class="icon-btn" id="tasks-btn" aria-label="Tasks &amp; calendar" title="Tasks &amp; calendar">
@@ -1502,14 +1491,7 @@
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
             Image gen
           </a>
-          <a href="/voice-clone" class="tool-tile">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
-            Voice clone
-          </a>
-          <a href="/music" class="tool-tile">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
-            Music
-          </a>
+          <!-- Voice clone + Music tiles RETIRED 2026-08-15 — retired/2026-08-15-voice-clone-and-music/ -->
           <a href="/video" class="tool-tile">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg>
             Video
@@ -1671,7 +1653,7 @@ const $voiceToggle = document.getElementById('voice-toggle');
 const $empty = document.getElementById('empty');
 const $clear = document.getElementById('clear');
 const VOICE_KEY = 'q-voice-out-v1';        // legacy boolean (migrated below)
-const VOICE_MODE_KEY = 'q-voice-mode-v1';  // 'off' | 'default' | 'cloned:{id}'
+const VOICE_MODE_KEY = 'q-voice-mode-v1';  // 'off' | 'default'  ('cloned:{id}' retired 2026-08-15)
 const THINK_KEY = 'q-thinking-level-v1';
 
 // Migrate legacy boolean → new mode string on first load.
@@ -1684,91 +1666,21 @@ if (!voiceMode) {
   voiceMode = (legacy === 'false') ? 'off' : 'default';
   localStorage.setItem(VOICE_MODE_KEY, voiceMode);
 }
+// Cloned voices retired 2026-08-15 — anyone still on 'cloned:{id}' drops to default.
+if (voiceMode.startsWith('cloned:')) {
+  voiceMode = 'default';
+  localStorage.setItem(VOICE_MODE_KEY, voiceMode);
+}
 const isVoiceOn = () => voiceMode !== 'off';
-const $voiceDot = document.getElementById('voice-toggle-dot');
 function refreshVoiceToggleVisual() {
   $voiceToggle.classList.toggle('on', voiceMode !== 'off');
-  $voiceDot.classList.toggle('show', voiceMode.startsWith('cloned:'));
 }
 refreshVoiceToggleVisual();
 
-// ─── IndexedDB store for cloned-voice reference clips ─────────────────────
-// Voices are stored locally in the browser. Audio blobs never leave Sarah's
-// machine except as part of a /speak-as-voice call.
-const VOICES_DB_NAME = 'q-voices-db';
-const VOICES_STORE = 'voices';
-
-function openVoicesDB() {
-  return new Promise((resolve, reject) => {
-    const req = indexedDB.open(VOICES_DB_NAME, 1);
-    req.addEventListener('upgradeneeded', () => {
-      const db = req.result;
-      if (!db.objectStoreNames.contains(VOICES_STORE)) {
-        db.createObjectStore(VOICES_STORE, { keyPath: 'id' });
-      }
-    });
-    req.addEventListener('success', () => resolve(req.result));
-    req.addEventListener('error', () => reject(req.error));
-  });
-}
-
-async function listVoices() {
-  const db = await openVoicesDB();
-  return new Promise((resolve, reject) => {
-    const tx = db.transaction(VOICES_STORE, 'readonly');
-    const store = tx.objectStore(VOICES_STORE);
-    const req = store.getAll();
-    req.addEventListener('success', () => resolve(req.result || []));
-    req.addEventListener('error', () => reject(req.error));
-  });
-}
-
-async function getVoice(id) {
-  const db = await openVoicesDB();
-  return new Promise((resolve, reject) => {
-    const tx = db.transaction(VOICES_STORE, 'readonly');
-    const store = tx.objectStore(VOICES_STORE);
-    const req = store.get(id);
-    req.addEventListener('success', () => resolve(req.result || null));
-    req.addEventListener('error', () => reject(req.error));
-  });
-}
-
-async function saveVoice(voice) {
-  const db = await openVoicesDB();
-  return new Promise((resolve, reject) => {
-    const tx = db.transaction(VOICES_STORE, 'readwrite');
-    const store = tx.objectStore(VOICES_STORE);
-    const req = store.put(voice);
-    req.addEventListener('success', () => resolve());
-    req.addEventListener('error', () => reject(req.error));
-  });
-}
-
-async function deleteVoice(id) {
-  const db = await openVoicesDB();
-  return new Promise((resolve, reject) => {
-    const tx = db.transaction(VOICES_STORE, 'readwrite');
-    const store = tx.objectStore(VOICES_STORE);
-    const req = store.delete(id);
-    req.addEventListener('success', () => resolve());
-    req.addEventListener('error', () => reject(req.error));
-  });
-}
-
-function blobToBase64(blob) {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onloadend = () => {
-      // strip "data:.../...;base64," prefix
-      const result = String(reader.result || '');
-      const comma = result.indexOf(',');
-      resolve(comma >= 0 ? result.substring(comma + 1) : result);
-    };
-    reader.onerror = () => reject(reader.error);
-    reader.readAsDataURL(blob);
-  });
-}
+// ─── Cloned-voice IndexedDB store + add-voice recorder + speakWithChatterbox
+// RETIRED 2026-08-15 (they posted reference audio to /speak-as-voice, which is
+// gone). Full code preserved in retired/2026-08-15-voice-clone-and-music/RETIRED.md.
+// The 'q-voices-db' IndexedDB left in a browser is inert and never read.
 
 // Thinking-level picker — Quick / Think / Deep maps to 'off' / 'high' / 'max'.
 // DEFAULT is Think ('high', the middle level) — Q reasons by default. The chosen
@@ -1998,13 +1910,7 @@ if ($pwdSave) $pwdSave.addEventListener('click', handleChangePassword);
 
 // ─── VOICES PANEL ─────────────────────────────────────────────────────────
 const $voicesPanel = document.getElementById('voices-panel');
-const $voicesList = document.getElementById('voices-list');
-const $addVoiceShow = document.getElementById('add-voice-show');
-const $addVoiceForm = document.getElementById('add-voice-form');
-const $addVoiceName = document.getElementById('add-voice-name');
-const $addVoiceRecord = document.getElementById('add-voice-record');
-const $addVoiceSave = document.getElementById('add-voice-save');
-const $addVoiceCancel = document.getElementById('add-voice-cancel');
+// (add-voice form + cloned-voice list elements RETIRED 2026-08-15)
 
 function selectVoice(mode) {
   voiceMode = mode;
@@ -2016,29 +1922,17 @@ function selectVoice(mode) {
   refreshVoicesPanel();
 }
 
-async function refreshVoicesPanel() {
-  // Mark the current selection on the static rows.
+function refreshVoicesPanel() {
+  // Mark the current selection on the static rows (Off / Q's default).
+  // Cloned-voice rows RETIRED 2026-08-15.
   $voicesPanel.querySelectorAll('.voice-row[data-voice]').forEach(row => {
     row.classList.toggle('selected', row.dataset.voice === voiceMode);
-  });
-  // Render saved cloned voices.
-  const voices = await listVoices().catch(() => []);
-  $voicesList.innerHTML = '';
-  voices.forEach(v => {
-    const row = document.createElement('div');
-    row.className = 'voice-row' + (voiceMode === 'cloned:' + v.id ? ' selected' : '');
-    row.dataset.voice = 'cloned:' + v.id;
-    row.innerHTML =
-      '<span class="voice-name">' + escapeHtml(v.name) + '</span>' +
-      '<button class="voice-del" data-del="' + v.id + '" title="Delete this voice">×</button>';
-    $voicesList.appendChild(row);
   });
 }
 
 function openVoicesPanel() { $voicesPanel.classList.add('show'); refreshVoicesPanel(); }
 function closeVoicesPanel() {
   $voicesPanel.classList.remove('show');
-  hideAddVoiceForm();
 }
 
 $voiceToggle.addEventListener('click', (e) => {
@@ -2060,110 +1954,11 @@ document.getElementById('conversation').addEventListener('click', (e) => {
   if (img) img.classList.toggle('expanded');
 });
 
-// Voice row clicks (Off / Default / saved cloned voices) + delete buttons.
-$voicesPanel.addEventListener('click', async (e) => {
-  const delBtn = e.target.closest('[data-del]');
-  if (delBtn) {
-    e.stopPropagation();
-    const id = delBtn.dataset.del;
-    if (!confirm('Delete this voice? This cannot be undone.')) return;
-    await deleteVoice(id);
-    if (voiceMode === 'cloned:' + id) selectVoice('default');
-    else refreshVoicesPanel();
-    return;
-  }
+// Voice row clicks (Off / Q's default). Cloned-voice rows + ADD-VOICE FLOW
+// (mic recorder → IndexedDB → /speak-as-voice) RETIRED 2026-08-15.
+$voicesPanel.addEventListener('click', (e) => {
   const row = e.target.closest('.voice-row[data-voice]');
   if (row) selectVoice(row.dataset.voice);
-});
-
-// ─── ADD-VOICE FLOW ───────────────────────────────────────────────────────
-let addRecorder = null;
-let addRecordedChunks = [];
-let addRecordedBlob = null;
-let addRecordedMime = '';
-let addStream = null;
-
-function showAddVoiceForm() {
-  $addVoiceForm.classList.add('show');
-  $addVoiceName.value = '';
-  $addVoiceName.focus();
-  addRecordedBlob = null;
-  addRecordedMime = '';
-  $addVoiceSave.disabled = true;
-  $addVoiceRecord.classList.remove('recording');
-  $addVoiceRecord.textContent = '● Record';
-}
-function hideAddVoiceForm() {
-  $addVoiceForm.classList.remove('show');
-  if (addRecorder && addRecorder.state !== 'inactive') {
-    try { addRecorder.stop(); } catch (e) {}
-  }
-  if (addStream) {
-    addStream.getTracks().forEach(t => t.stop());
-    addStream = null;
-  }
-  addRecordedBlob = null;
-}
-
-$addVoiceShow.addEventListener('click', showAddVoiceForm);
-$addVoiceCancel.addEventListener('click', hideAddVoiceForm);
-
-$addVoiceRecord.addEventListener('click', async () => {
-  if ($addVoiceRecord.classList.contains('recording')) {
-    if (addRecorder && addRecorder.state !== 'inactive') {
-      try { addRecorder.stop(); } catch (e) {}
-    }
-    if (addStream) { addStream.getTracks().forEach(t => t.stop()); addStream = null; }
-    return;
-  }
-  if (!navigator.mediaDevices || !window.MediaRecorder) {
-    alert('Your browser does not support microphone recording.');
-    return;
-  }
-  try {
-    addStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-    addRecordedChunks = [];
-    addRecorder = new MediaRecorder(addStream);
-    addRecordedMime = addRecorder.mimeType || 'audio/webm';
-    addRecorder.addEventListener('dataavailable', e => { if (e.data && e.data.size) addRecordedChunks.push(e.data); });
-    addRecorder.addEventListener('stop', () => {
-      $addVoiceRecord.classList.remove('recording');
-      $addVoiceRecord.textContent = '● Record';
-      if (addRecordedChunks.length === 0) return;
-      addRecordedBlob = new Blob(addRecordedChunks, { type: addRecordedMime });
-      $addVoiceSave.disabled = !($addVoiceName.value.trim() && addRecordedBlob);
-    });
-    addRecorder.start();
-    $addVoiceRecord.classList.add('recording');
-    $addVoiceRecord.textContent = '■ Stop';
-  } catch (e) {
-    alert('Microphone unavailable: ' + e.message);
-  }
-});
-
-$addVoiceName.addEventListener('input', () => {
-  $addVoiceSave.disabled = !($addVoiceName.value.trim() && addRecordedBlob);
-});
-
-$addVoiceSave.addEventListener('click', async () => {
-  const name = $addVoiceName.value.trim();
-  if (!name || !addRecordedBlob) return;
-  $addVoiceSave.disabled = true;
-  const id = 'v' + Date.now() + Math.random().toString(36).slice(2, 6);
-  try {
-    await saveVoice({
-      id,
-      name,
-      audioBlob: addRecordedBlob,
-      mimeType: addRecordedMime,
-      createdAt: new Date().toISOString(),
-    });
-    hideAddVoiceForm();
-    selectVoice('cloned:' + id);
-  } catch (e) {
-    alert('Could not save voice: ' + e.message);
-    $addVoiceSave.disabled = false;
-  }
 });
 
 // ─── BROWSER-SIDE VOICE ──────────────────────────────────────────────────
@@ -2231,13 +2026,7 @@ async function speakReply(text) {
   if (currentAudio) { try { currentAudio.pause(); } catch (e) {} currentAudio = null; }
   if ('speechSynthesis' in window) speechSynthesis.cancel();
 
-  if (voiceMode.startsWith('cloned:')) {
-    const voiceId = voiceMode.substring('cloned:'.length);
-    const voice = await getVoice(voiceId).catch(() => null);
-    if (voice) { await speakWithChatterbox(text, voice); return; }
-    console.warn('[q/voice] cloned voice missing — falling back to default');
-  }
-
+  // 'cloned:{id}' → speakWithChatterbox path RETIRED 2026-08-15. Kokoro only.
   await speakWithKokoro(text);
 }
 
@@ -2272,40 +2061,8 @@ async function speakWithKokoro(text) {
   }
 }
 
-async function speakWithChatterbox(text, voice) {
-  try {
-    showVoiceStatus('Cloning voice…');
-    const refB64 = await blobToBase64(voice.audioBlob);
-    const res = await fetch('/speak-as-voice', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        text,
-        referenceAudioBase64: refB64,
-        referenceMimeType: voice.mimeType || 'audio/webm',
-      }),
-    });
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({ error: 'HTTP ' + res.status }));
-      console.warn('[q/voice] Chatterbox failed:', err);
-      hideVoiceStatus();
-      if (err.error && err.error.includes('CHATTERBOX_SPACE_URL')) {
-        renderMessage('q', "(Voice cloning isn't set up yet — Sarah needs to configure the cloning service.)");
-      }
-      return;
-    }
-    const blob = await res.blob();
-    const url = URL.createObjectURL(blob);
-    currentAudio = new Audio(url);
-    currentAudio.addEventListener('ended', () => { URL.revokeObjectURL(url); currentAudio = null; hideVoiceStatus(); });
-    currentAudio.addEventListener('error', () => { URL.revokeObjectURL(url); currentAudio = null; hideVoiceStatus(); });
-    await currentAudio.play();
-  } catch (e) {
-    console.warn('[q/voice] Chatterbox generate failed:', e);
-    hideVoiceStatus();
-    currentAudio = null;
-  }
-}
+// speakWithChatterbox (POST /speak-as-voice) RETIRED 2026-08-15 — see
+// retired/2026-08-15-voice-clone-and-music/RETIRED.md
 
 // Lazy-load Whisper the first time we record.
 let whisperPromise = null;

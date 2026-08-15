@@ -19,6 +19,8 @@
 
 const { Q_CONFIG } = require('../config');
 const { cleanModelOutput } = require('./cjk-filter');
+const { timedFetch } = require('./timed-fetch');
+const { logUsage } = require('../cost-tracker');
 
 const SYSTEM_PROMPT = `You are a senior UK Quantity Surveyor and trade specialist reading incoming correspondence. You have 20 years experience in council housing maintenance, private sector repairs, and construction estimating.
 
@@ -126,7 +128,7 @@ async function readText(text, options = {}) {
 
     try {
         const startTime = Date.now();
-        const response = await fetch(`${Q_CONFIG.baseURL}/chat/completions`, {
+        const response = await timedFetch(`${Q_CONFIG.baseURL}/chat/completions`, {
             method: 'POST',
             headers: {
                 'Authorization': `Bearer ${Q_CONFIG.apiKey}`,
@@ -152,6 +154,7 @@ async function readText(text, options = {}) {
         }
 
         const data = await response.json();
+        logUsage({ skill: 'qb-text-reader', provider: 'together', model, data, started: startTime });
         let result = cleanModelOutput(data.choices?.[0]?.message?.content || '{}', 'text-reader');
         result = result.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim();
 

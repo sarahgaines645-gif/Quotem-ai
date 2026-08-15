@@ -210,14 +210,34 @@
         // After a successful sign-up the account is pending approval. Replace the
         // card with a calm confirmation so the person isn't bounced back to a
         // sign-in form that would just reject them.
-        function showPending() {
+        function showPending(verifyEmailSent) {
+            const inbox = verifyEmailSent
+                ? 'We\'ve emailed you a link — click it to confirm your address (check spam if it\'s not there). '
+                : '';
             card.innerHTML =
                 '<h1>Q<span class="dot">.</span></h1>' +
                 '<p class="q-mode-label">Almost there</p>' +
-                '<p class="q-info" style="margin-top:0">Thanks for signing up. Your account is waiting to be approved — you\'ll be able to sign in once you\'ve been let in.</p>' +
+                '<p class="q-info" style="margin-top:0">Thanks for signing up. ' + inbox + 'Your account then waits to be approved — you\'ll be able to sign in once you\'ve been let in.</p>' +
                 '<button class="q-submit" id="q-pending-ok">OK</button>';
             const okBtn = card.querySelector('#q-pending-ok');
             if (okBtn) okBtn.addEventListener('click', () => location.reload());
+        }
+
+        // Offer a "send me a new link" action when sign-in is refused for an
+        // unverified email.
+        async function offerResend(emailAddr) {
+            const a = document.createElement('a');
+            a.href = '#'; a.textContent = 'Send a new verification link';
+            a.style.display = 'block'; a.style.marginTop = '6px';
+            a.addEventListener('click', async (ev) => {
+                ev.preventDefault();
+                try {
+                    await fetch('/resend-verification', { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: emailAddr }) });
+                } catch (_) { /* silent */ }
+                err.style.color = '#2e7d32';
+                err.textContent = 'If that email is registered and unverified, a new link is on its way.';
+            });
+            err.appendChild(a);
         }
 
         function setMode(m) {
@@ -246,6 +266,14 @@
             }
         }
         setMode('signin');
+
+        // Landing back from the emailed verification link (/verify-email
+        // redirects to /welcome?verify=ok|invalid). After setMode so it isn't wiped.
+        try {
+            const v = new URLSearchParams(location.search).get('verify');
+            if (v === 'ok') { err.style.color = '#2e7d32'; err.textContent = 'Email confirmed — thanks. Sign in once your account has been approved.'; }
+            else if (v === 'invalid') { err.textContent = 'That verification link is invalid or has expired. Sign in to request a new one.'; }
+        } catch (_) { /* no-op */ }
 
         // Delegated mode-switching: catches both the bottom toggle links AND
         // the "Forgot password?" link sitting under the password field.
@@ -305,7 +333,7 @@
                     if (r.ok) {
                         // Account created but PENDING — no session was set. Show the
                         // waiting message rather than reloading into a dead session.
-                        showPending();
+                        showPending(!!data.verifyEmailSent);
                         return;
                     }
                     err.textContent = data.error || 'Sign-up failed.';
@@ -350,6 +378,7 @@
                 }
                 const data = await r.json().catch(() => ({}));
                 err.textContent = data.error || 'Sign in failed.';
+                if (data.code === 'email_unverified') offerResend(e);
             } catch (_) {
                 err.textContent = 'Network error — try again.';
             } finally {

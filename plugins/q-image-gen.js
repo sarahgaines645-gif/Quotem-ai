@@ -16,6 +16,8 @@
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 const OPENAI_BASE_URL = 'https://api.openai.com/v1';
 const IMAGE_MODEL = 'gpt-image-1';
+const { timedFetch } = require('./timed-fetch');
+const { logUsage } = require('../cost-tracker');
 
 /**
  * Generate an image from a prompt via OpenAI's images API.
@@ -66,17 +68,18 @@ async function generateImage(prompt, options = {}) {
     };
 
     try {
-        const res = await fetch(`${OPENAI_BASE_URL}/images/generations`, {
+        const res = await timedFetch(`${OPENAI_BASE_URL}/images/generations`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
                 'Authorization': `Bearer ${OPENAI_API_KEY}`,
             },
             body: JSON.stringify(body),
-        });
+        }, { label: 'image generator', timeoutMs: 180_000 });
 
         if (!res.ok) {
             const errText = await res.text();
+            logUsage({ skill: 'image-gen', provider: 'openai', model: IMAGE_MODEL, started: startTime, success: false, error: `HTTP ${res.status}` });
             return {
                 image: null,
                 mimeType: '',
@@ -86,6 +89,9 @@ async function generateImage(prompt, options = {}) {
         }
 
         const json = await res.json();
+        // gpt-image-1 reports usage.input_tokens / output_tokens (+ image_tokens
+        // detail); the tracker prices output at the image-output rate.
+        logUsage({ skill: 'image-gen', provider: 'openai', model: IMAGE_MODEL, data: json, started: startTime });
         const b64 = json?.data?.[0]?.b64_json;
         if (!b64) {
             return { image: null, mimeType: '', error: 'No image data in response', durationMs: Date.now() - startTime };

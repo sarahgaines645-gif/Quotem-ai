@@ -26,6 +26,8 @@ const { Q_CONFIG } = require('../config');
 const { TOOL_DEFINITIONS, executeTool } = require('./q-tools');
 const { verify } = require('./q-verifier');
 const { cleanModelOutput } = require('./cjk-filter');
+const { timedFetch } = require('./timed-fetch');
+const { logUsage } = require('../cost-tracker');
 
 const DEFAULT_MAX_STEPS = 25;
 
@@ -89,7 +91,8 @@ async function runAgent(goal, options = {}) {
             stepsTaken = step + 1;
             transcript.push({ type: 'step_start', step: stepsTaken, t: Date.now() - startTime });
 
-            const response = await fetch(`${Q_CONFIG.baseURL}/chat/completions`, {
+            const stepStarted = Date.now();
+            const response = await timedFetch(`${Q_CONFIG.baseURL}/chat/completions`, {
                 method: 'POST',
                 headers: {
                     'Authorization': `Bearer ${Q_CONFIG.apiKey}`,
@@ -103,11 +106,12 @@ async function runAgent(goal, options = {}) {
                     ...(useTools && { tools: TOOL_DEFINITIONS, tool_choice: 'auto' }),
                     messages: conversation,
                 }),
-            });
+            }, { label: 'agent', timeoutMs: 120_000 });
 
             if (!response.ok) {
                 const errText = await response.text();
                 const errMsg = `HTTP ${response.status}: ${errText.substring(0, 200)}`;
+                logUsage({ skill: 'agent', provider: 'together', model: Q_CONFIG.model, started: stepStarted, user: options.person?.id, success: false, error: errMsg });
                 transcript.push({ type: 'error', step: stepsTaken, error: errMsg });
                 return {
                     summary: null,
@@ -123,6 +127,9 @@ async function runAgent(goal, options = {}) {
             const data = await response.json();
             totalTokensIn += data.usage?.prompt_tokens || 0;
             totalTokensOut += data.usage?.completion_tokens || 0;
+            // Every agent step is its own paid call — log each one (a 100-step
+            // run with the full tool menu was the biggest unmetered spend in Q).
+            logUsage({ skill: 'agent', provider: 'together', model: Q_CONFIG.model, data, started: stepStarted, user: options.person?.id });
 
             const message = data.choices?.[0]?.message;
             const callsRequested = message?.tool_calls;
