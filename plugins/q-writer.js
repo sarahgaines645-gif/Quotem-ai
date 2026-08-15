@@ -244,6 +244,10 @@ Return ONLY valid JSON:
 // additionalProperties:false; no minItems/maxItems/minLength/minimum. Optional
 // fields are anyOf [type, null].
 const nullable = (t) => ({ anyOf: [{ type: t }, { type: 'null' }] });
+// Requirement dots (Sarah, 15 Aug): plain, distinct colours + what they mean.
+const REQ_KINDS = ['citation', 'reference', 'case-study', 'figure', 'theory', 'example', 'recommendation'];
+const REQ_COLOURS = { citation: '#7b1fa2', reference: '#1565c0', 'case-study': '#00897b', figure: '#ef6c00', theory: '#c2185b', example: '#2e7d32', recommendation: '#5d4037' };
+const REQ_LABELS = { citation: 'a citation', reference: 'a reference', 'case-study': 'a case study', figure: 'a figure', theory: 'a theory named', example: 'an example', recommendation: 'a recommendation' };
 
 const BRIEF_SCHEMA = {
     type: 'object', additionalProperties: false,
@@ -522,9 +526,11 @@ const MARK_SCHEMA = {
             type: 'array',
             items: {
                 type: 'object', additionalProperties: false,
-                required: ['criterionId', 'band', 'evidence', 'missingForTop', 'nextQuestion', 'voicedBrickIds'],
+                required: ['criterionId', 'band', 'evidence', 'missingForTop', 'nextQuestion', 'voicedBrickIds', 'termsUsed', 'requirementsMet'],
                 properties: {
                     criterionId: { type: 'string' },
+                    termsUsed: { type: 'array', items: { type: 'string' }, description: 'Of this part\'s EXPECTED TERMS, the ones the draft uses correctly (exact term as listed). Empty if none listed.' },
+                    requirementsMet: { type: 'array', items: { type: 'string' }, description: 'Of this part\'s REQUIREMENTS, the kinds the draft satisfies. Empty if none.' },
                     band: { type: 'string', enum: ['top', 'mid', 'low', 'missing'] },
                     voicedBrickIds: { type: 'array', items: { type: 'string' }, description: 'The model answer\'s brick ids that THIS DRAFT genuinely voices under this criterion (the point made in their words, with its example or reason) — the honest tally the visible score is built from. Empty if none.' },
                     evidence: { type: 'string', description: 'What in THEIR document earns this band — quote a phrase.' },
@@ -539,8 +545,9 @@ const MARK_SCHEMA = {
             description: 'MARK & FIX (Sarah, 15 Aug): the sentences you would change, weakest criterion FIRST, then document order. Up to 25. Only sentences that fall short of the brick they should be voicing; skip sentences that already match.',
             items: {
                 type: 'object', additionalProperties: false,
-                required: ['sentence', 'missing', 'fix', 'targetBrickId', 'suggestedTools', 'criterionId'],
+                required: ['sentence', 'missing', 'fix', 'targetBrickId', 'suggestedTools', 'criterionId', 'needs'],
                 properties: {
+                    needs: { type: 'array', items: { type: 'string', enum: REQ_KINDS }, description: 'The requirement kinds this sentence is missing (from the part\'s REQUIREMENTS) — they show as the coloured dots: "Missing: a figure and a reference (see the dots)". Empty if none.' },
                     sentence: { type: 'string', description: 'The student\'s sentence EXACTLY as numbered in the draft (verbatim, so the page can highlight it).' },
                     missing: { type: 'string', description: 'What is missing, ONE plain line in coach voice — "You say it, you don\'t show it — no reason the reader can check." Never marker language, never the answer.' },
                     fix: { type: 'string', description: 'The concrete thing to go and DO — "add one piece of evidence that people leave over pay: a survey figure, an exit comment". Never the words themselves, never a rewritten sentence.' },
@@ -554,7 +561,7 @@ const MARK_SCHEMA = {
 };
 
 /** markLikeMarker — the whole draft against the rubric, per criterion. */
-async function markLikeMarker({ brief, essay, docText, gradeScheme }) {
+async function markLikeMarker({ brief, essay, docText, gradeScheme, plans }) {
     if (!brief || !Array.isArray(brief.criteria) || !brief.criteria.length) throw new Error('No brief yet — upload the task first.');
     if (!String(docText || '').trim()) throw new Error('There is nothing on the page to mark yet.');
     const system = withMission(`You are the examiner for this assignment (the final marking pass — the one place plain marker language is allowed, still phrased plainly to the student). Mark the student's draft strictly against the brief and its criteria, the way the real marker will. ${gradeScheme ? `Grade scheme: ${gradeScheme}.` : ''}
@@ -567,18 +574,20 @@ Rules:
 ${PLAIN_QUESTION_RULE}
 - Overall band = what this draft would actually get. Be honest; a kind marker still fails a missing criterion.
 - "voicedBrickIds" per criterion: the bricks of the model answer this draft GENUINELY voices (point made in their words with its reason / example). This is the honest tally the student's visible score is rebuilt from — a listed item is not a voiced brick; a claim without its reason is not a voiced brick.
+- EXPECTATIONS per part (below, where a plan exists): report per criterion which expected terms the draft uses correctly ("termsUsed") and which requirements it satisfies ("requirementsMet"); in the critique, "needs" = the requirement kinds a sentence is missing.
 - MARK & FIX: "critique" is the sentence-by-sentence fix list the student will work through straight after the mark. Weakest criterion first. For each sentence: "missing" (one plain line, coach voice, what is missing), "fix" (the concrete thing to go and do — find one piece of evidence, name the idea, give the example — never the words themselves), the brick it should be voicing, and the tools that lead them there. Copy each sentence VERBATIM from the numbered draft.
 
 THE BRIEF
 ${briefForPrompt(brief)}
-${essay ? '\n' + essayForPrompt(essay).slice(0, 14000) : ''}`);
+${essay ? '\n' + essayForPrompt(essay).slice(0, 14000) : ''}
+${plans ? Object.values(plans).map(p => p && p.criterionId ? '[' + p.criterionId + '] ' + expectationsForPrompt(p) : '').filter(Boolean).join('\n') : ''}`);
     const sentences = splitSentences(docText).map(x => x.trim()).filter(x => x.length > 2).slice(0, 400);
     const user = `STUDENT'S DRAFT (numbered sentences, in order):\n${sentences.map((x, i) => `${i + 1}. ${x}`).join('\n')}\n\nMark it, then the critique.`;
     const r = await callAccurate(system, user, { maxTokens: 9000, schema: MARK_SCHEMA, effort: 'medium' });
-    return normaliseMark(r, brief, essay);
+    return normaliseMark(r, brief, essay, plans);
 }
 
-function normaliseMark(r, brief, essayForMark) {
+function normaliseMark(r, brief, essayForMark, plans) {
     if (!r || typeof r !== 'object' || !r.overall) throw new Error('The marking came back empty — try again.');
     const ids = brief.criteria.map(c => c.id);
     const seen = new Set();
@@ -587,11 +596,13 @@ function normaliseMark(r, brief, essayForMark) {
         criterionId: String(p.criterionId || '').replace(/\s+/g, ''),
         band: ['top', 'mid', 'low', 'missing'].includes(p.band) ? p.band : 'low',
         voicedBrickIds: (Array.isArray(p.voicedBrickIds) ? p.voicedBrickIds : []).map(x => String(x).replace(/\s+/g, '')).filter(x => brickIdsAll.has(x) && x.split('-')[0] === String(p.criterionId || '').replace(/\s+/g, '')),
+        termsUsed: (Array.isArray(p.termsUsed) ? p.termsUsed : []).map(String).filter(x => { const pl = plans && plans[String(p.criterionId || '').replace(/\s+/g, '')]; return pl && (pl.expectedTerms || []).some(t => t.toLowerCase() === x.toLowerCase()); }),
+        requirementsMet: (Array.isArray(p.requirementsMet) ? p.requirementsMet : []).map(String).filter(x => { const pl = plans && plans[String(p.criterionId || '').replace(/\s+/g, '')]; return pl && (pl.requirements || []).some(rq => rq.kind === x); }),
         evidence: String(p.evidence || ''),
         missingForTop: String(p.missingForTop || ''),
         nextQuestion: String(p.nextQuestion || ''),
     })).filter(p => ids.includes(p.criterionId) && !seen.has(p.criterionId) && seen.add(p.criterionId));
-    for (const id of ids) if (!seen.has(id)) per.push({ criterionId: id, band: 'missing', evidence: '', missingForTop: 'Nothing in the document addresses this criterion yet.', nextQuestion: '', voicedBrickIds: [] });
+    for (const id of ids) if (!seen.has(id)) per.push({ criterionId: id, band: 'missing', evidence: '', missingForTop: 'Nothing in the document addresses this criterion yet.', nextQuestion: '', voicedBrickIds: [], termsUsed: [], requirementsMet: [] });
     const order = { missing: 0, low: 1, mid: 2, top: 3 };
     const weakest = ids.includes(String(r.weakestCriterionId || '').replace(/\s+/g, ''))
         ? String(r.weakestCriterionId).replace(/\s+/g, '')
@@ -606,6 +617,7 @@ function normaliseMark(r, brief, essayForMark) {
         fix: String(it.fix || '').trim(),
         targetBrickId: it.targetBrickId && brickIds.has(String(it.targetBrickId).replace(/\s+/g, '')) ? String(it.targetBrickId).replace(/\s+/g, '') : null,
         suggestedTools: (Array.isArray(it.suggestedTools) ? it.suggestedTools : []).map(String).filter(t => EDIT_TOOLS.includes(t)).slice(0, 3),
+        needs: (Array.isArray(it.needs) ? it.needs : []).map(String).filter(k => REQ_KINDS.includes(k)),
         criterionId: ids.includes(String(it.criterionId || '').replace(/\s+/g, '')) ? String(it.criterionId).replace(/\s+/g, '') : (it.targetBrickId ? String(it.targetBrickId).split('-')[0] : ''),
     })).filter(it => it.sentence && (it.missing || it.fix))
       .sort((a, b) => ((bandOf[a.criterionId] ?? 9) - (bandOf[b.criterionId] ?? 9)) || (a.i - b.i))
@@ -917,22 +929,31 @@ ${targetForPrompt(brief, essay, brickId)}`);
 // never the target text.
 const CHECK_SCHEMA = {
     type: 'object', additionalProperties: false,
-    required: ['closeness', 'hint'],
+    required: ['closeness', 'hint', 'termsUsed', 'requirementsMet'],
     properties: {
+        termsUsed: { type: 'array', items: { type: 'string' }, description: 'Of the EXPECTED TERMS listed, the ones this sentence now uses correctly (exact term as listed). Empty if none listed / none used.' },
+        requirementsMet: { type: 'array', items: { type: 'string' }, description: 'Of the REQUIREMENTS listed, the kinds this sentence now satisfies (e.g. "figure" when it gives a number, "reference" when it cites a source). Empty if none.' },
         closeness: { type: 'string', enum: ['match', 'closer', 'missing'], description: 'match = the sentence now voices the brick (idea named, point made); closer = moved toward it but not there; missing = the key thing is still absent.' },
         hint: { type: 'string', description: 'For "match": a warm one-liner ("That\'s it — next."). For "closer" / "missing": ONE plain line on the one thing still missing, as a steer — never the sentence, never the term itself if terminology is the gap (point at it: "name the idea about how pay motivates people").' },
     },
 };
-async function checkSentence({ sentence, brickId, brief, essay }) {
+async function checkSentence({ sentence, brickId, brief, essay, plan }) {
     if (!String(sentence || '').trim()) throw new Error('No sentence to check.');
     const system = withMission(`You are Q in the EDITING stage. The student rewrote the highlighted sentence. Compare it to the target brick and answer with a closeness cue only.
-Rules: judge the IDEA — is the brick's point now made in their own words (the concept named, the example given, the reason shown)? Not spelling, not style. Never quote or paraphrase the target. Warm, short, steering.
+Rules: judge the IDEA — is the brick's point now made in their own words (the concept named, the example given, the reason shown)? Not spelling, not style. Never quote or paraphrase the target. Warm, short, steering. Also report which of the expected terms the sentence now uses correctly and which requirements it now satisfies.
 
-${targetForPrompt(brief, essay, brickId)}`);
+${targetForPrompt(brief, essay, brickId)}
+${expectationsForPrompt(plan)}`);
     const user = `THEIR SENTENCE NOW: "${String(sentence).slice(0, 800)}"\n\nHow close is it?`;
-    const r = await callAccurate(system, user, { maxTokens: 300, schema: CHECK_SCHEMA, effort: 'low' });
+    const r = await callAccurate(system, user, { maxTokens: 400, schema: CHECK_SCHEMA, effort: 'low' });
     const closeness = ['match', 'closer', 'missing'].includes(r && r.closeness) ? r.closeness : 'closer';
-    return { closeness, hint: String((r && r.hint) || (closeness === 'match' ? 'That\'s it — next.' : 'Closer.')).trim() };
+    const terms = new Set((plan && plan.expectedTerms || []).map(x => x.toLowerCase()));
+    const kinds = new Set((plan && plan.requirements || []).map(x => x.kind));
+    return {
+        closeness, hint: String((r && r.hint) || (closeness === 'match' ? 'That\'s it — next.' : 'Closer.')).trim(),
+        termsUsed: (r && Array.isArray(r.termsUsed) ? r.termsUsed : []).map(String).filter(x => terms.has(x.toLowerCase())),
+        requirementsMet: (r && Array.isArray(r.requirementsMet) ? r.requirementsMet : []).map(String).filter(x => kinds.has(x)),
+    };
 }
 
 // ── The visible match score: how much of the hidden essay is voiced / close,
@@ -978,10 +999,19 @@ function matchScore(essay, voiced, close, coverage, brief) {
 // student's items, and to check an argue/switch answer.
 const STEP_KINDS = ['list', 'numbers', 'tag', 'proscons', 'argue', 'switch', 'recommend', 'ask', 'teach'];
 const TAG_COLOURS = ['pink', 'blue', 'green', 'amber', 'purple', 'teal'];
+// ── EXPECTATIONS (Sarah, 15 Aug: "he should have broken the brief down to as
+// minimalistic as he could… then a list of words expected in the paragraph —
+// as BUTTONS… it goes GREEN if it fits… if there should be a citation,
+// reference, case study, whatever Q expects, a COLOURED DOT with a key").
+// Generated WITH the plan (one call), per part: the minimal ask, the expected
+// terms, the requirements (each a coloured dot on the board and the page).
 const PLAN_SCHEMA = {
     type: 'object', additionalProperties: false,
-    required: ['role', 'steps'],
+    required: ['role', 'steps', 'minimalAsk', 'expectedTerms', 'requirements'],
     properties: {
+        minimalAsk: { type: 'string', description: 'The brief for this part broken down as MINIMALLY as possible, one plain line to the student: "This question wants you to show the pros and cons of company benefits." Never the brief\'s own words.' },
+        expectedTerms: { type: 'array', items: { type: 'string' }, description: '6 to 12 words or short phrases the marker expects to SEE in this paragraph — the terms, theory names, key nouns from your model answer (e.g. "reward package", "market rate", "flexible benefits", "retention", "equity theory"). Each 1-4 words. These become buttons the student presses to drop the word into their sentence.' },
+        requirements: { type: 'array', items: { type: 'object', additionalProperties: false, required: ['kind', 'label'], properties: { kind: { type: 'string', enum: REQ_KINDS }, label: { type: 'string', description: 'What exactly, plainly: "a figure for the pay gap", "a reference for the retention claim", "the case study company", "the theory named".' } } }, description: 'What this paragraph must CONTAIN beyond words — each becomes a coloured dot the student can see: citation, reference, case-study, figure, theory, example, recommendation. 1 to 5. Empty if none.' },
         role: { type: 'string', description: 'ONE plain sentence framing the job of this part in role terms, spoken to the student — "Here you\'re the critic: judge whether the company\'s rewards actually work, then say how you\'d fix them" / "Here you\'re the adviser: choose fixed-for-all vs pick-your-own benefits and defend it". Never brief jargon; never "discuss"/"critically evaluate".' },
         steps: {
             type: 'array',
@@ -1045,6 +1075,7 @@ THE PLAN
     ask       — THE BRICK LOOP unit (the spine of the plan): ONE brick, whatever its size — a term, a fact, a theory, an ARGUMENT, a line of reasoning, why this point comes next. ASSUME THEY DO NOT KNOW: supply = the idea stated plainly first ("Plants use the sun to grow — that's called photosynthesis." / "One strong criticism of yearly pay steps is that the brilliant and the coasting rise at the same speed."), prompt = the ask for their sentence(s) saying it, anchored in their company / experience ("Could you write a sentence about when you enjoyed learning about this?" / "Which side of that do you see at your place?"), thenAsk = for a bigger brick, the final "now say it as your own sentence". supply is null only for a brick that is pure opinion / experience ("What colour is the sky?"). Their sentences land on the page; nothing Q said does.
     teach     — TEACH-THEN-APPLY (Sarah, 15 Aug: "bear in mind I don't know the answer. No matter how many questions and hints, it is not going to teach me"). Whenever the NEXT step's ask needs a concept, theory or term the student has not shown they know (incremental scales, cafeteria / flexible benefits, contingent reward, equity theory, total reward, market rate…), put a teach step BEFORE it: lesson = 2-4 plain sentences in your voice that actually teach it; example = one everyday concrete example; term = the term, named once; prompt = one line saying what you are about to teach and why ("Before you weigh this up, one idea you need: how pay ladders work."). Then the apply step asks them to USE it on their company. Never ask → hint → ask again about something never taught. Hints are only for nudging something already taught or said.
 - ${evaluative ? 'THIS PART IS EVALUATIVE (the marker wants judgement): the steps MUST end with argue → switch → recommend, so the critical evaluation comes out of them as a debate they had with themselves.' : 'If the part asks for judgement, finish with argue → switch → recommend; if it only asks for description or explanation, list / numbers / tag / proscons / ask are enough.'}
+- EXPECTATIONS (Sarah): "minimalAsk" — the brief for this part broken down as minimally as you can, one plain line ("This question wants you to show the pros and cons of company benefits."). "expectedTerms" — 6-12 words / short phrases the marker expects to see in this paragraph (the terms, theory names, key nouns of your model answer) — they become buttons the student presses to drop the word into their sentence, and go green when the word fits. "requirements" — what the paragraph must CONTAIN beyond words (a citation, a reference, a case study, a figure, a theory named, an example, a recommendation) — each becomes a coloured dot the student can see, with a key, so they know when they edit that it has to be there.
 - Every brick of this part appears in at least one step's targetBrickIds. Every prompt is ONE concrete ask, 35 words or fewer, in plain everyday British English.
 - Q FORMATS, THEY WRITE: whenever the student gives raw material (a list, numbers, an example, a story), Q's job is to ANALYSE it visibly on the board — coloured groups with a legend, the numbers with the gap drawn, the two sides of an argument in colour, the pros/cons grid laid out — and then ask for sentences OFF that structure ("look at the pink ones — why would a company give those to everyone? Write me a sentence."; "your salary sits 15k under — what does that do to how you feel on a Monday?"). Never quiz them on the categorisation. Later steps' prompts refer to the coloured groups / the gap by name.
 - ${PLAIN_QUESTION_RULE}
@@ -1106,9 +1137,22 @@ function normalisePlan(r, criterionId, bricks) {
     // Any brick no step voices → the last step carries it (nothing is lost).
     const covered = new Set(steps.flatMap(s => s.targetBrickIds));
     for (const b of brickIds) if (!covered.has(b)) steps[steps.length - 1].targetBrickIds.push(b);
-    return { criterionId, role: String(r.role || '').trim(), steps, madeAt: Date.now() };
+    // Expectations: terms (deduped, short), requirements (real kinds, coloured server-side).
+    const seenT = new Set();
+    const expectedTerms = (Array.isArray(r.expectedTerms) ? r.expectedTerms : []).map(x => String(x || '').replace(/\s+/g, ' ').trim().replace(/[.:;,]+$/, '')).filter(x => x && x.length <= 40 && !seenT.has(x.toLowerCase()) && seenT.add(x.toLowerCase())).slice(0, 12);
+    const seenR = new Set();
+    const requirements = (Array.isArray(r.requirements) ? r.requirements : []).map(x => ({ kind: String(x.kind || ''), label: String(x.label || '').trim() })).filter(x => REQ_KINDS.includes(x.kind) && !seenR.has(x.kind) && seenR.add(x.kind)).slice(0, 5).map(x => ({ ...x, label: x.label || REQ_LABELS[x.kind], colour: REQ_COLOURS[x.kind] }));
+    return { criterionId, role: String(r.role || '').trim(), minimalAsk: String(r.minimalAsk || '').trim(), expectedTerms, requirements, steps, madeAt: Date.now() };
 }
 
+// The part's expectations (terms + requirements) for the check / mark prompts.
+function expectationsForPrompt(plan) {
+    if (!plan || (!(plan.expectedTerms || []).length && !(plan.requirements || []).length)) return '';
+    const lines = ['WHAT THIS PART IS EXPECTED TO CONTAIN (report which are now met, by exact term / kind):'];
+    if ((plan.expectedTerms || []).length) lines.push('  expected terms: ' + plan.expectedTerms.join(' | '));
+    if ((plan.requirements || []).length) lines.push('  requirements: ' + plan.requirements.map(r => r.kind + ' (' + r.label + ')').join(' | '));
+    return lines.join('\n');
+}
 // The plan + where they are, rendered for the probe / stuck prompts so a
 // live probe asks for THIS step's thing, never a new open question.
 function planForPrompt(plan, stepId) {
@@ -1157,8 +1201,10 @@ ${briefForPrompt(brief).slice(0, 2500)}`);
 // yet filled. Never the answer.
 const STEP_CHECK_SCHEMA = {
     type: 'object', additionalProperties: false,
-    required: ['voicedBrickIds', 'filled', 'ack', 'followUp', 'supply', 'thenAsk'],
+    required: ['voicedBrickIds', 'filled', 'ack', 'followUp', 'supply', 'thenAsk', 'termsUsed', 'requirementsMet'],
     properties: {
+        termsUsed: { type: 'array', items: { type: 'string' }, description: 'Of the EXPECTED TERMS listed, the ones the answer now uses correctly (exact term as listed). Empty if none.' },
+        requirementsMet: { type: 'array', items: { type: 'string' }, description: 'Of the REQUIREMENTS listed, the kinds the answer now satisfies. Empty if none.' },
         supply: { anyOf: [{ type: 'string' }, { type: 'null' }], description: 'THE BRICK LOOP: if the step is not filled and the brick carries knowledge the answer does not yet have — a term, a fact or figure, a theory, the argument itself, the reasoning — STATE IT PLAINLY here in one to three sentences (assume they do not know; a fact given, never a hint), then thenAsk asks for their sentence saying it. null when the missing piece is their own view / example.' },
         thenAsk: { anyOf: [{ type: 'string' }, { type: 'null' }], description: 'With supply: the sentence request that follows — "Could you write a sentence about how that works at your company?". null otherwise.' },
         voicedBrickIds: { type: 'array', items: { type: 'string' }, description: 'The step\'s brick ids the student has now voiced in their own words (the point made, not the wording).' },
@@ -1174,6 +1220,7 @@ async function checkStep({ brief, essay, plan, step, answer, earlierAnswers }) {
     const system = withMission(`You are Q, checking the student's answer to ONE scaffold step against the bricks it is meant to draw out. Judge the IDEA (the point made in their own words), not the wording. If the step is filled, say so warmly. If not: ASSUME THEY DO NOT KNOW — when the brick carries knowledge their answer lacks (a term, a fact, a theory, the argument, the reasoning), SUPPLY it plainly ("supply") and ask for their sentence saying it ("thenAsk") — never a hint; when the missing piece is their own view / example, ask for that ONE thing ("followUp") — never a new open question, never the next step, never the answer.
 ${PLAIN_QUESTION_RULE}
 ${planForPrompt(plan, step.id)}
+${expectationsForPrompt(plan)}
 
 THE BRICKS THIS STEP DRAWS OUT (Q's eyes only — never quote or paraphrase them):
 ${bricks.length ? bricks.map(b => `(${b.brickId}) ${b.gist}\n    ${String(b.text || '').slice(0, 600)}`).join('\n') : '(no bricks tied to this step — judge whether the ask itself is answered fully)'}`);
@@ -1186,7 +1233,11 @@ Which bricks are voiced, is the step filled, and what is the one thing to ask if
     const r = await callAccurate(system, user, { maxTokens: 700, schema: STEP_CHECK_SCHEMA, effort: 'low' });
     const allowed = new Set(step.targetBrickIds || []);
     const supply = r && r.supply && !r.filled ? String(r.supply).trim() : null;
+    const terms = new Set((plan && plan.expectedTerms || []).map(x => x.toLowerCase()));
+    const kinds = new Set((plan && plan.requirements || []).map(x => x.kind));
     return {
+        termsUsed: (r && Array.isArray(r.termsUsed) ? r.termsUsed : []).map(String).filter(x => terms.has(x.toLowerCase())),
+        requirementsMet: (r && Array.isArray(r.requirementsMet) ? r.requirementsMet : []).map(String).filter(x => kinds.has(x)),
         voicedBrickIds: (r && Array.isArray(r.voicedBrickIds) ? r.voicedBrickIds : []).map(x => String(x).replace(/\s+/g, '')).filter(x => allowed.has(x)),
         filled: !!(r && r.filled),
         ack: String((r && r.ack) || '').trim(),
@@ -1700,7 +1751,7 @@ const UK_POLISH_KEYS = new Set([
     'example', 'craftLesson', 'changes', 'currentQuestion', 'lastQuestion', 'notes', 'error', 'teachersBrief',
     'sectionName', 'description', 'suggestFirstQ', 'task', 'keyConcepts', 'voiceSummary',
     // scaffolded coaching + mark & fix (Q's strings only — never the student's items / answers)
-    'role', 'prompt', 'lesson', 'term', 'applyAsk', 'line', 'meaning', 'ack', 'followUp', 'answer', 'missing', 'fix', 'headline', 'points', 'nudge', 'itemHint', 'isPrompt', 'shouldPrompt', 'side', 'supply', 'thenAsk',
+    'role', 'prompt', 'lesson', 'term', 'applyAsk', 'line', 'meaning', 'ack', 'followUp', 'answer', 'missing', 'fix', 'headline', 'points', 'nudge', 'itemHint', 'isPrompt', 'shouldPrompt', 'side', 'supply', 'thenAsk', 'minimalAsk',
 ]);
 // 'text' is polished only inside a criteria list; 'title' only on a brief.
 function ukPolishResponse(value, key, parentKey) {
@@ -1732,6 +1783,7 @@ module.exports = {
     planPart, normalisePlan, planForPrompt, tagItems, checkStep, brickById, bricksOfCriterion,
     PLAN_SCHEMA, TAG_SCHEMA, STEP_CHECK_SCHEMA, STEP_KINDS, TAG_COLOURS,
     teachFor, relabelCriteria, labelLooksGenerated, TEACH_SCHEMA, LABELS_SCHEMA,
+    expectationsForPrompt, REQ_KINDS, REQ_COLOURS, REQ_LABELS,
     analyseTask, analyseAndBrief, nextQuestion, assembleDocument,
     analyseVoice, tutorBrief, askLeadingQuestion, reframeInVoice, suggestWordSwaps, writeStarter,
     formatHarvardRef, suggestReferences, referenceParagraph,

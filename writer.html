@@ -864,6 +864,26 @@
     .tb-steps li .st-kind { font-size: 9px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-faint); margin-left: 4px; font-weight: 600; }
     .tb-scaf { margin: 6px 0 4px; }
     .tb-worksheet { margin: 0 0 10px; }
+    .tb-expect { margin: 0 0 8px; padding: 8px 10px; border-radius: 10px; box-shadow: var(--neu-raised-xs); }
+    .tb-expect .ex-ask { font-size: 12px; font-weight: 600; color: var(--text); line-height: 1.45; margin-bottom: 6px; }
+    .tb-expect .ex-terms { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 6px; }
+    .q-term { padding: 3px 9px; border: none; border-radius: 10px; cursor: pointer; font-family: 'Space Grotesk', sans-serif; font-size: 11px; font-weight: 500; background: var(--bg); color: var(--text); box-shadow: var(--neu-raised-xs); transition: color 0.15s, box-shadow 0.15s; }
+    .q-term:hover { box-shadow: var(--neu-raised-sm); }
+    .q-term.seen { color: #2e7d32; box-shadow: var(--neu-inset-sm); }
+    .q-term.fits { color: #fff; background: #2e7d32; box-shadow: none; }
+    .tb-expect .ex-left { font-size: 10px; color: var(--text-muted); line-height: 1.4; margin-bottom: 4px; }
+    .tb-expect .ex-left b { color: var(--text); }
+    .q-dots { display: inline-flex; gap: 5px; align-items: center; }
+    .q-dot { width: 11px; height: 11px; border-radius: 50%; border: 2px solid var(--dc, #999); background: transparent; display: inline-block; cursor: pointer; box-sizing: border-box; position: relative; }
+    .q-dot.met { background: var(--dc, #999); }
+    .q-dot.met::after { content: ''; position: absolute; left: 2px; top: 0px; width: 3px; height: 5px; border: solid #fff; border-width: 0 1.5px 1.5px 0; transform: rotate(45deg); }
+    .tb-expect .ex-key { display: flex; flex-wrap: wrap; gap: 3px 10px; font-size: 10px; color: var(--text-muted); margin-top: 4px; }
+    .tb-expect .ex-key span { display: inline-flex; align-items: center; gap: 4px; }
+    .tb-expect .ex-key .q-dot { width: 9px; height: 9px; cursor: default; }
+    .tb-expect .ex-key .todo { color: var(--text); font-weight: 600; }
+    .doc-body .q-margin-dots { position: absolute; left: -46px; top: 8px; display: flex; flex-direction: column; gap: 4px; user-select: none; }
+    .doc-body p.student-line { position: relative; }
+    .q-crit .qc-dots { margin-left: 6px; vertical-align: middle; }
     .tb-worksheet .tb-ws { margin: 4px 0 8px; }
     .sc-table td.sc-gap { font-weight: 700; color: var(--accent); white-space: nowrap; }
     .tb-scaf .sc-empty { font-size: 11px; color: var(--text-faint); }
@@ -1201,7 +1221,13 @@
       currentStep: null,      // { criterionId, stepId } while a scaffold step is live
       calls: {},              // { criterionId: { plan, tag, check, probe } } — model calls per part
       openerDone: false,
+      termsFit: {},           // { criterionId: [terms Q confirmed fit] }
+      reqMet: {},             // { criterionId: [requirement kinds met] }
     };
+    // Requirement dots: plain, distinct colours + what they mean (mirrors q-writer REQ_COLOURS).
+    const REQ_COLOURS = { citation: '#7b1fa2', reference: '#1565c0', 'case-study': '#00897b', figure: '#ef6c00', theory: '#c2185b', example: '#2e7d32', recommendation: '#5d4037' };
+    const REQ_LABELS = { citation: 'a citation', reference: 'a reference', 'case-study': 'a case study', figure: 'a figure', theory: 'a theory named', example: 'an example', recommendation: 'a recommendation' };
+    const REQ_TOOL = { citation: 'references', reference: 'references', 'case-study': 'cases', figure: 'weak', theory: 'strategies', example: 'weak', recommendation: 'weak' };
     const PROBE_MIN_GAP_MS = 8000;    // never two live probes closer than this (cost + rhythm)
     const PROBE_MIN_NEW_CHARS = 12;   // "genuinely new content" — a few real words
     const PROBE_RETRY_MS = 1500;      // re-check cadence while a condition is not yet met
@@ -1229,7 +1255,7 @@
     // coach is the student's own — grade bands are stripped.
     function docPlainText() {
       const clone = docBody.cloneNode(true);
-      clone.querySelectorAll('.grade-band').forEach(n => n.remove());
+      clone.querySelectorAll('.grade-band, .q-margin-dots').forEach(n => n.remove());
       // innerText keeps paragraph breaks; a detached clone has no layout, so
       // put line breaks in by hand for block elements.
       clone.querySelectorAll('div, p, br, li, h1, h2, h3').forEach(n => {
@@ -1242,10 +1268,12 @@
       const t = docPlainText();
       return t ? t.split(/\s+/).length : 0;
     }
+    let expectTimer = null;
     docBody.addEventListener('input', () => {
       wordEl.textContent = countWords() + ' words';
       scheduleAutosave();
       scheduleLiveProbe();
+      clearTimeout(expectTimer); expectTimer = setTimeout(() => { try { refreshExpectations(); } catch (_) {} }, 250);
     });
 
     // ── Setup strip ────────────────────────────────────────────────────────
@@ -1581,6 +1609,7 @@
       e.preventDefault(); watchVideoFor(b.dataset.watch, b);
     });
     window.__qwriterVideo = { openVideo, watchVideoFor, closeVideo };
+    window.__qwriterExpect = { insertTermAtCaret: (t) => insertTermAtCaret(t), refresh: () => refreshExpectations() };
     // The coach card is visible from the start; boards appear when the brief lands.
     loadLayout(); relayoutAll();
     fetch('/whoami', { credentials: 'include' }).then(r => r.json()).then(d => {
@@ -1885,7 +1914,7 @@
       state.brief = null; state.analysis = null; state.coverage = {}; state.coachHistory = [];
       state.currentQuestion = ''; state.currentCriterionId = ''; state.currentSection = ''; state.docSnapshot = ''; state.lastMark = null; state.lastProbeAt = 0;
       state.brickCounts = {}; state.essayReady = false; state.sources = []; state.editItems = null; state.editIndex = 0; state.editDone = false;
-      state.plans = {}; state.stepState = {}; state.currentStep = null; state.calls = {}; state.openerDone = false; state.match = null;
+      state.plans = {}; state.stepState = {}; state.currentStep = null; state.calls = {}; state.openerDone = false; state.match = null; state.termsFit = {}; state.reqMet = {};
       hidePanel('brief'); hidePanel('teach');
       document.getElementById('brief-board-body').innerHTML = '';
       state.boardItems = []; state.boardEarlierOpen = false; renderBoard();
@@ -2225,7 +2254,7 @@
       const last = state.boardItems[state.boardItems.length - 1];
       const already = state.boardItems.some(it => it.type === 'question' && it.stepId === step.id && it.criterionId === cid);
       if (!already) state.boardItems.push({ type: 'question', label: 'Step ' + (idx + 1) + ' of ' + plan.steps.length, text: step.prompt, criterionId: cid, stepId: step.id });
-      renderBoard(); switchToBoardMode();
+      renderBoard(); switchToBoardMode(); setTimeout(() => { try { renderMarginDots(); } catch (_) {} }, 0);
       const roleLine = frame && idx === 0 ? plan.role + ' ' : '';
       const pre = (ack ? ack.replace(/\s+$/, '') + ' ' : '') + roleLine;
       const common = { where: whereText(whereInfo(cid)), move: moved || '', inputVisible: true, showNudge: true };
@@ -2302,6 +2331,7 @@
       if (!text) return null;
       const p = insertQText(text, false, { focus: false });
       if (p) { p.setAttribute('data-step', key); state.docSnapshot = docPlainText(); }
+      setTimeout(() => { try { refreshExpectations(); } catch (_) {} }, 0);
       return p;
     }
 
@@ -2388,6 +2418,7 @@
         tally('check', cid);
         const d = await api('/writer/step', { criterionId: cid, stepId: step.id, check: true, answer, earlierAnswers: st.answers.slice(0, -1).join('\n') }, { timeoutMs: 60000 });
         applyCoverage(d.coverage); applyMatch(d.match); if (d.brickCounts) state.brickCounts = d.brickCounts;
+        applyExpectations(d);
         if (d.filled || !d.followUp) { st.followUp = null; completeStep(cid, step.id, { ack: d.ack || 'Good — that\'s on the page.' }); return; }
         st.followUps += 1; st.followUp = d.followUp;
         state.currentQuestion = d.followUp;
@@ -2560,8 +2591,87 @@
           blocks.push(`<div class="tb-ws" data-ws="numbers"><table class="sc-table"><thead><tr><th></th><th>is</th><th>should be</th><th>gap</th></tr></thead><tbody>${rows}</tbody></table></div>`);
         }
       }
-      return blocks.length ? `<div class="tb-worksheet"><span class="tb-label">worksheet</span>${blocks.join('')}</div>` : '';
+      const ex = expectHtml(cid);
+      return (ex || blocks.length) ? `<div class="tb-worksheet"><span class="tb-label">worksheet</span>${ex}${blocks.join('')}</div>` : '';
     }
+    // ── EXPECTATIONS on the board: the minimal ask, the expected terms as
+    // BUTTONS (press → the word goes into your sentence at the caret; light
+    // green when it is on the page, solid green when Q's check said it fits),
+    // "Still to use: …", and the requirement DOTS with their key.
+    function partParagraphs(cid) { return Array.from(docBody.querySelectorAll('p.student-line[data-step^="' + CSS.escape(cid + ':') + '"]')); }
+    function partText(cid) { const ps = partParagraphs(cid); return (ps.length ? ps.map(p => p.textContent).join(' ') : docPlainText()).toLowerCase(); }
+    function termSeen(cid, term, text) { return (text != null ? text : partText(cid)).includes(String(term).toLowerCase()); }
+    function expectHtml(cid) {
+      const plan = planFor(cid); if (!plan || (!plan.minimalAsk && !(plan.expectedTerms || []).length && !(plan.requirements || []).length)) return '';
+      const text = partText(cid); const fits = new Set((state.termsFit[cid] || []).map(x => x.toLowerCase())); const met = new Set(state.reqMet[cid] || []);
+      const terms = (plan.expectedTerms || []).map(t => { const cls = fits.has(t.toLowerCase()) ? ' fits' : (termSeen(cid, t, text) ? ' seen' : ''); return `<button type="button" class="q-term${cls}" data-term="${escHtml(t)}" title="${cls ? (cls.trim() === 'fits' ? 'Q says it fits' : 'On the page — Q will confirm it fits') : 'Press to drop it into your sentence'}">${escHtml(t)}</button>`; }).join('');
+      const left = (plan.expectedTerms || []).filter(t => !fits.has(t.toLowerCase()) && !termSeen(cid, t, text));
+      const dots = (plan.requirements || []).map(rq => `<span class="q-dot${met.has(rq.kind) ? ' met' : ''}" style="--dc:${REQ_COLOURS[rq.kind] || '#999'}" data-req="${escHtml(rq.kind)}" title="${escHtml(rq.label || REQ_LABELS[rq.kind] || rq.kind)}${met.has(rq.kind) ? ' — done' : ' — still needed'}"></span>`).join('');
+      const key = (plan.requirements || []).map(rq => `<span><span class="q-dot${met.has(rq.kind) ? ' met' : ''}" style="--dc:${REQ_COLOURS[rq.kind] || '#999'}"></span><span class="${met.has(rq.kind) ? '' : 'todo'}">${escHtml(rq.label || REQ_LABELS[rq.kind] || rq.kind)}</span></span>`).join('');
+      return `<div class="tb-expect" data-cid="${escHtml(cid)}">${plan.minimalAsk ? `<div class="ex-ask">${escHtml(plan.minimalAsk)}</div>` : ''}${terms ? `<div class="ex-terms">${terms}</div>` : ''}${left.length ? `<div class="ex-left"><b>Still to use:</b> ${left.map(escHtml).join(', ')}</div>` : (terms ? '<div class="ex-left"><b>Every expected word is in.</b></div>' : '')}${dots ? `<div class="ex-left"><span class="q-dots">${dots}</span> <b>must be in this part</b></div><div class="ex-key">${key}</div>` : ''}</div>`;
+    }
+    // Press a term → it goes into the sentence at the caret (execCommand keeps
+    // Ctrl+Z); no caret in the page → onto the end of this part's last paragraph.
+    function insertTermAtCaret(term) {
+      const t = String(term || '').trim(); if (!t) return;
+      const sel = window.getSelection();
+      let inDoc = sel && sel.rangeCount && docBody.contains(sel.getRangeAt(0).startContainer);
+      if (!inDoc) {
+        const paras = partParagraphs(state.currentCriterionId);
+        let target = paras[paras.length - 1];
+        if (!target) { target = insertQText(t, false, { focus: false }); if (target) { target.setAttribute('data-step', state.currentCriterionId + ':terms'); refreshExpectations(); } return; }
+        const range = document.createRange(); range.selectNodeContents(target); range.collapse(false);
+        sel.removeAllRanges(); sel.addRange(range); docBody.focus();
+      }
+      const r0 = sel.getRangeAt(0);
+      const pre = document.createRange(); pre.setStart(docBody, 0); pre.setEnd(r0.startContainer, r0.startOffset);
+      const before = pre.toString();
+      const needsSpace = before.length > 0 && !/\s$/.test(before);
+      const ok = document.execCommand('insertText', false, (needsSpace ? ' ' : '') + t + ' ');
+      if (!ok) { const r = sel.getRangeAt(0); r.insertNode(document.createTextNode((needsSpace ? ' ' : '') + t + ' ')); r.collapse(false); }
+      wordEl.textContent = countWords() + ' words'; scheduleAutosave();
+      refreshExpectations();
+    }
+    // Presence check without a full re-render (typing must stay smooth).
+    function refreshExpectations() {
+      const cid = state.currentCriterionId; const plan = planFor(cid); if (!plan) return;
+      const box = teachBody.querySelector('.tb-expect'); if (!box) return;
+      const text = partText(cid); const fits = new Set((state.termsFit[cid] || []).map(x => x.toLowerCase()));
+      const left = [];
+      box.querySelectorAll('.q-term').forEach(b => { const t = b.dataset.term; const isFit = fits.has(t.toLowerCase()); const seen = termSeen(cid, t, text); b.classList.toggle('fits', isFit); b.classList.toggle('seen', !isFit && seen); if (!isFit && !seen) left.push(t); });
+      const leftEl = box.querySelector('.ex-left'); if (leftEl && !leftEl.querySelector('.q-dots')) leftEl.innerHTML = left.length ? '<b>Still to use:</b> ' + left.map(escHtml).join(', ') : '<b>Every expected word is in.</b>';
+      renderMarginDots();
+    }
+    // The dots beside the part's paragraphs on the page (first paragraph of each part).
+    function renderMarginDots() {
+      docBody.querySelectorAll('.q-margin-dots').forEach(n => n.remove());
+      const cs = (state.brief && state.brief.criteria) || [];
+      for (const c of cs) {
+        const plan = planFor(c.id); if (!plan || !(plan.requirements || []).length) continue;
+        const first = partParagraphs(c.id)[0]; if (!first) continue;
+        const met = new Set(state.reqMet[c.id] || []);
+        const wrap = document.createElement('span'); wrap.className = 'q-margin-dots'; wrap.contentEditable = 'false'; wrap.setAttribute('data-q-furniture', 'true');
+        wrap.innerHTML = plan.requirements.map(rq => `<span class="q-dot${met.has(rq.kind) ? ' met' : ''}" style="--dc:${REQ_COLOURS[rq.kind] || '#999'}" data-req="${escHtml(rq.kind)}" data-cid="${escHtml(c.id)}" title="${escHtml((rq.label || REQ_LABELS[rq.kind] || rq.kind) + (met.has(rq.kind) ? ' — done' : ' — still needed'))}"></span>`).join('');
+        first.appendChild(wrap);
+      }
+    }
+    // Q's checks / the mark say what fits and what is met → the board + page update.
+    function applyExpectations(d) {
+      if (!d) return;
+      let changed = false;
+      if (d.termsFit && typeof d.termsFit === 'object') { state.termsFit = d.termsFit; changed = true; }
+      if (d.reqMet && typeof d.reqMet === 'object') { state.reqMet = d.reqMet; changed = true; }
+      if (changed) { renderBoard(); renderMarginDots(); }
+    }
+    // A dot pressed: in Mark & fix it opens the matching tool; otherwise it says what it means.
+    document.addEventListener('click', (e) => {
+      const term = e.target.closest('.q-term'); if (term && term.dataset.term) { e.preventDefault(); insertTermAtCaret(term.dataset.term); return; }
+      const dot = e.target.closest('.q-dot[data-req]'); if (!dot) return;
+      e.preventDefault();
+      const kind = dot.dataset.req; const label = REQ_LABELS[kind] || kind;
+      if (state.editing && state.editItems && state.editItems[state.editIndex]) { useTool(REQ_TOOL[kind] || 'weak', state.editItems[state.editIndex]); return; }
+      coachHint.textContent = 'That dot means this part needs ' + label + '. Mark & fix will check it and open the tool for it.';
+    });
     function scaffoldAgendaHtml() {
       const cid = state.currentCriterionId; const plan = planFor(cid); if (!plan) return '';
       const ss = ssFor(cid); const cur = state.currentStep && state.currentStep.criterionId === cid ? state.currentStep.stepId : null;
@@ -3824,9 +3934,10 @@
         applyCoverage(m.coverage);
         if (m.brickCounts) state.brickCounts = m.brickCounts;
         applyMatch(m.match);   // the marker's honest tally — the score the fix loop climbs from
+        applyExpectations(m);
         state.markStartPct = state.match ? state.match.overall : null;
         appendBoardItem({ type: 'note', label: 'marked', text: 'Marked: ' + bandLine(m) + '. ' + (m.overall.summary || '') });
-        const items = (m.critique || []).filter(it => it && it.sentence && (it.missing || it.fix)).map(it => ({ sentence: it.sentence, why: it.missing || '', fix: it.fix || '', targetBrickId: it.targetBrickId || null, suggestedTools: it.suggestedTools || [], criterionId: it.criterionId || '' }));
+        const items = (m.critique || []).filter(it => it && it.sentence && (it.missing || it.fix)).map(it => ({ sentence: it.sentence, why: it.missing || '', fix: it.fix || '', targetBrickId: it.targetBrickId || null, suggestedTools: it.suggestedTools || [], criterionId: it.criterionId || '', needs: Array.isArray(it.needs) ? it.needs : [] }));
         state.editItems = items; state.editIndex = 0; state.editing = true; state.editDone = false; state.markPassChanged = 0;
         persist({ lastMark: m });
         if (!items.length) { endFixPass({ nothing: true }); return; }
@@ -4117,7 +4228,8 @@
       });
       // The critique card: what's missing, and the concrete fix.
       const crit = document.createElement('div'); crit.className = 'q-crit';
-      crit.innerHTML = (it.why ? '<div class="qc-row"><span class="qc-l">Missing</span><span class="qc-v">' + escHtml(it.why) + '</span></div>' : '') + (it.fix ? '<div class="qc-row"><span class="qc-l">Fix</span><span class="qc-v">' + escHtml(it.fix) + '</span></div>' : '');
+      const needDots = (it.needs || []).length ? ' <span class="q-dots qc-dots">' + it.needs.map(k => '<span class="q-dot" style="--dc:' + (REQ_COLOURS[k] || '#999') + '" data-req="' + escHtml(k) + '" title="' + escHtml(REQ_LABELS[k] || k) + '"></span>').join('') + '</span> <span style="color:var(--text-muted)">(' + it.needs.map(k => REQ_LABELS[k] || k).join(' + ') + ' — see the dots)</span>' : '';
+      crit.innerHTML = (it.why ? '<div class="qc-row"><span class="qc-l">Missing</span><span class="qc-v">' + escHtml(it.why) + needDots + '</span></div>' : '') + (it.fix ? '<div class="qc-row"><span class="qc-l">Fix</span><span class="qc-v">' + escHtml(it.fix) + '</span></div>' : '');
       coachActions.insertBefore(crit, coachActions.firstChild);
       // The tool buttons: the suggested ones first.
       const row = document.createElement('div'); row.className = 'q-tools';
@@ -4185,6 +4297,7 @@
         applyMatch(d.match);
         applyCoverage(d.coverage);
         if (d.brickCounts) state.brickCounts = d.brickCounts;
+        applyExpectations(d);
         const cue = d.closeness === 'match' ? (d.hint || 'That\'s it — next.') : d.closeness === 'closer' ? 'Closer. ' + (d.hint || '') : 'One thing still missing: ' + (d.hint || '');
         appendBoardItem({ type: 'note', label: d.closeness === 'match' ? 'that\'s it' : 'closer?', text: cue });
         if (d.closeness === 'match') {
@@ -4239,7 +4352,7 @@
     // anything else. Walks the text nodes, tolerant of collapsed whitespace,
     // and applies the change with execCommand so Ctrl+Z undoes it.
     function docTextMap() {
-      const walker = document.createTreeWalker(docBody, NodeFilter.SHOW_TEXT, { acceptNode: (n) => n.parentElement && n.parentElement.closest('.grade-band') ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_ACCEPT });
+      const walker = document.createTreeWalker(docBody, NodeFilter.SHOW_TEXT, { acceptNode: (n) => n.parentElement && n.parentElement.closest('.grade-band, .q-margin-dots') ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_ACCEPT });
       const chars = []; const map = [];
       let lastSpace = true;
       for (let n = walker.nextNode(); n; n = walker.nextNode()) {
@@ -4393,6 +4506,9 @@
         state.currentStep = t.currentStep && t.currentStep.criterionId && t.currentStep.stepId && state.plans[t.currentStep.criterionId] ? t.currentStep : null;
         state.calls = t.calls && typeof t.calls === 'object' ? t.calls : {};
         state.openerDone = !!t.openerDone;
+        state.termsFit = t.termsFit && typeof t.termsFit === 'object' ? t.termsFit : {};
+        state.reqMet = t.reqMet && typeof t.reqMet === 'object' ? t.reqMet : {};
+        setTimeout(() => { try { renderMarginDots(); } catch (_) {} }, 0);
         // Rebuild the teaching board from history, then the live question.
         state.currentCriterionId = t.currentCriterionId || (t.brief.criteria[0] && t.brief.criteria[0].id) || '';
         state.currentSection = state.currentCriterionId;

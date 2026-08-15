@@ -1179,6 +1179,17 @@ function stepOf(t, criterionId, stepId) {
     const step = plan && Array.isArray(plan.steps) ? plan.steps.find(s => s.id === stepId) : null;
     return { plan: plan || null, step: step || null };
 }
+// Expectations met → the notebook (termsFit / reqMet per part). `replace`
+// = the marker's honest read (the mark); otherwise union (a check).
+function noteExpectations(personId, criterionId, termsUsed, requirementsMet, { replace } = {}) {
+    if (!criterionId) return null;
+    const t = readTutor(personId);
+    const tf = { ...(t.termsFit || {}) }, rm = { ...(t.reqMet || {}) };
+    tf[criterionId] = Array.from(new Set([...(replace ? [] : (tf[criterionId] || [])), ...(termsUsed || [])]));
+    rm[criterionId] = Array.from(new Set([...(replace ? [] : (rm[criterionId] || [])), ...(requirementsMet || [])]));
+    writeTutor(personId, { termsFit: tf, reqMet: rm });
+    return { termsFit: tf, reqMet: rm };
+}
 // Bricks voiced → coverage / counts / match, written to the notebook.
 function voiceBricks(personId, brickIds) {
     const t = readTutor(personId);
@@ -1271,7 +1282,9 @@ router.post('/writer/mark', requirePerson, express.json({ limit: '2mb' }), write
     const gradeScheme = String(req.body?.gradeScheme || t.gradeScheme || '');
     const personId = req.person.id;
     const job = startWriterJob(personId, 'mark', async () => {
-        const r = await qWriter.markLikeMarker({ brief: t.brief, essay: t.modelEssay || null, docText, gradeScheme });
+        const r = await qWriter.markLikeMarker({ brief: t.brief, essay: t.modelEssay || null, docText, gradeScheme, plans: t.plans || null });
+        // The marker's honest read of terms used / requirements met, per part.
+        for (const p of r.perCriterion) noteExpectations(personId, p.criterionId, p.termsUsed, p.requirementsMet, { replace: true });
         let coverage = { ...(t.coverage || {}) };
         for (const p of r.perCriterion) coverage[p.criterionId] = p.band === 'top' || p.band === 'mid' ? 'covered' : p.band === 'low' ? 'partial' : 'none';
         // The mark is the honest read of the page: the voiced-brick tally (and
@@ -1286,7 +1299,7 @@ router.post('/writer/mark', requirePerson, express.json({ limit: '2mb' }), write
             patch = { ...patch, voicedBricks: voiced, closeBricks: [], coverage, brickCounts };
         }
         const t2 = writeTutor(personId, patch);
-        return { ...r, coverage, brickCounts, match: matchFor(t2) };
+        return { ...r, coverage, brickCounts, match: matchFor(t2), termsFit: t2.termsFit || {}, reqMet: t2.reqMet || {} };
     });
     if (req.body?.sync) {
         while (job.status === 'running') await new Promise(r => setTimeout(r, 250));
@@ -1416,7 +1429,8 @@ router.post('/writer/step', requirePerson, express.json({ limit: '64kb' }), asyn
             const r = await qWriter.checkStep({ brief: t.brief, essay: t.modelEssay || null, plan, step, answer: String(b.answer || ''), earlierAnswers: b.earlierAnswers ? String(b.earlierAnswers) : '' });
             const toVoice = r.filled ? step.targetBrickIds : r.voicedBrickIds;
             const v = voiceBricks(personId, toVoice);
-            return ukJson(res, { ok: true, checked: true, ...r, coverage: v.coverage, brickCounts: v.brickCounts, match: v.match });
+            const ex = noteExpectations(personId, criterionId, r.termsUsed, r.requirementsMet);
+            return ukJson(res, { ok: true, checked: true, ...r, coverage: v.coverage, brickCounts: v.brickCounts, match: v.match, termsFit: ex ? ex.termsFit : undefined, reqMet: ex ? ex.reqMet : undefined });
         }
         if (b.done) {
             const v = voiceBricks(personId, step.targetBrickIds);
@@ -1592,7 +1606,9 @@ router.post('/writer/check-sentence', requirePerson, express.json({ limit: '32kb
     const b = req.body || {};
     try {
         const brickId = b.brickId ? String(b.brickId).replace(/\s+/g, '') : null;
-        const r = await qWriter.checkSentence({ sentence: String(b.sentence || ''), brickId, brief: t.brief, essay: t.modelEssay || null });
+        const cidOf = brickId ? brickId.split('-')[0] : (b.criterionId ? String(b.criterionId) : '');
+        const r = await qWriter.checkSentence({ sentence: String(b.sentence || ''), brickId, brief: t.brief, essay: t.modelEssay || null, plan: (t.plans && t.plans[cidOf]) || null });
+        const ex = noteExpectations(req.person.id, cidOf, r.termsUsed, r.requirementsMet);
         const voiced = new Set(Array.isArray(t.voicedBricks) ? t.voicedBricks : []);
         const close = new Set(Array.isArray(t.closeBricks) ? t.closeBricks : []);
         if (brickId) {
@@ -1602,7 +1618,7 @@ router.post('/writer/check-sentence', requirePerson, express.json({ limit: '32kb
         let coverage = { ...(t.coverage || {}) }, brickCounts = t.brickCounts || {};
         if (t.modelEssay) ({ coverage, brickCounts } = qWriter.coverageFromBricks(t.modelEssay, Array.from(voiced), coverage));
         const t2 = writeTutor(req.person.id, { voicedBricks: Array.from(voiced), closeBricks: Array.from(close), coverage, brickCounts });
-        ukJson(res, { ok: true, ...r, brickId, coverage, brickCounts, match: matchFor(t2) });
+        ukJson(res, { ok: true, ...r, brickId, criterionId: cidOf, coverage, brickCounts, match: matchFor(t2), termsFit: ex ? ex.termsFit : undefined, reqMet: ex ? ex.reqMet : undefined });
     } catch (e) {
         writerFail(res, e, '[writer/check-sentence]', 'sentence check');
     }
