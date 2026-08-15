@@ -1419,7 +1419,10 @@ function csvToRows(csv) {
 // links, the balances aren't trustworthy and nothing is touched.
 function auditRowsByBalanceChain(rows) {
     const withBal = rows.filter(r => r.balance != null && Number.isFinite(r.balance));
-    if (withBal.length < 2) return { rows, direction: null, links: 0, agree: 0, repaired: [], breaks: [] };
+    if (withBal.length < 2) {
+        console.log(`[finance] balance chain — ${withBal.length}/${rows.length} rows carry a running balance: nothing to audit against`);
+        return { rows, direction: null, links: 0, agree: 0, repaired: [], breaks: [], with_balance: withBal.length };
+    }
     const near = (a, b) => Math.abs(a - b) < 0.005;
     const r2 = v => Math.round(v * 100) / 100;
     // Links between consecutive balance-bearing rows (in read order).
@@ -1436,10 +1439,12 @@ function auditRowsByBalanceChain(rows) {
     }
     const nF = fwd.filter(Boolean).length, nR = rev.filter(Boolean).length;
     const links = fwd.length;
+    const forward_ = nF >= nR;
     if (Math.max(nF, nR) < Math.ceil(links / 2)) {
         console.log(`[finance] balance chain — ${links} links, forward agrees ${nF}, reverse ${nR}: balances not trustworthy, rows left as read`);
-        return { rows, direction: null, links, agree: Math.max(nF, nR), repaired: [], breaks: [] };
+        return { rows, direction: null, links, agree: Math.max(nF, nR), repaired: [], breaks: [], with_balance: withBal.length };
     }
+    console.log(`[finance] balance chain — ${withBal.length}/${rows.length} rows carry a balance; ${links} links, ${Math.max(nF, nR)} agree, ${forward_ ? 'oldest-first' : 'newest-first'}`);
     const forward = nF >= nR;
     const ok = forward ? fwd : rev;
     const out = rows.map(r => ({ ...r }));
@@ -1468,7 +1473,20 @@ function auditRowsByBalanceChain(rows) {
     }
     if (repaired.length) console.log(`[finance] balance chain — corrected ${repaired.length} row(s) to the bank's own step: ${repaired.map(x => `${x.date} "${x.description}" ${x.from}→${x.to}`).join('; ')}`);
     if (breaks.length)   console.log(`[finance] balance chain — ${breaks.length} link(s) don't add up and couldn't be pinned to one row: ${breaks.map(x => `${x.date} "${x.description}" read ${x.read} vs step ${x.bank_step}`).join('; ')}`);
-    return { rows: out, direction: forward ? 'oldest-first' : 'newest-first', links, agree: Math.max(nF, nR), repaired, breaks };
+    return { rows: out, direction: forward ? 'oldest-first' : 'newest-first', links, agree: Math.max(nF, nR), repaired, breaks, with_balance: withBal.length };
+}
+
+// Where a statement's shortfall sits when every link in the chain agrees:
+// the printed opening vs the chain's opening says how much moved BEFORE the
+// first row that was read; printed closing vs chain closing says how much
+// moved AFTER the last. That is the difference between "a row was missed
+// somewhere in 62" and "the top line of page 1 was skipped".
+function edgeGaps(printed, chain) {
+    if (!printed || !chain) return null;
+    const r2 = v => Math.round(v * 100) / 100;
+    const start = (printed.opening != null && chain.opening != null) ? r2(chain.opening - printed.opening) : null;
+    const end   = (printed.closing != null && chain.closing != null) ? r2(printed.closing - chain.closing) : null;
+    return { start_gap: start, end_gap: end };
 }
 
 // Opening and closing from the running balances themselves — for a
@@ -1556,15 +1574,36 @@ function parseBalanceHeader(csv) {
 // we had read TOO MUCH, which sends her looking for a missing row that isn't.
 function mismatchWords(check) {
     const money = v => (v < 0 ? '−' : '+') + '£' + Math.abs(v).toFixed(2);
-    return `⚠️ This statement doesn't add up. The bank's own balances say it moved ${money(check.expected_movement)} overall; I read ${money(check.read_movement)} — £${Math.abs(check.difference).toFixed(2)} apart. A row was misread or missed.`;
+    let where = 'A row was misread or missed.';
+    const c = check.chain;
+    if (c && c.links > 0 && c.agree === c.links && c.breaks === 0) {
+        // Every link agrees, so the gap is at an end of the statement.
+        const bits = [];
+        if (c.start_gap)  bits.push(`£${Math.abs(c.start_gap).toFixed(2)} moved before the first row I could read`);
+        if (c.end_gap)    bits.push(`£${Math.abs(c.end_gap).toFixed(2)} moved after the last row I could read`);
+        if (bits.length) where = `Every row I read agrees with the bank's running balance, so the difference is at the edge: ${bits.join(', and ')} — a line at the very top or bottom of the statement was skipped.`;
+    } else if (c && c.breaks > 0) {
+        where = `${c.breaks} place${c.breaks === 1 ? '' : 's'} where the running balance doesn't follow from the rows around it — a balance or an amount was misread there.`;
+    }
+    return `⚠️ This statement doesn't add up. The bank's own balances say it moved ${money(check.expected_movement)} overall; I read ${money(check.read_movement)} — £${Math.abs(check.difference).toFixed(2)} apart. ${where}`;
 }
 
 // Everything that happens once a statement's rows are in: audit against the
 // bank's balances, remember the result on the account, set the balance
 // (latest dated statement wins — never backwards), and say what happened.
 // Shared by the image and PDF paths so they can't drift.
-function finishStatementImport(email, acct, rows, bal, result, source) {
+function finishStatementImport(email, acct, rows, bal, result, source, audit, printed) {
     const check = reconcileStatement(rows, bal);
+    if (check && audit) {
+        const chain = balancesFromChain(rows, audit.direction);
+        check.chain = {
+            rows_with_balance: audit.with_balance || 0,
+            links: audit.links, agree: audit.agree, direction: audit.direction,
+            repaired: audit.repaired.length, breaks: audit.breaks.length,
+            ...(edgeGaps(printed, chain) || {}),
+        };
+        if (!check.ok) console.log(`[finance] statement check detail — chain ${check.chain.agree}/${check.chain.links} links agree, ${check.chain.repaired} repaired, ${check.chain.breaks} breaks, before-first-row ${check.chain.start_gap}, after-last-row ${check.chain.end_gap}`);
+    }
     if (bal && bal.closing != null && acct) {
         setAccountBalance(email, acct.id, bal.closing, bal.closingDate || undefined);
     }
@@ -1577,7 +1616,7 @@ function finishStatementImport(email, acct, rows, bal, result, source) {
             closing: bal ? bal.closing : null,
             rows: rows.length,
             source: source || null,
-            check: check ? { expected: check.expected_movement, read: check.read_movement, difference: check.difference, ok: check.ok } : null,
+            check: check ? { expected: check.expected_movement, read: check.read_movement, difference: check.difference, ok: check.ok, chain: check.chain || null } : null,
             repaired: result.repaired || 0,
         });
     }
@@ -1614,7 +1653,9 @@ async function importStatementFromImage(email, imageBase64, mimeType, filename, 
     const source = deriveSource(filename, '');
     const acct = detectAccount(accountHeaderText(raw), filename);
     if (acct) upsertAccount(email, acct, source);
+    keepRawRead(email, source, raw);
     let bal = normaliseCardBalance(parseBalanceHeader(raw), acct);
+    const printed = bal;
     // Card statements: check the signs against the statement's own evidence
     // BEFORE anything is saved (see normaliseCardRows).
     let rows = normaliseCardRows(csvToRows(raw).map(r => ({ ...r, source, ...(acct && { account: acct.id }) })), acct, bal).rows;
@@ -1629,9 +1670,24 @@ async function importStatementFromImage(email, imageBase64, mimeType, filename, 
     console.log(`[finance] importStatementFromImage: vision ${raw.length} chars → ${rows.length} rows (no re-parse)${acct ? `, account "${acct.label}"` : ''}`);
     const result = await saveRows(email, rows, { ownerName });
     result.repaired = audit.repaired.length;
-    const check = finishStatementImport(email, acct, rows, bal, result, source);
+    const check = finishStatementImport(email, acct, rows, bal, result, source, audit, printed);
     if (check && !check.ok) result.hint = mismatchWords(check);
     return result;
+}
+
+// The reader's raw output for a statement, kept in the user's own finance
+// folder (last 30). When a statement is out by 81p the only way to say WHICH
+// line is to look at what the reader actually returned. Her data, her folder,
+// same place as her transactions.
+function keepRawRead(email, source, raw) {
+    try {
+        const dir = finPath(email, 'reads/.keep');
+        const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+        const name = `${stamp}-${String(source || 'statement').replace(/[^a-z0-9]+/gi, '_').slice(0, 30)}.csv`;
+        fs.writeFileSync(path.join(path.dirname(dir), name), String(raw || ''), 'utf8');
+        const files = fs.readdirSync(path.dirname(dir)).filter(f => f.endsWith('.csv')).sort();
+        for (const f of files.slice(0, Math.max(0, files.length - 30))) fs.unlinkSync(path.join(path.dirname(dir), f));
+    } catch (e) { console.warn('[finance] keepRawRead failed:', e.message); }
 }
 
 // Gemini 2.0 Flash caps OUTPUT at ~8192 tokens (~300 CSV rows). A 3-month
@@ -1703,7 +1759,9 @@ async function importStatementFromFile(email, fileBase64, mimeType, onProgress, 
         // the account a real balance without anyone typing one. Read first:
         // on a credit card they are also the evidence for which way round the
         // rows were read (normaliseCardRows).
+        keepRawRead(email, source, chunked.csv);
         let bal = normaliseCardBalance(parseBalanceHeader(chunked.csv), acct);
+        const printed = bal;
         let rows = normaliseCardRows(csvToRows(chunked.csv).map(r => ({ ...r, source, ...(acct && { account: acct.id }) })), acct, bal).rows;
         console.log(`[finance] PDF→Gemini chunked: ${chunked.pageCount} pages → ${rows.length} rows; failed: ${chunked.failed.join(', ') || 'none'}${acct ? `; account "${acct.label}"` : ''}`);
         if (!rows.length) {
@@ -1721,7 +1779,7 @@ async function importStatementFromFile(email, fileBase64, mimeType, onProgress, 
         }
         const result = await saveRows(email, rows, { ownerName });
         result.repaired = audit.repaired.length;
-        const check = finishStatementImport(email, acct, rows, bal, result, source);
+        const check = finishStatementImport(email, acct, rows, bal, result, source, audit, printed);
 
         // Tell her what happened, in every case. A silent success is what let
         // a short read look identical to a complete one.
@@ -2836,6 +2894,8 @@ module.exports = {
     csvToRows,
     auditRowsByBalanceChain,
     balancesFromChain,
+    edgeGaps,
+    mismatchWords,
     recordStatement,
     statementGaps,
     refKey,

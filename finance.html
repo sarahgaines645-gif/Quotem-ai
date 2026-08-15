@@ -1149,7 +1149,18 @@
         ? 'Statements: ' + sts.map(st => {
             const span = ukDate(st.from) + '–' + ukDate(st.to);
             let v;
-            if (st.check)               v = st.check.ok ? '✓ adds up' : ('£' + fmt(Math.abs(st.check.difference)) + ' out');
+            if (st.check) {
+              v = st.check.ok ? '✓ adds up' : ('£' + fmt(Math.abs(st.check.difference)) + ' out');
+              const c = st.check.chain;
+              if (!st.check.ok && c && c.links > 0 && c.agree === c.links && !c.breaks) {
+                const w = [];
+                if (c.start_gap) w.push('before the first row');
+                if (c.end_gap)   w.push('after the last row');
+                if (w.length) v += ' (' + w.join(' and ') + ' — every row read agrees with the bank)';
+              } else if (!st.check.ok && c && c.breaks) {
+                v += ' (' + c.breaks + ' misread ' + (c.breaks === 1 ? 'row' : 'rows') + ')';
+              }
+            }
             else if (st.closing != null) v = 'balance read, not checkable';
             else                         v = 'no balances printed';
             return esc(span) + ' ' + (st.check && st.check.ok ? '<strong>' + v + '</strong>' : v);
