@@ -1420,6 +1420,19 @@ function detectSubscriptions(email) {
 }
 
 
+// Reference codes split one payer into many: "200Y14H4M DWP UC" and
+// "200X19N45 DWP UC" are the same benefit with per-payment references.
+// Strip mixed letter+digit tokens (6+ chars) before grouping — real names
+// ("GAINES SL") are untouched.
+function stripRefTokens(name) {
+    const cleaned = String(name || '')
+        .split(/\s+/)
+        .filter(w => !(w.length >= 6 && /[A-Za-z]/.test(w) && /\d/.test(w)))
+        .join(' ')
+        .trim();
+    return cleaned || String(name || '');
+}
+
 // Income sources — credits grouped the way subscriptions are, with
 // self-transfers (pots, savings, cross-account pairs) excluded so a top-up
 // from the user's own other bank never masquerades as income.
@@ -1429,7 +1442,7 @@ function detectIncome(email) {
     const credits = txns.filter(t => t.amount > 0 && t.category !== 'savings_transfer' && !paired.has(t.id));
     const byMerchant = {};
     for (const t of credits) {
-        const k = merchantKey(t.merchant || t.description);
+        const k = merchantKey(stripRefTokens(t.merchant || t.description));
         (byMerchant[k] = byMerchant[k] || []).push(t);
     }
     return Object.values(byMerchant)
@@ -1453,7 +1466,7 @@ function detectIncome(email) {
         .map(entries => {
             entries.sort((a, b) => (b.date || '').localeCompare(a.date || ''));
             return {
-                merchant:       entries[0].merchant || entries[0].description,
+                merchant:       stripRefTokens(entries[0].merchant || entries[0].description),
                 amount:         Math.abs(entries[0].amount),
                 last_seen:      entries[0].date,
                 source:         entries[0].source || null,
@@ -1477,7 +1490,7 @@ function detectRegulars(email) {
     const live = txns.filter(t => t.category !== 'savings_transfer' && !paired.has(t.id) && t.date);
     const groups = {};
     for (const t of live) {
-        const k = (t.amount < 0 ? 'out:' : 'in:') + merchantKey(t.merchant || t.description);
+        const k = (t.amount < 0 ? 'out:' : 'in:') + merchantKey(stripRefTokens(t.merchant || t.description));
         (groups[k] = groups[k] || []).push(t);
     }
     const rhythm = { in: { weekly: [], monthly: [], bills: [] }, out: { weekly: [], monthly: [], bills: [] } };
@@ -1524,7 +1537,7 @@ function detectRegulars(email) {
         else if (isBillNature) { target = 'bills'; cadence = entries.length === 1 ? 'new' : 'irregular'; }
         if (!target) continue;
         rhythm[dir][target].push({
-            merchant:      latest.merchant || latest.description,
+            merchant:      stripRefTokens(latest.merchant || latest.description),
             amount:        Math.round(amount * 100) / 100,
             cadence,
             monthly_equiv: monthlyEquiv != null ? Math.round(monthlyEquiv * 100) / 100 : null,
