@@ -1479,6 +1479,25 @@ router.post('/writer/labels', requirePerson, express.json({ limit: '8kb' }), asy
     }
 });
 
+// ── Teaching videos (Sarah, 15 Aug: "videos open in the teaching suite… on
+// its own raised movable card"). ONE explainer for a concept, from
+// plugins/q-youtube.js (YouTube Data API, key in Railway only). No key / no
+// result / API failure → video:null and the page falls back to a plain
+// search link. Never an error to the student. Same plugin serves the
+// revision suite (twin route below).
+const qYouTube = require('./plugins/q-youtube');
+async function videoHandler(req, res, fromTutor) {
+    const query = String(req.body?.query || '').replace(/\s+/g, ' ').trim().slice(0, 200);
+    if (!query) return res.status(400).json({ ok: false, error: 'query required', code: 'bad_body' });
+    let level = String(req.body?.level || ''), subject = String(req.body?.subject || '');
+    if (fromTutor) { const t = readTutor(req.person.id); level = level || String(t.yearGroup || t.gradeScheme || ''); subject = subject || String((t.brief && t.brief.subject) || ''); }
+    let video = null;
+    try { video = await qYouTube.searchTeachingVideo({ query, level, subject }); } catch (_) { video = null; }
+    res.json({ ok: true, video, hasKey: qYouTube.hasKey(), searchUrl: 'https://www.youtube.com/results?search_query=' + encodeURIComponent(query) });
+}
+router.post('/writer/video', requirePerson, express.json({ limit: '8kb' }), (req, res) => videoHandler(req, res, true));
+router.post('/revision/video', requirePerson, express.json({ limit: '8kb' }), (req, res) => videoHandler(req, res, false));
+
 // POST /writer/source — a supporting document (case study, module notes,
 // data) for THIS session. Stored server-side, bounded; the model essay is
 // rewritten to cite it. Body: { name, text } to add, { remove: name } to drop.

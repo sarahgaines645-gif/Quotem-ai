@@ -836,6 +836,21 @@
     .doc-body .student-line { margin: 0; font-style: normal; font-weight: 400; color: var(--text); border-left: 2px solid rgba(233,30,99,0.22); padding-left: 8px; margin-left: -10px; }
 
 
+    /* ── The Video panel: a raised, movable card with the explainer in it ── */
+    .video-panel { width: 420px; }
+    .video-panel .vp-title { font-size: 12px; font-weight: 600; color: var(--text); line-height: 1.35; margin-bottom: 2px; overflow-wrap: anywhere; }
+    .video-panel .vp-channel { font-size: 10px; color: var(--text-muted); margin-bottom: 8px; }
+    .video-panel .vp-frame { position: relative; width: 100%; aspect-ratio: 16 / 9; border-radius: 10px; overflow: hidden; box-shadow: var(--neu-inset-sm); background: #000; }
+    .video-panel .vp-frame iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; }
+    .video-panel .vp-actions { display: flex; gap: 6px 12px; flex-wrap: wrap; align-items: center; margin-top: 8px; }
+    .video-panel .vp-actions a { font-size: 11px; color: var(--text-muted); text-decoration: underline; text-underline-offset: 2px; }
+    .video-panel .vp-actions a:hover { color: var(--text); }
+    .q-watch { display: inline-flex; align-items: center; gap: 5px; padding: 4px 10px; border: none; border-radius: 12px; cursor: pointer; font-family: 'Space Grotesk', sans-serif; font-size: 11px; font-weight: 600; background: var(--bg); color: var(--text); box-shadow: var(--neu-raised-xs); }
+    .q-watch:hover { box-shadow: var(--neu-raised-sm); }
+    .q-watch .ico { color: var(--accent); }
+    .q-watch.busy { opacity: 0.6; cursor: wait; }
+    .q-lesson .ql-more { display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: center; }
+
     /* ── Scaffolded coaching: the agenda + the scaffold widgets on the board ── */
     .tb-agenda { margin: 0 0 10px; padding: 8px 10px; border-radius: 10px; box-shadow: var(--neu-raised-xs); }
     .tb-role { font-size: 12px; font-weight: 600; color: var(--text); line-height: 1.45; margin-bottom: 6px; }
@@ -848,6 +863,9 @@
     .tb-steps li.cur .st-dot { background: var(--accent); box-shadow: none; }
     .tb-steps li .st-kind { font-size: 9px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-faint); margin-left: 4px; font-weight: 600; }
     .tb-scaf { margin: 6px 0 4px; }
+    .tb-worksheet { margin: 0 0 10px; }
+    .tb-worksheet .tb-ws { margin: 4px 0 8px; }
+    .sc-table td.sc-gap { font-weight: 700; color: var(--accent); white-space: nowrap; }
     .tb-scaf .sc-empty { font-size: 11px; color: var(--text-faint); }
     .sc-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
     .sc-list li { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text); line-height: 1.4; padding: 3px 8px; border-radius: 8px; box-shadow: var(--neu-raised-xs); overflow-wrap: anywhere; }
@@ -1106,6 +1124,21 @@
       <button type="button" class="panel-min" id="teach-board-tog" title="Minimise" aria-label="Minimise the teaching board">−</button>
     </div>
     <div class="panel-body" id="teach-board-body"></div>
+    <div class="panel-grip" title="Drag to resize"></div>
+  </div>
+
+  <!-- The Video panel — an explainer opens here, on its own raised movable card (same panel manager) -->
+  <div class="qpanel video-panel hidden" id="video-panel" data-panel="video">
+    <div class="panel-head" id="video-panel-head">
+      <span class="panel-title" id="video-panel-badge">▶ Video</span>
+      <button type="button" class="panel-min" id="video-panel-tog" title="Minimise" aria-label="Minimise the video">−</button>
+    </div>
+    <div class="panel-body" id="video-panel-body">
+      <div class="vp-title" id="vp-title"></div>
+      <div class="vp-channel" id="vp-channel"></div>
+      <div class="vp-frame"><iframe id="vp-frame" title="Explainer video" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen referrerpolicy="strict-origin-when-cross-origin"></iframe></div>
+      <div class="vp-actions"><a id="vp-open" href="#" target="_blank" rel="noopener">open on YouTube</a><a href="#" id="vp-close">Close</a></div>
+    </div>
     <div class="panel-grip" title="Drag to resize"></div>
   </div>
 
@@ -1447,7 +1480,7 @@
         restackQueued = false;
         if (!isDocked()) return;
         let y = PANEL_M;
-        ['coach', 'teach', 'brief'].forEach(k => {
+        ['coach', 'video', 'teach', 'brief'].forEach(k => {
           const p = panels[k]; if (!p || p.el.classList.contains('hidden')) return;
           p.el.style.bottom = y + 'px';
           y += p.el.offsetHeight + 6;
@@ -1504,6 +1537,50 @@
         return { w: 300, left: 12, top: Math.min(under, window.innerHeight - 260) };
       },
     });
+    const videoPanel = makePanel(document.getElementById('video-panel'), 'video', {
+      minW: 260, minH: 200,
+      defaults: () => ({ w: 420, left: Math.max(PANEL_M, window.innerWidth - 420 - 16), top: 12 }),
+    });
+    // ── The Video panel: ONE explainer, on its own raised movable card ──────
+    // openVideo puts the embed (privacy-enhanced host, rel=0) in the panel;
+    // watchVideoFor asks /writer/video for the best teaching video (channel-
+    // first, short first). No key / nothing found → the plain YouTube search
+    // opens in a new tab and the card says so — never an error.
+    const vpFrame = document.getElementById('vp-frame'), vpTitle = document.getElementById('vp-title'), vpChannel = document.getElementById('vp-channel'), vpOpen = document.getElementById('vp-open');
+    function closeVideo() { vpFrame.src = 'about:blank'; hidePanel('video'); }
+    document.getElementById('vp-close').addEventListener('click', (e) => { e.preventDefault(); closeVideo(); });
+    function openVideo(v) {
+      if (!v || !v.videoId) return false;
+      vpTitle.textContent = v.title || 'Explainer';
+      vpChannel.textContent = v.channel ? v.channel : '';
+      vpOpen.href = v.url || ('https://www.youtube.com/watch?v=' + encodeURIComponent(v.videoId));
+      vpFrame.src = v.embedUrl || ('https://www.youtube-nocookie.com/embed/' + encodeURIComponent(v.videoId) + '?rel=0&modestbranding=1');
+      revealPanel('video'); bringToFront(videoPanel);
+      state.lastVideo = { videoId: v.videoId, title: v.title || '', channel: v.channel || '', url: vpOpen.href, embedUrl: vpFrame.src };
+      return true;
+    }
+    let videoBusy = false;
+    async function watchVideoFor(query, btn) {
+      const q = String(query || '').trim(); if (!q || videoBusy) return;
+      videoBusy = true; if (btn) btn.classList.add('busy');
+      const searchUrl = 'https://www.youtube.com/results?search_query=' + encodeURIComponent(q);
+      try {
+        const d = await api('/writer/video', { query: q }, { timeoutMs: 20000 });
+        if (d && d.video && openVideo(d.video)) return;
+        // Fallback: the plain search, in a new tab; the card says why.
+        window.open(d && d.searchUrl ? d.searchUrl : searchUrl, '_blank', 'noopener');
+        coachHint.textContent = d && d.hasKey === false ? 'Video search is not switched on here yet — I opened YouTube search instead.' : 'I could not find a good explainer for that — I opened YouTube search instead.';
+      } catch (e) {
+        window.open(searchUrl, '_blank', 'noopener');
+        coachHint.textContent = 'Video search did not answer (' + shortCause(e) + ') — I opened YouTube search instead.';
+      } finally { videoBusy = false; if (btn) btn.classList.remove('busy'); }
+    }
+    // Any "▶ Watch here" button anywhere on the card or the board.
+    document.addEventListener('click', (e) => {
+      const b = e.target.closest('[data-watch]'); if (!b) return;
+      e.preventDefault(); watchVideoFor(b.dataset.watch, b);
+    });
+    window.__qwriterVideo = { openVideo, watchVideoFor, closeVideo };
     // The coach card is visible from the start; boards appear when the brief lands.
     loadLayout(); relayoutAll();
     fetch('/whoami', { credentials: 'include' }).then(r => r.json()).then(d => {
@@ -1934,9 +2011,9 @@
     state.boardEarlierOpen = false;
     const teachBody = document.getElementById('teach-board-body');
     function switchToBoardMode() { showPanel('teach'); }
-    function appendBoardItem({ type, label, text, links, action, criterionId, stepId }) {
+    function appendBoardItem({ type, label, text, links, action, criterionId, stepId, watch }) {
       if (!text) return null;
-      const it = { type, label: label || '', text: String(text), links: links || null, action: action || null, criterionId: criterionId || state.currentCriterionId || '', stepId: stepId || null };
+      const it = { type, label: label || '', text: String(text), links: links || null, action: action || null, criterionId: criterionId || state.currentCriterionId || '', stepId: stepId || null, watch: watch || null };
       state.boardItems.push(it);
       renderBoard();
       switchToBoardMode();
@@ -1982,7 +2059,10 @@
         return `<div class="tb-item tb-a${click}" data-idx="${idx}"><span class="tb-label">you</span><div class="tb-text tb-atext${clampCls}">${paragraphsHtml(it.text)}</div>${more}</div>`;
       }
       if (it.type === 'explain') {
-        const links = (it.links || []).map(l => `<a class="tb-link" href="${escHtml(l.url)}" target="_blank" rel="noopener"><span class="ico">${escHtml(l.icon || '▶')}</span>${escHtml(l.name)}</a>`).join('');
+        const yt = (it.links || []).find(l => /youtube/i.test(l.name || '') || /youtube\.com/.test(l.url || ''));
+        const watchQ = it.watch || (yt ? decodeURIComponent((String(yt.url).split('search_query=')[1] || '').replace(/\+/g, ' ')) : '');
+        const links = (watchQ ? `<button type="button" class="tb-link q-watch" data-watch="${escHtml(watchQ)}"><span class="ico">▶</span>Watch here</button>` : '')
+          + (it.links || []).map(l => `<a class="tb-link" href="${escHtml(l.url)}" target="_blank" rel="noopener"><span class="ico">${escHtml(l.icon || '▶')}</span>${escHtml(l === yt ? 'open on YouTube' : l.name)}</a>`).join('');
         return `<div class="tb-item tb-x${click}" data-idx="${idx}"><span class="tb-label">Q explains</span><div class="tb-text tb-ntext${clampCls}">${paragraphsHtml(it.text)}</div>${more}${links ? `<div class="tb-links">${links}</div>` : ''}</div>`;
       }
       return `<div class="tb-item tb-n${click}" data-idx="${idx}"><span class="tb-label">${escHtml(it.label || 'note')}</span><div class="tb-text tb-ntext${clampCls}">${paragraphsHtml(it.text)}</div>${more}</div>`;
@@ -2001,7 +2081,7 @@
         : '';
       const currentHtml = `<div class="tb-current"><div class="tb-items">${current.map((it, i) => boardItemHtml(it, (qi >= 0 ? qi : 0) + i, false, it.type === 'question' && (state.currentStep ? (it.stepId === state.currentStep.stepId) : (it.text === state.currentQuestion)))).join('')}${scaffoldWidgetHtml()}</div></div>`;
       const stripHtml = state.brief ? `<div class="coverage-strip compact" id="coverage-strip-teach"></div>` : '';
-      teachBody.innerHTML = whereHtml + agendaHtml + earlierHtml + currentHtml + stripHtml;
+      teachBody.innerHTML = whereHtml + agendaHtml + worksheetHtml() + earlierHtml + currentHtml + stripHtml;
       wireScaffold();
       const fold = document.getElementById('tb-earlier');
       if (fold) fold.addEventListener('toggle', () => { state.boardEarlierOpen = fold.open; if (isDocked()) restackDock(); });
@@ -2161,7 +2241,7 @@
         // TEACH-THEN-APPLY: the lesson lives on the card now (and moves to the
         // board history when they press Got it). Nothing from it goes on the page.
         setCoach({ ...common, msg: pre + step.prompt, hint: '', inputVisible: false, showNudge: false, actions: [{ label: 'Got it →', primary: true, big: true, onClick: () => completeStep(cid, step.id, { ack: '' }) }, { label: 'Skip this', quiet: true, onClick: () => skipStep(cid, step.id) }] });
-        coachActions.insertAdjacentHTML('afterbegin', lessonHtml({ term: step.term, lesson: step.lesson, example: step.example }));
+        coachActions.insertAdjacentHTML('afterbegin', lessonHtml({ term: step.term, lesson: step.lesson, example: step.example, watch: step.term || null }));
       } else if (step.kind === 'tag') {
         setCoach({ ...common, msg: pre + step.prompt, hint: st.tags ? (st.legend || '') : 'Sorting your list…', actions: stepActions(cid, step, st), inputVisible: false });
         if (!st.tags) runTagStep(cid, step);
@@ -2343,8 +2423,44 @@
         applyCoverage(d.coverage); applyMatch(d.match); if (d.brickCounts) state.brickCounts = d.brickCounts;
       } catch (e) { /* the score catches up on the next call; nothing is lost */ }
       const pct = state.match && state.match.perCriterion ? state.match.perCriterion[cid] : null;
-      const a = ack || (step.kind === 'list' ? 'Good list.' : step.kind === 'numbers' ? 'Numbers down.' : step.kind === 'tag' ? '' : step.kind === 'proscons' ? 'That\'s the good and the bad.' : 'Got it.');
-      presentStep(cid, idx + 1, { ack: (a ? a + (pct != null ? ' ' + pct + '% on this part.' : '') : '') });
+      let a = ack || (step.kind === 'list' ? 'Good list.' : step.kind === 'numbers' ? 'Numbers down.' : step.kind === 'tag' ? '' : step.kind === 'proscons' ? 'That\'s the good and the bad.' : 'Got it.');
+      // Sarah, 15 Aug: "he doesn't need to ask. He doesn't need to tell you to
+      // write flexi" — a finished list is ANALYSED at once: the dependent tag
+      // step runs itself (one small call), the coloured groups + legend land
+      // on the board as the worksheet, and Q's one legend line is the ack.
+      if (step.kind === 'list') {
+        const tagStep = plan.steps.find(x => x.kind === 'tag' && x.itemsFrom === step.id && !stepStateOf(cid, x.id).tags);
+        if (tagStep && st.items.length) {
+          setCoach({ msg: 'Sorting your list…', thinking: true, inputVisible: false, actions: [] });
+          const line = await runTagAuto(cid, tagStep);
+          if (line) a = line;
+        }
+      }
+      let next = idx + 1;
+      while (next < plan.steps.length && stepStateOf(cid, plan.steps[next].id).filled) next++;
+      presentStep(cid, next, { ack: (a ? a + (pct != null && step.kind !== 'list' ? ' ' + pct + '% on this part.' : '') : '') });
+    }
+    // The automatic analysis of a list: tag it, mark the tag step filled, voice
+    // its bricks. Returns Q's legend line (or '' if it could not run — the tag
+    // step then runs when reached, with retry).
+    async function runTagAuto(cid, tagStep) {
+      const ts = stepStateOf(cid, tagStep.id);
+      const src = tagStep.itemsFrom ? stepStateOf(cid, tagStep.itemsFrom) : null;
+      const items = src ? src.items : [];
+      if (!items.length) return '';
+      try {
+        tally('tag', cid);
+        const d = await api('/writer/tag', { criterionId: cid, stepId: tagStep.id, items }, { timeoutMs: 60000 });
+        if (d.cached) { const c = state.calls[cid]; if (c && c.tag > 0) { c.tag -= 1; persist({ calls: state.calls }); } }
+        ts.tags = {}; for (const t of (d.tagged || [])) ts.tags[t.item] = t.tag;
+        ts.legend = d.line || ''; ts.filled = true;
+        persistSteps();
+        try { const v = await api('/writer/step', { criterionId: cid, stepId: tagStep.id, done: true }, { timeoutMs: 30000 }); applyCoverage(v.coverage); applyMatch(v.match); if (v.brickCounts) state.brickCounts = v.brickCounts; } catch (_) {}
+        renderBoard();
+        return ts.legend;
+      } catch (e) {
+        return '';
+      }
     }
     // The part is done: move to the next part with a one-line move, or say
     // every part has something.
@@ -2416,7 +2532,36 @@
       }
     }
 
-    // ── The board: the agenda block + the current step's widget ───────────
+    // ── The board: the WORKSHEET — Q's analysis of what they gave him stays
+    // visible while the part is current (their list in colours + the legend,
+    // their numbers with the gap drawn) so later asks can point at it.
+    function numVal(x) { const m = String(x || '').replace(/,/g, '').match(/(-?\d+(?:\.\d+)?)\s*(k)?/i); if (!m) return null; return parseFloat(m[1]) * (m[2] ? 1000 : 1); }
+    function fmtGap(is, should) {
+      const a = numVal(is), b = numVal(should); if (a == null || b == null) return '';
+      const d = b - a; if (!d) return 'same';
+      const k = /k/i.test(String(is) + String(should));
+      const v = k ? (Math.abs(d) / 1000).toString().replace(/\.0$/, '') + 'k' : String(Math.abs(d));
+      return (d > 0 ? '+' : '−') + v;
+    }
+    function worksheetHtml() {
+      const cid = state.currentCriterionId; const plan = planFor(cid); if (!plan) return '';
+      const ss = ssFor(cid); const cur = state.currentStep && state.currentStep.criterionId === cid ? state.currentStep.stepId : null;
+      const blocks = [];
+      for (const s of plan.steps) {
+        const st = ss.steps[s.id]; if (!st || s.id === cur) continue;
+        if (s.kind === 'tag' && st.tags) {
+          const src = s.itemsFrom ? ss.steps[s.itemsFrom] : null; const items = src ? src.items : [];
+          const byName = Object.fromEntries((s.tags || []).map(t => [t.name, t]));
+          const li = items.map((x, i) => { const name = st.tags[x]; const t = name ? byName[name] : null; const c = t ? TAG_CSS[t.colour] || '#999' : null; return `<li${c ? ` data-tag="${escHtml(name)}" style="--tagc:${c}"` : ''}><span class="sc-n">${i + 1}</span><span>${escHtml(x)}</span>${t ? `<span class="sc-tag">${escHtml(t.name)}</span>` : ''}</li>`; }).join('');
+          const legend = `<div class="sc-legend">${(s.tags || []).map(t => `<span style="--tagc:${TAG_CSS[t.colour] || '#999'}">${escHtml(t.colour)} = ${escHtml(t.meaning || t.name)}</span>`).join('')}</div>`;
+          blocks.push(`<div class="tb-ws" data-ws="tag"><ul class="sc-list">${li}</ul>${legend}</div>`);
+        } else if (s.kind === 'numbers' && (st.rows || []).some(v => v && (v.is || v.should))) {
+          const rows = s.rows.map((r, i) => { const v = st.rows[i] || {}; if (!v.is && !v.should) return ''; return `<tr><td class="sc-lab">${escHtml(r.label)}</td><td>${escHtml(v.is || '—')}</td><td>${escHtml(v.should || '—')}</td><td class="sc-gap">${escHtml(fmtGap(v.is, v.should))}</td></tr>`; }).join('');
+          blocks.push(`<div class="tb-ws" data-ws="numbers"><table class="sc-table"><thead><tr><th></th><th>is</th><th>should be</th><th>gap</th></tr></thead><tbody>${rows}</tbody></table></div>`);
+        }
+      }
+      return blocks.length ? `<div class="tb-worksheet"><span class="tb-label">worksheet</span>${blocks.join('')}</div>` : '';
+    }
     function scaffoldAgendaHtml() {
       const cid = state.currentCriterionId; const plan = planFor(cid); if (!plan) return '';
       const ss = ssFor(cid); const cur = state.currentStep && state.currentStep.criterionId === cid ? state.currentStep.stepId : null;
@@ -2494,8 +2639,12 @@
         });
       }
     }
-    function lessonHtml({ term, lesson, example, links }) {
-      return '<div class="q-lesson">' + (term ? '<div class="ql-term">' + escHtml(term) + '</div>' : '') + escHtml(lesson || '') + (example ? '<div class="ql-eg">e.g. ' + escHtml(example) + '</div>' : '') + (links && links.length ? '<div class="ql-more">If you want more: ' + links.map(l => '<a href="' + escHtml(l.url) + '" target="_blank" rel="noopener">' + escHtml(l.name) + '</a>').join('') + '</div>' : '') + '</div>';
+    function lessonHtml({ term, lesson, example, links, watch }) {
+      const q = watch || term || '';
+      const more = (q || (links && links.length))
+        ? '<div class="ql-more"><span>If you want more:</span>' + (q ? '<button type="button" class="q-watch" data-watch="' + escHtml(q) + '"><span class="ico">▶</span>Watch a short explainer</button>' : '') + (links || []).map(l => '<a href="' + escHtml(l.url) + '" target="_blank" rel="noopener">' + escHtml(/youtube/i.test(l.name) ? 'open on YouTube' : l.name) + '</a>').join('') + '</div>'
+        : '';
+      return '<div class="q-lesson">' + (term ? '<div class="ql-term">' + escHtml(term) + '</div>' : '') + escHtml(lesson || '') + (example ? '<div class="ql-eg">e.g. ' + escHtml(example) + '</div>' : '') + more + '</div>';
     }
     // "I don't understand this" / "I'm stuck" on ANY ask → TEACH, then re-ask
     // as an apply question (Sarah: "no matter how many questions and hints,
@@ -2524,13 +2673,13 @@
         else state.currentQuestion = applyAsk;
         const gotIt = () => {
           // The lesson moves to the board history (once); the apply ask is the ask now.
-          appendBoardItem({ type: 'explain', text: (d.term ? d.term + ' — ' : '') + d.lesson + (d.example ? ' e.g. ' + d.example : ''), links, stepId: info ? info.step.id : null });
+          appendBoardItem({ type: 'explain', text: (d.term ? d.term + ' — ' : '') + d.lesson + (d.example ? ' e.g. ' + d.example : ''), links, watch: terms[0] || d.term || ask, stepId: info ? info.step.id : null });
           if (info) presentStep(info.cid, info.idx, { ack: 'Now apply it.' });
           else setCoach({ msg: applyAsk, hint: 'Say it in your own words here.', inputVisible: true, showNudge: true });
           coachInput.focus();
         };
         setCoach({ msg: '', section: 'A QUICK LESSON', where: whereText(whereInfo()), hint: 'Then I\'ll ask you to apply it — nothing from the lesson goes on your page.', inputVisible: false, showNudge: false, actions: [{ label: 'Got it — ask me again →', primary: true, big: true, onClick: gotIt }] });
-        coachActions.insertAdjacentHTML('afterbegin', lessonHtml({ term: d.term, lesson: d.lesson, example: d.example, links }));
+        coachActions.insertAdjacentHTML('afterbegin', lessonHtml({ term: d.term, lesson: d.lesson, example: d.example, links, watch: terms[0] || d.term || ask }));
       } catch (e) {
         setCoach({ msg: ask, hint: 'Couldn\'t get the lesson just now (' + shortCause(e) + ') — try again.', inputVisible: true, showNudge: true, actions: info ? stepActions(info.cid, info.step, stepStateOf(info.cid, info.step.id)) : [] });
       } finally { teachInFlight = false; }
