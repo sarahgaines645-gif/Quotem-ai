@@ -1504,12 +1504,19 @@ function getSpendingGraphData(email) {
         byCategory[cat] = (byCategory[cat] || 0) + Math.abs(t.amount);
     }
 
-    // Graph 2: bucket/person breakdown (only assigned transactions). Same
-    // rule — a self-move that happens to carry a bucket label is not money
-    // spent on that person.
+    // Graph 2: bucket/person breakdown (only assigned transactions).
+    //
+    // ⚠️ DELIBERATELY NOT the same rule as the donut above. Sarah's children
+    // have accounts held under her own banking, so a transfer to Charlie is
+    // filed savings_transfer ("still her money") — but it IS money spent on
+    // Charlie, and knowing what each child costs is the entire point of this
+    // chart. Excluding self-moves here erased them. A bucket is a human's
+    // answer to "who was this for", and it outranks the category machinery.
+    // The chart therefore does NOT sum to total_spend, and must not be
+    // "corrected" to.
     const byBucket = {};
     for (const t of debits) {
-        if (t.bucket && viewCat(t) !== 'savings_transfer') {
+        if (t.bucket) {
             byBucket[t.bucket] = (byBucket[t.bucket] || 0) + Math.abs(t.amount);
         }
     }
