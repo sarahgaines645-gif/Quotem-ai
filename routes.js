@@ -2277,6 +2277,15 @@ router.get('/api/finance/accounts', requirePerson, (req, res) => {
     res.json(qFinance.getAccountsWithTotals(req.person.email));
 });
 
+// The balance the user can see in their banking app. Statements carry only
+// movements, so this is the number that turns them into "what have I got" —
+// and lets the app check whether it read the whole statement.
+router.post('/api/finance/accounts/:id/balance', requirePerson, express.json({ limit: '4kb' }), (req, res) => {
+    const updated = qFinance.setAccountBalance(req.person.email, req.params.id, req.body && req.body.balance, req.body && req.body.asAt);
+    if (!updated) return res.status(400).json({ error: 'Unknown account, or that balance was not a number.' });
+    res.json(updated);
+});
+
 // Import statement text (paste or extracted from PDF)
 router.post('/api/finance/statement', requirePerson, express.json({ limit: '2mb' }), async (req, res) => {
     const { text, filename } = req.body || {};

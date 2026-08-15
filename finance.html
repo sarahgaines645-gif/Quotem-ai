@@ -121,6 +121,22 @@
       font-size: 11px; color: var(--text-muted);
       margin: -6px 2px 16px;
     }
+    /* Balance entry — the one field on the card you TYPE into, so it is the
+       one thing that is inset. Everything else here is read, and protrudes. */
+    .ac-bal-row { display: flex; gap: 6px; margin: 5px 0 6px; }
+    .ac-bal-input {
+      flex: 1 1 auto; min-width: 0; font-family: inherit; font-size: 14px; font-weight: 700;
+      padding: 7px 10px; border: none; border-radius: 9px;
+      background: var(--bg); color: var(--text); box-shadow: var(--neu-inset-xs);
+    }
+    .ac-bal-input:focus { outline: none; box-shadow: var(--neu-inset-sm); }
+    .ac-bal-save, .ac-bal-edit {
+      font-family: inherit; font-size: 11px; font-weight: 600; cursor: pointer;
+      padding: 7px 12px; border: none; border-radius: 9px;
+      background: var(--bg); color: var(--text); box-shadow: var(--neu-raised-xs);
+    }
+    .ac-bal-save:active, .ac-bal-edit:active { box-shadow: var(--neu-inset-xs); }
+    .ac-bal-edit { margin-top: 8px; padding: 5px 10px; font-size: 10px; }
 
     /* ── Summary bar ── */
     .summary-bar {
@@ -849,6 +865,35 @@
         a.period_from && a.period_to ? ukDate(a.period_from) + ' – ' + ukDate(a.period_to) : '',
         a.transaction_count + (a.transaction_count === 1 ? ' transaction' : ' transactions'),
       ].filter(Boolean).join(' · ');
+      // Balance — the one thing a statement never tells us. With it, the card
+      // can say what the account actually holds AND check its own arithmetic:
+      // balance minus everything that moved must equal what was there at the
+      // start. If that opening figure is wrong to her, rows are missing.
+      const netMove = a.net_movement || 0;
+      const moveStr = (netMove >= 0 ? '+' : '−') + '£' + fmt(Math.abs(netMove));
+      let balBlock;
+      if (a.balance != null) {
+        balBlock = `<div style="margin-top:10px">
+          <div class="ac-fig-l">Balance${a.balanceAt ? ' · ' + esc(ukDate(a.balanceAt)) : ''}</div>
+          <div class="ac-fig-v" style="font-size:18px">£${fmt(a.balance)}</div>
+          <div class="ac-sub" style="margin-top:6px">
+            ${moveStr} moved since ${a.period_from ? esc(ukDate(a.period_from)) : 'the start'} —
+            so this account held <strong>£${fmt(a.implied_opening)}</strong> then.
+            If that's wrong, transactions are missing.
+          </div>
+          <button class="ac-bal-edit" data-acct="${esc(a.id)}" type="button">Update balance</button>
+        </div>`;
+      } else {
+        balBlock = `<div class="ac-bal-ask" data-acct="${esc(a.id)}">
+          <div class="ac-fig-l">What's in this account today?</div>
+          <div class="ac-bal-row">
+            <input class="ac-bal-input" id="bal-${esc(a.id)}" type="text" inputmode="decimal" placeholder="£0.00" />
+            <button class="ac-bal-save" data-acct="${esc(a.id)}" type="button">Save</button>
+          </div>
+          <div class="ac-sub">A statement only shows what moved. One number and the app can tell you what you've got — and check it read the whole statement.</div>
+        </div>`;
+      }
+
       // Own-money movement. Both directions, stated separately: taking the
       // larger of the two put a number on the card that disagreed with the
       // headline's (which counts the out-door only) under identical wording.
@@ -876,16 +921,54 @@
           <div><div class="ac-fig-l">Spent</div><div class="ac-fig-v">£${fmt(a.money_out)}</div></div>
           <div><div class="ac-fig-l">Received</div><div class="ac-fig-v">£${fmt(a.money_in)}</div></div>
         </div>
+        ${balBlock}
         ${selfLine ? `<div class="ac-sub" style="margin-top:8px">${selfLine}</div>` : ''}
         <div class="ac-sub" style="margin-top:${selfLine ? '4px' : '8px'}">${esc(sub)}</div>
       </div>`;
     }).join('');
+
+    // Balance entry. One number per account, typed once.
+    strip.querySelectorAll('.ac-bal-save').forEach(btn => {
+      btn.onclick = () => saveAccountBalance(btn.dataset.acct);
+    });
+    strip.querySelectorAll('.ac-bal-input').forEach(inp => {
+      inp.onkeydown = e => { if (e.key === 'Enter') saveAccountBalance(inp.id.replace(/^bal-/, '')); };
+    });
+    strip.querySelectorAll('.ac-bal-edit').forEach(btn => {
+      btn.onclick = () => {
+        const a = accounts.find(x => x.id === btn.dataset.acct);
+        if (a) { a.balance = null; renderAccounts(); }
+      };
+    });
 
     // Say plainly how much of the picture these cards do NOT cover.
     const un = graphData && graphData.summary ? graphData.summary.unattributed_count : 0;
     note.textContent = un
       ? un + (un === 1 ? ' transaction isn’t' : ' transactions aren’t') + ' linked to an account yet — upload that bank’s statement once and they’ll sort themselves.'
       : '';
+  }
+
+  // Save the balance the user can see in their banking app. Accepts "1240",
+  // "£1,240.55", "1240.55" — people type money the way people type money.
+  async function saveAccountBalance(id) {
+    const inp = document.getElementById('bal-' + id);
+    if (!inp) return;
+    const raw = String(inp.value || '').replace(/[£,\s]/g, '');
+    const n = parseFloat(raw);
+    if (!Number.isFinite(n)) { inp.value = ''; inp.placeholder = 'Just the number, e.g. 1240.55'; inp.focus(); return; }
+    const r = await apiFetch('/api/finance/accounts/' + encodeURIComponent(id) + '/balance', {
+      method: 'POST', body: { balance: n },
+    });
+    if (!r.ok) { inp.placeholder = "Couldn't save — try again"; return; }
+    const updated = await r.json();
+    const i = accounts.findIndex(a => a.id === id);
+    if (i !== -1) {
+      // Recompute locally so the implied-opening line is right immediately,
+      // rather than showing a stale figure until the next page load.
+      accounts[i] = { ...accounts[i], balance: updated.balance, balanceAt: updated.balanceAt,
+        implied_opening: Math.round((updated.balance - (accounts[i].net_movement || 0)) * 100) / 100 };
+    }
+    renderAccounts();
   }
 
   // ── Summary bar ───────────────────────────────────────────────────────────

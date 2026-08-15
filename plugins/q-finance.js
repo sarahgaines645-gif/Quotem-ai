@@ -678,6 +678,26 @@ function upsertAccount(email, acct, source) {
     return next;
 }
 
+// Record the balance the user can see in their banking app. The statements
+// themselves carry no balance (Monzo's CSV export has 18 columns and not one
+// of them is a balance), so this single number is what turns a list of
+// movements into "what have I actually got" — and it doubles as the only
+// real audit of whether an import was complete.
+function setAccountBalance(email, id, balance, asAt) {
+    const all = getAccounts(email);
+    const idx = all.findIndex(a => a.id === id);
+    if (idx === -1) return null;
+    const n = Number(balance);
+    if (!Number.isFinite(n) || Math.abs(n) > MAX_TXN_AMOUNT) return null;
+    all[idx] = {
+        ...all[idx],
+        balance:   Math.round(n * 100) / 100,
+        balanceAt: asAt || new Date().toISOString().slice(0, 10),
+    };
+    saveAccounts(email, all);
+    return all[idx];
+}
+
 // Accounts with their live figures, for the page's account cards. Computed
 // from the rows themselves — nothing is stored that could drift out of step
 // with the transactions.
@@ -701,8 +721,20 @@ function getAccountsWithTotals(email) {
         const dates = rows.map(t => t.date).filter(Boolean).sort();
         const real  = rows.filter(t => !isSelfMove(t));
         const moves = rows.filter(isSelfMove);
+        // Net movement is EVERY row, self-moves included — a pot transfer
+        // doesn't count as spending but it absolutely moves the balance.
+        // This is the one figure that must not exclude anything.
+        const netMovement = Math.round(rows.reduce((s, t) => s + t.amount, 0) * 100) / 100;
+        // Given a balance the user has told us, what must the balance have
+        // been at the start of the imported period? If that number is wrong
+        // to her, transactions are missing — this is the completeness test.
+        const impliedOpening = (a.balance != null)
+            ? Math.round((a.balance - netMovement) * 100) / 100
+            : null;
         return {
             ...a,
+            net_movement:    netMovement,
+            implied_opening: impliedOpening,
             transaction_count: rows.length,
             money_out: Math.round(real.filter(t => t.amount < 0).reduce((s, t) => s + Math.abs(t.amount), 0) * 100) / 100,
             money_in:  Math.round(real.filter(t => t.amount > 0).reduce((s, t) => s + t.amount, 0) * 100) / 100,
@@ -1915,6 +1947,7 @@ module.exports = {
     getAccounts,
     getAccountsWithTotals,
     upsertAccount,
+    setAccountBalance,
 
     // Subscriptions + income + rhythm
     detectSubscriptions,
