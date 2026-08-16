@@ -64,7 +64,7 @@
     .proj-btn .proj-count { color: var(--text-muted); font-weight: 500; }
     .proj-menu {
       position: absolute; top: calc(100% + 8px); left: 0; z-index: 60; width: 340px; max-width: calc(100vw - 32px);
-      background: var(--bg); border-radius: 14px; box-shadow: var(--float-shadow); padding: 8px;
+      background: var(--bg); border-radius: 14px; box-shadow: 8px 8px 22px #ababab, -6px -6px 16px #ffffff; padding: 8px;
       display: none;
     }
     .proj-menu.open { display: block; }
@@ -380,7 +380,7 @@
     .q-tools .q-tool.suggested::before { content: '● '; color: var(--accent); }
     /* Tool help + word meanings are POPUP CARDS (never board text): a raised
        card anchored beside the coach card / the word button, opaque, no scrim. */
-    .q-popcard { position: fixed; z-index: 260; width: 270px; max-width: calc(100vw - 16px); max-height: 60vh; overflow-y: auto; background: var(--bg); border-radius: 14px; box-shadow: var(--float-shadow); padding: 10px 12px 10px; font-family: 'Space Grotesk', sans-serif; font-size: 11px; line-height: 1.45; color: var(--text); overflow-wrap: anywhere; scrollbar-width: thin; }
+    .q-popcard { position: fixed; z-index: 260; width: 270px; max-width: calc(100vw - 16px); max-height: 60vh; overflow-y: auto; background: var(--bg); border-radius: 14px; box-shadow: 8px 8px 22px #ababab, -6px -6px 16px #ffffff; padding: 10px 12px 10px; font-family: 'Space Grotesk', sans-serif; font-size: 11px; line-height: 1.45; color: var(--text); overflow-wrap: anywhere; scrollbar-width: thin; }
     .q-popcard.hidden { display: none; }
     .q-popcard .pc-close { position: absolute; top: 6px; right: 8px; border: none; background: none; color: var(--text-faint); cursor: pointer; font-size: 15px; line-height: 1; padding: 2px 4px; }
     .q-popcard .pc-close:hover { color: var(--text); }
@@ -643,7 +643,7 @@
     .word-popup {
       position: fixed; z-index: 200;
       background: var(--bg); border-radius: 12px;
-      box-shadow: var(--float-shadow);
+      box-shadow: 8px 8px 22px #ababab, -6px -6px 16px #ffffff;
       padding: 8px 10px;
       display: none; flex-direction: column; gap: 4px;
       min-width: 130px;
@@ -1295,7 +1295,7 @@
       position: fixed; z-index: 9999; pointer-events: none;
       max-width: 300px; padding: 8px 12px; border-radius: 12px;
       background: var(--bg); color: var(--text);
-      box-shadow: var(--float-shadow);
+      box-shadow: 8px 8px 22px #ababab, -6px -6px 16px #ffffff;
       font-family: 'Space Grotesk', system-ui, sans-serif; font-size: 12px; line-height: 1.45; font-weight: 500;
       overflow-wrap: anywhere;
       opacity: 0; transform: translateY(4px); transition: opacity 0.12s ease, transform 0.12s ease;
