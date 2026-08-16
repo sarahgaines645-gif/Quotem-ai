@@ -2535,13 +2535,20 @@
       // the ask. A supply line is its own block above the ask.
       const role = frame && idx === 0 ? plan.role : '';
       const common = { where: whereText(whereInfo(cid)), move: moved || '', ack: ack || '', role, inputVisible: true, showNudge: true };
+      // WHERE IT GOES, SAID EVERY TIME. Sarah, 16 Aug: "he's asking questions
+      // like for lists and we answer and he doesn't put it on the paper. he
+      // needs to specify where to write it." A list is thinking — it goes on
+      // the BOARD (never mangled into the essay: her complaint five hours
+      // earlier). The sentence about it goes on the PAPER. So every card says
+      // which, in the hint, in plain words — and after a list is done, Q asks
+      // for the sentence and puts THAT on the paper.
       if (step.kind === 'list') {
         const n = st.items.length;
-        setCoach({ ...common, msg: step.prompt, hint: 'Enter after each one · Done when finished.' + (n ? ' ' + n + ' so far.' : ''), actions: stepActions(cid, step, st) });
+        setCoach({ ...common, msg: step.prompt, hint: 'This goes on the board, not the paper — type one here, Enter, next one. Done when finished.' + (n ? ' ' + n + ' so far.' : ''), actions: stepActions(cid, step, st) });
         coachInput.placeholder = step.itemHint ? step.itemHint : 'One item, then Enter…';
       } else if (step.kind === 'numbers') {
         const cell = nextNumbersCell(step, st);
-        setCoach({ ...common, msg: step.prompt, hint: cell ? cellAsk(cell) : 'All filled — press Done.', actions: stepActions(cid, step, st) });
+        setCoach({ ...common, msg: step.prompt, hint: cell ? 'On the board, not the paper. ' + cellAsk(cell) : 'All filled — press Done.', actions: stepActions(cid, step, st) });
         coachInput.placeholder = cell ? cellAsk(cell) : 'Done?';
       } else if (step.kind === 'teach') {
         // TEACH-THEN-APPLY: the lesson lives on the card now (and moves to the
@@ -2553,13 +2560,15 @@
         if (!st.tags) runTagStep(cid, step);
       } else if (step.kind === 'proscons') {
         const cell = nextPcCell(cid, step, st);
-        setCoach({ ...common, msg: step.prompt, hint: cell ? pcAsk(cell) : 'All done — press Done.', actions: stepActions(cid, step, st) });
+        setCoach({ ...common, msg: step.prompt, hint: cell ? 'On the board. ' + pcAsk(cell) : 'All done — press Done.', actions: stepActions(cid, step, st) });
         coachInput.placeholder = cell ? pcAsk(cell) : 'Done?';
       } else {
         // argue / switch / recommend / ask — the answer is a paragraph. The
         // supply (Q's one fact) is its own block above the ask.
         const supply = step.supply && !st.answers.length && !st.followUp ? step.supply : '';
-        setCoach({ ...common, supply, msg: st.followUp || st.applyAsk || step.prompt, hint: step.kind === 'argue' || step.kind === 'switch' ? 'A reason and an example, then Enter.' : step.kind === 'recommend' ? 'Which wins and why, then Enter.' : 'Your own words, then Enter.', actions: stepActions(cid, step, st) });
+        const w = whereInfo(cid);
+        const onPaper = 'This goes ON THE PAPER' + (w ? ' under Question ' + w.n : '') + ' — say it here, Enter, and I put it there in your words.';
+        setCoach({ ...common, supply, msg: st.followUp || st.applyAsk || step.prompt, hint: (step.kind === 'argue' || step.kind === 'switch' ? 'A reason and an example. ' : step.kind === 'recommend' ? 'Which wins and why. ' : '') + onPaper, actions: stepActions(cid, step, st) });
         coachInput.placeholder = step.kind === 'argue' || step.kind === 'switch' ? 'Argue it here…' : 'Your answer…';
       }
       persistSteps();

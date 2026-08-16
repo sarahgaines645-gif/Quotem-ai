@@ -1416,6 +1416,39 @@ function leadingAsk(prompt) {
     return p;
 }
 
+// A LIST IS NOT AN ANSWER. Sarah, 16 Aug: "he's asking questions like for
+// lists and we answer and he doesn't put it on the paper." Right — a list is
+// thinking, it lives on the board; the essay needs a SENTENCE about it. So
+// every list (or numbers) step must be followed, before the part ends, by a
+// step whose answer goes on the paper. If the model's plan goes list → tag →
+// (nothing) the student is left holding a list and no sentence. This puts the
+// sentence-ask in, right after the list and its sorter, pointed at the same
+// bricks, so it always exists.
+const PAPER_KINDS = ['ask', 'argue', 'switch', 'recommend'];
+function listNeedsASentence(steps) {
+    for (let i = 0; i < steps.length; i++) {
+        const s = steps[i];
+        if (s.kind !== 'list' && s.kind !== 'numbers') continue;
+        // Skip past the helper steps that work ON this list.
+        let j = i + 1;
+        while (j < steps.length && (steps[j].kind === 'tag' || steps[j].kind === 'proscons' || steps[j].kind === 'teach') && (steps[j].itemsFrom === s.id || steps[j].kind === 'teach')) j++;
+        if (j < steps.length && PAPER_KINDS.includes(steps[j].kind)) continue;   // already followed by a sentence step
+        const what = s.kind === 'list' ? 'your list' : 'those numbers';
+        const insert = {
+            id: s.id + '_say', kind: 'ask',
+            prompt: 'Now, looking at ' + what + ' on the board — write me one or two sentences saying what it shows. Your words; I put them on the paper.',
+            targetBrickIds: (s.targetBrickIds || []).slice(),
+            terms: (s.terms || []).slice(),
+            itemHint: null, rows: [], tags: [], itemsFrom: null, side: null,
+            hint: 'What does ' + what + ' tell you? Say it as if to a friend.',
+            supply: null, thenAsk: null, lesson: null, example: null, term: null,
+        };
+        steps.splice(j, 0, insert);
+        i = j;   // continue after the inserted step
+    }
+    return steps;
+}
+
 const MAX_PLAN_STEPS = 6;
 const CLOSING_KINDS = ['argue', 'switch', 'recommend'];
 function trimToMaxSteps(steps) {
@@ -1485,6 +1518,7 @@ function normalisePlan(r, criterionId, bricks) {
     factsFirst(steps);
     noTheoryBeforeFacts(steps);
     for (const s of steps) s.prompt = leadingAsk(s.prompt);
+    listNeedsASentence(steps);
     trimToMaxSteps(steps);
     // A numbers step with no rows becomes a plain ask; a tag/proscons step
     // must point at an earlier list-ish step (else the nearest one before it).
