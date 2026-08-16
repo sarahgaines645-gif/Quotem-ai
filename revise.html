@@ -4038,17 +4038,21 @@
       game.init($('tower-canvas'));
       pet.mount();
       // ── PET LAB — /revise?petlab=1 — see the pet without doing the quiz.
-      // Nothing here is saved: saveProgress is a no-op for the visit.
+      // The real book is never touched: the lab pet lives in localStorage
+      // (so it — and its park code — survive a reload). ?petlab=fresh resets it.
       if (qs.get('petlab')) {
-        saveProgress = () => {};
+        const LAB_KEY = 'q-petlab';
+        let labPet = null;
+        try { if (qs.get('petlab') !== 'fresh') labPet = JSON.parse(localStorage.getItem(LAB_KEY) || 'null'); } catch (e) { labPet = null; }
+        pet.hydrate(labPet && labPet.kind ? labPet : { kind: 'puppy', correct: 20, treats: 5, happy: 90, fed: 100, hungrySince: null, wearing: [], name: 'Lab', hatchedAt: null, lastSeen: Date.now(), inBed: false, unlockedSeen: [], park: null });
+        saveProgress = () => { try { localStorage.setItem(LAB_KEY, JSON.stringify(state.progress.pet)); } catch (e) { /* private mode */ } };
         window.__pet = pet;   // lab only: poke it from the console
-        state.progress.pet = { kind: 'puppy', correct: 20, treats: 5, happy: 90, fed: 100, hungrySince: null, wearing: [], name: 'Lab', hatchedAt: null, lastSeen: Date.now(), inBed: false, unlockedSeen: [], park: null };
         state.stage = 'build';
         const card = $('pet-card');
         card.classList.remove('hidden');
         const strip = document.createElement('div');
         strip.style.cssText = 'display:flex;flex-wrap:wrap;gap:4px;justify-content:center;margin-top:8px;padding-top:8px;border-top:1px solid rgba(0,0,0,0.06)';
-        const b = (label, fn) => { const x = document.createElement('button'); x.type = 'button'; x.className = 'pet-act'; x.style.fontSize = '10px'; x.textContent = label; x.addEventListener('click', () => { fn(); pet.render(); }); strip.appendChild(x); };
+        const b = (label, fn) => { const x = document.createElement('button'); x.type = 'button'; x.className = 'pet-act'; x.style.fontSize = '10px'; x.textContent = label; x.addEventListener('click', () => { fn(); saveProgress(); pet.render(); }); strip.appendChild(x); };
         const P = pet._debug.P;
         const setStage = (n) => { P().correct = n; P().inBed = false; pet._debug.beh.x = null; pet._debug.preloadSheets(); };
         b('🐶', () => { P().kind = 'puppy'; pet._debug.beh.x = null; pet._debug.preloadSheets(); });
@@ -4064,7 +4068,9 @@
         b('play', () => pet._debug.play('play', 'ball', 2600));
         b('sleep', () => { P().correct = Math.max(P().correct, 100); P().inBed = !P().inBed; });
         b('all items', () => { P().correct = Math.max(P().correct, 100); P().wearing = ['bow', 'hat', 'scarf']; });
+        b('✓ right answer', () => pet.answer(true)); b('+5 treats', () => { P().treats += 5; saveProgress(); });
         b('hungry', () => pet._debug.setFed(10)); b('poorly', () => pet._debug.setFed(0)); b('fed', () => pet._debug.setFed(100));
+        b('reset lab', () => { localStorage.removeItem('q-petlab'); location.href = '/revise?petlab=fresh'; });
         b('+🐶', () => pet._debug.addFriend('puppy', 'Rolo')); b('+🐹', () => pet._debug.addFriend('hamster', 'Biscuit')); b('+🦫', () => pet._debug.addFriend('capybara', 'Pip')); b('no friends', () => pet._debug.clearFriends());
         const info = document.createElement('div'); info.style.cssText = 'font-size:9px;color:var(--text-faint);width:100%;text-align:center;margin-top:4px;white-space:pre-wrap';
         setInterval(() => { try { info.textContent = ['run_side', 'run_front', 'lick', 'idle', 'jump', 'sleep'].map((a) => a + ' ' + String(pet._debug.frames(a)).split(' ')[0]).join(' · '); } catch (e) {} }, 1500);
