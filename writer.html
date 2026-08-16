@@ -24,6 +24,10 @@
       --neu-raised-sm: 6px 6px 16px #ababab, -5px -5px 12px #ffffff;
       --neu-inset-sm:  inset 3px 3px 8px #ababab, inset -2px -2px 6px #ffffff;
       --neu-raised-xs: 3px 3px 8px #ababab, -2px -2px 6px #ffffff;
+      /* Anything that FLOATS (panels, pop-ups, tooltips, menus) lifts with a
+         hard-edged shadow — offset, zero blur — never a haze around it
+         (Sarah, 17 Aug: "make sure anything that floats doesn't have the blur"). */
+      --float-shadow: 6px 6px 0 #d2d2d2, -3px -3px 0 #ffffff, 0 0 0 1px rgba(0,0,0,0.05);
     }
     * { box-sizing: border-box; margin: 0; padding: 0; }
     html, body {
@@ -59,7 +63,7 @@
     .proj-btn .proj-count { color: var(--text-muted); font-weight: 500; }
     .proj-menu {
       position: absolute; top: calc(100% + 8px); left: 0; z-index: 60; width: 340px; max-width: calc(100vw - 32px);
-      background: var(--bg); border-radius: 14px; box-shadow: var(--neu-raised-sm); padding: 8px;
+      background: var(--bg); border-radius: 14px; box-shadow: var(--float-shadow); padding: 8px;
       display: none;
     }
     .proj-menu.open { display: block; }
@@ -297,7 +301,7 @@
     .qpanel {
       position: fixed; z-index: 100;
       background: var(--bg); border-radius: 18px;
-      box-shadow: 10px 10px 28px #ababab, -8px -8px 20px #ffffff;
+      box-shadow: var(--float-shadow);
       display: flex; flex-direction: column; overflow: hidden;
       min-width: 190px;
       max-width: calc(100vw - var(--pleft, 8px) - 8px);
@@ -375,7 +379,7 @@
     .q-tools .q-tool.suggested::before { content: '● '; color: var(--accent); }
     /* Tool help + word meanings are POPUP CARDS (never board text): a raised
        card anchored beside the coach card / the word button, opaque, no scrim. */
-    .q-popcard { position: fixed; z-index: 260; width: 270px; max-width: calc(100vw - 16px); max-height: 60vh; overflow-y: auto; background: var(--bg); border-radius: 14px; box-shadow: 8px 8px 22px #ababab, -6px -6px 16px #ffffff; padding: 10px 12px 10px; font-family: 'Space Grotesk', sans-serif; font-size: 11px; line-height: 1.45; color: var(--text); overflow-wrap: anywhere; scrollbar-width: thin; }
+    .q-popcard { position: fixed; z-index: 260; width: 270px; max-width: calc(100vw - 16px); max-height: 60vh; overflow-y: auto; background: var(--bg); border-radius: 14px; box-shadow: var(--float-shadow); padding: 10px 12px 10px; font-family: 'Space Grotesk', sans-serif; font-size: 11px; line-height: 1.45; color: var(--text); overflow-wrap: anywhere; scrollbar-width: thin; }
     .q-popcard.hidden { display: none; }
     .q-popcard .pc-close { position: absolute; top: 6px; right: 8px; border: none; background: none; color: var(--text-faint); cursor: pointer; font-size: 15px; line-height: 1; padding: 2px 4px; }
     .q-popcard .pc-close:hover { color: var(--text); }
@@ -582,7 +586,7 @@
     .ref-para-popup {
       position: fixed; z-index: 200;
       background: var(--bg); border-radius: 14px;
-      box-shadow: 10px 10px 28px #ababab, -8px -8px 20px #ffffff;
+      box-shadow: var(--float-shadow);
       padding: 14px 16px; width: 280px; max-height: 80vh; overflow-y: auto;
       scrollbar-width: none;
     }
@@ -638,7 +642,7 @@
     .word-popup {
       position: fixed; z-index: 200;
       background: var(--bg); border-radius: 12px;
-      box-shadow: 8px 8px 22px #ababab, -6px -6px 16px #ffffff;
+      box-shadow: var(--float-shadow);
       padding: 8px 10px;
       display: none; flex-direction: column; gap: 4px;
       min-width: 130px;
@@ -1260,7 +1264,7 @@
       position: fixed; z-index: 9999; pointer-events: none;
       max-width: 300px; padding: 8px 12px; border-radius: 12px;
       background: var(--bg); color: var(--text);
-      box-shadow: var(--neu-raised-sm), 0 0 0 1px rgba(0,0,0,0.04);
+      box-shadow: var(--float-shadow);
       font-family: 'Space Grotesk', system-ui, sans-serif; font-size: 12px; line-height: 1.45; font-weight: 500;
       overflow-wrap: anywhere;
       opacity: 0; transform: translateY(4px); transition: opacity 0.12s ease, transform 0.12s ease;
@@ -3281,7 +3285,7 @@
     function startStepFixWalk(key, fromIndex, then) {
       const mk = state.stepMarks && state.stepMarks[key]; if (!mk || !mk.critique.length) return;
       state.editItems = mk.critique.map(it => ({ ...it })); state.editIndex = Math.max(0, Math.min(fromIndex || 0, mk.critique.length - 1)); state.editing = true; state.editDone = false; state.markPassChanged = 0;
-      state.editStepKey = key;
+      state.editStepKey = key; state.editWalkKind = 'step'; state.editWalkKey = key;
       state.partFixThen = then || (() => { const cs = state.currentStep; if (cs) { const plan = planFor(cs.criterionId); const i = plan ? plan.steps.findIndex(x => x.id === cs.stepId) : -1; if (i >= 0) presentStep(cs.criterionId, i, { restore: true }); } });
       state.partFixLabel = 'Next →';
       const bandWord = { top: 'top band', mid: 'middle band', low: 'lower band', missing: 'not there yet' }[mk.band] || mk.band;
@@ -3345,6 +3349,7 @@
         return;
       }
       state.editItems = items; state.editIndex = 0; state.editing = true; state.editDone = false; state.markPassChanged = 0;
+      state.editWalkKind = 'part'; state.editWalkKey = cid; state.editStepKey = null;
       state.partFixThen = then || null;
       showEditItem({ note: bandWord + ' — ' + (m.missingForTop || 'fix these, then on to the next question') });
     }
@@ -3480,13 +3485,25 @@
           if (el.classList.contains('q-part-head') || isRefsHeading(el)) break;
           if (isBlock(el) && el.textContent.trim()) push(el);
         }
-      } else if (!heads.length && !tagged.length) {
-        // No structure on the page at all: a single-question brief, or a
-        // student who wrote freely. Then the page IS the part — but only when
-        // there is only one part to be, so four questions never all claim
-        // the same text.
+      } else if (heads.length) {
+        // Headings exist but not for this part: the text BEFORE the first
+        // heading belongs to the earliest part (brief order) that has no
+        // heading — the one she wrote freely before Q started numbering.
         const cs = (state.brief && state.brief.criteria) || [];
-        if (cs.length === 1) {
+        const noHead = cs.filter(c => !heads.some(h => h.getAttribute('data-part') === c.id));
+        if (noHead[0] && noHead[0].id === cid) {
+          for (let el = docBody.firstElementChild; el && el !== heads[0]; el = el.nextElementSibling) {
+            if (isRefsHeading(el)) break;
+            if (isBlock(el) && el.textContent.trim()) push(el);
+          }
+        }
+      } else {
+        // No headings at all: a single-question brief, or a student who wrote
+        // freely (Sarah's sister, 17 Aug — half a page and "0 / 1000 words").
+        // Then the page IS the part she is ON — the current one — so the word
+        // budget and the mark see what she wrote; the other parts claim nothing.
+        const cs = (state.brief && state.brief.criteria) || [];
+        if (cs.length === 1 || cid === state.currentCriterionId) {
           let stop = false;
           Array.from(docBody.children).forEach(el => { if (stop) return; if (isRefsHeading(el)) { stop = true; return; } if (isBlock(el) && el.textContent.trim()) push(el); });
         }
@@ -5288,6 +5305,9 @@
       if (!m || !m.overall) return '';
       return (m.overall.label ? m.overall.label + ' — ' : '') + (BAND_WORD[m.overall.band] || m.overall.band) + ' · ' + (m.perCriterion || []).map(p => labelFor(p.criterionId) + ': ' + (BAND_WORD[p.band] || p.band)).join(' · ');
     }
+    function walkItemsFromMark(m) {
+      return ((m && m.critique) || []).filter(it => it && it.sentence && (it.missing || it.fix)).map(it => ({ sentence: it.sentence, why: it.missing || '', fix: it.fix || '', targetBrickId: it.targetBrickId || null, suggestedTools: it.suggestedTools || [], criterionId: it.criterionId || '', needs: Array.isArray(it.needs) ? it.needs : [] }));
+    }
     function bandListHtml(m) {
       if (!m || !m.overall) return '';
       const rows = (m.perCriterion || []).map(p => `<div class="q-band-row"><span class="bd ${escHtml(p.band)}"></span><span class="q-band-l">${escHtml(labelFor(p.criterionId))}</span><span class="q-band-w ${escHtml(p.band)}">${escHtml(BAND_WORD[p.band] || p.band)}</span></div>`).join('');
@@ -5325,8 +5345,9 @@
         applyExpectations(m);
         state.markStartPct = state.match ? state.match.overall : null;
         appendBoardItem({ type: 'note', label: 'marked', text: 'Marked: ' + bandLine(m) + '. ' + (m.overall.summary || ''), quiet: true });
-        const items = (m.critique || []).filter(it => it && it.sentence && (it.missing || it.fix)).map(it => ({ sentence: it.sentence, why: it.missing || '', fix: it.fix || '', targetBrickId: it.targetBrickId || null, suggestedTools: it.suggestedTools || [], criterionId: it.criterionId || '', needs: Array.isArray(it.needs) ? it.needs : [] }));
+        const items = walkItemsFromMark(m);
         state.editItems = items; state.editIndex = 0; state.editing = true; state.editDone = false; state.markPassChanged = 0;
+        state.editWalkKind = 'mark'; state.editStepKey = null;
         persist({ lastMark: m });
         if (!items.length) { endFixPass({ nothing: true }); return; }
         showEditItem();
@@ -5592,6 +5613,8 @@
     }
     function endEditStage() {
       clearEditHighlight();
+      state.editWalkKind = null; state.editWalkKey = null;
+      persist({ editPos: null });
       if (state.editStepKey && state.stepMarks && state.stepMarks[state.editStepKey]) {
         state.stepMarks[state.editStepKey].critique.forEach(it => { it.done = true; });
         state.editStepKey = null; renderInlineDots();
@@ -5621,6 +5644,9 @@
       const it = items[i];
       const onPage = highlightSentence(it.sentence);
       if (!onPage) { state.editIndex++; showEditItem({ note }); return; }   // rewritten or gone — next
+      // Where we are in the walk, saved — a refresh comes back to THIS
+      // sentence, not to the plan's first step (Sarah, 17 Aug).
+      persist({ editPos: { kind: state.editWalkKind || 'mark', key: state.editWalkKey || state.editStepKey || null, index: i, at: Date.now() } });
       const where = editWhere(it);
       renderBoard();   // the board's WHERE line follows the sentence's part
       const suggested = (it.suggestedTools || []).filter(t => EDIT_TOOL_LABELS[t]);
@@ -6470,6 +6496,26 @@
         boardFromSteps();
         renderBoard();
         renderCoverage();
+        // A Mark & fix walk in progress comes back first — that is where she
+        // was, whatever step the plan had saved underneath it.
+        const ep = t.editPos && typeof t.editPos === 'object' ? t.editPos : null;
+        if (ep && Number.isFinite(ep.index)) {
+          let items = null;
+          if (ep.kind === 'mark' && t.lastMark) items = walkItemsFromMark(t.lastMark);
+          else if (ep.kind === 'part' && ep.key && t.partMarks && t.partMarks[ep.key]) items = walkItemsFromMark(t.partMarks[ep.key]).map(it => ({ ...it, criterionId: it.criterionId || ep.key }));
+          else if (ep.kind === 'step' && ep.key && state.stepMarks && state.stepMarks[ep.key]) items = (state.stepMarks[ep.key].critique || []).filter(it => it && !it.done).map(it => ({ ...it }));
+          if (items && items.length) {
+            state.lastMark = t.lastMark || state.lastMark || null;
+            state.editItems = items; state.editIndex = Math.max(0, Math.min(ep.index, items.length - 1)); state.editing = true; state.editDone = false; state.markPassChanged = 0;
+            state.editWalkKind = ep.kind; state.editWalkKey = ep.key || null; state.editStepKey = ep.kind === 'step' ? ep.key : null;
+            if (ep.kind === 'part' && ep.key) state.partFixThen = () => { const cs = (state.brief && state.brief.criteria) || []; const i2 = cs.findIndex(c => c.id === ep.key); const nx = cs[i2 + 1]; if (nx) startPart(nx.id, { moveFrom: ep.key }); else setCoach({ msg: 'That question is tidied.', inputVisible: true, step: false }); };
+            state.currentCriterionId = (items[state.editIndex] && items[state.editIndex].criterionId) || state.currentCriterionId;
+            coachCard.classList.add('wide');
+            showEditItem({ note: 'Welcome back — we were on this sentence.' });
+            state.restored = true;
+            return;
+          }
+        }
         if (state.currentStep) {
           // Mid-step: land on the same step, scaffold as it was.
           const cs = state.currentStep; state.currentCriterionId = cs.criterionId; state.currentSection = cs.criterionId;

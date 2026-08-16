@@ -2383,6 +2383,9 @@ const TUTOR_KEYS = [
     'references', 'inlineDots',
     // marks on ONE POINT of a question (16 Aug): keyed criterionId:stepId
     'stepMarks',
+    // where she is in a Mark & fix walk (17 Aug: "when I refresh it goes back
+    // to Q1") — { kind: 'mark' | 'part' | 'step', key, index, at }
+    'editPos',
     // the per-part marks the page keeps (16 Aug) — dropped on refresh before.
     'partMarks',
 ];

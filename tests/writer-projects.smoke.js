@@ -102,6 +102,11 @@ async function main() {
   x = await j('GET', '/writer/tutor', undefined, { 'X-Writer-Project': 'main' });
   ok(x.d.tutor && x.d.tutor.docTitle === 'First essay', 'main untouched by reset in other project');
 
+  // 7b. the walk position round-trips (17 Aug: refresh went back to Q1)
+  x = await j('POST', '/writer/tutor', { editPos: { kind: 'mark', key: null, index: 3, at: 1 } }, { 'X-Writer-Project': pid2 });
+  x = await j('GET', '/writer/tutor', undefined, { 'X-Writer-Project': pid2 });
+  ok(x.d.tutor && x.d.tutor.editPos && x.d.tutor.editPos.index === 3, 'editPos saved and read back');
+
   // 8. new routes with {} → 4xx not 500
   for (const u of ['/writer/projects/open', '/writer/projects/rename', '/writer/projects/remove']) { x = await j('POST', u, {}); ok(x.status >= 400 && x.status < 500, u + ' {} → ' + x.status); }
 
