@@ -512,6 +512,18 @@
       text-align: center; margin-top: 6px;
     }
     .explain-popup .exp-close:hover { color: var(--text); }
+    /* The × that is ALWAYS visible — pinned to the corner, not at the end of
+       a scrolling explanation with the scrollbar hidden. Sarah, 16 Aug: "it
+       needs a close button as it keeps popping up." */
+    .explain-popup .exp-x {
+      position: sticky; top: -6px; float: right; margin: -6px -8px 0 8px;
+      width: 26px; height: 26px; border-radius: 50%; border: none; cursor: pointer;
+      background: var(--bg); box-shadow: var(--neu-raised-xs);
+      font-family: 'Space Grotesk', sans-serif; font-size: 14px; line-height: 1; color: var(--text-muted);
+      display: inline-flex; align-items: center; justify-content: center; z-index: 1;
+    }
+    .explain-popup .exp-x:hover { color: var(--text); }
+    .explain-popup .exp-x:active { box-shadow: var(--neu-inset-xs, inset 2px 2px 5px #ababab, inset -1px -1px 4px #ffffff); }
 
     /* Compact game strip below 980px (side card would overlap the paper) */
     @media (max-width: 980px) {
@@ -1057,6 +1069,7 @@
 
   <!-- Explain popup -->
   <div class="explain-popup hidden" id="explain-popup">
+    <button class="exp-x" id="explain-x" type="button" title="Close" aria-label="Close">×</button>
     <div class="exp-text" id="explain-text"></div>
     <div class="exp-links" id="explain-links"></div>
     <button class="exp-close" id="explain-close">close</button>
@@ -1895,6 +1908,7 @@
     }
 
     function presentQuestion(q) {
+      closeExplain();   // a new question — the last explanation goes with the old one
       state.quizQ = q;
       state.quizQID = qidOf(q);
       state.quizResolved = false;
@@ -2734,12 +2748,26 @@
     const explainPopup = $('explain-popup');
     const explainText  = $('explain-text');
     const explainLinks = $('explain-links');
-    $('explain-close').addEventListener('click', () => {
+    function closeExplain() {
+      if (explainPopup.classList.contains('hidden')) return;
       explainPopup.classList.add('hidden');
       game.wake(); // popup closed — the tube may start dripping again
+    }
+    $('explain-close').addEventListener('click', closeExplain);
+    $('explain-x').addEventListener('click', closeExplain);
+    // Escape closes it; so does clicking anywhere outside it (not the button
+    // that opened it — that one toggles).
+    document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeExplain(); });
+    document.addEventListener('pointerdown', (e) => {
+      if (explainPopup.classList.contains('hidden')) return;
+      if (explainPopup.contains(e.target)) return;
+      if (e.target.closest && e.target.closest('#btn-qz-explain, #btn-explain')) return;
+      closeExplain();
     });
 
     async function openExplain(anchorBtn, concept) {
+      if (!explainPopup.classList.contains('hidden') && explainPopup.dataset.concept === concept) { closeExplain(); return; }
+      explainPopup.dataset.concept = concept;
       const btnRect = anchorBtn.getBoundingClientRect();
       explainPopup.style.left = Math.max(12, Math.min(btnRect.left, window.innerWidth - 290)) + 'px';
       explainPopup.style.top = Math.min(btnRect.bottom + 8, window.innerHeight - 220) + 'px';
