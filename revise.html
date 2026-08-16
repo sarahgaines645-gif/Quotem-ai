@@ -2624,7 +2624,9 @@
         raf = requestAnimationFrame(draw);
         renderCard();
       }
-      return { mount, answer, render: renderCard, _debug: { setAct: (a, ms) => setAct(a, performance.now(), ms), beh, frames: (act) => { const r = sheet(sheetName(P(), stageOf(P()), act)); return r.failed ? 'failed' : (r.frames ? r.frames.length + ' [' + r.frames.map((f) => f.w + 'x' + f.h).join(' ') + ']' : 'loading'); } } };
+      return { mount, answer, render: renderCard,
+        _debug: { setAct: (a, ms) => setAct(a, performance.now(), ms), beh, play: (kind, item, ms) => play(kind, item, ms), P, preloadSheets: () => preloadSheets(P()),
+          frames: (act) => { const r = sheet(sheetName(P(), stageOf(P()), act)); return r.failed ? 'failed' : (r.frames ? r.frames.length + ' [' + r.frames.map((f) => f.w + 'x' + f.h).join(' ') + ']' : 'loading'); } } };
     })();
 
     const game = (() => {
@@ -3700,6 +3702,38 @@
       renderShelf();
       game.init($('tower-canvas'));
       pet.mount();
+      // ── PET LAB — /revise?petlab=1 — see the pet without doing the quiz.
+      // Nothing here is saved: saveProgress is a no-op for the visit.
+      if (qs.get('petlab')) {
+        saveProgress = () => {};
+        state.progress.pet = { kind: 'puppy', correct: 20, treats: 5, happy: 90, wearing: [], name: 'Lab', hatchedAt: null, lastSeen: Date.now(), inBed: false, unlockedSeen: [] };
+        state.stage = 'build';
+        const card = $('pet-card');
+        card.classList.remove('hidden');
+        const strip = document.createElement('div');
+        strip.style.cssText = 'display:flex;flex-wrap:wrap;gap:4px;justify-content:center;margin-top:8px;padding-top:8px;border-top:1px solid rgba(0,0,0,0.06)';
+        const b = (label, fn) => { const x = document.createElement('button'); x.type = 'button'; x.className = 'pet-act'; x.style.fontSize = '10px'; x.textContent = label; x.addEventListener('click', () => { fn(); pet.render(); }); strip.appendChild(x); };
+        const P = pet._debug.P;
+        const setStage = (n) => { P().correct = n; P().inBed = false; pet._debug.beh.x = null; pet._debug.preloadSheets(); };
+        b('🐶', () => { P().kind = 'puppy'; pet._debug.beh.x = null; pet._debug.preloadSheets(); });
+        b('🐹', () => { P().kind = 'hamster'; pet._debug.beh.x = null; pet._debug.preloadSheets(); });
+        b('🦫', () => { P().kind = 'capybara'; pet._debug.beh.x = null; pet._debug.preloadSheets(); });
+        b('egg', () => setStage(7)); b('baby', () => setStage(20)); b('young', () => setStage(70)); b('grown', () => setStage(130));
+        b('crack', () => { if (P().correct < 15) { P().correct = Math.min(14, P().correct + 1); pet._debug.play('crack', null, 500); } });
+        b('hatch', () => { P().correct = 14; pet.answer(true); });
+        b('run', () => { const be = pet._debug.beh; be.tx = 20 + Math.random() * 130; be.ty = -Math.random() * 14; be.dir = be.tx >= (be.x || 88) ? 1 : -1; be.speed = 60; pet._debug.setAct('run', 8000); });
+        b('lick', () => pet._debug.setAct('approach', 1400));
+        b('jump', () => pet._debug.setAct('jump', 700));
+        b('eat', () => { P().treats = Math.max(1, P().treats); pet._debug.play('eat', null, 1400); });
+        b('play', () => pet._debug.play('play', 'ball', 2600));
+        b('sleep', () => { P().correct = Math.max(P().correct, 100); P().inBed = !P().inBed; });
+        b('all items', () => { P().correct = Math.max(P().correct, 100); P().wearing = ['bow', 'hat', 'scarf']; });
+        const info = document.createElement('div'); info.style.cssText = 'font-size:9px;color:var(--text-faint);width:100%;text-align:center;margin-top:4px;white-space:pre-wrap';
+        setInterval(() => { try { info.textContent = ['run_side', 'run_front', 'lick', 'idle', 'jump', 'sleep'].map((a) => a + ' ' + String(pet._debug.frames(a)).split(' ')[0]).join(' · '); } catch (e) {} }, 1500);
+        card.appendChild(strip); card.appendChild(info);
+        pet.render();
+        $('setup-strip') && $('setup-strip').classList.add('hidden');
+      }
       $('tower-mute').textContent = state.progress.quiz.muted ? '🔇' : '🔈';
       updateGameStats();
       // seed the Exam Room's "don't repeat" list from the book
