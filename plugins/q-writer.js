@@ -476,8 +476,17 @@ function briefForPrompt(brief) {
 
 const PROBE_SCHEMA = {
     type: 'object', additionalProperties: false,
-    required: ['question', 'criterionId', 'hint', 'coveredSoFar', 'done', 'acknowledge', 'voicedBrickIds', 'targetBrickId', 'answer', 'supply', 'thenAsk'],
+    required: ['question', 'criterionId', 'hint', 'coveredSoFar', 'done', 'acknowledge', 'voicedBrickIds', 'targetBrickId', 'answer', 'supply', 'thenAsk', 'termsUsed', 'termsMisused', 'reaction'],
     properties: {
+        // THE LOOP (Sarah, 16 Aug: "I just pressed them all together and wrote
+        // 'saves money'. Stopped typing and they stayed green and Q said
+        // nothing."). When she pauses, Q reads what she just wrote against the
+        // expected words: which did she use PROPERLY (they go green), which
+        // did she drop in without saying anything (he says so, plainly), and
+        // one line back about the writing itself before the next ask.
+        termsUsed: { type: 'array', items: { type: 'string' }, description: 'Of the EXPECTED TERMS listed, the ones her NEW writing uses correctly — the idea behind the word is actually there, in a sentence that says something. Exact spelling as listed. Empty if none.' },
+        termsMisused: { type: 'array', items: { type: 'object', additionalProperties: false, required: ['term', 'why'], properties: { term: { type: 'string' }, why: { type: 'string', description: 'ONE plain line: what the word means and what her sentence would need to say to earn it. Never marker language.' } } }, description: 'Expected terms she has put on the page WITHOUT the idea behind them — dropped in as a label, listed with no sentence, used to mean something else. Be honest; a word pressed in from a button is not a word used. Empty if none.' },
+        reaction: { anyOf: [{ type: 'string' }, { type: 'null' }], description: 'On a PAUSE trigger only: ONE short line back about what she just wrote — what it does, what it lacks — coach voice, before the next ask. "That names the benefits but not who chooses them." Never a rewrite. null on other triggers.' },
         acknowledge: nullable('string'),
         supply: { anyOf: [{ type: 'string' }, { type: 'null' }], description: 'THE BRICK LOOP: ASSUME THEY DO NOT KNOW. When the brick you are fishing for carries knowledge — a term, a fact or figure, a theory, an argument, a line of reasoning, what comes next in the essay and why — state it here FIRST, plainly and briefly (one to three sentences): "Plants use the sun to grow — that\'s called photosynthesis." / "Supply and demand says a price rises when more people want a thing than there is of it." / "One strong criticism of trial by jury is that twelve strangers can be swayed by a good speaker." A fact given, never a hint, never a gate. null ONLY when the brick is pure opinion / experience (their view, their example).' },
         thenAsk: { anyOf: [{ type: 'string' }, { type: 'null' }], description: 'With supply: the sentence request that follows it — "Could you write a sentence about how that shows up in your own example?" (question = the same request). null otherwise.' },
@@ -536,7 +545,7 @@ HOW YOU COACH
 - Short. Warm. Concrete. One question, one idea. Never a list of questions.
 - If TRIGGER is "stuck": they cannot answer. Do not hint. SUPPLY the idea the brick carries plainly in "supply" (the term, the fact, the theory, the argument) and put the sentence request in "thenAsk" (question = thenAsk). If the brick is pure opinion / experience, ask a SMALLER, concrete question from their own life. Never give them the sentence.
 - If they answered "no" / "not sure" / guessed wrong: SUPPLY it ("supply") and ask for the sentence ("thenAsk"). A fact given, never withheld.
-- If TRIGGER is "pause": they just wrote in the document and stopped — react to exactly what they wrote.
+- If TRIGGER is "pause": they just wrote in the document and stopped — react to exactly what they wrote. THIS IS THE LOOP THE WHOLE APP RESTS ON: give ONE plain line back about the writing itself in "reaction" (what it does, what it lacks — never a rewrite), and judge the EXPECTED TERMS honestly: a word is "used" only when the idea behind it is on the page in a sentence that says something. A word pressed in from a button and left sitting there is NOT used — put it in termsMisused with one plain line on what the sentence would need to say to earn it. Sarah, 16 Aug: "I just pressed them all together and wrote 'saves money'… they stayed green and Q said nothing." Never let that happen: if she dropped words in without saying anything, say so, plainly and kindly, and ask for the sentence that uses ONE of them.
 - If TRIGGER is "question": the student asked YOU something (their words are under STUDENT'S QUESTION). Answer it plainly in "answer" — two or three sentences, everyday words, teach a term if that is what they asked (name it once, meaning, everyday example), never the model answer's text, never what to write. Then set "question" to the current ask restated (YOUR LAST QUESTION) so they can carry on. Nothing they asked is an answer to record.
 - If a PLAN FOR THIS PART is given below with a current step marked, you are the fallback for that step: your question asks for THAT step's thing (the next item, the number, the pro, the con, the argument for the side named) — never a new open question, never a later step, never another part.
 
@@ -549,7 +558,7 @@ ${relateHint}
 
 THE BRIEF AND THE ANSWER IN YOUR HEAD
 ${briefForPrompt(brief)}
-${plan ? '\n' + planForPrompt(plan, stepId) + '\n' : ''}${essay ? '\n' + essayForPrompt(essay) + '\n\nEvery question aims at the NEXT brick the student has not yet voiced. In voicedBrickIds list every brick they have now put in their own words. targetBrickId is the brick this question is fishing for.' : '\n(The full model answer is still being written — steer by the skeleton above; voicedBrickIds can be empty.)'}`);
+${plan ? '\n' + planForPrompt(plan, stepId) + '\n' + expectationsForPrompt(plan) + '\n' : ''}${essay ? '\n' + essayForPrompt(essay) + '\n\nEvery question aims at the NEXT brick the student has not yet voiced. In voicedBrickIds list every brick they have now put in their own words. targetBrickId is the brick this question is fishing for.' : '\n(The full model answer is still being written — steer by the skeleton above; voicedBrickIds can be empty.)'}`);
 
     const cov = coverage && typeof coverage === 'object' ? Object.entries(coverage).map(([k, v]) => `${k}: ${v}`).join(', ') : '(unknown)';
     const voicedList = Array.isArray(voiced) && voiced.length ? voiced.join(', ') : '(none yet)';
@@ -571,10 +580,10 @@ ${boundDoc(docText) || '(blank page)'}
 Ask the next question.`;
 
     const r = await callAccurate(system, user, { maxTokens: 1500, schema: PROBE_SCHEMA, effort: 'low' });
-    return normaliseProbe(r, brief, essay);
+    return normaliseProbe(r, brief, essay, plan);
 }
 
-function normaliseProbe(r, brief, essay) {
+function normaliseProbe(r, brief, essay, plan) {
     if (!r || typeof r !== 'object' || !String(r.question || '').trim()) throw new Error('The coach did not come back with a question — try again.');
     const ids = new Set(brief.criteria.map(c => c.id));
     const brickIds = new Set(allBrickIds(essay).map(b => b.brickId));
@@ -591,7 +600,18 @@ function normaliseProbe(r, brief, essay) {
         voicedBrickIds: Array.isArray(r.voicedBrickIds) ? r.voicedBrickIds.map(x => String(x).replace(/\s+/g, '')).filter(x => brickIds.has(x)) : [],
         targetBrickId: r.targetBrickId && brickIds.has(String(r.targetBrickId).replace(/\s+/g, '')) ? String(r.targetBrickId).replace(/\s+/g, '') : null,
         done: !!r.done,
+        // The words, judged — only real expected terms, canonical spelling.
+        termsUsed: (Array.isArray(r.termsUsed) ? r.termsUsed : []).map(x => termCanon(plan, x)).filter(Boolean),
+        termsMisused: (Array.isArray(r.termsMisused) ? r.termsMisused : []).map(m => ({ term: termCanon(plan, m && m.term), why: String((m && m.why) || '').trim() })).filter(m => m.term && m.why).slice(0, 4),
+        reaction: r.reaction ? String(r.reaction).trim() : null,
     };
+}
+// An expected term as the plan spells it, or '' if it is not one.
+function termCanon(plan, s) {
+    const want = String(s || '').replace(/\s+/g, ' ').trim().toLowerCase();
+    if (!want) return '';
+    const hit = ((plan && plan.expectedTerms) || []).find(t => t.toLowerCase() === want);
+    return hit || '';
 }
 
 // Weakest first, ten at a time. She fixes them one by one; a longer list is

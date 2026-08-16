@@ -1357,7 +1357,20 @@ router.post('/writer/probe', requirePerson, express.json({ limit: '1mb' }), writ
         let brickCounts = t.brickCounts || {};
         if (t.modelEssay) ({ coverage, brickCounts } = qWriter.coverageFromBricks(t.modelEssay, voiced, coverage));
         const t2 = writeTutor(req.person.id, { coverage, brickCounts, voicedBricks: voiced, currentQuestion: r.question, currentCriterionId: r.criterionId, lastQuestion: r.question, currentSection: r.criterionId });
-        ukJson(res, { ok: true, ...r, coverage, brickCounts, essayReady: !!t.modelEssay, match: matchFor(t2) });
+        // The pause read judged her words: the ones used properly go green on
+        // the board; a misused one comes OFF the green if a button-press had
+        // put it there. Honest, both directions.
+        let ex = null;
+        const cidForTerms = String(b.criterionId || r.criterionId || '');
+        if (cidForTerms && (r.termsUsed.length || r.termsMisused.length)) {
+            const cur = new Set(((t2.termsFit || {})[cidForTerms] || []).map(String));
+            for (const w of r.termsUsed) cur.add(w);
+            for (const m of r.termsMisused) cur.delete(m.term);
+            const tf = { ...(t2.termsFit || {}), [cidForTerms]: Array.from(cur) };
+            writeTutor(req.person.id, { termsFit: tf });
+            ex = { termsFit: tf, reqMet: t2.reqMet || {} };
+        }
+        ukJson(res, { ok: true, ...r, coverage, brickCounts, essayReady: !!t.modelEssay, match: matchFor(t2), ...(ex || {}) });
     } catch (e) {
         const cause = qWriter.userFacingCause(e, 'coaching turn');
         console.error('[writer/probe]', e.message, e.primaryCause ? '(first: ' + e.primaryCause + ')' : '');

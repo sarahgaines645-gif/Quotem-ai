@@ -1372,7 +1372,11 @@
     // The plan's own colour / label for a requirement kind, else the fallback.
     function reqOf(cid, kind) { const plan = planFor(cid); const rq = plan && (plan.requirements || []).find(r => r.kind === kind); return { colour: (rq && rq.colour) || REQ_COLOURS[kind] || '#999', label: (rq && rq.label) || REQ_LABELS[kind] || kind }; }
     const PROBE_MIN_GAP_MS = 8000;    // never two live probes closer than this (cost + rhythm)
-    const PROBE_MIN_NEW_CHARS = 12;   // "genuinely new content" — a few real words
+    // Sarah, 16 Aug: she pressed the word buttons in and wrote 'saves money',
+    // stopped, and Q said nothing. 'saves money' is ELEVEN characters — one
+    // under this floor — so the watcher decided nothing new had happened.
+    // Count words, not characters: two real words is a thing worth reading.
+    const PROBE_MIN_NEW_WORDS = 2;
     const PROBE_RETRY_MS = 1500;      // re-check cadence while a condition is not yet met
 
     // ── Element refs ───────────────────────────────────────────────────────
@@ -3541,6 +3545,12 @@
         if (d.essayReady) state.essayReady = true;
         applyCoverage(d.coverage);
         applyMatch(d.match);
+        // THE LOOP: the words she used properly go green; the ones she pressed
+        // in and left there come off it, and he says why in one line.
+        applyExpectations(d);
+        const misused = Array.isArray(d.termsMisused) ? d.termsMisused : [];
+        if (misused.length) appendBoardItem({ type: 'note', label: 'words', text: misused.map(m => '"' + m.term + '" — ' + m.why).join(' · '), criterionId: state.currentCriterionId });
+        if (Array.isArray(d.termsUsed) && d.termsUsed.length) appendBoardItem({ type: 'note', label: 'used', text: 'Used properly: ' + d.termsUsed.join(', ') + '.', quiet: true, criterionId: state.currentCriterionId });
 
         // WHERE WE ARE: when Q moves to a new criterion, say so in one line.
         const moved = moveLine(prevCriterionId, state.currentCriterionId);
@@ -3550,7 +3560,11 @@
         if (d.hint) appendBoardItem({ type: 'note', label: 'hint', text: d.hint });
 
         // After a coach-box answer: one short acknowledgement + the question.
-        const ack = opts.ack ? String(opts.ack) : (d.acknowledge && trigger === 'answer' ? String(d.acknowledge) : '');
+        // After a PAUSE: his one-line reaction to the writing itself, then the
+        // words he is not having, then the ask. That is him watching her write.
+        const reaction = trigger === 'pause' && d.reaction ? String(d.reaction).trim() : '';
+        const wordsLine = misused.length ? misused.map(m => '"' + m.term + '" is on the page but not used — ' + m.why).join(' ') : '';
+        const ack = opts.ack ? String(opts.ack) : (d.acknowledge && trigger === 'answer' ? String(d.acknowledge) : [reaction, wordsLine].filter(Boolean).join(' '));
         setCoach({
           supply: d.supply ? String(d.supply).trim() : '',
           ack: ack ? ack.replace(/\s+$/, '') : '',
@@ -4517,7 +4531,7 @@
       }
       const text = docPlainText();
       const delta = text.startsWith(state.docSnapshot) ? text.slice(state.docSnapshot.length) : text;
-      if (delta.trim().length < PROBE_MIN_NEW_CHARS) return;       // truly nothing new — wait for the next keystroke
+      if (delta.trim().split(/s+/).filter(w => /[a-z0-9]/i.test(w)).length < PROBE_MIN_NEW_WORDS) return;   // truly nothing new — wait for the next keystroke
       const idle = Date.now() - (lastInputAt || 0);
       if (idle < pauseMs) return rearm(pauseMs - idle);
       const finished = endsSentence(text) || /\n\s*$/.test(text);
