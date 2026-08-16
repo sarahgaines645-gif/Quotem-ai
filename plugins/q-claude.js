@@ -100,8 +100,10 @@ async function accurateJSON(systemPrompt, userPrompt, { maxTokens = 4096, model 
             // fails, keep Claude's cause on the error so the route can show
             // the student both halves ("accuracy service refused the key;
             // the backup timed out") instead of only the last one.
+            // The schema goes with it: without it the fallback answers in
+            // prose, JSON.parse throws, and every Claude 429/5xx became a 502.
             try {
-                return await fallback(systemPrompt, userPrompt, { maxTokens });
+                return await fallback(systemPrompt, userPrompt, { maxTokens, schema });
             } catch (e2) {
                 e2.primaryCause = e.message;
                 throw e2;
@@ -110,7 +112,7 @@ async function accurateJSON(systemPrompt, userPrompt, { maxTokens = 4096, model 
     } else if (!fallback) {
         throw new Error('ANTHROPIC_API_KEY not set and no fallback given');
     }
-    return await fallback(systemPrompt, userPrompt, { maxTokens });
+    return await fallback(systemPrompt, userPrompt, { maxTokens, schema });
 }
 
 module.exports = { hasClaude, claudeJSON, accurateJSON, MODEL, SONNET };

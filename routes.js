@@ -1266,6 +1266,8 @@ async function digestSourceInBackground(personId, name) {
         const src = (t.sources || []).find(s => s.name === name);
         if (!src || src.digest) return;
         const digest = await qWriter.digestSource({ name, text: src.text, brief: t.brief || null });
+        // A blank digest is not a digest: leave it null so the retry works.
+        if (emptyDigest(digest)) { console.warn('[writer/source digest] ' + name + ': came back empty, not stored'); return; }
         const t2 = readTutor(personId);
         const next = (t2.sources || []).map(s => s.name === name ? { ...s, digest } : s);
         writeTutor(personId, { sources: next });
@@ -1273,6 +1275,8 @@ async function digestSourceInBackground(personId, name) {
         console.warn('[writer/source digest] ' + name + ': ' + (e && e.message));
     }
 }
+// A digest with no story and no "what it is" has nothing she can read.
+function emptyDigest(d) { return !d || !(String(d.theStory || '').trim() || String(d.whatItIs || '').trim()); }
 function readStoredDocText(personId) {
     try {
         const docPath = getDocPath(personId);
@@ -1297,6 +1301,8 @@ function startEssayJob(personId) {
         const t = readTutor(personId);
         if (!t.brief) throw new Error('No brief yet — upload the task first.');
         const essay = await qWriter.writeModelEssay({ brief: t.brief, sources: t.sources || [] });
+        // Stamped so a plan can say which essay it was built from.
+        if (!essay.writtenAt) essay.writtenAt = Date.now();
         const t2 = readTutor(personId);
         // Keep bricks already voiced that still exist in the rewritten essay.
         const ids = new Set(qWriter.allBrickIds(essay).map(b => b.brickId));
@@ -1310,10 +1316,21 @@ function startEssayJob(personId) {
         return { essayReady: true, brickCounts, coverage, bricks: ids.size, notes: essay.notes, match: matchFor(t3) };
     });
 }
+// The essay job can vanish (restart mid-write) leaving a brief with no
+// answer behind it and nothing running — the page then waits for ever. If
+// there is nothing running (and no failure in the last minute, so a broken
+// key cannot be re-tried on every poll) start it again.
+function ensureEssayJob(personId, t) {
+    if (!t || !t.brief || t.modelEssay) return null;
+    const ej = writerJobs.get(writerJobKey(personId, 'essay'));
+    if (ej && ej.status === 'running') return ej;
+    if (ej && ej.status === 'failed' && Date.now() - (ej.finishedAt || 0) < 60 * 1000) return ej;
+    return startEssayJob(personId);
+}
 // The PART PLAN (Sarah, 15 Aug late — scaffolded coaching): one plan per
 // criterion, from the hidden essay's bricks, cached in the notebook under
 // plans[criterionId]. Only ever made once per part unless force'd.
-function startPlanJob(personId, criterionId) {
+function startPlanJob(personId, criterionId, { wordsTried } = {}) {
     const t0 = readTutor(personId);
     writeTutor(personId, { planWanted: criterionId });
     return startWriterJob(personId, 'plan', async () => {
@@ -1321,6 +1338,10 @@ function startPlanJob(personId, criterionId) {
         if (!t.brief) throw new Error('No brief yet — upload the task first.');
         if (!t.modelEssay) throw new Error('The model answer for this part is not written yet — a moment.');
         const plan = await qWriter.planPart({ brief: t.brief, essay: t.modelEssay, criterionId, yearGroup: t.yearGroup || '', relateAnchor: t.relateAnchor || '' });
+        // Which essay this plan was built from — a newer essay makes it stale.
+        plan.essayAt = t.modelEssay.writtenAt || null;
+        // A wordless plan gets ONE rebuild for its word board, not one per load.
+        if (wordsTried) plan.wordsTried = true;
         const t2 = readTutor(personId);
         const plans = { ...(t2.plans || {}), [criterionId]: plan };
         writeTutor(personId, { plans });
@@ -1469,6 +1490,7 @@ router.post('/writer/probe', requirePerson, express.json({ limit: '1mb' }), writ
     const t = readTutor(writerScope(req));
     if (!t.brief) return res.status(400).json({ error: 'No brief yet — upload the task first so I know what the marker wants.', code: 'no_brief' });
     const b = req.body || {};
+    if (String(b.trigger || '') === 'question' && !String(b.studentQuestion || '').trim()) return res.status(400).json({ ok: false, error: 'Ask Q something first — the box is empty.', code: 'empty_question', retryable: false });
     try {
         const r = await qWriter.probe({
             brief: t.brief,
@@ -1539,18 +1561,25 @@ router.post('/writer/plan', requirePerson, express.json({ limit: '16kb' }), asyn
     // terms — and a cached plan was served forever, which meant that session
     // could never grow buttons. A plan with no words in it is not a finished
     // plan: rebuild it. (Her draft is untouched; only the scaffold is remade.)
+    // ONE rebuild for words, then live with it — the page's own wordsTried
+    // was never saved server-side, so every load paid for the same re-plan.
     const cachedPlan = t.plans && t.plans[criterionId];
-    const wordless = cachedPlan && !(Array.isArray(cachedPlan.expectedTerms) && cachedPlan.expectedTerms.length);
-    if (!req.body?.force && cachedPlan && !wordless) return ukJson(res, { ok: true, kind: 'plan', status: 'done', cached: true, result: cachedPlan, meta: { criterionId } });
+    const wordless = cachedPlan && !(Array.isArray(cachedPlan.expectedTerms) && cachedPlan.expectedTerms.length) && !cachedPlan.wordsTried;
+    // A plan built from an older essay (re-brief, a source added) points its
+    // steps at paragraphs that no longer exist: stale, rebuild.
+    // (A plan from before essayAt existed is judged by its own madeAt.)
+    const essayAt = t.modelEssay && t.modelEssay.writtenAt;
+    const stale = !!(cachedPlan && essayAt && (cachedPlan.essayAt ? cachedPlan.essayAt !== essayAt : (cachedPlan.madeAt || 0) < essayAt));
+    if (!req.body?.force && cachedPlan && !wordless && !stale) return ukJson(res, { ok: true, kind: 'plan', status: 'done', cached: true, result: cachedPlan, meta: { criterionId } });
     if (!t.modelEssay) {
-        const ej = writerJobs.get(writerJobKey(personId, 'essay'));
+        const ej = ensureEssayJob(personId, t);
         return res.status(409).json({ ok: false, error: 'Q is still writing the answer in his head for this part — a moment.', code: 'essay_pending', retryable: true, essayJob: ej ? { status: ej.status, startedAt: ej.startedAt } : null });
     }
     const running = writerJobs.get(writerJobKey(personId, 'plan'));
     if (running && running.status === 'running' && running.meta && running.meta.criterionId !== criterionId) {
         return res.status(409).json({ ok: false, error: 'Q is finishing the plan for another part — a moment.', code: 'plan_busy', retryable: true });
     }
-    const job = startPlanJob(personId, criterionId);
+    const job = startPlanJob(personId, criterionId, { wordsTried: !!wordless });
     if (req.body?.sync) {
         while (job.status === 'running') await new Promise(r => setTimeout(r, 250));
         return res.status(job.status === 'done' ? 200 : (job.error?.status || 502)).json(qWriter.ukPolishResponse({ ok: job.status === 'done', ...jobView(job) }));
@@ -1811,6 +1840,8 @@ router.post('/writer/brief/scenario', requirePerson, express.json({ limit: '4kb'
     if (!stored || !stored.text) return res.status(400).json({ error: 'The brief text is not stored on the server any more — drop the task in again and I read it fresh.', code: 'no_doc' });
     try {
         const scenario = await qWriter.extractScenario({ taskText: stored.text, brief: t.brief });
+        // scenarioChecked only once the model has answered (a story, or a
+        // genuine null); a throw lands in the catch and leaves it unchecked.
         const t2 = readTutor(writerScope(req));
         writeTutor(writerScope(req), { brief: { ...(t2.brief || t.brief), scenario, scenarioChecked: true } });
         ukJson(res, { ok: true, scenario });
@@ -1830,6 +1861,7 @@ router.post('/writer/source/digest', requirePerson, express.json({ limit: '4kb' 
     if (!src) return res.status(400).json({ error: 'That document is not in this session.', code: 'no_source' });
     try {
         const digest = await qWriter.digestSource({ name, text: src.text, brief: t.brief || null });
+        if (emptyDigest(digest)) return res.status(502).json({ ok: false, error: 'The digest came back empty — retry?', code: 'empty_digest', retryable: true });
         const t2 = readTutor(writerScope(req));
         writeTutor(writerScope(req), { sources: (t2.sources || []).map(s => s.name === name ? { ...s, digest } : s) });
         ukJson(res, { ok: true, name, digest });
@@ -2259,6 +2291,8 @@ const TUTOR_KEYS = [
     // the marking stage (15 Aug 23:40): the Harvard list the page keeps in
     // sync with the essay, and the dots Q placed inside the student's text.
     'references', 'inlineDots',
+    // the per-part marks the page keeps (16 Aug) — dropped on refresh before.
+    'partMarks',
 ];
 router.post('/writer/tutor', requirePerson, express.json({ limit: '4mb' }), writerTooLarge('The session is too big to save in one go (over 4 MB). Trim very long pasted text out of the page and it will save again.'), async (req, res) => {
     try {
@@ -2308,7 +2342,9 @@ router.get('/writer/tutor', requirePerson, async (req, res) => {
         out.match = matchFor(t);
         delete out.closeBricks;
         const job = writerJobs.get(writerJobKey(writerScope(req), 'brief'));
-        const ej = writerJobs.get(writerJobKey(writerScope(req), 'essay'));
+        // A brief with no answer behind it and no job running (restart
+        // mid-write): start it again so the page's poll can land.
+        const ej = ensureEssayJob(writerScope(req), t) || writerJobs.get(writerJobKey(writerScope(req), 'essay'));
         ukJson(res, { ok: true, tutor: out, briefJob: job ? { status: job.status, startedAt: job.startedAt } : null, essayJob: ej ? { status: ej.status, startedAt: ej.startedAt } : null });
     } catch (e) {
         res.json({ ok: true, tutor: null });
@@ -2373,6 +2409,10 @@ router.post('/writer/brief', requirePerson, express.json({ limit: '8mb' }), writ
             lastQuestion: brief.opener,
             currentSection: criteria[0] ? criteria[0].id : null,
             voicedBricks: [], brickCounts: {}, modelEssay: null,
+            // Everything built from the OLD brief/essay goes too — a re-brief
+            // with the same part ids was serving old plans whose steps pointed
+            // at paragraphs that no longer existed.
+            plans: {}, stepTags: {}, dotCache: {}, teachCache: {}, termsFit: {}, reqMet: {}, closeBricks: [], lastMark: null, partMarks: {},
         });
         // The model essay follows in the back room; the student starts on the
         // opener now and the probes pick the essay up when it lands.

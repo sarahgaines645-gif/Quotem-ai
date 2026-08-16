@@ -2265,6 +2265,12 @@
       state.currentQuestion = ''; state.currentCriterionId = ''; state.currentSection = ''; state.docSnapshot = ''; state.lastMark = null; state.lastProbeAt = 0;
       state.brickCounts = {}; state.essayReady = false; state.sources = []; state.editItems = null; state.editIndex = 0; state.editDone = false;
       state.plans = {}; state.stepState = {}; state.currentStep = null; state.calls = {}; state.openerDone = false; state.match = null; state.termsFit = {}; state.reqMet = {}; state.references = []; state.inlineDots = {};
+      state.partMarks = {}; state.partMarkDone = {}; state.editing = false; state.partFixThen = null;
+      // The task slot too — otherwise a pasted brief or a link is ignored
+      // (the paste path checks !sourceState.name) and the old chip stays.
+      sourceState.name = null; sourceState.text = null; sourceState.imageDataUrl = null; sourceState.sourceUrl = null;
+      briefFiles = []; briefLandedAt = 0;
+      try { renderSourceSlot(); } catch (_) {}
       hideToolPop(); hideTermPop();
       hidePanel('brief'); hidePanel('teach');
       document.getElementById('brief-board-body').innerHTML = '';
@@ -2696,7 +2702,7 @@
           hint: 'Nothing is lost — retry, or carry on with a question instead.',
           actions: [
             { label: '↻ Try again', primary: true, onClick: () => startPart(cid, { moveFrom: prev }) },
-            { label: 'Ask me a question instead', onClick: () => askNextQuestion({ trigger: 'focus', focusCriterionId: cid }) },
+            { label: 'Ask me a question instead', onClick: () => askNextQuestion({ trigger: 'focus', focusCriterionId: cid, forceProbe: true }) },
           ],
           inputVisible: false, step: false,
         });
@@ -3183,7 +3189,41 @@
     // BUTTONS (press → the word goes into your sentence at the caret; light
     // green when it is on the page, solid green when Q's check said it fits),
     // "Still to use: …", and the requirement DOTS with their key.
-    function partParagraphs(cid) { return Array.from(docBody.querySelectorAll('p.student-line[data-step^="' + CSS.escape(cid + ':') + '"]')); }
+    // The paragraphs that belong to a part: the coach-box ones (tagged
+    // data-step) PLUS whatever was typed or dictated straight onto the page
+    // under that part's "Question n" heading, up to the next heading. Before
+    // (16 Aug) only tagged paragraphs counted — three paragraphs typed on the
+    // paper marked as nothing and budgeted as "0 / 980 words".
+    function isRefsHeading(el) { return /^references:?$/i.test((el.textContent || '').trim()); }
+    function partParagraphs(cid) {
+      const tagged = Array.from(docBody.querySelectorAll('p.student-line[data-step^="' + CSS.escape(cid + ':') + '"]'));
+      const heads = Array.from(docBody.querySelectorAll('p.q-part-head'));
+      const out = [];
+      const seen = new Set();
+      const push = el => { if (!seen.has(el)) { seen.add(el); out.push(el); } };
+      const isBlock = el => el.nodeType === 1 && /^(P|DIV|H[1-6]|LI|BLOCKQUOTE)$/.test(el.tagName);
+      const mine = heads.find(h => h.getAttribute('data-part') === cid);
+      if (mine) {
+        // Everything after my heading until the next heading (or References).
+        for (let el = mine.nextElementSibling; el; el = el.nextElementSibling) {
+          if (el.classList.contains('q-part-head') || isRefsHeading(el)) break;
+          if (isBlock(el) && el.textContent.trim()) push(el);
+        }
+      } else if (!heads.length && !tagged.length) {
+        // No structure on the page at all: a single-question brief, or a
+        // student who wrote freely. Then the page IS the part — but only when
+        // there is only one part to be, so four questions never all claim
+        // the same text.
+        const cs = (state.brief && state.brief.criteria) || [];
+        if (cs.length === 1) {
+          let stop = false;
+          Array.from(docBody.children).forEach(el => { if (stop) return; if (isRefsHeading(el)) { stop = true; return; } if (isBlock(el) && el.textContent.trim()) push(el); });
+        }
+      }
+      tagged.forEach(push);
+      // Keep document order.
+      return out.sort((a, b) => (a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING) ? -1 : 1);
+    }
     function partText(cid) { const ps = partParagraphs(cid); return (ps.length ? ps.map(p => p.textContent).join(' ') : docPlainText()).toLowerCase(); }
     function termSeen(cid, term, text) { return (text != null ? text : partText(cid)).includes(String(term).toLowerCase()); }
     // The word buttons + dots for a part (shared by the board card and the
@@ -3574,7 +3614,8 @@
         // pasted into an essay, not a sentence. Her lists, numbers and
         // pros/cons are the thinking; only the sentences she writes in her
         // own words belong on the page. This is why the document "isn't
-        // forming into sentences". persistSteps();
+        // forming into sentences".
+          persistSteps(); renderBoard();
           const next = nextNumbersCell(step, st);
           setCoach({ msg: step.prompt, hint: next ? cellAsk(next) : 'All filled — press Done.', inputVisible: true, showNudge: true, actions: stepActions(cid, step, st) });
           coachInput.placeholder = next ? cellAsk(next) : 'Done?';
@@ -3783,7 +3824,7 @@
       // Scaffolded coaching: once the answer in Q's head exists, a part runs
       // on its PLAN (cached) — no probe call needed to move on. A live step
       // keeps running underneath; the probe is only the fallback for it.
-      if (!state.currentStep && state.essayReady && trigger !== 'stuck' && !opts.forceProbe && !partStarting) {
+      if (!state.currentStep && state.essayReady && trigger !== 'stuck' && trigger !== 'pause' && !opts.forceProbe && !partStarting) {
         startPart(opts.focusCriterionId || state.currentCriterionId || firstPartId(), { resume: trigger !== 'focus' });
         return;
       }
@@ -3831,7 +3872,9 @@
         const moved = moveLine(prevCriterionId, state.currentCriterionId);
         state.qCount = (state.qCount || 1) + 1;
         const label = 'Q' + state.qCount;
-        appendBoardItem({ type: 'question', label, text: question });
+        // Inside a step the board already shows the step; a pause-probe's
+        // rephrasing is a reaction, not a second question on the worksheet.
+        if (!inStep) appendBoardItem({ type: 'question', label, text: question });
         if (d.hint) appendBoardItem({ type: 'note', label: 'hint', text: d.hint });
 
         // After a coach-box answer: one short acknowledgement + the question.
@@ -3849,6 +3892,7 @@
           hint: d.done ? 'Every part has something. Mark & fix when you\'re ready.' : (d.hint || ''),
           inputVisible: true,
           showNudge: true,
+          actions: inStep && currentStepInfo() ? stepActions(currentStepInfo().cid, currentStepInfo().step, stepStateOf(currentStepInfo().cid, currentStepInfo().step.id)) : undefined,
         });
         coachInput.placeholder = 'Type your answer…';
         if (!quiet) coachInput.focus();
@@ -4374,8 +4418,18 @@
     // Paste handler: if it's a file, load it; if it's text, fill the source
     window.addEventListener('paste', (e) => {
       const tag = (document.activeElement && document.activeElement.tagName) || '';
-      // Let the doc body and inputs handle their own pastes
-      if (tag === 'INPUT' || (document.activeElement && document.activeElement === docBody)) return;
+      const inDoc = !!(document.activeElement && document.activeElement === docBody);
+      // Let the doc body and inputs handle their own pastes — EXCEPT the
+      // first-run case the card promises ("paste it anywhere"): no brief yet,
+      // an empty page, and the pasted text reads like a task (criteria,
+      // marks, "discuss…"). Then it is the task, wherever the cursor was.
+      if (inDoc && !state.brief && !sourceState.name) {
+        const t0 = e.clipboardData ? String(e.clipboardData.getData('text') || '') : '';
+        const looksLikeTask = t0.length > 200 && /(assessment|criteria|criterion|assignment|task \d|question \d|marks?|word count|learning outcome|AC ?\d|discuss|critically|evaluate|analyse|assess)/i.test(t0);
+        const pageEmpty = countWords() < 20;
+        if (!(looksLikeTask && pageEmpty)) return;
+        e.preventDefault();
+      } else if (tag === 'INPUT' || inDoc) return;
       const items = (e.clipboardData && e.clipboardData.items) || [];
       for (const it of items) {
         if (it.kind === 'file') { const f = it.getAsFile(); if (f) { loadSourceFile(f); return; } }
@@ -4809,6 +4863,7 @@
     function maybeLiveProbe() {
       clearTimeout(probeTimer);
       if (!state.brief || briefRunning) return;
+      if (typeof markRunning !== 'undefined' && markRunning) return;   // the mark is reading the page — no live turn under it
       const pauseMs = state.settings.pauseMs || 7000;
       const rearm = (ms) => { probeTimer = setTimeout(maybeLiveProbe, ms || PROBE_RETRY_MS); };
       if (state.probeInFlight) return rearm();
@@ -5017,7 +5072,7 @@
         // the first part starts now (its plan was kicked server-side).
         if (state.openerDone && !state.currentStep && !partStarting && !state.editing) startPart(state.currentCriterionId || firstPartId());
         if (reason !== 'restore') {
-          appendBoardItem({ type: 'note', label: 'plan', text: 'Q now has the full answer in his head — ' + (r.bricks || '?') + ' bricks across ' + (state.brief.criteria || []).length + ' criteria' + (state.sources.length ? ', citing your ' + state.sources.length + ' document' + (state.sources.length === 1 ? '' : 's') : '') + '. Every question from here aims at the next brick you haven\'t voiced yet.' });
+          appendBoardItem({ type: 'note', label: 'plan', text: 'Q has the whole answer in his head now — every one of the ' + (state.brief.criteria || []).length + ' questions' + (state.sources.length ? ', using your ' + state.sources.length + ' document' + (state.sources.length === 1 ? '' : 's') : '') + '. From here each question aims at the next thing you haven\'t said yet.' });
         }
       } catch (e) {
         appendBoardItem({ type: 'note', label: 'plan', text: 'Q\'s plan (the full answer he steers by) didn\'t finish: ' + shortCause(e) + ' — coaching still works from the outline; tap here to retry.', action: () => { essayWatching = false; watchEssay('restore-kick'); } });
@@ -5635,7 +5690,12 @@
       return sel && sel.rangeCount && docBody.contains(sel.getRangeAt(0).startContainer);
     }
     function putCaretAtEnd() {
-      const last = docBody.lastElementChild || docBody;
+      // The end of the WRITING — not the end of the page. With a References
+      // list on the page, "Talk" used to land the caret inside the references.
+      let last = docBody.lastElementChild || docBody;
+      const kids = Array.from(docBody.children);
+      const refIdx = kids.findIndex(el => isRefsHeading(el));
+      if (refIdx > 0) { const before = kids.slice(0, refIdx).filter(el => (el.textContent || '').trim()); last = before[before.length - 1] || kids[0]; }
       const range = document.createRange();
       range.selectNodeContents(last); range.collapse(false);
       const sel = window.getSelection(); sel.removeAllRanges(); sel.addRange(range);
@@ -5904,7 +5964,7 @@
       if (!t) { setSavedLabel('saved'); savedEl.textContent = 'Nothing saved yet'; return; }
 
       // The page: HTML (grade bands, Q's starters) or the plain text.
-      if (typeof t.docHtml === 'string' && t.docHtml.trim()) docBody.innerHTML = t.docHtml;
+      if (typeof t.docHtml === 'string' && t.docHtml.trim()) { docBody.innerHTML = t.docHtml; docBody.querySelectorAll('.q-edit-block').forEach(el => el.classList.remove('q-edit-block')); }
       else if (typeof t.docText === 'string' && t.docText.trim()) docBody.textContent = t.docText;
       if (t.docTitle) titleEl.value = t.docTitle;
       state.qWordsWritten = Number(t.qWordsWritten) || 0;
@@ -5958,6 +6018,10 @@
         state.currentStep = t.currentStep && t.currentStep.criterionId && t.currentStep.stepId && state.plans[t.currentStep.criterionId] ? t.currentStep : null;
         state.calls = t.calls && typeof t.calls === 'object' ? t.calls : {};
         state.openerDone = !!t.openerDone;
+        // A part already marked stays marked across a refresh — no second
+        // paid mark, no re-walk of the fixes (partMarks is saved server-side).
+        state.partMarks = t.partMarks && typeof t.partMarks === 'object' ? t.partMarks : {};
+        state.partMarkDone = Object.fromEntries(Object.keys(state.partMarks).map(k => [k, true]));
         state.termsFit = t.termsFit && typeof t.termsFit === 'object' ? t.termsFit : {};
         state.reqMet = t.reqMet && typeof t.reqMet === 'object' ? t.reqMet : {};
         state.references = Array.isArray(t.references) ? t.references : [];
@@ -6023,7 +6087,7 @@
     loadProjects().then(restoreSession, restoreSession);
     // Test hooks (no data, no secrets): lets the harness exercise the page-side
     // helpers without a paid call. Harmless in production.
-    window.__qwriterTest = { findInDoc, replaceInDoc, appendReference, docPlainText, splitCheck: (t) => endsSentence(t), runEditPass, checkCurrentSentence, showEditItem, state: () => state, currentEditText };
+    window.__qwriterTest = { findInDoc, replaceInDoc, appendReference, docPlainText, splitCheck: (t) => endsSentence(t), runEditPass, checkCurrentSentence, showEditItem, state: () => state, currentEditText, partParagraphs };
 
 
     // (The old per-card drag code lived here — every panel now goes through makePanel above.)

@@ -129,8 +129,16 @@ function withHouseStyle(systemPrompt) {
     return sys.startsWith(UK_LINE) ? sys : UK_LINE + '\n\n' + sys;
 }
 
-async function callQ(systemPrompt, userPrompt, { maxTokens = 4096 } = {}) {
+async function callQ(systemPrompt, userPrompt, { maxTokens = 4096, schema = null } = {}) {
     systemPrompt = withHouseStyle(systemPrompt);
+    // callQ is the fallback for every schema'd call above. Without the schema
+    // it answered in prose, JSON.parse threw, and a Claude 429 became a 502.
+    // The shape goes in the prompt, NOT as response_format — Q's model returns
+    // a silent {} under response_format when it thinks for long (the V4 trap,
+    // docs/CODEBASE_AUDIT_2026-05-03 B1) — and the budget gets Claude's floor,
+    // because Q's thinking is billed against max_tokens too.
+    if (schema) userPrompt = String(userPrompt || '') + '\n\nReturn ONLY a JSON object matching this schema — no prose before or after it:\n' + JSON.stringify(schema);
+    maxTokens = Math.max(maxTokens, 4096);
     const started = Date.now();
     const response = await timedFetch(`${Q_CONFIG.baseURL}/chat/completions`, {
         method: 'POST',
@@ -157,7 +165,22 @@ async function callQ(systemPrompt, userPrompt, { maxTokens = 4096 } = {}) {
     logUsage({ skill: 'writer', provider: 'together', model: Q_CONFIG.model, data, started });
     const raw = cleanModelOutput(data.choices?.[0]?.message?.content || '{}', 'writer');
     const cleaned = raw.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim();
-    return JSON.parse(cleaned);
+    // Q sometimes wraps the JSON in a sentence — cut to the outermost braces.
+    const first = cleaned.search(/[[{]/);
+    const last = Math.max(cleaned.lastIndexOf('}'), cleaned.lastIndexOf(']'));
+    return JSON.parse(first >= 0 && last > first ? cleaned.slice(first, last + 1) : cleaned);
+}
+
+// Q's own outputs, held to the length the prompts ask for. "12 words or fewer"
+// in schema prose is a wish; this is the rule. Cuts at a word boundary and only
+// adds "…" when the cut lands mid-sentence. Never used on the student's text.
+function capWords(str, n) {
+    const s = String(str || '').replace(/\s+/g, ' ').trim();
+    if (!s) return '';
+    const words = s.split(' ');
+    if (words.length <= n) return s;
+    const cut = words.slice(0, n).join(' ');
+    return /[.!?]["'”’)\]]*$/.test(cut) ? cut : cut.replace(/[,;:]$/, '') + '…';
 }
 
 // Accuracy-critical calls (reading the brief, marking, references, teaching)
@@ -337,7 +360,7 @@ const BRIEF_SCHEMA = {
                     id: { type: 'string', description: 'Short stable id — the AC code if present ("AC1.1"), else "C1", "C2"…' },
                     label: { type: 'string', description: 'A plain-words nickname for this criterion, 4 words or fewer, in everyday English a student who has never seen the brief understands — e.g. "What attracts people", "Pay and perks", "How to measure it". Never the AC code, never jargon.' },
                     text: { type: 'string', description: 'The criterion / question in the marker\'s words, trimmed to one or two sentences.' },
-                    weight: nullable('string'),
+                    weight: { anyOf: [{ type: 'string' }, { type: 'null' }], description: 'The share of marks for this criterion if the brief states it — "25%", "20 marks", "1/4" — else null. Never an AC code, task number or LO.' },
                 },
             },
         },
@@ -408,11 +431,15 @@ function parseWordCount(s) {
     return Math.max(...nums);
 }
 // "25%", "25 marks", "25", "1/4" → 25 / 25 / 25 / 25. Words ("high") → null.
+// "AC1.4", "Task 1", "LO2" → null: the model sometimes puts the code in
+// `weight`, and a code's digits are not a share of the marks.
 function parseWeight(s) {
     const str = String(s == null ? '' : s).trim();
     if (!str) return null;
     const frac = str.match(/^(\d+)\s*\/\s*(\d+)$/);
     if (frac && Number(frac[2])) return 100 * Number(frac[1]) / Number(frac[2]);
+    if (/^\d+(\.\d+)?$/.test(str)) return Number(str);
+    if (!/%|\bmarks?\b/i.test(str)) return null;
     const m = str.match(/(\d+(?:\.\d+)?)/);
     return m ? Number(m[1]) : null;
 }
@@ -629,7 +656,7 @@ function normaliseProbe(r, brief, essay, plan) {
     const brickIds = new Set(allBrickIds(essay).map(b => b.brickId));
     const criterionId = ids.has(String(r.criterionId || '').replace(/\s+/g, '')) ? String(r.criterionId).replace(/\s+/g, '') : (brief.criteria[0] && brief.criteria[0].id) || '';
     return {
-        question: String(r.question).trim(),
+        question: capWords(r.question, 35),
         criterionId,
         hint: r.hint ? String(r.hint) : null,
         answer: r.answer ? String(r.answer).trim() : null,
@@ -643,7 +670,7 @@ function normaliseProbe(r, brief, essay, plan) {
         // The words, judged — only real expected terms, canonical spelling.
         termsUsed: (Array.isArray(r.termsUsed) ? r.termsUsed : []).map(x => termCanon(plan, x)).filter(Boolean),
         termsMisused: (Array.isArray(r.termsMisused) ? r.termsMisused : []).map(m => ({ term: termCanon(plan, m && m.term), why: String((m && m.why) || '').trim() })).filter(m => m.term && m.why).slice(0, 4),
-        reaction: r.reaction ? String(r.reaction).trim() : null,
+        reaction: r.reaction ? String(r.reaction).trim().split(/\n+/)[0].trim() || null : null,
     };
 }
 // An expected term as the plan spells it, or '' if it is not one.
@@ -816,8 +843,8 @@ ${bricks.length ? '\nWHAT A TOP ANSWER CONTAINS (your model answer — never quo
     const brickIds = new Set(bricks.map(b => b.brickId));
     const critique = (Array.isArray(r && r.critique) ? r.critique : []).map(it => ({
         sentence: String(it.sentence || '').trim(),
-        missing: String(it.missing || '').trim(),
-        fix: String(it.fix || '').trim(),
+        missing: capWords(it.missing, 12),
+        fix: capWords(it.fix, 16),
         targetBrickId: it.targetBrickId && brickIds.has(String(it.targetBrickId).replace(/\s+/g, '')) ? String(it.targetBrickId).replace(/\s+/g, '') : null,
         suggestedTools: (Array.isArray(it.suggestedTools) ? it.suggestedTools : []).map(String).filter(t => EDIT_TOOLS.includes(t) || t === 'cite').slice(0, 3),
         needs: (Array.isArray(it.needs) ? it.needs : []).map(String).filter(k => REQ_KINDS.includes(k)),
@@ -841,7 +868,9 @@ function normaliseMark(r, brief, essayForMark, plans) {
         criterionId: String(p.criterionId || '').replace(/\s+/g, ''),
         band: ['top', 'mid', 'low', 'missing'].includes(p.band) ? p.band : 'low',
         voicedBrickIds: (Array.isArray(p.voicedBrickIds) ? p.voicedBrickIds : []).map(x => String(x).replace(/\s+/g, '')).filter(x => brickIdsAll.has(x) && x.split('-')[0] === String(p.criterionId || '').replace(/\s+/g, '')),
-        termsUsed: (Array.isArray(p.termsUsed) ? p.termsUsed : []).map(String).filter(x => { const pl = plans && plans[String(p.criterionId || '').replace(/\s+/g, '')]; return pl && (pl.expectedTerms || []).some(t => t.toLowerCase() === x.toLowerCase()); }),
+        // Canonical spelling (termCanon) — the route adds and removes these by
+        // exact string, so the mark must spell them the way the plan does.
+        termsUsed: (Array.isArray(p.termsUsed) ? p.termsUsed : []).map(x => termCanon(plans && plans[String(p.criterionId || '').replace(/\s+/g, '')], x)).filter(Boolean),
         requirementsMet: (Array.isArray(p.requirementsMet) ? p.requirementsMet : []).map(String).filter(x => { const pl = plans && plans[String(p.criterionId || '').replace(/\s+/g, '')]; return pl && (pl.requirements || []).some(rq => rq.kind === x); }),
         evidence: String(p.evidence || ''),
         missingForTop: String(p.missingForTop || ''),
@@ -858,8 +887,8 @@ function normaliseMark(r, brief, essayForMark, plans) {
     const critique = (Array.isArray(r.critique) ? r.critique : []).map((it, i) => ({
         i,
         sentence: String(it.sentence || '').trim(),
-        missing: String(it.missing || '').trim(),
-        fix: String(it.fix || '').trim(),
+        missing: capWords(it.missing, 12),
+        fix: capWords(it.fix, 16),
         targetBrickId: it.targetBrickId && brickIds.has(String(it.targetBrickId).replace(/\s+/g, '')) ? String(it.targetBrickId).replace(/\s+/g, '') : null,
         suggestedTools: (Array.isArray(it.suggestedTools) ? it.suggestedTools : []).map(String).filter(t => EDIT_TOOLS.includes(t)).slice(0, 3),
         needs: (Array.isArray(it.needs) ? it.needs : []).map(String).filter(k => REQ_KINDS.includes(k)),
@@ -909,7 +938,7 @@ ${briefForPrompt(brief)}`;
     const r = await callAccurate(system, user, { maxTokens: 12000, schema: ASSEMBLE_SCHEMA, effort: 'low' });
     if (!r || !String(r.document || '').trim()) throw new Error('The assembly came back empty — try again.');
     const doc = String(r.document);
-    return { document: doc, wordCount: Number(r.wordCount) || doc.trim().split(/\s+/).filter(Boolean).length, changes: Array.isArray(r.changes) ? r.changes.map(String) : [] };
+    return { document: doc, wordCount: Number(r.wordCount) || doc.trim().split(/\s+/).filter(Boolean).length, changes: Array.isArray(r.changes) ? r.changes.map(String).slice(0, 6) : [] };
 }
 
 
@@ -947,8 +976,13 @@ ${brief ? '\nTHE QUESTIONS (already extracted):\n' + (brief.criteria || []).map(
     const user = `THE DOCUMENT:\n\n${body.slice(0, 60000)}\n\nTell the scenario for someone who will not read this.`;
     const schema = { type: 'object', additionalProperties: false, required: ['scenario'], properties: { scenario: BRIEF_SCHEMA.properties.scenario } };
     const r = await callAccurate(system, user, { maxTokens: 1800, schema, effort: 'low' });
-    const sc = r && r.scenario && typeof r.scenario === 'object' ? r.scenario : null;
-    if (!sc || !(String(sc.theStory || '').trim() || String(sc.whatItIs || '').trim())) return null;
+    // null means "the document has no scenario" — that is the model's call
+    // (scenario: null), not what an empty object or a blank story means. Those
+    // are a failed read and must retry, not sit as "no scenario" for ever.
+    if (!r || typeof r !== 'object' || !('scenario' in r)) throw new Error('Q could not read that document — try again.');
+    if (r.scenario === null) return null;
+    const sc = r.scenario && typeof r.scenario === 'object' ? r.scenario : null;
+    if (!sc || !(String(sc.theStory || '').trim() || String(sc.whatItIs || '').trim())) throw new Error('Q could not read that document — try again.');
     return {
         whatItIs: String(sc.whatItIs || '').trim(),
         theStory: String(sc.theStory || '').trim(),
@@ -966,6 +1000,9 @@ async function digestSource({ name, text, brief }) {
 ${brief ? '\nTHE ASSIGNMENT THIS DOCUMENT SUPPORTS (so you know what matters in it):\n' + briefForPrompt(brief).slice(0, 3000) : ''}`);
     const user = `DOCUMENT: ${name || 'supporting document'}\n\n${body.slice(0, 60000)}\n\nDigest it for someone who will not read it.`;
     const r = await callAccurate(system, user, { maxTokens: 1800, schema: SOURCE_DIGEST_SCHEMA, effort: 'low' });
+    // An empty {} used to become an all-blank digest, stored as if it were
+    // done. Throw instead so the route's retry path (and the page's retry) fire.
+    if (!r || !(String(r.theStory || '').trim() || String(r.whatItIs || '').trim())) throw new Error('Q could not read that document — try again.');
     return {
         whatItIs: String((r && r.whatItIs) || '').trim(),
         theStory: String((r && r.theStory) || '').trim(),
@@ -1051,7 +1088,24 @@ THE BRIEF
 ${briefForPrompt(brief)}`);
     const user = `SUPPORTING DOCUMENTS UPLOADED BY THE STUDENT:\n${sourcesForPrompt(sources)}\n\nWrite the model answer.`;
     const r = await callAccurate(system, user, { maxTokens: 14000, schema: ESSAY_SCHEMA, effort: 'medium' });
-    return normaliseEssay(r, brief);
+    const essay = normaliseEssay(r, brief);
+    // A criterion the model skipped (or gave empty paragraphs) used to vanish
+    // here — and planPart then said "not written yet" for ever, because the
+    // essay existed and nothing would ever write that part. One small top-up
+    // call for JUST the missing parts, merged in brief order; if it still
+    // comes back empty the job fails visibly (retryable) instead of silently.
+    const missing = brief.criteria.filter(c => !essay.perCriterion.some(p => p.criterionId === c.id));
+    if (missing.length) {
+        const ids = missing.map(c => c.id);
+        const topUp = `${user}\n\nThe model answer above is already written for every part EXCEPT these — write ONLY these parts, with these exact criterionIds, at least one paragraph each: ${ids.join(', ')}.`;
+        const r2 = await callAccurate(system, topUp, { maxTokens: 6000, schema: ESSAY_SCHEMA, effort: 'medium' });
+        const extra = normaliseEssay(r2, { ...brief, criteria: missing });
+        const byId = new Map(essay.perCriterion.concat(extra.perCriterion).map(p => [p.criterionId, p]));
+        essay.perCriterion = brief.criteria.map(c => byId.get(c.id)).filter(Boolean);
+        const still = ids.filter(id => !byId.has(id));
+        if (still.length) throw new Error(`The model answer came back empty for ${still.join(', ')} — try again.`);
+    }
+    return essay;
 }
 
 function normaliseEssay(r, brief) {
@@ -1158,7 +1212,7 @@ ${essay ? '\n' + essayForPrompt(essay).slice(0, 12000) : ''}`);
         why: String(it.why || '').trim(),
         targetBrickId: it.targetBrickId && brickIds.has(String(it.targetBrickId).replace(/\s+/g, '')) ? String(it.targetBrickId).replace(/\s+/g, '') : null,
         suggestedTools: (Array.isArray(it.suggestedTools) ? it.suggestedTools : []).map(String).filter(t => EDIT_TOOLS.includes(t)).slice(0, 3),
-    })).filter(it => it.sentence && it.why);
+    })).filter(it => it.sentence && it.why).slice(0, 30);
     return { items, sentencesSeen: sentences.length };
 }
 
@@ -1226,7 +1280,7 @@ ${targetForPrompt(brief, essay, brickId)}`);
     if (!r || typeof r !== 'object' || !String(r.headline || '').trim()) throw new Error('The tool came back empty — try again.');
     return {
         tool,
-        headline: String(r.headline).trim(),
+        headline: tool === 'references' ? String(r.headline).trim() : capWords(r.headline, 8),
         points: (Array.isArray(r.points) ? r.points : []).map(x => String(x).trim()).filter(Boolean).slice(0, 8),
         example: r.example ? String(r.example).trim() : null,
         nudge: String(r.nudge || 'Now say your sentence using it.').trim(),
@@ -1257,11 +1311,11 @@ ${expectationsForPrompt(plan)}`);
     const user = `THEIR SENTENCE NOW: "${String(sentence).slice(0, 800)}"\n\nHow close is it?`;
     const r = await callAccurate(system, user, { maxTokens: 400, schema: CHECK_SCHEMA, effort: 'low' });
     const closeness = ['match', 'closer', 'missing'].includes(r && r.closeness) ? r.closeness : 'closer';
-    const terms = new Set((plan && plan.expectedTerms || []).map(x => x.toLowerCase()));
     const kinds = new Set((plan && plan.requirements || []).map(x => x.kind));
     return {
         closeness, hint: String((r && r.hint) || (closeness === 'match' ? 'That\'s it — next.' : 'Closer.')).trim(),
-        termsUsed: (r && Array.isArray(r.termsUsed) ? r.termsUsed : []).map(String).filter(x => terms.has(x.toLowerCase())),
+        // termCanon: the plan's spelling, so the route's set add/delete matches.
+        termsUsed: (r && Array.isArray(r.termsUsed) ? r.termsUsed : []).map(x => termCanon(plan, x)).filter(Boolean),
         requirementsMet: (r && Array.isArray(r.requirementsMet) ? r.requirementsMet : []).map(String).filter(x => kinds.has(x)),
     };
 }
@@ -1367,7 +1421,10 @@ async function planPart({ brief, essay, criterionId, yearGroup, relateAnchor }) 
     const crit = brief.criteria.find(c => c.id === criterionId);
     if (!crit) throw new Error('That part is not in the brief.');
     const bricks = bricksOfCriterion(essay, criterionId);
-    if (!bricks.length) throw new Error('The model answer for this part is not written yet — a moment.');
+    if (!essay) throw new Error('The model answer for this part is not written yet — a moment.');
+    // The essay exists but has nothing for this part: say so — "a moment" was
+    // a promise nothing kept. This wording is retryable (userFacingCause).
+    if (!bricks.length) throw new Error('The model answer came back empty for this part — try again.');
     const idx = brief.criteria.findIndex(c => c.id === criterionId);
     const evaluative = /evaluat|critic|assess|judge|justify|argu|compare|extent|effective|recommend/i.test(crit.text || '');
     const ageHint = yearGroup ? `Year group: ${yearGroup}. Pitch every ask at their level.` : '';
@@ -1376,7 +1433,7 @@ async function planPart({ brief, essay, criterionId, yearGroup, relateAnchor }) 
 
 THE PLAN
 - "role": ONE plain sentence framing the job in role terms so they never wonder whether they are describing, judging or redesigning. Say it to them: "Here you're the critic: …" / "Here you're the adviser: …" / "Here you're the reporter: …".
-- "steps": 3-8 steps in the order a real tutor would run them. The SPINE is the brick loop: every brick — a term, a fact, a theory, an argument, a paragraph's line of reasoning, the structure — gets drawn out in turn (supply the idea plainly → ask for their sentence saying it, anchored in their world → bigger bricks take 2-3 asks). Group bricks the way the essay's paragraphs run. Lists, numbers, tags and pros/cons are helpers where they genuinely fit (a package to list, figures to put down, items to sort), never the spine for its own sake. Kinds:
+- "steps": 3 to 6 steps in the order a real tutor would run them. The SPINE is the brick loop: every brick — a term, a fact, a theory, an argument, a paragraph's line of reasoning, the structure — gets drawn out in turn (supply the idea plainly → ask for their sentence saying it, anchored in their world → bigger bricks take 2-3 asks). Group bricks the way the essay's paragraphs run. Lists, numbers, tags and pros/cons are helpers where they genuinely fit (a package to list, figures to put down, items to sort), never the spine for its own sake. Kinds:
     list      — they build a list, one item per line (a company's benefits, the causes of an event, the symptoms of a condition, the features of a design…). itemHint = a short example placeholder.
     numbers   — a small table: for each row, what it IS now and what it SHOULD be (a salary 30k → 45k; a temperature 20°C → 37°C; a date; a measurement). rows = the row labels and the two cell asks.
     tag       — YOU sort their list into 2-4 tags with colours (this runs AUTOMATICALLY the moment their list is done — no ask to the student, never "which are which?"; the coloured board + legend teaches it). prompt = the one legend line you say ("The pink ones you pick yourself — flexible; the blue ones everyone gets — fixed."). itemsFrom = the list step id. tags = name/colour/meaning, in everyday words ("pink = the company gives everyone the same; blue = you get to choose").
@@ -1580,7 +1637,7 @@ function normalisePlan(r, criterionId, bricks) {
     if (!steps.length) throw new Error('The plan had no usable steps — try again.');
     factsFirst(steps);
     noTheoryBeforeFacts(steps);
-    for (const s of steps) s.prompt = leadingAsk(s.prompt);
+    for (const s of steps) s.prompt = capWords(leadingAsk(s.prompt), 35);
     listNeedsASentence(steps);
     trimToMaxSteps(steps);
     // A numbers step with no rows becomes a plain ask; a tag/proscons step
@@ -1720,18 +1777,23 @@ ${String(answer).slice(0, 2500)}
 Which bricks are voiced, is the step filled, and what is the one thing to ask if not?`;
     const r = await callAccurate(system, user, { maxTokens: 700, schema: STEP_CHECK_SCHEMA, effort: 'low' });
     const allowed = new Set(step.targetBrickIds || []);
-    const supply = r && r.supply && !r.filled ? String(r.supply).trim() : null;
-    const terms = new Set((plan && plan.expectedTerms || []).map(x => x.toLowerCase()));
+    const filled = !!(r && r.filled);
+    const supply = r && r.supply && !filled ? String(r.supply).trim() : null;
     const kinds = new Set((plan && plan.requirements || []).map(x => x.kind));
+    // Not filled and the model gave no ask back = the page had nothing to show
+    // and moved on — full credit for an unfilled step. The step's own thenAsk /
+    // prompt is the ask again; never filled:false with followUp:null.
+    const followUp = filled ? null : capWords((supply && r.thenAsk) || (r && r.followUp) || step.thenAsk || step.prompt, 30) || null;
     return {
-        termsUsed: (r && Array.isArray(r.termsUsed) ? r.termsUsed : []).map(String).filter(x => terms.has(x.toLowerCase())),
+        // termCanon: the plan's spelling, so the route's set add/delete matches.
+        termsUsed: (r && Array.isArray(r.termsUsed) ? r.termsUsed : []).map(x => termCanon(plan, x)).filter(Boolean),
         requirementsMet: (r && Array.isArray(r.requirementsMet) ? r.requirementsMet : []).map(String).filter(x => kinds.has(x)),
         voicedBrickIds: (r && Array.isArray(r.voicedBrickIds) ? r.voicedBrickIds : []).map(x => String(x).replace(/\s+/g, '')).filter(x => allowed.has(x)),
-        filled: !!(r && r.filled),
+        filled,
         ack: String((r && r.ack) || '').trim(),
         supply,
         thenAsk: supply && r.thenAsk ? String(r.thenAsk).trim() : null,
-        followUp: r && !r.filled ? String((supply && r.thenAsk) || r.followUp || '').trim() || null : null,
+        followUp,
     };
 }
 
@@ -1775,7 +1837,7 @@ ${bricks.length ? 'THE BRICKS THE ASK IS FISHING FOR (Q\'s eyes only — teach t
         term: String(r.term || '').trim(),
         lesson: String(r.lesson).trim(),
         example: String(r.example || '').trim(),
-        applyAsk: String(r.applyAsk || ask).trim(),
+        applyAsk: capWords(r.applyAsk || ask, 35),
         searchTerms: (Array.isArray(r.searchTerms) ? r.searchTerms : []).map(String).filter(Boolean).slice(0, 3),
     };
 }
@@ -1850,7 +1912,8 @@ async function relabelCriteria({ brief }) {
     const system = withHouseStyle(`You give each assessment criterion a plain-words nickname (4 words or fewer) that a student who has never read the brief understands at a glance — the THING it is about, in everyday words: "Pay and perks", "What attracts people", "Fixed or pick-your-own", "How to measure it". Never the AC code, never the brief's verbs (evaluate, discuss, analyse, assess), never jargon.`);
     const user = `CRITERIA:\n${brief.criteria.map(c => `- [${c.id}] ${c.text}`).join('\n')}\n\nGive every one a nickname.`;
     const r = await callAccurate(system, user, { maxTokens: 600, schema: LABELS_SCHEMA, effort: 'low' });
-    const byId = new Map((r && Array.isArray(r.labels) ? r.labels : []).map(x => [String(x.id || '').replace(/\s+/g, ''), plainLabel(x.label, '')]));
+    // An empty label would become "this part" and overwrite a good one — drop it.
+    const byId = new Map((r && Array.isArray(r.labels) ? r.labels : []).filter(x => x && String(x.label || '').trim()).map(x => [String(x.id || '').replace(/\s+/g, ''), plainLabel(x.label, '')]));
     return brief.criteria.map(c => ({ id: c.id, label: byId.get(c.id) || c.label || plainLabel('', c.text) }));
 }
 
@@ -1874,10 +1937,16 @@ function userFacingCause(err, step = 'that step') {
     }
     if (code === 429) return { message: `The ${step} is busy right now (rate limit) — retry in a few seconds?`, code: 'busy', status: 503, retryable: true };
     if (code && code >= 500) return { message: `The ${step} hit a problem upstream (${code}) — retry?`, code: 'upstream', status: 502, retryable: true };
-    if (/truncated at \d+ tokens/i.test(both)) return { message: `The ${step} ran out of room mid-answer — retry (it will use a bigger budget)?`, code: 'truncated', status: 502, retryable: true };
+    if (/truncated at \d+ tokens/i.test(both)) return { message: `The ${step} ran out of room mid-answer — shorten the brief or try again?`, code: 'truncated', status: 502, retryable: true };
     if (/refused the request/i.test(both)) return { message: `The ${step} was declined by the coaching service for this content. Check the document is the assignment brief and try again.`, code: 'refused', status: 422, retryable: false };
     if (/JSON|Unexpected token|Unexpected end/i.test(both)) return { message: `The ${step} came back garbled — retry?`, code: 'garbled', status: 502, retryable: true };
     if (/fetch failed|ECONNRESET|ENOTFOUND|EAI_AGAIN|network/i.test(both)) return { message: `The ${step} could not reach the coaching service (network) — retry?`, code: 'network', status: 502, retryable: true };
+    // An empty 200 (the model returned {} / blank fields) is the service's
+    // fault, not the student's — retryable, never a 400.
+    if (/came back empty|did not match the criteria|could not read that document/i.test(msg)) return { message: msg, code: 'empty', status: 502, retryable: true };
+    // A bug of ours (TypeError etc.) is not something the student can act on
+    // — never show them "Cannot read properties of undefined" as a 400.
+    if ((err instanceof TypeError) || /Cannot read|is not a function|is not iterable|is not defined/.test(msg)) return { message: `Q lost his place on that step — try again.`, code: 'internal', status: 502, retryable: true };
     // Our own plain-English throws (no brief yet, nothing to mark…) pass through.
     if (msg && !/upstream|ANTHROPIC|TOGETHER|Claude|Q upstream/i.test(msg)) return { message: msg, code: 'invalid', status: 400, retryable: false };
     return { message: `The ${step} failed: ${msg.replace(/Claude|Anthropic|Together|DeepSeek|Gemini/gi, 'the coaching service').slice(0, 200)} — retry?`, code: 'unknown', status: 502, retryable: true };
@@ -2319,7 +2388,7 @@ function ukPolishResponse(value, key, parentKey) {
 }
 
 module.exports = {
-    ukPolishResponse, ukText, UK_LINE, PLAIN_QUESTION_RULE, withHouseStyle, plainLabel,
+    ukPolishResponse, ukText, UK_LINE, PLAIN_QUESTION_RULE, withHouseStyle, plainLabel, capWords, parseWeight, termCanon,
     TUTOR_MISSION, WHY_THE_GAME, GAME_RULE, COACH_VOICE, MISSION_BLOCK, withMission, BRICK_LOOP_RULE,
     toolHelp, checkSentence, matchScore, EDIT_TOOLS, TOOL_SCHEMA, CHECK_SCHEMA,
     planPart, normalisePlan, planForPrompt, tagItems, checkStep, brickById, bricksOfCriterion,
