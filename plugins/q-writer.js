@@ -1100,6 +1100,57 @@ Make the plan.`;
     return normalisePlan(r, criterionId, bricks);
 }
 
+// ── The board must never become a wall ─────────────────────────────────────
+// Sarah, 16 Aug, on a live screenshot: "for someone that's turned to an app
+// because they can't do it themselves this is a lot of text and clutter, no
+// colour, nothing stands out." Her Part 1 had ELEVEN steps on the board. The
+// schema says "3 to 6 steps" — but that is a sentence addressed to the model,
+// and these schemas carry no minItems/maxItems, so nothing ever enforced it.
+// A rule that only exists in prose is not a rule. Enforce it here.
+//
+// Which six: the ending is what makes a part evaluative (argue → switch →
+// recommend is where the marks are), so the last of those are kept and the
+// front of the plan fills what is left. Steps dropped here lose nothing —
+// their bricks fall to the last surviving step a few lines below, and the
+// dependency pass after this repairs any tag/pros-cons step whose list went.
+const MAX_PLAN_STEPS = 6;
+const CLOSING_KINDS = ['argue', 'switch', 'recommend'];
+function trimToMaxSteps(steps) {
+    if (steps.length <= MAX_PLAN_STEPS) return steps;
+    const closing = steps.filter(s => CLOSING_KINDS.includes(s.kind)).slice(-3);
+    const opening = steps.filter(s => !closing.includes(s)).slice(0, Math.max(1, MAX_PLAN_STEPS - closing.length));
+    const kept = opening.concat(closing);
+    steps.length = 0;
+    steps.push(...kept);
+    return steps;
+}
+
+// The one-line ask, actually one line. "12 words or fewer" was schema prose
+// too; what reached Sarah's word board was 20 words. A clause boundary makes
+// a clean short ask out of a long one ("Look honestly at your organisation's
+// pay and benefits, use real evidence to judge…" → the first clause), and
+// only a sentence with nowhere to cut gets an ellipsis.
+function oneLineAsk(text, maxWords = 12) {
+    const s = String(text || '').replace(/\s+/g, ' ').trim();
+    if (!s) return '';
+    const words = s.split(' ');
+    // A grace of two words: cutting a 13-word ask to 12 mangles a phrase
+    // ("the good and bad of flexible…") for no gain. Only trim what is
+    // actually long.
+    if (words.length <= maxWords + 2) return s;
+    const cuts = [];
+    let count = 0;
+    for (let i = 0; i < words.length; i++) {
+        count += 1;
+        if (/[,;:]$/.test(words[i]) && count >= 5 && count <= maxWords) cuts.push(count);
+    }
+    if (cuts.length) {
+        const n = cuts[cuts.length - 1];
+        return words.slice(0, n).join(' ').replace(/[,;:]$/, '') + '.';
+    }
+    return words.slice(0, maxWords).join(' ').replace(/[,;:]$/, '') + '…';
+}
+
 function normalisePlan(r, criterionId, bricks) {
     if (!r || typeof r !== 'object' || !Array.isArray(r.steps) || !r.steps.length) throw new Error('The plan came back empty — try again.');
     const brickIds = new Set((bricks || []).map(b => b.brickId));
@@ -1127,6 +1178,7 @@ function normalisePlan(r, criterionId, bricks) {
         };
     }).filter(s => s.prompt && !(s.kind === 'teach' && !s.lesson));
     if (!steps.length) throw new Error('The plan had no usable steps — try again.');
+    trimToMaxSteps(steps);
     // A numbers step with no rows becomes a plain ask; a tag/proscons step
     // must point at an earlier list-ish step (else the nearest one before it).
     const ids = steps.map(s => s.id);
@@ -1157,7 +1209,7 @@ function normalisePlan(r, criterionId, bricks) {
         if (!term || !seenT.has(term)) continue;
         glossary[term] = { meaning: String((g && g.meaning) || '').trim().slice(0, 240), example: String((g && g.example) || '').trim().slice(0, 240) };
     }
-    return { criterionId, role: String(r.role || '').trim(), minimalAsk: String(r.minimalAsk || '').trim(), expectedTerms, glossary, requirements, steps, madeAt: Date.now() };
+    return { criterionId, role: String(r.role || '').trim(), minimalAsk: oneLineAsk(r.minimalAsk), expectedTerms, glossary, requirements, steps, madeAt: Date.now() };
 }
 
 // The part's expectations (terms + requirements) for the check / mark prompts.

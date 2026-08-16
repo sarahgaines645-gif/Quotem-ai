@@ -329,6 +329,19 @@
     .q-popcard .pc-list { margin: 0 0 4px 14px; padding: 0; }
     .q-popcard .pc-list li { margin-bottom: 2px; }
     .q-popcard.term { width: 230px; pointer-events: none; z-index: 270; }
+    .q-popcard.cite { width: 300px; }
+    .q-popcard .cite-opt { display: block; width: 100%; text-align: left; margin-bottom: 6px; padding: 7px 9px; }
+    .q-popcard .cite-opt .co-title { display: block; font-weight: 600; font-size: 11px; line-height: 1.35; color: var(--text); }
+    .q-popcard .cite-opt .co-meta { display: block; font-size: 10px; color: var(--text-muted); margin-top: 2px; line-height: 1.35; }
+    .q-popcard .cite-opt .co-tag { display: inline-block; font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--accent); margin-right: 5px; }
+    .q-popcard .cite-opt .co-snip { display: block; font-size: 10px; color: var(--text-faint); font-style: italic; margin-top: 2px; line-height: 1.35; }
+    .q-popcard .cite-opt .co-warn { display: block; font-size: 9px; color: var(--accent); margin-top: 2px; }
+    .q-popcard .cite-sent { font-size: 10px; color: var(--text-muted); font-style: italic; margin-bottom: 6px; line-height: 1.35; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+    .refs-yours { display: flex; flex-direction: column; gap: 4px; margin-bottom: 12px; }
+    .refs-yours:empty { display: none; }
+    .refs-yours .ry-title { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-muted); }
+    .refs-yours .ry-item { font-family: 'Lora', Georgia, serif; font-size: 12px; line-height: 1.5; color: var(--text); padding: 4px 8px; border-radius: 8px; box-shadow: var(--neu-raised-xs); overflow-wrap: anywhere; }
+    .refs-yours .ry-item .ry-tag { font-family: 'Space Grotesk', sans-serif; font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--accent); margin-left: 6px; }
     .q-tool-out:empty { display: none; }
     .q-tool-out { font-size: 11px; color: var(--text-muted); margin-bottom: 6px; }
     .q-tool-head { font-weight: 700; font-size: 12px; margin-bottom: 4px; }
@@ -884,14 +897,14 @@
     /* ── Scaffolded coaching: the agenda + the scaffold widgets on the board ── */
     .tb-agenda { margin: 0 0 10px; padding: 8px 10px; border-radius: 10px; box-shadow: var(--neu-raised-xs); }
     .tb-role { font-size: 12px; font-weight: 600; color: var(--text); line-height: 1.45; margin-bottom: 6px; }
-    .tb-steps { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 3px; }
-    .tb-steps li { font-size: 11px; color: var(--text-muted); line-height: 1.4; display: grid; grid-template-columns: 14px 1fr; gap: 4px; align-items: start; }
-    .tb-steps li .st-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-top: 4px; box-shadow: var(--neu-inset-sm); }
-    .tb-steps li.done { color: var(--text-muted); }
-    .tb-steps li.done .st-dot { background: #28a745; box-shadow: none; }
-    .tb-steps li.cur { color: var(--text); font-weight: 600; }
-    .tb-steps li.cur .st-dot { background: var(--accent); box-shadow: none; }
-    .tb-steps li .st-kind { font-size: 9px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-faint); margin-left: 4px; font-weight: 600; }
+    /* One step, then a row of beads. No list of what is coming. */
+    .tb-now { font-size: 14px; font-weight: 600; color: var(--text); line-height: 1.45; }
+    .tb-track { display: flex; align-items: center; gap: 8px; margin-top: 8px; }
+    .st-beads { display: inline-flex; gap: 5px; align-items: center; }
+    .st-bead { width: 8px; height: 8px; border-radius: 50%; box-shadow: var(--neu-inset-sm); display: inline-block; }
+    .st-bead.done { background: #28a745; box-shadow: none; }
+    .st-bead.cur { background: var(--accent); box-shadow: none; transform: scale(1.35); }
+    .tb-count { font-size: 10px; color: var(--text-faint); font-weight: 600; letter-spacing: 0.04em; }
     .tb-scaf { margin: 6px 0 4px; }
     .tb-worksheet { margin: 0 0 10px; }
     /* THE WORD BOARD (Sarah, 15 Aug 23:40): a card of words as BUTTONS per
@@ -939,9 +952,19 @@
     .sc-list li .sc-n { font-size: 9px; color: var(--text-faint); font-weight: 700; min-width: 12px; }
     .sc-list li .sc-x { margin-left: auto; border: none; background: none; color: var(--text-faint); cursor: pointer; font-size: 14px; line-height: 1; padding: 0 2px; }
     .sc-list li .sc-x:hover { color: var(--accent); }
-    .sc-list li[data-tag] { border-left: 4px solid var(--tagc, transparent); }
+    /* Sarah, 16 Aug: "the different colour text was supposed to separate
+       things like flexi benefits and fixed to make it obvious. I meant use
+       colour to divide sections to make it clear." So the WORDS carry the
+       colour — a 4px stripe down the side of a grey row is not colour you can
+       read at a glance. The stripe stays as the edge, the text is the signal. */
+    .sc-list li[data-tag] { border-left: 4px solid var(--tagc, transparent); color: var(--tagc, var(--text)); font-weight: 600; }
+    .sc-list li[data-tag] .sc-n { color: var(--tagc); opacity: 0.7; }
+    /* An item the sorter has not reached yet must LOOK unsorted, never just
+       colourless-and-identical — that reads as "Q said pink and nothing is pink". */
+    .sc-list li[data-tag="?"] { border-left-style: dotted; color: var(--text-muted); font-weight: 400; }
     .sc-list li .sc-tag { font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--tagc, var(--text-muted)); }
-    .sc-legend { display: flex; flex-wrap: wrap; gap: 4px 10px; margin-top: 6px; font-size: 10px; color: var(--text-muted); }
+    .sc-legend { display: flex; flex-wrap: wrap; gap: 4px 10px; margin-top: 6px; font-size: 10px; }
+    .sc-legend span { color: var(--tagc, var(--text-muted)); font-weight: 600; }
     .sc-legend span::before { content: '●'; color: var(--tagc); margin-right: 4px; }
     .sc-line { font-size: 12px; color: var(--text); line-height: 1.45; margin-top: 6px; }
     .sc-table { width: 100%; border-collapse: collapse; font-size: 11px; }
@@ -1094,6 +1117,7 @@
 
       <!-- References panel — opens below the button -->
       <div class="refs-panel hidden" id="refs-panel">
+        <div class="refs-yours" id="refs-yours"></div>
         <div class="refs-tabs">
           <button class="refs-tab active" data-tab="manual">Add a source</button>
           <button class="refs-tab" data-tab="suggest">Suggest for this doc</button>
@@ -1163,6 +1187,7 @@
       <div class="q-nudge-btns hidden" id="coach-nudge">
         <button class="q-btn" id="btn-start-me" title="A smaller, easier question toward the same point">I'm stuck</button>
         <button class="q-btn" id="btn-dont-understand">I don't understand this</button>
+        <button class="q-btn" id="btn-auto-cite" title="Put the cursor at the end of a sentence — Q finds real sources you can cite (your uploads first), and puts the Harvard citation in for you">Auto cite</button>
       </div>
     </div>
     <div class="panel-foot">
@@ -2682,7 +2707,7 @@
         if (s.kind === 'tag' && st.tags) {
           const src = s.itemsFrom ? ss.steps[s.itemsFrom] : null; const items = src ? src.items : [];
           const byName = Object.fromEntries((s.tags || []).map(t => [t.name, t]));
-          const li = items.map((x, i) => { const name = st.tags[x]; const t = name ? byName[name] : null; const c = t ? TAG_CSS[t.colour] || '#999' : null; return `<li${c ? ` data-tag="${escHtml(name)}" style="--tagc:${c}"` : ''}><span class="sc-n">${i + 1}</span><span>${escHtml(x)}</span>${t ? `<span class="sc-tag">${escHtml(t.name)}</span>` : ''}</li>`; }).join('');
+          const li = items.map((x, i) => taggedRowHtml(x, i, st, byName)).join('');
           const legend = `<div class="sc-legend">${(s.tags || []).map(t => `<span style="--tagc:${TAG_CSS[t.colour] || '#999'}">${escHtml(t.colour)} = ${escHtml(t.meaning || t.name)}</span>`).join('')}</div>`;
           blocks.push(`<div class="tb-ws" data-ws="tag"><ul class="sc-list">${li}</ul>${legend}</div>`);
         } else if (s.kind === 'numbers' && (st.rows || []).some(v => v && (v.is || v.should))) {
@@ -2920,15 +2945,51 @@
     document.addEventListener('pointercancel', () => clearTimeout(termPop.pressTimer));
     document.addEventListener('scroll', hideTermPop, true);
     window.__qwriterWords = { showTermPop, hideTermPop, glossaryFor, coachWordsHtml, expectHtml };
+    // ONE STEP AT A TIME. Sarah, 16 Aug, looking at eleven steps on the board:
+    // "it should be one step at a time so he can make you write what he wants
+    // per sentence. that's all so much it will never work."
+    //
+    // She is right, and it is not a size problem — a list of what is coming is
+    // a list of things you cannot do yet. Someone who came to an app because
+    // they cannot start reads that as eleven reasons to close the tab. So the
+    // board carries the step she is ON, and the rest is a row of plain dots:
+    // where she is, how far, nothing to read. Colour is the divider she asked
+    // for — done is green, now is the accent, still to come is grey.
     function scaffoldAgendaHtml() {
       const cid = state.currentCriterionId; const plan = planFor(cid); if (!plan) return '';
       const ss = ssFor(cid); const cur = state.currentStep && state.currentStep.criterionId === cid ? state.currentStep.stepId : null;
-      const li = plan.steps.map((s, i) => {
-        const st = ss.steps[s.id]; const done = !!(st && st.filled);
-        const cls = done ? 'done' : (s.id === cur ? 'cur' : '');
-        return `<li class="${cls}"><span class="st-dot"></span><span>${escHtml(s.prompt.length > 70 ? s.prompt.slice(0, 69) + '…' : s.prompt)}<span class="st-kind">${escHtml(STEP_KIND_LABEL[s.kind] || s.kind)}</span></span></li>`;
+      const idx = cur ? plan.steps.findIndex(s => s.id === cur) : plan.steps.findIndex(s => !(ss.steps[s.id] && ss.steps[s.id].filled));
+      const here = plan.steps[idx < 0 ? 0 : idx];
+      const beads = plan.steps.map((s) => {
+        const st = ss.steps[s.id];
+        return `<span class="st-bead${st && st.filled ? ' done' : (s.id === (here && here.id) ? ' cur' : '')}" title="${escHtml(STEP_KIND_LABEL[s.kind] || s.kind)}"></span>`;
       }).join('');
-      return `<div class="tb-agenda" id="tb-agenda"><div class="tb-role">${escHtml(plan.role)}</div><ol class="tb-steps">${li}</ol></div>`;
+      const n = (idx < 0 ? 0 : idx) + 1;
+      return `<div class="tb-agenda" id="tb-agenda">`
+        + `<div class="tb-now">${escHtml(here ? here.prompt : plan.role)}</div>`
+        + `<div class="tb-track"><span class="st-beads">${beads}</span><span class="tb-count">${n} of ${plan.steps.length}</span></div>`
+        + `</div>`;
+    }
+    // ONE row of a sorted list, in its colour. The lookup is forgiving: the
+    // sorter's answer is keyed by the item text, so an item edited or added
+    // after the sort used to come back with no tag and render as plain grey —
+    // indistinguishable from a sorted one, which is exactly how Sarah ended up
+    // reading "pink = salary, bonus, pension" above a list with no pink in it.
+    // No match now renders as visibly not-yet-sorted instead of silently plain.
+    function tagOf(st, item) {
+      const tags = (st && st.tags) || null;
+      if (!tags) return null;
+      if (tags[item]) return tags[item];
+      const want = String(item).trim().toLowerCase();
+      for (const k of Object.keys(tags)) if (String(k).trim().toLowerCase() === want) return tags[k];
+      return null;
+    }
+    function taggedRowHtml(x, i, st, byName) {
+      const name = tagOf(st, x);
+      const t = name ? byName[name] : null;
+      const c = t ? (TAG_CSS[t.colour] || '#999') : null;
+      const attrs = c ? ` data-tag="${escHtml(name)}" style="--tagc:${c}"` : (st && st.tags ? ' data-tag="?"' : '');
+      return `<li${attrs}><span class="sc-n">${i + 1}</span><span>${escHtml(x)}</span>${t ? `<span class="sc-tag">${escHtml(t.name)}</span>` : ''}</li>`;
     }
     function scaffoldWidgetHtml() {
       const info = currentStepInfo(); if (!info) return '';
@@ -2940,7 +3001,7 @@
       if (step.kind === 'tag') {
         const src = step.itemsFrom ? stepStateOf(cid, step.itemsFrom) : null; const items = src ? src.items : [];
         const byName = Object.fromEntries((step.tags || []).map(t => [t.name, t]));
-        const li = items.map((x, i) => { const name = st.tags ? st.tags[x] : null; const t = name ? byName[name] : null; const c = t ? TAG_CSS[t.colour] || '#999' : null; return `<li${c ? ` data-tag="${escHtml(name)}" style="--tagc:${c}"` : ''}><span class="sc-n">${i + 1}</span><span>${escHtml(x)}</span>${t ? `<span class="sc-tag">${escHtml(t.name)}</span>` : ''}</li>`; }).join('');
+        const li = items.map((x, i) => taggedRowHtml(x, i, st, byName)).join('');
         const legend = st.tags ? `<div class="sc-legend">${(step.tags || []).map(t => `<span style="--tagc:${TAG_CSS[t.colour] || '#999'}">${escHtml(t.colour)} = ${escHtml(t.name)}${t.meaning ? ' — ' + escHtml(t.meaning) : ''}</span>`).join('')}</div>` : `<div class="sc-empty">Sorting…</div>`;
         return `<div class="tb-scaf" data-scaf="tag"><ul class="sc-list">${li}</ul>${legend}</div>`;
       }
@@ -3830,19 +3891,13 @@
       }
     });
 
+    // Every reference goes through appendReference (a "References" heading +
+    // one line per entry at the foot of the page) — never a rewrite of the
+    // page's text, which used to wipe the student's paragraphs.
     function appendRefToDoc(refText) {
-      const current = (docBody.textContent || '').trim();
-      const hasRefsSection = current.includes('References\n') || current.includes('References:');
-      let newContent;
-      if (hasRefsSection) {
-        newContent = current + '\n' + refText;
-      } else {
-        newContent = current
-          ? current + '\n\n' + 'References\n\n' + refText
-          : 'References\n\n' + refText;
-      }
-      docBody.textContent = newContent;
-      wordEl.textContent = countWords() + ' words';
+      appendReference(String(refText || '').trim());
+      noteReference({ reference: String(refText || '').trim(), inText: '', title: '', fromUpload: false });
+      wordEl.textContent = countWords() + ' words'; scheduleAutosave();
     }
 
     refsInsertManual.addEventListener('click', () => {
@@ -4383,8 +4438,8 @@
     // the page; "Check it" (or their next pause) compares it to Q's target
     // and answers with a closeness cue — closer / that's it / one thing still
     // missing — never the target text. Then the next sentence.
-    const EDIT_TOOL_LABELS = { terminology: 'Terminology', synonyms: 'Synonyms', dictionary: 'Dictionary', strategies: 'Strategies / theories', cases: 'Case studies', references: 'References', weak: 'What\'s weak' };
-    const EDIT_TOOL_ORDER = ['terminology', 'synonyms', 'dictionary', 'strategies', 'cases', 'references', 'weak'];
+    const EDIT_TOOL_LABELS = { cite: 'Auto cite', terminology: 'Terminology', synonyms: 'Synonyms', dictionary: 'Dictionary', strategies: 'Strategies / theories', cases: 'Case studies', references: 'References', weak: 'What\'s weak' };
+    const EDIT_TOOL_ORDER = ['cite', 'terminology', 'synonyms', 'dictionary', 'strategies', 'cases', 'references', 'weak'];
     let editHighlight = null;   // { range, block }
     function clearEditHighlight() {
       try { if (window.CSS && CSS.highlights) CSS.highlights.delete('q-edit'); } catch (_) {}
@@ -4466,7 +4521,7 @@
       const where = editWhere(it);
       renderBoard();   // the board's WHERE line + word board follow the sentence's part
       const suggested = (it.suggestedTools || []).filter(t => EDIT_TOOL_LABELS[t]);
-      const tools = suggested.concat(EDIT_TOOL_ORDER.filter(t => !suggested.includes(t)));
+      const tools = ['cite'].concat(suggested.filter(t => t !== 'cite'), EDIT_TOOL_ORDER.filter(t => t !== 'cite' && !suggested.includes(t)));   // Auto cite always leads
       hideToolPop();
       setCoach({
         msg: '',
@@ -4545,6 +4600,7 @@
     window.__qwriterTools = { showToolPop, hideToolPop, toolHelpHtml, runTool: (t, it, w) => runTool(t, it, w) };
     // A tool: one small structured call → help that leads them to write it.
     async function useTool(tool, it) {
+      if (tool === 'cite') { runAutoCite({ sentence: currentEditText() || it.sentence, criterionId: it.criterionId || state.currentCriterionId }); return; }
       const needsWord = tool === 'synonyms' || tool === 'dictionary';
       let word = '';
       if (needsWord) {
@@ -4701,6 +4757,127 @@
       wordEl.textContent = countWords() + ' words';
     }
 
+    // ══ AUTO CITE (Sarah, 15 Aug 23:40) ══════════════════════════════════
+    // Caret at the end of a sentence (or the highlighted / dotted sentence) →
+    // /writer/cite → real candidates (uploads first, tagged; then OpenAlex /
+    // CrossRef with verified metadata) on a popup card → press one → the
+    // Harvard in-text citation goes in before the sentence's full stop and
+    // the reference joins the list at the foot of the page (deduped); the
+    // part's citation / reference dot clears. Nothing found → say so plainly
+    // and offer the References tool. Never a made-up source.
+    function pickSentence(raw, off) {
+      const re = /[^.!?]+[.!?]+["'”’)\]]*|[^.!?]+$/g; let m, last = null;
+      while ((m = re.exec(raw))) {
+        const st = m.index, en = m.index + m[0].length;
+        if (off >= st && off <= en) { const t = m[0].replace(/\s+/g, ' ').trim(); if (t.length >= 3) return t; }
+        if (en <= off) last = m[0];
+      }
+      return last ? last.replace(/\s+/g, ' ').trim() : null;
+    }
+    // The sentence the caret is in (or just after); a real selection wins.
+    function sentenceAtCaret() {
+      const sel = window.getSelection(); if (!sel || !sel.rangeCount) return null;
+      const r = sel.getRangeAt(0); if (!docBody.contains(r.startContainer)) return null;
+      if (!r.collapsed) { const t = r.toString().replace(/\s+/g, ' ').trim(); if (t.length >= 12) return t; }
+      let block = r.startContainer.nodeType === 3 ? r.startContainer.parentElement : r.startContainer;
+      while (block && block !== docBody && !/^(P|DIV|LI|H1|H2|H3)$/.test(block.tagName)) block = block.parentElement;
+      if (!block || block === docBody) {
+        if (r.startContainer.nodeType !== 3) return null;
+        return pickSentence(r.startContainer.nodeValue || '', r.startOffset);
+      }
+      const pre = document.createRange(); pre.selectNodeContents(block); pre.setEnd(r.startContainer, r.startOffset);
+      return pickSentence(blockText(block), pre.toString().length);
+    }
+    // Where the in-text citation goes: before the sentence's closing punctuation.
+    function citationPoint(sentence) {
+      const needle = String(sentence || '').replace(/\s+/g, ' ').trim(); if (!needle) return null;
+      const { text, map } = docTextMap();
+      const at = text.indexOf(needle); if (at < 0) return null;
+      const j = at + needle.length;
+      let k = j; while (k > at && /[.!?"'”’)\]]/.test(text[k - 1])) k--;
+      if (k < j) return { node: map[k].node, offset: map[k].offset, spaceBefore: !/\s/.test(text[k - 1]) };
+      return { node: map[j - 1].node, offset: map[j - 1].offset + 1, spaceBefore: true };
+    }
+    function referenceKey(c) { return String(c.doi || c.id || c.reference || '').toLowerCase(); }
+    function noteReference(c) {
+      const key = referenceKey(c); if (!key) return;
+      if (!state.references.some(r => r.key === key)) state.references.push({ key, inText: c.inText || '', reference: c.reference || '', title: c.title || '', year: c.year || '', fromUpload: !!c.fromUpload, sourceName: c.sourceName || null, at: Date.now() });
+      persist({ references: state.references });
+      renderRefsList();
+    }
+    const refsYours = document.getElementById('refs-yours');
+    function renderRefsList() {
+      const list = state.references || [];
+      refsYours.innerHTML = list.length ? '<span class="ry-title">Your references (' + list.length + ')</span>' + list.map(r => '<div class="ry-item">' + escHtml(r.reference) + (r.fromUpload ? '<span class="ry-tag">your upload</span>' : '') + '</div>').join('') : '';
+    }
+    let citeBusy = false;
+    async function runAutoCite({ sentence, criterionId, anchor, dot } = {}) {
+      if (citeBusy) return;
+      const cid = criterionId || state.currentCriterionId;
+      const sent = String(sentence || sentenceAtCaret() || (state.editing ? currentEditText() : '') || '').replace(/\s+/g, ' ').trim();
+      const kind = 'Auto cite';
+      if (!state.brief) { showToolPop('<div class="pc-line">Drop your task in first — then I can find sources for what you write.</div>', { kind, anchor }); return; }
+      if (sent.length < 12) { showToolPop('<div class="pc-line">Put the cursor at the end of the sentence you want to back up, then press Auto cite.</div>', { kind, anchor }); return; }
+      citeBusy = true;
+      showToolPop('<div class="cite-sent">' + escHtml(sent) + '</div><div class="pc-line">Finding real sources…</div>', { kind, anchor });
+      toolPopEl.classList.add('cite');
+      try {
+        const d = await api('/writer/cite', { sentence: sent, criterionId: cid }, { timeoutMs: 40000 });
+        tally('cite', cid);
+        const cands = Array.isArray(d.candidates) ? d.candidates : [];
+        if (!cands.length) {
+          showToolPop('<div class="cite-sent">' + escHtml(sent) + '</div><div class="pc-line">' + escHtml(d.note || 'I could not find a source I can verify for that sentence.') + '</div><button type="button" class="q-btn" id="cite-refs-tool">Open the References tool</button>', { kind, anchor });
+          toolPopEl.classList.add('cite');
+          toolPopEl.querySelector('#cite-refs-tool').addEventListener('click', () => runTool('references', { sentence: sent, targetBrickId: null, criterionId: cid }, '', { anchor }));
+          return;
+        }
+        const html = '<div class="cite-sent">' + escHtml(sent) + '</div>' + cands.map((c, i) => {
+          const who = (c.authors || []).map(a => a.family).slice(0, 3).join(', ') + ((c.authors || []).length > 3 ? ' et al.' : '');
+          const meta = [who, c.year, c.journal || c.publisher || (c.type === 'book' ? 'book' : '')].filter(Boolean).join(' · ');
+          return '<button type="button" class="q-btn cite-opt" data-i="' + i + '">' + (c.fromUpload ? '<span class="co-tag">from your uploads</span>' : '') + '<span class="co-title">' + escHtml(c.title || '') + '</span><span class="co-meta">' + escHtml(meta) + ' — ' + escHtml(c.inText || '') + '</span>' + (c.snippet ? '<span class="co-snip">“' + escHtml(c.snippet.slice(0, 140)) + (c.snippet.length > 140 ? '…' : '') + '”</span>' : '') + ((c.warnings || []).length ? '<span class="co-warn">check: ' + escHtml(c.warnings.join('; ')) + '</span>' : '') + '</button>';
+        }).join('') + '<div class="pc-nudge">Press one — it goes in as a Harvard citation and joins your reference list.</div>';
+        showToolPop(html, { kind, anchor });
+        toolPopEl.classList.add('cite');
+        toolPopEl.querySelectorAll('.cite-opt').forEach(b => b.addEventListener('click', () => useCitation(cands[Number(b.dataset.i)], sent, cid, { anchor, dot })));
+      } catch (e) {
+        showToolPop('<div class="pc-line">The source search did not answer (' + escHtml(shortCause(e)) + ') — try again, or use the References tool.</div>', { kind, anchor });
+      } finally { citeBusy = false; }
+    }
+    async function useCitation(c, sentence, cid, { anchor, dot } = {}) {
+      if (!c) return;
+      // 1. the in-text citation before the sentence's full stop (once)
+      const pt = citationPoint(sentence);
+      let placed = false;
+      if (pt && c.inText) {
+        let blk = pt.node.parentElement; while (blk && blk !== docBody && !/^(P|DIV|LI|H1|H2|H3)$/.test(blk.tagName)) blk = blk.parentElement;
+        const around = blockText(blk && blk !== docBody ? blk : docBody);
+        if (!around.includes(c.inText)) {
+          const sel = window.getSelection(); const r = document.createRange(); r.setStart(pt.node, pt.offset); r.collapse(true); sel.removeAllRanges(); sel.addRange(r); docBody.focus();
+          const ok = document.execCommand('insertText', false, (pt.spaceBefore ? ' ' : '') + c.inText);
+          if (!ok) { r.insertNode(document.createTextNode((pt.spaceBefore ? ' ' : '') + c.inText)); }
+          placed = true;
+        }
+      }
+      // 2. the reference list entry (deduped) + the drawer + the notebook
+      appendReference(c.reference);
+      noteReference(c);
+      wordEl.textContent = countWords() + ' words'; scheduleAutosave();
+      // 3. the citation / reference dot for this part clears (the notebook's honest read is told)
+      try {
+        const kinds = ['citation', 'reference'];
+        const d = await api('/writer/cite/used', { criterionId: cid, kinds }, { timeoutMs: 20000 });
+        applyExpectations(d);
+      } catch (_) {
+        state.reqMet[cid] = Array.from(new Set([...(state.reqMet[cid] || []), 'citation', 'reference'])); renderBoard(); renderInlineDots(); refreshExpectations();
+      }
+      showToolPop('<div class="pc-head">' + escHtml(c.inText) + '</div><div class="pc-line">' + (placed ? 'In — at the end of your sentence, and the reference is on your list.' : 'That citation is already in your sentence — the reference is on your list.') + '</div>' + (c.warnings && c.warnings.length ? '<div class="pc-eg">Check: ' + escHtml(c.warnings.join('; ')) + '</div>' : ''), { kind: 'Auto cite', anchor });
+      clearTimeout(state.citePopTimer); state.citePopTimer = setTimeout(hideToolPop, 3500);
+      state.docSnapshot = docPlainText();
+    }
+    function escapeRe(x) { return String(x).replace(/[.*+?^${}()|[\]\\]/g, '\\    // ── Dictation: speak the answer into the coach box ────────────────────'); }
+    document.getElementById('btn-auto-cite').addEventListener('click', () => runAutoCite({}));
+    window.__qwriterCite = { runAutoCite, useCitation, sentenceAtCaret, citationPoint, renderRefsList, references: () => state.references };
+
     // ── Dictation: speak the answer into the coach box ────────────────────
     // Same ear as the chat page: the browser's own speech recognition
     // (Edge/Chrome), words appear as you speak, nothing is sent until Enter.
@@ -4806,6 +4983,7 @@
         state.reqMet = t.reqMet && typeof t.reqMet === 'object' ? t.reqMet : {};
         state.references = Array.isArray(t.references) ? t.references : [];
         state.inlineDots = t.inlineDots && typeof t.inlineDots === 'object' ? t.inlineDots : {};
+        renderRefsList();
         // BACKFILL (Sarah's live session pre-dates the plan engine): a session
         // that has already started — answers in the history or words on the
         // page — counts the opener as done, so the current part runs on its
