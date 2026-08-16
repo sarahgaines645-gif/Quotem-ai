@@ -12,7 +12,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Lora:ital,wght@0,400;0,500;0,600;1,400&display=swap" rel="stylesheet">
   <style>
     :root {
-      --bg: #e8e8e8;
+      --bg: #f3f3f3;
       --text: #1a1a1a;
       --text-muted: rgba(0,0,0,0.55);
       --text-faint: rgba(0,0,0,0.35);
@@ -1924,7 +1924,7 @@
       const BALL_COLORS = ['#e74c3c', '#f39c12', '#f1c40f', '#2ecc71', '#3498db', '#9b59b6', '#e91e63', '#1abc9c'];
 
       let canvas = null, ctx = null, W = 0, H = 0;
-      let col = { bg: '#e8e8e8', text: '#1a1a1a', accent: '#e91e63', muted: 'rgba(0,0,0,0.55)', faint: 'rgba(0,0,0,0.35)', neon: false };
+      let col = { bg: '#f3f3f3', text: '#1a1a1a', accent: '#e91e63', muted: 'rgba(0,0,0,0.55)', faint: 'rgba(0,0,0,0.35)', neon: false };
       const NEON_BALLS = ['#ff2d95', '#00f0ff', '#b6ff00', '#ffb800', '#a855f7', '#ff5e3a', '#ffffff', '#ff7cc0'];
       let reducedMotion = false;   // shakes off, drip still animates
       let TX = 0, TY = 4, TW = 0, TB = 0, innerH = 1; // tube geometry
@@ -2006,7 +2006,7 @@
         const cs = getComputedStyle(document.documentElement);
         const get = (n, f) => (cs.getPropertyValue(n) || '').trim() || f;
         col = {
-          bg: get('--bg', '#e8e8e8'), text: get('--text', '#1a1a1a'),
+          bg: get('--bg', '#f3f3f3'), text: get('--text', '#1a1a1a'),
           accent: get('--accent', '#e91e63'),
           muted: get('--text-muted', 'rgba(0,0,0,0.55)'),
           faint: get('--text-faint', 'rgba(0,0,0,0.35)'),

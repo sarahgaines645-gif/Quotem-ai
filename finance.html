@@ -19,7 +19,7 @@
   <script>pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';</script>
   <style>
     :root {
-      --bg: #e8e8e8; --text: #1a1a1a;
+      --bg: #f3f3f3; --text: #1a1a1a;
       --text-muted: rgba(0,0,0,0.42); --text-faint: rgba(0,0,0,0.26);
       --accent: #e91e63; --accent-soft: rgba(233,30,99,0.10);
       --green: #22c55e; --green-soft: rgba(34,197,94,0.10);
@@ -2819,7 +2819,7 @@
     // forced onto www. for the production domain and left alone anywhere
     // else (localhost, a preview). qrUploadUrl() is the one place this lives.
     const uploadUrl = qrUploadUrl(session.token);
-    QRCode.toCanvas(document.getElementById('qr-canvas'), uploadUrl, { width: 200, margin: 1, color: { dark: '#1a1a1a', light: '#e8e8e8' } });
+    QRCode.toCanvas(document.getElementById('qr-canvas'), uploadUrl, { width: 200, margin: 1, color: { dark: '#1a1a1a', light: '#f3f3f3' } });
 
     // Start polling
     qrPollTimer = setInterval(() => pollQrSession(), 3000);

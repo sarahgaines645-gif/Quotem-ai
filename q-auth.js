@@ -26,7 +26,7 @@
                     padding: clamp(16px, 8vh, 80px) 16px clamp(120px, 35vh, 320px);
                 }
                 #q-signin-card {
-                    background: #e8e8e8;
+                    background: #f3f3f3;
                     box-shadow: 10px 10px 28px #ababab, -8px -8px 20px #ffffff;
                     border-radius: 24px;
                     padding: 40px 36px;
@@ -52,7 +52,7 @@
                 #q-signin-card input {
                     width: 100%; padding: 14px 18px;
                     border: none; outline: none;
-                    background: #e8e8e8;
+                    background: #f3f3f3;
                     box-shadow: inset 5px 5px 14px #ababab, inset -4px -4px 10px #ffffff;
                     border-radius: 14px; font-size: 16px;
                     color: #1a1a1a; font-family: inherit;
@@ -78,7 +78,7 @@
                 #q-signin-card button.q-submit {
                     width: 100%; padding: 14px;
                     border: none; cursor: pointer;
-                    background: #e8e8e8; color: #1a1a1a;
+                    background: #f3f3f3; color: #1a1a1a;
                     box-shadow: 6px 6px 16px #ababab, -5px -5px 12px #ffffff;
                     border-radius: 14px; font-size: 15px;
                     font-weight: 600; font-family: inherit;
@@ -470,7 +470,7 @@
           #q-bell {
             position: fixed; top: 14px; right: 14px; z-index: 99990;
             width: 44px; height: 44px; border: none; border-radius: 50%;
-            background: #e8e8e8; color: #1a1a1a; padding: 0;
+            background: #f3f3f3; color: #1a1a1a; padding: 0;
             box-shadow: 6px 6px 16px #ababab, -5px -5px 12px #ffffff;
             display: inline-flex; align-items: center; justify-content: center;
             cursor: pointer; transition: box-shadow 0.12s;
@@ -484,7 +484,7 @@
             position: absolute; top: 8px; right: 8px;
             width: 9px; height: 9px; border-radius: 50%;
             background: #e91e63; display: none;
-            box-shadow: 0 0 0 2px #e8e8e8;
+            box-shadow: 0 0 0 2px #f3f3f3;
           }
           #q-bell.q-bell-on .q-bell-dot { display: block; }
           @media (max-width: 600px) { #q-bell { width: 40px; height: 40px; top: 10px; right: 10px; } }
