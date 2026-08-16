@@ -13,7 +13,7 @@
   <script src="/marked.min.js"></script>
   <style>
     :root {
-      --bg: #e8e8e8;
+      --bg: #f3f3f3;
       --text: #1a1a1a;
       --text-muted: rgba(0,0,0,0.55);
       --text-faint: rgba(0,0,0,0.35);
@@ -920,7 +920,15 @@
     .tb-expect .ex-terms { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 6px; }
     .q-term { padding: 3px 9px; border: none; border-radius: 10px; cursor: pointer; font-family: 'Space Grotesk', sans-serif; font-size: 11px; font-weight: 500; background: var(--bg); color: var(--text); box-shadow: var(--neu-raised-xs); transition: color 0.15s, box-shadow 0.15s; }
     .q-term:hover { box-shadow: var(--neu-raised-sm); }
-    .q-term.seen { color: #2e7d32; box-shadow: var(--neu-inset-sm); }
+    /* GREEN MEANS Q CHECKED IT — NOTHING ELSE. Sarah, 16 Aug: "the idea of
+       these buttons is they go green when you have used them correctly. I just
+       pressed them all together and wrote 'saves money' … they stayed green."
+       They were green for being ON THE PAGE, which is a thing the student can
+       do by pressing a button — so the board was congratulating her for
+       pressing buttons. On the page but unchecked now reads as exactly that:
+       pressed in, waiting. Only Q's check earns the green. */
+    .q-term.seen { color: var(--text-muted); box-shadow: var(--neu-inset-sm); }
+    .q-term.seen::after { content: ' ·'; color: var(--text-faint); }
     .q-term.fits { color: #fff; background: #2e7d32; box-shadow: none; }
     .tb-expect .ex-left { font-size: 10px; color: var(--text-muted); line-height: 1.4; margin-bottom: 4px; }
     .tb-expect .ex-left b { color: var(--text); }
@@ -2427,8 +2435,27 @@
         : step.kind === 'tag' ? !!st.tags
         : step.kind === 'proscons' ? Object.values(st.pc || {}).some(v => v && (v.pro || v.con))
         : st.answers.length >= 1;
-      if (step.kind === 'tag') { if (st.tags) acts.push({ label: 'Next →', primary: true, big: true, onClick: () => completeStep(cid, step.id) }); }
-      else if (filledEnough) acts.push({ label: step.kind === 'list' ? 'Done with the list →' : 'Done →', primary: true, onClick: () => completeStep(cid, step.id) });
+      // THERE IS ALWAYS A WAY FORWARD. Sarah, 16 Aug, stuck mid-part: "there's
+      // no next button. there's no way forward."
+      //
+      // The forward button only appeared once the step counted itself filled,
+      // and a step counts answers typed in the COACH BOX. She was writing in
+      // the document — which is the whole point of the app — so the step never
+      // filled and the only thing on offer was "Skip this step". Being trapped
+      // on a question is the one thing that makes someone close the tab, and
+      // it is never worth protecting a step's completeness at that price.
+      //
+      // So Next is always there. What changes with `filledEnough` is only what
+      // it says: "Done →" when the step has what it wanted, a quieter
+      // "Next →" when she is moving on regardless. Her writing is on the page
+      // either way, and the mark reads the page, not the scaffold.
+      if (step.kind === 'tag') {
+        acts.push({ label: st.tags ? 'Next →' : 'Next → (sorting)', primary: true, big: true, onClick: () => completeStep(cid, step.id) });
+      } else if (filledEnough) {
+        acts.push({ label: step.kind === 'list' ? 'Done with the list →' : 'Done →', primary: true, onClick: () => completeStep(cid, step.id) });
+      } else {
+        acts.push({ label: 'Next →', primary: true, onClick: () => completeStep(cid, step.id) });
+      }
       acts.push({ label: 'Skip this step', quiet: true, onClick: () => skipStep(cid, step.id) });
       return acts;
     }
@@ -2762,7 +2789,7 @@
     function termButtonsHtml(cid, { compact } = {}) {
       const plan = planFor(cid); if (!plan) return '';
       const text = partText(cid); const fits = new Set((state.termsFit[cid] || []).map(x => x.toLowerCase()));
-      return (plan.expectedTerms || []).map(t => { const cls = fits.has(t.toLowerCase()) ? ' fits' : (termSeen(cid, t, text) ? ' seen' : ''); return `<button type="button" class="q-term${cls}" data-term="${escHtml(t)}" data-cid="${escHtml(cid)}" title="${cls ? (cls.trim() === 'fits' ? 'Q says it fits' : 'On the page — Q will confirm it fits') : 'Press to drop it into your sentence · hover for what it means'}">${escHtml(t)}</button>`; }).join('');
+      return (plan.expectedTerms || []).map(t => { const cls = fits.has(t.toLowerCase()) ? ' fits' : (termSeen(cid, t, text) ? ' seen' : ''); return `<button type="button" class="q-term${cls}" data-term="${escHtml(t)}" data-cid="${escHtml(cid)}" title="${cls ? (cls.trim() === 'fits' ? 'Green: you used it properly and Q checked it' : 'On the page, not checked yet — write the sentence that uses it and Q will read it') : 'Press to drop it into your sentence · hover for what it means'}">${escHtml(t)}</button>`; }).join('');
     }
     function reqDotsHtml(cid, { withKey } = {}) {
       const plan = planFor(cid); if (!plan || !(plan.requirements || []).length) return '';
