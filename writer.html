@@ -2479,7 +2479,14 @@
         let parts = text.split(/\n|;/).map(x => x.trim()).filter(Boolean);
         if (parts.length === 1 && (text.match(/,/g) || []).length >= 2) { const cs = text.split(',').map(x => x.trim()).filter(Boolean); if (cs.every(x => x.length <= 40)) parts = cs; }
         for (const p of parts) if (!st.items.some(x => x.toLowerCase() === p.toLowerCase())) st.items.push(p.slice(0, 160));
-        putStepOnPage(cid, step, stepPageText(step, st));
+        // Scaffold material stays ON THE BOARD. Sarah, 16 Aug: "the list he
+        // had me write to develop the answer went straight into the doc" —
+        // and it arrived as "One expensive tech a year, IE iPad.Christmas
+        // party, summer party and a pay increase", which is a worksheet
+        // pasted into an essay, not a sentence. Her lists, numbers and
+        // pros/cons are the thinking; only the sentences she writes in her
+        // own words belong on the page. This is why the document "isn't
+        // forming into sentences".
         renderBoard(); persistSteps();
         setCoach({ msg: step.prompt, hint: st.items.length + ' on the list · Enter adds one · Done when finished.', inputVisible: true, showNudge: true, actions: stepActions(cid, step, st) });
         coachInput.placeholder = step.itemHint || 'Another one, then Enter…';
@@ -2490,7 +2497,14 @@
         const cell = nextNumbersCell(step, st);
         if (!cell) { completeStep(cid, step.id); return true; }
         st.rows[cell.i] = st.rows[cell.i] || {}; st.rows[cell.i][cell.field] = text.trim().slice(0, 80);
-        putStepOnPage(cid, step, stepPageText(step, st));
+        // Scaffold material stays ON THE BOARD. Sarah, 16 Aug: "the list he
+        // had me write to develop the answer went straight into the doc" —
+        // and it arrived as "One expensive tech a year, IE iPad.Christmas
+        // party, summer party and a pay increase", which is a worksheet
+        // pasted into an essay, not a sentence. Her lists, numbers and
+        // pros/cons are the thinking; only the sentences she writes in her
+        // own words belong on the page. This is why the document "isn't
+        // forming into sentences".
         renderBoard(); persistSteps();
         const next = nextNumbersCell(step, st);
         if (!next) { completeStep(cid, step.id); return true; }
@@ -2503,7 +2517,14 @@
         const cell = nextPcCell(cid, step, st);
         if (!cell) { completeStep(cid, step.id); return true; }
         st.pc[cell.item] = st.pc[cell.item] || { pro: '', con: '' }; st.pc[cell.item][cell.field] = text.trim().slice(0, 400);
-        putStepOnPage(cid, step, stepPageText(step, st));
+        // Scaffold material stays ON THE BOARD. Sarah, 16 Aug: "the list he
+        // had me write to develop the answer went straight into the doc" —
+        // and it arrived as "One expensive tech a year, IE iPad.Christmas
+        // party, summer party and a pay increase", which is a worksheet
+        // pasted into an essay, not a sentence. Her lists, numbers and
+        // pros/cons are the thinking; only the sentences she writes in her
+        // own words belong on the page. This is why the document "isn't
+        // forming into sentences".
         renderBoard(); persistSteps();
         const next = nextPcCell(cid, step, st);
         if (!next) { completeStep(cid, step.id); return true; }
@@ -3038,13 +3059,22 @@
       const info = currentStepInfo(); if (!info) return;
       const { step, cid } = info; const st = stepStateOf(cid, step.id);
       teachBody.querySelectorAll('.tb-scaf .sc-x').forEach(b => b.addEventListener('click', () => {
-        st.items.splice(Number(b.dataset.rm), 1); putStepOnPage(cid, step, stepPageText(step, st)); renderBoard(); persistSteps();
+        // '' clears any scaffold paragraph an older session left in the
+        // document — the list lives on the board now, not on the page.
+        st.items.splice(Number(b.dataset.rm), 1); putStepOnPage(cid, step, ''); renderBoard(); persistSteps();
         setCoach({ msg: step.prompt, hint: st.items.length + ' on the list.', inputVisible: true, showNudge: true, actions: stepActions(cid, step, st) });
       }));
       teachBody.querySelectorAll('.tb-scaf .sc-table input').forEach(inp => {
         inp.addEventListener('change', () => {
           const i = Number(inp.dataset.row); st.rows[i] = st.rows[i] || {}; st.rows[i][inp.dataset.field] = inp.value.trim().slice(0, 80);
-          putStepOnPage(cid, step, stepPageText(step, st)); persistSteps();
+          // Scaffold material stays ON THE BOARD. Sarah, 16 Aug: "the list he
+        // had me write to develop the answer went straight into the doc" —
+        // and it arrived as "One expensive tech a year, IE iPad.Christmas
+        // party, summer party and a pay increase", which is a worksheet
+        // pasted into an essay, not a sentence. Her lists, numbers and
+        // pros/cons are the thinking; only the sentences she writes in her
+        // own words belong on the page. This is why the document "isn't
+        // forming into sentences". persistSteps();
           const next = nextNumbersCell(step, st);
           setCoach({ msg: step.prompt, hint: next ? cellAsk(next) : 'All filled — press Done.', inputVisible: true, showNudge: true, actions: stepActions(cid, step, st) });
           coachInput.placeholder = next ? cellAsk(next) : 'Done?';
