@@ -110,7 +110,7 @@
       width: 30px; height: 30px; border-radius: 8px; flex: 0 0 30px;
       display: flex; align-items: center; justify-content: center;
       font-size: 12px; font-weight: 700; letter-spacing: -0.03em;
-      box-shadow: var(--neu-inset-xs);
+      box-shadow: var(--neu-raised-xs);
     }
     .acct-card .ac-name { font-size: 13px; font-weight: 700; color: var(--text); line-height: 1.2; }
     .acct-card .ac-sub  { font-size: 10px; color: var(--text-muted); margin-top: 2px; }
@@ -401,7 +401,10 @@
       display: inline-flex; align-items: center; justify-content: center;
       font-size: 9px; font-weight: 700; letter-spacing: 0.02em;
       position: relative; overflow: hidden;
+      box-shadow: var(--neu-raised-xs);
     }
+    /* Inside a letter's stamp the stamp is the raised thing — the chip sits flat on it. */
+    .stamp-mark .m-chip { box-shadow: none; }
     /* Invisible (NOT display:none) until loaded — a lazy-loaded image with
        no layout box never counts as "in view", so it never fetches and
        onload never fires. Keep the box, hide the pixels. */
