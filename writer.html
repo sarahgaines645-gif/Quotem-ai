@@ -43,6 +43,61 @@
     header .nav-links { margin-left: auto; display: flex; gap: 14px; align-items: center; }
     header a.back { color: var(--text-muted); text-decoration: none; font-size: 13px; }
     header a.back:hover { color: var(--accent); }
+    /* ── Assignments (16 Aug 2026): one person, several pieces of work ── */
+    .proj-wrap { position: relative; display: flex; align-items: center; min-width: 0; }
+    .proj-btn {
+      display: inline-flex; align-items: center; gap: 7px; max-width: 320px;
+      padding: 5px 12px; border: none; border-radius: 12px; cursor: pointer;
+      font-family: 'Space Grotesk', sans-serif; font-size: 12px; font-weight: 600;
+      background: var(--bg); color: var(--text); box-shadow: var(--neu-raised-xs);
+      transition: box-shadow 0.15s;
+    }
+    .proj-btn:hover { box-shadow: var(--neu-raised-sm); }
+    .proj-btn[aria-expanded="true"] { box-shadow: var(--neu-inset-sm); }
+    .proj-btn .proj-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .proj-btn .proj-caret { color: var(--text-muted); font-size: 10px; }
+    .proj-btn .proj-count { color: var(--text-muted); font-weight: 500; }
+    .proj-menu {
+      position: absolute; top: calc(100% + 8px); left: 0; z-index: 60; width: 340px; max-width: calc(100vw - 32px);
+      background: var(--bg); border-radius: 14px; box-shadow: var(--neu-raised-sm); padding: 8px;
+      display: none;
+    }
+    .proj-menu.open { display: block; }
+    .proj-menu .proj-title { font-size: 11px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-muted); padding: 6px 8px 4px; }
+    .proj-list { max-height: 50vh; overflow-y: auto; display: flex; flex-direction: column; gap: 2px; }
+    .proj-row {
+      display: grid; grid-template-columns: 12px minmax(0, 1fr) auto; align-items: center; gap: 8px;
+      padding: 8px 8px; border-radius: 10px; cursor: pointer;
+    }
+    .proj-row:hover { box-shadow: var(--neu-raised-xs); }
+    .proj-row.on { box-shadow: var(--neu-inset-sm); cursor: default; }
+    .proj-row .proj-dot { width: 8px; height: 8px; border-radius: 50%; background: transparent; }
+    .proj-row.on .proj-dot { background: var(--accent); }
+    .proj-row .proj-main { min-width: 0; }
+    .proj-row .proj-n { font-size: 13px; font-weight: 700; color: var(--text); overflow-wrap: anywhere; }
+    .proj-menu .proj-meta { font-size: 11px; color: var(--text-muted); margin-top: 1px; }
+    .proj-row .proj-acts { display: flex; gap: 4px; opacity: 0; transition: opacity 0.12s; }
+    .proj-row:hover .proj-acts, .proj-row.on .proj-acts, .proj-row.arm .proj-acts { opacity: 1; }
+    .proj-act {
+      border: none; background: var(--bg); color: var(--text-muted); cursor: pointer; border-radius: 8px;
+      width: 24px; height: 24px; font-size: 12px; line-height: 1; box-shadow: var(--neu-raised-xs);
+      font-family: 'Space Grotesk', sans-serif;
+    }
+    .proj-act:hover { color: var(--text); box-shadow: var(--neu-raised-sm); }
+    .proj-act.armed { color: var(--accent); box-shadow: var(--neu-inset-sm); width: auto; padding: 0 8px; font-weight: 700; }
+    .proj-row input.proj-rename {
+      width: 100%; border: none; border-radius: 8px; padding: 4px 8px; font-family: 'Space Grotesk', sans-serif; font-size: 13px; font-weight: 700;
+      background: var(--bg); color: var(--text); box-shadow: var(--neu-inset-sm); outline: none;
+    }
+    .proj-new {
+      margin-top: 6px; width: 100%; border: none; border-radius: 10px; padding: 9px 10px; cursor: pointer; text-align: left;
+      font-family: 'Space Grotesk', sans-serif; font-size: 12px; font-weight: 700; color: var(--text);
+      background: var(--bg); box-shadow: var(--neu-raised-xs);
+    }
+    .proj-new:hover { box-shadow: var(--neu-raised-sm); }
+    .proj-new::before { content: '+ '; color: var(--accent); }
+    .proj-menu .proj-err { font-size: 11px; color: var(--accent); padding: 4px 8px 0; }
+    @media (max-width: 700px) { .proj-btn { max-width: 160px; } .proj-menu { width: calc(100vw - 32px); } }
 
     /* ── Setup strip ─────────────────────────────────────────────────────── */
     .setup-strip {
@@ -1103,6 +1158,17 @@
   <header>
     <div class="brand">Q<span class="dot">.</span></div>
     <div class="crumbs">Writing Coach</div>
+    <div class="proj-wrap" id="proj-wrap">
+      <button type="button" class="proj-btn" id="proj-btn" aria-haspopup="true" aria-expanded="false" title="Your assignments — switch between them, or start a new one. Each keeps its own brief, coaching and page.">
+        <span class="proj-name" id="proj-name">Assignments</span><span class="proj-count" id="proj-count"></span><span class="proj-caret">▾</span>
+      </button>
+      <div class="proj-menu" id="proj-menu" role="menu">
+        <div class="proj-title">Your assignments</div>
+        <div class="proj-list" id="proj-list"></div>
+        <button type="button" class="proj-new" id="proj-new">New assignment</button>
+        <div class="proj-err" id="proj-err"></div>
+      </div>
+    </div>
     <div class="nav-links">
       <a href="/revise" class="back">Revision</a>
       <a href="/chat" class="back">← Chat</a>
@@ -1430,6 +1496,8 @@
 
     // ── State ──────────────────────────────────────────────────────────────
     const state = {
+      projectId: null,        // which assignment this page is showing (server: active)
+      projects: [],           // the switcher's list
       voiceSignature: null,
       relateAnchor: '',
       yearGroup: '',
@@ -1986,10 +2054,17 @@
     }
 
     // ── API helpers ────────────────────────────────────────────────────────
+    // Every /writer call names the assignment it is about (16 Aug 2026 —
+    // one person, several assignments). No header = the server's active one.
+    function writerHeaders(url, h) {
+      const out = Object.assign({}, h || {});
+      if (state.projectId && typeof url === 'string' && url.indexOf('/writer') === 0) out['X-Writer-Project'] = state.projectId;
+      return out;
+    }
     async function post(url, body) {
       const r = await fetch(url, {
         method: 'POST', credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
+        headers: writerHeaders(url, { 'Content-Type': 'application/json' }),
         body: JSON.stringify(body),
       });
       return r.json();
@@ -2007,7 +2082,7 @@
       try {
         r = await fetch(url, {
           method, credentials: 'include', signal: ctrl.signal,
-          headers: body !== undefined ? { 'Content-Type': 'application/json' } : undefined,
+          headers: writerHeaders(url, body !== undefined ? { 'Content-Type': 'application/json' } : {}),
           body: body !== undefined ? JSON.stringify(body) : undefined,
         });
       } catch (e) {
@@ -2175,7 +2250,7 @@
       const patch = Object.assign(pendingPatch || {}, dirtySince ? docPatch() : {});
       pendingPatch = null;
       if (!Object.keys(patch).length) return;
-      try { fetch('/writer/tutor', { method: 'POST', credentials: 'include', keepalive: true, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(patch) }); } catch (_) {}
+      try { fetch('/writer/tutor', { method: 'POST', credentials: 'include', keepalive: true, headers: writerHeaders('/writer/tutor', { 'Content-Type': 'application/json' }), body: JSON.stringify(patch) }); } catch (_) {}
     });
     document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden' && dirtySince) { clearTimeout(saveTimer); persist(docPatch()); } });
 
@@ -5646,7 +5721,8 @@
       const btn = document.getElementById('btn-restart');
       const note = document.getElementById('restart-note');
       if (!btn) return;
-      const STASH = 'q.writer.lastCleared';
+      const STASH_BASE = 'q.writer.lastCleared';
+      const stashKey = () => STASH_BASE + (state.projectId && state.projectId !== 'main' ? ':' + state.projectId : '');
       let armed = null;
       function disarm() { armed = null; btn.classList.remove('arm'); btn.textContent = 'Start again from scratch'; note.innerHTML = ''; }
       btn.addEventListener('click', async () => {
@@ -5660,13 +5736,13 @@
         clearTimeout(armed); armed = null;
         btn.classList.remove('arm'); btn.disabled = true; btn.textContent = 'Clearing…';
         try {
-          try { localStorage.setItem(STASH, JSON.stringify({ at: Date.now(), title: titleEl.value || '', html: docBody.innerHTML })); } catch (_) {}
+          try { localStorage.setItem(stashKey(), JSON.stringify({ at: Date.now(), title: titleEl.value || '', html: docBody.innerHTML })); } catch (_) {}
           await resetSession({ keepDoc: false });
           note.innerHTML = 'Clean slate — drop a task in above. <button type="button" class="meta-btn" id="btn-unclear">Put my writing back</button>';
           const undo = document.getElementById('btn-unclear');
           if (undo) undo.addEventListener('click', () => {
             try {
-              const s = JSON.parse(localStorage.getItem(STASH) || 'null');
+              const s = JSON.parse(localStorage.getItem(stashKey()) || 'null');
               if (!s || !s.html) { note.textContent = 'Nothing stashed to put back.'; return; }
               docBody.innerHTML = s.html; titleEl.value = s.title || '';
               wordEl.textContent = countWords() + ' words'; scheduleAutosave();
@@ -5680,6 +5756,139 @@
         }
       });
     })();
+
+    // ── Assignments: list, switch, new, rename, remove (16 Aug 2026) ────────
+    // Each assignment has its own brief, coaching, plans and page on the
+    // server. Switching flushes what is pending (pagehide keepalive carries
+    // the OLD project id) and reloads: restoreSession then reads the new one.
+    const projBtn = document.getElementById('proj-btn');
+    const projMenu = document.getElementById('proj-menu');
+    const projList = document.getElementById('proj-list');
+    const projName = document.getElementById('proj-name');
+    const projCount = document.getElementById('proj-count');
+    const projErr = document.getElementById('proj-err');
+    const projNew = document.getElementById('proj-new');
+    function projWhen(ts) {
+      if (!ts) return '';
+      const d = new Date(ts), now = new Date();
+      const day = 86400000, diff = now - d;
+      if (diff < day && d.getDate() === now.getDate()) return 'today';
+      if (diff < 2 * day) return 'yesterday';
+      if (diff < 7 * day) return Math.round(diff / day) + ' days ago';
+      return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+    }
+    function renderProjects() {
+      const list = state.projects || [];
+      const cur = list.find(pr => pr.id === state.projectId) || null;
+      projName.textContent = cur ? cur.name : (list.length ? 'Assignments' : 'New assignment');
+      projCount.textContent = list.length > 1 ? '· ' + list.length : '';
+      projList.innerHTML = list.map(pr => {
+        const on = pr.id === state.projectId;
+        const bits = [];
+        if (pr.parts) bits.push(pr.parts + (pr.parts === 1 ? ' part' : ' parts'));
+        if (pr.words) bits.push(pr.words + ' words');
+        if (!pr.hasBrief && !pr.words) bits.push('nothing in it yet');
+        const when = projWhen(pr.updatedAt || pr.createdAt);
+        if (when) bits.push(when);
+        return `<div class="proj-row${on ? ' on' : ''}" data-id="${escHtml(pr.id)}" role="menuitem" tabindex="0">
+          <span class="proj-dot"></span>
+          <div class="proj-main"><div class="proj-n">${escHtml(pr.name)}</div><div class="proj-meta">${escHtml(bits.join(' · '))}</div></div>
+          <div class="proj-acts">
+            <button type="button" class="proj-act" data-act="rename" title="Rename">✎</button>
+            <button type="button" class="proj-act" data-act="remove" title="Take it off the list (nothing is deleted)">×</button>
+          </div>
+        </div>`;
+      }).join('') || '<div class="proj-meta" style="padding:6px 8px">Nothing yet — drop a task in, or start a new assignment.</div>';
+    }
+    async function loadProjects() {
+      try {
+        const d = await api('/writer/projects', undefined, { method: 'GET', timeoutMs: 15000 });
+        state.projects = d.projects || [];
+        state.projectId = d.active || null;
+      } catch (e) {
+        state.projects = []; // header stays off; the server serves the active one
+      }
+      renderProjects();
+    }
+    function projOpen(open) {
+      projMenu.classList.toggle('open', open);
+      projBtn.setAttribute('aria-expanded', open ? 'true' : 'false');
+      projErr.textContent = '';
+      if (open) renderProjects();
+    }
+    projBtn.addEventListener('click', () => projOpen(!projMenu.classList.contains('open')));
+    document.addEventListener('mousedown', e => { if (projMenu.classList.contains('open') && !document.getElementById('proj-wrap').contains(e.target)) projOpen(false); });
+    document.addEventListener('keydown', e => { if (e.key === 'Escape' && projMenu.classList.contains('open')) projOpen(false); });
+    async function switchProject(id) {
+      if (!id || id === state.projectId) { projOpen(false); return; }
+      projErr.textContent = 'Opening…';
+      try {
+        clearTimeout(saveTimer);
+        if (dirtySince) pendingPatch = Object.assign(pendingPatch || {}, docPatch());
+        await flushSave();
+        await api('/writer/projects/open', { id }, { timeoutMs: 15000 });
+        location.reload();
+      } catch (e) { projErr.textContent = 'Could not open it — ' + shortCause(e); }
+    }
+    projNew.addEventListener('click', async () => {
+      projErr.textContent = 'Starting…';
+      try {
+        clearTimeout(saveTimer);
+        if (dirtySince) pendingPatch = Object.assign(pendingPatch || {}, docPatch());
+        await flushSave();
+        await api('/writer/projects', {}, { timeoutMs: 15000 });
+        location.reload();
+      } catch (e) { projErr.textContent = 'Could not start one — ' + shortCause(e); }
+    });
+    projList.addEventListener('click', async e => {
+      const act = e.target.closest('.proj-act');
+      const row = e.target.closest('.proj-row');
+      if (!row) return;
+      const id = row.getAttribute('data-id');
+      if (act && act.dataset.act === 'rename') {
+        e.stopPropagation();
+        const cur = (state.projects.find(pr => pr.id === id) || {}).name || '';
+        const main = row.querySelector('.proj-main');
+        main.innerHTML = `<input class="proj-rename" value="${escHtml(cur)}" maxlength="120" aria-label="New name">`;
+        const inp = main.querySelector('input'); inp.focus(); inp.select();
+        row.classList.add('arm');
+        const finish = async (save) => {
+          row.classList.remove('arm');
+          if (!save) return renderProjects();
+          const name = inp.value.trim();
+          try {
+            const d = await api('/writer/projects/rename', { id, name }, { timeoutMs: 15000 });
+            state.projects = d.projects || state.projects; renderProjects();
+          } catch (err) { projErr.textContent = 'Could not rename — ' + shortCause(err); renderProjects(); }
+        };
+        inp.addEventListener('keydown', ev => { if (ev.key === 'Enter') { ev.preventDefault(); finish(true); } if (ev.key === 'Escape') { ev.stopPropagation(); finish(false); } });
+        inp.addEventListener('blur', () => finish(true));
+        inp.addEventListener('click', ev => ev.stopPropagation());
+        return;
+      }
+      if (act && act.dataset.act === 'remove') {
+        e.stopPropagation();
+        // Two presses: the first arms it and says what will happen.
+        if (!act.classList.contains('armed')) {
+          act.classList.add('armed'); act.textContent = 'Remove?'; row.classList.add('arm');
+          setTimeout(() => { if (act.isConnected) { act.classList.remove('armed'); act.textContent = '×'; row.classList.remove('arm'); } }, 4000);
+          return;
+        }
+        try {
+          const d = await api('/writer/projects/remove', { id }, { timeoutMs: 15000 });
+          state.projects = d.projects || [];
+          if (id === state.projectId) { location.reload(); return; }
+          renderProjects();
+        } catch (err) { projErr.textContent = 'Could not remove — ' + shortCause(err); }
+        return;
+      }
+      if (row.querySelector('input.proj-rename')) return;
+      switchProject(id);
+    });
+    projList.addEventListener('keydown', e => {
+      const row = e.target.closest('.proj-row');
+      if (row && (e.key === 'Enter' || e.key === ' ') && e.target === row) { e.preventDefault(); switchProject(row.getAttribute('data-id')); }
+    });
 
     // ── Restore on load: refresh, phone lock, Railway restart lose nothing ──
     async function restoreSession() {
@@ -5811,7 +6020,7 @@
         }
       }
     }
-    restoreSession();
+    loadProjects().then(restoreSession, restoreSession);
     // Test hooks (no data, no secrets): lets the harness exercise the page-side
     // helpers without a paid call. Harmless in production.
     window.__qwriterTest = { findInDoc, replaceInDoc, appendReference, docPlainText, splitCheck: (t) => endsSentence(t), runEditPass, checkCurrentSentence, showEditItem, state: () => state, currentEditText };

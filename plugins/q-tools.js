@@ -24,7 +24,7 @@ const fs = require('fs');
 const path = require('path');
 const { Q_CONFIG } = require('../config');
 const { addFact, searchFacts, listFacts } = require('../facts');
-const { getTutorPath } = require('../memory');
+const { getActiveTutorPath } = require('../memory');
 const { createDocx, createPdf, stashFile, resolveToken } = require('./doc-creator');
 const { cleanModelOutput } = require('./cjk-filter');
 const { timedFetch } = require('./timed-fetch');
@@ -2426,7 +2426,9 @@ function recall({ query = '', limit = 10 } = {}, personId) {
  */
 function recallTutor(personId) {
     try {
-        const p = getTutorPath(personId);
+        // 16 Aug 2026: one person, several assignments — Q recalls the one
+        // that is OPEN on the writer page (the active project).
+        const p = getActiveTutorPath(personId);
         if (!fs.existsSync(p)) {
             return { note: 'No tutoring work saved for this person yet — nothing in the notebook.' };
         }

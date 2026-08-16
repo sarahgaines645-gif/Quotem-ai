@@ -44,7 +44,7 @@ const {
 // Boot the scheduler worker as soon as the routes module loads.
 // Idempotent — calling more than once is safe.
 startScheduler();
-const { loadMemory, clearMemory, appendMessage, getRecentMessages, getCircleSummary, getMemoryPath, getVoicePath, getDocPath, getTutorPath, getRevisionPath } = require('./memory');
+const { loadMemory, clearMemory, appendMessage, getRecentMessages, getCircleSummary, getMemoryPath, getVoicePath, getDocPath, getTutorPath, getRevisionPath, tutorScope, readTutorIndex, writeTutorIndex, resolveWriterProject, PROJECT_ID_RE } = require('./memory');
 const { requirePerson, tryAttachPerson, setSessionCookie, clearSessionCookie } = require('./auth');
 const { listPeople, addPerson, signupPerson, isApproved, approvePerson, isAdmin, getPerson, getPersonByEmail, removePerson, verifyLogin, changePassword, updateName, rotatePassword, createResetToken, consumeResetToken, createVerificationToken, consumeVerificationToken, isEmailVerified } = require('./people');
 const { sendMail, isConfigured: mailerConfigured } = require('./mailer');
@@ -1097,6 +1097,130 @@ function writerFail(res, e, tag, step) {
     res.status(cause.status).json({ ok: false, error: cause.message, code: cause.code, retryable: cause.retryable });
 }
 
+// ── Writer PROJECTS (16 Aug 2026): which assignment is this request about? ──
+// The page sends `X-Writer-Project` on every /writer call (its open project);
+// with no header the person's active project is used; a brand-new person
+// lands on 'main' (the legacy per-person files — nothing moved). The scope
+// string stands in for personId in every notebook/doc helper below, so one
+// person can hold several assignments without them eating each other.
+// Voice (/writer/voice) and revision stay per PERSON — they use req.person.id.
+function writerProjectId(req) {
+    if (req._writerProject) return req._writerProject;
+    const want = req.get ? req.get('x-writer-project') : null;
+    req._writerProject = resolveWriterProject(req.person.id, want);
+    // A write to 'main' registers it, so it shows in the project list.
+    if (req.method === 'POST' && req._writerProject === 'main') registerProject(req.person.id, 'main');
+    return req._writerProject;
+}
+function writerScope(req) {
+    if (req._writerScope) return req._writerScope;
+    req._writerScope = tutorScope(req.person.id, writerProjectId(req));
+    return req._writerScope;
+}
+function registerProject(personId, id, extra) {
+    const idx = readTutorIndex(personId);
+    if (!idx.projects.some(pr => pr.id === id)) {
+        idx.projects.push({ id, createdAt: Date.now(), ...(extra || {}) });
+        if (!idx.active) idx.active = id;
+        writeTutorIndex(personId, idx);
+    }
+    return idx;
+}
+function newProjectId() {
+    return 'p' + randomUUID().replace(/-/g, '').slice(0, 10);
+}
+// What the switcher shows for each project — read from the project's own
+// notebook so the name is always the real one (brief title, then the file
+// name), never a stale copy.
+function projectCard(personId, pr) {
+    const t = readTutor(tutorScope(personId, pr.id));
+    const brief = t && t.brief;
+    const briefTitle = brief && (brief.title || brief.assignmentTitle);
+    const name = (pr.name && String(pr.name).trim())
+        || (briefTitle && String(briefTitle).trim())
+        || (t && t.docTitle && String(t.docTitle).trim())
+        || (t && t.sourceName && String(t.sourceName).trim())
+        || 'New assignment';
+    return {
+        id: pr.id, name: name.slice(0, 120), createdAt: pr.createdAt || null, updatedAt: (t && t.updatedAt) || null,
+        hasBrief: !!brief, parts: brief && Array.isArray(brief.criteria) ? brief.criteria.length : 0,
+        words: t && typeof t.docText === 'string' ? t.docText.trim().split(/\s+/).filter(Boolean).length : 0,
+        sourceName: (t && t.sourceName) || null,
+    };
+}
+function projectsView(personId) {
+    const idx = readTutorIndex(personId);
+    const live = idx.projects.filter(pr => !pr.archived);
+    return { active: resolveWriterProject(personId, null), projects: live.map(pr => projectCard(personId, pr)) };
+}
+function projectsErr(res, e, what) {
+    res.status(500).json({ ok: false, error: what + ': ' + String((e && e.message) || '').slice(0, 160) });
+}
+
+// GET /writer/projects — the person's assignments and which one is open.
+router.get('/writer/projects', requirePerson, (req, res) => {
+    try { res.json({ ok: true, ...projectsView(req.person.id) }); }
+    catch (e) { projectsErr(res, e, 'Could not list your assignments'); }
+});
+// POST /writer/projects — start a new, empty assignment and open it.
+router.post('/writer/projects', requirePerson, express.json({ limit: '4kb' }), (req, res) => {
+    try {
+        const id = newProjectId();
+        const name = String((req.body && req.body.name) || '').trim().slice(0, 120);
+        registerProject(req.person.id, id, name ? { name } : undefined);
+        const idx = readTutorIndex(req.person.id); idx.active = id; writeTutorIndex(req.person.id, idx);
+        res.json({ ok: true, id, ...projectsView(req.person.id) });
+    } catch (e) { projectsErr(res, e, 'Could not start a new assignment'); }
+});
+// POST /writer/projects/open {id} — make it the active one (what the page shows).
+router.post('/writer/projects/open', requirePerson, express.json({ limit: '4kb' }), (req, res) => {
+    try {
+        const id = String((req.body && req.body.id) || '').trim();
+        if (!PROJECT_ID_RE.test(id)) return res.status(400).json({ ok: false, error: 'Which assignment? That id is not one of yours.' });
+        const idx = readTutorIndex(req.person.id);
+        if (id !== 'main' && !idx.projects.some(pr => pr.id === id && !pr.archived)) return res.status(404).json({ ok: false, error: 'That assignment is not in your list.' });
+        if (id === 'main') registerProject(req.person.id, 'main');
+        const idx2 = readTutorIndex(req.person.id); idx2.active = id; writeTutorIndex(req.person.id, idx2);
+        res.json({ ok: true, ...projectsView(req.person.id) });
+    } catch (e) { projectsErr(res, e, 'Could not open that assignment'); }
+});
+// POST /writer/projects/rename {id, name}
+router.post('/writer/projects/rename', requirePerson, express.json({ limit: '4kb' }), (req, res) => {
+    try {
+        const id = String((req.body && req.body.id) || '').trim();
+        const name = String((req.body && req.body.name) || '').trim().slice(0, 120);
+        if (!PROJECT_ID_RE.test(id)) return res.status(400).json({ ok: false, error: 'Which assignment? That id is not one of yours.' });
+        const idx = readTutorIndex(req.person.id);
+        const pr = idx.projects.find(x => x.id === id && !x.archived);
+        if (!pr) return res.status(404).json({ ok: false, error: 'That assignment is not in your list.' });
+        if (name) pr.name = name; else delete pr.name;
+        writeTutorIndex(req.person.id, idx);
+        res.json({ ok: true, ...projectsView(req.person.id) });
+    } catch (e) { projectsErr(res, e, 'Could not rename that assignment'); }
+});
+// POST /writer/projects/remove {id} — takes it off the list. The files stay
+// on disk (nothing of theirs is ever deleted by a click); it just stops
+// showing. If it was open, the most recent other one opens.
+router.post('/writer/projects/remove', requirePerson, express.json({ limit: '4kb' }), (req, res) => {
+    try {
+        const id = String((req.body && req.body.id) || '').trim();
+        if (!PROJECT_ID_RE.test(id)) return res.status(400).json({ ok: false, error: 'Which assignment? That id is not one of yours.' });
+        const idx = readTutorIndex(req.person.id);
+        const pr = idx.projects.find(x => x.id === id && !x.archived);
+        if (!pr) return res.status(404).json({ ok: false, error: 'That assignment is not in your list.' });
+        pr.archived = Date.now();
+        if (idx.active === id) {
+            const rest = idx.projects.filter(x => !x.archived);
+            rest.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+            idx.active = rest[0] ? rest[0].id : null;
+        }
+        writeTutorIndex(req.person.id, idx);
+        // Nothing may keep serving the removed one by accident.
+        for (const kind of ['brief', 'essay', 'plan', 'assemble', 'mark']) writerJobs.delete(writerJobKey(tutorScope(req.person.id, id), kind));
+        res.json({ ok: true, ...projectsView(req.person.id) });
+    } catch (e) { projectsErr(res, e, 'Could not remove that assignment'); }
+});
+
 // The tutor notebook. Merge-write: only the keys sent are changed.
 function readTutor(personId) {
     try {
@@ -1263,13 +1387,13 @@ function jobView(job) {
 router.get('/writer/job/:kind', requirePerson, (req, res) => {
     const kind = String(req.params.kind || '');
     if (!WRITER_JOB_STEP[kind]) return res.status(404).json({ error: 'Unknown job kind.' });
-    const job = writerJobs.get(writerJobKey(req.person.id, kind));
+    const job = writerJobs.get(writerJobKey(writerScope(req), kind));
     if (job) {
         const view = jobView(job);
         if (kind === 'brief' && view.result) view.result = publicBrief(view.result);
         return ukJson(res, { ok: true, ...view });
     }
-    const t = readTutor(req.person.id);
+    const t = readTutor(writerScope(req));
     const saved = kind === 'brief' ? (t.brief ? publicBrief(t.brief) : null)
         : kind === 'mark' ? (t.lastMark || null)
         : kind === 'essay' ? (t.modelEssay ? { essayReady: true, brickCounts: t.brickCounts || {}, coverage: t.coverage || {}, bricks: qWriter.allBrickIds(t.modelEssay).length, notes: t.modelEssay.notes, match: matchFor(t) } : null)
@@ -1283,12 +1407,12 @@ router.get('/writer/job/:kind', requirePerson, (req, res) => {
 // POST /writer/assemble — THEIR words, HIS structure. Arranges the student's
 // draft (+ coach-box answers) under the criteria. Job: poll GET /writer/job/assemble.
 router.post('/writer/assemble', requirePerson, express.json({ limit: '2mb' }), writerTooLarge('That draft is too long to assemble in one go (over 2 MB of text). Trim it, or assemble a section at a time.'), async (req, res) => {
-    const t = readTutor(req.person.id);
+    const t = readTutor(writerScope(req));
     if (!t.brief) return res.status(400).json({ error: 'No brief yet — upload the task first so I know what the marker wants.', code: 'no_brief' });
     const docText = String(req.body?.docText || t.docText || '');
     const history = Array.isArray(req.body?.history) ? req.body.history : (Array.isArray(t.coachHistory) ? t.coachHistory : []);
     const title = String(req.body?.title || t.docTitle || t.brief.title || '');
-    const personId = req.person.id;
+    const personId = writerScope(req);
     const job = startWriterJob(personId, 'assemble', async () => {
         const r = await qWriter.assembleFromDraft({ brief: t.brief, docText, history, title });
         writeTutor(personId, { lastAssembly: { ...r, at: Date.now() } });
@@ -1304,12 +1428,12 @@ router.post('/writer/assemble', requirePerson, express.json({ limit: '2mb' }), w
 // POST /writer/mark — mark like the marker: per-criterion band + what the top
 // band still needs. Job: poll GET /writer/job/mark.
 router.post('/writer/mark', requirePerson, express.json({ limit: '2mb' }), writerTooLarge('That draft is too long to mark in one go (over 2 MB of text).'), async (req, res) => {
-    const t = readTutor(req.person.id);
+    const t = readTutor(writerScope(req));
     if (!t.brief) return res.status(400).json({ error: 'No brief yet — upload the task first so I know what the marker wants.', code: 'no_brief' });
     const docText = String(req.body?.docText || t.docText || '');
     if (!docText.trim()) return res.status(400).json({ error: 'There is nothing on the page to mark yet.', code: 'empty' });
     const gradeScheme = String(req.body?.gradeScheme || t.gradeScheme || '');
-    const personId = req.person.id;
+    const personId = writerScope(req);
     const job = startWriterJob(personId, 'mark', async () => {
         const r = await qWriter.markLikeMarker({ brief: t.brief, essay: t.modelEssay || null, docText, gradeScheme, plans: t.plans || null });
         // The marker's honest read of terms used / requirements met, per part.
@@ -1342,7 +1466,7 @@ router.post('/writer/mark', requirePerson, express.json({ limit: '2mb' }), write
 // re-sent by the page); the page sends the doc text (bounded server-side),
 // what changed since the last probe, compact history and the coverage tally.
 router.post('/writer/probe', requirePerson, express.json({ limit: '1mb' }), writerTooLarge('That is too much text for one coaching turn (over 1 MB).'), async (req, res) => {
-    const t = readTutor(req.person.id);
+    const t = readTutor(writerScope(req));
     if (!t.brief) return res.status(400).json({ error: 'No brief yet — upload the task first so I know what the marker wants.', code: 'no_brief' });
     const b = req.body || {};
     try {
@@ -1375,7 +1499,7 @@ router.post('/writer/probe', requirePerson, express.json({ limit: '1mb' }), writ
         if (r.criterionId && !coverage[r.criterionId]) coverage[r.criterionId] = 'partial';
         let brickCounts = t.brickCounts || {};
         if (t.modelEssay) ({ coverage, brickCounts } = qWriter.coverageFromBricks(t.modelEssay, voiced, coverage));
-        const t2 = writeTutor(req.person.id, { coverage, brickCounts, voicedBricks: voiced, currentQuestion: r.question, currentCriterionId: r.criterionId, lastQuestion: r.question, currentSection: r.criterionId });
+        const t2 = writeTutor(writerScope(req), { coverage, brickCounts, voicedBricks: voiced, currentQuestion: r.question, currentCriterionId: r.criterionId, lastQuestion: r.question, currentSection: r.criterionId });
         // The pause read judged her words: the ones used properly go green on
         // the board; a misused one comes OFF the green if a button-press had
         // put it there. Honest, both directions.
@@ -1386,7 +1510,7 @@ router.post('/writer/probe', requirePerson, express.json({ limit: '1mb' }), writ
             for (const w of r.termsUsed) cur.add(w);
             for (const m of r.termsMisused) cur.delete(m.term);
             const tf = { ...(t2.termsFit || {}), [cidForTerms]: Array.from(cur) };
-            writeTutor(req.person.id, { termsFit: tf });
+            writeTutor(writerScope(req), { termsFit: tf });
             ex = { termsFit: tf, reqMet: t2.reqMet || {} };
         }
         ukJson(res, { ok: true, ...r, coverage, brickCounts, essayReady: !!t.modelEssay, match: matchFor(t2), ...(ex || {}) });
@@ -1404,7 +1528,7 @@ router.post('/writer/probe', requirePerson, express.json({ limit: '1mb' }), writ
 // else the job view (poll GET /writer/job/plan). 409 essay_pending while the
 // model answer is still being written (the page waits on the essay job).
 router.post('/writer/plan', requirePerson, express.json({ limit: '16kb' }), async (req, res) => {
-    const personId = req.person.id;
+    const personId = writerScope(req);
     const t = readTutor(personId);
     if (!t.brief) return res.status(400).json({ error: 'No brief yet — upload the task first so I know what the marker wants.', code: 'no_brief' });
     const criterionId = String(req.body?.criterionId || t.currentCriterionId || (t.brief.criteria[0] && t.brief.criteria[0].id) || '').replace(/\s+/g, '');
@@ -1438,7 +1562,7 @@ router.post('/writer/plan', requirePerson, express.json({ limit: '16kb' }), asyn
 // list into the step's tags (one small call; the result is cached per items
 // so a refresh never pays twice).
 router.post('/writer/tag', requirePerson, express.json({ limit: '64kb' }), async (req, res) => {
-    const personId = req.person.id;
+    const personId = writerScope(req);
     const t = readTutor(personId);
     if (!t.brief) return res.status(400).json({ error: 'No brief yet — upload the task first so I know what the marker wants.', code: 'no_brief' });
     const b = req.body || {};
@@ -1467,7 +1591,7 @@ router.post('/writer/tag', requirePerson, express.json({ limit: '64kb' }), async
 // step's bricks → {voicedBrickIds, filled, ack, followUp}; filled ⇒ every
 // target brick voiced.
 router.post('/writer/step', requirePerson, express.json({ limit: '64kb' }), async (req, res) => {
-    const personId = req.person.id;
+    const personId = writerScope(req);
     const t = readTutor(personId);
     if (!t.brief) return res.status(400).json({ error: 'No brief yet — upload the task first so I know what the marker wants.', code: 'no_brief' });
     const b = req.body || {};
@@ -1499,7 +1623,7 @@ router.post('/writer/step', requirePerson, express.json({ limit: '64kb' }), asyn
 // / "I'm stuck": a mini-lesson for the concept the ask needs + the ask re-put
 // as an apply question. Cached per step (a refresh never pays twice).
 router.post('/writer/teach', requirePerson, express.json({ limit: '32kb' }), async (req, res) => {
-    const personId = req.person.id;
+    const personId = writerScope(req);
     const t = readTutor(personId);
     if (!t.brief) return res.status(400).json({ error: 'No brief yet — upload the task first so I know what the marker wants.', code: 'no_brief' });
     const b = req.body || {};
@@ -1528,7 +1652,7 @@ router.post('/writer/teach', requirePerson, express.json({ limit: '32kb' }), asy
 // (and after the mark); cached by (part, sentences, unmet kinds) so a
 // refresh or a re-mark never pays twice for the same text.
 router.post('/writer/place-dots', requirePerson, express.json({ limit: '128kb' }), async (req, res) => {
-    const personId = req.person.id;
+    const personId = writerScope(req);
     const t = readTutor(personId);
     if (!t.brief) return res.status(400).json({ error: 'No brief yet — upload the task first so I know what the marker wants.', code: 'no_brief' });
     const b = req.body || {};
@@ -1563,7 +1687,7 @@ router.post('/writer/place-dots', requirePerson, express.json({ limit: '128kb' }
 // source in the notebook. Nothing on this route invents a source.
 const qCite = require('./plugins/q-cite');
 router.post('/writer/cite', requirePerson, express.json({ limit: '32kb' }), async (req, res) => {
-    const personId = req.person.id;
+    const personId = writerScope(req);
     const t = readTutor(personId);
     if (!t.brief) return res.status(400).json({ error: 'No brief yet — upload the task first so I know what the marker wants.', code: 'no_brief' });
     const sentence = String(req.body?.sentence || '').replace(/\s+/g, ' ').trim().slice(0, 600);
@@ -1595,18 +1719,18 @@ router.post('/writer/cite', requirePerson, express.json({ limit: '32kb' }), asyn
 // student's request: the part's citation / reference requirement counts as
 // met (union into the notebook's honest read), so its dot clears.
 router.post('/writer/cite/used', requirePerson, express.json({ limit: '8kb' }), (req, res) => {
-    const t = readTutor(req.person.id);
+    const t = readTutor(writerScope(req));
     if (!t.brief) return res.status(400).json({ error: 'No brief yet.', code: 'no_brief' });
     const criterionId = String(req.body?.criterionId || t.currentCriterionId || '').replace(/\s+/g, '');
     const kinds = (Array.isArray(req.body?.kinds) ? req.body.kinds : ['citation', 'reference']).map(String).filter(k => qWriter.REQ_KINDS.includes(k));
-    const ex = noteExpectations(req.person.id, criterionId, [], kinds);
+    const ex = noteExpectations(writerScope(req), criterionId, [], kinds);
     res.json({ ok: true, criterionId, termsFit: ex ? ex.termsFit : (t.termsFit || {}), reqMet: ex ? ex.reqMet : (t.reqMet || {}) });
 });
 
 // POST /writer/labels — plain nicknames for a brief saved before labels
 // existed. ONE tiny call for every criterion; saved to the notebook once.
 router.post('/writer/labels', requirePerson, express.json({ limit: '8kb' }), async (req, res) => {
-    const personId = req.person.id;
+    const personId = writerScope(req);
     const t = readTutor(personId);
     if (!t.brief) return res.status(400).json({ error: 'No brief yet.', code: 'no_brief' });
     const needs = t.brief.criteria.some(c => qWriter.labelLooksGenerated(c));
@@ -1635,7 +1759,7 @@ async function videoHandler(req, res, fromTutor) {
     const query = String(req.body?.query || '').replace(/\s+/g, ' ').trim().slice(0, 200);
     if (!query) return res.status(400).json({ ok: false, error: 'query required', code: 'bad_body' });
     let level = String(req.body?.level || ''), subject = String(req.body?.subject || '');
-    if (fromTutor) { const t = readTutor(req.person.id); level = level || String(t.yearGroup || t.gradeScheme || ''); subject = subject || String((t.brief && t.brief.subject) || ''); }
+    if (fromTutor) { const t = readTutor(writerScope(req)); level = level || String(t.yearGroup || t.gradeScheme || ''); subject = subject || String((t.brief && t.brief.subject) || ''); }
     let video = null;
     try { video = await qYouTube.searchTeachingVideo({ query, level, subject }); } catch (_) { video = null; }
     res.json({ ok: true, video, hasKey: qYouTube.hasKey(), searchUrl: 'https://www.youtube.com/results?search_query=' + encodeURIComponent(query) });
@@ -1647,7 +1771,7 @@ router.post('/revision/video', requirePerson, express.json({ limit: '8kb' }), (r
 // data) for THIS session. Stored server-side, bounded; the model essay is
 // rewritten to cite it. Body: { name, text } to add, { remove: name } to drop.
 router.post('/writer/source', requirePerson, express.json({ limit: '4mb' }), writerTooLarge('That supporting document is too big (over 4 MB of text). Upload the part that matters — a chapter, the case study pages.'), async (req, res) => {
-    const personId = req.person.id;
+    const personId = writerScope(req);
     const t = readTutor(personId);
     const sources = Array.isArray(t.sources) ? t.sources.slice() : [];
     const b = req.body || {};
@@ -1680,15 +1804,15 @@ router.post('/writer/source', requirePerson, express.json({ limit: '4mb' }), wri
 // brief. the story that you're basing the questions on."). One small call over
 // the stored brief text; stored on the brief so it is done once.
 router.post('/writer/brief/scenario', requirePerson, express.json({ limit: '4kb' }), async (req, res) => {
-    const t = readTutor(req.person.id);
+    const t = readTutor(writerScope(req));
     if (!t.brief) return res.status(400).json({ error: 'No brief yet — upload the task first.', code: 'no_brief' });
     if (t.brief.scenario && t.brief.scenario.theStory) return ukJson(res, { ok: true, scenario: t.brief.scenario, cached: true });
-    const stored = readStoredDocText(req.person.id);
+    const stored = readStoredDocText(writerScope(req));
     if (!stored || !stored.text) return res.status(400).json({ error: 'The brief text is not stored on the server any more — drop the task in again and I read it fresh.', code: 'no_doc' });
     try {
         const scenario = await qWriter.extractScenario({ taskText: stored.text, brief: t.brief });
-        const t2 = readTutor(req.person.id);
-        writeTutor(req.person.id, { brief: { ...(t2.brief || t.brief), scenario, scenarioChecked: true } });
+        const t2 = readTutor(writerScope(req));
+        writeTutor(writerScope(req), { brief: { ...(t2.brief || t.brief), scenario, scenarioChecked: true } });
         ukJson(res, { ok: true, scenario });
     } catch (e) {
         writerFail(res, e, '[writer/brief/scenario]', 'pulling the story out of the brief');
@@ -1700,14 +1824,14 @@ router.post('/writer/brief/scenario', requirePerson, express.json({ limit: '4kb'
 // them, so this is only the retry path and the "digest the ones from before"
 // path for sources uploaded before digests existed.
 router.post('/writer/source/digest', requirePerson, express.json({ limit: '4kb' }), async (req, res) => {
-    const t = readTutor(req.person.id);
+    const t = readTutor(writerScope(req));
     const name = String(req.body?.name || '').trim();
     const src = (t.sources || []).find(s => s.name === name);
     if (!src) return res.status(400).json({ error: 'That document is not in this session.', code: 'no_source' });
     try {
         const digest = await qWriter.digestSource({ name, text: src.text, brief: t.brief || null });
-        const t2 = readTutor(req.person.id);
-        writeTutor(req.person.id, { sources: (t2.sources || []).map(s => s.name === name ? { ...s, digest } : s) });
+        const t2 = readTutor(writerScope(req));
+        writeTutor(writerScope(req), { sources: (t2.sources || []).map(s => s.name === name ? { ...s, digest } : s) });
         ukJson(res, { ok: true, name, digest });
     } catch (e) {
         writerFail(res, e, '[writer/source/digest]', 'reading that document for you');
@@ -1716,9 +1840,9 @@ router.post('/writer/source/digest', requirePerson, express.json({ limit: '4kb' 
 
 // POST /writer/essay — (re)write the hidden model answer. Job: GET /writer/job/essay.
 router.post('/writer/essay', requirePerson, express.json({ limit: '16kb' }), async (req, res) => {
-    const t = readTutor(req.person.id);
+    const t = readTutor(writerScope(req));
     if (!t.brief) return res.status(400).json({ error: 'No brief yet — upload the task first so I know what the marker wants.', code: 'no_brief' });
-    const job = startEssayJob(req.person.id);
+    const job = startEssayJob(writerScope(req));
     if (req.body?.sync) {
         while (job.status === 'running') await new Promise(r => setTimeout(r, 250));
         return res.status(job.status === 'done' ? 200 : (job.error?.status || 502)).json(qWriter.ukPolishResponse({ ok: job.status === 'done', ...jobView(job) }));
@@ -1729,12 +1853,12 @@ router.post('/writer/essay', requirePerson, express.json({ limit: '16kb' }), asy
 // POST /writer/edit-pass — the editing stage: per sentence, a stronger word
 // and a real reference (uploaded sources first). Job: GET /writer/job/edit.
 router.post('/writer/edit-pass', requirePerson, express.json({ limit: '2mb' }), writerTooLarge('That draft is too long to edit in one pass (over 2 MB of text).'), async (req, res) => {
-    const t = readTutor(req.person.id);
+    const t = readTutor(writerScope(req));
     if (!t.brief) return res.status(400).json({ error: 'No brief yet — upload the task first so I know what the marker wants.', code: 'no_brief' });
     const docText = String(req.body?.docText || t.docText || '');
     if (!docText.trim()) return res.status(400).json({ error: 'There is nothing on the page to edit yet.', code: 'empty' });
     const voiceSignature = req.body?.voiceSignature || null;
-    const personId = req.person.id;
+    const personId = writerScope(req);
     const job = startWriterJob(personId, 'edit', async () => {
         const r = await qWriter.editPass({ brief: t.brief, essay: t.modelEssay || null, docText, sources: t.sources || [], voiceSignature });
         writeTutor(personId, { lastEdit: { ...r, at: Date.now() } });
@@ -1752,7 +1876,7 @@ router.post('/writer/edit-pass', requirePerson, express.json({ limit: '2mb' }), 
 // call that LEADS the student to write it themselves. Body: { tool, sentence,
 // word?, brickId? }. Never a rewritten sentence.
 router.post('/writer/tool', requirePerson, express.json({ limit: '32kb' }), async (req, res) => {
-    const t = readTutor(req.person.id);
+    const t = readTutor(writerScope(req));
     if (!t.brief) return res.status(400).json({ error: 'No brief yet — upload the task first so I know what the marker wants.', code: 'no_brief' });
     const b = req.body || {};
     try {
@@ -1772,14 +1896,14 @@ router.post('/writer/tool', requirePerson, express.json({ limit: '32kb' }), asyn
 // target). match ⇒ the brick counts as voiced; closer ⇒ half credit. The
 // visible match score follows. Body: { sentence, brickId? }.
 router.post('/writer/check-sentence', requirePerson, express.json({ limit: '32kb' }), async (req, res) => {
-    const t = readTutor(req.person.id);
+    const t = readTutor(writerScope(req));
     if (!t.brief) return res.status(400).json({ error: 'No brief yet — upload the task first so I know what the marker wants.', code: 'no_brief' });
     const b = req.body || {};
     try {
         const brickId = b.brickId ? String(b.brickId).replace(/\s+/g, '') : null;
         const cidOf = brickId ? brickId.split('-')[0] : (b.criterionId ? String(b.criterionId) : '');
         const r = await qWriter.checkSentence({ sentence: String(b.sentence || ''), brickId, brief: t.brief, essay: t.modelEssay || null, plan: (t.plans && t.plans[cidOf]) || null });
-        const ex = noteExpectations(req.person.id, cidOf, r.termsUsed, r.requirementsMet);
+        const ex = noteExpectations(writerScope(req), cidOf, r.termsUsed, r.requirementsMet);
         const voiced = new Set(Array.isArray(t.voicedBricks) ? t.voicedBricks : []);
         const close = new Set(Array.isArray(t.closeBricks) ? t.closeBricks : []);
         if (brickId) {
@@ -1788,7 +1912,7 @@ router.post('/writer/check-sentence', requirePerson, express.json({ limit: '32kb
         }
         let coverage = { ...(t.coverage || {}) }, brickCounts = t.brickCounts || {};
         if (t.modelEssay) ({ coverage, brickCounts } = qWriter.coverageFromBricks(t.modelEssay, Array.from(voiced), coverage));
-        const t2 = writeTutor(req.person.id, { voicedBricks: Array.from(voiced), closeBricks: Array.from(close), coverage, brickCounts });
+        const t2 = writeTutor(writerScope(req), { voicedBricks: Array.from(voiced), closeBricks: Array.from(close), coverage, brickCounts });
         ukJson(res, { ok: true, ...r, brickId, criterionId: cidOf, coverage, brickCounts, match: matchFor(t2), termsFit: ex ? ex.termsFit : undefined, reqMet: ex ? ex.reqMet : undefined });
     } catch (e) {
         writerFail(res, e, '[writer/check-sentence]', 'sentence check');
@@ -1844,7 +1968,7 @@ router.post('/writer/doc', requirePerson, express.json({ limit: '8mb' }), writer
     const { text, name } = req.body || {};
     if (!text) return res.status(400).json({ error: 'text required' });
     try {
-        const docPath = getDocPath(req.person.id);
+        const docPath = getDocPath(writerScope(req));
         fs.writeFileSync(docPath, JSON.stringify({ text, name: name || 'document', savedAt: Date.now() }));
         res.json({ ok: true });
     } catch (e) {
@@ -1856,7 +1980,7 @@ router.post('/writer/doc', requirePerson, express.json({ limit: '8mb' }), writer
 // GET /writer/doc — load stored document for this person
 router.get('/writer/doc', requirePerson, async (req, res) => {
     try {
-        const docPath = getDocPath(req.person.id);
+        const docPath = getDocPath(writerScope(req));
         if (!fs.existsSync(docPath)) return res.json({ ok: true, text: null });
         const { text, name, savedAt } = JSON.parse(fs.readFileSync(docPath, 'utf8'));
         res.json({ ok: true, text, name, savedAt });
@@ -2142,10 +2266,10 @@ router.post('/writer/tutor', requirePerson, express.json({ limit: '4mb' }), writ
         // A new assignment: wipe the notebook (the page asks for this when the
         // source is removed or replaced). Voice signature lives elsewhere.
         if (body.reset === true) {
-            fs.writeFileSync(getTutorPath(req.person.id), JSON.stringify({ updatedAt: Date.now() }));
+            fs.writeFileSync(getTutorPath(writerScope(req)), JSON.stringify({ updatedAt: Date.now() }));
             return res.json({ ok: true, savedAt: Date.now(), reset: true });
         }
-        const existing = readTutor(req.person.id);
+        const existing = readTutor(writerScope(req));
         const patch = {};
         for (const k of TUTOR_KEYS) if (body[k] !== undefined) patch[k] = body[k];
         // The brief is written by the brief job. A page may re-send it (the
@@ -2162,8 +2286,8 @@ router.post('/writer/tutor', requirePerson, express.json({ limit: '4mb' }), writ
         // hidden model answer written behind it.
         const kickEssay = !!(patch.brief && !existing.brief);
         if (typeof patch.docText === 'string' && patch.docText.length > 400000) patch.docText = patch.docText.slice(0, 400000);
-        const merged = writeTutor(req.person.id, patch);
-        if (kickEssay) startEssayJob(req.person.id);
+        const merged = writeTutor(writerScope(req), patch);
+        if (kickEssay) startEssayJob(writerScope(req));
         res.json({ ok: true, savedAt: merged.updatedAt });
     } catch (e) {
         console.error('[writer/tutor store]', e.message);
@@ -2174,7 +2298,7 @@ router.post('/writer/tutor', requirePerson, express.json({ limit: '4mb' }), writ
 // GET /writer/tutor — load the tutor notebook for this person (skeleton stripped).
 router.get('/writer/tutor', requirePerson, async (req, res) => {
     try {
-        const t = readTutor(req.person.id);
+        const t = readTutor(writerScope(req));
         if (!t || !Object.keys(t).length) return res.json({ ok: true, tutor: null });
         const out = { ...t };
         if (out.brief) out.brief = publicBrief(out.brief);
@@ -2183,8 +2307,8 @@ router.get('/writer/tutor', requirePerson, async (req, res) => {
         out.sources = sourcesMeta(t.sources);
         out.match = matchFor(t);
         delete out.closeBricks;
-        const job = writerJobs.get(writerJobKey(req.person.id, 'brief'));
-        const ej = writerJobs.get(writerJobKey(req.person.id, 'essay'));
+        const job = writerJobs.get(writerJobKey(writerScope(req), 'brief'));
+        const ej = writerJobs.get(writerJobKey(writerScope(req), 'essay'));
         ukJson(res, { ok: true, tutor: out, briefJob: job ? { status: job.status, startedAt: job.startedAt } : null, essayJob: ej ? { status: ej.status, startedAt: ej.startedAt } : null });
     } catch (e) {
         res.json({ ok: true, tutor: null });
@@ -2205,7 +2329,7 @@ router.get('/writer/tutor', requirePerson, async (req, res) => {
 // GET /writer/job/brief. Body: { taskText, name } (stores the doc too) or
 // {} to brief the doc already stored by /writer/doc. { sync:true } waits.
 router.post('/writer/brief', requirePerson, express.json({ limit: '8mb' }), writerTooLarge('That document text is over 8 MB — the coach can hold about 2,000 pages of text. Upload only the part with the tasks and criteria.'), async (req, res) => {
-    const personId = req.person.id;
+    const personId = writerScope(req);
     let taskText = String(req.body?.taskText || '').trim();
     let name = String(req.body?.name || '').trim();
     // Sarah, 16 Aug: the brief can arrive as two files. {append:true} joins the
@@ -2271,7 +2395,7 @@ router.post('/writer/lead', requirePerson, express.json({ limit: '128kb' }), asy
         // Load the full document from the server-side store
         let docContext = null;
         try {
-            const docPath = getDocPath(req.person.id);
+            const docPath = getDocPath(writerScope(req));
             if (fs.existsSync(docPath)) {
                 const stored = JSON.parse(fs.readFileSync(docPath, 'utf8'));
                 docContext = stored.text || null;
@@ -2355,7 +2479,7 @@ router.post('/writer/explain', requirePerson, express.json({ limit: '16kb' }), a
 // fraction of the whole-document mark, which arrives too late to act on.
 // Synchronous: it is small, and a job to poll would cost more than it saves.
 router.post('/writer/mark-part', requirePerson, express.json({ limit: '256kb' }), writerTooLarge('That part is too long to mark in one go.'), async (req, res) => {
-    const t = readTutor(req.person.id);
+    const t = readTutor(writerScope(req));
     if (!t.brief) return res.status(400).json({ error: 'No brief yet — upload the task first.', code: 'no_brief' });
     const criterionId = String(req.body?.criterionId || '').replace(/\s+/g, '');
     if (!t.brief.criteria.some(c => c.id === criterionId)) return res.status(400).json({ error: 'That part is not in the brief.', code: 'bad_part' });

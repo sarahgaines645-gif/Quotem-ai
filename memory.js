@@ -235,6 +235,78 @@ function getTutorPath(personId) {
     return path.join(Q_DATA_DIR, `q-tutor-${safeId(personId)}.json`);
 }
 
+// ── Writer PROJECTS (16 Aug 2026) ────────────────────────────────────────
+// One person, several assignments. The tutor notebook and the stored brief
+// were one-per-person (a second brief overwrote the first). Now each project
+// has its own notebook + doc, keyed by a SCOPE string that stands in for the
+// personId in getTutorPath/getDocPath:
+//     'main'  → the person's own id      (the legacy files — nothing moves,
+//                                          Sarah's live session survives)
+//     'p…'    → `${personId}--proj-${id}` (a new file pair per project)
+// The index (one small file per person) lists the projects and which one is
+// active. Voice signature and revision stay per person — they are not per
+// assignment.
+const PROJECT_ID_RE = /^(main|p[a-z0-9]{8,12})$/;
+function getTutorIndexPath(personId) {
+    return path.join(Q_DATA_DIR, `q-tutor-index-${safeId(personId)}.json`);
+}
+function tutorScope(personId, projectId) {
+    const pid = String(projectId || 'main');
+    return pid === 'main' ? String(personId) : `${personId}--proj-${pid}`;
+}
+function tutorFileHasWork(p) {
+    try {
+        if (!fs.existsSync(p)) return false;
+        const t = JSON.parse(fs.readFileSync(p, 'utf8')) || {};
+        return Object.keys(t).some(k => k !== 'updatedAt');
+    } catch (_) { return false; }
+}
+function readTutorIndex(personId) {
+    const p = getTutorIndexPath(personId);
+    try {
+        if (fs.existsSync(p)) {
+            const idx = JSON.parse(fs.readFileSync(p, 'utf8')) || {};
+            if (Array.isArray(idx.projects)) return idx;
+        }
+    } catch (_) { /* rebuild below */ }
+    // First sight of this person: their existing notebook (if any) becomes
+    // project 'main'. Nothing is copied or moved.
+    const now = Date.now();
+    const idx = { projects: [], active: null, updatedAt: now };
+    if (tutorFileHasWork(getTutorPath(personId))) {
+        idx.projects.push({ id: 'main', createdAt: now });
+        idx.active = 'main';
+    }
+    writeTutorIndex(personId, idx);
+    return idx;
+}
+function writeTutorIndex(personId, idx) {
+    const out = { projects: Array.isArray(idx.projects) ? idx.projects : [], active: idx.active || null, updatedAt: Date.now() };
+    fs.writeFileSync(getTutorIndexPath(personId), JSON.stringify(out));
+    return out;
+}
+// The project a request is about: an explicit, valid, live id wins; else the
+// active one; else 'main' (a brand-new person works exactly as before, and
+// 'main' is registered the first time it is written to — see routes.js).
+function resolveWriterProject(personId, requestedId) {
+    const idx = readTutorIndex(personId);
+    const req = String(requestedId || '').trim();
+    if (req && PROJECT_ID_RE.test(req)) {
+        if (req === 'main') return 'main';
+        const hit = idx.projects.find(pr => pr.id === req && !pr.archived);
+        if (hit) return req;
+    }
+    if (idx.active) {
+        const act = idx.projects.find(pr => pr.id === idx.active && !pr.archived);
+        if (act) return act.id;
+    }
+    return 'main';
+}
+// The notebook Q reads from other surfaces (recall_tutor): the active project.
+function getActiveTutorPath(personId) {
+    return getTutorPath(tutorScope(personId, resolveWriterProject(personId, null)));
+}
+
 // Q's revision book — per person: subject settings, question history (scores
 // per topic), and the streak. The /revise page reads and writes the whole
 // object; weak-topic targeting is derived from it.
@@ -259,6 +331,13 @@ module.exports = {
     getVoicePath,
     getDocPath,
     getTutorPath,
+    getTutorIndexPath,
+    tutorScope,
+    readTutorIndex,
+    writeTutorIndex,
+    resolveWriterProject,
+    getActiveTutorPath,
+    PROJECT_ID_RE,
     getRevisionPath,
     getBankPath,
     migrateLegacyMemory,
