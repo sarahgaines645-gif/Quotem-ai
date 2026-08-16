@@ -5050,8 +5050,18 @@
       const said = placed ? 'In — at the end of your sentence, and the reference is on your list.'
         : already ? 'That citation was already in your writing — the reference is on your list.'
         : 'The reference is on your list, but I could not find the sentence to put "' + c.inText + '" into. Put your cursor where it belongs and press the source again.';
-      showToolPop('<div class="pc-head">' + escHtml(c.inText) + '</div><div class="pc-line">' + escHtml(said) + '</div>' + (c.warnings && c.warnings.length ? '<div class="pc-eg">Check: ' + escHtml(c.warnings.join('; ')) + '</div>' : ''), { kind: 'Auto cite', anchor });
-      clearTimeout(state.citePopTimer); state.citePopTimer = setTimeout(hideToolPop, 3500);
+      // Sarah, 16 Aug: "what's the point in citing if there's no words to back
+      // up your sentence?" None — a citation with nothing behind it is
+      // decoration, and the marker's next question is always "and what did
+      // they actually say?". So the confirmation is not a receipt: it shows
+      // the source's OWN words and asks her for the line that uses them. Her
+      // sentence, his structure — the same loop as everything else. Q does not
+      // write the backing sentence, because then it would be his essay.
+      const says = c.snippet ? '<div class="pc-head" style="margin-top:8px">What ' + escHtml((c.authors && c.authors[0] && c.authors[0].family) || 'they') + ' actually says</div><div class="cite-sent">' + escHtml(c.snippet) + '</div><div class="pc-nudge">Now put that in your own words on the page, right before the citation — one line saying what it means for your company. That is what the marker is looking for.</div>' : '';
+      showToolPop('<div class="pc-head">' + escHtml(c.inText) + '</div><div class="pc-line">' + escHtml(said) + '</div>' + says + (c.warnings && c.warnings.length ? '<div class="pc-eg">Check: ' + escHtml(c.warnings.join('; ')) + '</div>' : ''), { kind: 'Auto cite', anchor });
+      clearTimeout(state.citePopTimer);
+      // A receipt can vanish; something to act on must not.
+      if (!c.snippet) state.citePopTimer = setTimeout(hideToolPop, 3500);
       state.docSnapshot = docPlainText();
     }
     // Its replacement string had a comment line spliced into it, so instead of

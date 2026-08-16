@@ -92,7 +92,31 @@ const WEAK = new Set(('staff people person company companies work works working 
 // deliberately NOT appended — it swamps the topic and returns generic field
 // surveys ("A Systematic Review of Human Resource Management Systems").
 function buildQuery(claimSentence, subject) {
-    const kw = keywords(claimSentence, 12);
+    // Sarah, 16 Aug: "This is a classic example of the Equity Theory (Kang et
+    // al., 2010)" found nothing, because the first two content words are
+    // "classic example". A student frames before they name the thing, so the
+    // concept is rarely at the front. Two better signals, tried first:
+    //
+    //  - A capitalised phrase mid-sentence is almost always the term. She
+    //    wrote "Equity Theory" with capitals; students do that with the idea
+    //    they have been taught.
+    //  - A phrase ending in a concept noun — theory, model, effect, doctrine —
+    //    is the term wherever it sits in the sentence.
+    //
+    // Any citation already in the sentence is stripped first: "(Kang et al.,
+    // 2010)" would otherwise put an author's surname into the search.
+    const cleaned = String(claimSentence || '').replace(/\([^)]*\d{4}[a-z]?\)/g, ' ').replace(/\s+/g, ' ').trim();
+    // Measured on the live index: the named concept ON ITS OWN is the best
+    // query there is. "Equity Theory" returns "Equity: theory and research"
+    // and "What Should Be Done with Equity Theory?". The same phrase padded
+    // with the rest of her sentence — "classic example favoured" — returns
+    // children's judgments of resource distribution and the evolution of
+    // fairness by partner choice. Her framing words are noise to an index, so
+    // once the concept is named, nothing else goes in. Relevance filtering and
+    // the field sort below do the narrowing instead.
+    const named = namedConcept(cleaned);
+    if (named) return '"' + named + '"';
+    const kw = keywords(cleaned, 12);
     const strong = kw.filter(w => !WEAK.has(w));
     if (strong.length < 2) {
         const fallback = strong.concat(kw.filter(w => !strong.includes(w))).slice(0, 5);
@@ -112,6 +136,37 @@ function buildQuery(claimSentence, subject) {
     // connector; otherwise quote the concept on its own.
     const phrase = span && isTermSpan(span) ? '"' + span + '"' : '"' + strong[0] + '"';
     return (phrase + ' ' + strong.slice(1, 5).filter(w => !phrase.includes(w)).join(' ')).trim();
+}
+// The named idea in a sentence: a capitalised phrase that isn't the opening
+// word, or a phrase ending in a concept noun. Subject-neutral — "Equity
+// Theory", "the doctrine of precedent", "the Bolam test", "the Krebs cycle".
+const CONCEPT_NOUNS = ['theory', 'theories', 'model', 'models', 'effect', 'effects', 'principle', 'principles',
+    'framework', 'frameworks', 'doctrine', 'hypothesis', 'cycle', 'law', 'act', 'test', 'rule', 'method',
+    'approach', 'syndrome', 'process', 'system', 'strategy', 'bias', 'paradox', 'equation'];
+function namedConcept(sentence) {
+    const s = String(sentence || '').trim();
+    if (!s) return '';
+    const words = s.split(/\s+/);
+    // A run of capitalised words that does not start the sentence.
+    let run = [];
+    const runs = [];
+    for (let i = 0; i < words.length; i++) {
+        const raw = words[i].replace(/[^\w'-]/g, '');
+        const isCap = /^[A-Z][a-z'-]{1,}$/.test(raw);
+        if (isCap && i > 0) run.push(raw);
+        else { if (run.length >= 2) runs.push(run.join(' ')); run = []; }
+    }
+    if (run.length >= 2) runs.push(run.join(' '));
+    if (runs.length) return runs.sort((a, b) => b.split(' ').length - a.split(' ').length)[0];
+    // A phrase ending in a concept noun: take it and the word before it.
+    const low = words.map(w => w.replace(/[^\w'-]/g, '').toLowerCase());
+    for (let i = low.length - 1; i > 0; i--) {
+        if (!CONCEPT_NOUNS.includes(low[i])) continue;
+        const before = low[i - 1];
+        if (!before || STOP.has(before) || WEAK.has(before)) continue;
+        return words.slice(i - 1, i + 1).join(' ').replace(/[^\w\s'-]/g, '').trim();
+    }
+    return '';
 }
 const CONNECTORS = new Set(['of', 'in', 'on', 'for', 'and', 'the', 'a', 'to', 'by', 'at', 'with', 'from']);
 function isTermSpan(span) {
@@ -298,6 +353,44 @@ async function uploadCandidates(uploadedSources, kw, subjKw, extractMeta, max) {
     return out.sort((a, b) => b.score - a.score).slice(0, max);
 }
 
+// WHAT THE SOURCE ACTUALLY SAYS. Sarah, 16 Aug, looking at "(Kang et al.,
+// 2010)" sitting on the end of her own sentence: "isn't it supposed to
+// actually quote them?" A paraphrase with an author-date citation is correct
+// Harvard and usually better than quoting — but a citation attached to a claim
+// nobody has read is the thing a marker probes, and she had no way to know
+// whether Kang et al. supports her point or contradicts it.
+//
+// OpenAlex ships the abstract as an inverted index (word → the positions it
+// appears at), so it has to be put back into order before a human can read it.
+// This is the source's own words, from the index, not written by anyone here.
+function abstractOf(w) {
+    const inv = w && w.abstract_inverted_index;
+    if (!inv || typeof inv !== 'object') return null;
+    const words = [];
+    for (const word of Object.keys(inv)) {
+        const at = inv[word];
+        if (!Array.isArray(at)) continue;
+        for (const i of at) if (Number.isInteger(i) && i >= 0 && i < 4000) words[i] = word;
+    }
+    const text = words.filter(Boolean).join(' ').replace(/\s+/g, ' ').trim();
+    if (text.length < 40) return null;
+    // The index carries bad abstracts. Hatfield's "Equity: theory and
+    // research" came back with "Chapter 1 Thinking About American Politics
+    // Chapter 2 Political Culture…" — another book's contents page entirely.
+    // Showing that to a student as "what they actually say" is worse than
+    // showing nothing, so two sanity checks: a contents page is not an
+    // abstract, and an abstract that shares no real word with its own title
+    // is not this work's abstract.
+    if ((text.match(/\bChapter\s+\d+/gi) || []).length >= 3) return null;
+    if ((text.match(/\bPart\s+(one|two|three|[IVX]+|\d+)\b/gi) || []).length >= 3) return null;
+    const titleWords = String(w.display_name || '').toLowerCase().replace(/[^a-z0-9\s]/g, ' ').split(/\s+/).filter(x => x.length > 4 && !STOP.has(x));
+    if (titleWords.length) {
+        const low = text.toLowerCase();
+        if (!titleWords.some(x => low.includes(x))) return null;
+    }
+    return text.length > 420 ? text.slice(0, 417).replace(/\s+\S*$/, '') + '…' : text;
+}
+
 // ── OpenAlex → metadata ───────────────────────────────────────────────────
 function fromOpenAlex(w) {
     if (!w || w.is_retracted) return null;
@@ -315,12 +408,12 @@ function fromOpenAlex(w) {
         volume: b.volume || null, issue: b.issue || null, pages: b.first_page && b.last_page ? b.first_page + '–' + b.last_page : (b.first_page || null),
         publisher: type !== 'article' ? (src.host_organization_name || src.display_name || null) : null, place: null,
         doi, url: loc.landing_page_url || (doi ? 'https://doi.org/' + doi : null),
-        citedBy: Number(w.cited_by_count) || 0, fromUpload: false, sourceName: null, snippet: null, index: 'openalex',
+        citedBy: Number(w.cited_by_count) || 0, fromUpload: false, sourceName: null, snippet: abstractOf(w), index: 'openalex',
     };
 }
 async function searchOpenAlex(query, max) {
     const mailto = process.env.OPENALEX_MAILTO ? '&mailto=' + encodeURIComponent(process.env.OPENALEX_MAILTO) : '';
-    const url = OPENALEX + '?search=' + encodeURIComponent(query) + '&per-page=' + Math.min(25, max * 3) + '&filter=is_retracted:false,type:article|book|book-chapter|report&select=id,display_name,publication_year,authorships,primary_location,doi,type,cited_by_count,biblio,is_retracted' + mailto;
+    const url = OPENALEX + '?search=' + encodeURIComponent(query) + '&per-page=' + Math.min(25, max * 3) + '&filter=is_retracted:false,type:article|book|book-chapter|report&select=id,display_name,publication_year,authorships,primary_location,doi,type,cited_by_count,biblio,is_retracted,abstract_inverted_index' + mailto;
     const started = Date.now();
     try {
         const d = await deps.fetchJson(url);
@@ -398,7 +491,20 @@ async function findSources({ claimSentence, subject, level, uploadedSources, max
     }
     // Real but not relevant is still wrong. Drop anything the sentence has no
     // word in common with rather than offer it as a citation.
-    const onTopic = pub.filter(w => isRelevant(w, kw));
+    // Prefer her own field. "Equity Theory" is studied in romantic
+    // relationships as well as in pay, and both are real equity-theory papers
+    // — but only one of them backs a sentence about bonuses. The subject never
+    // goes into the QUERY (it swamps the topic); it sorts what came back.
+    const subjWords = keywords(subject, 5).filter(w => w.length > 3);
+    const inField = (w) => {
+        if (!subjWords.length) return 0;
+        const hay = ((w.title || '') + ' ' + (w.journal || w.publisher || '') + ' ' + (w.snippet || '')).toLowerCase();
+        return subjWords.filter(s => hay.includes(s)).length;
+    };
+    const onTopic = pub.filter(w => isRelevant(w, kw))
+        .map(w => ({ w, field: inField(w) }))
+        .sort((a, b) => b.field - a.field)
+        .map(x => x.w);
     const candidates = ups.concat(onTopic.map(finish));
     let note = '';
     if (!candidates.length) note = searched.openalex || searched.crossref ? 'I could not find a source I can verify for that sentence — try the References tool, or upload the source you have in mind.' : 'The source index did not answer just now — try again in a moment, or use the References tool.';
