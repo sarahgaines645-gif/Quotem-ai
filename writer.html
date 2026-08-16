@@ -1117,8 +1117,10 @@
        spelling and it will highlight all spelling mistakes. all the improvement
        buttons can be on there — highlight the sentence(s) and use those
        buttons, or press the button and then highlight"). */
-    .ed-panel { width: 300px; }
-    .ed-body { padding: 10px 12px 12px; overflow: auto; }
+    .ed-strip { margin: -4px 0 16px; padding: 10px 12px 12px; border-radius: 12px; box-shadow: var(--neu-raised-xs); background: var(--paper, #fbf9f3); }
+    .ed-strip.hidden { display: none; }
+    .ed-strip .ed-tools { gap: 6px 8px; }
+    .ed-strip .ed-issues { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 6px; }
     .ed-hint { font-size: 11px; color: var(--text-muted); line-height: 1.45; margin-bottom: 8px; }
     .ed-hint b { color: var(--text); }
     .ed-sec { font-size: 9px; font-weight: 700; letter-spacing: 0.09em; text-transform: uppercase; color: var(--text-faint); margin: 10px 0 5px; }
@@ -1417,7 +1419,11 @@
         <button type="button" class="meta-btn hidden" id="doc-go" title="Q reads what you have written since he last looked — press when you are ready, not before">● Continue →</button>
         <button type="button" class="meta-btn" id="btn-download" title="Download what is on the page as a Word file">↓ Download</button>
         <button type="button" class="meta-btn primary" id="btn-finish" title="Q marks it like the marker, then walks it with you sentence by sentence — highlight, what's missing, the fix, tools, Check it">Mark &amp; fix →</button>
+        <button type="button" class="meta-btn" id="btn-edit-strip" title="Editing — the improvement tools (highlight, then press) and the Spelling / Grammar passes over the whole page" aria-expanded="false">✎ Editing</button>
       </div>
+      <!-- THE EDITING STRIP — on the paper, not a floating card (Sarah, 17 Aug:
+           "they should be on the page not inside a pop up card"). -->
+      <div class="ed-strip hidden" id="edit-body"></div>
       <div class="source-slot" id="source-slot">
         <button type="button" class="source-add" id="source-add-btn"
           title="Drop, paste, or click to add your homework / task">
@@ -1547,14 +1553,6 @@
   </div>
 
   <!-- The Video panel — an explainer opens here, on its own raised movable card (same panel manager) -->
-  <div class="qpanel ed-panel hidden" id="edit-panel" data-panel="edit">
-    <div class="panel-head" id="edit-panel-head">
-      <span class="panel-title">✎ Editing</span>
-      <button type="button" class="panel-min" id="edit-panel-tog" title="Minimise" aria-label="Minimise the editing panel">−</button>
-    </div>
-    <div class="panel-body ed-body" id="edit-body"></div>
-    <div class="panel-grip" title="Drag to resize"></div>
-  </div>
   <div class="qpanel wb-panel hidden" id="wb-panel" data-panel="wb">
     <div class="panel-head" id="wb-panel-head">
       <span class="panel-title" id="wb-title">▦ Whiteboard</span>
@@ -2105,10 +2103,6 @@
         const under = !b.classList.contains('hidden') ? b.getBoundingClientRect().bottom + 10 : 12;
         return { w: 300, left: 12, top: Math.min(under, window.innerHeight - 260) };
       },
-    });
-    const editPanel = makePanel(document.getElementById('edit-panel'), 'edit', {
-      minW: 240, minH: 160,
-      defaults: () => ({ w: 300, left: Math.max(PANEL_M, window.innerWidth - 300 - 16), top: Math.min(window.innerHeight - 320, 420) }),
     });
     const wbPanel = makePanel(document.getElementById('wb-panel'), 'wb', {
       minW: 320, minH: 200,
@@ -4029,7 +4023,7 @@
       edPaint(is.wrong);
     }
     function renderEditPanel() {
-      if (editPanel.el.classList.contains('hidden')) return;
+      if (edBody.classList.contains('hidden')) return;
       const tools = ED_TOOL_ORDER.map(t => `<button type="button" class="q-btn${edArmed === t ? ' armed' : ''}" data-ed-tool="${t}" title="${escHtml(ED_TOOL_TIPS[t] || '')}">${escHtml(EDIT_TOOL_LABELS[t] || t)}</button>`).join('');
       const left = edProof.issues.filter(x => !x.done).length;
       const list = edProof.issues.map((is, i) => `<div class="ed-issue${is.done ? ' done' : ''}" data-ed-i="${i}"><div><div class="ed-w"><s>${escHtml(is.wrong)}</s> → <b>${escHtml(is.right)}</b></div><div class="ed-y">${escHtml(is.why || '')}</div></div>${is.done ? '<span class="ed-y">fixed</span>' : `<button type="button" class="ed-fix" data-ed-fix="${i}">Fix</button>`}</div>`).join('');
@@ -4047,8 +4041,17 @@
       edBody.querySelectorAll('.ed-issue').forEach(row => row.addEventListener('click', () => edGoTo(Number(row.dataset.edI))));
     }
     const ED_TOOL_TIPS = { cite: 'A real source for the highlighted claim, put in Harvard', weak: 'What is weak in the highlighted sentence — and what would make it strong', terminology: 'The proper term for what you highlighted', synonyms: 'Other words for the ONE word you highlighted', dictionary: 'What the ONE word you highlighted means', strategies: 'The theory or model that fits what you highlighted', cases: 'A case or example that fits', references: 'What to read for this point' };
-    function openEditPanel() { showPanel('edit'); revealPanel('edit'); renderEditPanel(); }
-    document.getElementById('coach-ed').addEventListener('click', openEditPanel);
+    function openEditPanel({ toggle } = {}) {
+      const btn = document.getElementById('btn-edit-strip');
+      const open = toggle ? edBody.classList.contains('hidden') : true;
+      edBody.classList.toggle('hidden', !open);
+      if (btn) btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+      if (!open) { edArmed = null; return; }
+      renderEditPanel();
+      const r = edBody.getBoundingClientRect(); if (r.top < 0 || r.bottom > window.innerHeight) edBody.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+    document.getElementById('coach-ed').addEventListener('click', () => openEditPanel({ toggle: true }));
+    document.getElementById('btn-edit-strip').addEventListener('click', () => openEditPanel({ toggle: true }));
 
     // ── THE WHITEBOARD ────────────────────────────────────────────────────
     // What the teaching board shows small, at teaching size: the step's ask,
