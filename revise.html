@@ -416,6 +416,9 @@
     .pet-egg-btn .egg { width: 26px; height: 32px; border-radius: 50% 50% 50% 50% / 60% 60% 40% 40%; background: #f7f1e3; box-shadow: inset -3px -3px 6px #e2d6bf; position: relative; }
     .pet-egg-btn .egg.spots::before { content: ''; position: absolute; left: 6px; top: 8px; width: 7px; height: 7px; border-radius: 50%; background: #b98b5b; box-shadow: 10px 12px 0 -1px #b98b5b, 4px 16px 0 -2px #b98b5b; }
     .pet-egg-btn .egg.stripes::before { content: ''; position: absolute; left: 3px; right: 3px; top: 10px; height: 4px; background: #f2a95a; box-shadow: 0 9px 0 0 #f2a95a; border-radius: 2px; }
+    .pet-egg-btn .egg.dots::before { content: ''; position: absolute; left: 5px; top: 7px; width: 5px; height: 5px; border-radius: 50%; background: #9fd18a; box-shadow: 10px 5px 0 0 #9fd18a, 3px 14px 0 0 #9fd18a, 12px 17px 0 0 #9fd18a; }
+    .pet-card .pet-eggs { gap: 6px; }
+    .pet-egg-btn { width: 56px; padding: 7px 4px 5px; font-size: 10px; }
     .pet-card .pet-name-wrap { display: flex; gap: 6px; margin-top: 8px; }
     .pet-card .pet-name-wrap input {
       flex: 1; min-width: 0; font: inherit; font-size: 11px; padding: 6px 9px; border: none; border-radius: 10px;
@@ -1111,6 +1114,7 @@
       <div class="pet-eggs">
         <button type="button" class="pet-egg-btn" id="pet-pick-puppy"><span class="egg spots"></span>spotty egg</button>
         <button type="button" class="pet-egg-btn" id="pet-pick-hamster"><span class="egg stripes"></span>stripy egg</button>
+        <button type="button" class="pet-egg-btn" id="pet-pick-capybara"><span class="egg dots"></span>dotty egg</button>
       </div>
     </div>
     <div class="pet-scene hidden" id="pet-scene">
@@ -2153,100 +2157,6 @@
         { at: 80,  id: 'scarf', label: 'scarf', kind: 'wear',  icon: '🧣' },
         { at: 100, id: 'bed',   label: 'bed',   kind: 'home',  icon: '🛏️' },
       ];
-      // Sprites — outlined, shaded pixel art (drawn and checked by render, 16 Aug).
-      const PAL = {"n":"#3b2a1f","w":"#fbf6ea","s":"#e8dcc4","S":"#d4c4a5","k":"#6f5b45","p":"#b98b5b","o":"#f2a95a","x":"#ffffff","b":"#b07a48","B":"#8a5a30","c":"#f7e8d0","C":"#e6d0ad","e":"#ffffff","i":"#2a2a2a","t":"#ef97ad","K":"#1c1c1c","h":"#f5a850","H":"#d8842e","m":"#fde9d3","M":"#f0d3b0","P":"#f4b9c8","y":"#f6d33c","Y":"#d9b21e","r":"#e04b5a","R":"#b53445","g":"#f6c65b","q":"#c9a86b","Q":"#a5843f","v":"#8d6bd8","V":"#6b4fb0","l":"#9fd3f7","z":"#5aa870"};
-      const EGG_BASE = [
-        "........nnnnnn........",
-        "......nnwwwwwwnn......",
-        ".....nwwxwwwwwwwn.....",
-        "....nwwxwwwwwwwwwn....",
-        "...nwwwxwwwwwwwwwwn...",
-        "...nwwwwwwwwwwwwwwn...",
-        "..nwwwwwwwwwwwwwwwsn..",
-        "..nwwwwwwwwwwwwwwwsn..",
-        ".nwwwwwwwwwwwwwwwwssn.",
-        ".nwwwwwwwwwwwwwwwwssn.",
-        ".nwwwwwwwwwwwwwwwsssn.",
-        "nwwwwwwwwwwwwwwwwsssSn",
-        "nwwwwwwwwwwwwwwwwsssSn",
-        "nwwwwwwwwwwwwwwwssssSn",
-        "nwwwwwwwwwwwwwwwssssSn",
-        "nwwwwwwwwwwwwwwsssssSn",
-        ".nwwwwwwwwwwwwsssssSn.",
-        ".nwwwwwwwwwwwwsssssSn.",
-        ".nwwwwwwwwwwwssssssSn.",
-        "..nwwwwwwwwwsssssssn..",
-        "..nwwwwwwwwsssssssSn..",
-        "...nwwwwwsssssssSSn...",
-        "...nwwwssssssssSSSn...",
-        "....nssssssssSSSSn....",
-        ".....nnssssSSSSnn.....",
-        ".......nnnnnnnn.......",
-      ];
-      const EGG_PUPPY_SPOTS = [[6,9],[7,9],[6,10],[7,10],[8,10],[7,11],[13,7],[14,7],[14,8],[11,15],[12,15],[11,16],[12,16],[13,16],[12,17],[5,18],[6,18],[6,19],[15,19],[16,19],[16,20]];
-      const EGG_HAM_STRIPES = [[1,8],[2,8],[3,8],[4,8],[5,8],[6,8],[7,8],[8,8],[9,8],[10,8],[11,8],[12,8],[13,8],[14,8],[15,8],[16,8],[17,8],[18,8],[19,8],[20,8],[1,9],[2,9],[3,9],[4,9],[5,9],[6,9],[7,9],[8,9],[9,9],[10,9],[11,9],[12,9],[13,9],[14,9],[15,9],[16,9],[17,9],[18,9],[19,9],[20,9],[1,15],[2,15],[3,15],[4,15],[5,15],[6,15],[7,15],[8,15],[9,15],[10,15],[11,15],[12,15],[13,15],[14,15],[15,15],[16,15],[17,15],[18,15],[19,15],[20,15],[1,16],[2,16],[3,16],[4,16],[5,16],[6,16],[7,16],[8,16],[9,16],[10,16],[11,16],[12,16],[13,16],[14,16],[15,16],[16,16],[17,16],[18,16],[19,16],[20,16],[1,21],[2,21],[3,21],[4,21],[5,21],[6,21],[7,21],[8,21],[9,21],[10,21],[11,21],[12,21],[13,21],[14,21],[15,21],[16,21],[17,21],[18,21],[19,21],[20,21]];
-      const CRACKS = [[[10,4],[9,5],[10,6],[11,7]],[[11,7],[12,8],[11,9],[12,10],[13,11]],[[13,11],[12,12],[13,13],[14,14],[8,3],[9,4]],[[6,12],[7,12],[8,13],[9,13],[13,13],[14,15],[15,16]],[[7,17],[8,18],[9,19],[10,20],[15,17],[16,18],[15,19]]];
-      const PUPPY = [
-        "......nnn..........nnn......",
-        ".....nbbbn........nbbbn.....",
-        "....nbbBbbn......nbbBbbn....",
-        "....nbbbbbnnnnnnnnbbbbbn....",
-        "...nbbbbnccccccccnbbbbbn....",
-        "...nbbbnccccccccccnbbbbn....",
-        "...nbbncccccccccccnbbbn.....",
-        "...nbbnccccccccccccnbbn.....",
-        "...nbbnbbbccnncccncnbbn.....",
-        "...nbnbBbbcnienceincnbn.....",
-        "....nnbbbbcniinciiincn......",
-        "....nbbbbccccccccccccn......",
-        "....ncccccccccKKcccccn......",
-        ".....nccccccccKKccccn.......",
-        ".....ncccccccnnnnccccn......",
-        "......ncccccnttttnccn.......",
-        "......nnccccnnnnnnccnn......",
-        ".....ncccccccccccccccn......",
-        "....nccccccccccccccccnn.....",
-        "....nccbbcccccccccbbccnbn...",
-        "....ncbBbbcccccccbBbbcnbbn..",
-        "....ncbbbbcccccccbbbbcnbBn..",
-        "....nnbbbnnnnnnnnnbbbnnbbn..",
-        ".....nnnnn.......nnnnn.nnn..",
-      ];
-      const HAMSTER = [
-        ".....nnnn........nnnn.....",
-        "....nhPPhn......nhPPhn....",
-        "....nhPPPhn....nhPPPhn....",
-        "...nhhhhhhhnnnnhhhhhhhn...",
-        "..nhhhhhhhhhhhhhhhhhhhhn..",
-        ".nhhhhhhhhhhhhhhhhhhhhhhn.",
-        ".nhhhhhhhhhhhhhhhhhhhhhhn.",
-        "nhhhhhnnhhhhhhhhhhnnhhhhhn",
-        "nhhhhnienhhhhhhhhnienhhhhn",
-        "nhhhhniinhhhhhhhhniinhhhhn",
-        "nhhhhhnnhhhmmmmhhhnnhhhhhn",
-        "nhhhhhhhhhmmmKmmmhhhhhhhhn",
-        "nhPPhhhhhhmmmmmmmhhhhhhPPn",
-        "nhPPhhhhhhhmmmmmhhhhhhhPPn",
-        "nhhhhhhhhhmmmmmmmhhhhhhhhn",
-        "nhhhhhhhhmmmmmmmmmhhhhhhhn",
-        "nhhhhhhhmmmmmmmmmmmhhhhhhn",
-        ".nhhhhhhmmmmmmmmmmmhhhhhn.",
-        ".nHhhhhhhmmmmmmmmmhhhhhHn.",
-        "..nHhhhhhhhhhhhhhhhhhhHn..",
-        "...nHHhPPhHHHHHHHhPPhHHn..",
-        "....nnnnnnnnnnnnnnnnnnn...",
-      ];
-      const ITEMS = {
-        bone: ["nn......nn","nccnnnnccn","nccccccccn","nccccccccn","nccnnnnccn","nn......nn"],
-        seed: ["...nn...","..nkkn..",".nkggkkn",".nkggkkn",".nkkgkkn","..nkkkn.","...nn..."],
-        ball: ["..nnnn..",".nyyyyn.","nyeyyyyn","nyyyyYyn","nyyyYYyn","nyyYYYyn",".nYYYYn.","..nnnn.."],
-        heart: [".nn.nn.","nrrnrrn","nrrrrrn","nrRRRrn",".nRRRn.","..nRn..","...n..."],
-        bow: ["nn.....nn","nttn.nttn","ntttttttn","ntttttttn","nttn.nttn","nn.....nn"],
-        hat: ["...nnnnnn...","...niiiin...","...niiiin...","...niiiin...","nnnniiiinnnn","niiiiiiiiiin","nnnnnnnnnnnn"],
-        scarf: ["nrrrrrrrrrrn","nrRrrrrrRrrn","nrrrrrrrrrrn",".......nrrn.",".......nrRn.",".......nrrn.","........nn.."],
-        bed: ["nvvn................nvvn","nvVn................nvVn","nvvvvvvvvvvvvvvvvvvvvvvn","nvllllllllllllllllllllvn","nvllllllllllllllllllllvn","nVVVVVVVVVVVVVVVVVVVVVVn",".nnnnnnnnnnnnnnnnnnnnnn."],
-      };
-
       let canvas = null, ctx = null, W = 0, H = 0, raf = 0, t0 = 0;
       let anim = null;   // { kind: 'eat'|'play'|'hatch'|'love', item, until }
       let mounted = false;
@@ -2269,24 +2179,67 @@
         p.lastSeen = now;
       }
 
-      // ── drawing ──
-      function px(map, x, y, scale, opts = {}) {
-        for (let r = 0; r < map.length; r++) for (let c = 0; c < map[r].length; c++) {
-          let ch = map[r][c];
-          if (ch === '.') continue;
-          if (opts.recolour && opts.recolour[ch]) ch = opts.recolour[ch];
-          ctx.fillStyle = PAL[ch] || ch;
-          ctx.fillRect(Math.round(x + c * scale), Math.round(y + r * scale), scale, scale);
-        }
+      // ── drawing: illustrations brought to life ─────────────────────────
+      // The art is a generated set (assets/pet/*.png, transparent): a front
+      // view and a running side view per pet per stage, three eggs each,
+      // items. Life comes from motion: the pet WANDERS — picks a spot, runs
+      // to it (side view, flipped to face the way it's going, bobbing),
+      // sits and breathes facing you, then off again; further away sits a
+      // little higher up the card for depth. Egg wobbles at idle and
+      // shudders when it cracks; hatch and grow burst; ball play is a chase
+      // across the card; eating leans in and the treat shrinks; in bed it
+      // settles low and breathes slow.
+      const IMG = {};
+      function img(name) {
+        if (!IMG[name]) { const i = new Image(); i.decoding = 'async'; i.src = '/assets/pet/' + name + '.png'; IMG[name] = i; }
+        return IMG[name];
       }
-      function eggMap(p) {
-        const m = EGG_BASE.map((r) => r.split(''));
-        const marks = p.kind === 'hamster' ? EGG_HAM_STRIPES : EGG_PUPPY_SPOTS;
-        for (const [x, y] of marks) if (m[y] && m[y][x] && m[y][x] !== '.' && m[y][x] !== 'n') m[y][x] = p.kind === 'hamster' ? 'o' : 'p';
-        // cracks appear a stage at a time across the 15 answers
-        const stages = Math.min(CRACKS.length, Math.floor((p.correct / HATCH_AT) * (CRACKS.length + 1)));
-        for (let i = 0; i < stages; i++) for (const [x, y] of CRACKS[i]) if (m[y] && m[y][x] && m[y][x] !== '.' && m[y][x] !== 'n') m[y][x] = 'k';
-        return m.map((r) => r.join(''));
+      // draw an image with its bottom-centre at (cx, by), `size` px square
+      function drawImg(name, cx, by, size, o = {}) {
+        const im = img(name);
+        if (!im.complete || !im.naturalWidth) return false;
+        ctx.save();
+        ctx.translate(cx, by);
+        if (o.rot) ctx.rotate(o.rot);
+        ctx.scale((o.flip ? -1 : 1) * (o.sx || 1), o.sy || 1);
+        if (o.alpha != null) ctx.globalAlpha = o.alpha;
+        ctx.drawImage(im, -size / 2, -size, size, size);
+        ctx.restore();
+        return true;
+      }
+      const easeOutBack = (k) => { const c1 = 1.70158, c3 = c1 + 1; return 1 + c3 * Math.pow(k - 1, 3) + c1 * Math.pow(k - 1, 2); };
+      const KIND_KEY = { puppy: 'puppy', hamster: 'ham', capybara: 'capy' };
+      const FOOD = { puppy: 'bone', hamster: 'seed', capybara: 'orange' };
+      const FOOD_ICON = { puppy: '🦴', hamster: '🌻', capybara: '🍊' };
+      function eggName(p) {
+        const st = p.correct < 5 ? 0 : p.correct < 10 ? 1 : 2;
+        return 'egg_' + (KIND_KEY[p.kind] || 'puppy') + '_' + st;
+      }
+      function petName(p, stage, run) { return (KIND_KEY[p.kind] || 'puppy') + (run ? '_run_' : '_') + stage; }
+      function preload() {
+        const names = [];
+        for (const k of ['puppy', 'ham', 'capy']) {
+          for (let i = 0; i < 3; i++) names.push('egg_' + k + '_' + i);
+          for (const st of ['baby', 'young', 'grown']) { names.push(k + '_' + st); names.push(k + '_run_' + st); }
+        }
+        ['bone', 'seed', 'orange', 'ball', 'bow', 'hat', 'scarf', 'bed', 'heart'].forEach((n) => names.push('item_' + n));
+        names.forEach(img);
+      }
+
+      // wander state: where the pet is, where it's going, what it's doing
+      const wander = { x: null, y: 0, tx: null, ty: 0, mode: 'sit', until: 0, dir: 1, speed: 46 };
+      function planNext(now, size) {
+        const margin = size / 2 + 6;
+        if (wander.mode === 'sit') {
+          wander.mode = 'run';
+          wander.tx = margin + Math.random() * (W - margin * 2);
+          wander.ty = -Math.random() * 14;                       // depth: up to 14px "further away"
+          wander.dir = wander.tx >= wander.x ? 1 : -1;
+          wander.speed = 38 + Math.random() * 30;
+        } else {
+          wander.mode = 'sit';
+          wander.until = now + 2500 + Math.random() * 5000;
+        }
       }
       function draw(now) {
         if (!ctx) return;
@@ -2294,44 +2247,104 @@
         const time = (now - t0) / 1000;
         ctx.clearRect(0, 0, W, H);
         const stage = stageOf(p);
-        const bob = Math.sin(time * 2.2) * 2;
-        const cx = W / 2, floor = H - 22;
+        const cx = W / 2, floor = H - 16;
+        const k = anim ? Math.max(0, Math.min(1, 1 - (anim.until - now) / anim.len)) : 0;   // 0 → 1 through the animation
         if (stage === 'egg') {
-          const scale = 4;
-          const map = eggMap(p);
-          const w = map[0].length * scale, h = map.length * scale;
-          const wob = anim && anim.kind === 'crack' ? Math.sin(time * 40) * 3 : 0;
-          px(map, cx - w / 2 + wob, floor - h + bob * 0.5, scale);
+          const size = 104;
+          let rot = Math.sin(time * 1.4) * 0.03, dy = 0;
+          if (anim && anim.kind === 'crack') { rot += Math.sin(time * 42) * 0.09 * (1 - k); dy = -Math.abs(Math.sin(time * 30)) * 4 * (1 - k); }
+          ctx.fillStyle = 'rgba(0,0,0,0.10)'; ctx.beginPath(); ctx.ellipse(cx, floor + 3, 40, 5, 0, 0, Math.PI * 2); ctx.fill();
+          drawImg(eggName(p), cx, floor + dy, size, { rot });
+          if (anim && now > anim.until) { anim = null; renderCard(); }
+          raf = requestAnimationFrame(draw);
+          return;
+        }
+        const size = stage === 'baby' ? 88 : stage === 'young' ? 104 : 118;
+        if (wander.x == null) { wander.x = cx; wander.mode = 'sit'; wander.until = now + 2000; }
+        const inBed = p.inBed && p.correct >= 100;
+        const busy = !!anim && (anim.kind === 'eat' || anim.kind === 'hatch' || anim.kind === 'love');
+        // ── move ──
+        let running = false;
+        if (!inBed && !busy) {
+          if (anim && anim.kind === 'play') {
+            // chase the ball across the card
+            const bx = cx + Math.sin(time * 1.6) * (W / 2 - size / 2 - 10);
+            wander.dir = bx >= wander.x ? 1 : -1;
+            wander.x += Math.max(-1, Math.min(1, (bx - wander.x) / 20)) * 2.2;
+            running = Math.abs(bx - wander.x) > 8;
+          } else if (wander.mode === 'run' && wander.tx != null) {
+            const dt = 1 / 60;
+            const dx = wander.tx - wander.x, dyy = wander.ty - wander.y;
+            const dist = Math.hypot(dx, dyy);
+            if (dist < 2) { planNext(now, size); }
+            else { wander.x += (dx / dist) * wander.speed * dt; wander.y += (dyy / dist) * wander.speed * dt; running = true; }
+          } else if (wander.mode === 'sit' && now > wander.until) {
+            planNext(now, size);
+          }
+        } else if (inBed) { wander.x += (cx - wander.x) * 0.1; wander.y += (0 - wander.y) * 0.1; wander.mode = 'sit'; wander.until = now + 3000; }
+        else { wander.mode = 'sit'; wander.until = now + 1500; }
+        const depth = 1 + wander.y / 140;                       // further away = a touch smaller
+        const px_ = wander.x, by = floor + wander.y;
+        let sx = 1, sy = 1, dy = 0, rot = 0;
+        const breathe = Math.sin(time * 2.2);
+        if (running) {
+          const gait = Math.abs(Math.sin(time * 11));
+          dy = -gait * 5; rot = Math.sin(time * 11) * 0.05 * wander.dir;
+          sx = 1 + gait * 0.04; sy = 1 - gait * 0.05;
         } else {
-          const map = p.kind === 'hamster' ? HAMSTER : PUPPY;
-          const scale = stage === 'baby' ? 3 : stage === 'young' ? 4 : 5;
-          const w = map[0].length * scale, h = map.length * scale;
-          let x = cx - w / 2, y = floor - h + bob;
-          if (anim && anim.kind === 'play') { x += Math.sin(time * 6) * 14; y -= Math.abs(Math.sin(time * 9)) * 10; }
-          if (p.inBed && p.correct >= 100) { px(ITEMS.bed, cx - 60, floor - 22, 5); y += 4; }
-          px(map, x, y, scale);
+          sx = 1 - breathe * 0.018; sy = 1 + breathe * 0.028;
+        }
+        if (inBed) {
+          drawImg('item_bed', cx, floor + 6, 150);
+          const slow = Math.sin(time * 1.1);
+          sx = 1 - slow * 0.012; sy = 0.96 + slow * 0.02; dy = 6;
+        }
+        if (anim && anim.kind === 'hatch') { const s = k < 0.5 ? easeOutBack(k * 2) : 1; sx *= Math.max(0.05, s); sy *= Math.max(0.05, s); }
+        if (anim && anim.kind === 'eat') { rot = -0.10 * Math.sin(k * Math.PI); dy += 3 * Math.sin(k * Math.PI); }
+        // shadow
+        ctx.fillStyle = 'rgba(0,0,0,0.10)';
+        ctx.beginPath(); ctx.ellipse(px_, by + 3, (size * 0.42) * depth, 5, 0, 0, Math.PI * 2); ctx.fill();
+        // the pet
+        const name = petName(p, stage, running);
+        const drawn = drawImg(name, px_, by + dy, size * depth, { sx, sy, rot, flip: running && wander.dir < 0 });
+        if (!drawn) drawImg(petName(p, stage, false), px_, by + dy, size * depth, { sx, sy, rot });   // side view not loaded yet — front will do
+        const top = by + dy - size * depth * sy;
+        // clothes (front view only — they sit on the face/neck)
+        if (!running) {
           const wear = new Set(p.wearing || []);
           const ham = p.kind === 'hamster';
-          if (wear.has('scarf')) px(ITEMS.scarf, x + w * 0.24, y + h * (ham ? 0.74 : 0.62), scale * 0.5);
-          if (wear.has('bow'))   px(ITEMS.bow, x + w * (ham ? 0.72 : 0.66), y - scale * 1.2, scale * 0.45);
-          if (wear.has('hat'))   px(ITEMS.hat, x + w * 0.5 - 6 * scale * 0.5, y - 7 * scale * 0.5 + scale * (ham ? 2.2 : 1.6), scale * 0.5);
-          if (anim && anim.kind === 'eat') {
-            const k = Math.max(0, (anim.until - now) / anim.len);       // 1 → 0
-            px(ITEMS[anim.item] || ITEMS.bone, x + w * 0.38, y + h * 0.58, 2.6 * k + 0.4);
-          }
-          if (anim && anim.kind === 'play') px(ITEMS.ball, x + w + 6 + Math.sin(time * 6) * 10, floor - 24 - Math.abs(Math.sin(time * 9)) * 30, 3);
-          if (anim && (anim.kind === 'love' || anim.kind === 'eat' || anim.kind === 'hatch')) {
-            const k = Math.max(0, (anim.until - now) / anim.len);
-            px(ITEMS.heart, x + w * 0.7, y - 30 + k * 26, 3);
-            if (anim.kind === 'hatch') { px(ITEMS.heart, x - 20, y - 10 + k * 20, 3); px(ITEMS.heart, x + w + 8, y + k * 20, 3); }
+          if (wear.has('scarf')) drawImg('item_scarf', px_, by + dy - size * (ham ? 0.22 : 0.24), size * 0.50, { rot });
+          if (wear.has('bow'))   drawImg('item_bow', px_ + size * (ham ? 0.30 : 0.27), top + size * (ham ? 0.30 : 0.26), size * 0.30, { rot });
+          if (wear.has('hat'))   drawImg('item_hat', px_ + size * 0.02, top + size * 0.20, size * 0.46, { rot });
+        }
+        if (anim && anim.kind === 'eat') {
+          const food = 'item_' + (anim.item || FOOD[p.kind] || 'bone');
+          const fx = px_ + 54 - 46 * k, fy = by - size * 0.30 - 30 * (1 - k) + 6 * Math.sin(k * Math.PI * 3);
+          drawImg(food, fx, fy, 34 * (1 - k * 0.85), { rot: k * 0.8 });
+        }
+        if (anim && anim.kind === 'play') {
+          const bx = cx + Math.sin(time * 1.6) * (W / 2 - size / 2 - 10);
+          const hop = Math.abs(Math.sin(time * 7));
+          drawImg('item_ball', bx, floor - 6 - hop * 40, 30, { rot: time * 6 });
+        }
+        if (anim && (anim.kind === 'love' || anim.kind === 'eat' || anim.kind === 'hatch')) {
+          drawImg('item_heart', px_ + size * 0.34, top + 12 - k * 34, 22, { alpha: 1 - k * 0.8 });
+          if (anim.kind === 'hatch') {
+            for (let i = 0; i < 5; i++) {
+              const a = (-1.2 + i * 0.6), r = 30 + k * 60;
+              drawImg('item_heart', px_ + Math.cos(a - Math.PI / 2) * r, floor - size * 0.5 + Math.sin(a - Math.PI / 2) * r, 18 + 6 * (1 - k), { alpha: 1 - k });
+            }
           }
         }
-        // ground shadow
-        ctx.fillStyle = 'rgba(0,0,0,0.08)';
-        ctx.beginPath(); ctx.ellipse(cx, floor + 6, 44, 6, 0, 0, Math.PI * 2); ctx.fill();
+        if (inBed && !anim) {
+          ctx.fillStyle = 'rgba(0,0,0,0.35)'; ctx.font = 'bold 11px sans-serif';
+          const zk = (time % 3) / 3;
+          ctx.globalAlpha = 1 - zk; ctx.fillText('z', px_ + size * 0.42, top + 10 - zk * 18); ctx.fillText('z', px_ + size * 0.50, top - zk * 26); ctx.globalAlpha = 1;
+        }
         if (anim && now > anim.until) { anim = null; renderCard(); }
         raf = requestAnimationFrame(draw);
       }
+
       function play(kind, item, ms) { anim = { kind, item, len: ms, until: performance.now() + ms }; }
 
       // ── card ──
@@ -2346,7 +2359,9 @@
         $('pet-choose').classList.toggle('hidden', !!p.kind);
         $('pet-scene').classList.toggle('hidden', !p.kind);
         if (!p.kind) return;
-        const title = p.name ? p.name : (stage === 'egg' ? (p.kind === 'hamster' ? 'Hamster egg' : 'Puppy egg') : (p.kind === 'hamster' ? 'Your hamster' : 'Your puppy'));
+        const KIND_NAME = { puppy: 'puppy', hamster: 'hamster', capybara: 'capybara' };
+        const kn = KIND_NAME[p.kind] || 'pet';
+        const title = p.name ? p.name : (stage === 'egg' ? (kn.charAt(0).toUpperCase() + kn.slice(1) + ' egg') : ('Your ' + kn));
         $('pet-title').textContent = title;
         // line under the scene
         let line;
@@ -2372,8 +2387,8 @@
             b.type = 'button'; b.className = 'pet-act' + (on ? ' on' : ''); b.textContent = label; b.title = title;
             b.addEventListener('click', fn); acts.appendChild(b);
           };
-          const food = p.kind === 'hamster' ? 'seed' : 'bone';
-          mk((p.kind === 'hamster' ? '🌻' : '🦴') + ' ' + p.treats, p.treats ? 'Feed — you have ' + p.treats + ' treat' + (p.treats === 1 ? '' : 's') : 'Get a question right to earn a treat', () => {
+          const food = FOOD[p.kind] || 'bone';
+          mk((FOOD_ICON[p.kind] || '🦴') + ' ' + p.treats, p.treats ? 'Feed — you have ' + p.treats + ' treat' + (p.treats === 1 ? '' : 's') : 'Get a question right to earn a treat', () => {
             if (p.treats <= 0) return;
             p.treats -= 1; p.happy = Math.min(100, p.happy + 8);
             play('eat', food, 1400); saveProgress(); renderCard();
@@ -2412,7 +2427,7 @@
           p.hatchedAt = new Date().toISOString();
           p.treats += 3;                                   // a welcome gift
           play('hatch', null, 2600);
-          toastPet((p.kind === 'hamster' ? 'Your hamster' : 'Your puppy') + ' hatched! 🎉 Give it a name.');
+          toastPet('Your ' + ({ puppy: 'puppy', hamster: 'hamster', capybara: 'capybara' }[p.kind] || 'pet') + ' hatched! 🎉 Give it a name.');
         } else if (before === 'egg') {
           play('crack', null, 500);
         } else if (before !== after) {
@@ -2434,13 +2449,15 @@
         canvas = $('pet-canvas'); if (!canvas) return;
         ctx = canvas.getContext('2d');
         const dpr = Math.min(2, window.devicePixelRatio || 1);
-        W = 172; H = 156;
+        W = 176; H = 160;
         canvas.width = W * dpr; canvas.height = H * dpr; canvas.style.width = W + 'px'; canvas.style.height = H + 'px';
         ctx.scale(dpr, dpr); ctx.imageSmoothingEnabled = false;
         mounted = true;
         settle();
         $('pet-pick-puppy').addEventListener('click', () => choose('puppy'));
         $('pet-pick-hamster').addEventListener('click', () => choose('hamster'));
+        $('pet-pick-capybara').addEventListener('click', () => choose('capybara'));
+        preload();
         $('pet-name-save').addEventListener('click', () => {
           const v = $('pet-name-input').value.trim().slice(0, 18);
           if (!v) return; P().name = v; saveProgress(); renderCard();
