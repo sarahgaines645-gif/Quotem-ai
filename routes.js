@@ -1128,7 +1128,26 @@ function publicBrief(brief) {
     return rest;
 }
 function sourcesMeta(sources) {
-    return (Array.isArray(sources) ? sources : []).map(s => ({ name: s.name, chars: (s.text || '').length, addedAt: s.addedAt || null }));
+    // The digest rides along: the plain-words version she reads INSTEAD of
+    // the document (Sarah, 16 Aug: "I need to be able to do this without
+    // reading it"). null until the digest job lands.
+    return (Array.isArray(sources) ? sources : []).map(s => ({ name: s.name, chars: (s.text || '').length, addedAt: s.addedAt || null, digest: s.digest || null }));
+}
+// One small call per source, in the background, stored ON the source so a
+// refresh keeps it. Never blocks the upload; a failure leaves digest null and
+// the page offers a retry.
+async function digestSourceInBackground(personId, name) {
+    try {
+        const t = readTutor(personId);
+        const src = (t.sources || []).find(s => s.name === name);
+        if (!src || src.digest) return;
+        const digest = await qWriter.digestSource({ name, text: src.text, brief: t.brief || null });
+        const t2 = readTutor(personId);
+        const next = (t2.sources || []).map(s => s.name === name ? { ...s, digest } : s);
+        writeTutor(personId, { sources: next });
+    } catch (e) {
+        console.warn('[writer/source digest] ' + name + ': ' + (e && e.message));
+    }
 }
 function readStoredDocText(personId) {
     try {
@@ -1652,7 +1671,27 @@ router.post('/writer/source', requirePerson, express.json({ limit: '4mb' }), wri
     if (idx >= 0) sources[idx] = entry; else sources.push(entry);
     writeTutor(personId, { sources });
     if (t.brief) startEssayJob(personId);
-    res.json({ ok: true, sources: sourcesMeta(sources), truncated, essayJob: t.brief ? 'started' : null });
+    setTimeout(() => { digestSourceInBackground(personId, name); }, 0);
+    res.json({ ok: true, sources: sourcesMeta(sources), truncated, essayJob: t.brief ? 'started' : null, digesting: true });
+});
+
+// POST /writer/source/digest { name } — (re)make the plain-words digest of one
+// supporting document; GET the digests any time. The page polls the tutor for
+// them, so this is only the retry path and the "digest the ones from before"
+// path for sources uploaded before digests existed.
+router.post('/writer/source/digest', requirePerson, express.json({ limit: '4kb' }), async (req, res) => {
+    const t = readTutor(req.person.id);
+    const name = String(req.body?.name || '').trim();
+    const src = (t.sources || []).find(s => s.name === name);
+    if (!src) return res.status(400).json({ error: 'That document is not in this session.', code: 'no_source' });
+    try {
+        const digest = await qWriter.digestSource({ name, text: src.text, brief: t.brief || null });
+        const t2 = readTutor(req.person.id);
+        writeTutor(req.person.id, { sources: (t2.sources || []).map(s => s.name === name ? { ...s, digest } : s) });
+        ukJson(res, { ok: true, name, digest });
+    } catch (e) {
+        writerFail(res, e, '[writer/source/digest]', 'reading that document for you');
+    }
 });
 
 // POST /writer/essay — (re)write the hidden model answer. Job: GET /writer/job/essay.

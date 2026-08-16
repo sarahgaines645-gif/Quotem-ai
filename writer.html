@@ -929,6 +929,20 @@
     .st-bead.done { background: #28a745; box-shadow: none; }
     .st-bead.cur { background: var(--accent); box-shadow: none; transform: scale(1.35); }
     .tb-count { font-size: 10px; color: var(--text-faint); font-weight: 600; letter-spacing: 0.04em; }
+    /* The case study, in plain words, on the brief board */
+    .bb-src { margin: 10px 0 12px; padding: 12px 14px; border-radius: 12px; box-shadow: var(--neu-raised-xs); }
+    .bb-src-head { font-size: 13px; font-weight: 700; color: var(--text); line-height: 1.4; margin-bottom: 6px; overflow-wrap: anywhere; }
+    .bb-src-story { font-size: 13px; color: var(--text); line-height: 1.55; margin-bottom: 8px; }
+    .bb-src-sec { margin: 8px 0; }
+    .bb-src-lab { display: block; font-size: 9px; font-weight: 700; letter-spacing: 0.09em; text-transform: uppercase; color: var(--text-faint); margin-bottom: 4px; }
+    .bb-src-sec ul { margin: 0; padding-left: 16px; }
+    .bb-src-sec li { font-size: 12px; color: var(--text); line-height: 1.5; overflow-wrap: anywhere; }
+    .bb-src-nums { display: flex; flex-wrap: wrap; gap: 6px; }
+    .bb-num { font-size: 11px; color: var(--text-muted); padding: 3px 8px; border-radius: 9px; box-shadow: var(--neu-inset-sm); }
+    .bb-num b { color: var(--text); font-weight: 700; margin-right: 3px; }
+    .bb-src-use { font-size: 11px; color: var(--text-muted); font-style: italic; margin-top: 8px; line-height: 1.45; }
+    .bb-src-wait { font-size: 12px; color: var(--text-muted); line-height: 1.5; }
+    .bb-src-wait .q-btn { margin-left: 6px; }
     .tb-budget { margin-left: auto; font-size: 10px; font-weight: 700; color: var(--text-muted); white-space: nowrap; }
     .tb-budget.near { color: #b26a00; }
     .tb-budget.over { color: #c62828; }
@@ -2114,6 +2128,63 @@
     // questions"), so the board is ONE line in Q's words + the coverage strip;
     // the formal content sits behind "Show the brief", collapsed by default
     // and remembered.
+    // THE CASE STUDY IN PLAIN WORDS. Sarah, 16 Aug: "it's expecting you to have
+    // read the case study. I need to be able to do this without reading it so
+    // I need him to simplify it as much as possible so I don't have to read it.
+    // and put that in the brief." So it sits on the brief board, above the
+    // fold: what it is, the story in a few lines, the people, the numbers to
+    // have to hand, the problems it sets up, and how to use it. She answers
+    // questions about the case from this, never from the document.
+    function sourceDigestsHtml() {
+      const list = (state.sources || []).filter(s => s && s.name);
+      if (!list.length) return '';
+      const esc = escHtml;
+      return list.map(s => {
+        const d = s.digest;
+        if (!d) return `<div class="bb-src" data-src="${esc(s.name)}"><div class="bb-src-head">📎 ${esc(s.name)}</div><div class="bb-src-wait">Q is reading this for you — the plain version lands here in a moment. <button type="button" class="q-btn bb-src-retry" data-src="${esc(s.name)}">Read it now</button></div></div>`;
+        const people = (d.people || []).length ? `<div class="bb-src-sec"><span class="bb-src-lab">Who</span><ul>${d.people.map(p => `<li><b>${esc(p.who)}</b> — ${esc(p.what)}</li>`).join('')}</ul></div>` : '';
+        const numbers = (d.numbers || []).length ? `<div class="bb-src-sec"><span class="bb-src-lab">Numbers to hand</span><div class="bb-src-nums">${d.numbers.map(n => `<span class="bb-num"><b>${esc(n.value)}</b> ${esc(n.label)}</span>`).join('')}</div></div>` : '';
+        const problems = (d.problems || []).length ? `<div class="bb-src-sec"><span class="bb-src-lab">What's going wrong / to decide</span><ul>${d.problems.map(p => `<li>${esc(p)}</li>`).join('')}</ul></div>` : '';
+        return `<div class="bb-src" data-src="${esc(s.name)}">
+          <div class="bb-src-head">📎 ${esc(d.whatItIs || s.name)}</div>
+          <div class="bb-src-story">${esc(d.theStory || '')}</div>
+          ${people}${numbers}${problems}
+          ${d.useIt ? `<div class="bb-src-use">${esc(d.useIt)}</div>` : ''}
+        </div>`;
+      }).join('');
+    }
+    function refreshSourceDigests() {
+      const el = document.getElementById('bb-sources'); if (!el) return;
+      el.innerHTML = sourceDigestsHtml();
+    }
+    document.addEventListener('click', async (e) => {
+      const b = e.target.closest('.bb-src-retry'); if (!b) return;
+      e.preventDefault(); b.disabled = true; b.textContent = 'Reading…';
+      try {
+        const d = await api('/writer/source/digest', { name: b.dataset.src }, { timeoutMs: 60000 });
+        state.sources = (state.sources || []).map(s => s.name === d.name ? { ...s, digest: d.digest } : s);
+        refreshSourceDigests();
+      } catch (err) { b.disabled = false; b.textContent = 'Read it now'; coachHint.textContent = 'Could not read that document: ' + shortCause(err); }
+    });
+    // A fresh source's digest lands in the background — poll the notebook a
+    // few times, cheaply, until it does.
+    let digestPollTimer = null;
+    function watchDigests() {
+      clearTimeout(digestPollTimer);
+      const pending = (state.sources || []).some(s => s && !s.digest);
+      if (!pending) return;
+      let n = 0;
+      const tick = async () => {
+        n += 1;
+        try {
+          const d = await api('/writer/tutor', undefined, { method: 'GET', timeoutMs: 15000 });
+          const srcs = (d && d.tutor && d.tutor.sources) || [];
+          if (srcs.length) { state.sources = srcs; refreshSourceDigests(); }
+        } catch (_) {}
+        if ((state.sources || []).some(s => s && !s.digest) && n < 20) digestPollTimer = setTimeout(tick, 4000);
+      };
+      digestPollTimer = setTimeout(tick, 4000);
+    }
     function setBrief(data) {
       const body  = document.getElementById('brief-board-body');
       const esc = escHtml;
@@ -2140,6 +2211,7 @@
 
       body.innerHTML = `<div class="bb-line">${esc(line)}</div>
         <div class="coverage-strip" id="coverage-strip"></div>
+        <div id="bb-sources">${sourceDigestsHtml()}</div>
         <details class="bb-fold" id="bb-fold"${foldOpen ? ' open' : ''}><summary>Show the brief</summary>
           <div class="bb-formal">
             <div class="brief-doctype">${esc(docType)}</div>
@@ -3637,15 +3709,27 @@
     //   answer    — everything else
     const PROGRESS_RE = /\b(how am i doing|how'?m i doing|where are we|what are we doing|how far (am i|are we|have i)|what'?s left|what is left|how much (more|left)|what'?s next|what is next|what am i (meant|supposed) to|what do i do now|how many (more|left)|am i (nearly |almost )?(done|finished|there))\b/i;
     const QUESTION_START_RE = /^(how|what|why|where|when|which|who|whom|whose|can you|could you|should i|do i|am i|is this|is that|is it|does|did|would you|will you|are you|are we|have i|explain|tell me|remind me)\b/i;
-    const META_RE = /\b(explain|i don'?t understand|dont understand|not sure what you mean|what does .{1,60} mean|what do you mean|stuck|help me|help\b|why are you asking|what are you asking|say that again|in plain english|meaning of)\b/i;
+    const META_RE = /\b(explain|i (don'?t|dont|do not) (understand|get it|get this|follow|know what)|not sure what you mean|what does .{1,60} mean|what do you mean|stuck|help me|help\b|why are you asking|what are you asking|say that again|in plain english|meaning of)\b/i;
     const CLEAR_SHORT_RE = /^(yes|no|yeah|nope|done|next|skip|ok|okay|nothing|none|not sure|n\/a)\b/i;
+    // Sarah, 16 Aug: "when I speak to Q to ask him questions he just asks the
+    // question again and ignores my question." She DICTATES. A spoken question
+    // has no question mark, and it is easily over twelve words — so both gates
+    // failed, it was classed as an ANSWER, and Q treated her question as her
+    // answer to his. The word caps go: a question that opens like a question
+    // is a question at any length. And a question addressed to him by name
+    // ("Q, what does…") is one whatever follows.
+    const QUESTION_ANYWHERE_RE = /\b(what does|what do you mean|what is|what are|what's|whats|how do i|how do you|how does|why does|why is|why do|can you|could you|should i|do i need|do i have to|does that mean|is that|is it|are you saying|which one|which of|tell me|remind me|i don'?t (know|get|understand)|what'?s the difference)\b/i;
     function classifyCoachInput(text) {
       const t = String(text || '').trim();
       const words = t.split(/\s+/).filter(Boolean).length;
       if (PROGRESS_RE.test(t)) return 'progress';
       if (/\?\s*$/.test(t)) return 'question';
-      if (META_RE.test(t) && words <= 14) return 'question';
-      if (QUESTION_START_RE.test(t) && words <= 12) return 'question';
+      if (/^(q|hey q|ok q|okay q|right q)[,:\s]/i.test(t)) return 'question';
+      if (META_RE.test(t)) return 'question';
+      if (QUESTION_START_RE.test(t)) return 'question';
+      // Mid-sentence question openers, only when the text isn't obviously a
+      // statement about her own workplace (an answer often contains "what is").
+      if (QUESTION_ANYWHERE_RE.test(t) && words <= 30 && !/^(my|our|the|we|i think|i believe|they|it|there)\b/i.test(t)) return 'question';
       const info = currentStepInfo();
       const kind = info ? info.step.kind : null;
       // A list item / a number / a pro or con is normally short — never ambiguous.
@@ -3701,10 +3785,13 @@
         }, { timeoutMs: 60000 });
         tally('probe', state.currentCriterionId);
         const answer = String(d.answer || d.question || '').trim();
-        appendBoardItem({ type: 'explain', text: answer });
-        revealPanel('teach');
+        appendBoardItem({ type: 'explain', text: answer, quiet: true });
         const info = currentStepInfo();
-        setCoach({ msg: (ask ? 'Back to it: ' + ask : ''), hint: 'I\'ve answered on the board — have a read, then carry on here.', inputVisible: true, showNudge: true, actions: info ? stepActions(info.cid, info.step, stepStateOf(info.cid, info.step.id)) : [] });
+        // THE ANSWER GOES ON THE CARD — where she asked. It used to go on the
+        // board only, with the card saying "Back to it: <his question again>",
+        // which, with the board minimised, is indistinguishable from being
+        // ignored. Now: his answer, then one quiet line with the ask.
+        setCoach({ ack: answer, msg: (ask ? 'Back to it: ' + ask : ''), section: 'YOU ASKED', hint: '', inputVisible: true, showNudge: true, actions: info ? stepActions(info.cid, info.step, stepStateOf(info.cid, info.step.id)) : [] });
       } catch (e) {
         setCoach({ msg: 'I couldn\'t answer that just now (' + shortCause(e) + ').' + (ask ? '\n\nBack to it: ' + ask : ''), inputVisible: true, showNudge: true });
       }
@@ -4758,9 +4845,9 @@
         }
         const d = await api('/writer/source', { name, text }, { timeoutMs: 40000 });
         state.sources = d.sources || [];
-        renderSourceSlot();
-        appendBoardItem({ type: 'note', label: 'source', text: 'Added ' + name + (d.truncated ? ' (first 80,000 characters kept)' : '') + '. Q is reading it into his plan…' });
-        setCoach({ msg: 'Got ' + name + '. I\'m folding it into the answer in my head — carry on, I\'ll say when it\'s in.', inputVisible: true, showNudge: true });
+        renderSourceSlot(); refreshSourceDigests(); watchDigests();
+        appendBoardItem({ type: 'note', label: 'source', text: 'Added ' + name + (d.truncated ? ' (first 80,000 characters kept)' : '') + '. Q is reading it FOR you — the plain version goes on the brief board.' });
+        setCoach({ msg: 'Got ' + name + '. I\'m reading it so you don\'t have to — the plain version lands on the brief board in a moment. Carry on.', inputVisible: true, showNudge: true });
         if (d.essayJob) { essayWatching = false; watchEssay('source'); }
       } catch (e) {
         setCoach({ msg: 'Couldn\'t add ' + name + ': ' + shortCause(e), section: 'SUPPORTING DOC', inputVisible: true, showNudge: !!state.brief });
@@ -5498,6 +5585,14 @@
       state.brickCounts = t.brickCounts && typeof t.brickCounts === 'object' ? t.brickCounts : {};
       state.essayReady = !!t.essayReady;
       state.sources = Array.isArray(t.sources) ? t.sources : [];
+      // Sources from before digests existed: ask for theirs, one at a time,
+      // quietly — then the board fills in.
+      setTimeout(async () => {
+        for (const s of (state.sources || [])) {
+          if (!s || s.digest) continue;
+          try { const d = await api('/writer/source/digest', { name: s.name }, { timeoutMs: 60000 }); state.sources = state.sources.map(x => x.name === d.name ? { ...x, digest: d.digest } : x); refreshSourceDigests(); } catch (_) {}
+        }
+      }, 1500);
       state.lastMark = t.lastMark || null;
       if (t.match) applyMatch(t.match);
       if (t.sourceName) renderSourceSlot();

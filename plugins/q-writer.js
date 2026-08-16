@@ -873,6 +873,47 @@ ${briefForPrompt(brief)}`;
 }
 
 
+// ─── THE CASE STUDY, SO SHE NEVER HAS TO READ IT ──────────────────────────
+// Sarah, 16 Aug: "it's expecting you to have read the case study. I need to
+// be able to do this without reading it so I need him to simplify it as much
+// as possible so I don't have to read it. and put that in the brief."
+//
+// Same principle as the brief itself: Q reads it, she doesn't. A supporting
+// document used to go into the hidden essay and nowhere else — she got a
+// chip with a filename and "Q is reading it into his plan". This makes the
+// digest: the plain-words version that lets her answer questions about the
+// case as if she'd read it. One small call per source, stored with the
+// source, shown on the brief board.
+const SOURCE_DIGEST_SCHEMA = {
+    type: 'object', additionalProperties: false,
+    required: ['whatItIs', 'theStory', 'people', 'numbers', 'problems', 'useIt'],
+    properties: {
+        whatItIs: { type: 'string', description: 'ONE plain sentence: what this document is. "A case study about a mid-sized software firm, Datacore, and how it pays its people."' },
+        theStory: { type: 'string', description: 'The whole thing in 3-5 short plain sentences, as you would tell a friend who has not read it. Everyday words. What the organisation is, what happened, where it is now. This is what she reads INSTEAD of the document.' },
+        people: { type: 'array', items: { type: 'object', additionalProperties: false, required: ['who', 'what'], properties: { who: { type: 'string', description: 'A name or role, e.g. "Priya (HR Director)".' }, what: { type: 'string', description: 'One short line: who they are and what they want / did.' } } }, description: 'The named people or roles that matter. Up to 6. Empty if none.' },
+        numbers: { type: 'array', items: { type: 'object', additionalProperties: false, required: ['label', 'value'], properties: { label: { type: 'string' }, value: { type: 'string' } } }, description: 'The figures worth having to hand — headcount, turnover, salaries, dates, percentages, budgets. Copied EXACTLY as the document states them, never rounded or invented. Up to 10. Empty if none.' },
+        problems: { type: 'array', items: { type: 'string' }, description: 'The problems / tensions / decisions the case sets up, each ONE plain line. These are usually what the questions are about. Up to 6.' },
+        useIt: { type: 'string', description: 'ONE plain sentence telling her how this document is meant to be used in her answers — "when a question says \'the organisation\', it means this company; use its numbers and its problems as your examples."' },
+    },
+};
+async function digestSource({ name, text, brief }) {
+    const body = String(text || '').trim();
+    if (!body) throw new Error('That document is empty.');
+    const system = withMission(`You are Q, reading a supporting document FOR the student so they never have to. They will answer questions about it as if they had read it — from your digest alone. So: plain everyday British English, short, concrete, nothing left out that a question could hinge on, nothing added that is not in the document. Figures copied exactly. Names as written. No marker language, no advice on what to write.
+${brief ? '\nTHE ASSIGNMENT THIS DOCUMENT SUPPORTS (so you know what matters in it):\n' + briefForPrompt(brief).slice(0, 3000) : ''}`);
+    const user = `DOCUMENT: ${name || 'supporting document'}\n\n${body.slice(0, 60000)}\n\nDigest it for someone who will not read it.`;
+    const r = await callAccurate(system, user, { maxTokens: 1800, schema: SOURCE_DIGEST_SCHEMA, effort: 'low' });
+    return {
+        whatItIs: String((r && r.whatItIs) || '').trim(),
+        theStory: String((r && r.theStory) || '').trim(),
+        people: (Array.isArray(r && r.people) ? r.people : []).map(p => ({ who: String((p && p.who) || '').trim(), what: String((p && p.what) || '').trim() })).filter(p => p.who).slice(0, 6),
+        numbers: (Array.isArray(r && r.numbers) ? r.numbers : []).map(n => ({ label: String((n && n.label) || '').trim(), value: String((n && n.value) || '').trim() })).filter(n => n.label && n.value).slice(0, 10),
+        problems: (Array.isArray(r && r.problems) ? r.problems : []).map(String).map(s => s.trim()).filter(Boolean).slice(0, 6),
+        useIt: String((r && r.useIt) || '').trim(),
+        madeAt: Date.now(),
+    };
+}
+
 // ─── PHASE 3b (Sarah, 15 Aug evening) — the HIDDEN MODEL ESSAY ────────────
 //
 // After the brief lands, Q writes the FULL target essay in the back room:
@@ -2193,7 +2234,7 @@ module.exports = {
     formatHarvardRef, suggestReferences, referenceParagraph,
     explainConcept, markSection, improveSectionStep,
     // Phase 3 — the coach with the answer in his head
-    probe, markLikeMarker, markPart, assembleFromDraft, userFacingCause, normaliseBrief, briefForPrompt,
+    probe, markLikeMarker, markPart, digestSource, assembleFromDraft, userFacingCause, normaliseBrief, briefForPrompt,
     writeModelEssay, essayForPrompt, allBrickIds, coverageFromBricks, editPass, splitSentences,
     BRIEF_SCHEMA, PROBE_SCHEMA, MARK_SCHEMA, ASSEMBLE_SCHEMA, ESSAY_SCHEMA, EDIT_SCHEMA,
 };
