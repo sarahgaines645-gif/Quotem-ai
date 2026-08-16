@@ -394,7 +394,7 @@
     .pet-card .pet-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 6px; }
     .pet-card .pet-title { font-size: 12px; font-weight: 700; color: var(--text); letter-spacing: 0.02em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .pet-card .pet-scene { text-align: center; }
-    .pet-card canvas { display: block; margin: 0 auto; image-rendering: pixelated; image-rendering: crisp-edges; }
+    .pet-card canvas { display: block; margin: 0 auto; }   /* the rig is vector — smooth edges */
     .pet-card .pet-line { font-size: 10.5px; color: var(--text-muted); text-align: center; margin: 4px 0 6px; line-height: 1.35; }
     .pet-card .pet-acts { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; }
     .pet-act {
@@ -2490,6 +2490,224 @@
         if (!framed && b.act === 'approach' && Math.abs(b.x - cx) < 3) setAct(b, 'idle', now, 2500);
       }
 
+      // ── THE RIG: pets drawn in code and moved like game characters ────────
+      // Sarah, 17 Aug: "I want an interactive pet, not videos — millions of
+      // games do this." They do it with a rig: the pet is PARTS (head, ears,
+      // body, four legs, tail, face) and code moves the joints — legs swing in
+      // gait, the body bobs, ears flop a beat behind, the tail wags, the eyes
+      // follow you, it blinks, squashes on landing. Nothing here is a picture:
+      // it's shapes, so it can do anything we describe and it costs nothing.
+      // Units: pet is ~100 tall standing; origin at the feet, bottom-centre;
+      // faces RIGHT (the caller flips it). `pose` says what to do:
+      //   view 'side'|'front'|'lie'; gait 0..∞ (phase, 0 = standing still);
+      //   run 0..1 (how hard the legs work); hop 0..1 (in the air);
+      //   look {x,y} -1..1 (where the eyes point); blink 0..1; mouth
+      //   'smile'|'open'|'tongue'|'chew'|'o'; happy (eyes as arcs);
+      //   ears -1..1 (down..up); tail (wag phase); tilt (head rad); breathe.
+      const RIG = {
+        puppy:    { base: '#f7e2b8', shade: '#e9c98f', patch: '#b96f3c', line: '#5b3a22', earIn: '#e9a58a', nose: '#3a2416', tongue: '#f28ba0', blush: 'rgba(240,120,130,0.32)',
+                    ear: 'floppy', tail: 'curl', snout: 'round', cheeks: 0, head: 1.0, body: 1.0, legs: 1.0 },
+        hamster:  { base: '#f4a94f', shade: '#e08d33', patch: null, belly: '#fbe8c9', line: '#6a3d1a', earIn: '#f7c9b0', nose: '#4a2a14', tongue: '#f28ba0', blush: 'rgba(240,120,130,0.30)',
+                    ear: 'round', tail: 'nub', snout: 'small', cheeks: 1, head: 1.05, body: 1.15, legs: 0.7 },
+        capybara: { base: '#c98d4e', shade: '#b0763a', patch: null, line: '#5a3a1e', earIn: '#8f5b2f', nose: '#3a2416', tongue: '#f28ba0', blush: 'rgba(240,120,130,0.22)',
+                    ear: 'tiny', tail: 'none', snout: 'box', cheeks: 0, head: 0.95, body: 1.2, legs: 0.85 },
+      };
+      const STAGE_PROP = { baby: { head: 1.12, body: 0.86, legs: 0.78 }, young: { head: 1.0, body: 1.0, legs: 1.0 }, grown: { head: 0.92, body: 1.12, legs: 1.14 } };
+      const RIG_LINE = 2.4;
+      function rr(x, y, w, h, r) { ctx.beginPath(); ctx.roundRect ? ctx.roundRect(x, y, w, h, r) : ctx.rect(x, y, w, h); }
+      function ell(x, y, rx, ry, rot) { ctx.beginPath(); ctx.ellipse(x, y, rx, ry, rot || 0, 0, Math.PI * 2); }
+      function fillStroke(fill, line) { if (fill) { ctx.fillStyle = fill; ctx.fill(); } if (line) { ctx.strokeStyle = line; ctx.stroke(); } }
+      // one leg: pivot at (px, py), swings by `ang` (rad, + = forward), length L
+      function leg(R, px, py, L, ang, w, near) {
+        ctx.save(); ctx.translate(px, py); ctx.rotate(-ang);
+        rr(-w / 2, -3, w, L + 3, w / 2); fillStroke(near ? R.base : R.shade, R.line);
+        ell(0, L, w * 0.62, w * 0.42); fillStroke(near ? R.base : R.shade, R.line);   // paw
+        ctx.restore();
+      }
+      function earShape(R, side, k, view) {
+        // side: -1 left/back, +1 right/front (in the pet's own frame). k = ears (-1 down .. 1 up)
+        ctx.save();
+        if (R.ear === 'floppy') {
+          ctx.rotate(side * (0.32 - k * 0.55) * (view === 'front' ? 1 : 0.7));
+          ell(side * 7, 17, 9, 18, side * 0.12); fillStroke(R.patch || R.shade, R.line);
+          ell(side * 7, 18, 4.4, 10.5, side * 0.12); fillStroke(R.earIn, null);
+        } else if (R.ear === 'round') {
+          ctx.rotate(side * (0.15 - k * 0.2));
+          ell(side * 4, -4, 8.5, 8.5); fillStroke(R.base, R.line);
+          ell(side * 4, -3.5, 4.8, 4.8); fillStroke(R.earIn, null);
+        } else {   // tiny
+          ctx.rotate(side * (0.2 - k * 0.2));
+          ell(side * 3, -2, 5, 5.5); fillStroke(R.shade, R.line);
+          ell(side * 3, -1.5, 2.6, 3); fillStroke(R.earIn, null);
+        }
+        ctx.restore();
+      }
+      function eye(R, x, y, r, look, blink, happy) {
+        if (happy) { ctx.beginPath(); ctx.arc(x, y + r * 0.6, r * 1.05, Math.PI * 1.15, Math.PI * 1.85); ctx.lineWidth = RIG_LINE * 1.15; ctx.strokeStyle = R.line; ctx.stroke(); ctx.lineWidth = RIG_LINE; return; }
+        if (blink > 0.85) { ctx.beginPath(); ctx.moveTo(x - r, y); ctx.quadraticCurveTo(x, y + r * 0.5, x + r, y); ctx.strokeStyle = R.line; ctx.stroke(); return; }
+        const sq = 1 - blink * 0.85;
+        ell(x, y, r, r * sq); fillStroke('#fff', R.line);
+        const px = x + (look ? look.x : 0) * r * 0.42, py = y + (look ? look.y : 0) * r * 0.42;
+        ell(px, py, r * 0.62, r * 0.62 * sq); fillStroke(R.nose === R.line ? R.line : '#2a1a12', null);
+        ell(px - r * 0.2, py - r * 0.24, r * 0.2, r * 0.2 * sq); fillStroke('#fff', null);
+        ell(px + r * 0.22, py + r * 0.22, r * 0.09, r * 0.09 * sq); fillStroke('#fff', null);
+      }
+      function mouth(R, x, y, kind, t) {
+        ctx.strokeStyle = R.line; ctx.lineCap = 'round';
+        if (kind === 'open' || kind === 'chew') {
+          const o = kind === 'chew' ? 2 + 2.5 * Math.abs(Math.sin(t * 9)) : 5;
+          ell(x, y + 3, 4.5, o); fillStroke('#7a3a3a', R.line);
+          if (o > 3) { ell(x, y + 3 + o * 0.5, 2.6, o * 0.45); fillStroke(R.tongue, null); }
+        } else if (kind === 'tongue') {
+          ctx.beginPath(); ctx.moveTo(x - 4, y); ctx.quadraticCurveTo(x, y + 3, x + 4, y); ctx.stroke();
+          const w = 5.5 + Math.sin(t * 10) * 0.6;
+          ell(x + 1, y + 6 + Math.sin(t * 10) * 1.2, w * 0.7, w); fillStroke(R.tongue, R.line);
+        } else if (kind === 'o') {
+          ell(x, y + 2.5, 2.4, 2.8); fillStroke('#7a3a3a', R.line);
+        } else {   // smile: the little "w"
+          ctx.beginPath(); ctx.moveTo(x - 5, y - 1); ctx.quadraticCurveTo(x - 2.5, y + 3, x, y); ctx.quadraticCurveTo(x + 2.5, y + 3, x + 5, y - 1); ctx.stroke();
+        }
+      }
+      // Draw the pet at (cx, by) with height `size`. Returns true.
+      function drawRig(kind, stage, pose, cx, by, size, o = {}) {
+        const R = RIG[kind]; if (!R) return false;
+        const S = STAGE_PROP[stage] || STAGE_PROP.young;
+        const t = pose.t || 0;
+        const hs = R.head * S.head, bs = R.body * S.body, ls = R.legs * S.legs;
+        ctx.save();
+        ctx.translate(cx, by);
+        const u = size / 100;
+        ctx.scale((o.flip ? -1 : 1) * (o.sx || 1) * u, (o.sy || 1) * u);
+        if (o.rot) ctx.rotate(o.rot);
+        if (o.alpha != null) ctx.globalAlpha = o.alpha;
+        ctx.lineWidth = RIG_LINE; ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+        const breathe = Math.sin(t * 2.2 + (pose.seed || 0)) * (pose.breathe == null ? 1 : pose.breathe);
+        const look = pose.look || { x: 0, y: 0 };
+        const blink = pose.blink || 0;
+        const ears = pose.ears == null ? 0 : pose.ears;
+        const wag = pose.tail == null ? t * 4 : pose.tail;
+
+        if (pose.view === 'side') {
+          // ── gait ──
+          const g = pose.gait || 0, run = Math.min(1, pose.run == null ? (g ? 1 : 0) : pose.run);
+          const swing = Math.sin(g * Math.PI * 2), swing2 = Math.sin(g * Math.PI * 2 + Math.PI);
+          const amp = 0.55 * run;
+          const bob = run ? Math.abs(Math.cos(g * Math.PI * 2)) * 3.2 * run : 0;
+          const pitch = run ? Math.sin(g * Math.PI * 2 + 0.6) * 0.06 * run : 0;
+          const hop = pose.hop || 0;
+          const bodyY = -34 * ls - 22 * bs + 20 - bob + breathe * 0.6;   // body centre
+          const bodyRx = 30 * bs, bodyRy = 21 * bs;
+          const legL = 26 * ls, legW = 10.5 * Math.min(bs, 1.15);
+          const hipX = -bodyRx * 0.55, shX = bodyRx * 0.55, legY = bodyY + bodyRy * 0.62;
+          // in the air: legs tuck (front forward, back back)
+          const fA = hop ? 0.7 * hop : 0, bA = hop ? -0.5 * hop : 0;
+          ctx.save(); ctx.translate(0, 0); ctx.rotate(pitch);
+          // far legs (lighter)
+          leg(R, hipX + 2, legY, legL, -swing * amp + bA, legW, false);
+          leg(R, shX - 2, legY, legL, swing2 * amp * 0.9 + fA, legW, false);
+          // tail
+          if (R.tail === 'curl') {
+            ctx.save(); ctx.translate(-bodyRx * 0.92, bodyY - bodyRy * 0.35); ctx.rotate(-0.4 + Math.sin(wag) * 0.5 - (run ? 0.3 : 0));
+            ctx.beginPath(); ctx.moveTo(0, 0); ctx.quadraticCurveTo(-10, -12, -6, -22); ctx.lineWidth = 7; ctx.strokeStyle = R.line; ctx.stroke(); ctx.lineWidth = 3.4; ctx.strokeStyle = R.patch || R.base; ctx.stroke(); ctx.lineWidth = RIG_LINE; ctx.restore();
+          } else if (R.tail === 'nub') { ell(-bodyRx * 0.98, bodyY + 2, 3.5, 3); fillStroke(R.base, R.line); }
+          // body
+          ell(0, bodyY, bodyRx, bodyRy); fillStroke(R.base, R.line);
+          if (R.belly) { ell(2, bodyY + bodyRy * 0.35, bodyRx * 0.6, bodyRy * 0.5); fillStroke(R.belly, null); }
+          if (R.patch) { ell(-bodyRx * 0.35, bodyY - bodyRy * 0.25, bodyRx * 0.36, bodyRy * 0.55, -0.3); fillStroke(R.patch, null); }
+          // near legs
+          leg(R, hipX - 2, legY, legL, swing * amp + bA, legW, true);
+          leg(R, shX + 2, legY, legL, -swing2 * amp * 0.9 + fA, legW, true);
+          ctx.restore();
+          // head (bobs a touch after the body)
+          const hr = 26 * hs;
+          const hx = bodyRx * 0.5 + 2, hy = bodyY - bodyRy * 0.6 - hr * 0.6 - (run ? Math.sin(g * Math.PI * 2 - 0.9) * 1.6 * run : 0) - hop * 3;
+          ctx.save(); ctx.translate(hx, hy); ctx.rotate((pose.tilt || 0) + (run ? -0.08 * run : 0) + hop * -0.12);
+          // far ear (behind the head, hangs down the back)
+          ctx.save(); ctx.translate(-hr * 0.42, -hr * 0.62); earShape(R, -1, ears + (run ? -0.6 : 0) + hop * 0.8, 'side'); ctx.restore();
+          ell(0, 0, hr, hr * 0.96); fillStroke(R.base, R.line);
+          if (R.patch) { ell(hr * 0.15, -hr * 0.28, hr * 0.5, hr * 0.42, 0.25); fillStroke(R.patch, null); }
+          // snout
+          if (R.snout === 'box') { rr(hr * 0.35, -hr * 0.28, hr * 0.85, hr * 0.62, hr * 0.28); fillStroke(R.shade, R.line); ell(hr * 1.06, -hr * 0.05, 3, 2.4); fillStroke(R.nose, null); }
+          else { ell(hr * 0.68, hr * 0.18, hr * 0.42, hr * 0.32); fillStroke(R.snout === 'small' ? R.base : '#fbf0dc', R.line); ell(hr * 0.98, hr * 0.06, 3.2, 2.6); fillStroke(R.nose, null); }
+          if (R.cheeks) { ell(hr * 0.55, hr * 0.32, hr * 0.42, hr * 0.34); fillStroke(R.base, R.line); }
+          // eye + mouth
+          eye(R, hr * 0.28, -hr * 0.12, hr * 0.2, { x: 0.3 + look.x * 0.5, y: look.y }, blink, pose.happy);
+          if (pose.mouth === 'tongue' || pose.mouth === 'open') { ell(hr * 0.78, hr * 0.5, 3.4, 4.6, 0.3); fillStroke(R.tongue, R.line); }
+          ell(hr * 0.42, hr * 0.32, hr * 0.16, hr * 0.1); fillStroke(R.blush, null);
+          // near ear — at the back-top of the head, in front, so the face stays clear
+          ctx.save(); ctx.translate(-hr * 0.2, -hr * 0.7); earShape(R, -1, ears + (run ? -0.6 : 0) + hop * 0.8, 'side'); ctx.restore();
+          ctx.restore();
+        }
+        else if (pose.view === 'lie') {
+          // lying down: body flat, head on paws, eyes shut unless told otherwise
+          const bodyRx = 34 * bs, bodyRy = 15 * bs, bodyY = -bodyRy - 2 + breathe * 0.5;
+          if (R.tail === 'curl') { ctx.save(); ctx.translate(-bodyRx * 0.9, bodyY); ctx.rotate(0.6 + Math.sin(wag * 0.5) * 0.15); ctx.beginPath(); ctx.moveTo(0, 0); ctx.quadraticCurveTo(-10, -6, -14, 2); ctx.lineWidth = 7; ctx.strokeStyle = R.line; ctx.stroke(); ctx.lineWidth = 3.4; ctx.strokeStyle = R.patch || R.base; ctx.stroke(); ctx.lineWidth = RIG_LINE; ctx.restore(); }
+          ell(0, bodyY, bodyRx, bodyRy); fillStroke(R.base, R.line);
+          if (R.patch) { ell(-bodyRx * 0.3, bodyY - bodyRy * 0.3, bodyRx * 0.3, bodyRy * 0.55, -0.2); fillStroke(R.patch, null); }
+          // paws out front
+          ell(bodyRx * 0.55, -3, 8, 4.5); fillStroke(R.base, R.line); ell(bodyRx * 0.85, -3, 8, 4.5); fillStroke(R.base, R.line);
+          const hr = 24 * hs; ctx.save(); ctx.translate(bodyRx * 0.62, -hr * 0.85 - 2 + breathe * 0.4); ctx.rotate(0.12);
+          ctx.save(); ctx.translate(-hr * 0.45, -hr * 0.55); earShape(R, -1, -0.8, 'side'); ctx.restore();
+          ell(0, 0, hr, hr * 0.94); fillStroke(R.base, R.line);
+          if (R.patch) { ell(hr * 0.15, -hr * 0.28, hr * 0.5, hr * 0.42, 0.25); fillStroke(R.patch, null); }
+          if (R.snout === 'box') { rr(hr * 0.35, -hr * 0.2, hr * 0.8, hr * 0.58, hr * 0.26); fillStroke(R.shade, R.line); ell(hr * 1.02, 0, 3, 2.4); fillStroke(R.nose, null); }
+          else { ell(hr * 0.66, hr * 0.22, hr * 0.4, hr * 0.3); fillStroke(R.snout === 'small' ? R.base : '#fbf0dc', R.line); ell(hr * 0.95, hr * 0.1, 3, 2.4); fillStroke(R.nose, null); }
+          eye(R, hr * 0.28, -hr * 0.1, hr * 0.19, look, pose.blink == null ? 1 : pose.blink, pose.happy);
+          ctx.save(); ctx.translate(-hr * 0.2, -hr * 0.66); earShape(R, -1, -0.9, 'side'); ctx.restore();
+          ctx.restore();
+        }
+        else {
+          // ── front, sitting ──
+          const hop = pose.hop || 0;
+          const bodyRx = 27 * bs, bodyRy = 30 * bs;
+          const bodyY = -bodyRy + 2 - hop * 2 + breathe * 0.5;
+          const bounce = pose.gait ? Math.abs(Math.sin(pose.gait * Math.PI * 2)) : 0;   // running at you
+          // back legs (haunches) peeking
+          ell(-bodyRx * 0.85, -7, 9, 7); fillStroke(R.shade, R.line); ell(bodyRx * 0.85, -7, 9, 7); fillStroke(R.shade, R.line);
+          // tail peeking (curl) at one side
+          if (R.tail === 'curl') { ctx.save(); ctx.translate(bodyRx * 0.9, bodyY + bodyRy * 0.5); ctx.rotate(0.9 + Math.sin(wag) * 0.45); ctx.beginPath(); ctx.moveTo(0, 0); ctx.quadraticCurveTo(10, -10, 6, -20); ctx.lineWidth = 7; ctx.strokeStyle = R.line; ctx.stroke(); ctx.lineWidth = 3.4; ctx.strokeStyle = R.patch || R.base; ctx.stroke(); ctx.lineWidth = RIG_LINE; ctx.restore(); }
+          // body (a soft pear)
+          ctx.beginPath(); ctx.moveTo(-bodyRx * 0.55, bodyY - bodyRy);
+          ctx.bezierCurveTo(-bodyRx * 1.35, bodyY - bodyRy * 0.2, -bodyRx * 1.15, bodyY + bodyRy, 0, bodyY + bodyRy);
+          ctx.bezierCurveTo(bodyRx * 1.15, bodyY + bodyRy, bodyRx * 1.35, bodyY - bodyRy * 0.2, bodyRx * 0.55, bodyY - bodyRy); ctx.closePath(); fillStroke(R.base, R.line);
+          if (R.belly) { ell(0, bodyY + bodyRy * 0.25, bodyRx * 0.62, bodyRy * 0.6); fillStroke(R.belly, null); }
+          else if (R.snout !== 'box') { ell(0, bodyY + bodyRy * 0.3, bodyRx * 0.5, bodyRy * 0.5); fillStroke(R.snout === 'small' ? R.shade : '#fbf0dc', null); }
+          // front paws — lift alternately when running at you / begging
+          const lift = pose.paws == null ? bounce * 4 : pose.paws;
+          const pw = 8.5 * Math.min(bs, 1.1);
+          leg(R, -bodyRx * 0.42, bodyY + bodyRy * 0.55 - (pose.gait ? lift : 0), 12 * ls, pose.beg ? 0.5 + Math.sin(t * 6) * 0.15 : 0, pw, true);
+          leg(R, bodyRx * 0.42, bodyY + bodyRy * 0.55 - (pose.gait ? 4 - lift : 0), 12 * ls, pose.beg ? 0.5 - Math.sin(t * 6) * 0.15 : 0, pw, true);
+          // head
+          const hr = 30 * hs;
+          ctx.save(); ctx.translate(look.x * 1.5, bodyY - bodyRy * 0.55 - hr * 0.72 - hop * 4 - bounce * 1.5 + breathe * 0.4);
+          ctx.rotate((pose.tilt || 0) + look.x * 0.06);
+          const earK = ears + hop * 0.9 - bounce * 0.5;
+          if (R.ear !== 'floppy') { ctx.save(); ctx.translate(-hr * 0.7, -hr * 0.7); earShape(R, -1, earK, 'front'); ctx.restore(); ctx.save(); ctx.translate(hr * 0.7, -hr * 0.7); earShape(R, 1, earK, 'front'); ctx.restore(); }
+          ell(0, 0, hr, hr * 0.94); fillStroke(R.base, R.line);
+          if (R.ear === 'floppy') { ctx.save(); ctx.translate(-hr * 0.78, -hr * 0.6); earShape(R, -1, earK, 'front'); ctx.restore(); ctx.save(); ctx.translate(hr * 0.78, -hr * 0.6); earShape(R, 1, earK, 'front'); ctx.restore(); }
+          if (R.patch) { ell(hr * 0.42, -hr * 0.3, hr * 0.5, hr * 0.42, 0.35); fillStroke(R.patch, null); }
+          if (R.cheeks) { ell(-hr * 0.55, hr * 0.28, hr * 0.42, hr * 0.32); fillStroke(R.base, R.line); ell(hr * 0.55, hr * 0.28, hr * 0.42, hr * 0.32); fillStroke(R.base, R.line); }
+          if (R.snout === 'box') { rr(-hr * 0.42, hr * 0.05, hr * 0.84, hr * 0.62, hr * 0.28); fillStroke(R.shade, R.line); ell(-hr * 0.16, hr * 0.28, 2.6, 2.2); fillStroke(R.nose, null); ell(hr * 0.16, hr * 0.28, 2.6, 2.2); fillStroke(R.nose, null); }
+          else { ell(0, hr * 0.38, hr * 0.42, hr * 0.3); fillStroke(R.snout === 'small' ? R.base : '#fbf0dc', R.line); ell(0, hr * 0.28, 3.4, 2.7); fillStroke(R.nose, null); }
+          eye(R, -hr * 0.36, -hr * 0.05, hr * 0.19, look, blink, pose.happy);
+          eye(R, hr * 0.36, -hr * 0.05, hr * 0.19, look, blink, pose.happy);
+          mouth(R, 0, hr * 0.5, pose.mouth || 'smile', t);
+          ell(-hr * 0.66, hr * 0.22, hr * 0.17, hr * 0.1); fillStroke(R.blush, null);
+          ell(hr * 0.66, hr * 0.22, hr * 0.17, hr * 0.1); fillStroke(R.blush, null);
+          ctx.restore();
+        }
+        ctx.restore();
+        return true;
+      }
+      // Where the mouse is over the glass — the pet's eyes follow it.
+      const mouse = { x: null, y: null, at: 0, over: false };
+      function lookAt(px, top, size) {
+        if (mouse.x == null || performance.now() - mouse.at > 4000) return { x: 0, y: 0 };
+        const dx = mouse.x - px, dy = mouse.y - top;
+        const d = Math.max(30, Math.hypot(dx, dy));
+        return { x: Math.max(-1, Math.min(1, dx / d * 1.3)), y: Math.max(-1, Math.min(1, dy / d * 1.3)) };
+      }
+      let RIG_ON = true;   // the rig draws; the pictures are the fallback (lab can switch)
       // draw one actor; returns where it ended up (for the food / hearts)
       function drawActor(actor, now, time, size, k) {
         const b = actor.beh;
@@ -2511,6 +2729,16 @@
         let drewPet = false;
         const bk = b.until > b.since ? Math.max(0, Math.min(1, (now - b.since) / (b.until - b.since))) : 0;   // progress through the current act
         const front = petName(kind, stage, false), side = petName(kind, stage, true);
+        const seed = isMe ? 0 : 1.7 + friends.indexOf(actor);
+        const rig = RIG_ON && !!RIG[kind];
+        // blink: a quick shut every few seconds (shared by rig and sheets)
+        if (now > b.blinkAt) b.blinkAt = now + 2600 + Math.random() * 3000;
+        const tb = b.blinkAt - now;
+        const blinkK = tb < 140 ? 1 : 0;
+        // where it looks: my pet follows the mouse; friends glance about
+        const glance = { x: Math.sin(time * 0.7 + seed * 3) * 0.5, y: Math.cos(time * 0.5 + seed) * 0.25 };
+        const lookOf = (x, top) => isMe && mouse.over ? lookAt(x, top, size) : glance;
+        const R = (pose, x, y, sz, o) => drawRig(kind, stage, Object.assign({ t: time, seed, blink: blinkK }, pose), x, y, sz, o);
 
         // ── play (chase the ball) — friends chase it too ──
         if (chasing) {
@@ -2520,7 +2748,9 @@
           b.x += Math.max(-1, Math.min(1, (bx - lag * b.dir - b.x) / 20)) * 2.2; b.y += (0 - b.y) * 0.1;
           px_ = b.x; by = floor + b.y;
           const moving = Math.abs(bx - lag * b.dir - b.x) > 8;
-          if (moving && framed) drewPet = drawFrame(kind, stage, 'run_side', Math.floor(time * 12), px_, by, size, { flip: b.dir < 0 });
+          if (rig) drewPet = moving ? R({ view: 'side', gait: time * 2.4, run: 1, mouth: 'tongue', tail: time * 9, look: { x: 0.5, y: -0.6 } }, px_, by, size, { flip: b.dir < 0 })
+                                    : R({ view: 'front', look: { x: (bx - px_) / 60, y: -0.8 }, mouth: 'open', tail: time * 9, ears: 0.4 }, px_, by, size, { sx, sy });
+          else if (moving && framed) drewPet = drawFrame(kind, stage, 'run_side', Math.floor(time * 12), px_, by, size, { flip: b.dir < 0 });
           else if (moving) { const gait = Math.abs(Math.sin(time * 11)); drewPet = drawImg(side, px_, by - gait * 5, size, { flip: b.dir < 0, sx: 1 + gait * 0.04, sy: 1 - gait * 0.05 }); }
           else drewPet = drawImg(front, px_, by, size, { sx, sy });
           if (isMe) { const hop = Math.abs(Math.sin(time * 7)); drawImg('item_ball', bx, floor - 6 - hop * 40, 30, { rot: time * 6 }); }
@@ -2529,7 +2759,8 @@
         else if (inBed) {
           if (isMe) drawImg('item_bed', cx, floor + 6, 150);
           const slow = Math.sin(time * 1.1);
-          if (framed && hasSheet(kind, stage, 'sleep')) drewPet = drawFrame(kind, stage, 'sleep', -1, px_, floor + 4, size * 0.78, { sx: 1 - slow * 0.012, sy: 1 + slow * 0.02 });
+          if (rig) drewPet = R({ view: 'lie', blink: 1, breathe: 1.6, tail: time * 0.6 }, px_, floor + 2, size * 0.92, { flip: !isMe });
+          else if (framed && hasSheet(kind, stage, 'sleep')) drewPet = drawFrame(kind, stage, 'sleep', -1, px_, floor + 4, size * 0.78, { sx: 1 - slow * 0.012, sy: 1 + slow * 0.02 });
           else drewPet = drawImg(front, px_, floor + 6, size, { sx: 1 - slow * 0.012, sy: 0.96 + slow * 0.02 });
           if (!anim) { ctx.fillStyle = 'rgba(0,0,0,0.35)'; ctx.font = 'bold 11px sans-serif'; const zk = (time % 3) / 3; ctx.globalAlpha = 1 - zk; ctx.fillText('z', px_ + size * 0.42, floor - size * 0.6 - zk * 18); ctx.fillText('z', px_ + size * 0.50, floor - size * 0.7 - zk * 26); ctx.globalAlpha = 1; }
           by = floor;
@@ -2537,7 +2768,8 @@
         // ── poorly: lying down, a bit grey, no bounce ──
         else if (b.act === 'poorly') {
           const slow = Math.sin(time * 0.9);
-          if (framed && hasSheet(kind, stage, 'sleep')) drewPet = drawFrame(kind, stage, 'sleep', -1, px_, by + 2, size * 0.78, { alpha: 0.82, sx: 1 - slow * 0.01, sy: 1 + slow * 0.015 });
+          if (rig) drewPet = R({ view: 'lie', blink: 0.55, look: { x: 0, y: 0.5 }, breathe: 1.4, tail: 0 }, px_, by + 1, size * 0.92, { alpha: 0.85 });
+          else if (framed && hasSheet(kind, stage, 'sleep')) drewPet = drawFrame(kind, stage, 'sleep', -1, px_, by + 2, size * 0.78, { alpha: 0.82, sx: 1 - slow * 0.01, sy: 1 + slow * 0.015 });
           else drewPet = drawImg(front, px_, by + 2, size * 0.92, { alpha: 0.82, rot: 0.06, sy: 0.9 + slow * 0.015 });
           if (isMe && !anim) { ctx.font = '13px sans-serif'; ctx.globalAlpha = 0.55 + 0.45 * Math.abs(Math.sin(time * 1.4)); ctx.fillText('💧', px_ + size * 0.34, by - size * 0.62); ctx.globalAlpha = 1; }
         }
@@ -2545,12 +2777,17 @@
         else if (busy) {
           if (anim.kind === 'hatch') { const s = k < 0.5 ? easeOutBack(k * 2) : 1; sx *= Math.max(0.05, s); sy *= Math.max(0.05, s); }
           if (anim.kind === 'eat') { rot = -0.10 * Math.sin(k * Math.PI); dy += 3 * Math.sin(k * Math.PI); }
-          if (framed && anim.kind === 'eat' && k > 0.55 && hasSheet(kind, stage, 'idle')) drewPet = drawFrame(kind, stage, 'idle', -1, px_, by + dy, size * depth, { sx, sy, rot });   // eyes shut, savouring
+          if (rig) drewPet = R(anim.kind === 'eat' ? { view: 'front', mouth: k < 0.55 ? 'open' : 'chew', happy: k > 0.55, look: { x: 0.6 - k * 0.6, y: -0.3 }, tail: time * 7, ears: k > 0.55 ? 0.3 : 0 }
+                                : anim.kind === 'love' ? { view: 'front', happy: true, mouth: 'smile', tail: time * 10, ears: 0.6, tilt: Math.sin(time * 6) * 0.08 }
+                                : { view: 'front', look: { x: 0, y: -0.2 }, mouth: 'o', ears: 0.8, tail: time * 6 }, px_, by + dy, size * depth, { sx, sy, rot });
+          else if (framed && anim.kind === 'eat' && k > 0.55 && hasSheet(kind, stage, 'idle')) drewPet = drawFrame(kind, stage, 'idle', -1, px_, by + dy, size * depth, { sx, sy, rot });   // eyes shut, savouring
           else drewPet = drawImg(front, px_, by + dy, size * depth, { sx, sy, rot });
         }
         // ── running about / going to see a friend ──
         else if (b.act === 'run' || b.act === 'visit') {
-          if (framed) drewPet = drawFrame(kind, stage, 'run_side', Math.floor(time * 12), px_, by, size * depth, { flip: b.dir < 0 });
+          const trot = Math.min(1, b.speed / 60);
+          if (rig) drewPet = R({ view: 'side', gait: time * (1.6 + trot * 0.8), run: 0.7 + trot * 0.3, tail: time * 6, look: { x: 0.4, y: 0 }, mouth: b.act === 'visit' ? 'open' : 'smile' }, px_, by, size * depth, { flip: b.dir < 0 });
+          else if (framed) drewPet = drawFrame(kind, stage, 'run_side', Math.floor(time * 12), px_, by, size * depth, { flip: b.dir < 0 });
           else { const gait = Math.abs(Math.sin(time * 11)); dy = -gait * 5; drewPet = drawImg(side, px_, by + dy, size * depth, { flip: b.dir < 0, sx: 1 + gait * 0.04, sy: 1 - gait * 0.05, rot: Math.sin(time * 11) * 0.05 * b.dir }); }
         }
         // ── running up to the glass ──
@@ -2558,7 +2795,8 @@
           const grow = 1 + bk * 0.9;                                  // 1 → 1.9: coming right up to you
           by = floor + 10 * bk; px_ = b.x;
           shadowW = size * 0.42 * grow; shadowY = by + 3;
-          if (framed && hasSheet(kind, stage, 'run_front')) drewPet = drawFrame(kind, stage, 'run_front', Math.floor(time * 10), px_, by, size * grow);
+          if (rig) drewPet = R({ view: 'front', gait: time * 2.2, look: { x: 0, y: -0.7 }, mouth: 'open', tail: time * 9, ears: -0.2 }, px_, by, size * grow);
+          else if (framed && hasSheet(kind, stage, 'run_front')) drewPet = drawFrame(kind, stage, 'run_front', Math.floor(time * 10), px_, by, size * grow);
           else { const gait = Math.abs(Math.sin(time * 11)); drewPet = drawImg(front, px_, by - gait * 4, size * grow, { sx: 1 + gait * 0.03, sy: 1 - gait * 0.04 }); }
         }
         // ── the lick ──
@@ -2568,7 +2806,8 @@
           const big = size * 1.9;
           by = floor + 10; px_ = cx;
           shadowW = size * 0.8; shadowY = by + 3;
-          drewPet = drawFrame(kind, stage, 'lick', fi, px_, by, big) || drawImg(front, px_, by, big);
+          if (rig) drewPet = R({ view: 'front', mouth: 'tongue', look: { x: Math.sin(time * 4) * 0.4, y: -0.9 }, tail: time * 10, ears: 0.1, tilt: Math.sin(time * 5) * 0.06, blink: fi === 2 ? 0.5 : blinkK }, px_, by, big);
+          else drewPet = drawFrame(kind, stage, 'lick', fi, px_, by, big) || drawImg(front, px_, by, big);
           if (isMe && fi === 2 && (!me.licks.length || now - me.licks[me.licks.length - 1].t > 900)) {
             me.licks.push({ x: cx + (Math.random() - 0.5) * 30, y: floor - big * 0.55 + (Math.random() - 0.5) * 20, t: now, w: 46 + Math.random() * 20, h: 30 + Math.random() * 14, a: Math.random() * 0.8 - 0.4 });
           }
@@ -2578,14 +2817,20 @@
           const grow = 1.9 - bk * 0.9;
           by = floor + 10 * (1 - bk); px_ = cx;
           shadowW = size * 0.42 * grow; shadowY = by + 3;
-          drewPet = drawImg(front, px_, by, size * grow);
+          if (rig) drewPet = R({ view: 'front', gait: time * 2, look: { x: 0, y: -0.5 }, happy: true, tail: time * 8, mouth: 'tongue' }, px_, by, size * grow);
+          else drewPet = drawImg(front, px_, by, size * grow);
         }
         // ── happy jump / hello hop ──
         else if (b.act === 'jump' || b.act === 'greet') {
           const hop = b.act === 'jump' ? Math.sin(bk * Math.PI) : Math.abs(Math.sin(bk * Math.PI * 2)) * 0.6;
           const fi = bk < 0.2 ? 0 : bk < 0.5 ? 1 : bk < 0.8 ? 2 : 3;
           shadowW = size * 0.42 * (1 - hop * 0.35);
-          if (b.act === 'greet') {
+          if (rig) {
+            // crouch before, stretch in the air, squash on landing
+            const air = hop;
+            const squash = bk < 0.1 ? 1 - bk * 1.2 : bk > 0.9 ? 1 - (1 - bk) * 1.2 : 1;
+            drewPet = R({ view: 'front', hop: air, happy: air > 0.5, mouth: air > 0.3 ? 'open' : 'smile', ears: air, tail: time * 12, look: { x: b.act === 'greet' ? b.dir * 0.8 : 0, y: -air } }, px_, by - hop * (b.act === 'jump' ? 26 : 22), size * depth, { sx: 1 + (1 - squash) * 0.5 - air * 0.05, sy: squash + air * 0.08 });
+          } else if (b.act === 'greet') {
             // face the friend
             if (framed && hasSheet(kind, stage, 'jump')) drewPet = drawFrame(kind, stage, 'jump', fi, px_, by - hop * 22, size * depth);
             else drewPet = drawImg(front, px_, by - hop * 22, size * depth, { sx: 1 - hop * 0.06, sy: 1 + hop * 0.08 });
@@ -2595,7 +2840,8 @@
         // ── hungry: sits at the front and asks ──
         else if (b.act === 'beg') {
           const wob = Math.sin(time * 3.1);
-          drewPet = drawImg(front, px_, by, size * depth, { sx: 1 - wob * 0.02, sy: 1 + wob * 0.03, rot: Math.sin(time * 1.3) * 0.04 });
+          if (rig) drewPet = R({ view: 'front', beg: true, look: { x: 0, y: -1 }, mouth: 'o', ears: -0.5, tilt: Math.sin(time * 1.3) * 0.12, tail: time * 3 }, px_, by, size * depth, { sx: 1 - wob * 0.02, sy: 1 + wob * 0.03 });
+          else drewPet = drawImg(front, px_, by, size * depth, { sx: 1 - wob * 0.02, sy: 1 + wob * 0.03, rot: Math.sin(time * 1.3) * 0.04 });
           if (isMe && !anim) {
             // a little thought of food, bobbing
             const fx_ = px_ + size * 0.52, fy = by - size * 0.95 + Math.sin(time * 2) * 3;
@@ -2606,10 +2852,14 @@
         }
         // ── idle: sit, breathe, blink ──
         else {
-          if (now > b.blinkAt) b.blinkAt = now + 2600 + Math.random() * 3000;
-          const tb = b.blinkAt - now;                            // ms until the next blink
-          const closing = tb < 140;
-          if (closing && framed && hasSheet(kind, stage, 'idle')) drewPet = drawFrame(kind, stage, 'idle', -1, px_, by, size * depth, { sx, sy });   // last frame = eyes shut
+          const closing = blinkK > 0;
+          if (rig) {
+            const top = by - size * depth;
+            const lk = lookOf(px_, top + size * 0.35);
+            const wagging = isMe && mouse.over;                        // you're near: tail goes
+            drewPet = R({ view: 'front', look: lk, mouth: wagging ? 'tongue' : 'smile', tail: time * (wagging ? 11 : 3.5), ears: wagging ? 0.4 : Math.sin(time * 0.9 + seed) * 0.15, tilt: Math.sin(time * 0.6 + seed) * 0.05 + lk.x * 0.04 }, px_, by, size * depth, { sx, sy });
+          }
+          else if (closing && framed && hasSheet(kind, stage, 'idle')) drewPet = drawFrame(kind, stage, 'idle', -1, px_, by, size * depth, { sx, sy });   // last frame = eyes shut
           else drewPet = drawImg(front, px_, by, size * depth, { sx, sy });
         }
         // shadow under whatever was drawn
@@ -2666,7 +2916,7 @@
         const actors = [me, ...shown];
         for (const a of actors) step(a, now, sizeFor(actorStage(a)), actors.filter((o) => o !== a), dt);
         // keep everyone on the floor and inside the glass
-        for (const a of actors) { const s = sizeFor(actorStage(a)); a.beh.x = Math.max(s * 0.35, Math.min(W - s * 0.35, a.beh.x)); }
+        for (const a of actors) { const s = sizeFor(actorStage(a)); a.beh.x = Math.max(s * 0.5, Math.min(W - s * 0.5, a.beh.x)); }
         // furthest back first, so the front pet overlaps
         const order = actors.slice().sort((a, b) => a.beh.y - b.beh.y);
         let mine = null;
@@ -2810,7 +3060,7 @@
         const dpr = Math.min(2, window.devicePixelRatio || 1);
         W = w; H = 160;
         canvas.width = W * dpr; canvas.height = H * dpr; canvas.style.width = W + 'px'; canvas.style.height = H + 'px';
-        ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.scale(dpr, dpr); ctx.imageSmoothingEnabled = false;
+        ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.scale(dpr, dpr); ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = 'high';
         for (const a of [me, ...friends]) if (a.beh.x != null) a.beh.x = Math.max(30, Math.min(W - 30, a.beh.x));
       }
 
@@ -2949,6 +3199,16 @@
         setInterval(tick, 60000);
         document.addEventListener('visibilitychange', () => { if (!document.hidden) { tick(); parkPing(); } });
         window.addEventListener('resize', fit);
+        // the glass is touchable: eyes follow the pointer, a pat is a stroke
+        const pos = (e) => { const r = canvas.getBoundingClientRect(); const t = e.touches ? e.touches[0] : e; return { x: (t.clientX - r.left) * (W / r.width), y: (t.clientY - r.top) * (H / r.height) }; };
+        canvas.addEventListener('pointermove', (e) => { const q = pos(e); mouse.x = q.x; mouse.y = q.y; mouse.at = performance.now(); mouse.over = true; });
+        canvas.addEventListener('pointerleave', () => { mouse.over = false; });
+        canvas.addEventListener('pointerdown', (e) => {
+          const q = pos(e); mouse.x = q.x; mouse.y = q.y; mouse.at = performance.now(); mouse.over = true;
+          const p = P(); if (!p.kind || stageOf(p) === 'egg' || anim) return;
+          if (Math.abs(q.x - me.beh.x) < 60) { p.happy = Math.min(100, p.happy + 2); play('love', null, 900); saveProgress(); }   // a pat
+        });
+        canvas.style.touchAction = 'none';
         t0 = performance.now();
         raf = requestAnimationFrame(draw);
         renderCard();
@@ -2961,6 +3221,7 @@
           setFed: (n) => { const p = P(); p.fed = n; p.hungrySince = n <= 0 ? Date.now() - POORLY_AFTER_MS - 1000 : null; lastMood = moodOf(p); me.beh.act = 'idle'; renderCard(); },
           addFriend: (kind, name) => { const f = { id: 'f' + (friends.length + 1), name: name || '', kind, stage: ['baby', 'young', 'grown'][friends.length % 3], wearing: friends.length === 1 ? ['bow'] : [], mood: 'happy', at: Date.now() }; setFriends([...friends.map((x) => ({ id: x.id, name: x.name, kind: x.kind, stage: x.stage, wearing: x.wearing, mood: x.mood, at: x.at })), f]); renderCard(); },
           clearFriends: () => { setFriends([]); renderCard(); },
+          rig: (on) => { RIG_ON = on == null ? !RIG_ON : !!on; return RIG_ON; },
           frames: (act) => { const r = sheet(sheetName(P().kind, stageOf(P()), act)); return r.failed ? 'failed' : (r.frames ? r.frames.length + ' [' + r.frames.map((f) => f.w + 'x' + f.h).join(' ') + ']' : 'loading'); } } };
     })();
 
@@ -4070,6 +4331,7 @@
         b('all items', () => { P().correct = Math.max(P().correct, 100); P().wearing = ['bow', 'hat', 'scarf']; });
         b('✓ right answer', () => pet.answer(true)); b('+5 treats', () => { P().treats += 5; saveProgress(); });
         b('hungry', () => pet._debug.setFed(10)); b('poorly', () => pet._debug.setFed(0)); b('fed', () => pet._debug.setFed(100));
+        b('art: rig/pictures', () => pet._debug.rig());
         b('reset lab', () => { localStorage.removeItem('q-petlab'); location.href = '/revise?petlab=fresh'; });
         b('+🐶', () => pet._debug.addFriend('puppy', 'Rolo')); b('+🐹', () => pet._debug.addFriend('hamster', 'Biscuit')); b('+🦫', () => pet._debug.addFriend('capybara', 'Pip')); b('no friends', () => pet._debug.clearFriends());
         const info = document.createElement('div'); info.style.cssText = 'font-size:9px;color:var(--text-faint);width:100%;text-align:center;margin-top:4px;white-space:pre-wrap';
