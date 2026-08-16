@@ -1021,6 +1021,68 @@
     .q-go::before { content: '● '; color: var(--accent); }
     .q-go.busy { opacity: 0.6; pointer-events: none; }
     .bb-src-wait { font-size: 12px; color: var(--text-muted); line-height: 1.5; }
+    /* ── THE WHITEBOARD (Sarah, 17 Aug: "the lists and things he says to write
+       need to be written in some kind of pop-up display screen so he can
+       colour the words and separate them — like a whiteboard he can teach
+       on"). One big opaque surface for the step we're on: the ask, Q's line,
+       and the scaffold at teaching size — tiles, coloured by his sorting,
+       separated into columns, a legend; the numbers table; pros & cons in two
+       columns; a lesson in big type. Same state as the teaching board. */
+    .wb-panel { width: min(760px, calc(100vw - 32px)); }
+    .wb-body { padding: 14px 18px 16px; overflow: auto; }
+    .wb-ask { font-size: 20px; font-weight: 700; line-height: 1.3; color: var(--text); overflow-wrap: anywhere; }
+    .wb-ask .wb-step { display: block; font-size: 10px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--text-faint); margin-bottom: 4px; }
+    .wb-say { font-size: 14px; color: var(--text-muted); line-height: 1.5; margin: 8px 0 12px; overflow-wrap: anywhere; }
+    .wb-say b { color: var(--text); font-weight: 700; }
+    .wb-hint { font-size: 12px; color: var(--text-faint); margin-top: 10px; }
+    .wb-tiles { display: flex; flex-wrap: wrap; gap: 10px; }
+    .wb-tile {
+      display: inline-flex; align-items: center; gap: 8px; max-width: 100%;
+      padding: 10px 14px; border-radius: 12px; background: var(--bg);
+      box-shadow: var(--neu-raised-sm); font-size: 15px; font-weight: 600; color: var(--text); overflow-wrap: anywhere;
+      border-left: 5px solid var(--tagc, transparent);
+    }
+    .wb-tile[data-tag] { color: var(--tagc, var(--text)); }
+    .wb-tile[data-tag="?"] { color: var(--text-muted); border-left-color: transparent; border-left-style: dashed; }
+    .wb-tile .wb-n { font-size: 11px; font-weight: 700; color: var(--text-faint); }
+    .wb-tile[data-tag] .wb-n { color: var(--tagc); opacity: 0.8; }
+    .wb-tile .wb-x { border: none; background: transparent; color: var(--text-faint); cursor: pointer; font-size: 14px; line-height: 1; padding: 0 2px; }
+    .wb-tile .wb-x:hover { color: var(--accent); }
+    .wb-cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 12px; }
+    .wb-col { padding: 10px 12px 12px; border-radius: 14px; box-shadow: var(--neu-inset-sm); }
+    .wb-col-h { font-size: 12px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: var(--tagc, var(--text-muted)); margin-bottom: 8px; display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px 6px; }
+    .wb-col-h .wb-name { white-space: nowrap; }
+    .wb-col-h::before { content: ''; width: 10px; height: 10px; border-radius: 50%; background: var(--tagc, var(--text-faint)); }
+    .wb-col-h .wb-mean { font-weight: 500; text-transform: none; letter-spacing: 0; color: var(--text-muted); }
+    .wb-col .wb-tiles { flex-direction: column; align-items: stretch; }
+    .wb-legend { display: flex; flex-wrap: wrap; gap: 6px 14px; margin-top: 12px; font-size: 12px; color: var(--text-muted); }
+    .wb-legend span::before { content: '● '; color: var(--tagc, #999); }
+    .wb-legend b { color: var(--tagc, var(--text)); }
+    .wb-table { width: 100%; border-collapse: separate; border-spacing: 0 6px; font-size: 15px; }
+    .wb-table th { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-faint); text-align: left; padding: 0 10px; }
+    .wb-table td { padding: 8px 10px; }
+    .wb-table td.wb-lab { font-weight: 700; color: var(--text); }
+    .wb-table td.wb-val { box-shadow: var(--neu-inset-sm); border-radius: 10px; font-weight: 600; min-width: 90px; }
+    .wb-table td.wb-val.empty { color: var(--text-faint); font-weight: 400; }
+    .wb-table tr.cur td.wb-lab { color: var(--accent); }
+    .wb-pc { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .wb-pc-item { grid-column: 1 / -1; font-size: 15px; font-weight: 700; color: var(--tagc, var(--text)); margin-top: 6px; }
+    .wb-pc-cell { padding: 10px 12px; border-radius: 12px; box-shadow: var(--neu-inset-sm); font-size: 14px; color: var(--text); min-height: 42px; }
+    .wb-pc-cell.empty { color: var(--text-faint); font-style: italic; }
+    .wb-pc-cell .wb-pc-l { display: block; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-faint); margin-bottom: 2px; }
+    .wb-pc-cell.cur { box-shadow: var(--neu-inset-sm), 0 0 0 2px var(--accent) inset; }
+    .wb-lesson { font-size: 17px; line-height: 1.5; color: var(--text); }
+    .wb-lesson .wb-term { display: block; font-size: 24px; font-weight: 700; margin-bottom: 8px; }
+    .wb-lesson .wb-eg { display: block; margin-top: 10px; font-size: 14px; color: var(--text-muted); font-style: italic; }
+    .wb-words { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+    .wb-words .q-term { font-size: 14px; padding: 8px 14px; }
+    .wb-input-row { display: flex; gap: 8px; margin-top: 14px; align-items: center; }
+    .wb-input { flex: 1; border: none; border-radius: 12px; padding: 10px 14px; font-family: 'Space Grotesk', sans-serif; font-size: 15px; background: var(--bg); color: var(--text); box-shadow: var(--neu-inset-sm); outline: none; }
+    .wb-done { border: none; border-radius: 12px; padding: 9px 14px; cursor: pointer; font-family: 'Space Grotesk', sans-serif; font-size: 13px; font-weight: 700; background: var(--bg); color: var(--text); box-shadow: var(--neu-raised-sm); }
+    .wb-done::before { content: '● '; color: var(--accent); }
+    .wb-empty { font-size: 14px; color: var(--text-faint); font-style: italic; }
+    .wb-open-btn { margin-left: 6px; }
+    @media (max-width: 700px) { .wb-ask { font-size: 17px; } .wb-tile { font-size: 14px; } .wb-pc { grid-template-columns: 1fr; } }
     .bb-src-wait .q-btn { margin-left: 6px; }
     .tb-budget { margin-left: auto; font-size: 10px; font-weight: 700; color: var(--text-muted); white-space: nowrap; }
     .tb-budget.near { color: #b26a00; }
@@ -1392,6 +1454,7 @@
         <input class="coach-input" id="coach-input" type="text"
           placeholder="Ask Q…" autocomplete="off" />
         <button type="button" class="q-go hidden" id="coach-go" title="Q reads what you have written since he last looked and comes back — one line, then the next thing">Continue →</button>
+        <button type="button" class="q-mic" id="coach-wb" title="The whiteboard — the list, sorting, numbers or lesson we are on, big enough to teach on" aria-label="Open the whiteboard" style="font-size:13px">▦</button>
         <button type="button" class="q-mic" id="coach-mic" title="Tap and talk — your words type themselves into the box. Tap again to stop, then press Enter."><svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg></button>
       </div>
     </div>
@@ -1419,6 +1482,14 @@
   </div>
 
   <!-- The Video panel — an explainer opens here, on its own raised movable card (same panel manager) -->
+  <div class="qpanel wb-panel hidden" id="wb-panel" data-panel="wb">
+    <div class="panel-head" id="wb-panel-head">
+      <span class="panel-title" id="wb-title">▦ Whiteboard</span>
+      <button type="button" class="panel-min" id="wb-panel-tog" title="Minimise" aria-label="Minimise the whiteboard">−</button>
+    </div>
+    <div class="panel-body wb-body" id="wb-body"></div>
+    <div class="panel-grip" title="Drag to resize"></div>
+  </div>
   <div class="qpanel video-panel hidden" id="video-panel" data-panel="video">
     <div class="panel-head" id="video-panel-head">
       <span class="panel-title" id="video-panel-badge">▶ Video</span>
@@ -1703,6 +1774,7 @@
       } finally { continueBusy = false; coachGo.classList.remove('busy'); docGo.classList.remove('busy'); }
     }
     coachGo.addEventListener('click', continueNow);
+    document.getElementById('coach-wb').addEventListener('click', () => { showPanel('wb'); revealPanel('wb'); renderWhiteboard(); });
     docGo.addEventListener('click', continueNow);
 
     startBtn.addEventListener('click', async () => {
@@ -1960,6 +2032,10 @@
         const under = !b.classList.contains('hidden') ? b.getBoundingClientRect().bottom + 10 : 12;
         return { w: 300, left: 12, top: Math.min(under, window.innerHeight - 260) };
       },
+    });
+    const wbPanel = makePanel(document.getElementById('wb-panel'), 'wb', {
+      minW: 320, minH: 200,
+      defaults: () => { const w = Math.min(760, window.innerWidth - 32); return { w, left: Math.max(PANEL_M, Math.round((window.innerWidth - w) / 2)), top: 56 }; },
     });
     const videoPanel = makePanel(document.getElementById('video-panel'), 'video', {
       minW: 260, minH: 200,
@@ -2628,6 +2704,10 @@
       return `<div class="tb-item tb-n${click}" data-idx="${idx}"><span class="tb-label">${escHtml(it.label || 'note')}</span><div class="tb-text tb-ntext${clampCls}">${paragraphsHtml(it.text)}</div>${more}</div>`;
     }
     function renderBoard() {
+      try { renderWhiteboard(); } catch (_) {}
+      return renderBoardInner();
+    }
+    function renderBoardInner() {
       const items = state.boardItems;
       let qi = -1;
       for (let i = items.length - 1; i >= 0; i--) if (items[i].type === 'question') { qi = i; break; }
@@ -2799,6 +2879,10 @@
     // scaffold widget; the coach card carries the ask (with the frame line
     // the first time) and the right hint for the kind.
     function presentStep(cid, idx, { ack, moved, frame, restore } = {}) {
+      try {
+        const plan0 = planFor(cid); const s0 = plan0 && plan0.steps[idx];
+        if (s0 && WB_KINDS.has(s0.kind) && !restore) { showPanel('wb'); revealPanel('wb'); }
+      } catch (_) {}
       const plan = planFor(cid); if (!plan) return;
       if (idx >= plan.steps.length) { finishPart(cid); return; }
       const step = plan.steps[idx];
@@ -3760,6 +3844,78 @@
         startPart(id, { moveFrom: state.currentCriterionId });
       }
     });
+    // ── THE WHITEBOARD ────────────────────────────────────────────────────
+    // What the teaching board shows small, at teaching size: the step's ask,
+    // Q's line, and the scaffold. Same state (stepStateOf), so anything typed
+    // in the coach box or here lands in both. Opens itself when a scaffold or
+    // lesson step is presented; the ▦ button on the coach card brings it back.
+    const WB_KINDS = new Set(['list', 'tag', 'numbers', 'proscons', 'teach']);
+    const wbBody = document.getElementById('wb-body');
+    const wbTitle = document.getElementById('wb-title');
+    function wbOpen() { return !wbPanel.el.classList.contains('hidden'); }
+    function renderWhiteboard() {
+      if (!wbOpen()) return;
+      const info = currentStepInfo();
+      if (!info) { wbBody.innerHTML = '<div class="wb-empty">Nothing on the board yet — the next list, sorting, numbers or lesson lands here.</div>'; return; }
+      const { step, cid, n, N } = info; const st = stepStateOf(cid, step.id);
+      const w = whereInfo(cid);
+      wbTitle.textContent = '▦ Whiteboard' + (w ? ' · Q' + w.n : '');
+      const head = `<div class="wb-ask"><span class="wb-step">${w ? escHtml('Question ' + w.n + ' · ') : ''}step ${n} of ${N} · ${escHtml(STEP_KIND_LABEL[step.kind] || step.kind)}</span>${escHtml(step.kind === 'teach' ? (step.term ? 'A word to learn' : 'A lesson') : step.prompt || '')}</div>`;
+      const say = step.supply && step.kind !== 'teach' ? `<div class="wb-say"><b>Q says</b> — ${escHtml(step.supply)}</div>` : '';
+      let body = '';
+      if (step.kind === 'list') {
+        const tagStep = (planFor(cid).steps || []).find(x => x.kind === 'tag' && x.itemsFrom === step.id);
+        const tst = tagStep ? stepStateOf(cid, tagStep.id) : null;
+        body = st.items.length ? wbTilesHtml(st.items, tst && tst.tags ? tst : null, tagStep, { removable: true }) : `<div class="wb-empty">${escHtml(step.itemHint ? 'e.g. ' + step.itemHint.replace(/^e\.g\.\s*/i, '') : 'Your list builds here — one per line.')}</div>`;
+        body += `<div class="wb-input-row"><input class="wb-input" id="wb-input" placeholder="${escHtml(step.itemHint || 'Another one, then Enter…')}" autocomplete="off"><button type="button" class="wb-done" id="wb-done">Done</button></div>`;
+      } else if (step.kind === 'tag') {
+        const src = step.itemsFrom ? stepStateOf(cid, step.itemsFrom) : null; const items = src ? src.items : [];
+        body = items.length ? wbTilesHtml(items, st.tags ? st : null, step, {}) : '<div class="wb-empty">Nothing to sort yet.</div>';
+        if (!st.tags) body += '<div class="wb-hint">Q is sorting these into groups — the colours land here.</div>';
+      } else if (step.kind === 'numbers') {
+        const cell = nextNumbersCell(step, st);
+        const rows = step.rows.map((r, i) => { const v = st.rows[i] || {}; const cur = cell && cell.i === i; return `<tr class="${cur ? 'cur' : ''}"><td class="wb-lab">${escHtml(r.label)}</td><td class="wb-val${v.is ? '' : ' empty'}">${escHtml(v.is || 'is…')}</td><td class="wb-val${v.should ? '' : ' empty'}">${escHtml(v.should || 'should be…')}</td></tr>`; }).join('');
+        body = `<table class="wb-table"><thead><tr><th></th><th>is</th><th>should be</th></tr></thead><tbody>${rows}</tbody></table><div class="wb-hint">Type each number in the coach box — ${cell ? escHtml(cellAsk(cell)) : 'all filled — press Done.'}</div>`;
+      } else if (step.kind === 'proscons') {
+        const cell = nextPcCell(cid, step, st); const items = pcItems(cid, step);
+        body = items.length ? `<div class="wb-pc">${items.map(item => { const v = st.pc[item] || {}; const t = pcTagOf(cid, step, item); const c = t ? TAG_CSS[t.colour] || '#999' : null;
+          const cellH = (f, label) => `<div class="wb-pc-cell${v[f] ? '' : ' empty'}${cell && cell.item === item && cell.field === f ? ' cur' : ''}"><span class="wb-pc-l">${label}</span>${escHtml(v[f] || '…')}</div>`;
+          return `<div class="wb-pc-item"${c ? ` style="--tagc:${c}"` : ''}>${escHtml(item)}</div>${cellH('pro', 'good')}${cellH('con', 'bad')}`; }).join('')}</div>` : '<div class="wb-empty">No items to weigh up yet.</div>';
+      } else if (step.kind === 'teach') {
+        body = `<div class="wb-lesson">${step.term ? `<span class="wb-term">${escHtml(step.term)}</span>` : ''}${escHtml(step.lesson || '')}${step.example ? `<span class="wb-eg">e.g. ${escHtml(step.example)}</span>` : ''}</div>${step.applyAsk ? `<div class="wb-say" style="margin-top:12px"><b>Now</b> — ${escHtml(step.applyAsk)}</div>` : ''}`;
+      } else {
+        // A writing step: the ask, Q's line and the words for THIS bit, big.
+        const terms = termButtonsHtml(cid);
+        body = terms ? `<div class="wb-words">${terms}</div><div class="wb-hint">Press a word to drop it into your sentence on the page.</div>` : '<div class="wb-hint">Write it on the page — I read as you go.</div>';
+      }
+      wbBody.innerHTML = head + say + body;
+      const inp = document.getElementById('wb-input');
+      if (inp) {
+        inp.addEventListener('keydown', async (e) => {
+          if (e.key !== 'Enter') return; e.preventDefault();
+          const v = inp.value.trim(); if (!v) return; inp.value = '';
+          await handleStepInput(v); renderWhiteboard(); const again = document.getElementById('wb-input'); if (again) again.focus();
+        });
+        document.getElementById('wb-done').addEventListener('click', () => { if (st.items.length) completeStep(cid, step.id); });
+      }
+      wbBody.querySelectorAll('.wb-x').forEach(b => b.addEventListener('click', () => { st.items.splice(Number(b.dataset.rm), 1); putStepOnPage(cid, step, ''); renderBoard(); persistSteps(); renderWhiteboard(); }));
+      // (.q-term clicks anywhere are handled by the document listener — hover meaning, insert at caret.)
+    }
+    // Tiles: plain, or coloured + separated into a column per group once Q
+    // has sorted them (his colours, his legend — she wrote the words).
+    function wbTilesHtml(items, tst, tagStep, { removable } = {}) {
+      const tags = tagStep ? (tagStep.tags || []) : [];
+      const byName = Object.fromEntries(tags.map(t => [t.name, t]));
+      const tile = (x, i, name) => { const t = name ? byName[name] : null; const c = t ? (TAG_CSS[t.colour] || '#999') : null;
+        return `<span class="wb-tile"${c ? ` data-tag="${escHtml(name)}" style="--tagc:${c}"` : (tst ? ' data-tag="?"' : '')}><span class="wb-n">${i + 1}</span><span>${escHtml(x)}</span>${removable ? `<button type="button" class="wb-x" data-rm="${i}" title="Take it off">×</button>` : ''}</span>`; };
+      if (!tst) return `<div class="wb-tiles">${items.map((x, i) => tile(x, i, null)).join('')}</div>`;
+      const groups = new Map(); const loose = [];
+      items.forEach((x, i) => { const name = tagOf(tst, x); if (name && byName[name]) { if (!groups.has(name)) groups.set(name, []); groups.get(name).push([x, i]); } else loose.push([x, i]); });
+      const cols = tags.filter(t => groups.has(t.name)).map(t => `<div class="wb-col" style="--tagc:${TAG_CSS[t.colour] || '#999'}"><div class="wb-col-h"><span class="wb-name">${escHtml(t.name)}</span>${t.meaning ? `<span class="wb-mean">— ${escHtml(t.meaning)}</span>` : ''}</div><div class="wb-tiles">${groups.get(t.name).map(([x, i]) => tile(x, i, t.name)).join('')}</div></div>`).join('');
+      const rest = loose.length ? `<div class="wb-col"><div class="wb-col-h"><span class="wb-name">not sorted</span></div><div class="wb-tiles">${loose.map(([x, i]) => tile(x, i, null)).join('')}</div></div>` : '';
+      const legend = `<div class="wb-legend">${tags.map(t => `<span style="--tagc:${TAG_CSS[t.colour] || '#999'}"><b>${escHtml(t.name)}</b>${t.meaning ? ' — ' + escHtml(t.meaning) : ''}</span>`).join('')}</div>`;
+      return `<div class="wb-cols">${cols}${rest}</div>${legend}`;
+    }
     function scaffoldWidgetHtml() {
       const info = currentStepInfo(); if (!info) return '';
       const { step, cid } = info; const st = stepStateOf(cid, step.id);
