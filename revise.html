@@ -99,6 +99,20 @@
       display: flex; flex-wrap: wrap; gap: 8px;
     }
     .topic-shelf.hidden { display: none; }
+    /* Topic picker — WHICH of the current list to revise right now. Toggle
+       chips: on = raised, off = flat and faded. */
+    .topic-pick { max-width: 760px; margin: 0 auto 12px; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+    .topic-pick.hidden { display: none; }
+    .topic-pick .tp-l { font-size: 11px; color: var(--text-faint); margin-right: 2px; }
+    .tp-chip {
+      font: inherit; font-size: 11px; font-weight: 600; color: var(--text); cursor: pointer;
+      padding: 5px 12px; border-radius: 12px; border: none; background: var(--bg);
+      box-shadow: var(--neu-raised-xs, 3px 3px 8px #ababab, -2px -2px 6px #ffffff);
+    }
+    .tp-chip.off { color: var(--text-faint); box-shadow: 0 0 0 1px rgba(0,0,0,0.07); background: transparent; }
+    .tp-all { font: inherit; font-size: 11px; color: var(--text-muted); background: none; border: none; cursor: pointer; text-decoration: underline; padding: 0 4px; }
+    html.teen .tp-chip { box-shadow: 0 0 0 1px rgba(255,255,255,0.18); }
+    html.teen .tp-chip.off { box-shadow: 0 0 0 1px rgba(255,255,255,0.08); }
     .shelf-chip {
       display: inline-flex; align-items: center; gap: 6px;
       font-size: 11px; font-weight: 500; color: var(--text-muted);
@@ -806,6 +820,8 @@
     </div>
   </div>
 
+  <!-- Topic picker — which of the CURRENT list to revise right now -->
+  <div class="topic-pick hidden" id="topic-pick"></div>
   <!-- Topic shelf — one chip per topic, medals for mastered, dot for weak -->
   <div class="topic-shelf hidden" id="topic-shelf"></div>
 
@@ -1124,6 +1140,7 @@
     const BUILD_DOM = { idle: 'quiz-idle', thinking: 'quiz-thinking', question: 'quiz', error: 'quiz-error' };
 
     function render() {
+      if (typeof renderTopicPick === 'function') renderTopicPick();
       if (state.stage === 'build') showDomView(BUILD_DOM[state.buildView] || 'quiz-idle');
       else showDomView(state.examView);
       const towerCard = $('tower-card');
@@ -1246,8 +1263,13 @@
       return Object.keys(state.progress.quiz.perTopic).filter(isWeakTopic).slice(0, 3);
     }
     function topicForQuiz() {
-      const base = state.progress.settings.topic || '';
-      const weak = weakQuizTopics();
+      // Only the topics switched ON — the live batch (and the bank top-up
+      // that banks it) is written for what she is revising right now.
+      const all = currentTopics();
+      const scope = activeTopicNorms();
+      const on = (all.length && scope) ? all.filter((t) => scope.indexOf(normTag(t)) !== -1) : all;
+      const base = on.length ? on.join('\n') : (state.progress.settings.topic || '');
+      const weak = weakQuizTopics().filter((w) => !scope || scope.indexOf(normTag(w)) !== -1);
       return weak.length ? base + '\n(Focus especially on: ' + weak.join('; ') + ')' : base;
     }
 
@@ -1558,12 +1580,13 @@
             good.push(q);
           });
           state.bank.questions = good;
-          state.bank.count = good.length;
+          state.bank.count = good.filter(inScope).length;   // what is playable for THIS list
           state.bank.loaded = true;
           state.bankBuild.known = true;
         }
       } catch (e) { /* bank unavailable — batch play still works */ }
       renderBankLine();
+      renderTopicPick();
     }
 
     async function pollBankStatus() {
@@ -1619,7 +1642,8 @@
       } else if (b.ready) {
         txt('Question bank ready — ' + n + ' questions');
       } else {
-        txt('Bank: ' + n + ' question' + (n === 1 ? '' : 's'));
+        const total = state.bank.questions.length;
+        txt('Bank: ' + n + ' question' + (n === 1 ? '' : 's') + (total > n ? ' for what you\'re revising (' + total + ' in the whole ' + (state.progress.settings.subject || 'subject') + ' library)' : ''));
       }
     }
 
@@ -1653,6 +1677,7 @@
       setBuild('thinking');
       render();
       renderBankLine();
+      renderTopicPick();
 
       await refreshBank();
       // ALWAYS ask the server to top the bank up — a 17-topic list with only
@@ -1679,10 +1704,79 @@
     }
     function qidOf(q) { return (q.id !== undefined && q.id !== null && q.id !== '') ? String(q.id) : hashStem(q.question); }
 
+    // ── What to revise RIGHT NOW ─────────────────────────────────────────
+    // The bank is a global library for the subject: every topic anyone has
+    // ever revised is in it. Play used to draw from the WHOLE bank, so the
+    // topics banked first kept coming out whatever the list said — Sarah:
+    // "when you change what to revise it only uses the one you first ever
+    // used". Scope = the CURRENT topic list (split like the server does),
+    // minus any she has switched off on the picker.
+    function currentTopics() {
+      return String(state.progress.settings.topic || '')
+        .split(/[;\n]+/)
+        .map((t) => t.replace(/\(.*?very important.*?\)/gi, '').trim())
+        .map((t) => t.replace(/^[-•\d.\s]+/, '').trim())
+        .filter((t) => t.length > 2);
+    }
+    function activeTopicNorms() {
+      const all = currentTopics();
+      if (!all.length) return null;                       // no list → whole bank, as before
+      const off = new Set((state.progress.settings.topicsOff || []).map(normTag));
+      const on = all.map(normTag).filter((n) => !off.has(n));
+      return on.length ? on : all.map(normTag);          // all off = all on (never an empty quiz)
+    }
+    function inScope(q) {
+      const scope = activeTopicNorms();
+      if (!scope) return true;
+      const tag = normTag(q && q.topicTag || '');
+      if (!tag) return false;
+      return scope.some((n) => n === tag || tag.indexOf(n) !== -1 || n.indexOf(tag) !== -1);
+    }
+    function bankInScope() { return state.bank.questions.filter(inScope); }
+
+    function renderTopicPick() {
+      const el = $('topic-pick');
+      if (!el) return;
+      const all = currentTopics();
+      if (all.length < 2 || state.stage !== 'build') { el.classList.add('hidden'); return; }
+      el.classList.remove('hidden');
+      el.innerHTML = '';
+      const off = new Set((state.progress.settings.topicsOff || []).map(normTag));
+      const lab = document.createElement('span'); lab.className = 'tp-l'; lab.textContent = 'Revising:'; el.appendChild(lab);
+      all.forEach((t) => {
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.className = 'tp-chip' + (off.has(normTag(t)) ? ' off' : '');
+        const n = bankInScopeFor(t);
+        b.textContent = t + (n ? ' · ' + n : '');
+        b.title = off.has(normTag(t)) ? 'Switched off — click to revise this' : 'Click to leave this out for now';
+        b.addEventListener('click', () => {
+          const cur = new Set((state.progress.settings.topicsOff || []).map(normTag));
+          if (cur.has(normTag(t))) cur.delete(normTag(t)); else cur.add(normTag(t));
+          state.progress.settings.topicsOff = all.filter((x) => cur.has(normTag(x)));
+          saveProgress();
+          renderTopicPick();
+          renderBankLine();
+        });
+        el.appendChild(b);
+      });
+      const allBtn = document.createElement('button'); allBtn.type = 'button'; allBtn.className = 'tp-all'; allBtn.textContent = 'all';
+      allBtn.addEventListener('click', () => { state.progress.settings.topicsOff = []; saveProgress(); renderTopicPick(); renderBankLine(); });
+      el.appendChild(allBtn);
+      const oneBtn = document.createElement('button'); oneBtn.type = 'button'; oneBtn.className = 'tp-all'; oneBtn.textContent = 'just one…';
+      oneBtn.title = 'Switch everything off, then click the one you want';
+      oneBtn.addEventListener('click', () => { state.progress.settings.topicsOff = all.slice(); saveProgress(); renderTopicPick(); renderBankLine(); });
+      el.appendChild(oneBtn);
+    }
+    function bankInScopeFor(topic) {
+      const n = normTag(topic);
+      return state.bank.questions.filter((q) => { const t = normTag(q.topicTag || ''); return t && (t === n || t.indexOf(n) !== -1 || n.indexOf(t) !== -1); }).length;
+    }
+
     function pickFromBank() {
       const qz = state.progress.quiz;
       const sc = qz.serveCount || 0;
-      const pool = state.bank.questions;
+      const pool = bankInScope();
       if (!pool.length) return null;
 
       const info = pool.map((q) => ({ q, st: qz.qstate[qidOf(q)] || null }));
