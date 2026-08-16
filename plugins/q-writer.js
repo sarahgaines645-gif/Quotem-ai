@@ -54,6 +54,45 @@ const PLAIN_QUESTION_RULE = `HOW EVERY QUESTION IS WORDED — as if the student 
 - Never a list of questions. One question, one idea.
 - VOCABULARY: jargon appears ONLY when you are deliberately teaching a term — name it once, give its plain meaning and an everyday example ("a 'primary source' is something made at the time, like a soldier's letter home"). Never sprinkle technical words, brief words or trigger words into an ask for the student to parrot back. If they cannot answer without knowing the word, teach the word first or ask about the thing in everyday terms.`;
 
+// ── LEADING QUESTIONS (Sarah, 16 Aug, on being handed a theory and asked to
+// judge with it). What she was given:
+//
+//   "Marchington et al. argue reward needs both vertical fit (matches business
+//    strategy) and horizontal fit (matches other HR practices) to count as
+//    effective. Thinking about your organisation, does its pay and benefits
+//    set-up genuinely match its business goals and its other HR practices, or
+//    do they pull in different directions? Write a sentence saying which."
+//
+// Her verdict: "I may as well be reading the paper myself. It should be saying
+// what are your business goals... what are the benefits... and then lead you
+// into debating them for the purpose of using the trigger words and
+// sentences."
+//
+// That is the whole method. You cannot judge a fit between two things before
+// both things are named, and naming them is the student's job, because their
+// answers are the essay. The theory is not the opening move — it is what gets
+// attached to their facts once their facts are on the board.
+const LEADING_QUESTION_RULE = `LEADING QUESTIONS — HOW YOU PULL THE ANSWER OUT OF THEM (Sarah's method, the most important rule here):
+
+NEVER ask someone to judge, compare, evaluate or "think about whether" ANYTHING until their own facts are on the board. A question they can only answer by having read the theory is a question they will not answer.
+
+WRONG (a lecture with a question mark on the end):
+  "X and Y argue reward needs vertical fit and horizontal fit to be effective. Thinking about your organisation, does its pay set-up genuinely match its business goals and other HR practices, or do they pull in different directions? Write a sentence."
+RIGHT (four small asks, each answerable by anyone about their own life, ending exactly where the wrong one started):
+  1. "What is your company actually trying to do this year — grow, cut costs, keep customers happy? Two or three."
+  2. "Now list what they give staff: pay, bonus, holiday, anything else."
+  3. "Look at your list — which of those actually helps the thing you named first?"
+  4. "So: your bonus rewards individual sales, but you said the company wants teamwork. What does that do?"
+By 4 they are arguing the point the theory makes, in their own words, off their own facts — and only then is the term named, as the label for what they have just said.
+
+THEREFORE:
+- FACTS BEFORE JUDGEMENT. The first asks of every part collect what they HAVE — a list, numbers, names, what happened. Never an opinion question first.
+- ONE ASK, ONE THING. Never a compound question. "…, or do they pull in different directions?" is two questions and reads as a test.
+- NEVER OPEN WITH "Thinking about…", "Consider…", "Reflecting on…", "To what extent…". Ask for the thing itself: "What are…", "List…", "Which of those…", "How much…", "What happened when…".
+- ANSWERABLE WITHOUT THE READING. Every ask must be answerable by someone who has read nothing at all, about their own workplace, their own life, or a plain everyday example you give them.
+- THE THEORY LANDS ON THEIR FACTS, NOT BEFORE THEM. Only after their material is on the board do you name the idea, and you name it as the label for what THEY have already said: "what you have just described has a name — that's a misalignment."
+- THEN THE DEBATE. Get them arguing one side hard off their own examples, then flip them to the other, then ask which wins. The terminology gets used because they need it to make their own point — never because you dropped it in for them to repeat.`;
+
 // ── THE BRICK LOOP (Sarah, 15 Aug 2026 — her definitive spec of the coaching
 // loop, near-verbatim). The unit of coaching is ONE TARGET SENTENCE (a brick
 // of the hidden essay). Q asks the question that reaches for it; if the brick
@@ -319,6 +358,8 @@ Build the tutor's brief:
 The student will NOT read this brief — you will walk them through it question by question. The opener obeys this rule:
 ${PLAIN_QUESTION_RULE}
 
+${LEADING_QUESTION_RULE}
+
 If you can see ANY assignment content, extract what you can. Never ask for more information — fill what you can and leave the rest empty. Word count and deadline are null if the brief does not state them.`);
     const brief = await callAccurate(system, `ASSIGNMENT BRIEF (full text):\n${taskText}`, { maxTokens: 8000, schema: BRIEF_SCHEMA, effort: 'medium' });
     return normaliseBrief(brief);
@@ -464,6 +505,8 @@ HOW YOU COACH
 - If a PLAN FOR THIS PART is given below with a current step marked, you are the fallback for that step: your question asks for THAT step's thing (the next item, the number, the pro, the con, the argument for the side named) — never a new open question, never a later step, never another part.
 
 ${PLAIN_QUESTION_RULE}
+
+${LEADING_QUESTION_RULE}
 ${ageHint}
 ${voiceHint}
 ${relateHint}
@@ -580,6 +623,8 @@ Rules:
 - "missingForTop" is the exact gap for THAT criterion — concrete: the model, example, evaluation, comparison, or evidence the top band expects and they have not given. Not "develop further".
 - "nextQuestion" is the one question a tutor would ask to pull that missing piece out of the student. Never contains the answer. It is worded for a student who has NOT read the brief:
 ${PLAIN_QUESTION_RULE}
+
+${LEADING_QUESTION_RULE}
 - Overall band = what this draft would actually get. Be honest; a kind marker still fails a missing criterion.
 - "voicedBrickIds" per criterion: the bricks of the model answer this draft GENUINELY voices (point made in their words with its reason / example). This is the honest tally the student's visible score is rebuilt from — a listed item is not a voiced brick; a claim without its reason is not a voiced brick.
 - EXPECTATIONS per part (below, where a plan exists): report per criterion which expected terms the draft uses correctly ("termsUsed") and which requirements it satisfies ("requirementsMet"); in the critique, "needs" = the requirement kinds a sentence is missing.
@@ -1105,6 +1150,8 @@ THE PLAN
 - Every brick of this part appears in at least one step's targetBrickIds. Every prompt is ONE concrete ask, 35 words or fewer, in plain everyday British English.
 - Q FORMATS, THEY WRITE: whenever the student gives raw material (a list, numbers, an example, a story), Q's job is to ANALYSE it visibly on the board — coloured groups with a legend, the numbers with the gap drawn, the two sides of an argument in colour, the pros/cons grid laid out — and then ask for sentences OFF that structure ("look at the pink ones — why would they all sit in one group? Write me a sentence."; "the gap is 15k — what does that do to how you feel on a Monday?"). Never quiz them on the categorisation. Later steps' prompts refer to the coloured groups / the gap by name.
 - ${PLAIN_QUESTION_RULE}
+
+${LEADING_QUESTION_RULE}
 ${ageHint}
 ${relateHint}
 
@@ -1133,6 +1180,64 @@ Make the plan.`;
 // front of the plan fills what is left. Steps dropped here lose nothing —
 // their bricks fall to the last surviving step a few lines below, and the
 // dependency pass after this repairs any tag/pros-cons step whose list went.
+// FACTS BEFORE JUDGEMENT, enforced. The prompt asks for it; this makes it so.
+// A part that opens by asking her to weigh something up has already lost her —
+// she has nothing of her own on the board to weigh. If the plan collects facts
+// later on, that step comes first; a tag/pros-cons step follows its list
+// wherever the list goes, and the repair pass below re-points anything that
+// ends up dangling.
+const FACT_KINDS = ['list', 'numbers'];
+const JUDGEMENT_KINDS = ['argue', 'switch', 'recommend', 'ask', 'proscons'];
+function factsFirst(steps) {
+    if (steps.length < 2) return steps;
+    if (FACT_KINDS.includes(steps[0].kind) || steps[0].kind === 'teach') return steps;
+    if (!JUDGEMENT_KINDS.includes(steps[0].kind)) return steps;
+    const i = steps.findIndex(s => FACT_KINDS.includes(s.kind));
+    if (i <= 0) return steps;
+    const [fact] = steps.splice(i, 1);
+    steps.unshift(fact);
+    return steps;
+}
+
+// "Marchington et al. argue reward needs both vertical fit and horizontal
+// fit…" arrived as a step's `supply` — the field that states a fact plainly
+// BEFORE the ask, which is right when a brick genuinely needs a fact the
+// student cannot know, and completely wrong as the opening move of a part.
+// Handed a theory and asked to judge with it, Sarah's answer was "I may as
+// well be reading the paper myself."
+//
+// So the theory cannot arrive before her facts do: no supply on the opening
+// step, and none on a step that is collecting her raw material. By the time a
+// supply is allowed, there is something of hers on the board for it to land
+// on. The `thenAsk` that belongs to a supply goes with it.
+function noTheoryBeforeFacts(steps) {
+    for (let i = 0; i < steps.length; i++) {
+        const s = steps[i];
+        const collecting = FACT_KINDS.includes(s.kind);
+        if ((i === 0 || collecting) && s.supply) { s.supply = null; s.thenAsk = null; }
+    }
+    return steps;
+}
+
+// The openers Sarah named, stripped in code: "Thinking about your
+// organisation, does its pay set-up genuinely match…" becomes "Does its pay
+// set-up genuinely match…". A question that starts by asking someone to think
+// is a question that has not asked anything yet.
+const DEAD_OPENERS = /^(thinking about|think about|considering|consider|reflecting on|reflect on|having read|bearing in mind|with (that|this) in mind|in light of|to what extent,?)\b[^,]*,\s*/i;
+function leadingAsk(prompt) {
+    let p = String(prompt || '').replace(/\s+/g, ' ').trim();
+    if (!p) return p;
+    const cut = p.replace(DEAD_OPENERS, '');
+    if (cut && cut.length > 12) p = cut.charAt(0).toUpperCase() + cut.slice(1);
+    // ONE ASK, ONE THING. "…match its business goals, or do they pull in
+    // different directions?" is two questions wearing one question mark, and
+    // it reads as a test: the second half tells her there is a right answer
+    // and she has to pick it. The first half is the question; the rest goes.
+    const single = p.replace(/,\s*or\b[^?]*\?\s*$/i, '?');
+    if (single.length > 15) p = single;
+    return p;
+}
+
 const MAX_PLAN_STEPS = 6;
 const CLOSING_KINDS = ['argue', 'switch', 'recommend'];
 function trimToMaxSteps(steps) {
@@ -1199,6 +1304,9 @@ function normalisePlan(r, criterionId, bricks) {
         };
     }).filter(s => s.prompt && !(s.kind === 'teach' && !s.lesson));
     if (!steps.length) throw new Error('The plan had no usable steps — try again.');
+    factsFirst(steps);
+    noTheoryBeforeFacts(steps);
+    for (const s of steps) s.prompt = leadingAsk(s.prompt);
     trimToMaxSteps(steps);
     // A numbers step with no rows becomes a plain ask; a tag/proscons step
     // must point at an earlier list-ish step (else the nearest one before it).
@@ -1282,6 +1390,8 @@ ${step.tags.map(t => `- ${t.name} (${t.colour}) — ${t.meaning}`).join('\n')}
 Every item gets exactly one tag. Keep each item verbatim. Then ONE plain line telling the student what the colours mean, in everyday words, naming the term once if you are teaching it.
 ${PLAIN_QUESTION_RULE}
 
+${LEADING_QUESTION_RULE}
+
 THE BRIEF (for context)
 ${briefForPrompt(brief).slice(0, 2500)}`);
     const user = `THE STUDENT'S LIST:\n${list.map((x, i) => `${i + 1}. ${x}`).join('\n')}\n\nSort it.`;
@@ -1320,6 +1430,8 @@ async function checkStep({ brief, essay, plan, step, answer, earlierAnswers }) {
     const bricks = (step.targetBrickIds || []).map(id => brickById(essay, id)).filter(Boolean);
     const system = withMission(`You are Q, checking the student's answer to ONE scaffold step against the bricks it is meant to draw out. Judge the IDEA (the point made in their own words), not the wording. If the step is filled, say so warmly. If not: ASSUME THEY DO NOT KNOW — when the brick carries knowledge their answer lacks (a term, a fact, a theory, the argument, the reasoning), SUPPLY it plainly ("supply") and ask for their sentence saying it ("thenAsk") — never a hint; when the missing piece is their own view / example, ask for that ONE thing ("followUp") — never a new open question, never the next step, never the answer.
 ${PLAIN_QUESTION_RULE}
+
+${LEADING_QUESTION_RULE}
 ${planForPrompt(plan, step.id)}
 ${expectationsForPrompt(plan)}
 
@@ -1372,6 +1484,8 @@ async function teachFor({ brief, essay, plan, step, question, yearGroup, relateA
     const relateHint = relateAnchor ? `Their world: "${relateAnchor}". Use it for the example if it fits.` : '';
     const system = withMission(`You are Q. The student pressed "I don't understand" / "I'm stuck" on your ask. They do not know the answer and more questions or hints will not teach them. TEACH the concept the ask depends on — a mini-lesson in your voice, 2-4 plain sentences, one everyday concrete example, the term named once — then re-put the ask as an APPLY question they can now answer about their own example / situation. Never a rephrase, never another hint, never the model answer's words.
 ${PLAIN_QUESTION_RULE}
+
+${LEADING_QUESTION_RULE}
 ${ageHint}
 ${relateHint}
 ${plan ? planForPrompt(plan, step ? step.id : null) : ''}
@@ -1538,6 +1652,8 @@ Rules:
 - Always suggest they TYPE it into the document — the goal is words on the page.
 
 ${PLAIN_QUESTION_RULE}
+
+${LEADING_QUESTION_RULE}
 
 Return ONLY valid JSON:
 - question (string): the question to ask
