@@ -1043,9 +1043,10 @@ const PLAN_SCHEMA = {
             description: '3 to 6 scaffold steps in order. Together they must pull EVERY brick of this part out of the student in their own words.',
             items: {
                 type: 'object', additionalProperties: false,
-                required: ['id', 'kind', 'prompt', 'targetBrickIds', 'itemHint', 'rows', 'tags', 'itemsFrom', 'side', 'hint', 'lesson', 'example', 'term', 'supply', 'thenAsk'],
+                required: ['id', 'kind', 'prompt', 'targetBrickIds', 'terms', 'itemHint', 'rows', 'tags', 'itemsFrom', 'side', 'hint', 'lesson', 'example', 'term', 'supply', 'thenAsk'],
                 properties: {
                     id: { type: 'string', description: 'Short id, "s1", "s2"…' },
+                    terms: { type: 'array', items: { type: 'string' }, description: 'THE WORD BOARD FOR THIS STEP (Sarah, 16 Aug: "the word board needs to be per question"). Of this part\'s expectedTerms, the 2-4 the student should be reaching for while answering THIS step — spelled exactly as in expectedTerms. Showing a part\'s whole vocabulary at every step invites pressing them all in at once, which teaches nothing. Every expected term should belong to at least one step; a term with no natural home can be left out.' },
                     kind: { type: 'string', enum: STEP_KINDS },
                     prompt: { type: 'string', description: 'The ONE concrete ask, plain everyday British English, 35 words or fewer. list: "List every cause you can think of — one per line." numbers: "Put a number on each: what it is now, what it should be." tag: what the colours will mean, one line. proscons: "One good thing and one bad thing about each." argue: "Argue that…, as if you mean it." switch: "Now argue the other side…" recommend: "Which wins, and why?"' },
                     targetBrickIds: { type: 'array', items: { type: 'string' }, description: 'The brick ids of this part that this step voices when filled. Every brick of the part must appear in at least one step.' },
@@ -1183,6 +1184,7 @@ function normalisePlan(r, criterionId, bricks) {
             id, kind,
             prompt: String(s.prompt || '').trim(),
             targetBrickIds: (Array.isArray(s.targetBrickIds) ? s.targetBrickIds : []).map(x => String(x).replace(/\s+/g, '')).filter(x => brickIds.has(x)),
+            terms: (Array.isArray(s.terms) ? s.terms : []).map(x => String(x || '').replace(/\s+/g, ' ').trim()).filter(Boolean),
             itemHint: kind === 'list' && s.itemHint ? String(s.itemHint).slice(0, 60) : null,
             rows: kind === 'numbers' ? (Array.isArray(s.rows) ? s.rows : []).map(row => ({ label: String(row.label || '').trim(), isPrompt: String(row.isPrompt || 'what it is now').trim(), shouldPrompt: String(row.shouldPrompt || 'what it should be').trim() })).filter(row => row.label).slice(0, 6) : [],
             tags: kind === 'tag' ? (Array.isArray(s.tags) ? s.tags : []).map((t, k) => ({ name: String(t.name || '').trim(), colour: TAG_COLOURS.includes(t.colour) ? t.colour : TAG_COLOURS[k % TAG_COLOURS.length], meaning: String(t.meaning || '').trim() })).filter(t => t.name).slice(0, 4) : [],
@@ -1227,6 +1229,19 @@ function normalisePlan(r, criterionId, bricks) {
         const term = String((g && g.term) || '').replace(/\s+/g, ' ').trim().replace(/[.:;,]+$/, '').toLowerCase();
         if (!term || !seenT.has(term)) continue;
         glossary[term] = { meaning: String((g && g.meaning) || '').trim().slice(0, 240), example: String((g && g.example) || '').trim().slice(0, 240) };
+    }
+    // Each step's own word board (Sarah, 16 Aug: "the word board needs to be
+    // per question"). Only real expected terms, in their canonical spelling —
+    // a button whose word is not on the part's list can never go green,
+    // because the check only ever reports terms from expectedTerms.
+    const canonical = new Map(expectedTerms.map(t => [t.toLowerCase(), t]));
+    for (const s of steps) {
+        const picked = [];
+        for (const t of (s.terms || [])) {
+            const c = canonical.get(t.toLowerCase());
+            if (c && !picked.includes(c)) picked.push(c);
+        }
+        s.terms = picked.slice(0, 4);
     }
     return { criterionId, role: String(r.role || '').trim(), minimalAsk: oneLineAsk(r.minimalAsk), expectedTerms, glossary, requirements, steps, madeAt: Date.now() };
 }

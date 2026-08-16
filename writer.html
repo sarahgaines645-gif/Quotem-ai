@@ -2786,10 +2786,25 @@
     function termSeen(cid, term, text) { return (text != null ? text : partText(cid)).includes(String(term).toLowerCase()); }
     // The word buttons + dots for a part (shared by the board card and the
     // compact mirror on the coach card during Mark & fix).
+    // THE WORD BOARD IS PER QUESTION. Sarah, 16 Aug — after pressing every
+    // button at once: "the word board needs to be per question." A part's
+    // whole vocabulary in one pile is not a word board, it is a glossary, and
+    // a pile invites exactly what she did. So: the words for the step she is
+    // actually on. Plans made before steps carried their own words fall back
+    // to the part's list, which is the old behaviour and no worse than it was.
+    function termsForBoard(cid) {
+      const plan = planFor(cid); if (!plan) return [];
+      const all = plan.expectedTerms || [];
+      const cs = state.currentStep;
+      if (!cs || cs.criterionId !== cid) return all;
+      const step = (plan.steps || []).find(s => s.id === cs.stepId);
+      const mine = step && Array.isArray(step.terms) ? step.terms.filter(t => all.includes(t)) : [];
+      return mine.length ? mine : all;
+    }
     function termButtonsHtml(cid, { compact } = {}) {
       const plan = planFor(cid); if (!plan) return '';
       const text = partText(cid); const fits = new Set((state.termsFit[cid] || []).map(x => x.toLowerCase()));
-      return (plan.expectedTerms || []).map(t => { const cls = fits.has(t.toLowerCase()) ? ' fits' : (termSeen(cid, t, text) ? ' seen' : ''); return `<button type="button" class="q-term${cls}" data-term="${escHtml(t)}" data-cid="${escHtml(cid)}" title="${cls ? (cls.trim() === 'fits' ? 'Green: you used it properly and Q checked it' : 'On the page, not checked yet — write the sentence that uses it and Q will read it') : 'Press to drop it into your sentence · hover for what it means'}">${escHtml(t)}</button>`; }).join('');
+      return termsForBoard(cid).map(t => { const cls = fits.has(t.toLowerCase()) ? ' fits' : (termSeen(cid, t, text) ? ' seen' : ''); return `<button type="button" class="q-term${cls}" data-term="${escHtml(t)}" data-cid="${escHtml(cid)}" title="${cls ? (cls.trim() === 'fits' ? 'Green: you used it properly and Q checked it' : 'On the page, not checked yet — write the sentence that uses it and Q will read it') : 'Press to drop it into your sentence · hover for what it means'}">${escHtml(t)}</button>`; }).join('');
     }
     function reqDotsHtml(cid, { withKey } = {}) {
       const plan = planFor(cid); if (!plan || !(plan.requirements || []).length) return '';
@@ -2806,7 +2821,9 @@
       const plan = planFor(cid); if (!plan || (!plan.minimalAsk && !(plan.expectedTerms || []).length && !(plan.requirements || []).length)) return '';
       const text = partText(cid); const fits = new Set((state.termsFit[cid] || []).map(x => x.toLowerCase()));
       const terms = termButtonsHtml(cid);
-      const left = (plan.expectedTerms || []).filter(t => !fits.has(t.toLowerCase()) && !termSeen(cid, t, text));
+      // "Still to use" counts the words ON THE BOARD, not the whole part —
+      // a to-do list of words she hasn't been asked for yet is just more text.
+      const left = termsForBoard(cid).filter(t => !fits.has(t.toLowerCase()) && !termSeen(cid, t, text));
       const w = whereInfo(cid);
       return `<div class="tb-expect" data-cid="${escHtml(cid)}"><span class="ex-title">Word board<span class="ex-part">${w ? escHtml('Part ' + w.n + ' — ' + w.label) : ''}</span></span>${plan.minimalAsk ? `<div class="ex-ask">${escHtml(plan.minimalAsk)}</div>` : ''}${terms ? `<div class="ex-terms">${terms}</div>` : ''}${left.length ? `<div class="ex-left"><b>Still to use:</b> ${left.map(escHtml).join(', ')}</div>` : (terms ? '<div class="ex-left"><b>Every expected word is in.</b></div>' : '')}${reqDotsHtml(cid, { withKey: true })}</div>`;
     }
