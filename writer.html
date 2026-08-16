@@ -2261,6 +2261,12 @@
       persist({ calls: state.calls });
     }
     function planFor(cid) { return state.plans[cid] || null; }
+    // A plan with no expected terms has no word board, and the word board is
+    // the point — Sarah, 16 Aug: "the buttons with words are the big piece
+    // missing." Plans built before word boards existed look complete (they
+    // have steps) but can never grow buttons while they sit in the cache, so
+    // treat them as unfinished and let the server rebuild them.
+    function planHasWords(cid) { const p = planFor(cid); return !!(p && ((p.expectedTerms || []).length || p.wordsTried)); }
     function ssFor(cid) { return state.stepState[cid] || (state.stepState[cid] = { stepIndex: 0, framed: false, steps: {} }); }
     function stepStateOf(cid, stepId) { const ss = ssFor(cid); return ss.steps[stepId] || (ss.steps[stepId] = { items: [], rows: [], tags: null, legend: null, pc: {}, answers: [], followUps: 0, filled: false }); }
     function currentStepInfo() {
@@ -2273,7 +2279,7 @@
 
     // ── The plan: cached, or wait for it (the essay first if need be) ──────
     async function getPlan(cid, { onTick } = {}) {
-      if (planFor(cid)) return planFor(cid);
+      if (planHasWords(cid)) return planFor(cid);
       for (let attempt = 0; attempt < 40; attempt++) {
         let d;
         try {
@@ -2300,7 +2306,13 @@
         // request); counted the first time this session acquires it. A restore
         // brings plans back from the notebook, so a refresh never counts twice.
         if (!state.plans[cid]) tally('plan', cid);
+        // Asked once. If the rebuild still comes back with no expected terms,
+        // this stops planHasWords sending us round again on every render —
+        // "every question is costing money" (Sarah). One attempt, then live
+        // with it.
+        plan.wordsTried = true;
         state.plans[cid] = plan;
+        persist({ plans: state.plans });
         return plan;
       }
       throw Object.assign(new Error('could not get the plan for this part'), { retryable: true });
@@ -2312,7 +2324,7 @@
     async function ensurePlans(onTick) {
       const cs = (state.brief && state.brief.criteria) || [];
       for (let i = 0; i < cs.length; i++) {
-        const c = cs[i]; if (planFor(c.id)) continue;
+        const c = cs[i]; if (planHasWords(c.id)) continue;
         try { await getPlan(c.id, { onTick: (line) => onTick && onTick('Setting out the word board for part ' + (i + 1) + ' of ' + cs.length + '…') }); }
         catch (e) { appendBoardItem({ type: 'note', label: 'note', text: 'No word board for part ' + (i + 1) + ' yet (' + shortCause(e) + ').', quiet: true }); }
       }

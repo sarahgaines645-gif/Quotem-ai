@@ -1367,7 +1367,15 @@ router.post('/writer/plan', requirePerson, express.json({ limit: '16kb' }), asyn
     if (!t.brief) return res.status(400).json({ error: 'No brief yet — upload the task first so I know what the marker wants.', code: 'no_brief' });
     const criterionId = String(req.body?.criterionId || t.currentCriterionId || (t.brief.criteria[0] && t.brief.criteria[0].id) || '').replace(/\s+/g, '');
     if (!t.brief.criteria.some(c => c.id === criterionId)) return res.status(400).json({ error: 'That part is not in the brief.', code: 'bad_part' });
-    if (!req.body?.force && t.plans && t.plans[criterionId]) return ukJson(res, { ok: true, kind: 'plan', status: 'done', cached: true, result: t.plans[criterionId], meta: { criterionId } });
+    // Sarah, 16 Aug, live: "it says word board but there should be buttons on
+    // it and terminology that needs to be used in the answers." Her plans were
+    // built before the word board existed, so they have steps but no expected
+    // terms — and a cached plan was served forever, which meant that session
+    // could never grow buttons. A plan with no words in it is not a finished
+    // plan: rebuild it. (Her draft is untouched; only the scaffold is remade.)
+    const cachedPlan = t.plans && t.plans[criterionId];
+    const wordless = cachedPlan && !(Array.isArray(cachedPlan.expectedTerms) && cachedPlan.expectedTerms.length);
+    if (!req.body?.force && cachedPlan && !wordless) return ukJson(res, { ok: true, kind: 'plan', status: 'done', cached: true, result: cachedPlan, meta: { criterionId } });
     if (!t.modelEssay) {
         const ej = writerJobs.get(writerJobKey(personId, 'essay'));
         return res.status(409).json({ ok: false, error: 'Q is still writing the answer in his head for this part — a moment.', code: 'essay_pending', retryable: true, essayJob: ej ? { status: ej.status, startedAt: ej.startedAt } : null });

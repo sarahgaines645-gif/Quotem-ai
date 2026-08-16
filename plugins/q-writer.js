@@ -515,6 +515,9 @@ function normaliseProbe(r, brief, essay) {
     };
 }
 
+// Weakest first, ten at a time. She fixes them one by one; a longer list is
+// both unreadable and what overflowed the mark's token budget.
+const MAX_CRITIQUE = 10;
 const MARK_SCHEMA = {
     type: 'object', additionalProperties: false,
     required: ['overall', 'perCriterion', 'weakestCriterionId', 'critique'],
@@ -547,7 +550,7 @@ const MARK_SCHEMA = {
         weakestCriterionId: { type: 'string', description: 'The criterion to send them back to first.' },
         critique: {
             type: 'array',
-            description: 'MARK & FIX (Sarah, 15 Aug): the sentences you would change, weakest criterion FIRST, then document order. Up to 25. Only sentences that fall short of the brick they should be voicing; skip sentences that already match.',
+            description: 'MARK & FIX (Sarah, 15 Aug): the sentences you would change, weakest criterion FIRST, then document order. AT MOST 10 — the student works through them one at a time and a longer list is both unreadable and the thing that truncates the whole mark. Only sentences that fall short of the brick they should be voicing; skip sentences that already match.',
             items: {
                 type: 'object', additionalProperties: false,
                 required: ['sentence', 'missing', 'fix', 'targetBrickId', 'suggestedTools', 'criterionId', 'needs'],
@@ -588,7 +591,22 @@ ${essay ? '\n' + essayForPrompt(essay).slice(0, 14000) : ''}
 ${plans ? Object.values(plans).map(p => p && p.criterionId ? '[' + p.criterionId + '] ' + expectationsForPrompt(p) : '').filter(Boolean).join('\n') : ''}`);
     const sentences = splitSentences(docText).map(x => x.trim()).filter(x => x.length > 2).slice(0, 400);
     const user = `STUDENT'S DRAFT (numbered sentences, in order):\n${sentences.map((x, i) => `${i + 1}. ${x}`).join('\n')}\n\nMark it, then the critique.`;
-    const r = await callAccurate(system, user, { maxTokens: 9000, schema: MARK_SCHEMA, effort: 'medium' });
+    // Sarah, 16 Aug, live: "it keeps saying marking failed" — GET
+    // /writer/job/mark 502, over and over, on a long dictated draft.
+    //
+    // The mark is the biggest thing this app asks a model to write, and the
+    // budget has to cover BOTH the thinking and the answer (q-claude.js:39 —
+    // "thinking shares max_tokens with the answer"). The answer echoes each
+    // criticised sentence back VERBATIM, and her sentences are long spoken
+    // ones, so a 25-sentence critique plus medium-effort thinking ran past
+    // 9,000 tokens; q-claude.js:75 then threw "response truncated", the
+    // Together fallback fell over too, and the job came back 502. Nothing was
+    // wrong with her draft — the mark simply could not fit in its own budget.
+    //
+    // So: real headroom, and a critique capped at ten sentences (she works
+    // through them one at a time regardless — a longer list is unreadable AND
+    // the thing that overflows).
+    const r = await callAccurate(system, user, { maxTokens: 20000, schema: MARK_SCHEMA, effort: 'medium' });
     return normaliseMark(r, brief, essay, plans);
 }
 
@@ -626,7 +644,8 @@ function normaliseMark(r, brief, essayForMark, plans) {
         criterionId: ids.includes(String(it.criterionId || '').replace(/\s+/g, '')) ? String(it.criterionId).replace(/\s+/g, '') : (it.targetBrickId ? String(it.targetBrickId).split('-')[0] : ''),
     })).filter(it => it.sentence && (it.missing || it.fix))
       .sort((a, b) => ((bandOf[a.criterionId] ?? 9) - (bandOf[b.criterionId] ?? 9)) || (a.i - b.i))
-      .map(({ i, ...rest }) => rest);
+      .map(({ i, ...rest }) => rest)
+      .slice(0, MAX_CRITIQUE);   // the schema asks for ten; this is what makes it ten
     return {
         overall: { band: ['top', 'mid', 'low'].includes(r.overall.band) ? r.overall.band : 'low', label: String(r.overall.label || ''), summary: String(r.overall.summary || '') },
         perCriterion: per,
