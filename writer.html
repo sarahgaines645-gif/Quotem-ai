@@ -4667,9 +4667,15 @@
         msg: '',
         section: 'MARK & FIX · SENTENCE ' + (i + 1) + ' OF ' + items.length,
         where, move: bandLine(state.lastMark), step: false,
-        hint: note || 'Rewrite it on the page, then Check it.',
+        hint: note || 'Rewrite it on the page — type or talk — then Check it.',
         actions: [
           { label: '✓ Check it', primary: true, big: true, onClick: () => checkCurrentSentence() },
+          // Sarah, 16 Aug: "when you're editing you can no longer access the
+          // mic to write." The fix stage hides the coach box (there is nothing
+          // to answer — the rewrite goes on the page), and the only mic lived
+          // inside that box. The card tells her to rewrite it on the page, so
+          // the way to talk has to be on the card that says so.
+          { label: 'Talk', quiet: true, onClick: () => toggleDocDictation() },
           { label: 'Skip', quiet: true, onClick: () => { state.editIndex++; showEditItem(); } },
           { label: 'Stop for now', quiet: true, onClick: () => endFixPass() },
         ],
@@ -5096,6 +5102,14 @@
       if (why) coachHint.textContent = why;
     }
     function startDocDictation() {
+      // Mid Mark & fix, "the page" means the sentence he has highlighted —
+      // dropping her words at the very end of the document would be useless.
+      if (state.editing && editHighlight && editHighlight.range && !docCaretInPage()) {
+        try {
+          const r = editHighlight.range.cloneRange(); r.collapse(false);
+          const sel = window.getSelection(); sel.removeAllRanges(); sel.addRange(r); docBody.focus();
+        } catch (_) { putCaretAtEnd(); }
+      }
       if (!docCaretInPage()) putCaretAtEnd();
       docRec = new SpeechRec();
       docRec.continuous = true; docRec.interimResults = true; docRec.lang = 'en-GB';
@@ -5130,12 +5144,16 @@
         coachHint.textContent = 'Listening — talk and it goes on the page. Press a word button any time and it drops into your sentence.';
       } catch (e) { docRec = null; coachHint.textContent = 'Couldn\'t start the mic: ' + shortCause(e); }
     }
-    docMic.addEventListener('click', () => {
+    // One entry point, so the toolbar button and the Talk action on the
+    // Mark & fix card are the same switch.
+    function toggleDocDictation() {
       if (!SpeechRec) { coachHint.textContent = 'Dictation isn\'t available in this browser — Edge or Chrome can listen.'; return; }
-      if (docMic.classList.contains('listening')) { stopDocDictation(); return; }
+      if (docMic.classList.contains('listening')) { stopDocDictation('Stopped listening.'); return; }
       if (micBtn.classList.contains('listening')) stopDictation();   // one ear at a time
       startDocDictation();
-    });
+    }
+    docMic.addEventListener('click', toggleDocDictation);
+    window.__qwriterMic = { toggleDocDictation };
 
 
     // ── Restore on load: refresh, phone lock, Railway restart lose nothing ──
