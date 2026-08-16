@@ -1077,6 +1077,10 @@
        a little popup: what's missing right there + ONE action. */
     .doc-body .q-idot { display: inline-block; width: 11px; height: 11px; border-radius: 50%; border: 2px solid var(--dc, #999); background: var(--paper, #fbf9f3); box-sizing: border-box; margin: 0 4px 0 3px; vertical-align: middle; cursor: pointer; user-select: none; -webkit-user-select: none; position: relative; top: -1px; box-shadow: 0 0 0 2px rgba(255,255,255,0.7); }
     .doc-body .q-idot:hover { transform: scale(1.25); }
+    /* A MARK on the bit she just wrote (Sarah, 16 Aug): filled accent dot after
+       the sentence that falls short — click → what's missing + Fix it. */
+    .doc-body .q-idot.q-mk { border-color: var(--accent); background: var(--accent); width: 10px; height: 10px; }
+    .doc-body .q-idot.q-mk.done { background: var(--paper, #fbf9f3); border-color: var(--text-faint); }
     .q-popcard.dotpop { width: 250px; }
     .q-popcard.dotpop .pc-head { font-size: 12px; font-weight: 600; }
     .q-popcard.dotpop .pc-dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; border: 2px solid var(--dc, #999); box-sizing: border-box; margin-right: 6px; vertical-align: middle; position: relative; top: -1px; }
@@ -2335,7 +2339,7 @@
       state.currentQuestion = ''; state.currentCriterionId = ''; state.currentSection = ''; state.docSnapshot = ''; state.lastMark = null; state.lastProbeAt = 0;
       state.brickCounts = {}; state.essayReady = false; state.sources = []; state.editItems = null; state.editIndex = 0; state.editDone = false;
       state.plans = {}; state.stepState = {}; state.currentStep = null; state.calls = {}; state.openerDone = false; state.match = null; state.termsFit = {}; state.reqMet = {}; state.references = []; state.inlineDots = {};
-      state.partMarks = {}; state.partMarkDone = {}; state.editing = false; state.partFixThen = null;
+      state.partMarks = {}; state.partMarkDone = {}; state.editing = false; state.partFixThen = null; state.stepMarks = {}; state.editStepKey = null;
       // The task slot too — otherwise a pasted brief or a link is ignored
       // (the paste path checks !sourceState.name) and the old chip stays.
       sourceState.name = null; sourceState.text = null; sourceState.imageDataUrl = null; sourceState.sourceUrl = null;
@@ -3100,7 +3104,75 @@
       }
       let next = idx + 1;
       while (next < plan.steps.length && stepStateOf(cid, plan.steps[next].id).filled) next++;
-      presentStep(cid, next, { ack: (a ? a + (pct != null && step.kind !== 'list' ? ' ' + pct + '% on this part.' : '') : '') });
+      const ackLine = (a ? a + (pct != null && step.kind !== 'list' ? ' ' + pct + '% on this part.' : '') : '');
+      // A bit of WRITING is marked the moment it is done — the marks go on
+      // that paragraph, before the next point. Scaffold steps (list, numbers,
+      // sorting, pros/cons, lessons) are not writing; they move straight on.
+      if (WRITING_KINDS.has(step.kind) && stepParagraphs(cid, step.id).length) {
+        markStepNow(cid, step, { next, ack: ackLine });
+        return;
+      }
+      presentStep(cid, next, { ack: ackLine });
+    }
+    const WRITING_KINDS = new Set(['argue', 'switch', 'recommend', 'ask', 'write', 'sentence', 'explain', 'evaluate', 'compare', 'apply']);
+    function stepParagraphs(cid, stepId) { return Array.from(docBody.querySelectorAll('p.student-line[data-step="' + CSS.escape(cid + ':' + stepId) + '"]')); }
+    function stepMarkKey(cid, stepId) { return cid + ':' + stepId; }
+    // THE MARKS ON THAT BIT (Sarah, 16 Aug: "if he's broken the question down
+    // into 4 and he's had me write about equality, when I've done that bit he
+    // needs to put those marks on it so I know where I'm going wrong —
+    // obviously not every time I write a sentence"). One job for the point;
+    // the critique lands as dots after her sentences (click → what's missing
+    // + Fix it), the card says the band for this point and offers the walk.
+    async function markStepNow(cid, step, { next, ack } = {}) {
+      const key = stepMarkKey(cid, step.id);
+      const text = stepParagraphs(cid, step.id).map(p => blockText(p)).join('\n').trim();
+      if (!text) { presentStep(cid, next, { ack }); return; }
+      const w = whereInfo(cid);
+      setCoach({ msg: 'Marking that bit…', section: 'MARK & FIX · ' + (w ? 'Q' + w.n : '') + ' · this point', thinking: true, inputVisible: false, step: false });
+      let m;
+      try {
+        const first = await api('/writer/mark-part', { criterionId: cid, stepId: step.id, focus: step.prompt || '', targetBrickIds: step.targetBrickIds || [], partText: text, gradeScheme: state.gradeScheme || '' }, { timeoutMs: 60000 });
+        if (first && first.status && first.status !== 'done' && !first.band) {
+          const job = await waitForJob('mark-part?criterionId=' + encodeURIComponent(key), { onTick: (secs) => setCoach({ msg: 'Marking that bit… ' + secs + 's', section: 'MARK & FIX · ' + (w ? 'Q' + w.n : '') + ' · this point', thinking: true, inputVisible: false, step: false }) });
+          m = job.result || {};
+        } else m = (first && first.result) || first;
+      } catch (e) {
+        appendBoardItem({ type: 'note', label: 'note', text: 'Could not mark that bit (' + shortCause(e) + ') — carrying on; the question mark at the end still covers it.', quiet: true });
+        presentStep(cid, next, { ack }); return;
+      }
+      applyExpectations(m);
+      const items = (m.critique || []).map(it => ({ sentence: it.sentence, why: it.missing || '', fix: it.fix || '', targetBrickId: it.targetBrickId || null, suggestedTools: it.suggestedTools || [], criterionId: cid, needs: Array.isArray(it.needs) ? it.needs : [], stepKey: key }));
+      state.stepMarks = state.stepMarks || {};
+      state.stepMarks[key] = { band: m.band, strongest: m.strongest || '', missingForTop: m.missingForTop || '', critique: items, at: Date.now() };
+      renderInlineDots();
+      const bandWord = { top: 'top band', mid: 'middle band', low: 'lower band', missing: 'not there yet' }[m.band] || m.band;
+      const line = 'That bit: ' + bandWord + '.' + (m.strongest ? ' ' + m.strongest : '') + (m.missingForTop ? ' For the top band: ' + m.missingForTop : '');
+      appendBoardItem({ type: 'note', label: 'marked', text: line, quiet: false, criterionId: cid, stepId: step.id });
+      const goOn = () => presentStep(cid, next, { ack: ack || '' });
+      if (!items.length) {
+        setCoach({ msg: (m.strongest || 'That bit holds up.') + (m.missingForTop ? ' For the top band: ' + m.missingForTop : ''), section: 'MARKED · ' + bandWord.toUpperCase(), actions: [{ label: 'Next →', primary: true, big: true, onClick: goOn }], inputVisible: false, step: false });
+        return;
+      }
+      setCoach({
+        msg: items.length + (items.length === 1 ? ' sentence' : ' sentences') + ' to fix in that bit — the dots on the page show where.' + (m.missingForTop ? ' ' + m.missingForTop : ''),
+        section: 'MARKED · ' + bandWord.toUpperCase(),
+        actions: [
+          { label: 'Fix these →', primary: true, big: true, onClick: () => startStepFixWalk(key, 0, goOn) },
+          { label: 'Next →', quiet: true, onClick: goOn },
+        ],
+        inputVisible: false, step: false,
+      });
+    }
+    // The walk over one bit's fixes — the same highlight / what's missing /
+    // fix / tools / Check it as the question mark, then back to where we were.
+    function startStepFixWalk(key, fromIndex, then) {
+      const mk = state.stepMarks && state.stepMarks[key]; if (!mk || !mk.critique.length) return;
+      state.editItems = mk.critique.map(it => ({ ...it })); state.editIndex = Math.max(0, Math.min(fromIndex || 0, mk.critique.length - 1)); state.editing = true; state.editDone = false; state.markPassChanged = 0;
+      state.editStepKey = key;
+      state.partFixThen = then || (() => { const cs = state.currentStep; if (cs) { const plan = planFor(cs.criterionId); const i = plan ? plan.steps.findIndex(x => x.id === cs.stepId) : -1; if (i >= 0) presentStep(cs.criterionId, i, { restore: true }); } });
+      state.partFixLabel = 'Next →';
+      const bandWord = { top: 'top band', mid: 'middle band', low: 'lower band', missing: 'not there yet' }[mk.band] || mk.band;
+      showEditItem({ note: bandWord + ' — ' + (mk.missingForTop || 'fix these, then on we go') });
     }
     // The automatic analysis of a list: tag it, mark the tag step filled, voice
     // its bricks. Returns Q's legend line (or '' if it could not run — the tag
@@ -3326,8 +3398,20 @@
       const cs = state.currentStep;
       if (!cs || cs.criterionId !== cid) return all;
       const step = (plan.steps || []).find(s => s.id === cs.stepId);
-      const mine = step && Array.isArray(step.terms) ? step.terms.filter(t => all.includes(t)) : [];
-      return mine.length ? mine : all;
+      if (!step) return all;
+      // ONLY the words for the bit we are on (Sarah, 16 Aug: "the hot key word
+      // buttons need to be just the ones I need to use for the bit we are
+      // working on. I'm actively trying to use them because they are there").
+      // The step's own list first (case-insensitive against the part's words);
+      // a step without one gets the part words its ask actually mentions; a
+      // step that mentions none shows none — never the whole pile.
+      const lower = new Map(all.map(t => [String(t).toLowerCase(), t]));
+      let mine = (Array.isArray(step.terms) ? step.terms : []).map(t => lower.get(String(t).toLowerCase())).filter(Boolean);
+      if (!mine.length) {
+        const hay = [step.prompt, step.supply, step.thenAsk, step.hint, step.term].filter(Boolean).join(' ').toLowerCase();
+        mine = all.filter(t => { const w = String(t).toLowerCase(); return w.length > 2 && new RegExp('\\b' + w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\b').test(hay); }).slice(0, 4);
+      }
+      return mine;
     }
     function termButtonsHtml(cid, { compact } = {}) {
       const plan = planFor(cid); if (!plan) return '';
@@ -3459,6 +3543,22 @@
     function renderInlineDots() {
       docBody.querySelectorAll('.q-idot').forEach(n => n.remove());
       docBody.normalize();
+      // The marks on a finished bit: one filled dot after each sentence that
+      // fell short. Gone when the sentence is rewritten (findInDoc misses) or
+      // when its walk is done.
+      for (const [key, mk] of Object.entries(state.stepMarks || {})) {
+        (mk && mk.critique || []).forEach((it, i) => {
+          if (!it || it.done) return;
+          const hit = findInDoc(it.sentence); if (!hit) return;
+          const dot = document.createElement('span');
+          dot.className = 'q-idot q-mk'; dot.contentEditable = 'false'; dot.setAttribute('data-q-furniture', 'true');
+          dot.dataset.mk = key; dot.dataset.mki = String(i); dot.dataset.cid = it.criterionId || key.split(':')[0]; dot.dataset.sentence = it.sentence; dot.dataset.why = it.why || '';
+          dot.style.setProperty('--dc', 'var(--accent)'); dot.title = (it.why || 'This sentence falls short') + (it.fix ? ' — ' + it.fix : '');
+          const node = hit.end.node, off = Math.min(hit.end.offset + 1, node.nodeValue.length);
+          const after = node.splitText(off);
+          after.parentNode.insertBefore(dot, after);
+        });
+      }
       for (const [cid, list] of Object.entries(state.inlineDots || {})) {
         const met = new Set(state.reqMet[cid] || []);
         for (const p of (list || [])) {
@@ -3484,6 +3584,16 @@
     const DOT_ACTION_LABEL = { cite: 'Auto cite', references: 'References', cases: 'Case studies', strategies: 'Strategies', terminology: 'Terminology', weak: 'What\'s weak', synonyms: 'Synonyms', dictionary: 'Dictionary' };
     // Click a dot → the popup: what's missing right there + ONE action.
     function openDotPopup(dot) {
+      if (dot.dataset.mk) {
+        const key = dot.dataset.mk, i = Number(dot.dataset.mki) || 0;
+        const mk = state.stepMarks && state.stepMarks[key]; const it = mk && mk.critique[i];
+        if (!it) return;
+        showToolPop('<div class="pc-head"><span class="pc-dot" style="--dc:var(--accent)"></span>What\'s missing here</div><div class="pc-line">' + escHtml(it.why || 'This sentence falls short.') + '</div>' + (it.fix ? '<div class="pc-line" style="color:var(--text-muted)">' + escHtml(it.fix) + '</div>' : '') + '<button type="button" class="q-btn primary" id="dot-action">Fix it →</button>', { anchor: dot });
+        toolPopEl.classList.add('dotpop');
+        const btn = toolPopEl.querySelector('#dot-action');
+        btn.addEventListener('click', () => { toolPopEl.classList.remove('dotpop'); hideToolPop(); startStepFixWalk(key, i); });
+        return;
+      }
       const cid = dot.dataset.cid, kind = dot.dataset.req; const rq = reqOf(cid, kind);
       const tool = REQ_TOOL[kind] || 'weak'; const label = DOT_ACTION_LABEL[tool] || tool;
       const it = { sentence: dot.dataset.sentence || '', targetBrickId: null, criterionId: cid };
@@ -5047,7 +5157,8 @@
       // whole-document buttons below are for the end-of-essay mark only.
       if (state.partFixThen) {
         const go = state.partFixThen; state.partFixThen = null;
-        setCoach({ msg: nothing ? 'Nothing to fix here — on we go.' : 'That question is tidied. On to the next.', section: 'MARK & FIX', actions: [{ label: 'Next question →', primary: true, big: true, onClick: () => go() }], inputVisible: false, step: false });
+        const lbl = state.partFixLabel || 'Next question →'; state.partFixLabel = null;
+        setCoach({ msg: nothing ? 'Nothing to fix here — on we go.' : (lbl === 'Next →' ? 'That bit is tidied. On we go.' : 'That question is tidied. On to the next.'), section: 'MARK & FIX', actions: [{ label: lbl, primary: true, big: true, onClick: () => go() }], inputVisible: false, step: false });
         return;
       }
       const m = state.lastMark;
@@ -5288,6 +5399,10 @@
     }
     function endEditStage() {
       clearEditHighlight();
+      if (state.editStepKey && state.stepMarks && state.stepMarks[state.editStepKey]) {
+        state.stepMarks[state.editStepKey].critique.forEach(it => { it.done = true; });
+        state.editStepKey = null; renderInlineDots();
+      }
       state.editing = false; state.editDone = true; state.awaitingWord = null;
       coachCard.classList.remove('wide');
     }
@@ -6121,6 +6236,7 @@
         state.reqMet = t.reqMet && typeof t.reqMet === 'object' ? t.reqMet : {};
         state.references = Array.isArray(t.references) ? t.references : [];
         state.inlineDots = t.inlineDots && typeof t.inlineDots === 'object' ? t.inlineDots : {};
+        state.stepMarks = t.stepMarks && typeof t.stepMarks === 'object' ? t.stepMarks : {};
         renderRefsList();
         // BACKFILL (Sarah's live session pre-dates the plan engine): a session
         // that has already started — answers in the history or words on the
@@ -6183,7 +6299,7 @@
     loadProjects().then(restoreSession, restoreSession);
     // Test hooks (no data, no secrets): lets the harness exercise the page-side
     // helpers without a paid call. Harmless in production.
-    window.__qwriterTest = { findInDoc, replaceInDoc, appendReference, docPlainText, splitCheck: (t) => endsSentence(t), runEditPass, checkCurrentSentence, showEditItem, state: () => state, currentEditText, partParagraphs, setBrief, storyPointsHtml };
+    window.__qwriterTest = { findInDoc, replaceInDoc, appendReference, docPlainText, splitCheck: (t) => endsSentence(t), runEditPass, checkCurrentSentence, showEditItem, state: () => state, currentEditText, partParagraphs, setBrief, storyPointsHtml, renderInlineDots, termsForBoard };
 
 
     // (The old per-card drag code lived here — every panel now goes through makePanel above.)

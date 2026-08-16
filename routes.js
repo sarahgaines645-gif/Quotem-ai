@@ -2381,6 +2381,8 @@ const TUTOR_KEYS = [
     // the marking stage (15 Aug 23:40): the Harvard list the page keeps in
     // sync with the essay, and the dots Q placed inside the student's text.
     'references', 'inlineDots',
+    // marks on ONE POINT of a question (16 Aug): keyed criterionId:stepId
+    'stepMarks',
     // the per-part marks the page keeps (16 Aug) — dropped on refresh before.
     'partMarks',
 ];
@@ -2620,8 +2622,15 @@ router.post('/writer/mark-part', requirePerson, express.json({ limit: '256kb' })
     const partText = String(req.body?.partText || '');
     const gradeScheme = String(req.body?.gradeScheme || t.gradeScheme || '');
     const scope = writerScope(req);
-    // One job PER QUESTION (key mark-part:<criterionId>) — two parts marked
-    // close together never share a job or hand each other's result back.
+    // ONE POINT of the question (a finished step): { stepId, focus,
+    // targetBrickIds } — the marks land on that bit of the page as soon as
+    // she has written it, not at the end of the question. Its job is keyed
+    // per step and it does NOT overwrite the question's own mark.
+    const stepId = String(req.body?.stepId || '').replace(/\s+/g, '').slice(0, 40);
+    const focus = stepId ? String(req.body?.focus || '') : '';
+    const targetBrickIds = stepId && Array.isArray(req.body?.targetBrickIds) ? req.body.targetBrickIds.slice(0, 12) : [];
+    // One job PER QUESTION (key mark-part:<criterionId>) — or per point
+    // (mark-part:<criterionId>:<stepId>) — so nothing hands back another's result.
     const job = startWriterJob(scope, 'mark-part', async () => {
         const r = await qWriter.markPart({
             brief: t.brief,
@@ -2630,13 +2639,19 @@ router.post('/writer/mark-part', requirePerson, express.json({ limit: '256kb' })
             criterionId,
             partText,
             gradeScheme,
+            focus, targetBrickIds, stepId: stepId || null,
         });
         const ex = noteExpectations(scope, criterionId, r.termsUsed || [], r.requirementsMet || []);
         const saved = { ...r, at: Date.now() };
-        // Merge: one entry per question, the others stay as they were.
-        const t2 = writeTutor(scope, { partMarks: { ...(readTutor(scope).partMarks || {}), [criterionId]: saved } });
+        // Merge: one entry per question, the others stay as they were. A
+        // point's mark rides along under stepMarks so a refresh keeps the dots.
+        const cur = readTutor(scope);
+        const patch = stepId
+            ? { stepMarks: { ...(cur.stepMarks || {}), [criterionId + ':' + stepId]: saved } }
+            : { partMarks: { ...(cur.partMarks || {}), [criterionId]: saved } };
+        const t2 = writeTutor(scope, patch);
         return { ...saved, termsFit: t2.termsFit || (ex && ex.termsFit) || {}, reqMet: t2.reqMet || (ex && ex.reqMet) || {} };
-    }, { criterionId, keySuffix: criterionId });
+    }, { criterionId, stepId: stepId || null, keySuffix: stepId ? criterionId + ':' + stepId : criterionId });
     if (req.body?.sync) {
         while (job.status === 'running') await new Promise(r => setTimeout(r, 250));
         return res.status(job.status === 'done' ? 200 : (job.error?.status || 502)).json(qWriter.ukPolishResponse({ ok: job.status === 'done', ...jobView(job) }));

@@ -835,14 +835,24 @@ function partMarkSchema() { return {
         },
     },
 }; }
-async function markPart({ brief, essay, plan, criterionId, partText, gradeScheme }) {
+// ONE POINT of a question (Sarah, 16 Aug: "if he's broken the question down
+// into 4 and he's had me write about equality, when I've done that bit he
+// needs to put those marks on it so I know where I'm going wrong — obviously
+// not every time I write a sentence"). `focus` = the step's ask, in her
+// words; `targetBrickIds` = the bricks that step was drawing out. With a
+// focus the marker judges THAT point only, against THOSE bricks.
+async function markPart({ brief, essay, plan, criterionId, partText, gradeScheme, focus, targetBrickIds, stepId }) {
     if (!brief || !Array.isArray(brief.criteria)) throw new Error('No brief yet — upload the task first.');
     const crit = brief.criteria.find(c => c.id === criterionId);
     if (!crit) throw new Error('That part is not in the brief.');
     const text = String(partText || '').trim();
-    if (!text) return { criterionId, band: 'missing', strongest: '', missingForTop: 'There is nothing on the page for this part yet.', termsUsed: [], requirementsMet: [], critique: [] };
-    const bricks = bricksOfCriterion(essay, criterionId);
-    const system = withMission(`You are marking ONE question of this assignment, the moment the student finishes it — so the direction arrives while they can still use it. ${gradeScheme ? `Grade scheme: ${gradeScheme}.` : ''}
+    const focusText = String(focus || '').replace(/\s+/g, ' ').trim().slice(0, 300);
+    if (!text) return { criterionId, stepId: stepId || null, band: 'missing', strongest: '', missingForTop: focusText ? 'There is nothing on the page for this point yet.' : 'There is nothing on the page for this part yet.', termsUsed: [], requirementsMet: [], critique: [] };
+    const allBricks = bricksOfCriterion(essay, criterionId);
+    const wantIds = new Set((Array.isArray(targetBrickIds) ? targetBrickIds : []).map(x => String(x).replace(/\s+/g, '')));
+    const bricks = focusText && wantIds.size && allBricks.some(b => wantIds.has(b.brickId)) ? allBricks.filter(b => wantIds.has(b.brickId)) : allBricks;
+    const system = withMission(`You are marking ${focusText ? 'ONE POINT of one question' : 'ONE question'} of this assignment, the moment the student finishes it — so the direction arrives while they can still use it. ${gradeScheme ? `Grade scheme: ${gradeScheme}.` : ''}
+${focusText ? `\nTHE POINT BEING MARKED (what they were asked to write, in plain words): ${focusText}\n- Judge ONLY whether THIS point is made well. Do not mark them down for things that belong to other points of the question.\n- "band" is the band for this point alone.` : ''}
 
 Rules:
 - Judge ONLY this question. Say nothing about the rest of the document.
@@ -880,6 +890,7 @@ ${bricks.length ? '\nWHAT A TOP ANSWER CONTAINS (your model answer — never quo
     })).filter(it => it.sentence && (it.missing || it.fix)).slice(0, MAX_CRITIQUE);
     return {
         criterionId,
+        stepId: stepId || null,
         band: ['top', 'mid', 'low', 'missing'].includes(r && r.band) ? r.band : 'low',
         strongest: capWords(r && r.strongest, 22),
         missingForTop: capWords(r && r.missingForTop, 22),
