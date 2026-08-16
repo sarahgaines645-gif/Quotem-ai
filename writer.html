@@ -1085,7 +1085,7 @@
          brief, the plans and the coaching away — the writing on the page is
          kept, since losing that is never what "start again" means. -->
     <div class="setup-restart">
-      <button type="button" class="meta-btn" id="btn-restart" title="Clear this brief and its coaching so you can drop in a different task. What you have written on the page is kept.">Start again with a new task</button>
+      <button type="button" class="meta-btn" id="btn-restart" title="Clear everything — the task, the coaching and the page — so you can start from nothing. A copy of your writing is kept in this browser.">Start again from scratch</button>
       <span class="restart-note" id="restart-note"></span>
     </div>
     <div class="setup-row">
@@ -5266,33 +5266,55 @@
     window.__qwriterMic = { toggleDocDictation };
 
 
-    // ── Start again ───────────────────────────────────────────────────────
-    // Two presses, no dialog box: this throws away the brief, the plans and
-    // the coaching. The WRITING IS KEPT — "start again" never means "delete
-    // what I wrote", and if she wants a clean page she can select it and
-    // delete it herself, which is reversible in a way this is not.
+    // ── Start again, from scratch ─────────────────────────────────────────
+    // Sarah, 16 Aug: "I have no way to show someone this because I'm half way
+    // through the essay… the start again isn't clearing. I want to start from
+    // scratch."
+    //
+    // It WAS clearing — the brief, the plans, the coaching — and keeping the
+    // writing, because I decided "start again" should never delete an essay.
+    // Wrong call: the page is the visible thing, so a full page after pressing
+    // it reads as a button that does nothing, and a clean slate is exactly
+    // what you need to show someone the tool from the beginning.
+    //
+    // So it clears everything, page included, and says so before the second
+    // press. The last copy is stashed in this browser first, so a mistaken
+    // demo-clear at 2am is recoverable instead of final.
     (function wireRestart() {
       const btn = document.getElementById('btn-restart');
       const note = document.getElementById('restart-note');
       if (!btn) return;
+      const STASH = 'q.writer.lastCleared';
       let armed = null;
+      function disarm() { armed = null; btn.classList.remove('arm'); btn.textContent = 'Start again from scratch'; note.innerHTML = ''; }
       btn.addEventListener('click', async () => {
         if (!armed) {
-          armed = setTimeout(() => { armed = null; btn.classList.remove('arm'); btn.textContent = 'Start again with a new task'; note.textContent = ''; }, 6000);
+          armed = setTimeout(disarm, 8000);
           btn.classList.add('arm');
-          btn.textContent = 'Press again to clear the task';
-          note.textContent = 'Your writing stays on the page. The brief, the word boards and the coaching go.';
+          btn.textContent = 'Press again — this clears everything';
+          note.textContent = 'The task, the word boards, the coaching AND the writing on the page. A copy is kept in this browser in case you did not mean it.';
           return;
         }
         clearTimeout(armed); armed = null;
         btn.classList.remove('arm'); btn.disabled = true; btn.textContent = 'Clearing…';
         try {
-          await resetSession({ keepDoc: true });
-          note.textContent = 'Cleared — drop your next task in above.';
+          try { localStorage.setItem(STASH, JSON.stringify({ at: Date.now(), title: titleEl.value || '', html: docBody.innerHTML })); } catch (_) {}
+          await resetSession({ keepDoc: false });
+          note.innerHTML = 'Clean slate — drop a task in above. <button type="button" class="meta-btn" id="btn-unclear">Put my writing back</button>';
+          const undo = document.getElementById('btn-unclear');
+          if (undo) undo.addEventListener('click', () => {
+            try {
+              const s = JSON.parse(localStorage.getItem(STASH) || 'null');
+              if (!s || !s.html) { note.textContent = 'Nothing stashed to put back.'; return; }
+              docBody.innerHTML = s.html; titleEl.value = s.title || '';
+              wordEl.textContent = countWords() + ' words'; scheduleAutosave();
+              note.textContent = 'Your writing is back on the page (the task and coaching stay cleared).';
+            } catch (e) { note.textContent = 'Could not restore it: ' + shortCause(e); }
+          });
         } catch (e) {
           note.textContent = 'Could not clear it: ' + shortCause(e);
         } finally {
-          btn.disabled = false; btn.textContent = 'Start again with a new task';
+          btn.disabled = false; btn.textContent = 'Start again from scratch';
         }
       });
     })();
