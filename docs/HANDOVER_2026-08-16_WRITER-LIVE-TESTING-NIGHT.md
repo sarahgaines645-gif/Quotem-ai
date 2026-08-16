@@ -7,6 +7,8 @@ here is from memory — every claim has a commit hash.*
 ---
 
 ## 0. THE ONE SENTENCE
+*(Updated ~05:00: three more shipped after the first write — the story in the brief, where-it-goes + sentence-after-list, source digests + spoken questions. Rows at the top of §2.)*
+
 Sarah drove `writer.html` live on her sister's real CIPD Level 7 brief from ~01:00 to ~04:00,
 screenshotting every rough edge; **each one became a precise fix and shipped within minutes**
 (22 writer commits, all pushed, all live at www.quotem-ai.co.uk). The app is now materially
@@ -51,6 +53,9 @@ Her criticisms ARE the spec. Keep working that way.
 
 | commit | what | her words |
 |---|---|---|
+|  | **THE STORY IN THE BRIEF** —  on BRIEF_SCHEMA (story, people, numbers exact, problems, useIt); in  so EVERY prompt knows it; 📖 first on the brief board;  () backfills a stored brief once on restore | "there's still no simplified case study or brief. the story that you're basing the questions on" |
+|  | every ask says WHERE it goes (board vs paper under Question n);  — a list/numbers step is always followed by an ask for the SENTENCE about it (before the cap, so it survives) | "he doesn't put it on the paper. he needs to specify where to write it" |
+|  | supporting-doc DIGEST (, background, stored on the source,  retry, backfilled on restore) on the brief board; spoken QUESTIONS classified as questions (no , no word cap, "Q, …", "I do not understand"), answer ON THE CARD not board-only | "expecting you to have read the case study" / "he just asks the question again and ignores my question" |
 | `f7434c4` | **THE LOOP** — pause probe judges the expected words (`termsUsed` → green, `termsMisused` → OFF green + one plain line why), returns a one-line `reaction`; watcher floor is 2 WORDS not 12 chars ("saves money" was 11 chars — that is literally why he said nothing) | "I just pressed them all together and wrote 'saves money'. Stopped typing and they stayed green and Q said nothing." |
 | `0a8e0ab` | two-file brief, actually — click handler had `multiple=false`; "+ Add the rest of the brief" button; join is server-side (`/writer/brief {append:true}`) so it survives refresh | "it still won't let me upload 2 docs" |
 | `263fffd` | word budget per question — arithmetic on brief total × criterion weight, on the criterion as `wordBudget`, live "312 / 980 words" in the Now block, amber 90%, red over; backfilled on GET /writer/tutor | "he needs to estimate the word count per question so we don't go over" |
@@ -86,6 +91,7 @@ above. Every commit message lists exactly what was verified.
 nursing (`q-cite.js`); video relevance (8 title/query pairs).
 
 **NOT yet seen with a real model — her next upload is the test, in this order:**
+0. **The story in the brief** (`bac18aa`): on reload, 📖 lands on the brief board — is it a faithful plain telling of her CIPD case? Numbers exact? Then: do Q's asks now NAME the company instead of "your organisation"?
 1. **THE LOOP** (`f7434c4`): press two word buttons in, write "saves money", wait 7s. Expect: a
    one-line reaction on the coach card, the pressed words dropping OFF green with a reason. If
    silent, ask what the card shows ("READING…" stuck ≠ silence).
