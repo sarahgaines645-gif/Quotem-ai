@@ -98,3 +98,23 @@ Scratch data dir + two test people + minted cookies + headless Edge over CDP:
 `scratchpad/shot.js`, `cookie.js`, `joinB.sh` in this session's scratchpad.
 Server: `RAILWAY_VOLUME_MOUNT_PATH=<scratch>/vol Q_AUTH_PEPPER=<16+> EMAIL_TOKEN_KEY=<16+> PORT=8099 node server/index.js`
 (setting a RAILWAY_* var flips IS_PRODUCTION, hence the two keys).
+
+---
+
+## 17 Aug — THE RIG (`39b5359`) — supersedes the picture/sheet route
+
+Sarah: "I want an interactive pet, not videos — millions of games do this." and
+"I don't like the ones we have." She said NO to any spend (video clips, part
+sheets). So the pets are now **drawn in code and rigged** — `drawRig()` in
+`revise.html`, RIG table per pet, STAGE_PROP per stage, `pose` per act (see
+commit body). Eyes follow the pointer, click = pat, tail wags on hover. The PNG
+art + sprite sheets are the FALLBACK (`RIG_ON`, lab button "art: rig/pictures").
+Verified in the lab: idle/run/jump/beg/poorly/eat/approach/lick/dressed for
+puppy, hamster, capybara (contact sheets in the session scratchpad).
+
+**Do NOT go back to generating sheets or proposing video.** The look is shapes:
+change colours/ears/proportions in the RIG table. Next quality steps if she wants
+them: soft shading (a second darker ellipse on body/head), an idle "sit → stand →
+stretch" cycle, walk (slower gait) vs run, a shake, a roll-over, tail visible in
+front view for all kinds, accessories drawn in the same vector style (currently
+still the item PNGs on top).
