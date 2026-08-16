@@ -376,6 +376,25 @@ function plainLabel(label, text) {
     const words = String(text || '').replace(/^\s*(AC|LO)?\s*\d+(\.\d+)*\s*[:.)-]?\s*/i, '').replace(/\s+/g, ' ').trim().split(' ').filter(Boolean);
     return words.slice(0, 4).join(' ').replace(/[.:;,]+$/, '') || 'this part';
 }
+// "3,900 words", "3900", "3,500-4,000 words (+/-10%)", "approx. 4000" → 3900 /
+// 3900 / 4000 (the top of a range — the ceiling is what she must not cross) /
+// 4000. Anything unparseable → null and no budget is shown.
+function parseWordCount(s) {
+    const str = String(s == null ? '' : s).replace(/,/g, '');
+    const nums = (str.match(/\d{3,5}/g) || []).map(Number).filter(n => n >= 100 && n <= 50000);
+    if (!nums.length) return null;
+    return Math.max(...nums);
+}
+// "25%", "25 marks", "25", "1/4" → 25 / 25 / 25 / 25. Words ("high") → null.
+function parseWeight(s) {
+    const str = String(s == null ? '' : s).trim();
+    if (!str) return null;
+    const frac = str.match(/^(\d+)\s*\/\s*(\d+)$/);
+    if (frac && Number(frac[2])) return 100 * Number(frac[1]) / Number(frac[2]);
+    const m = str.match(/(\d+(?:\.\d+)?)/);
+    return m ? Number(m[1]) : null;
+}
+
 function normaliseBrief(b) {
     if (!b || typeof b !== 'object') throw new Error('The brief came back empty — try again.');
     const out = { ...b };
@@ -405,6 +424,23 @@ function normaliseBrief(b) {
     out.youreProducing = String(b.youreProducing || b.summary || '');
     out.wordCount = b.wordCount == null ? null : String(b.wordCount);
     out.deadline = b.deadline == null ? null : String(b.deadline);
+    // A WORD BUDGET PER QUESTION. Sarah, 16 Aug: "he needs to estimate the
+    // word count per question so we don't go over as we are answering." The
+    // brief already carries the total ("3,900 words") and each criterion's
+    // weight where the brief gives one — so the budget is arithmetic, no call.
+    // Split by weight when weights are numbers; equally when they are not.
+    // Stored on each criterion; the page shows "312 / 650" beside the
+    // question and goes amber near the line, red over it.
+    const total = parseWordCount(out.wordCount);
+    if (total && out.criteria.length) {
+        const weights = out.criteria.map(c => parseWeight(c.weight));
+        const sum = weights.reduce((a, w) => a + (w || 0), 0);
+        const allNumeric = weights.every(w => w != null) && sum > 0;
+        for (let i = 0; i < out.criteria.length; i++) {
+            const share = allNumeric ? weights[i] / sum : 1 / out.criteria.length;
+            out.criteria[i].wordBudget = Math.max(50, Math.round(total * share / 10) * 10);
+        }
+    }
     out.opener = String(b.opener || '').trim() || `Before we open the brief — in your own words, what do you already know about ${out.subject || 'this topic'}? One or two lines is plenty.`;
     out.prerequisites = Array.isArray(b.prerequisites) ? b.prerequisites.map(String).filter(Boolean) : [];
     return out;

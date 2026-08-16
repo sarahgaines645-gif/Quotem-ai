@@ -1115,6 +1115,16 @@ function writeTutor(personId, patch) {
 function publicBrief(brief) {
     if (!brief || typeof brief !== 'object') return null;
     const { idealAnswerSkeleton, ...rest } = brief;
+    // Word budgets per question are arithmetic on the brief; a brief stored
+    // before they existed gets them filled in on the way out, so Sarah's live
+    // session shows them without a re-upload.
+    if (Array.isArray(rest.criteria) && rest.criteria.length && !rest.criteria.some(c => c && c.wordBudget)) {
+        try {
+            const re = qWriter.normaliseBrief({ ...rest, idealAnswerSkeleton: [] });
+            const byId = Object.fromEntries((re.criteria || []).map(c => [c.id, c.wordBudget]));
+            rest.criteria = rest.criteria.map(c => byId[c.id] ? { ...c, wordBudget: byId[c.id] } : c);
+        } catch (_) { /* leave it as it was */ }
+    }
     return rest;
 }
 function sourcesMeta(sources) {

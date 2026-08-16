@@ -929,6 +929,9 @@
     .st-bead.done { background: #28a745; box-shadow: none; }
     .st-bead.cur { background: var(--accent); box-shadow: none; transform: scale(1.35); }
     .tb-count { font-size: 10px; color: var(--text-faint); font-weight: 600; letter-spacing: 0.04em; }
+    .tb-budget { margin-left: auto; font-size: 10px; font-weight: 700; color: var(--text-muted); white-space: nowrap; }
+    .tb-budget.near { color: #b26a00; }
+    .tb-budget.over { color: #c62828; }
     /* The other questions — always one press away, never a list to read. */
     .tb-parts { display: flex; align-items: center; gap: 5px; margin-top: 10px; flex-wrap: wrap; }
     .tb-part {
@@ -1413,7 +1416,7 @@
       wordEl.textContent = countWords() + ' words';
       scheduleAutosave();
       scheduleLiveProbe();
-      clearTimeout(expectTimer); expectTimer = setTimeout(() => { try { refreshExpectations(); } catch (_) {} }, 250);
+      clearTimeout(expectTimer); expectTimer = setTimeout(() => { try { refreshExpectations(); refreshWordBudget(); } catch (_) {} }, 250);
     });
 
     // ── Setup strip ────────────────────────────────────────────────────────
@@ -3169,6 +3172,7 @@
       const n = (idx < 0 ? 0 : idx) + 1;
       // The other questions, always reachable, right under the step.
       const cs = (state.brief && state.brief.criteria) || [];
+      const budget = wordBudgetHtml(cid);
       const parts = cs.length > 1 ? `<div class="tb-parts">${cs.map((c, i) => {
         const on = c.id === cid ? ' on' : '';
         const cov = state.coverage[c.id] || 'none';
@@ -3176,9 +3180,28 @@
       }).join('')}<span class="tb-partlab">${escHtml(criterionLabel(cs[Math.max(0, cs.findIndex(c => c.id === cid))] || cs[0]))}</span></div>` : '';
       return `<div class="tb-agenda" id="tb-agenda">`
         + `<div class="tb-now">${escHtml(here ? here.prompt : plan.role)}</div>`
-        + `<div class="tb-track"><span class="st-beads">${beads}</span><span class="tb-count">${n} of ${plan.steps.length}</span></div>`
+        + `<div class="tb-track"><span class="st-beads">${beads}</span><span class="tb-count">${n} of ${plan.steps.length}</span>${budget}</div>`
         + parts
         + `</div>`;
+    }
+    // WORDS SO FAR / BUDGET for this question. Sarah, 16 Aug: "he needs to
+    // estimate the word count per question so we don't go over as we are
+    // answering." The budget is on the criterion (server-side arithmetic from
+    // the brief's total and weights); the count is her paragraphs for this
+    // part, live. Amber from 90%, red over the line. Nothing shown when the
+    // brief gave no word count — a made-up number would be worse than none.
+    function wordBudgetHtml(cid) {
+      const c = ((state.brief && state.brief.criteria) || []).find(x => x.id === cid);
+      if (!c || !c.wordBudget) return '';
+      const words = partParagraphs(cid).map(p => p.textContent.trim()).filter(Boolean).join(' ').split(/\s+/).filter(Boolean).length;
+      const pct = words / c.wordBudget;
+      const cls = pct > 1 ? ' over' : pct >= 0.9 ? ' near' : '';
+      return `<span class="tb-budget${cls}" id="tb-budget" title="Words on the page for this question / its share of the ${escHtml(state.brief.wordCount || 'total')}">${words} / ${c.wordBudget} words</span>`;
+    }
+    function refreshWordBudget() {
+      const el = document.getElementById('tb-budget'); if (!el) return;
+      const html = wordBudgetHtml(state.currentCriterionId);
+      if (html) el.outerHTML = html;
     }
     // ONE row of a sorted list, in its colour. The lookup is forgiving: the
     // sorter's answer is keyed by the item text, so an item edited or added
