@@ -1080,6 +1080,23 @@
       .doc-body { font-size: 15px; line-height: 28px; }
       .setup-strip { padding: 14px 16px; }
     }
+    /* ── Tooltips (Sarah, 16 Aug: "can we make these look nicer") ────────
+       The browser's own title box is a hard-edged white strip that runs off
+       the screen. One soft card instead, in the page's own font and depth,
+       under (or over) whatever is hovered — every title= on the page goes
+       through it, including the ones set later by script. */
+    .q-tip {
+      position: fixed; z-index: 9999; pointer-events: none;
+      max-width: 300px; padding: 8px 12px; border-radius: 12px;
+      background: var(--bg); color: var(--text);
+      box-shadow: var(--neu-raised-sm), 0 0 0 1px rgba(0,0,0,0.04);
+      font-family: 'Space Grotesk', system-ui, sans-serif; font-size: 12px; line-height: 1.45; font-weight: 500;
+      overflow-wrap: anywhere;
+      opacity: 0; transform: translateY(4px); transition: opacity 0.12s ease, transform 0.12s ease;
+    }
+    .q-tip.show { opacity: 1; transform: translateY(0); }
+    .q-tip.above { transform: translateY(-4px); }
+    .q-tip.above.show { transform: translateY(0); }
   </style>
 </head>
 <body>
@@ -1334,6 +1351,82 @@
   <script>
   (() => {
     'use strict';
+
+    // ── Tooltips: one soft card for every title= on the page ─────────────
+    // On hover/focus the element's title moves to data-tip (so the browser's
+    // own box never appears) and the card shows below the element — or above
+    // when there is no room below. Titles set later by script are picked up
+    // the next time the element is hovered. Touch: a tap shows it briefly.
+    (function tooltips() {
+      let tip = null, cur = null, showT = null, hideT = null;
+      function el() {
+        if (tip) return tip;
+        tip = document.createElement('div'); tip.className = 'q-tip'; tip.setAttribute('role', 'tooltip');
+        document.body.appendChild(tip); return tip;
+      }
+      function textFor(t) {
+        if (!t || !t.getAttribute) return '';
+        const title = t.getAttribute('title');
+        if (title !== null) { t.setAttribute('data-tip', title); t.removeAttribute('title'); }
+        return t.getAttribute('data-tip') || '';
+      }
+      function place(target) {
+        const b = el(), r = target.getBoundingClientRect(), pad = 8;
+        b.style.left = '0px'; b.style.top = '0px';
+        const w = b.offsetWidth, h = b.offsetHeight;
+        let x = r.left + r.width / 2 - w / 2;
+        x = Math.max(pad, Math.min(x, window.innerWidth - w - pad));
+        let y = r.bottom + 8; let above = false;
+        if (y + h > window.innerHeight - pad) { y = r.top - h - 8; above = true; }
+        if (y < pad) { y = pad; above = false; }
+        b.style.left = Math.round(x) + 'px'; b.style.top = Math.round(y) + 'px';
+        b.classList.toggle('above', above);
+      }
+      function show(target) {
+        const text = textFor(target);
+        if (!text) return;
+        clearTimeout(hideT);
+        cur = target;
+        const b = el(); b.textContent = text; b.classList.remove('show');
+        place(target);
+        void b.offsetWidth;            // commit the start state so the fade runs
+        b.classList.add('show');
+      }
+      function hide() {
+        clearTimeout(showT); cur = null;
+        if (tip) tip.classList.remove('show');
+      }
+      function findTarget(node) {
+        let n = node;
+        while (n && n !== document.body && n.getAttribute) {
+          if (n.hasAttribute('title') || n.hasAttribute('data-tip')) return n;
+          n = n.parentNode;
+        }
+        return null;
+      }
+      document.addEventListener('mouseover', e => {
+        const t = findTarget(e.target);
+        if (!t) { if (cur) hide(); return; }
+        if (t === cur) return;
+        textFor(t); // move the title off NOW so the native box never races us
+        clearTimeout(showT);
+        showT = setTimeout(() => show(t), 380);
+      });
+      document.addEventListener('mouseout', e => {
+        const t = findTarget(e.target);
+        if (t && (!e.relatedTarget || !t.contains(e.relatedTarget))) hide();
+      });
+      document.addEventListener('mousedown', hide, true);
+      document.addEventListener('focusin', e => { const t = findTarget(e.target); if (t) show(t); });
+      document.addEventListener('focusout', hide);
+      document.addEventListener('scroll', hide, true);
+      window.addEventListener('resize', hide);
+      document.addEventListener('keydown', e => { if (e.key === 'Escape') hide(); });
+      document.addEventListener('touchstart', e => {
+        const t = findTarget(e.target); if (!t) return;
+        show(t); clearTimeout(hideT); hideT = setTimeout(hide, 2200);
+      }, { passive: true });
+    })();
 
     // ── State ──────────────────────────────────────────────────────────────
     const state = {
