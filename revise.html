@@ -844,10 +844,26 @@
       <div class="setup-field" style="flex:1">
         <div class="setup-label">Level</div>
         <select class="setup-select" id="setup-level">
-          <option>GCSE</option>
-          <option selected>A-Level Year 12</option>
-          <option>A-Level Year 13</option>
-          <option>BTEC</option>
+          <optgroup label="Primary">
+            <option>Reception</option>
+            <option>Year 1</option>
+            <option>Year 2</option>
+            <option>Year 3</option>
+            <option>Year 4</option>
+            <option>Year 5</option>
+            <option>Year 6</option>
+          </optgroup>
+          <optgroup label="Secondary">
+            <option>Year 7</option>
+            <option>Year 8</option>
+            <option>Year 9</option>
+            <option>GCSE</option>
+          </optgroup>
+          <optgroup label="Post-16">
+            <option selected>A-Level Year 12</option>
+            <option>A-Level Year 13</option>
+            <option>BTEC</option>
+          </optgroup>
           <option>Other</option>
         </select>
       </div>
@@ -858,6 +874,7 @@
           <option>Edexcel</option>
           <option>OCR</option>
           <option>WJEC</option>
+          <option value="National curriculum (England)">National curriculum (England)</option>
           <option value="Other">Other / Not sure</option>
         </select>
       </div>
@@ -1360,6 +1377,26 @@
     // ── Topic tags: one topic, however the model spelt it ─────────────────
     // Matching key: lower-case, letters/digits only, single spaces. Display
     // keeps the first spelling seen (usually the teacher's list wording).
+    // A school year has no exam board: pick the national curriculum for
+    // her, and make the subject box suggest what a child that age studies.
+    function isSchoolLevel(l) { return /^(reception|year\s*[1-9])$/i.test(String(l || '').trim()); }
+    function syncStageUI() {
+      const lvl = $('setup-level').value;
+      const boardSel = $('setup-board');
+      const subj = $('setup-subject');
+      if (isSchoolLevel(lvl)) {
+        boardSel.value = 'National curriculum (England)';
+        boardSel.disabled = true;
+        subj.placeholder = /reception|year\s*[1-6]/i.test(lvl)
+          ? 'e.g. Maths, Reading, Spelling & grammar, Science, History…'
+          : 'e.g. Maths, English, Science, History, Geography, French…';
+      } else {
+        if (boardSel.disabled) { boardSel.disabled = false; if (boardSel.value === 'National curriculum (England)') boardSel.value = 'AQA'; }
+        subj.placeholder = 'e.g. Biology';
+      }
+    }
+    $('setup-level').addEventListener('change', syncStageUI);
+
     function normTag(tag) {
       return String(tag || '').toLowerCase().replace(/&/g, ' and ').replace(/[^a-z0-9]+/g, ' ').replace(/\s+/g, ' ').trim();
     }
@@ -1459,6 +1496,7 @@
       if (s.subject) $('setup-subject').value = s.subject;
       if (s.level)   $('setup-level').value = s.level;
       if (s.board)   $('setup-board').value = s.board;
+      syncStageUI();
       if (s.topic)   $('setup-topic').value = s.topic;
       if (s.channel) $('setup-channel').value = s.channel;
     }

@@ -85,19 +85,72 @@ function asStringArray(v) {
 
 // ── Generate one exam-style question ──────────────────────────────────────
 
+// ── UK school stages ────────────────────────────────────────────────────
+// A Year 4 child must get Year 4 questions — not GCSE questions with
+// smaller numbers. The level string names the stage; this turns it into
+// what the writer, the checker and the marker need to know: the child's
+// age, the key stage, what the national curriculum for England covers at
+// that year (and NOT later years), the national tests that shape the style,
+// and how to write for that age. Sarah, 16 Aug: "put in primary school
+// stages — whatever they will be studying at school in the UK."
+const STAGES = {
+    reception: { label: 'Reception (EYFS)', ages: '4–5', ks: 'Early Years Foundation Stage', tests: 'no formal tests — early learning goals: phonics, counting to 20, shapes, listening and talking' },
+    1: { label: 'Year 1', ages: '5–6', ks: 'Key Stage 1', tests: 'the Year 1 phonics screening check (decoding real and made-up words); numbers to 100, adding and subtracting within 20' },
+    2: { label: 'Year 2', ages: '6–7', ks: 'Key Stage 1', tests: 'end-of-KS1 teacher assessment (KS1 SATs are optional papers): reading, maths, spelling/punctuation/grammar' },
+    3: { label: 'Year 3', ages: '7–8', ks: 'Key Stage 2 (lower)', tests: 'classroom assessment; times tables 3, 4, 8; column addition/subtraction; fractions as parts of a whole' },
+    4: { label: 'Year 4', ages: '8–9', ks: 'Key Stage 2 (lower)', tests: 'the Year 4 multiplication tables check (all tables to 12×12, quick recall); numbers to 10,000; decimals to tenths and hundredths' },
+    5: { label: 'Year 5', ages: '9–10', ks: 'Key Stage 2 (upper)', tests: 'classroom assessment; long multiplication, fractions/decimals/percentages, angles, roman numerals to 1000' },
+    6: { label: 'Year 6', ages: '10–11', ks: 'Key Stage 2 (upper)', tests: 'the KS2 SATs in May: Reading paper; Maths Paper 1 (arithmetic) and Papers 2–3 (reasoning); English grammar, punctuation and spelling (GPS) papers' },
+    7: { label: 'Year 7', ages: '11–12', ks: 'Key Stage 3', tests: 'classroom tests only; the KS3 programme of study, first year of secondary school' },
+    8: { label: 'Year 8', ages: '12–13', ks: 'Key Stage 3', tests: 'classroom tests only; the KS3 programme of study' },
+    9: { label: 'Year 9', ages: '13–14', ks: 'Key Stage 3', tests: 'classroom tests only; end of KS3, before GCSE courses begin — never GCSE-only content' },
+};
+
+function stageOf(level) {
+    const l = String(level || '').toLowerCase();
+    if (/reception|eyfs/.test(l)) return STAGES.reception;
+    const m = l.match(/year\s*(\d{1,2})\b/);
+    if (m && STAGES[m[1]]) return STAGES[m[1]];
+    if (/\bks\s*1\b|key stage 1/.test(l)) return STAGES[2];
+    if (/\bks\s*2\b|key stage 2/.test(l)) return STAGES[6];
+    if (/\bks\s*3\b|key stage 3/.test(l)) return STAGES[9];
+    return null;
+}
+function isSchoolStage(level) { return !!stageOf(level); }
+function isPrimary(level) { const st = stageOf(level); return !!st && !/Key Stage 3/.test(st.ks); }
+
+// The block every prompt gets when the level is a school stage. Empty
+// string otherwise, so GCSE/A-Level prompts are byte-for-byte unchanged.
+function stageRules(level, subject) {
+    const st = stageOf(level);
+    if (!st) return '';
+    const primary = !/Key Stage 3/.test(st.ks);
+    return `
+THIS STUDENT IS A SCHOOL CHILD — ${st.label}, age ${st.ages}, ${st.ks}, national curriculum for England. Not an exam candidate.
+- Test ONLY what the national curriculum programme of study covers by ${st.label} in ${subject || 'this subject'}. Nothing from later years. If unsure whether a child of ${st.ages} has met it, choose something you are sure they have.
+- What shapes this year: ${st.tests}.
+- Write for a ${st.ages}-year-old: short sentences, everyday words, one idea per question, numbers and situations a child that age meets (sweets, pets, the classroom, pocket money). Reading age must never be the barrier unless it is a reading question.
+- Style like the classroom and the national tests for that year${primary ? ' (KS2 SATs style for maths reasoning, reading comprehension, and grammar/punctuation/spelling)' : ''}. Ask with "Which…", "What…", "How many…", "Choose the…", "Which word…" — never "Evaluate", "Analyse", "Discuss".
+- Wrong options are the mistakes a child of this age REALLY makes (place-value slips, adding instead of multiplying, common misspellings, the confusable word) — never trick wording, never obviously silly.
+- Warm and encouraging. ${primary ? 'One mark per question.' : 'One or two marks per question.'}
+${primary ? '- Spelling in the child\'s answers: accept phonetic spelling where the meaning is clear, unless the question IS a spelling question.' : ''}`;
+}
+
 async function generateQuestion({ subject, board, level, topic, askedSoFar, weakAreas } = {}) {
-    const boardLine = board && board !== 'Other'
-        ? board
-        : 'a UK exam board (not specified — stay on content every board teaches)';
+    const boardLine = isSchoolStage(level)
+        ? 'the national curriculum for England (no exam board at this stage)'
+        : (board && board !== 'Other'
+            ? board
+            : 'a UK exam board (not specified — stay on content every board teaches)');
 
     const system = `You are a UK exam question writer and tutor. You write ONE exam-style revision question for a student, exactly as it would appear on a real paper, with the mark scheme a real examiner would mark it against.
 
 Board: ${boardLine}
 Level: ${level || 'A-Level'}
 Subject: ${subject || 'General Studies'}
-
+${stageRules(level, subject)}
 Rules:
-- ONE question only, using a realistic command word (State, Describe, Explain, Compare, Analyse, Evaluate). Match the marks to the command word: State/Describe 2-3, Explain 3-4, Compare/Analyse 4-6, Evaluate or extended response 6-12. Marks must be between 2 and 12.
+- ONE question only, using a realistic command word (State, Describe, Explain, Compare, Analyse, Evaluate). Match the marks to the command word: State/Describe 2-3, Explain 3-4, Compare/Analyse 4-6, Evaluate or extended response 6-12. Marks must be between 2 and 12.${isSchoolStage(level) ? ' FOR A SCHOOL CHILD: 1 to 3 marks, "What / Which / How many / Explain in one sentence" — never Evaluate/Analyse.' : ''}
 - If a topic is given, stay on it. If not, pick a core topic every student of this subject at this level must know.
 - If weak areas are listed, bias towards them — that is where this student's marks are hiding. Do not ONLY ask weak areas; roughly two in three questions should target them.
 - NEVER repeat or closely rephrase anything in the already-asked list. A different topic or a genuinely different angle every time.
@@ -158,6 +211,7 @@ Marking rules:
 - DO credit valid alternative wording — if the student's phrasing means the same as a scheme point, it scores. Judge meaning, not word-matching.
 - Irrelevant material earns nothing but loses nothing, unless it directly contradicts a correct point (a contradiction cancels that mark).
 - The student is at ${level || 'A-Level'} — judge the answer at that standard, no higher.
+${stageRules(level)}
 
 Feedback rules — talk TO the student ("you"), never about them. Warm, specific, brief. A teacher handing the paper back, not a report:
 - feedback: 2-3 sentences — what earned marks and the main thing that did not.
@@ -345,13 +399,15 @@ function publicError(msg) {
 
 async function generateQuiz({ subject, board, level, topic, count, avoid } = {}) {
     const n = clamp(toInt(count, 10), 3, 12);
-    const boardLine = board && board !== 'Other'
-        ? board
-        : 'a UK exam board (not specified — stay on content every board teaches)';
+    const boardLine = isSchoolStage(level)
+        ? 'the national curriculum for England (no exam board at this stage)'
+        : (board && board !== 'Other'
+            ? board
+            : 'a UK exam board (not specified — stay on content every board teaches)');
     const avoided = asStringArray(avoid);
 
     const writerSystem = `You write multiple-choice revision questions for a UK student. Board: ${boardLine}. Level: ${level || 'A-Level'}. Subject: ${subject || 'General Studies'}.
-
+${stageRules(level, subject)}
 Rules:
 - Write ${n} questions. Mix difficulties: a couple of "foundation" to build confidence, mostly "standard", one or two "stretch".
 - If a topic list is given, spread across it; keep each question on ONE topic and label it with topicTag using the list's exact wording.
@@ -402,7 +458,7 @@ Write the ${n} questions.`;
     // Step 2 — Sonnet checks every answer key. No check, no quiz.
     if (!hasClaude()) throw Object.assign(new Error('Checker unavailable — the accuracy service key is not set on the server.'), { publicMessage: 'Checker unavailable — the accuracy service key is not set on the server.' });
     const checkerSystem = `You are the accuracy checker for a UK revision quiz (${boardLine}, ${level || 'A-Level'}, ${subject || 'General Studies'}). Another model drafted these multiple-choice questions. Your job: make sure a student can NEVER be taught something wrong by this batch.
-
+${stageRules(level, subject)}${isSchoolStage(level) ? '\n- ALSO drop any question a child of this age has not been taught yet (content from a later year), and simplify wording a child of this age could not read.\n' : ''}
 For every question:
 - Verify the keyed answer (correctIndex) is definitely correct and the ONLY correct option. If the key is wrong, fix correctIndex.
 - Verify the other three options are definitely wrong at this level. If a distractor is arguably right, rewrite it so it is cleanly wrong.
@@ -442,4 +498,5 @@ function stemKey(stem) {
     return String(stem || '').toLowerCase().replace(/[^a-z0-9\s]+/g, ' ').replace(/\s+/g, ' ').trim().split(' ').slice(0, 8).join(' ');
 }
 
-module.exports = { generateQuestion, markAnswer, generateQuiz, publicError, QUIZ_SCHEMA, normaliseQuizQuestions };
+module.exports = {
+    stageOf, stageRules, isSchoolStage, isPrimary, generateQuestion, markAnswer, generateQuiz, publicError, QUIZ_SCHEMA, normaliseQuizQuestions };
