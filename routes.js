@@ -2136,6 +2136,18 @@ router.post('/writer/brief', requirePerson, express.json({ limit: '8mb' }), writ
     const personId = req.person.id;
     let taskText = String(req.body?.taskText || '').trim();
     let name = String(req.body?.name || '').trim();
+    // Sarah, 16 Aug: the brief can arrive as two files. {append:true} joins the
+    // new text to the brief already stored here — server-side, so it works
+    // after a refresh, when the page no longer holds the first file's text.
+    if (taskText && req.body?.append) {
+        const stored = readStoredDocText(personId);
+        if (stored && stored.text && !stored.text.includes(taskText.slice(0, 200))) {
+            const n = (stored.text.match(/^=== DOCUMENT \d+ of \d+/gm) || []).length;
+            const first = n ? stored.text : '=== DOCUMENT 1: ' + (stored.name || 'document') + ' ===\n' + stored.text;
+            taskText = first + '\n\n=== DOCUMENT ' + ((n || 1) + 1) + ': ' + (name || 'document') + ' ===\n' + taskText;
+            name = (stored.name || 'document') + ' + ' + (name || 'document');
+        }
+    }
     if (taskText) {
         // Store the full text so every later step reads it server-side —
         // the page never re-sends the source (Phase 1 finding #5).

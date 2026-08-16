@@ -3424,16 +3424,17 @@
     // failure the CAUSE is shown, with retry, and the general-chat read
     // (first part of the doc only) is offered as the last resort.
     let briefRunning = false;
-    async function runBrief(taskText, name, { fromStored } = {}) {
+    async function runBrief(taskText, name, { fromStored, append } = {}) {
       if (briefRunning) return;
       briefRunning = true;
       const chars = (taskText || '').length;
-      setCoach({ msg: 'Reading your task' + (chars ? ' — all ' + chars.toLocaleString() + ' characters of it' : '') + '…', thinking: true, inputVisible: false });
+      setCoach({ msg: (append ? 'Adding that to the brief and reading both' : 'Reading your task') + (chars ? ' — all ' + chars.toLocaleString() + ' characters of it' : '') + '…', thinking: true, inputVisible: false });
       try {
         // A new brief means a new session in the notebook: keep the page's
-        // writing, drop the old coaching state.
+        // writing, drop the old coaching state. Adding the rest of the brief
+        // is the same fresh start — the plans were built on half a task.
         if (state.brief) await resetSession({ keepDoc: true });
-        await api('/writer/brief', fromStored ? {} : { taskText, name: name || sourceState.name || 'document' }, { timeoutMs: 40000 });
+        await api('/writer/brief', fromStored ? {} : { taskText, name: name || sourceState.name || 'document', append: !!append }, { timeoutMs: 40000 });
         const job = await waitForJob('brief', {
           onTick: (secs) => setCoach({ msg: 'Reading your task… ' + secs + 's' + (secs > 45 ? ' — long brief, still going' : ''), thinking: true, inputVisible: false }),
         });
@@ -3832,7 +3833,10 @@
         btn.type = 'button'; btn.className = 'source-add'; btn.id = 'source-add-btn';
         btn.title = 'Drop, paste, or click to add your homework / task';
         btn.innerHTML = '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg><span>Drop your task here — one file or several — or paste text / click</span>';
-        btn.addEventListener('click', () => { sourceMode = 'brief'; sourceFileInput.multiple = false; sourceFileInput.click(); });
+        // Sarah, 16 Aug: "it still won't let me upload 2 docs." This line set
+        // multiple=false right before opening the picker, overriding the
+        // attribute on the input — so the picker only ever let her choose one.
+        btn.addEventListener('click', () => { sourceMode = 'brief'; sourceFileInput.multiple = true; sourceFileInput.click(); });
         sourceSlot.appendChild(btn);
         // A link, e.g. the course page the assignment lives on
         const linkBtn = document.createElement('button');
@@ -3868,6 +3872,16 @@
           list.appendChild(c);
         });
         if (state.brief) {
+          // The other half of the brief — the marking guide to go with the
+          // questions, or the questions to go with the guide. Re-reads the
+          // brief with both. Distinct from a supporting document, which Q
+          // cites but does not treat as the task.
+          const more = document.createElement('button');
+          more.type = 'button'; more.className = 'source-add';
+          more.title = 'The task came as more than one file? Add the other part — the questions, the marking guide, the assessment criteria — and Q re-reads the brief with both.';
+          more.innerHTML = '<span>+ Add the rest of the brief</span>';
+          more.addEventListener('click', () => { sourceMode = 'brief-more'; sourceFileInput.multiple = true; sourceFileInput.click(); });
+          list.appendChild(more);
           const add = document.createElement('button');
           add.type = 'button'; add.className = 'source-add';
           add.title = 'Case study, module notes, data, reading — Q reads it into his plan and cites it';
@@ -3993,7 +4007,7 @@
       if (briefFiles.length === 1) return briefFiles[0].text;
       return briefFiles.map((f, i) => '=== DOCUMENT ' + (i + 1) + ' of ' + briefFiles.length + ': ' + f.name + ' ===\n' + f.text).join('\n\n');
     }
-    async function loadSourceFile(fileOrFiles) {
+    async function loadSourceFile(fileOrFiles, { addToBrief } = {}) {
       const files = (Array.isArray(fileOrFiles) ? fileOrFiles : [fileOrFiles]).filter(Boolean);
       if (!files.length) return;
       sourceState.name = files.map(f => f.name).join(' + ') + ' (loading…)';
@@ -4010,17 +4024,31 @@
           await runBriefViaChat('[image task — Q will use vision]');
           return;
         }
-        // Adding to a brief that just landed → it was the other half.
-        const addingToFresh = state.brief && briefLandedAt && (Date.now() - briefLandedAt) < 60000 && briefFiles.length;
-        if (!addingToFresh) briefFiles = [];
+        // "Add the rest of the brief" says so explicitly; a drop within a
+        // minute of the brief landing is taken to mean the same. Either way
+        // the existing brief text is kept and the new file joins it. (A restore
+        // does not bring briefFiles back, so a session picked up after a
+        // refresh keeps its stored brief text as document 1.)
+        const adding = !!(state.brief && (addToBrief || (briefLandedAt && (Date.now() - briefLandedAt) < 60000)));
+        if (!adding) briefFiles = [];
         for (const t of texts) if (!briefFiles.some(b => b.name === t.name)) briefFiles.push({ name: t.name, text: t.text });
-        sourceState.text = joinedBriefText();
         sourceState.imageDataUrl = null;
-        sourceState.name = briefFiles.map(f => f.name).join(' + ');
-        renderSourceSlot();
-        // The WHOLE text of every document goes to the brief step (stored
-        // server-side there).
-        await runBrief(sourceState.text, sourceState.name);
+        if (adding) {
+          // The server holds the brief text already; it joins the new file to
+          // it and re-reads. The page only needs to send what is new.
+          const newText = texts.map(t => (texts.length > 1 ? '=== ' + t.name + ' ===\n' : '') + t.text).join('\n\n');
+          sourceState.text = newText;
+          sourceState.name = (sourceState.name || 'the brief').replace(/ \(loading…\)$/, '') + ' + ' + texts.map(t => t.name).join(' + ');
+          renderSourceSlot();
+          await runBrief(newText, texts.map(t => t.name).join(' + '), { append: true });
+        } else {
+          sourceState.text = joinedBriefText();
+          sourceState.name = briefFiles.map(f => f.name).join(' + ');
+          renderSourceSlot();
+          // The WHOLE text of every document goes to the brief step (stored
+          // server-side there).
+          await runBrief(sourceState.text, sourceState.name);
+        }
         briefLandedAt = Date.now();
       } catch (e) {
         sourceState.name = null; sourceState.text = null; sourceState.imageDataUrl = null; briefFiles = [];
@@ -4033,7 +4061,7 @@
       const files = Array.from(ev.target.files || []);
       if (files.length) {
         if (sourceMode === 'support') files.forEach(f => loadSupportingFile(f));
-        else loadSourceFile(files);   // ALL of them — the brief may be two documents
+        else loadSourceFile(files, { addToBrief: sourceMode === 'brief-more' });   // ALL of them — the brief may be two documents
       }
       sourceMode = 'brief';
       ev.target.value = '';
