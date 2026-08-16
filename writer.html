@@ -864,6 +864,23 @@
     .q-bands b { color: var(--text); }
     .q-bands .bd { display: inline-block; width: 7px; height: 7px; border-radius: 50%; margin-right: 3px; }
     .q-bands .bd.top { background: #28a745; } .q-bands .bd.mid { background: #e6a817; } .q-bands .bd.low { background: #dc3545; } .q-bands .bd.missing { background: #999; }
+    /* The mark as a LIST, a colour per band (Sarah, 17 Aug: "things like this
+       would be better in a list and maybe in a colour") — one row per part,
+       the overall first and bold. Colours: green top, amber middle, accent
+       lower, grey missing. */
+    .q-bandlist { display: flex; flex-direction: column; gap: 3px; }
+    .q-bandlist .q-band-all { font-size: 12px; color: var(--text); margin-bottom: 3px; }
+    .q-bandlist .q-band-all b { font-weight: 700; }
+    .q-bandlist .q-band-all span { color: var(--text-muted); font-weight: 500; margin-left: 4px; }
+    .q-bandlist .q-band-row { display: grid; grid-template-columns: 9px minmax(0, 1fr) auto; align-items: center; gap: 7px; font-size: 11px; line-height: 1.35; }
+    .q-bandlist .q-band-row .bd { width: 8px; height: 8px; border-radius: 50%; }
+    .q-bandlist .q-band-l { color: var(--text); font-weight: 600; overflow-wrap: anywhere; }
+    .q-bandlist .q-band-w { font-weight: 700; white-space: nowrap; }
+    .q-bandlist .bd.top, .q-bandlist .q-band-w.top { background-color: #28a745; color: #1f8a3a; }
+    .q-bandlist .bd.mid, .q-bandlist .q-band-w.mid { background-color: #e6a817; color: #b07f05; }
+    .q-bandlist .bd.low, .q-bandlist .q-band-w.low { background-color: var(--accent); color: var(--accent); }
+    .q-bandlist .bd.missing, .q-bandlist .q-band-w.missing { background-color: #9a9a9a; color: var(--text-muted); }
+    .q-bandlist .q-band-w { background-color: transparent !important; }
     .q-lesson { font-size: 12px; line-height: 1.5; color: var(--text); margin-bottom: 8px; padding: 8px 10px; border-radius: 10px; box-shadow: var(--neu-raised-xs); overflow-wrap: anywhere; }
     .q-lesson .ql-term { font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--accent); margin-bottom: 3px; }
     .q-lesson .ql-eg { color: var(--text-muted); margin-top: 4px; }
@@ -2108,7 +2125,7 @@
     // the WHERE line (tap "Part 1 of 4 — …" to re-read it).
     // supply: Q's one fact, its own block above the ask. ack: one warm line
     // (goes in the move slot when there is no move line).
-    function setCoach({ msg, section, hint, actions, inputVisible, thinking, showNudge, where, move, step, role, supply, ack }) {
+    function setCoach({ msg, section, hint, actions, inputVisible, thinking, showNudge, where, move, moveHtml, step, role, supply, ack }) {
       coachMsg.classList.toggle('thinking', !!thinking);
       coachMsg.textContent = msg || '';
       coachMsg.classList.toggle('ask', !thinking && !!msg && !!(state.brief));
@@ -2124,7 +2141,7 @@
       coachWhere.textContent = where === false ? '' : (typeof where === 'string' ? where : whereText(whereInfo()));
       coachWhere.classList.toggle('has-role', !!(coachWhere.textContent && !role && (planFor(state.currentCriterionId) || {}).role));
       coachWhere.title = coachWhere.classList.contains('has-role') ? 'Tap to re-read what this part asks of you' : '';
-      coachMove.textContent = move || ack || '';
+      if (moveHtml) coachMove.innerHTML = moveHtml; else coachMove.textContent = move || ack || '';
       renderScore();
 
       coachNudge.classList.toggle('hidden', !showNudge);
@@ -5259,6 +5276,11 @@
       if (!m || !m.overall) return '';
       return (m.overall.label ? m.overall.label + ' — ' : '') + (BAND_WORD[m.overall.band] || m.overall.band) + ' · ' + (m.perCriterion || []).map(p => labelFor(p.criterionId) + ': ' + (BAND_WORD[p.band] || p.band)).join(' · ');
     }
+    function bandListHtml(m) {
+      if (!m || !m.overall) return '';
+      const rows = (m.perCriterion || []).map(p => `<div class="q-band-row"><span class="bd ${escHtml(p.band)}"></span><span class="q-band-l">${escHtml(labelFor(p.criterionId))}</span><span class="q-band-w ${escHtml(p.band)}">${escHtml(BAND_WORD[p.band] || p.band)}</span></div>`).join('');
+      return `<div class="q-bandlist"><div class="q-band-all"><b>${escHtml((m.overall.label ? m.overall.label + ' — ' : '') + (BAND_WORD[m.overall.band] || m.overall.band))}</b><span>overall</span></div>${rows}</div>`;
+    }
     function bandsHtml(m) {
       if (!m || !m.overall) return '';
       return '<div class="q-bands"><b>' + escHtml((m.overall.label ? m.overall.label + ' — ' : '') + (BAND_WORD[m.overall.band] || m.overall.band)) + '</b>' +
@@ -5322,7 +5344,7 @@
       const climb = from != null && to != null ? (from === to ? to + '% overall.' : from + '% → ' + to + '% overall.') : '';
       setCoach({
         msg: nothing ? 'Nothing I\'d change — every sentence is doing its job. ' + climb : 'That\'s the pass done — every word on the page still yours. ' + climb + ' Mark it again and I\'ll find the next things, or download it.',
-        section: 'MARK & FIX', move: bandLine(m), hint: '',
+        section: 'MARK & FIX', moveHtml: bandListHtml(m), hint: '',
         actions: [
           { label: '↻ Mark & fix again', primary: true, big: true, onClick: () => markAndFix() },
           { label: '📄 Assemble & download', onClick: () => assembleAndOffer() },
@@ -5330,7 +5352,7 @@
         ],
         inputVisible: false, step: false,
       });
-      coachActions.insertAdjacentHTML('afterbegin', bandsHtml(m));
+      // (the bands are the list in the move box now — no second strip here)
     }
     // Kept for older call sites.
     function finishAndMark() { return markAndFix(); }
@@ -5584,7 +5606,7 @@
       setCoach({
         msg: '',
         section: 'MARK & FIX · SENTENCE ' + (i + 1) + ' OF ' + items.length,
-        where, move: bandLine(state.lastMark), step: false,
+        where, moveHtml: bandListHtml(state.lastMark), step: false,
         hint: note || 'Rewrite it on the page — type or talk — then Check it.',
         actions: [
           { label: '✓ Check it', primary: true, big: true, onClick: () => checkCurrentSentence() },
@@ -5718,7 +5740,7 @@
         if (d.closeness === 'match') {
           const wm = whereInfo(); const pct = wm && state.match && state.match.perCriterion ? state.match.perCriterion[wm.id] : null;
           state.markPassChanged = (state.markPassChanged || 0) + 1;
-          setCoach({ msg: cue + (pct != null ? ' That took you to ' + pct + '% on this part.' : ''), section: 'MARK & FIX · SENTENCE ' + (state.editIndex + 1) + ' OF ' + items.length, move: bandLine(state.lastMark), step: false, actions: [{ label: 'Next →', primary: true, big: true, onClick: () => { state.editIndex++; showEditItem(); } }, { label: 'Stop for now', quiet: true, onClick: () => endFixPass() }], inputVisible: false });
+          setCoach({ msg: cue + (pct != null ? ' That took you to ' + pct + '% on this part.' : ''), section: 'MARK & FIX · SENTENCE ' + (state.editIndex + 1) + ' OF ' + items.length, moveHtml: bandListHtml(state.lastMark), step: false, actions: [{ label: 'Next →', primary: true, big: true, onClick: () => { state.editIndex++; showEditItem(); } }, { label: 'Stop for now', quiet: true, onClick: () => endFixPass() }], inputVisible: false });
           clearTimeout(state.editAdvanceTimer);
           state.editAdvanceTimer = setTimeout(() => { if (state.editing && items[state.editIndex] === it) { state.editIndex++; showEditItem(); } }, 2500);
         } else {
@@ -6455,7 +6477,7 @@
     loadProjects().then(restoreSession, restoreSession);
     // Test hooks (no data, no secrets): lets the harness exercise the page-side
     // helpers without a paid call. Harmless in production.
-    window.__qwriterTest = { findInDoc, replaceInDoc, appendReference, docPlainText, splitCheck: (t) => endsSentence(t), runEditPass, checkCurrentSentence, showEditItem, state: () => state, currentEditText, partParagraphs, setBrief, storyPointsHtml, renderInlineDots, termsForBoard };
+    window.__qwriterTest = { findInDoc, replaceInDoc, appendReference, docPlainText, splitCheck: (t) => endsSentence(t), runEditPass, checkCurrentSentence, showEditItem, state: () => state, currentEditText, partParagraphs, setBrief, storyPointsHtml, renderInlineDots, termsForBoard, setCoach, bandListHtml };
 
 
     // (The old per-card drag code lived here — every panel now goes through makePanel above.)
