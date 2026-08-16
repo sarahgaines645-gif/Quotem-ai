@@ -44,7 +44,7 @@ const {
 // Boot the scheduler worker as soon as the routes module loads.
 // Idempotent — calling more than once is safe.
 startScheduler();
-const { loadMemory, clearMemory, appendMessage, getRecentMessages, getCircleSummary, getMemoryPath, getVoicePath, getDocPath, getTutorPath, getRevisionPath, tutorScope, readTutorIndex, writeTutorIndex, resolveWriterProject, PROJECT_ID_RE } = require('./memory');
+const { loadMemory, clearMemory, appendMessage, getRecentMessages, getCircleSummary, getMemoryPath, getVoicePath, getDocPath, getTutorPath, getRevisionPath, getParkPath, tutorScope, readTutorIndex, writeTutorIndex, resolveWriterProject, PROJECT_ID_RE } = require('./memory');
 const { requirePerson, tryAttachPerson, setSessionCookie, clearSessionCookie } = require('./auth');
 const { listPeople, addPerson, signupPerson, isApproved, approvePerson, isAdmin, getPerson, getPersonByEmail, removePerson, verifyLogin, changePassword, updateName, rotatePassword, createResetToken, consumeResetToken, createVerificationToken, consumeVerificationToken, isEmailVerified } = require('./people');
 const { sendMail, isConfigured: mailerConfigured } = require('./mailer');
@@ -2275,6 +2275,84 @@ router.post('/revision/progress', requirePerson, express.json({ limit: '512kb' }
         res.json({ ok: true, bytes: Buffer.byteLength(JSON.stringify(req.body || {})) });
     } catch (e) {
         revisionError(res, 'revision/progress', e);
+    }
+});
+
+// ── THE PET PARK — pets that play together ────────────────────────────────
+// A park is a small shared room keyed by a short code a child can read out
+// to a brother or a friend ("sunny-otter-27"). Each person's pet posts a
+// snapshot (name, kind, stage, what it's wearing, mood) and gets back the
+// other pets, which the page draws in the scene beside their own. Nothing
+// personal crosses: pet names only, and an opaque per-member id.
+const PARK_WORDS_A = ['sunny', 'fluffy', 'happy', 'bouncy', 'sleepy', 'jolly', 'tiny', 'giant', 'speedy', 'cosy', 'muddy', 'snowy', 'stripy', 'spotty', 'shiny', 'wiggly'];
+const PARK_WORDS_B = ['otter', 'puffin', 'badger', 'rabbit', 'fox', 'hedgehog', 'panda', 'koala', 'penguin', 'llama', 'sloth', 'squirrel', 'owl', 'duck', 'seal', 'moose'];
+const PARK_MAX_MEMBERS = 12;
+const PARK_STALE_MS = 30 * 24 * 3600 * 1000;   // a pet not seen for a month drops out of the scene
+function parkCodeOk(code) { return /^[a-z]+-[a-z]+-\d{2}$/.test(String(code || '')); }
+function newParkCode() {
+    const crypto = require('crypto');
+    const r = crypto.randomBytes(3);
+    return PARK_WORDS_A[r[0] % PARK_WORDS_A.length] + '-' + PARK_WORDS_B[r[1] % PARK_WORDS_B.length] + '-' + String(10 + (r[2] % 90));
+}
+function readPark(code) {
+    const p = getParkPath(code);
+    if (!fs.existsSync(p)) return null;
+    try { const j = JSON.parse(fs.readFileSync(p, 'utf8')); return (j && j.members && typeof j.members === 'object') ? j : null; } catch (e) { return null; }
+}
+function writePark(park) { fs.writeFileSync(getParkPath(park.code), JSON.stringify(park), 'utf8'); }
+function memberKey(personId) {
+    const crypto = require('crypto');
+    return crypto.createHash('sha256').update('park:' + String(personId)).digest('hex').slice(0, 12);
+}
+function cleanPetSnapshot(raw) {
+    const s = (raw && typeof raw === 'object') ? raw : {};
+    const kind = ['puppy', 'hamster', 'capybara'].includes(s.kind) ? s.kind : null;
+    if (!kind) return null;
+    const stage = ['baby', 'young', 'grown'].includes(s.stage) ? s.stage : 'baby';
+    const wearing = Array.isArray(s.wearing) ? s.wearing.filter((w) => ['bow', 'hat', 'scarf'].includes(w)).slice(0, 3) : [];
+    const mood = ['happy', 'okay', 'hungry', 'poorly', 'asleep'].includes(s.mood) ? s.mood : 'okay';
+    const name = String(s.name || '').replace(/[^\p{L}\p{N} '\-]/gu, '').trim().slice(0, 18);
+    return { name, kind, stage, wearing, mood };
+}
+function parkFriends(park, me) {
+    const now = Date.now();
+    return Object.entries(park.members)
+        .filter(([k, m]) => k !== me && m && m.pet && (now - (m.at || 0)) < PARK_STALE_MS)
+        .sort((a, b) => (b[1].at || 0) - (a[1].at || 0))
+        .map(([k, m]) => ({ id: k, at: m.at, ...m.pet }));
+}
+// POST /revision/park — { action: 'create' | 'join' | 'ping' | 'leave', code?, pet? }
+router.post('/revision/park', requirePerson, express.json({ limit: '8kb' }), revisionBodyError, (req, res) => {
+    try {
+        const { action } = req.body || {};
+        const me = memberKey(req.person.id);
+        const pet = cleanPetSnapshot(req.body && req.body.pet);
+        const code = String((req.body && req.body.code) || '').trim().toLowerCase().replace(/\s+/g, '-');
+        if (action === 'create') {
+            let c = newParkCode(), tries = 0;
+            while (readPark(c) && tries++ < 20) c = newParkCode();
+            const park = { code: c, created: Date.now(), members: {} };
+            park.members[me] = { pet, at: Date.now(), since: Date.now() };
+            writePark(park);
+            return res.json({ ok: true, code: c, friends: [] });
+        }
+        if (!parkCodeOk(code)) return res.status(400).json({ error: 'That doesn\'t look like a park code — it\'s two words and a number, like sunny-otter-27.' });
+        const park = readPark(code);
+        if (!park) return res.status(404).json({ error: 'No park with that code. Check the letters with whoever gave it to you.' });
+        if (action === 'leave') {
+            delete park.members[me];
+            if (Object.keys(park.members).length) writePark(park); else { try { fs.unlinkSync(getParkPath(code)); } catch (e) { /* gone */ } }
+            return res.json({ ok: true });
+        }
+        if (action === 'join' || action === 'ping') {
+            if (!park.members[me] && Object.keys(park.members).length >= PARK_MAX_MEMBERS) return res.status(409).json({ error: 'That park is full (12 pets).' });
+            park.members[me] = { pet: pet || (park.members[me] && park.members[me].pet) || null, at: Date.now(), since: (park.members[me] && park.members[me].since) || Date.now() };
+            writePark(park);
+            return res.json({ ok: true, code, friends: parkFriends(park, me) });
+        }
+        return res.status(400).json({ error: 'Unknown park action.' });
+    } catch (e) {
+        revisionError(res, 'revision/park', e);
     }
 });
 

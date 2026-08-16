@@ -313,6 +313,11 @@ function getActiveTutorPath(personId) {
 function getRevisionPath(personId) {
     return path.join(Q_DATA_DIR, `q-revision-${safeId(personId)}.json`);
 }
+// A pet park — SHARED between the people who know its code (a brother, a
+// friend from school). Holds pet snapshots only: name, kind, stage, mood.
+function getParkPath(code) {
+    return path.join(Q_DATA_DIR, `q-park-${safeId(code)}.json`);
+}
 
 // The question bank — GLOBAL (shared, not per-person): Sonnet-checked
 // multiple-choice questions kept forever, keyed by subject+board+level.
@@ -339,6 +344,7 @@ module.exports = {
     getActiveTutorPath,
     PROJECT_ID_RE,
     getRevisionPath,
+    getParkPath,
     getBankPath,
     migrateLegacyMemory,
 };

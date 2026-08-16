@@ -426,6 +426,24 @@
     }
     .pet-card .pet-name-wrap input:focus { outline: none; }
     .pet-card .pet-toast { font-size: 10.5px; color: var(--text); text-align: center; margin-top: 6px; }
+    /* company: friends' pets in the scene — the card widens to fit them */
+    .pet-card.park { width: 300px; }
+    .pet-act.off { opacity: 0.45; }
+    .pet-act.urge { animation: pet-urge 1.4s ease-in-out infinite; }
+    @keyframes pet-urge { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-2px); } }
+    /* the park panel — inside the card, never a pop-up */
+    .pet-card .pet-park { margin-top: 8px; padding-top: 8px; border-top: 1px solid rgba(0,0,0,0.06); text-align: center; }
+    .pet-card .pet-park.hidden { display: none; }
+    .pet-card .pk-q, .pet-card .pk-or, .pet-card .pk-who { font-size: 10.5px; color: var(--text-muted); line-height: 1.35; }
+    .pet-card .pk-or { margin: 6px 0 4px; }
+    .pet-card .pk-who { margin: 6px 0; overflow-wrap: anywhere; }
+    .pet-card .pk-code { font-size: 15px; font-weight: 700; letter-spacing: 0.04em; color: var(--text); margin: 4px 0 2px; user-select: all; overflow-wrap: anywhere; }
+    .pet-card .pk-row { display: flex; gap: 6px; margin-top: 4px; }
+    .pet-card .pk-row input { flex: 1; min-width: 0; font: inherit; font-size: 11px; padding: 6px 9px; border: none; border-radius: 10px; background: var(--bg); color: var(--text); box-shadow: var(--neu-inset-xs, inset 2px 2px 5px #ababab, inset -1px -1px 4px #ffffff); }
+    .pet-card .pk-row input:focus { outline: none; }
+    .pet-card .pk-leave { font-size: 10.5px; margin-top: 4px; }
+    .pet-card .pk-err { font-size: 10.5px; color: #b0413e; margin-top: 6px; }
+    .pet-card.collapsed .pet-park { display: none; }
     .pet-card .pet-toast.hidden, .pet-card .pet-name-wrap.hidden, .pet-card .pet-choose.hidden, .pet-card .pet-scene.hidden { display: none; }
     .pet-card.collapsed .pet-scene, .pet-card.collapsed .pet-choose, .pet-card.collapsed .pet-name-wrap, .pet-card.collapsed .pet-toast { display: none; }
     .pet-card.collapsed { width: auto; }
@@ -1121,6 +1139,7 @@
       <canvas id="pet-canvas"></canvas>
       <div class="pet-line" id="pet-line"></div>
       <div class="pet-acts" id="pet-acts"></div>
+      <div class="pet-park hidden" id="pet-park"></div>
       <div class="pet-name-wrap hidden" id="pet-name-wrap">
         <input id="pet-name-input" type="text" maxlength="18" placeholder="Give it a name" autocomplete="off" />
         <button type="button" class="pet-act" id="pet-name-save">✓</button>
@@ -1459,6 +1478,7 @@
             motion: ['auto', 'full', 'reduced'].includes(ui.motion) ? ui.motion : 'auto',
             fx: (ui.fx && typeof ui.fx === 'object') ? ui.fx : {},
           };
+          pet.hydrate(d.pet); // the pet is saved with the book — and read back (it used to reset every visit)
           mergePerTopic(); // fold "Criminal: causation" / "criminal - causation" into one shelf chip
         }
       } catch (e) { /* first visit or offline — start fresh, nothing lost */ }
@@ -2157,26 +2177,94 @@
         { at: 80,  id: 'scarf', label: 'scarf', kind: 'wear',  icon: '🧣' },
         { at: 100, id: 'bed',   label: 'bed',   kind: 'home',  icon: '🛏️' },
       ];
-      let canvas = null, ctx = null, W = 0, H = 0, raf = 0, t0 = 0;
-      let anim = null;   // { kind: 'eat'|'play'|'hatch'|'love', item, until }
+      // ── a LIVING pet (Sarah, 16 Aug: "a living pet that children can keep
+      // alive"). It gets hungry in real time; a hungry pet begs; a pet left
+      // empty for half a day is poorly and won't play until it's fed. Treats
+      // only come from right answers — so keeping it well means revising.
+      // It never dies: a child who comes back always finds it waiting.
+      const FED_PER_HOUR = 2.8;              // full → empty in about a day and a half
+      const HUNGRY_AT = 30;                  // below this it asks for food
+      const POORLY_AFTER_MS = 12 * 3600e3;   // empty this long → poorly
+      const FEED_FILL = 30;                  // one treat
+      const KINDS = ['puppy', 'hamster', 'capybara'];
+      let canvas = null, ctx = null, W = 176, H = 160, raf = 0, t0 = 0;
+      let anim = null;   // { kind: 'eat'|'play'|'hatch'|'love'|'crack', item, until, len }
       let mounted = false;
+      let lastMood = null;
 
+      const fresh = () => ({ kind: null, correct: 0, treats: 0, happy: 80, fed: 100, hungrySince: null, wearing: [], name: '', hatchedAt: null, lastSeen: Date.now(), inBed: false, unlockedSeen: [], park: null });
       const P = () => {
         const pr = state.progress;
-        if (!pr.pet) pr.pet = { kind: null, correct: 0, treats: 0, happy: 80, wearing: [], name: '', hatchedAt: null, lastSeen: Date.now(), inBed: false, unlockedSeen: [] };
+        if (!pr.pet) pr.pet = fresh();
         return pr.pet;
       };
+      // What the server sent back, made safe. Called from loadProgress — the
+      // pet used to be saved but never read back, so it reset on every visit.
+      function hydrate(raw) {
+        const r = (raw && typeof raw === 'object') ? raw : null;
+        const p = fresh();
+        if (!r || !KINDS.includes(r.kind)) { state.progress.pet = p; return; }
+        p.kind = r.kind;
+        p.correct = Math.max(0, Math.floor(Number(r.correct) || 0));
+        p.treats = Math.max(0, Math.floor(Number(r.treats) || 0));
+        p.happy = Math.max(35, Math.min(100, Number(r.happy) || 80));
+        p.fed = (typeof r.fed === 'number' && isFinite(r.fed)) ? Math.max(0, Math.min(100, r.fed)) : 100;
+        p.hungrySince = (typeof r.hungrySince === 'number' && r.hungrySince > 0) ? r.hungrySince : null;
+        p.wearing = Array.isArray(r.wearing) ? r.wearing.filter((w) => ['bow', 'hat', 'scarf'].includes(w)) : [];
+        p.name = String(r.name || '').slice(0, 18);
+        p.hatchedAt = r.hatchedAt || null;
+        p.lastSeen = (typeof r.lastSeen === 'number' && r.lastSeen > 0) ? r.lastSeen : Date.now();
+        p.inBed = !!r.inBed;
+        p.unlockedSeen = Array.isArray(r.unlockedSeen) ? r.unlockedSeen : [];
+        p.park = /^[a-z]+-[a-z]+-\d{2}$/.test(String(r.park || '')) ? r.park : null;
+        state.progress.pet = p;
+      }
       const stageOf = (p) => { let s = STAGES[0]; for (const st of STAGES) if (p.correct >= st.at) s = st; return s.name; };
       const unlockedItems = (p) => UNLOCKS.filter((u) => p.correct >= u.at);
       const nextUnlock = (p) => UNLOCKS.find((u) => p.correct < u.at);
+      const isHungry = (p) => stageOf(p) !== 'egg' && (p.fed || 0) < HUNGRY_AT;
+      const isPoorly = (p) => stageOf(p) !== 'egg' && !!p.hungrySince && (Date.now() - p.hungrySince) > POORLY_AFTER_MS;
+      function moodOf(p) {
+        if (stageOf(p) === 'egg') return 'okay';
+        if (isPoorly(p)) return 'poorly';
+        if (isHungry(p)) return 'hungry';
+        if (p.inBed && p.correct >= 100) return 'asleep';
+        return p.happy >= 75 ? 'happy' : 'okay';
+      }
 
-      // Happiness drifts down 2 an hour while away, never below 35.
+      // Time passes: happiness drifts down 2 an hour (never below 35), the
+      // tummy empties. Runs at mount, once a minute while the page is open,
+      // and when the tab comes back — so a pet left overnight is hungry in
+      // the morning, and one left for days is poorly and waiting.
       function settle() {
         const p = P();
         const now = Date.now();
         const hrs = Math.max(0, (now - (p.lastSeen || now)) / 3600000);
-        if (hrs > 0.25) p.happy = Math.max(35, Math.round(p.happy - hrs * 2));
+        if (hrs < 1 / 120) return false;             // less than half a minute — nothing to do
+        const before = { happy: Math.round(p.happy), fed: Math.floor(p.fed), hs: p.hungrySince };
+        p.happy = Math.max(35, p.happy - hrs * 2);
+        if (stageOf(p) !== 'egg' && !(p.inBed && p.correct >= 100)) {
+          const fedBefore = p.fed;
+          p.fed = Math.max(0, p.fed - hrs * FED_PER_HOUR);
+          if (p.fed <= 0 && !p.hungrySince) p.hungrySince = Math.min(now, (p.lastSeen || now) + (fedBefore / FED_PER_HOUR) * 3600000);
+        } else if (p.inBed && p.correct >= 100) {
+          p.fed = Math.max(0, p.fed - hrs * FED_PER_HOUR * 0.35);   // asleep in its bed it barely gets hungry
+        }
         p.lastSeen = now;
+        const changed = before.happy !== Math.round(p.happy) || before.fed !== Math.floor(p.fed) || before.hs !== p.hungrySince;
+        return changed;
+      }
+      function tick() {
+        if (!mounted) return;
+        const p = P();
+        if (settle()) saveProgress();
+        const m = moodOf(p);
+        if (p.kind && m !== lastMood) {
+          if (m === 'hungry' && lastMood !== 'poorly') toastPet((p.name || 'Your pet') + ' is hungry — get one right, then feed ' + (p.name ? p.name : 'it') + '.');
+          if (m === 'poorly') toastPet((p.name || 'Your pet') + ' is poorly — a few treats and a rest will fix it.');
+          lastMood = m;
+          renderCard();
+        }
       }
 
       // ── drawing ─────────────────────────────────────────────────────────
@@ -2204,10 +2292,11 @@
       }
       const easeOutBack = (k) => { const c1 = 1.70158, c3 = c1 + 1; return 1 + c3 * Math.pow(k - 1, 3) + c1 * Math.pow(k - 1, 2); };
       const KIND_KEY = { puppy: 'puppy', hamster: 'ham', capybara: 'capy' };
+      const KIND_NAME = { puppy: 'puppy', hamster: 'hamster', capybara: 'capybara' };
       const FOOD = { puppy: 'bone', hamster: 'seed', capybara: 'orange' };
       const FOOD_ICON = { puppy: '🦴', hamster: '🌻', capybara: '🍊' };
       function eggName(p) { const st = p.correct < 5 ? 0 : p.correct < 10 ? 1 : 2; return 'egg_' + (KIND_KEY[p.kind] || 'puppy') + '_' + st; }
-      function petName(p, stage, run) { return (KIND_KEY[p.kind] || 'puppy') + (run ? '_run_' : '_') + stage; }
+      function petName(kind, stage, run) { return (KIND_KEY[kind] || 'puppy') + (run ? '_run_' : '_') + stage; }
       function preload() {
         const names = [];
         for (const k of ['puppy', 'ham', 'capy']) {
@@ -2225,7 +2314,7 @@
       // sheets yet falls back to its single drawing + motion.
       const SHEET_FRAMES = { run_side: 6, run_front: 4, lick: 4, idle: 3, jump: 4, sleep: 2 };
       const SHEETS = {};   // name -> { img, frames: [{x,y,w,h}] | null, failed }
-      function sheetName(p, stage, act) { return 'sheet_' + (KIND_KEY[p.kind] || 'puppy') + '_' + stage + '_' + act; }
+      function sheetName(kind, stage, act) { return 'sheet_' + (KIND_KEY[kind] || 'puppy') + '_' + stage + '_' + act; }
       function sheet(name) {
         if (SHEETS[name]) return SHEETS[name];
         const rec = { img: new Image(), frames: null, failed: false };
@@ -2292,14 +2381,14 @@
           return { x: x0, y: top, w: x1 - x0, h: bot - top + 1 };
         });
       }
-      function hasSheet(p, stage, act) { const r = sheet(sheetName(p, stage, act)); return !!(r.frames && r.frames.length); }
+      function hasSheet(kind, stage, act) { const r = sheet(sheetName(kind, stage, act)); return !!(r.frames && r.frames.length); }
       // draw frame i of a sheet with its bottom-centre at (cx, by). Run/jump
       // sheets scale by the TALLEST frame (legs out vs tucked must not change
       // the size); face-on sheets (idle, lick, sleep) scale each frame to the
       // same height, because the model draws them at slightly different sizes.
       const PER_FRAME = { idle: 1, lick: 1, sleep: 1 };
-      function drawFrame(p, stage, act, i, cx, by, size, o = {}) {
-        const r = sheet(sheetName(p, stage, act));
+      function drawFrame(kind, stage, act, i, cx, by, size, o = {}) {
+        const r = sheet(sheetName(kind, stage, act));
         if (!r.frames || !r.frames.length) return false;
         const f = r.frames[((i % r.frames.length) + r.frames.length) % r.frames.length];
         const maxH = PER_FRAME[act] ? f.h : Math.max(...r.frames.map((q) => q.h));
@@ -2314,26 +2403,243 @@
         ctx.restore();
         return true;
       }
-      function preloadSheets(p) {
-        if (!p.kind) return;
-        for (const st of ['baby', 'young', 'grown']) for (const act of Object.keys(SHEET_FRAMES)) sheet(sheetName(p, st, act));
+      function preloadSheets(kind) {
+        if (!kind) return;
+        for (const st of ['baby', 'young', 'grown']) for (const act of Object.keys(SHEET_FRAMES)) sheet(sheetName(kind, st, act));
       }
 
-      // ── behaviour ──
-      // act: 'idle' | 'run' | 'approach' | 'lick' | 'retreat' | 'jump' | 'sleep' | 'eat' | 'play'
-      const beh = { act: 'idle', since: 0, until: 0, x: null, y: 0, tx: 0, ty: 0, dir: 1, speed: 46, blinkAt: 0, licks: [] };
-      function setAct(a, now, ms) { beh.act = a; beh.since = now; beh.until = now + (ms || 0); }
-      function chooseNext(now, size) {
+      // ── actors: my pet + the friends from the park ──────────────────────
+      // Every pet in the scene is an actor with its own behaviour state.
+      // act: 'idle' | 'run' | 'approach' | 'lick' | 'retreat' | 'jump' | 'sleep' | 'visit' | 'greet' | 'beg' | 'poorly'
+      const mkBeh = () => ({ act: 'idle', since: 0, until: 0, x: null, y: 0, tx: 0, ty: 0, dir: 1, speed: 46, blinkAt: 0, with: null });
+      const me = { id: 'me', beh: mkBeh(), licks: [], hearts: 0 };
+      const beh = me.beh;                       // the lab reaches in here
+      let friends = [];                         // [{ id, name, kind, stage, wearing, mood, at, beh, hearts }]
+      const SHOW_FRIENDS = 3;                   // more than this and the scene is a crowd — the rest are named on the card
+      const actorKind = (a) => a === me ? P().kind : a.kind;
+      const actorStage = (a) => a === me ? stageOf(P()) : a.stage;
+      const actorWear = (a) => a === me ? (P().wearing || []) : (a.wearing || []);
+      function setAct(a, act, now, ms) { a.act = act; a.since = now; a.until = now + (ms || 0); }
+      function chooseNext(actor, now, size, others) {
+        const b = actor.beh;
         const r = Math.random();
-        if (r < 0.28) { setAct('approach', now, 1400); beh.tx = W / 2; beh.ty = 0; }
+        const margin = size / 2 + 6;
+        // someone to play with? run over and say hello (both hop, hearts)
+        const free = others.filter((o) => o.beh.x != null && ['idle', 'run'].includes(o.beh.act));
+        if (free.length && r < 0.30) {
+          const o = free[Math.floor(Math.random() * free.length)];
+          b.with = o; b.tx = o.beh.x + (o.beh.x > W / 2 ? -1 : 1) * size * 0.62; b.ty = o.beh.y;
+          b.tx = Math.max(margin, Math.min(W - margin, b.tx));
+          b.dir = b.tx >= b.x ? 1 : -1; b.speed = 55 + Math.random() * 25;
+          setAct(b, 'visit', now, 6000);
+          return;
+        }
+        if (actor === me && r < (free.length ? 0.42 : 0.28)) { setAct(b, 'approach', now, 1400); b.tx = W / 2; b.ty = 0; }
         else if (r < 0.9) {
-          const margin = size / 2 + 6;
-          beh.tx = margin + Math.random() * (W - margin * 2); beh.ty = -Math.random() * 14;
-          beh.dir = beh.tx >= beh.x ? 1 : -1; beh.speed = 40 + Math.random() * 30;
-          setAct('run', now, 8000);
-        } else setAct('jump', now, 700);
+          b.tx = margin + Math.random() * (W - margin * 2); b.ty = -Math.random() * 14;
+          b.dir = b.tx >= b.x ? 1 : -1; b.speed = 40 + Math.random() * 30;
+          setAct(b, 'run', now, 8000);
+        } else setAct(b, 'jump', now, 700);
       }
-      function nudge(kind, now, ms) { setAct(kind, now, ms); }   // eat / play / jump from the card
+      function nudge(kind, now, ms) { setAct(me.beh, kind, now, ms); }   // eat / play / jump from the card
+
+      // one behaviour step for one actor
+      function step(actor, now, size, others, dt) {
+        const b = actor.beh;
+        const isMe = actor === me;
+        const p = isMe ? P() : null;
+        const kind = actorKind(actor), stage = actorStage(actor);
+        const cx = W / 2;
+        const framed = hasSheet(kind, stage, 'run_side');
+        if (b.x == null) { b.x = isMe ? cx : 20 + Math.random() * (W - 40); setAct(b, 'idle', now, 500 + Math.random() * 1500); }
+        const inBed = isMe ? (p.inBed && p.correct >= 100) : actor.mood === 'asleep';
+        const poorly = isMe ? isPoorly(p) : actor.mood === 'poorly';
+        const hungry = isMe ? isHungry(p) : actor.mood === 'hungry';
+        const busy = isMe && !!anim && (anim.kind === 'eat' || anim.kind === 'hatch' || anim.kind === 'love');
+        const chasing = !!anim && anim.kind === 'play' && !inBed && !poorly;   // the ball is out — everyone runs
+        if (inBed) { b.x += (cx - b.x) * 0.1; b.y += (0 - b.y) * 0.1; if (b.act !== 'sleep') setAct(b, 'sleep', now, 1e9); return; }
+        if (b.act === 'sleep') setAct(b, 'idle', now, 1500);
+        if (busy || chasing) return;
+        if (poorly) { if (b.act !== 'poorly') { b.tx = cx; setAct(b, 'poorly', now, 1e9); } b.x += (cx - b.x) * 0.04; b.y += (0 - b.y) * 0.1; return; }
+        if (b.act === 'poorly') setAct(b, 'idle', now, 800);
+        if (hungry && isMe) {
+          // hungry: sits nearer the front, faces you, thinks about food — no wandering
+          if (!['beg', 'jump'].includes(b.act)) { setAct(b, 'beg', now, 1e9); }
+          b.x += (cx - b.x) * 0.03; b.y += (6 - b.y) * 0.05;
+          if (b.act === 'jump' && now > b.until) setAct(b, 'beg', now, 1e9);
+          return;
+        }
+        if (b.act === 'beg') setAct(b, 'idle', now, 600);
+        if (b.act === 'run' || b.act === 'visit') {
+          const dx = b.tx - b.x, dyy = b.ty - b.y, dist = Math.hypot(dx, dyy);
+          if (dist < 2 || now > b.until) {
+            if (b.act === 'visit' && b.with && b.with.beh.x != null && Math.abs(b.with.beh.x - b.x) < size * 0.9 && ['idle', 'run', 'visit', 'greet'].includes(b.with.beh.act)) {
+              // arrived: both say hello
+              b.dir = b.with.beh.x >= b.x ? 1 : -1;
+              setAct(b, 'greet', now, 1600); actor.hearts = now;
+              const ob = b.with.beh; ob.dir = -b.dir; setAct(ob, 'greet', now, 1600); b.with.hearts = now;
+            } else setAct(b, 'idle', now, 2500 + Math.random() * 4000);
+          } else { b.x += (dx / dist) * b.speed * dt; b.y += (dyy / dist) * b.speed * dt; }
+        } else if (b.act === 'idle') { if (now > b.until) chooseNext(actor, now, size, others); }
+        else if (b.act === 'greet') { if (now > b.until) setAct(b, 'idle', now, 1200 + Math.random() * 2500); }
+        else if (b.act === 'approach') { b.x += (cx - b.x) * 0.06; b.y += (0 - b.y) * 0.1; if (now > b.until) setAct(b, framed && hasSheet(kind, stage, 'lick') ? 'lick' : 'retreat', now, framed ? 1900 : 300); }
+        else if (b.act === 'lick') { if (now > b.until) setAct(b, 'retreat', now, 800); }
+        else if (b.act === 'retreat') { if (now > b.until) setAct(b, 'idle', now, 2000 + Math.random() * 3000); }
+        else if (b.act === 'jump') { if (now > b.until) setAct(b, 'idle', now, 1500 + Math.random() * 3000); }
+        // approach without sheets is just a run to the middle
+        if (!framed && b.act === 'approach' && Math.abs(b.x - cx) < 3) setAct(b, 'idle', now, 2500);
+      }
+
+      // draw one actor; returns where it ended up (for the food / hearts)
+      function drawActor(actor, now, time, size, k) {
+        const b = actor.beh;
+        const isMe = actor === me;
+        const p = isMe ? P() : null;
+        const kind = actorKind(actor), stage = actorStage(actor);
+        const cx = W / 2, floor = H - 16;
+        const framed = hasSheet(kind, stage, 'run_side');
+        const inBed = isMe ? (p.inBed && p.correct >= 100) : actor.mood === 'asleep';
+        const busy = isMe && !!anim && (anim.kind === 'eat' || anim.kind === 'hatch' || anim.kind === 'love');
+        const poorly = isMe ? isPoorly(p) : actor.mood === 'poorly';
+        const chasing = !!anim && anim.kind === 'play' && !inBed && !poorly;
+        const depth = 1 + b.y / 140;
+        let px_ = b.x, by = floor + b.y;
+        let sx = 1, sy = 1, dy = 0, rot = 0;
+        const breathe = Math.sin(time * 2.2 + (isMe ? 0 : 1.7));
+        sx = 1 - breathe * 0.018; sy = 1 + breathe * 0.028;
+        let shadowW = size * 0.42 * depth, shadowY = by + 3;
+        let drewPet = false;
+        const bk = b.until > b.since ? Math.max(0, Math.min(1, (now - b.since) / (b.until - b.since))) : 0;   // progress through the current act
+        const front = petName(kind, stage, false), side = petName(kind, stage, true);
+
+        // ── play (chase the ball) — friends chase it too ──
+        if (chasing) {
+          const bx = cx + Math.sin(time * 1.6) * (W / 2 - size / 2 - 10);
+          const lag = isMe ? 0 : 36 * (friends.indexOf(actor) + 1);   // friends run a step behind
+          b.dir = bx >= b.x ? 1 : -1;
+          b.x += Math.max(-1, Math.min(1, (bx - lag * b.dir - b.x) / 20)) * 2.2; b.y += (0 - b.y) * 0.1;
+          px_ = b.x; by = floor + b.y;
+          const moving = Math.abs(bx - lag * b.dir - b.x) > 8;
+          if (moving && framed) drewPet = drawFrame(kind, stage, 'run_side', Math.floor(time * 12), px_, by, size, { flip: b.dir < 0 });
+          else if (moving) { const gait = Math.abs(Math.sin(time * 11)); drewPet = drawImg(side, px_, by - gait * 5, size, { flip: b.dir < 0, sx: 1 + gait * 0.04, sy: 1 - gait * 0.05 }); }
+          else drewPet = drawImg(front, px_, by, size, { sx, sy });
+          if (isMe) { const hop = Math.abs(Math.sin(time * 7)); drawImg('item_ball', bx, floor - 6 - hop * 40, 30, { rot: time * 6 }); }
+        }
+        // ── in bed / asleep ──
+        else if (inBed) {
+          if (isMe) drawImg('item_bed', cx, floor + 6, 150);
+          const slow = Math.sin(time * 1.1);
+          if (framed && hasSheet(kind, stage, 'sleep')) drewPet = drawFrame(kind, stage, 'sleep', -1, px_, floor + 4, size * 0.78, { sx: 1 - slow * 0.012, sy: 1 + slow * 0.02 });
+          else drewPet = drawImg(front, px_, floor + 6, size, { sx: 1 - slow * 0.012, sy: 0.96 + slow * 0.02 });
+          if (!anim) { ctx.fillStyle = 'rgba(0,0,0,0.35)'; ctx.font = 'bold 11px sans-serif'; const zk = (time % 3) / 3; ctx.globalAlpha = 1 - zk; ctx.fillText('z', px_ + size * 0.42, floor - size * 0.6 - zk * 18); ctx.fillText('z', px_ + size * 0.50, floor - size * 0.7 - zk * 26); ctx.globalAlpha = 1; }
+          by = floor;
+        }
+        // ── poorly: lying down, a bit grey, no bounce ──
+        else if (b.act === 'poorly') {
+          const slow = Math.sin(time * 0.9);
+          if (framed && hasSheet(kind, stage, 'sleep')) drewPet = drawFrame(kind, stage, 'sleep', -1, px_, by + 2, size * 0.78, { alpha: 0.82, sx: 1 - slow * 0.01, sy: 1 + slow * 0.015 });
+          else drewPet = drawImg(front, px_, by + 2, size * 0.92, { alpha: 0.82, rot: 0.06, sy: 0.9 + slow * 0.015 });
+          if (isMe && !anim) { ctx.font = '13px sans-serif'; ctx.globalAlpha = 0.55 + 0.45 * Math.abs(Math.sin(time * 1.4)); ctx.fillText('💧', px_ + size * 0.34, by - size * 0.62); ctx.globalAlpha = 1; }
+        }
+        // ── busy: eat / love / hatch (front, with the old motion) ──
+        else if (busy) {
+          if (anim.kind === 'hatch') { const s = k < 0.5 ? easeOutBack(k * 2) : 1; sx *= Math.max(0.05, s); sy *= Math.max(0.05, s); }
+          if (anim.kind === 'eat') { rot = -0.10 * Math.sin(k * Math.PI); dy += 3 * Math.sin(k * Math.PI); }
+          if (framed && anim.kind === 'eat' && k > 0.55 && hasSheet(kind, stage, 'idle')) drewPet = drawFrame(kind, stage, 'idle', -1, px_, by + dy, size * depth, { sx, sy, rot });   // eyes shut, savouring
+          else drewPet = drawImg(front, px_, by + dy, size * depth, { sx, sy, rot });
+        }
+        // ── running about / going to see a friend ──
+        else if (b.act === 'run' || b.act === 'visit') {
+          if (framed) drewPet = drawFrame(kind, stage, 'run_side', Math.floor(time * 12), px_, by, size * depth, { flip: b.dir < 0 });
+          else { const gait = Math.abs(Math.sin(time * 11)); dy = -gait * 5; drewPet = drawImg(side, px_, by + dy, size * depth, { flip: b.dir < 0, sx: 1 + gait * 0.04, sy: 1 - gait * 0.05, rot: Math.sin(time * 11) * 0.05 * b.dir }); }
+        }
+        // ── running up to the glass ──
+        else if (b.act === 'approach') {
+          const grow = 1 + bk * 0.9;                                  // 1 → 1.9: coming right up to you
+          by = floor + 10 * bk; px_ = b.x;
+          shadowW = size * 0.42 * grow; shadowY = by + 3;
+          if (framed && hasSheet(kind, stage, 'run_front')) drewPet = drawFrame(kind, stage, 'run_front', Math.floor(time * 10), px_, by, size * grow);
+          else { const gait = Math.abs(Math.sin(time * 11)); drewPet = drawImg(front, px_, by - gait * 4, size * grow, { sx: 1 + gait * 0.03, sy: 1 - gait * 0.04 }); }
+        }
+        // ── the lick ──
+        else if (b.act === 'lick') {
+          const seq = [0, 1, 2, 2, 2, 3];
+          const fi = seq[Math.min(seq.length - 1, Math.floor(bk * seq.length))];
+          const big = size * 1.9;
+          by = floor + 10; px_ = cx;
+          shadowW = size * 0.8; shadowY = by + 3;
+          drewPet = drawFrame(kind, stage, 'lick', fi, px_, by, big) || drawImg(front, px_, by, big);
+          if (isMe && fi === 2 && (!me.licks.length || now - me.licks[me.licks.length - 1].t > 900)) {
+            me.licks.push({ x: cx + (Math.random() - 0.5) * 30, y: floor - big * 0.55 + (Math.random() - 0.5) * 20, t: now, w: 46 + Math.random() * 20, h: 30 + Math.random() * 14, a: Math.random() * 0.8 - 0.4 });
+          }
+        }
+        // ── backing off after the lick ──
+        else if (b.act === 'retreat') {
+          const grow = 1.9 - bk * 0.9;
+          by = floor + 10 * (1 - bk); px_ = cx;
+          shadowW = size * 0.42 * grow; shadowY = by + 3;
+          drewPet = drawImg(front, px_, by, size * grow);
+        }
+        // ── happy jump / hello hop ──
+        else if (b.act === 'jump' || b.act === 'greet') {
+          const hop = b.act === 'jump' ? Math.sin(bk * Math.PI) : Math.abs(Math.sin(bk * Math.PI * 2)) * 0.6;
+          const fi = bk < 0.2 ? 0 : bk < 0.5 ? 1 : bk < 0.8 ? 2 : 3;
+          shadowW = size * 0.42 * (1 - hop * 0.35);
+          if (b.act === 'greet') {
+            // face the friend
+            if (framed && hasSheet(kind, stage, 'jump')) drewPet = drawFrame(kind, stage, 'jump', fi, px_, by - hop * 22, size * depth);
+            else drewPet = drawImg(front, px_, by - hop * 22, size * depth, { sx: 1 - hop * 0.06, sy: 1 + hop * 0.08 });
+          } else if (framed && hasSheet(kind, stage, 'jump')) drewPet = drawFrame(kind, stage, 'jump', fi, px_, by - hop * 26, size * depth);
+          else drewPet = drawImg(front, px_, by - hop * 26, size * depth, { sx: 1 - hop * 0.06, sy: 1 + hop * 0.08 });
+        }
+        // ── hungry: sits at the front and asks ──
+        else if (b.act === 'beg') {
+          const wob = Math.sin(time * 3.1);
+          drewPet = drawImg(front, px_, by, size * depth, { sx: 1 - wob * 0.02, sy: 1 + wob * 0.03, rot: Math.sin(time * 1.3) * 0.04 });
+          if (isMe && !anim) {
+            // a little thought of food, bobbing
+            const fx_ = px_ + size * 0.52, fy = by - size * 0.95 + Math.sin(time * 2) * 3;
+            ctx.fillStyle = 'rgba(255,255,255,0.85)'; ctx.beginPath(); ctx.ellipse(fx_, fy, 15, 12, 0, 0, Math.PI * 2); ctx.fill();
+            ctx.beginPath(); ctx.arc(fx_ - 12, fy + 12, 3, 0, Math.PI * 2); ctx.arc(fx_ - 17, fy + 18, 2, 0, Math.PI * 2); ctx.fill();
+            drawImg('item_' + (FOOD[kind] || 'bone'), fx_, fy + 9, 18);
+          }
+        }
+        // ── idle: sit, breathe, blink ──
+        else {
+          if (now > b.blinkAt) b.blinkAt = now + 2600 + Math.random() * 3000;
+          const tb = b.blinkAt - now;                            // ms until the next blink
+          const closing = tb < 140;
+          if (closing && framed && hasSheet(kind, stage, 'idle')) drewPet = drawFrame(kind, stage, 'idle', -1, px_, by, size * depth, { sx, sy });   // last frame = eyes shut
+          else drewPet = drawImg(front, px_, by, size * depth, { sx, sy });
+        }
+        // shadow under whatever was drawn
+        ctx.globalCompositeOperation = 'destination-over';
+        ctx.fillStyle = 'rgba(0,0,0,0.10)';
+        ctx.beginPath(); ctx.ellipse(px_, shadowY, shadowW, 5, 0, 0, Math.PI * 2); ctx.fill();
+        ctx.globalCompositeOperation = 'source-over';
+        // clothes on the front-facing, normal-size states
+        const frontish = !inBed && !chasing && (busy || ['idle', 'jump', 'greet', 'beg'].includes(b.act));
+        if (frontish && drewPet) {
+          const hopUp = (b.act === 'jump') ? -Math.sin(bk * Math.PI) * 26 : (b.act === 'greet') ? -Math.abs(Math.sin(bk * Math.PI * 2)) * 0.6 * 22 : 0;
+          const top = by - size * depth * sy + hopUp;
+          const wear = new Set(actorWear(actor));
+          const ham = kind === 'hamster';
+          if (wear.has('scarf')) drawImg('item_scarf', px_, by + dy - size * (ham ? 0.22 : 0.24) + hopUp, size * 0.50, { rot });
+          if (wear.has('bow'))   drawImg('item_bow', px_ + size * (ham ? 0.30 : 0.27), top + size * (ham ? 0.30 : 0.26), size * 0.30, { rot });
+          if (wear.has('hat'))   drawImg('item_hat', px_ + size * 0.02, top + size * 0.20, size * 0.46, { rot });
+        }
+        // hello hearts between friends
+        if (actor.hearts && now - actor.hearts < 1600) {
+          const hk = (now - actor.hearts) / 1600;
+          drawImg('item_heart', px_ + size * 0.30 * (b.dir || 1), by - size - 6 - hk * 26, 16, { alpha: 1 - hk });
+        }
+        // a friend's name, small, under the pet
+        if (!isMe && actor.name) {
+          ctx.font = '600 9px sans-serif'; ctx.fillStyle = 'rgba(0,0,0,0.42)'; ctx.textAlign = 'center';
+          ctx.fillText(actor.name, px_, floor + 12); ctx.textAlign = 'left';
+        }
+        return { px_, by, size, dy, k, drewPet };
+      }
 
       function draw(now) {
         if (!ctx) return;
@@ -2352,142 +2658,33 @@
           raf = requestAnimationFrame(draw);
           return;
         }
-        const size = stage === 'baby' ? 88 : stage === 'young' ? 104 : 118;
-        if (beh.x == null) { beh.x = cx; setAct('idle', now, 2000); preloadSheets(p); }
-        const inBed = p.inBed && p.correct >= 100;
-        const busy = !!anim && (anim.kind === 'eat' || anim.kind === 'hatch' || anim.kind === 'love');
-        const framed = hasSheet(p, stage, 'run_side');   // sheets present for this pet+stage?
+        if (me.beh.x == null) preloadSheets(p.kind);
+        const shown = friends.slice(0, SHOW_FRIENDS);
+        const crowd = shown.length ? 0.82 : 1;                 // company: everyone a touch smaller so they fit
+        const sizeFor = (st) => (st === 'baby' ? 88 : st === 'young' ? 104 : 118) * crowd;
         const dt = 1 / 60;
-        // ── behaviour step ──
-        if (inBed) { beh.x += (cx - beh.x) * 0.1; beh.y += (0 - beh.y) * 0.1; if (beh.act !== 'sleep') setAct('sleep', now, 1e9); }
-        else if (beh.act === 'sleep') setAct('idle', now, 1500);
-        else if (busy || (anim && anim.kind === 'play')) { /* handled below */ }
-        else if (beh.act === 'run') {
-          const dx = beh.tx - beh.x, dyy = beh.ty - beh.y, dist = Math.hypot(dx, dyy);
-          if (dist < 2 || now > beh.until) setAct('idle', now, 2500 + Math.random() * 4000);
-          else { beh.x += (dx / dist) * beh.speed * dt; beh.y += (dyy / dist) * beh.speed * dt; }
-        } else if (beh.act === 'idle') { if (now > beh.until) chooseNext(now, size); }
-        else if (beh.act === 'approach') { beh.x += (cx - beh.x) * 0.06; beh.y += (0 - beh.y) * 0.1; if (now > beh.until) setAct(framed && hasSheet(p, stage, 'lick') ? 'lick' : 'retreat', now, framed ? 1900 : 300); }
-        else if (beh.act === 'lick') { if (now > beh.until) setAct('retreat', now, 800); }
-        else if (beh.act === 'retreat') { if (now > beh.until) setAct('idle', now, 2000 + Math.random() * 3000); }
-        else if (beh.act === 'jump') { if (now > beh.until) setAct('idle', now, 1500 + Math.random() * 3000); }
-        // approach without sheets is just a run to the middle
-        if (!framed && beh.act === 'approach' && Math.abs(beh.x - cx) < 3) setAct('idle', now, 2500);
-
-        const depth = 1 + beh.y / 140;
-        let px_ = beh.x, by = floor + beh.y;
-        let sx = 1, sy = 1, dy = 0, rot = 0;
-        const breathe = Math.sin(time * 2.2);
-        sx = 1 - breathe * 0.018; sy = 1 + breathe * 0.028;
-        let shadowW = size * 0.42 * depth, shadowY = by + 3;
-        let drewPet = false;
-        const bk = beh.until > beh.since ? Math.max(0, Math.min(1, (now - beh.since) / (beh.until - beh.since))) : 0;   // progress through the current act
-
-        // ── play (chase the ball) ──
-        if (anim && anim.kind === 'play' && !inBed) {
-          const bx = cx + Math.sin(time * 1.6) * (W / 2 - size / 2 - 10);
-          beh.dir = bx >= beh.x ? 1 : -1;
-          beh.x += Math.max(-1, Math.min(1, (bx - beh.x) / 20)) * 2.2; beh.y += (0 - beh.y) * 0.1;
-          px_ = beh.x; by = floor + beh.y;
-          const moving = Math.abs(bx - beh.x) > 8;
-          if (moving && framed) drewPet = drawFrame(p, stage, 'run_side', Math.floor(time * 12), px_, by, size, { flip: beh.dir < 0 });
-          else if (moving) { const gait = Math.abs(Math.sin(time * 11)); drewPet = drawImg(petName(p, stage, true), px_, by - gait * 5, size, { flip: beh.dir < 0, sx: 1 + gait * 0.04, sy: 1 - gait * 0.05 }); }
-          else drewPet = drawImg(petName(p, stage, false), px_, by, size, { sx, sy });
-          const hop = Math.abs(Math.sin(time * 7));
-          drawImg('item_ball', bx, floor - 6 - hop * 40, 30, { rot: time * 6 });
-        }
-        // ── in bed ──
-        else if (inBed) {
-          drawImg('item_bed', cx, floor + 6, 150);
-          if (framed && hasSheet(p, stage, 'sleep')) { const slow = Math.sin(time * 1.1); drewPet = drawFrame(p, stage, 'sleep', -1, cx, floor + 4, size * 0.78, { sx: 1 - slow * 0.012, sy: 1 + slow * 0.02 }); }
-          else { const slow = Math.sin(time * 1.1); drewPet = drawImg(petName(p, stage, false), cx, floor + 6, size, { sx: 1 - slow * 0.012, sy: 0.96 + slow * 0.02 }); }
-          if (!anim) { ctx.fillStyle = 'rgba(0,0,0,0.35)'; ctx.font = 'bold 11px sans-serif'; const zk = (time % 3) / 3; ctx.globalAlpha = 1 - zk; ctx.fillText('z', cx + size * 0.42, floor - size * 0.6 - zk * 18); ctx.fillText('z', cx + size * 0.50, floor - size * 0.7 - zk * 26); ctx.globalAlpha = 1; }
-          px_ = cx; by = floor;
-        }
-        // ── busy: eat / love / hatch (front, with the old motion) ──
-        else if (busy) {
-          if (anim.kind === 'hatch') { const s = k < 0.5 ? easeOutBack(k * 2) : 1; sx *= Math.max(0.05, s); sy *= Math.max(0.05, s); }
-          if (anim.kind === 'eat') { rot = -0.10 * Math.sin(k * Math.PI); dy += 3 * Math.sin(k * Math.PI); }
-          if (framed && anim.kind === 'eat' && k > 0.55 && hasSheet(p, stage, 'idle')) drewPet = drawFrame(p, stage, 'idle', -1, px_, by + dy, size * depth, { sx, sy, rot });   // eyes shut, savouring
-          else drewPet = drawImg(petName(p, stage, false), px_, by + dy, size * depth, { sx, sy, rot });
-        }
-        // ── running about ──
-        else if (beh.act === 'run') {
-          if (framed) drewPet = drawFrame(p, stage, 'run_side', Math.floor(time * 12), px_, by, size * depth, { flip: beh.dir < 0 });
-          else { const gait = Math.abs(Math.sin(time * 11)); dy = -gait * 5; drewPet = drawImg(petName(p, stage, true), px_, by + dy, size * depth, { flip: beh.dir < 0, sx: 1 + gait * 0.04, sy: 1 - gait * 0.05, rot: Math.sin(time * 11) * 0.05 * beh.dir }); }
-        }
-        // ── running up to the glass ──
-        else if (beh.act === 'approach') {
-          const grow = 1 + bk * 0.9;                                  // 1 → 1.9: coming right up to you
-          by = floor + 10 * bk; px_ = beh.x;
-          shadowW = size * 0.42 * grow; shadowY = by + 3;
-          if (framed && hasSheet(p, stage, 'run_front')) drewPet = drawFrame(p, stage, 'run_front', Math.floor(time * 10), px_, by, size * grow);
-          else { const gait = Math.abs(Math.sin(time * 11)); drewPet = drawImg(petName(p, stage, false), px_, by - gait * 4, size * grow, { sx: 1 + gait * 0.03, sy: 1 - gait * 0.04 }); }
-        }
-        // ── the lick ──
-        else if (beh.act === 'lick') {
-          const seq = [0, 1, 2, 2, 2, 3];
-          const fi = seq[Math.min(seq.length - 1, Math.floor(bk * seq.length))];
-          const big = size * 1.9;
-          by = floor + 10; px_ = cx;
-          shadowW = size * 0.8; shadowY = by + 3;
-          drewPet = drawFrame(p, stage, 'lick', fi, px_, by, big) || drawImg(petName(p, stage, false), px_, by, big);
-          if (fi === 2 && (!beh.licks.length || now - beh.licks[beh.licks.length - 1].t > 900)) {
-            beh.licks.push({ x: cx + (Math.random() - 0.5) * 30, y: floor - big * 0.55 + (Math.random() - 0.5) * 20, t: now, w: 46 + Math.random() * 20, h: 30 + Math.random() * 14, a: Math.random() * 0.8 - 0.4 });
-          }
-        }
-        // ── backing off after the lick ──
-        else if (beh.act === 'retreat') {
-          const grow = 1.9 - bk * 0.9;
-          by = floor + 10 * (1 - bk); px_ = cx;
-          shadowW = size * 0.42 * grow; shadowY = by + 3;
-          drewPet = drawImg(petName(p, stage, false), px_, by, size * grow);
-        }
-        // ── happy jump ──
-        else if (beh.act === 'jump') {
-          const hop = Math.sin(bk * Math.PI);
-          const fi = bk < 0.2 ? 0 : bk < 0.5 ? 1 : bk < 0.8 ? 2 : 3;
-          shadowW = size * 0.42 * (1 - hop * 0.35);
-          if (framed && hasSheet(p, stage, 'jump')) drewPet = drawFrame(p, stage, 'jump', fi, px_, by - hop * 26, size * depth);
-          else drewPet = drawImg(petName(p, stage, false), px_, by - hop * 26, size * depth, { sx: 1 - hop * 0.06, sy: 1 + hop * 0.08 });
-        }
-        // ── idle: sit, breathe, blink ──
-        else {
-          if (now > beh.blinkAt) beh.blinkAt = now + 2600 + Math.random() * 3000;
-          const tb = beh.blinkAt - now;                            // ms until the next blink
-          const closing = tb < 140;
-          if (closing && framed && hasSheet(p, stage, 'idle')) drewPet = drawFrame(p, stage, 'idle', -1, px_, by, size * depth, { sx, sy });   // last frame = eyes shut
-          else drewPet = drawImg(petName(p, stage, false), px_, by, size * depth, { sx, sy });
-        }
-        // shadow under whatever was drawn (drawn first for order? — cheap: draw beneath by compositing)
-        ctx.globalCompositeOperation = 'destination-over';
-        ctx.fillStyle = 'rgba(0,0,0,0.10)';
-        ctx.beginPath(); ctx.ellipse(px_, shadowY, shadowW, 5, 0, 0, Math.PI * 2); ctx.fill();
-        ctx.globalCompositeOperation = 'source-over';
-        // clothes on the front-facing, normal-size states
-        const frontish = !inBed && !(anim && anim.kind === 'play') && (busy || beh.act === 'idle' || beh.act === 'jump');
-        if (frontish && drewPet) {
-          const top = by - size * depth * sy + (beh.act === 'jump' ? -Math.sin(bk * Math.PI) * 26 : 0);
-          const wear = new Set(p.wearing || []);
-          const ham = p.kind === 'hamster';
-          if (wear.has('scarf')) drawImg('item_scarf', px_, by + dy - size * (ham ? 0.22 : 0.24) + (beh.act === 'jump' ? -Math.sin(bk * Math.PI) * 26 : 0), size * 0.50, { rot });
-          if (wear.has('bow'))   drawImg('item_bow', px_ + size * (ham ? 0.30 : 0.27), top + size * (ham ? 0.30 : 0.26), size * 0.30, { rot });
-          if (wear.has('hat'))   drawImg('item_hat', px_ + size * 0.02, top + size * 0.20, size * 0.46, { rot });
-        }
+        const actors = [me, ...shown];
+        for (const a of actors) step(a, now, sizeFor(actorStage(a)), actors.filter((o) => o !== a), dt);
+        // keep everyone on the floor and inside the glass
+        for (const a of actors) { const s = sizeFor(actorStage(a)); a.beh.x = Math.max(s * 0.35, Math.min(W - s * 0.35, a.beh.x)); }
+        // furthest back first, so the front pet overlaps
+        const order = actors.slice().sort((a, b) => a.beh.y - b.beh.y);
+        let mine = null;
+        for (const a of order) { const r = drawActor(a, now, time, sizeFor(actorStage(a)), k); if (a === me) mine = r; }
         // eat: the treat shrinks into the mouth; hearts
-        if (anim && anim.kind === 'eat') {
+        if (mine && anim && anim.kind === 'eat') {
           const food = 'item_' + (anim.item || FOOD[p.kind] || 'bone');
-          drawImg(food, px_ + 54 - 46 * k, by - size * 0.30 - 30 * (1 - k) + 6 * Math.sin(k * Math.PI * 3), 34 * (1 - k * 0.85), { rot: k * 0.8 });
+          drawImg(food, mine.px_ + 54 - 46 * k, mine.by - mine.size * 0.30 - 30 * (1 - k) + 6 * Math.sin(k * Math.PI * 3), 34 * (1 - k * 0.85), { rot: k * 0.8 });
         }
-        if (anim && (anim.kind === 'love' || anim.kind === 'eat' || anim.kind === 'hatch')) {
-          const top = by - size;
+        if (mine && anim && (anim.kind === 'love' || anim.kind === 'eat' || anim.kind === 'hatch')) {
+          const top = mine.by - mine.size, size = mine.size, px_ = mine.px_;
           drawImg('item_heart', px_ + size * 0.34, top + 12 - k * 34, 22, { alpha: 1 - k * 0.8 });
           if (anim.kind === 'hatch') for (let i = 0; i < 5; i++) { const a = (-1.2 + i * 0.6), r = 30 + k * 60; drawImg('item_heart', px_ + Math.cos(a - Math.PI / 2) * r, floor - size * 0.5 + Math.sin(a - Math.PI / 2) * r, 18 + 6 * (1 - k), { alpha: 1 - k }); }
         }
         // lick smears on the glass — drawn last, over everything, fading out
-        if (beh.licks.length) {
-          beh.licks = beh.licks.filter((L) => now - L.t < 2600);
-          for (const L of beh.licks) {
+        if (me.licks.length) {
+          me.licks = me.licks.filter((L) => now - L.t < 2600);
+          for (const L of me.licks) {
             const a = 1 - (now - L.t) / 2600;
             ctx.save(); ctx.translate(L.x, L.y); ctx.rotate(L.a);
             const g = ctx.createRadialGradient(0, 0, 2, 0, 0, L.w / 2);
@@ -2502,6 +2699,121 @@
 
       function play(kind, item, ms) { anim = { kind, item, len: ms, until: performance.now() + ms }; }
 
+      // ── the park: other children's pets in the scene ─────────────────
+      // A park is a shared room with a short code (two words and a number).
+      // The page posts this pet's snapshot every half minute while it's open
+      // and gets back the others; they're drawn beside your own pet, wander,
+      // hop over to say hello, chase the ball with you. Only pet names cross.
+      const park = { timer: 0, busy: false, error: '', lastAt: 0 };
+      function snapshot() {
+        const p = P();
+        return { name: p.name || '', kind: p.kind, stage: stageOf(p), wearing: p.wearing || [], mood: moodOf(p) };
+      }
+      async function parkCall(action, code) {
+        const r = await fetch('/revision/park', { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action, code, pet: snapshot() }) });
+        let d = null; try { d = await r.json(); } catch (e) { d = null; }
+        if (!r.ok) { const err = new Error((d && d.error) || 'The park didn\'t answer.'); err.status = r.status; throw err; }
+        return d || {};
+      }
+      function setFriends(list) {
+        const byId = new Map(friends.map((f) => [f.id, f]));
+        friends = (Array.isArray(list) ? list : []).filter((f) => f && KINDS.includes(f.kind)).map((f) => {
+          const old = byId.get(f.id);
+          const a = old || { id: f.id, beh: mkBeh(), hearts: 0 };
+          a.name = String(f.name || '').slice(0, 18); a.kind = f.kind; a.stage = ['baby', 'young', 'grown'].includes(f.stage) ? f.stage : 'baby';
+          a.wearing = Array.isArray(f.wearing) ? f.wearing : []; a.mood = f.mood || 'okay'; a.at = f.at || 0;
+          if (!old) preloadSheets(a.kind);
+          return a;
+        });
+        fit();
+      }
+      async function parkPing() {
+        const p = P();
+        if (!p.park || park.busy || document.hidden || stageOf(p) === 'egg') return;
+        park.busy = true;
+        try {
+          const d = await parkCall('ping', p.park);
+          park.error = ''; park.lastAt = Date.now();
+          const n = friends.length;
+          setFriends(d.friends);
+          if (friends.length !== n) renderCard();   // the 🏞 button shows who's in
+        } catch (e) {
+          if (e.status === 404) { p.park = null; friends = []; fit(); saveProgress(); toastPet('That park has closed.'); }
+          else park.error = e.message;
+        }
+        park.busy = false;
+        renderPark(true);
+      }
+      function parkStart() {
+        clearInterval(park.timer); park.timer = 0;
+        if (!P().park) { if (friends.length) { friends = []; fit(); } return; }
+        parkPing();
+        park.timer = setInterval(parkPing, 25000);
+      }
+      async function parkCreate() {
+        try { const d = await parkCall('create'); P().park = d.code; saveProgress(); setFriends([]); parkStart(); toastPet('Your park is open — tell a friend the code.'); }
+        catch (e) { park.error = e.message; }
+        renderPark(true);
+      }
+      async function parkJoin(code) {
+        const c = String(code || '').trim().toLowerCase().replace(/\s+/g, '-');
+        if (!c) return;
+        try { const d = await parkCall('join', c); P().park = d.code || c; park.error = ''; saveProgress(); setFriends(d.friends); parkStart(); toastPet('You\'re in! Friends\' pets show up as they visit.'); }
+        catch (e) { park.error = e.message; }
+        renderPark(true);
+      }
+      async function parkLeave() {
+        const p = P(); const c = p.park;
+        p.park = null; friends = []; fit(); saveProgress(); clearInterval(park.timer); park.timer = 0;
+        try { if (c) await parkCall('leave', c); } catch (e) { /* already gone */ }
+        renderPark(true);
+      }
+      // The park panel lives INSIDE the card (no pop-ups). Opened by 🏞.
+      function renderPark(force) {
+        const box = $('pet-park'); if (!box || !mounted) return;
+        const p = P();
+        if (box.classList.contains('hidden')) return;
+        const typing = box.querySelector('input');
+        if (!force && typing && (document.activeElement === typing || typing.value)) return;   // don't wipe a half-typed code
+        box.innerHTML = '';
+        const el = (tag, cls, text) => { const x = document.createElement(tag); if (cls) x.className = cls; if (text != null) x.textContent = text; return x; };
+        if (!p.park) {
+          box.appendChild(el('div', 'pk-q', 'Play with a friend\'s pet'));
+          const mk = el('button', 'pet-act', '🏞 Make a park'); mk.type = 'button'; mk.addEventListener('click', parkCreate); box.appendChild(mk);
+          const or = el('div', 'pk-or', 'or join one with its code'); box.appendChild(or);
+          const row = el('div', 'pk-row');
+          const inp = el('input'); inp.type = 'text'; inp.placeholder = 'sunny-otter-27'; inp.autocomplete = 'off'; inp.maxLength = 30; inp.spellcheck = false;
+          const go = el('button', 'pet-act', '✓'); go.type = 'button'; go.addEventListener('click', () => parkJoin(inp.value));
+          inp.addEventListener('keydown', (e) => { if (e.key === 'Enter') parkJoin(inp.value); });
+          row.appendChild(inp); row.appendChild(go); box.appendChild(row);
+        } else {
+          box.appendChild(el('div', 'pk-q', 'Park code — a friend types this into their pet card'));
+          box.appendChild(el('div', 'pk-code', p.park));
+          const who = el('div', 'pk-who');
+          if (!friends.length) who.textContent = 'No one else here yet.';
+          else who.textContent = friends.map((f) => (f.name || 'A ' + (KIND_NAME[f.kind] || 'pet')) + (f.name ? ' the ' + (KIND_NAME[f.kind] || 'pet') : '') + (f.mood === 'asleep' ? ' (asleep)' : f.mood === 'poorly' ? ' (poorly)' : f.mood === 'hungry' ? ' (hungry)' : '')).join(' · ') + (friends.length > SHOW_FRIENDS ? ' — ' + SHOW_FRIENDS + ' at a time in the scene' : '');
+          box.appendChild(who);
+          const lv = el('button', 'pet-act pk-leave', 'Leave the park'); lv.type = 'button'; lv.addEventListener('click', parkLeave); box.appendChild(lv);
+        }
+        if (park.error) box.appendChild(el('div', 'pk-err', park.error));
+      }
+      // The canvas is as wide as the card gives it — wider when friends are in.
+      let fitted = false;
+      function fit() {
+        if (!canvas) return;
+        const card = $('pet-card');
+        card.classList.toggle('park', friends.length > 0);
+        const scene = $('pet-scene');
+        const w = Math.max(150, Math.min(360, (scene && scene.clientWidth) || 176));
+        if (w === W && fitted) return;
+        fitted = true;
+        const dpr = Math.min(2, window.devicePixelRatio || 1);
+        W = w; H = 160;
+        canvas.width = W * dpr; canvas.height = H * dpr; canvas.style.width = W + 'px'; canvas.style.height = H + 'px';
+        ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.scale(dpr, dpr); ctx.imageSmoothingEnabled = false;
+        for (const a of [me, ...friends]) if (a.beh.x != null) a.beh.x = Math.max(30, Math.min(W - 30, a.beh.x));
+      }
+
       // ── card ──
       function renderCard() {
         if (!mounted) return;
@@ -2514,12 +2826,13 @@
         $('pet-choose').classList.toggle('hidden', !!p.kind);
         $('pet-scene').classList.toggle('hidden', !p.kind);
         if (!p.kind) return;
-        const KIND_NAME = { puppy: 'puppy', hamster: 'hamster', capybara: 'capybara' };
+        if (showCard) fit();
         const kn = KIND_NAME[p.kind] || 'pet';
         const title = p.name ? p.name : (stage === 'egg' ? (kn.charAt(0).toUpperCase() + kn.slice(1) + ' egg') : ('Your ' + kn));
         $('pet-title').textContent = title;
         // line under the scene
         let line;
+        const hungry = isHungry(p), poorly = isPoorly(p);
         if (stage === 'egg') {
           const left = HATCH_AT - p.correct;
           line = left > 0 ? left + ' more right answer' + (left === 1 ? '' : 's') + ' and it hatches' : 'Hatching…';
@@ -2527,9 +2840,13 @@
           const nx = nextUnlock(p);
           const stageNext = STAGES.find((s) => s.at > p.correct);
           const bits = [];
-          bits.push('❤'.repeat(Math.max(1, Math.round((p.happy || 50) / 25))) + ' ' + (p.happy >= 75 ? 'happy' : p.happy >= 50 ? 'okay' : 'a bit lonely'));
-          if (nx) bits.push(nx.icon + ' at ' + nx.at + ' (' + Math.max(0, nx.at - p.correct) + ' to go)');
-          else if (stageNext) bits.push('grows at ' + stageNext.at);
+          if (poorly) bits.push('🤒 poorly — needs feeding' + (p.treats ? '' : ' (get one right for a treat)'));
+          else if (hungry) bits.push('hungry' + (p.treats ? ' — feed ' + (p.name || 'it') : ' — get one right for a treat'));
+          else bits.push('❤'.repeat(Math.max(1, Math.round((p.happy || 50) / 25))) + ' ' + (p.happy >= 75 ? 'happy' : p.happy >= 50 ? 'okay' : 'a bit lonely'));
+          if (!poorly && !hungry) {
+            if (nx) bits.push(nx.icon + ' at ' + nx.at + ' (' + Math.max(0, nx.at - p.correct) + ' to go)');
+            else if (stageNext) bits.push('grows at ' + stageNext.at);
+          }
           line = bits.join(' · ');
         }
         $('pet-line').textContent = line;
@@ -2537,34 +2854,44 @@
         const acts = $('pet-acts');
         acts.innerHTML = '';
         if (stage !== 'egg') {
-          const mk = (label, title, fn, on) => {
+          const mk = (label, title, fn, on, extra) => {
             const b = document.createElement('button');
-            b.type = 'button'; b.className = 'pet-act' + (on ? ' on' : ''); b.textContent = label; b.title = title;
+            b.type = 'button'; b.className = 'pet-act' + (on ? ' on' : '') + (extra ? ' ' + extra : ''); b.textContent = label; b.title = title;
             b.addEventListener('click', fn); acts.appendChild(b);
+            return b;
           };
           const food = FOOD[p.kind] || 'bone';
           mk((FOOD_ICON[p.kind] || '🦴') + ' ' + p.treats, p.treats ? 'Feed — you have ' + p.treats + ' treat' + (p.treats === 1 ? '' : 's') : 'Get a question right to earn a treat', () => {
-            if (p.treats <= 0) return;
+            if (p.treats <= 0 || anim) return;
             p.treats -= 1; p.happy = Math.min(100, p.happy + 8);
+            p.fed = Math.min(100, (p.fed || 0) + FEED_FILL);
+            if (p.fed >= HUNGRY_AT && p.hungrySince) { p.hungrySince = null; if (lastMood === 'poorly') toastPet((p.name || 'Your pet') + ' is feeling better 💛'); }
+            lastMood = moodOf(p);
             play('eat', food, 1400); saveProgress(); renderCard();
-          }, false);
+          }, false, (hungry || poorly) && p.treats ? 'urge' : '');
           for (const u of unlockedItems(p)) {
-            if (u.kind === 'toy') mk(u.icon, 'Play ' + u.label, () => { p.happy = Math.min(100, p.happy + 12); play('play', u.id, 2200); saveProgress(); }, false);
+            if (u.kind === 'toy') mk(u.icon, poorly ? (p.name || 'Your pet') + ' is too poorly to play' : 'Play ' + u.label, () => { if (poorly || anim) return; p.happy = Math.min(100, p.happy + 12); play('play', u.id, 2200); saveProgress(); }, false, poorly ? 'off' : '');
             else if (u.kind === 'wear') mk(u.icon, (p.wearing.includes(u.id) ? 'Take off the ' : 'Put on the ') + u.label, () => {
               p.wearing = p.wearing.includes(u.id) ? p.wearing.filter((x) => x !== u.id) : [...p.wearing, u.id];
               play('love', null, 900); saveProgress(); renderCard();
             }, p.wearing.includes(u.id));
-            else if (u.kind === 'home') mk(u.icon, p.inBed ? 'Wake up' : 'Bed time', () => { p.inBed = !p.inBed; saveProgress(); renderCard(); }, p.inBed);
+            else if (u.kind === 'home') mk(u.icon, p.inBed ? 'Wake up' : 'Bed time', () => { p.inBed = !p.inBed; lastMood = moodOf(p); saveProgress(); renderCard(); }, p.inBed);
           }
+          const pk = mk('🏞', p.park ? 'The park — ' + (friends.length ? friends.length + ' friend' + (friends.length === 1 ? '' : 's') + ' here' : 'no one else here yet') : 'Play with a friend\'s pet', () => {
+            const box = $('pet-park'); box.classList.toggle('hidden'); pk.classList.toggle('on', !box.classList.contains('hidden')); renderPark();
+          }, !$('pet-park').classList.contains('hidden'));
+          if (friends.length) pk.textContent = '🏞 ' + friends.length;
         }
         // name box shows once, after hatch
         const nameWrap = $('pet-name-wrap');
         nameWrap.classList.toggle('hidden', !(stage !== 'egg' && !p.name));
+        renderPark();
       }
 
       function choose(kind) {
         const p = P();
-        p.kind = kind; p.correct = 0; p.treats = 0; p.happy = 80; p.wearing = []; p.name = ''; p.hatchedAt = null;
+        p.kind = kind; p.correct = 0; p.treats = 0; p.happy = 80; p.fed = 100; p.hungrySince = null; p.wearing = []; p.name = ''; p.hatchedAt = null; p.lastSeen = Date.now();
+        lastMood = 'okay';
         saveProgress(); renderCard();
       }
 
@@ -2577,13 +2904,14 @@
         p.correct += 1;
         if (before !== 'egg') p.treats += 1;
         p.happy = Math.min(100, (p.happy || 50) + 1);
-        if (before !== 'egg' && !anim && !p.inBed) nudge('jump', performance.now(), 700);   // a right answer: a happy jump
+        if (before !== 'egg' && !anim && !p.inBed && !isPoorly(p)) nudge('jump', performance.now(), 700);   // a right answer: a happy jump
         const after = stageOf(p);
         if (before === 'egg' && after !== 'egg') {
           p.hatchedAt = new Date().toISOString();
           p.treats += 3;                                   // a welcome gift
+          p.fed = 100; p.hungrySince = null; p.lastSeen = Date.now();
           play('hatch', null, 2600);
-          toastPet('Your ' + ({ puppy: 'puppy', hamster: 'hamster', capybara: 'capybara' }[p.kind] || 'pet') + ' hatched! 🎉 Give it a name.');
+          toastPet('Your ' + (KIND_NAME[p.kind] || 'pet') + ' hatched! 🎉 Give it a name.');
         } else if (before === 'egg') {
           play('crack', null, 500);
         } else if (before !== after) {
@@ -2604,29 +2932,36 @@
         if (mounted) return;
         canvas = $('pet-canvas'); if (!canvas) return;
         ctx = canvas.getContext('2d');
-        const dpr = Math.min(2, window.devicePixelRatio || 1);
-        W = 176; H = 160;
-        canvas.width = W * dpr; canvas.height = H * dpr; canvas.style.width = W + 'px'; canvas.style.height = H + 'px';
-        ctx.scale(dpr, dpr); ctx.imageSmoothingEnabled = false;
         mounted = true;
-        settle();
+        fit();
+        if (settle()) saveProgress();
+        lastMood = moodOf(P());
         $('pet-pick-puppy').addEventListener('click', () => choose('puppy'));
         $('pet-pick-hamster').addEventListener('click', () => choose('hamster'));
         $('pet-pick-capybara').addEventListener('click', () => choose('capybara'));
         preload();
         $('pet-name-save').addEventListener('click', () => {
           const v = $('pet-name-input').value.trim().slice(0, 18);
-          if (!v) return; P().name = v; saveProgress(); renderCard();
+          if (!v) return; P().name = v; saveProgress(); renderCard(); parkPing();
         });
         $('pet-name-input').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('pet-name-save').click(); });
         $('pet-toggle').addEventListener('click', () => { $('pet-card').classList.toggle('collapsed'); });
+        setInterval(tick, 60000);
+        document.addEventListener('visibilitychange', () => { if (!document.hidden) { tick(); parkPing(); } });
+        window.addEventListener('resize', fit);
         t0 = performance.now();
         raf = requestAnimationFrame(draw);
         renderCard();
+        parkStart();
+        // once the card is laid out, size the canvas to it
+        requestAnimationFrame(fit);
       }
-      return { mount, answer, render: renderCard,
-        _debug: { setAct: (a, ms) => setAct(a, performance.now(), ms), beh, play: (kind, item, ms) => play(kind, item, ms), P, preloadSheets: () => preloadSheets(P()),
-          frames: (act) => { const r = sheet(sheetName(P(), stageOf(P()), act)); return r.failed ? 'failed' : (r.frames ? r.frames.length + ' [' + r.frames.map((f) => f.w + 'x' + f.h).join(' ') + ']' : 'loading'); } } };
+      return { mount, answer, hydrate, render: renderCard, moodOf: () => moodOf(P()),
+        _debug: { setAct: (a, ms) => setAct(me.beh, a, performance.now(), ms), beh, play: (kind, item, ms) => play(kind, item, ms), P, preloadSheets: () => preloadSheets(P().kind), park, ping: parkPing, friends: () => friends,
+          setFed: (n) => { const p = P(); p.fed = n; p.hungrySince = n <= 0 ? Date.now() - POORLY_AFTER_MS - 1000 : null; lastMood = moodOf(p); me.beh.act = 'idle'; renderCard(); },
+          addFriend: (kind, name) => { const f = { id: 'f' + (friends.length + 1), name: name || '', kind, stage: ['baby', 'young', 'grown'][friends.length % 3], wearing: friends.length === 1 ? ['bow'] : [], mood: 'happy', at: Date.now() }; setFriends([...friends.map((x) => ({ id: x.id, name: x.name, kind: x.kind, stage: x.stage, wearing: x.wearing, mood: x.mood, at: x.at })), f]); renderCard(); },
+          clearFriends: () => { setFriends([]); renderCard(); },
+          frames: (act) => { const r = sheet(sheetName(P().kind, stageOf(P()), act)); return r.failed ? 'failed' : (r.frames ? r.frames.length + ' [' + r.frames.map((f) => f.w + 'x' + f.h).join(' ') + ']' : 'loading'); } } };
     })();
 
     const game = (() => {
@@ -3706,7 +4041,8 @@
       // Nothing here is saved: saveProgress is a no-op for the visit.
       if (qs.get('petlab')) {
         saveProgress = () => {};
-        state.progress.pet = { kind: 'puppy', correct: 20, treats: 5, happy: 90, wearing: [], name: 'Lab', hatchedAt: null, lastSeen: Date.now(), inBed: false, unlockedSeen: [] };
+        window.__pet = pet;   // lab only: poke it from the console
+        state.progress.pet = { kind: 'puppy', correct: 20, treats: 5, happy: 90, fed: 100, hungrySince: null, wearing: [], name: 'Lab', hatchedAt: null, lastSeen: Date.now(), inBed: false, unlockedSeen: [], park: null };
         state.stage = 'build';
         const card = $('pet-card');
         card.classList.remove('hidden');
@@ -3728,6 +4064,8 @@
         b('play', () => pet._debug.play('play', 'ball', 2600));
         b('sleep', () => { P().correct = Math.max(P().correct, 100); P().inBed = !P().inBed; });
         b('all items', () => { P().correct = Math.max(P().correct, 100); P().wearing = ['bow', 'hat', 'scarf']; });
+        b('hungry', () => pet._debug.setFed(10)); b('poorly', () => pet._debug.setFed(0)); b('fed', () => pet._debug.setFed(100));
+        b('+🐶', () => pet._debug.addFriend('puppy', 'Rolo')); b('+🐹', () => pet._debug.addFriend('hamster', 'Biscuit')); b('+🦫', () => pet._debug.addFriend('capybara', 'Pip')); b('no friends', () => pet._debug.clearFriends());
         const info = document.createElement('div'); info.style.cssText = 'font-size:9px;color:var(--text-faint);width:100%;text-align:center;margin-top:4px;white-space:pre-wrap';
         setInterval(() => { try { info.textContent = ['run_side', 'run_front', 'lick', 'idle', 'jump', 'sleep'].map((a) => a + ' ' + String(pet._debug.frames(a)).split(' ')[0]).join(' · '); } catch (e) {} }, 1500);
         card.appendChild(strip); card.appendChild(info);
