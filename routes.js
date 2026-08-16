@@ -1502,6 +1502,57 @@ router.post('/writer/place-dots', requirePerson, express.json({ limit: '128kb' }
     }
 });
 
+// POST /writer/cite {sentence, criterionId?} — AUTO CITE (Sarah, 15 Aug 23:40:
+// "press AUTO CITE: it finds a list of citations you can use; press one and
+// it puts it in as a Harvard ref. This has to be ACCURATE"). plugins/q-cite:
+// the student's uploaded sources first (matched by content, details from
+// their front matter), then real published work from OpenAlex (CrossRef
+// fallback) — verified metadata only, Harvard formatted in code, never a
+// model-written reference. The one model call here (a source's front matter
+// read, only when the heuristics cannot find author + year) is cached per
+// source in the notebook. Nothing on this route invents a source.
+const qCite = require('./plugins/q-cite');
+router.post('/writer/cite', requirePerson, express.json({ limit: '32kb' }), async (req, res) => {
+    const personId = req.person.id;
+    const t = readTutor(personId);
+    if (!t.brief) return res.status(400).json({ error: 'No brief yet — upload the task first so I know what the marker wants.', code: 'no_brief' });
+    const sentence = String(req.body?.sentence || '').replace(/\s+/g, ' ').trim().slice(0, 600);
+    if (sentence.length < 12) return res.status(400).json({ error: 'Put the cursor at the end of the sentence you want to back up, then press Auto cite.', code: 'no_sentence' });
+    const extractMeta = async (src) => {
+        const t2 = readTutor(personId);
+        const cached = t2.sourceMetaCache && t2.sourceMetaCache[src.name];
+        if (cached && cached.at) return cached.meta;
+        let meta = null;
+        try {
+            const { accurateJSON, SONNET, hasClaude } = require('./plugins/q-claude');
+            if (!hasClaude()) return null;
+            meta = await accurateJSON(qWriter.withHouseStyle(qCite.SOURCE_META_PROMPT), 'DOCUMENT NAME: ' + src.name + '\n\nFIRST PAGE(S):\n' + String(src.text || '').slice(0, 3500), { model: SONNET, effort: 'low', maxTokens: 500, schema: qCite.SOURCE_META_SCHEMA, skill: 'writer' });
+        } catch (e) { meta = null; }
+        const t3 = readTutor(personId);
+        writeTutor(personId, { sourceMetaCache: { ...(t3.sourceMetaCache || {}), [src.name]: { meta, at: Date.now() } } });
+        return meta;
+    };
+    try {
+        const out = await qCite.findSources({ claimSentence: sentence, subject: (t.brief && t.brief.subject) || '', level: t.yearGroup || '', uploadedSources: t.sources || [], max: 5, extractMeta });
+        // Titles / names / references are never "polished" — they are the source's own words.
+        res.json({ ok: true, sentence, candidates: out.candidates, searched: out.searched, note: out.note ? qWriter.ukText(out.note) : '' });
+    } catch (e) {
+        writerFail(res, e, '[writer/cite]', 'source search');
+    }
+});
+
+// POST /writer/cite/used {criterionId, kinds[]} — a citation went in at the
+// student's request: the part's citation / reference requirement counts as
+// met (union into the notebook's honest read), so its dot clears.
+router.post('/writer/cite/used', requirePerson, express.json({ limit: '8kb' }), (req, res) => {
+    const t = readTutor(req.person.id);
+    if (!t.brief) return res.status(400).json({ error: 'No brief yet.', code: 'no_brief' });
+    const criterionId = String(req.body?.criterionId || t.currentCriterionId || '').replace(/\s+/g, '');
+    const kinds = (Array.isArray(req.body?.kinds) ? req.body.kinds : ['citation', 'reference']).map(String).filter(k => qWriter.REQ_KINDS.includes(k));
+    const ex = noteExpectations(req.person.id, criterionId, [], kinds);
+    res.json({ ok: true, criterionId, termsFit: ex ? ex.termsFit : (t.termsFit || {}), reqMet: ex ? ex.reqMet : (t.reqMet || {}) });
+});
+
 // POST /writer/labels — plain nicknames for a brief saved before labels
 // existed. ONE tiny call for every criterion; saved to the notebook once.
 router.post('/writer/labels', requirePerson, express.json({ limit: '8kb' }), async (req, res) => {
