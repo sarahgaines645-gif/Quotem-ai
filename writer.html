@@ -59,6 +59,9 @@
       display: flex; align-items: center; justify-content: space-between;
     }
     .setup-strip-header span { font-size: 11px; color: var(--text-faint); }
+    .setup-restart { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+    .setup-restart .restart-note { font-size: 11px; color: var(--text-muted); }
+    .setup-restart .meta-btn.arm { color: var(--accent); box-shadow: var(--neu-inset-sm); }
     .setup-row { display: flex; gap: 10px; flex-wrap: wrap; align-items: flex-start; }
     .setup-label { font-size: 12px; color: var(--text-muted); margin-bottom: 4px; }
     .setup-field { display: flex; flex-direction: column; flex: 1; min-width: 140px; }
@@ -921,10 +924,22 @@
     .tb-now { font-size: 14px; font-weight: 600; color: var(--text); line-height: 1.45; }
     .tb-track { display: flex; align-items: center; gap: 8px; margin-top: 8px; }
     .st-beads { display: inline-flex; gap: 5px; align-items: center; }
-    .st-bead { width: 8px; height: 8px; border-radius: 50%; box-shadow: var(--neu-inset-sm); display: inline-block; }
+    .st-bead { width: 10px; height: 10px; padding: 0; border: none; border-radius: 50%; box-shadow: var(--neu-inset-sm); display: inline-block; background: var(--bg); cursor: pointer; }
+    .st-bead:hover { box-shadow: var(--neu-raised-xs); }
     .st-bead.done { background: #28a745; box-shadow: none; }
     .st-bead.cur { background: var(--accent); box-shadow: none; transform: scale(1.35); }
     .tb-count { font-size: 10px; color: var(--text-faint); font-weight: 600; letter-spacing: 0.04em; }
+    /* The other questions — always one press away, never a list to read. */
+    .tb-parts { display: flex; align-items: center; gap: 5px; margin-top: 10px; flex-wrap: wrap; }
+    .tb-part {
+      min-width: 26px; padding: 3px 7px; border: none; border-radius: 9px; cursor: pointer;
+      font-family: 'Space Grotesk', sans-serif; font-size: 10px; font-weight: 700;
+      background: var(--bg); color: var(--text-muted); box-shadow: var(--neu-raised-xs);
+    }
+    .tb-part:hover { color: var(--text); box-shadow: var(--neu-raised-sm); }
+    .tb-part.on { color: var(--accent); box-shadow: var(--neu-inset-sm); }
+    .tb-part[data-cov="covered"] { color: #2e7d32; }
+    .tb-partlab { font-size: 10px; color: var(--text-faint); margin-left: 2px; overflow-wrap: anywhere; }
     .tb-scaf { margin: 6px 0 4px; }
     .tb-worksheet { margin: 0 0 20px; padding: 12px 14px; border-radius: 12px; box-shadow: var(--neu-raised-xs); }
     /* THE WORD BOARD (Sarah, 15 Aug 23:40): a card of words as BUTTONS per
@@ -1065,6 +1080,13 @@
     <div class="setup-strip-header">
       Tell Q a bit about this writing session
       <span>all optional</span>
+    </div>
+    <!-- Sarah, 16 Aug: "no way to restart". Two presses, because it throws the
+         brief, the plans and the coaching away — the writing on the page is
+         kept, since losing that is never what "start again" means. -->
+    <div class="setup-restart">
+      <button type="button" class="meta-btn" id="btn-restart" title="Clear this brief and its coaching so you can drop in a different task. What you have written on the page is kept.">Start again with a new task</button>
+      <span class="restart-note" id="restart-note"></span>
     </div>
     <div class="setup-row">
       <div class="setup-field" style="flex:2">
@@ -2157,7 +2179,13 @@
       strips.forEach(strip => {
         strip.innerHTML = html;
         strip.querySelectorAll('.cov-item').forEach(el => {
-          el.addEventListener('click', () => askNextQuestion({ trigger: 'focus', focusCriterionId: el.dataset.id }));
+          // With a plan for that part, going there means starting it — the old
+          // path asked a loose question instead and left the scaffold behind.
+          el.addEventListener('click', () => {
+            const id = el.dataset.id;
+            if (planFor(id)) startPart(id, { moveFrom: state.currentCriterionId });
+            else askNextQuestion({ trigger: 'focus', focusCriterionId: id });
+          });
         });
       });
     }
@@ -3091,14 +3119,27 @@
       const ss = ssFor(cid); const cur = state.currentStep && state.currentStep.criterionId === cid ? state.currentStep.stepId : null;
       const idx = cur ? plan.steps.findIndex(s => s.id === cur) : plan.steps.findIndex(s => !(ss.steps[s.id] && ss.steps[s.id].filled));
       const here = plan.steps[idx < 0 ? 0 : idx];
-      const beads = plan.steps.map((s) => {
+      // Sarah, 16 Aug: "this shows what q you're on but gives you no way to go
+      // back to other q's." A bead is a place, so it should be a door: press
+      // one and you are on that step. Going back has to be free — she is
+      // testing, and a coach you cannot walk backwards through is a corridor.
+      const beads = plan.steps.map((s, i) => {
         const st = ss.steps[s.id];
-        return `<span class="st-bead${st && st.filled ? ' done' : (s.id === (here && here.id) ? ' cur' : '')}" title="${escHtml(STEP_KIND_LABEL[s.kind] || s.kind)}"></span>`;
+        const cls = st && st.filled ? ' done' : (s.id === (here && here.id) ? ' cur' : '');
+        return `<button type="button" class="st-bead${cls}" data-step-i="${i}" data-step-cid="${escHtml(cid)}" title="${escHtml((i + 1) + '. ' + (s.prompt.length > 60 ? s.prompt.slice(0, 59) + '…' : s.prompt))}" aria-label="Step ${i + 1}"></button>`;
       }).join('');
       const n = (idx < 0 ? 0 : idx) + 1;
+      // The other questions, always reachable, right under the step.
+      const cs = (state.brief && state.brief.criteria) || [];
+      const parts = cs.length > 1 ? `<div class="tb-parts">${cs.map((c, i) => {
+        const on = c.id === cid ? ' on' : '';
+        const cov = state.coverage[c.id] || 'none';
+        return `<button type="button" class="tb-part${on}" data-part-id="${escHtml(c.id)}" data-cov="${cov}" title="${escHtml(criterionLabel(c))}">Q${i + 1}</button>`;
+      }).join('')}<span class="tb-partlab">${escHtml(criterionLabel(cs[Math.max(0, cs.findIndex(c => c.id === cid))] || cs[0]))}</span></div>` : '';
       return `<div class="tb-agenda" id="tb-agenda">`
         + `<div class="tb-now">${escHtml(here ? here.prompt : plan.role)}</div>`
         + `<div class="tb-track"><span class="st-beads">${beads}</span><span class="tb-count">${n} of ${plan.steps.length}</span></div>`
+        + parts
         + `</div>`;
     }
     // ONE row of a sorted list, in its colour. The lookup is forgiving: the
@@ -3122,6 +3163,27 @@
       const attrs = c ? ` data-tag="${escHtml(name)}" style="--tagc:${c}"` : (st && st.tags ? ' data-tag="?"' : '');
       return `<li${attrs}><span class="sc-n">${i + 1}</span><span>${escHtml(x)}</span>${t ? `<span class="sc-tag">${escHtml(t.name)}</span>` : ''}</li>`;
     }
+    // Walking backwards and forwards: a bead goes to that step, a Q button to
+    // that question. Nothing is lost either way — a step's answers live in
+    // stepState and its writing is on the page, so revisiting is just looking.
+    document.addEventListener('click', (e) => {
+      const bead = e.target.closest('.st-bead[data-step-i]');
+      if (bead) {
+        e.preventDefault();
+        const cid = bead.dataset.stepCid; const i = Number(bead.dataset.stepI);
+        const plan = planFor(cid); if (!plan || !plan.steps[i]) return;
+        state.currentCriterionId = cid; state.currentSection = cid;
+        presentStep(cid, i, { ack: '' });
+        return;
+      }
+      const partBtn = e.target.closest('.tb-part[data-part-id]');
+      if (partBtn) {
+        e.preventDefault();
+        const id = partBtn.dataset.partId;
+        if (id === state.currentCriterionId) return;
+        startPart(id, { moveFrom: state.currentCriterionId });
+      }
+    });
     function scaffoldWidgetHtml() {
       const info = currentStepInfo(); if (!info) return '';
       const { step, cid } = info; const st = stepStateOf(cid, step.id);
@@ -5203,6 +5265,37 @@
     docMic.addEventListener('click', toggleDocDictation);
     window.__qwriterMic = { toggleDocDictation };
 
+
+    // ── Start again ───────────────────────────────────────────────────────
+    // Two presses, no dialog box: this throws away the brief, the plans and
+    // the coaching. The WRITING IS KEPT — "start again" never means "delete
+    // what I wrote", and if she wants a clean page she can select it and
+    // delete it herself, which is reversible in a way this is not.
+    (function wireRestart() {
+      const btn = document.getElementById('btn-restart');
+      const note = document.getElementById('restart-note');
+      if (!btn) return;
+      let armed = null;
+      btn.addEventListener('click', async () => {
+        if (!armed) {
+          armed = setTimeout(() => { armed = null; btn.classList.remove('arm'); btn.textContent = 'Start again with a new task'; note.textContent = ''; }, 6000);
+          btn.classList.add('arm');
+          btn.textContent = 'Press again to clear the task';
+          note.textContent = 'Your writing stays on the page. The brief, the word boards and the coaching go.';
+          return;
+        }
+        clearTimeout(armed); armed = null;
+        btn.classList.remove('arm'); btn.disabled = true; btn.textContent = 'Clearing…';
+        try {
+          await resetSession({ keepDoc: true });
+          note.textContent = 'Cleared — drop your next task in above.';
+        } catch (e) {
+          note.textContent = 'Could not clear it: ' + shortCause(e);
+        } finally {
+          btn.disabled = false; btn.textContent = 'Start again with a new task';
+        }
+      });
+    })();
 
     // ── Restore on load: refresh, phone lock, Railway restart lose nothing ──
     async function restoreSession() {
