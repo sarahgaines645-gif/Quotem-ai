@@ -2393,7 +2393,7 @@ const TUTOR_KEYS = [
     // scaffolded coaching (15 Aug late): where they are in the part plan, the
     // filled scaffolds, the page's model-call tally per part. plans[] itself is
     // written by the plan job only.
-    'stepState', 'currentStep', 'calls', 'openerDone',
+    'stepState', 'currentStep', 'calls', 'openerDone', 'askFresh',
     // the marking stage (15 Aug 23:40): the Harvard list the page keeps in
     // sync with the essay, and the dots Q placed inside the student's text.
     'references', 'inlineDots',
