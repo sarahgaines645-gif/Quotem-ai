@@ -2136,17 +2136,25 @@
     // have to hand, the problems it sets up, and how to use it. She answers
     // questions about the case from this, never from the document.
     function sourceDigestsHtml() {
-      const list = (state.sources || []).filter(s => s && s.name);
-      if (!list.length) return '';
       const esc = escHtml;
+      // The scenario INSIDE the brief comes first — it is the story every
+      // question is about (Sarah, 16 Aug: "the story that you're basing the
+      // questions on"). Then any supporting documents.
+      const list = [];
+      const sc = state.brief && state.brief.scenario;
+      if (sc && (sc.theStory || sc.whatItIs)) list.push({ name: 'The story in the brief', digest: sc, isBrief: true });
+      else if (state.brief && !state.brief.scenarioChecked) list.push({ name: 'The story in the brief', digest: null, isBrief: true });
+      for (const s of (state.sources || [])) if (s && s.name) list.push(s);
+      if (!list.length) return '';
       return list.map(s => {
         const d = s.digest;
+        if (!d && s.isBrief) return `<div class="bb-src" data-src="__brief"><div class="bb-src-head">📖 The story the questions are about</div><div class="bb-src-wait">Q is pulling the scenario out of the brief for you… <button type="button" class="q-btn bb-src-retry" data-src="__brief">Read it now</button></div></div>`;
         if (!d) return `<div class="bb-src" data-src="${esc(s.name)}"><div class="bb-src-head">📎 ${esc(s.name)}</div><div class="bb-src-wait">Q is reading this for you — the plain version lands here in a moment. <button type="button" class="q-btn bb-src-retry" data-src="${esc(s.name)}">Read it now</button></div></div>`;
         const people = (d.people || []).length ? `<div class="bb-src-sec"><span class="bb-src-lab">Who</span><ul>${d.people.map(p => `<li><b>${esc(p.who)}</b> — ${esc(p.what)}</li>`).join('')}</ul></div>` : '';
         const numbers = (d.numbers || []).length ? `<div class="bb-src-sec"><span class="bb-src-lab">Numbers to hand</span><div class="bb-src-nums">${d.numbers.map(n => `<span class="bb-num"><b>${esc(n.value)}</b> ${esc(n.label)}</span>`).join('')}</div></div>` : '';
         const problems = (d.problems || []).length ? `<div class="bb-src-sec"><span class="bb-src-lab">What's going wrong / to decide</span><ul>${d.problems.map(p => `<li>${esc(p)}</li>`).join('')}</ul></div>` : '';
         return `<div class="bb-src" data-src="${esc(s.name)}">
-          <div class="bb-src-head">📎 ${esc(d.whatItIs || s.name)}</div>
+          <div class="bb-src-head">${s.isBrief ? '📖' : '📎'} ${esc(d.whatItIs || s.name)}</div>
           <div class="bb-src-story">${esc(d.theStory || '')}</div>
           ${people}${numbers}${problems}
           ${d.useIt ? `<div class="bb-src-use">${esc(d.useIt)}</div>` : ''}
@@ -2161,11 +2169,29 @@
       const b = e.target.closest('.bb-src-retry'); if (!b) return;
       e.preventDefault(); b.disabled = true; b.textContent = 'Reading…';
       try {
+        if (b.dataset.src === '__brief') { await fetchBriefScenario(); return; }
         const d = await api('/writer/source/digest', { name: b.dataset.src }, { timeoutMs: 60000 });
         state.sources = (state.sources || []).map(s => s.name === d.name ? { ...s, digest: d.digest } : s);
         refreshSourceDigests();
       } catch (err) { b.disabled = false; b.textContent = 'Read it now'; coachHint.textContent = 'Could not read that document: ' + shortCause(err); }
     });
+    // A brief read before the scenario existed: one small call pulls the story
+    // out of the stored brief text. Once per session, remembered either way.
+    let scenarioFetching = false;
+    async function fetchBriefScenario() {
+      if (!state.brief || scenarioFetching) return;
+      scenarioFetching = true;
+      try {
+        const d = await api('/writer/brief/scenario', {}, { timeoutMs: 90000 });
+        state.brief.scenario = d.scenario || null;
+        state.brief.scenarioChecked = true;
+        refreshSourceDigests();
+      } catch (err) {
+        state.brief.scenarioChecked = true;   // don't loop on a failure
+        refreshSourceDigests();
+        coachHint.textContent = 'Could not pull the story out of the brief: ' + shortCause(err);
+      } finally { scenarioFetching = false; }
+    }
     // A fresh source's digest lands in the background — poll the notebook a
     // few times, cheaply, until it does.
     let digestPollTimer = null;
@@ -5597,6 +5623,8 @@
       // Sources from before digests existed: ask for theirs, one at a time,
       // quietly — then the board fills in.
       setTimeout(async () => {
+        // The story in the brief first (a brief read before `scenario` existed).
+        if (state.brief && !(state.brief.scenario && state.brief.scenario.theStory) && !state.brief.scenarioChecked) await fetchBriefScenario();
         for (const s of (state.sources || [])) {
           if (!s || s.digest) continue;
           try { const d = await api('/writer/source/digest', { name: s.name }, { timeoutMs: 60000 }); state.sources = state.sources.map(x => x.name === d.name ? { ...x, digest: d.digest } : x); refreshSourceDigests(); } catch (_) {}

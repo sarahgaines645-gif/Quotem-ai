@@ -1675,6 +1675,26 @@ router.post('/writer/source', requirePerson, express.json({ limit: '4mb' }), wri
     res.json({ ok: true, sources: sourcesMeta(sources), truncated, essayJob: t.brief ? 'started' : null, digesting: true });
 });
 
+// POST /writer/brief/scenario — the story inside a brief that was read before
+// `scenario` existed (Sarah, 16 Aug: "there's still no simplified case study or
+// brief. the story that you're basing the questions on."). One small call over
+// the stored brief text; stored on the brief so it is done once.
+router.post('/writer/brief/scenario', requirePerson, express.json({ limit: '4kb' }), async (req, res) => {
+    const t = readTutor(req.person.id);
+    if (!t.brief) return res.status(400).json({ error: 'No brief yet — upload the task first.', code: 'no_brief' });
+    if (t.brief.scenario && t.brief.scenario.theStory) return ukJson(res, { ok: true, scenario: t.brief.scenario, cached: true });
+    const stored = readStoredDocText(req.person.id);
+    if (!stored || !stored.text) return res.status(400).json({ error: 'The brief text is not stored on the server any more — drop the task in again and I read it fresh.', code: 'no_doc' });
+    try {
+        const scenario = await qWriter.extractScenario({ taskText: stored.text, brief: t.brief });
+        const t2 = readTutor(req.person.id);
+        writeTutor(req.person.id, { brief: { ...(t2.brief || t.brief), scenario, scenarioChecked: true } });
+        ukJson(res, { ok: true, scenario });
+    } catch (e) {
+        writerFail(res, e, '[writer/brief/scenario]', 'pulling the story out of the brief');
+    }
+});
+
 // POST /writer/source/digest { name } — (re)make the plain-words digest of one
 // supporting document; GET the digests any time. The page polls the tutor for
 // them, so this is only the retry path and the "digest the ones from before"

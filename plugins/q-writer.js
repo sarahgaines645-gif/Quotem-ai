@@ -296,8 +296,30 @@ const REQ_LABELS = { citation: 'a citation', reference: 'a reference', 'case-stu
 const BRIEF_SCHEMA = {
     type: 'object', additionalProperties: false,
     required: ['title', 'subject', 'docType', 'whatItWants', 'youreProducing', 'wordCount', 'deadline',
-        'criteria', 'gradeBands', 'idealAnswerSkeleton', 'opener', 'prerequisites'],
+        'criteria', 'gradeBands', 'idealAnswerSkeleton', 'opener', 'prerequisites', 'scenario'],
     properties: {
+        // THE STORY THE QUESTIONS ARE ABOUT. Sarah, 16 Aug: "there's still no
+        // simplified case study or brief. the story that you're basing the
+        // questions on." The brief used to extract questions and criteria and
+        // throw the scenario away — so she was asked about "the organisation"
+        // and had never been told what the organisation was. Q reads it, she
+        // doesn't: the story in plain words, the people, the numbers to have to
+        // hand, the problems it sets up. null ONLY when the document genuinely
+        // contains no scenario, case, company, text or situation.
+        scenario: {
+            anyOf: [{ type: 'null' }, {
+                type: 'object', additionalProperties: false,
+                required: ['whatItIs', 'theStory', 'people', 'numbers', 'problems', 'useIt'],
+                properties: {
+                    whatItIs: { type: 'string', description: 'ONE plain sentence: what the story is. "A case study about Datacore, a mid-sized software firm, and how it pays people."' },
+                    theStory: { type: 'string', description: 'The whole scenario in 3-6 short plain sentences, as you would tell a friend who has not read it. What the organisation / situation / text is, what happened, where it stands now. This is what the student reads INSTEAD of the document.' },
+                    people: { type: 'array', items: { type: 'object', additionalProperties: false, required: ['who', 'what'], properties: { who: { type: 'string' }, what: { type: 'string' } } }, description: 'Named people or roles that matter, one short line each. Up to 6. Empty if none.' },
+                    numbers: { type: 'array', items: { type: 'object', additionalProperties: false, required: ['label', 'value'], properties: { label: { type: 'string' }, value: { type: 'string' } } }, description: 'Figures worth having to hand — headcount, turnover, pay, dates, percentages — copied EXACTLY as stated, never rounded or invented. Up to 10.' },
+                    problems: { type: 'array', items: { type: 'string' }, description: 'The problems / tensions / decisions the scenario sets up, one plain line each — these are usually what the questions are about. Up to 6.' },
+                    useIt: { type: 'string', description: 'ONE plain sentence on how the scenario is used in the answers: "when a question says \'your organisation\' it means this company — use its numbers and its problems as your examples."' },
+                },
+            }],
+        },
         title: { type: 'string', description: 'Short name for this assignment, e.g. "7HR03 Strategic reward — Task 1", "A-level Law Paper 1 Q3", or the module/unit name. Not a sentence.' },
         subject: { type: 'string', description: 'Subject area, e.g. "Strategic reward management", "GCSE English Literature", "A-level Law", "Adult nursing".' },
         docType: { type: 'string', enum: ['essay', 'report', 'letter', 'review', 'analysis', 'creative', 'presentation', 'other'] },
@@ -443,6 +465,16 @@ function normaliseBrief(b) {
     }
     out.opener = String(b.opener || '').trim() || `Before we open the brief — in your own words, what do you already know about ${out.subject || 'this topic'}? One or two lines is plenty.`;
     out.prerequisites = Array.isArray(b.prerequisites) ? b.prerequisites.map(String).filter(Boolean) : [];
+    // The scenario, shaped like a source digest so the page shows both the same way.
+    const sc = b.scenario && typeof b.scenario === 'object' ? b.scenario : null;
+    out.scenario = sc && (String(sc.theStory || '').trim() || String(sc.whatItIs || '').trim()) ? {
+        whatItIs: String(sc.whatItIs || '').trim(),
+        theStory: String(sc.theStory || '').trim(),
+        people: (Array.isArray(sc.people) ? sc.people : []).map(p => ({ who: String((p && p.who) || '').trim(), what: String((p && p.what) || '').trim() })).filter(p => p.who).slice(0, 6),
+        numbers: (Array.isArray(sc.numbers) ? sc.numbers : []).map(n => ({ label: String((n && n.label) || '').trim(), value: String((n && n.value) || '').trim() })).filter(n => n.label && n.value).slice(0, 10),
+        problems: (Array.isArray(sc.problems) ? sc.problems : []).map(String).map(s => s.trim()).filter(Boolean).slice(0, 6),
+        useIt: String(sc.useIt || '').trim(),
+    } : null;
     return out;
 }
 
@@ -457,6 +489,14 @@ function briefForPrompt(brief) {
     lines.push(`WHAT IT WANTS: ${brief.whatItWants}`);
     lines.push(`YOU'RE PRODUCING: ${brief.youreProducing}`);
     if (brief.wordCount) lines.push(`WORD COUNT: ${brief.wordCount}`);
+    if (brief.scenario && brief.scenario.theStory) {
+        lines.push('');
+        lines.push('THE SCENARIO THE QUESTIONS ARE ABOUT (the student has NOT read the document — this is what they know):');
+        lines.push(brief.scenario.theStory);
+        if ((brief.scenario.people || []).length) lines.push('  people: ' + brief.scenario.people.map(p => p.who + ' — ' + p.what).join('; '));
+        if ((brief.scenario.numbers || []).length) lines.push('  numbers: ' + brief.scenario.numbers.map(n => n.label + ' ' + n.value).join('; '));
+        if ((brief.scenario.problems || []).length) lines.push('  problems: ' + brief.scenario.problems.join(' | '));
+    }
     lines.push('');
     lines.push('CRITERIA (in writing order):');
     for (const c of brief.criteria) lines.push(`- [${c.id}]${c.label ? ` "${c.label}" —` : ''} ${c.text}${c.weight ? ` (${c.weight})` : ''}`);
@@ -896,6 +936,29 @@ const SOURCE_DIGEST_SCHEMA = {
         useIt: { type: 'string', description: 'ONE plain sentence telling her how this document is meant to be used in her answers — "when a question says \'the organisation\', it means this company; use its numbers and its problems as your examples."' },
     },
 };
+// The story INSIDE a brief that was read before `scenario` existed — one small
+// call over the stored brief text, same shape as a source digest. Returns
+// null (not an error) when the document has no scenario in it.
+async function extractScenario({ taskText, brief }) {
+    const body = String(taskText || '').trim();
+    if (!body) return null;
+    const system = withMission(`You are Q, reading an assignment document FOR the student so they never have to. Find the SCENARIO the questions are about — the case study, the company, the situation, the text — and tell it plainly. Everyday British English, short, concrete. Figures copied exactly. Names as written. If the document has no scenario at all (it is questions and criteria only), return scenario: null.
+${brief ? '\nTHE QUESTIONS (already extracted):\n' + (brief.criteria || []).map(c => '- ' + c.text).join('\n') : ''}`);
+    const user = `THE DOCUMENT:\n\n${body.slice(0, 60000)}\n\nTell the scenario for someone who will not read this.`;
+    const schema = { type: 'object', additionalProperties: false, required: ['scenario'], properties: { scenario: BRIEF_SCHEMA.properties.scenario } };
+    const r = await callAccurate(system, user, { maxTokens: 1800, schema, effort: 'low' });
+    const sc = r && r.scenario && typeof r.scenario === 'object' ? r.scenario : null;
+    if (!sc || !(String(sc.theStory || '').trim() || String(sc.whatItIs || '').trim())) return null;
+    return {
+        whatItIs: String(sc.whatItIs || '').trim(),
+        theStory: String(sc.theStory || '').trim(),
+        people: (Array.isArray(sc.people) ? sc.people : []).map(p => ({ who: String((p && p.who) || '').trim(), what: String((p && p.what) || '').trim() })).filter(p => p.who).slice(0, 6),
+        numbers: (Array.isArray(sc.numbers) ? sc.numbers : []).map(n => ({ label: String((n && n.label) || '').trim(), value: String((n && n.value) || '').trim() })).filter(n => n.label && n.value).slice(0, 10),
+        problems: (Array.isArray(sc.problems) ? sc.problems : []).map(String).map(s => s.trim()).filter(Boolean).slice(0, 6),
+        useIt: String(sc.useIt || '').trim(),
+    };
+}
+
 async function digestSource({ name, text, brief }) {
     const body = String(text || '').trim();
     if (!body) throw new Error('That document is empty.');
@@ -2268,7 +2331,7 @@ module.exports = {
     formatHarvardRef, suggestReferences, referenceParagraph,
     explainConcept, markSection, improveSectionStep,
     // Phase 3 — the coach with the answer in his head
-    probe, markLikeMarker, markPart, digestSource, assembleFromDraft, userFacingCause, normaliseBrief, briefForPrompt,
+    probe, markLikeMarker, markPart, digestSource, extractScenario, assembleFromDraft, userFacingCause, normaliseBrief, briefForPrompt,
     writeModelEssay, essayForPrompt, allBrickIds, coverageFromBricks, editPass, splitSentences,
     BRIEF_SCHEMA, PROBE_SCHEMA, MARK_SCHEMA, ASSEMBLE_SCHEMA, ESSAY_SCHEMA, EDIT_SCHEMA,
 };
