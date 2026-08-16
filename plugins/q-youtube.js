@@ -53,6 +53,24 @@ function apiKey() {
     return process.env.YOUTUBE_API_KEY || process.env.GOOGLE_PLACES_KEY || process.env.GOOGLE_MAPS_KEY || '';
 }
 function hasKey() { return !!apiKey(); }
+
+// The words a video has to actually contain to be about the thing. Word
+// boundaries matter more than anything here: "step" matching "Stepping" is
+// exactly how a fitness vlog ended up teaching pay progression.
+const TOPIC_STOP = new Set('the a an and or of in on for to is are was were be with from what how why explain explained explaining introduction basics guide tutorial gcse alevel level revision lesson'.split(' '));
+function topicTerms(query) {
+    const words = String(query || '').toLowerCase().replace(/[^a-z0-9\s-]/g, ' ').split(/\s+/)
+        .map(w => w.trim()).filter(w => w.length >= 3 && !TOPIC_STOP.has(w));
+    const seen = new Set();
+    const out = [];
+    for (const w of words) {
+        if (seen.has(w)) continue;
+        seen.add(w);
+        out.push(new RegExp('\\b' + w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '(s|es|ing|ed)?\\b', 'i'));
+        if (out.length >= 6) break;
+    }
+    return out;
+}
 function cacheKey(query, level, subject) { return [String(query || '').trim().toLowerCase(), String(level || '').toLowerCase(), String(subject || '').toLowerCase()].join('|'); }
 
 // The pieces a page needs. embedUrl uses the privacy-enhanced host.
@@ -99,16 +117,27 @@ async function searchTeachingVideo({ query, level, subject } = {}) {
     try {
         const auth = apiKey();
         const good = channelsFor(level).map(c => c.toLowerCase());
+        const terms = topicTerms(q);
+        // Sarah, 16 Aug: asked to teach her about pay progression, Q played
+        // "DAY 85 -- Stepping UP Strong!" from a fitness vlog. The search had
+        // matched "step". A video that is not about the concept teaches
+        // nothing and costs her trust, so a candidate has to actually name the
+        // topic — on WORD boundaries, because "step" must not match
+        // "Stepping". Matching more of the topic ranks higher; matching none
+        // is dropped outright, and dropping everything is fine: the caller
+        // falls back to a plain search link, which is honest.
         const rank = (items) => items.map(shape).filter(Boolean).map(v => {
             const ch = v.channel.toLowerCase();
             const idx = good.findIndex(g => ch === g || ch.includes(g));
-            return { v, score: idx >= 0 ? 100 - idx : 0 };
-        });
+            const hits = terms.filter(t => t.test(v.title) || t.test(v.channel)).length;
+            return { v, hits, score: (idx >= 0 ? 100 - idx : 0) + hits * 40 };
+        }).filter(r => !terms.length || r.hits > 0);
         // Pass 1: short explainers (revision-length), general query + subject.
         const qq = subject && !q.toLowerCase().includes(String(subject).toLowerCase()) ? q + ' ' + subject : q;
         let ranked = rank(await callSearch({ q: qq + ' explained', videoDuration: 'short' }, auth));
-        // Pass 2 (only if nothing from a known channel): any length.
-        if (!ranked.some(r => r.score > 0)) {
+        // Pass 2: nothing from a known channel, or the short pass found
+        // nothing on topic at all — try again without the length limit.
+        if (!ranked.some(r => r.score >= 100) || !ranked.length) {
             const more = rank(await callSearch({ q: qq }, auth));
             ranked = ranked.concat(more.filter(m => !ranked.some(r => r.v.videoId === m.v.videoId)));
         }
@@ -125,4 +154,4 @@ async function searchTeachingVideo({ query, level, subject } = {}) {
 
 function cacheStats() { return { entries: cache.size, hasKey: hasKey() }; }
 
-module.exports = { searchTeachingVideo, hasKey, channelsFor, cacheStats, CHANNELS };
+module.exports = { searchTeachingVideo, hasKey, channelsFor, cacheStats, topicTerms, CHANNELS };
