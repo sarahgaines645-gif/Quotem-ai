@@ -655,6 +655,87 @@ ${plans ? Object.values(plans).map(p => p && p.criterionId ? '[' + p.criterionId
     return normaliseMark(r, brief, essay, plans);
 }
 
+// ── MARK ONE QUESTION, AS SHE FINISHES IT ─────────────────────────────────
+// Sarah, 16 Aug: "we need to have Q doing the mark and fix as you answer each
+// question so you actually get direction" — and, in the same breath, "he's
+// taking forever to respond."
+//
+// Both point the same way. The whole-document mark is the most expensive call
+// in the app (20,000 tokens, medium effort) and it lands at the very end, when
+// the writing is finished and the direction is too late to use. One question's
+// worth is a fraction of that: one criterion, her paragraphs for it, three
+// fixes at most, low effort. Small and quick, while she can still act on it.
+function partMarkSchema() { return {
+    type: 'object', additionalProperties: false,
+    required: ['band', 'strongest', 'missingForTop', 'critique'],
+    properties: {
+        band: { type: 'string', enum: ['top', 'mid', 'low', 'missing'] },
+        strongest: { type: 'string', description: 'ONE short line naming the best thing she actually did in this part, quoting a few of her own words. Never flattery — if it is thin, say what the one real point is.' },
+        missingForTop: { type: 'string', description: 'The ONE concrete thing between this part and the top band. A named idea, an example, a figure, a source, the other side of the argument. Never "develop further".' },
+        critique: {
+            type: 'array',
+            description: 'AT MOST 3 sentences of hers worth fixing, weakest first. Only sentences that fall short; skip what already works. Empty if the part is genuinely fine.',
+            items: {
+                type: 'object', additionalProperties: false,
+                required: ['sentence', 'missing', 'fix', 'targetBrickId', 'suggestedTools', 'needs'],
+                properties: {
+                    sentence: { type: 'string', description: 'HER sentence, verbatim from the numbered list, so the page can highlight it.' },
+                    missing: { type: 'string', description: 'ONE plain line, coach voice, saying what is missing. Never marker jargon.' },
+                    fix: { type: 'string', description: 'The concrete thing to go and do — name the idea, give one example, put a number on it, back it with a source. NEVER the words themselves.' },
+                    targetBrickId: { anyOf: [{ type: 'string' }, { type: 'null' }] },
+                    suggestedTools: { type: 'array', items: { type: 'string', enum: EDIT_TOOLS.concat(['cite']) } },
+                    needs: { type: 'array', items: { type: 'string', enum: REQ_KINDS } },
+                },
+            },
+        },
+    },
+}; }
+async function markPart({ brief, essay, plan, criterionId, partText, gradeScheme }) {
+    if (!brief || !Array.isArray(brief.criteria)) throw new Error('No brief yet — upload the task first.');
+    const crit = brief.criteria.find(c => c.id === criterionId);
+    if (!crit) throw new Error('That part is not in the brief.');
+    const text = String(partText || '').trim();
+    if (!text) return { band: 'missing', strongest: '', missingForTop: 'There is nothing on the page for this part yet.', critique: [] };
+    const bricks = bricksOfCriterion(essay, criterionId);
+    const system = withMission(`You are marking ONE question of this assignment, the moment the student finishes it — so the direction arrives while they can still use it. ${gradeScheme ? `Grade scheme: ${gradeScheme}.` : ''}
+
+Rules:
+- Judge ONLY this question. Say nothing about the rest of the document.
+- Evidence is their own words: quote a phrase of theirs.
+- "missingForTop" is the ONE thing between this and the top band, concrete enough to act on in the next five minutes.
+- At most THREE sentences in the critique, weakest first. If the part is genuinely fine, return an empty critique and say so in "strongest".
+- Never write a replacement sentence. The fix says what to go and do, never the words.
+${PLAIN_QUESTION_RULE}
+
+${LEADING_QUESTION_RULE}
+
+THIS QUESTION
+${crit.id} — ${crit.text}
+${plan && plan.minimalAsk ? 'In plain words: ' + plan.minimalAsk : ''}
+${expectationsForPrompt(plan)}
+${bricks.length ? '\nWHAT A TOP ANSWER CONTAINS (your model answer — never quote it to them):\n' + bricks.map(b => `(${b.brickId}) ${b.gist}`).join('\n') : ''}`);
+    const sentences = splitSentences(text).map(x => x.trim()).filter(x => x.length > 2).slice(0, 60);
+    const user = `THEIR ANSWER TO THIS QUESTION (numbered sentences):\n${sentences.map((x, i) => `${i + 1}. ${x}`).join('\n')}\n\nMark this question.`;
+    const r = await callAccurate(system, user, { maxTokens: 2500, schema: partMarkSchema(), effort: 'low' });
+    const brickIds = new Set(bricks.map(b => b.brickId));
+    const critique = (Array.isArray(r && r.critique) ? r.critique : []).map(it => ({
+        sentence: String(it.sentence || '').trim(),
+        missing: String(it.missing || '').trim(),
+        fix: String(it.fix || '').trim(),
+        targetBrickId: it.targetBrickId && brickIds.has(String(it.targetBrickId).replace(/\s+/g, '')) ? String(it.targetBrickId).replace(/\s+/g, '') : null,
+        suggestedTools: (Array.isArray(it.suggestedTools) ? it.suggestedTools : []).map(String).filter(t => EDIT_TOOLS.includes(t) || t === 'cite').slice(0, 3),
+        needs: (Array.isArray(it.needs) ? it.needs : []).map(String).filter(k => REQ_KINDS.includes(k)),
+        criterionId,
+    })).filter(it => it.sentence && (it.missing || it.fix)).slice(0, 3);
+    return {
+        criterionId,
+        band: ['top', 'mid', 'low', 'missing'].includes(r && r.band) ? r.band : 'low',
+        strongest: String((r && r.strongest) || '').trim(),
+        missingForTop: String((r && r.missingForTop) || '').trim(),
+        critique,
+    };
+}
+
 function normaliseMark(r, brief, essayForMark, plans) {
     if (!r || typeof r !== 'object' || !r.overall) throw new Error('The marking came back empty — try again.');
     const ids = brief.criteria.map(c => c.id);
@@ -2056,7 +2137,7 @@ module.exports = {
     formatHarvardRef, suggestReferences, referenceParagraph,
     explainConcept, markSection, improveSectionStep,
     // Phase 3 — the coach with the answer in his head
-    probe, markLikeMarker, assembleFromDraft, userFacingCause, normaliseBrief, briefForPrompt,
+    probe, markLikeMarker, markPart, assembleFromDraft, userFacingCause, normaliseBrief, briefForPrompt,
     writeModelEssay, essayForPrompt, allBrickIds, coverageFromBricks, editPass, splitSentences,
     BRIEF_SCHEMA, PROBE_SCHEMA, MARK_SCHEMA, ASSEMBLE_SCHEMA, ESSAY_SCHEMA, EDIT_SCHEMA,
 };

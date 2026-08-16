@@ -2758,11 +2758,49 @@
     }
     // The part is done: move to the next part with a one-line move, or say
     // every part has something.
+    // MARK & FIX PER QUESTION. Sarah, 16 Aug: "we need to have Q doing the
+    // mark and fix as you answer each question so you actually get direction."
+    // The whole-document mark at the end is the biggest, slowest call in the
+    // app and lands when the direction is too late to use. So: as a part's
+    // steps finish, ONE small mark of that part — her paragraphs, three fixes
+    // at most — and the same highlight-and-fix walk, before the next question.
+    // "Skip" moves on; nothing is gated on it.
+    async function markThisPart(cid, { then } = {}) {
+      const text = partParagraphs(cid).map(p => p.textContent).join('\n').trim();
+      if (!text) { then && then(); return; }
+      setCoach({ msg: 'Marking this question…', section: 'MARK & FIX · ' + (whereInfo(cid) ? 'Q' + whereInfo(cid).n : ''), thinking: true, inputVisible: false, step: false });
+      let m;
+      try {
+        m = await api('/writer/mark-part', { criterionId: cid, partText: text, gradeScheme: state.gradeScheme || '' }, { timeoutMs: 60000 });
+      } catch (e) {
+        appendBoardItem({ type: 'note', label: 'note', text: 'Could not mark this question (' + shortCause(e) + ') — moving on; Mark & fix at the end still covers it.', quiet: true });
+        then && then(); return;
+      }
+      state.partMarks = state.partMarks || {}; state.partMarks[cid] = { band: m.band, strongest: m.strongest, missingForTop: m.missingForTop, at: Date.now() };
+      persist({ partMarks: state.partMarks });
+      const bandWord = { top: 'top band', mid: 'middle band', low: 'lower band', missing: 'not there yet' }[m.band] || m.band;
+      const items = (m.critique || []).map(it => ({ sentence: it.sentence, why: it.missing || '', fix: it.fix || '', targetBrickId: it.targetBrickId || null, suggestedTools: it.suggestedTools || [], criterionId: cid, needs: Array.isArray(it.needs) ? it.needs : [] }));
+      appendBoardItem({ type: 'note', label: 'marked', text: 'This question: ' + bandWord + '. ' + (m.strongest ? m.strongest + ' ' : '') + (m.missingForTop ? 'For the top band: ' + m.missingForTop : ''), quiet: false, criterionId: cid });
+      if (!items.length) {
+        setCoach({ msg: (m.strongest || 'This question holds up.') + (m.missingForTop ? ' For the top band: ' + m.missingForTop : ''), section: 'MARKED · ' + bandWord.toUpperCase(), actions: [{ label: 'Next question →', primary: true, big: true, onClick: () => then && then() }], inputVisible: false, step: false });
+        return;
+      }
+      state.editItems = items; state.editIndex = 0; state.editing = true; state.editDone = false; state.markPassChanged = 0;
+      state.partFixThen = then || null;
+      showEditItem({ note: bandWord + ' — ' + (m.missingForTop || 'fix these, then on to the next question') });
+    }
     function finishPart(cid) {
       state.currentStep = null; state.currentQuestion = '';
       // Q marks the finished part quietly as they move on: the dots go into
       // their text where each requirement belongs (one small call, cached).
       setTimeout(() => { placeInlineDots(cid).catch(() => {}); }, 0);
+      // The mark for THIS question first; the move to the next one is what
+      // happens after the fixes (or after Skip / Stop).
+      if (!state.partMarkDone || !state.partMarkDone[cid]) {
+        state.partMarkDone = state.partMarkDone || {}; state.partMarkDone[cid] = true;
+        markThisPart(cid, { then: () => finishPart(cid) });
+        return;
+      }
       const cs = (state.brief && state.brief.criteria) || [];
       const i = cs.findIndex(c => c.id === cid);
       const next = cs.slice(i + 1).find(c => (state.coverage[c.id] || 'none') !== 'covered' && !(planFor(c.id) && ssFor(c.id).stepIndex >= planFor(c.id).steps.length)) || cs.slice(0, i).find(c => (state.coverage[c.id] || 'none') === 'none');
@@ -4465,6 +4503,13 @@
     // The end of a pass: the band again, the score climb, mark again / download.
     function endFixPass({ nothing } = {}) {
       endEditStage();
+      // A per-question pass ends by carrying on to the next question — the
+      // whole-document buttons below are for the end-of-essay mark only.
+      if (state.partFixThen) {
+        const go = state.partFixThen; state.partFixThen = null;
+        setCoach({ msg: nothing ? 'Nothing to fix here — on we go.' : 'That question is tidied. On to the next.', section: 'MARK & FIX', actions: [{ label: 'Next question →', primary: true, big: true, onClick: () => go() }], inputVisible: false, step: false });
+        return;
+      }
       const m = state.lastMark;
       const from = state.markStartPct, to = state.match ? state.match.overall : null;
       const climb = from != null && to != null ? (from === to ? to + '% overall.' : from + '% → ' + to + '% overall.') : '';

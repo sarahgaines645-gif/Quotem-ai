@@ -2254,6 +2254,32 @@ router.post('/writer/explain', requirePerson, express.json({ limit: '16kb' }), a
 });
 
 // POST /writer/mark-section — grade a completed section (red/amber/green)
+// POST /writer/mark-part { criterionId, partText } — mark ONE question the
+// moment she finishes it (Sarah, 16 Aug: "we need to have Q doing the mark and
+// fix as you answer each question so you actually get direction"). One
+// criterion, her paragraphs for it, three fixes at most, low effort — a
+// fraction of the whole-document mark, which arrives too late to act on.
+// Synchronous: it is small, and a job to poll would cost more than it saves.
+router.post('/writer/mark-part', requirePerson, express.json({ limit: '256kb' }), writerTooLarge('That part is too long to mark in one go.'), async (req, res) => {
+    const t = readTutor(req.person.id);
+    if (!t.brief) return res.status(400).json({ error: 'No brief yet — upload the task first.', code: 'no_brief' });
+    const criterionId = String(req.body?.criterionId || '').replace(/\s+/g, '');
+    if (!t.brief.criteria.some(c => c.id === criterionId)) return res.status(400).json({ error: 'That part is not in the brief.', code: 'bad_part' });
+    try {
+        const r = await qWriter.markPart({
+            brief: t.brief,
+            essay: t.modelEssay || null,
+            plan: (t.plans || {})[criterionId] || null,
+            criterionId,
+            partText: String(req.body?.partText || ''),
+            gradeScheme: String(req.body?.gradeScheme || t.gradeScheme || ''),
+        });
+        ukJson(res, { ok: true, ...r });
+    } catch (e) {
+        writerFail(res, e, '[writer/mark-part]', 'marking this question');
+    }
+});
+
 router.post('/writer/mark-section', requirePerson, express.json({ limit: '64kb' }), async (req, res) => {
     const { sectionText, sectionName, analysis, gradeScheme } = req.body || {};
     if (!sectionText) return res.status(400).json({ error: 'sectionText required' });
