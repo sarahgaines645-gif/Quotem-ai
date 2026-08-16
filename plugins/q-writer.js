@@ -178,13 +178,27 @@ async function callQ(systemPrompt, userPrompt, { maxTokens = 4096, schema = null
 // Q's own outputs, held to the length the prompts ask for. "12 words or fewer"
 // in schema prose is a wish; this is the rule. Cuts at a word boundary and only
 // adds "…" when the cut lands mid-sentence. Never used on the student's text.
+// Sarah, 17 Aug (a fix that read "…and add a short…"): "where's the end of
+// that sentence?" A cap is a shape rule for Q's output — it must NEVER hand
+// her half an instruction. So: keep whole sentences up to the cap; the
+// sentence the cap lands inside is kept whole; only the sentences AFTER it
+// are dropped. A single sentence longer than the cap is kept as it is (hard
+// safety at three times the cap, at a clause boundary, with the "…").
 function capWords(str, n) {
     const s = String(str || '').replace(/\s+/g, ' ').trim();
     if (!s) return '';
     const words = s.split(' ');
     if (words.length <= n) return s;
-    const cut = words.slice(0, n).join(' ');
-    return /[.!?]["'”’)\]]*$/.test(cut) ? cut : cut.replace(/[,;:]$/, '') + '…';
+    const sentences = s.split(/(?<=[.!?]["'”’)\]]*)\s+(?=[A-Z0-9"'“(])/);
+    let out = '';
+    for (const sen of sentences) {
+        const next = out ? out + ' ' + sen : sen;
+        if (!out || next.split(' ').length <= n) out = next; else break;
+    }
+    if (out.split(' ').length <= n * 3) return out;
+    const hard = words.slice(0, n * 3).join(' ');
+    const clause = hard.lastIndexOf(', ');
+    return (clause > hard.length / 2 ? hard.slice(0, clause) : hard).replace(/[,;:]$/, '') + '…';
 }
 // A supplied idea, held to "two short sentences at most" (TO_THE_POINT): the
 // first nSentences sentences, then capWords at nWords. Never the student's text.
@@ -705,7 +719,7 @@ const MARK_SCHEMA = {
             type: 'object', additionalProperties: false, required: ['band', 'label', 'summary'],
             properties: {
                 band: { type: 'string', enum: ['top', 'mid', 'low'] },
-                label: { type: 'string', description: 'The grade in the student\'s scheme, e.g. "Distinction", "Merit", "Grade 7", "2:1".' },
+                label: { type: 'string', description: 'The grade in the student\'s scheme, e.g. "Distinction", "Merit", "Grade 7", "2:1", "Pass", "Refer". If the scheme is "as the brief says", use the words the brief itself uses for its bands; if the brief names none, leave this empty.' },
                 summary: { type: 'string', description: 'Two sentences to the student: what is strong, and the single biggest thing between them and the top band.' },
             },
         },
@@ -748,10 +762,18 @@ const MARK_SCHEMA = {
 };
 
 /** markLikeMarker — the whole draft against the rubric, per criterion. */
+// The grade scheme line for the markers. "as the brief says" (the default,
+// 17 Aug — a Level 7 CIPD brief was being graded "Grade 2" on GCSE 9–1) means:
+// use the words the brief itself uses for its bands; invent no grade labels.
+function schemeLine(gradeScheme) {
+    const g = String(gradeScheme || '').trim();
+    if (!g || /as the brief says/i.test(g)) return 'Grade scheme: the one the brief itself states (its own band / grade words). If the brief names none, give bands only and leave "label" empty — never invent a grade label from another scheme.';
+    return `Grade scheme: ${g}.`;
+}
 async function markLikeMarker({ brief, essay, docText, gradeScheme, plans }) {
     if (!brief || !Array.isArray(brief.criteria) || !brief.criteria.length) throw new Error('No brief yet — upload the task first.');
     if (!String(docText || '').trim()) throw new Error('There is nothing on the page to mark yet.');
-    const system = withMission(`You are the examiner for this assignment (the final marking pass — the one place plain marker language is allowed, still phrased plainly to the student). Mark the student's draft strictly against the brief and its criteria, the way the real marker will. ${gradeScheme ? `Grade scheme: ${gradeScheme}.` : ''}
+    const system = withMission(`You are the examiner for this assignment (the final marking pass — the one place plain marker language is allowed, still phrased plainly to the student). Mark the student's draft strictly against the brief and its criteria, the way the real marker will. ${schemeLine(gradeScheme)}
 
 Rules:
 - Every criterion gets a band: top / mid / low / missing (missing = the document does not address it at all).
@@ -851,7 +873,7 @@ async function markPart({ brief, essay, plan, criterionId, partText, gradeScheme
     const allBricks = bricksOfCriterion(essay, criterionId);
     const wantIds = new Set((Array.isArray(targetBrickIds) ? targetBrickIds : []).map(x => String(x).replace(/\s+/g, '')));
     const bricks = focusText && wantIds.size && allBricks.some(b => wantIds.has(b.brickId)) ? allBricks.filter(b => wantIds.has(b.brickId)) : allBricks;
-    const system = withMission(`You are marking ${focusText ? 'ONE POINT of one question' : 'ONE question'} of this assignment, the moment the student finishes it — so the direction arrives while they can still use it. ${gradeScheme ? `Grade scheme: ${gradeScheme}.` : ''}
+    const system = withMission(`You are marking ${focusText ? 'ONE POINT of one question' : 'ONE question'} of this assignment, the moment the student finishes it — so the direction arrives while they can still use it. ${schemeLine(gradeScheme)}
 ${focusText ? `\nTHE POINT BEING MARKED (what they were asked to write, in plain words): ${focusText}\n- Judge ONLY whether THIS point is made well. Do not mark them down for things that belong to other points of the question.\n- "band" is the band for this point alone.` : ''}
 
 Rules:
@@ -2302,7 +2324,7 @@ Return ONLY valid JSON:
 
 async function markSection(sectionText, sectionName, analysis, gradeScheme) {
     const bands = analysis?.gradeBands || {};
-    const schemeNote = gradeScheme ? `Grade scheme: ${gradeScheme}.` : 'Use GCSE standard grades.';
+    const schemeNote = schemeLine(gradeScheme);
 
     const system = `You are an examiner marking one section of a student's document.
 

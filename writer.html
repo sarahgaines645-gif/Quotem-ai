@@ -412,7 +412,14 @@
     .q-tool-ask { color: var(--text-muted); font-style: italic; }
     /* The highlighted sentence on the page (edit stage) */
     ::highlight(q-edit) { background: rgba(233,30,99,0.16); }
-    .doc-body .q-edit-block { box-shadow: -3px 0 0 var(--accent); padding-left: 6px; margin-left: -9px; background: rgba(233,30,99,0.035); }
+    .doc-body .q-edit-block { box-shadow: -3px 0 0 var(--accent); padding-left: 6px; margin-left: -9px; background: rgba(233,30,99,0.035); position: relative; }
+    /* Sarah, 17 Aug: "I don't know what highlighting this means?" — the page
+       says it: the pink sentence is the one Q is on right now. */
+    .doc-body .q-edit-block::before {
+      content: '● the sentence Q is on — see the coach card'; position: absolute; top: -13px; left: 4px;
+      font-family: 'Space Grotesk', sans-serif; font-size: 9.5px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase;
+      color: var(--accent); background: var(--paper, #fbf9f3); padding: 0 5px; border-radius: 6px; line-height: 13px; white-space: nowrap; pointer-events: none;
+    }
     .coach-card .q-move {
       font-size: 11px; color: var(--text-muted); line-height: 1.4; margin-bottom: 6px;
       padding: 5px 8px; border-radius: 8px; box-shadow: var(--neu-raised-xs);
@@ -857,7 +864,9 @@
     .q-crit { display: flex; flex-direction: column; gap: 3px; margin-bottom: 8px; }
     .q-crit .qc-row { display: grid; grid-template-columns: 48px 1fr; gap: 6px; font-size: 12px; line-height: 1.4; color: var(--text); align-items: start; }
     .q-crit .qc-l { font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--accent); margin-top: 3px; }
-    .q-crit .qc-v { overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+    .q-crit .qc-v { overflow-wrap: anywhere; font-size: 13px; line-height: 1.45; }
+    .q-crit .qc-v.qc-do { font-weight: 700; color: var(--text); }
+    .q-crit .qc-row + .qc-row { margin-top: 4px; }
     .q-crit .qc-v .q-dots { vertical-align: middle; margin-right: 6px; }
     .q-crit .qc-v .q-dot { width: 12px; height: 12px; }
     .q-bands { display: flex; flex-wrap: wrap; gap: 4px 8px; font-size: 10px; color: var(--text-muted); margin-bottom: 6px; }
@@ -1319,6 +1328,9 @@
       <div class="setup-field" style="flex:1">
         <div class="setup-label">Grade scheme</div>
         <select class="setup-select" id="setup-grade-scheme">
+          <option value="as the brief says">As the brief says</option>
+          <option value="Pass / Merit / Distinction (Level 7 / professional)">Pass/Merit/Dist (L7)</option>
+          <option value="Pass / Refer">Pass / Refer</option>
           <option value="GCSE (9-1)">GCSE 9–1</option>
           <option value="GCSE (A*-G)">GCSE A*–G</option>
           <option value="A-Level (A*-E)">A-Level</option>
@@ -1797,7 +1809,7 @@
     startBtn.addEventListener('click', async () => {
       state.relateAnchor  = relateInput.value.trim();
       state.yearGroup     = yearSelect.value;
-      state.gradeScheme   = gradeSchemeSelect.value || 'GCSE (9-1)';
+      state.gradeScheme   = gradeSchemeSelect.value || 'as the brief says';
       readPauseSetting();
       const sample = (voiceArea.value || '').trim();
 
@@ -5279,7 +5291,10 @@
     function bandListHtml(m) {
       if (!m || !m.overall) return '';
       const rows = (m.perCriterion || []).map(p => `<div class="q-band-row"><span class="bd ${escHtml(p.band)}"></span><span class="q-band-l">${escHtml(labelFor(p.criterionId))}</span><span class="q-band-w ${escHtml(p.band)}">${escHtml(BAND_WORD[p.band] || p.band)}</span></div>`).join('');
-      return `<div class="q-bandlist"><div class="q-band-all"><b>${escHtml((m.overall.label ? m.overall.label + ' — ' : '') + (BAND_WORD[m.overall.band] || m.overall.band))}</b><span>overall</span></div>${rows}</div>`;
+      const scheme = String(state.gradeScheme || '').trim();
+      const lbl = String(m.overall.label || '').trim();
+      const schemeNote = lbl && scheme && !/as the brief says/i.test(scheme) ? ' · ' + scheme : '';
+      return `<div class="q-bandlist"><div class="q-band-all"><b>${escHtml((BAND_WORD[m.overall.band] || m.overall.band) + (lbl ? ' — ' + lbl : ''))}</b><span>overall${escHtml(schemeNote)}</span></div>${rows}</div>`;
     }
     function bandsHtml(m) {
       if (!m || !m.overall) return '';
@@ -5590,7 +5605,15 @@
       if (w) { state.currentCriterionId = w.id; state.currentSection = w.id; }
       return whereText(w);
     }
-    function showEditItem({ note } = {}) {
+    // THE FIX CARD (Sarah, 17 Aug: "this is messy. I don't know why half of
+    // it's there. He should make it clear what's missing and what needs to be
+    // done. Then there should be a button that says edit this now and he will
+    // start talking you through it."). So: two clear lines — WHAT'S MISSING,
+    // WHAT TO DO — and one big button. No word pile, no dots. Pressing
+    // "Edit this now →" puts the caret at the sentence, opens Q's help for the
+    // thing that's missing (the suggested tool) and brings the tools + Check
+    // it up. Talk / Skip / Stop stay quiet underneath.
+    function showEditItem({ note, editing } = {}) {
       const items = state.editItems || [];
       const i = state.editIndex;
       state.awaitingWord = null;
@@ -5599,39 +5622,50 @@
       const onPage = highlightSentence(it.sentence);
       if (!onPage) { state.editIndex++; showEditItem({ note }); return; }   // rewritten or gone — next
       const where = editWhere(it);
-      renderBoard();   // the board's WHERE line + word board follow the sentence's part
+      renderBoard();   // the board's WHERE line follows the sentence's part
       const suggested = (it.suggestedTools || []).filter(t => EDIT_TOOL_LABELS[t]);
       const tools = ['cite'].concat(suggested.filter(t => t !== 'cite'), EDIT_TOOL_ORDER.filter(t => t !== 'cite' && !suggested.includes(t)));   // Auto cite always leads
       hideToolPop();
+      const cid = it.criterionId || state.currentCriterionId;
+      const why = String(it.why || '').replace(/\s+/g, ' ').trim();
+      const fix = String(it.fix || '').replace(/\s+/g, ' ').trim();
+      const needLabels = (it.needs || []).map(k => reqOf(cid, k).label).filter(Boolean);
+      const missingLine = why || (needLabels.length ? needLabels.join(' · ') : 'This sentence falls short of the marker\'s standard.');
+      const doLine = fix || (needLabels.length ? 'Put in: ' + needLabels.join(', ') + '.' : 'Rewrite it so it says more, on the page.');
+      const editNow = () => {
+        // caret at the end of the pink sentence, then Q's help for the missing thing
+        try { if (editHighlight && editHighlight.range) { const r = editHighlight.range.cloneRange(); r.collapse(false); const sel = window.getSelection(); sel.removeAllRanges(); sel.addRange(r); docBody.focus(); } } catch (_) {}
+        showEditItem({ note, editing: true });
+        const first = suggested[0] || (needLabels.length && /source|reference|cite/i.test(needLabels.join(' ')) ? 'cite' : 'weak');
+        if (first) setTimeout(() => useTool(first, it), 60);
+      };
       setCoach({
         msg: '',
         section: 'MARK & FIX · SENTENCE ' + (i + 1) + ' OF ' + items.length,
         where, moveHtml: bandListHtml(state.lastMark), step: false,
-        hint: note || 'Rewrite it on the page — type or talk — then Check it.',
-        actions: [
+        hint: editing ? 'Rewrite it on the page — type or talk — then Check it.' : (i === 0 ? 'The pink sentence on the page is the one we\'re on.' : ''),
+        actions: editing ? [
           { label: '✓ Check it', primary: true, big: true, onClick: () => checkCurrentSentence() },
           // Sarah, 16 Aug: "when you're editing you can no longer access the
-          // mic to write." The fix stage hides the coach box (there is nothing
-          // to answer — the rewrite goes on the page), and the only mic lived
-          // inside that box. The card tells her to rewrite it on the page, so
-          // the way to talk has to be on the card that says so.
+          // mic to write." The fix stage hides the coach box, and the only mic
+          // lived inside it — so the way to talk is on the card that says so.
           { label: 'Talk', quiet: true, onClick: () => toggleDocDictation() },
+          { label: 'Skip', quiet: true, onClick: () => { state.editIndex++; showEditItem(); } },
+          { label: 'Stop for now', quiet: true, onClick: () => endFixPass() },
+        ] : [
+          { label: 'Edit this now →', primary: true, big: true, onClick: editNow },
           { label: 'Skip', quiet: true, onClick: () => { state.editIndex++; showEditItem(); } },
           { label: 'Stop for now', quiet: true, onClick: () => endFixPass() },
         ],
         inputVisible: false,
       });
-      // The critique card: ONE line "Missing: ● ● ●" (labels on hover; the
-      // one-line why when there are no dots) + ONE line fix. No paragraph.
-      const cid = it.criterionId || state.currentCriterionId;
+      // The two lines that matter — whole sentences, never clipped.
       const crit = document.createElement('div'); crit.className = 'q-crit';
-      const needDots = (it.needs || []).length ? '<span class="q-dots qc-dots">' + it.needs.map(k => { const rq = reqOf(cid, k); return '<span class="q-dot" style="--dc:' + rq.colour + '" data-req="' + escHtml(k) + '" data-cid="' + escHtml(cid) + '" title="' + escHtml(rq.label) + '"></span>'; }).join('') + '</span>' : '';
-      const why = String(it.why || '').replace(/\s+/g, ' ').trim();
-      crit.innerHTML = '<div class="qc-row"><span class="qc-l">Missing</span><span class="qc-v" title="' + escHtml(why) + '">' + needDots + (needDots ? '<span style="color:var(--text-muted)">' + escHtml(it.needs.map(k => reqOf(cid, k).label).join(' · ')) + '</span>' : escHtml(why || 'the point, made fully')) + '</span></div>' + (it.fix ? '<div class="qc-row"><span class="qc-l">Fix</span><span class="qc-v" title="' + escHtml(it.fix) + '">' + escHtml(it.fix) + '</span></div>' : '');
+      crit.innerHTML = '<div class="qc-row"><span class="qc-l">Missing</span><span class="qc-v">' + escHtml(missingLine) + '</span></div>'
+        + '<div class="qc-row"><span class="qc-l">Do this</span><span class="qc-v qc-do">' + escHtml(doLine) + '</span></div>';
       coachActions.insertBefore(crit, coachActions.firstChild);
-      // The word board for this part, compact, on the card.
-      const wb = coachWordsHtml(cid); if (wb) crit.insertAdjacentHTML('beforebegin', wb);
-      // The tool buttons: the suggested ones first.
+      if (!editing) return;
+      // Editing: the tool buttons (suggested first) and where Q's help lands.
       const row = document.createElement('div'); row.className = 'q-tools';
       tools.forEach(t => {
         const b = document.createElement('button'); b.type = 'button';
@@ -5640,9 +5674,7 @@
         b.addEventListener('click', () => useTool(t, it));
         row.appendChild(b);
       });
-      const critEl = coachActions.querySelector('.q-crit');
-      coachActions.insertBefore(row, critEl ? critEl.nextSibling : coachActions.firstChild);
-      // Tool help lands here (below the buttons).
+      coachActions.insertBefore(row, crit.nextSibling);
       const out = document.createElement('div'); out.className = 'q-tool-out'; out.id = 'q-tool-out';
       coachActions.insertBefore(out, row.nextSibling);
     }
@@ -6477,7 +6509,7 @@
     loadProjects().then(restoreSession, restoreSession);
     // Test hooks (no data, no secrets): lets the harness exercise the page-side
     // helpers without a paid call. Harmless in production.
-    window.__qwriterTest = { findInDoc, replaceInDoc, appendReference, docPlainText, splitCheck: (t) => endsSentence(t), runEditPass, checkCurrentSentence, showEditItem, state: () => state, currentEditText, partParagraphs, setBrief, storyPointsHtml, renderInlineDots, termsForBoard, setCoach, bandListHtml };
+    window.__qwriterTest = { findInDoc, replaceInDoc, appendReference, docPlainText, splitCheck: (t) => endsSentence(t), runEditPass, checkCurrentSentence, showEditItem, state: () => state, currentEditText, partParagraphs, setBrief, storyPointsHtml, renderInlineDots, termsForBoard, setCoach, bandListHtml, showEditItem };
 
 
     // (The old per-card drag code lived here — every panel now goes through makePanel above.)
