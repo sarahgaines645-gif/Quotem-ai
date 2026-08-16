@@ -292,7 +292,9 @@
       background: var(--bg); box-shadow: var(--neu-raised-xs);
       outline: 1px dashed rgba(0,0,0,0.18); outline-offset: -4px;
     }
-    .stamp-v { font-size: 14px; font-weight: 700; color: var(--red); line-height: 1.1; }
+    .stamp-mark { display: flex; justify-content: center; margin-bottom: 4px; }
+    .stamp-mark .m-chip { width: 28px; height: 28px; font-size: 10px; }
+    .stamp-v { font-size: 13px; font-weight: 700; color: var(--red); line-height: 1.1; }
     .stamp-l { font-size: 8px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-faint); margin-top: 2px; }
     .stamp.paid .stamp-v { color: var(--green); }
     .letter-body { font-size: 11.5px; color: var(--text-muted); line-height: 1.4; margin: 10px 0 8px;
@@ -1750,7 +1752,8 @@
               <div class="letter-from">${esc(provider)}</div>
             </div>
             <div class="stamp${showingResolved ? ' paid' : ''}">
-              <div class="stamp-v">${p.amount ? '£' + fmt(p.amount) : (URGENCY_ICON[urg] || '📋')}</div>
+              <div class="stamp-mark">${mChip(provider)}</div>
+              ${p.amount ? `<div class="stamp-v">£${fmt(p.amount)}</div>` : ''}
               <div class="stamp-l">${showingResolved ? 'resolved' : (p.amount ? (dueLate ? 'overdue' : 'owed') : urg)}</div>
             </div>
           </div>
