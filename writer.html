@@ -4992,16 +4992,47 @@
     async function useCitation(c, sentence, cid, { anchor, dot } = {}) {
       if (!c) return;
       // 1. the in-text citation before the sentence's full stop (once)
-      const pt = citationPoint(sentence);
+      // Sarah, 16 Aug: "it's gone in at the end of the doc but isn't it
+      // supposed to be in the essay?" The reference list was landing; the
+      // in-text "(Guest, 2017)" was not. Two reasons, both fixed here:
+      //
+      // 1. NO FALLBACK. If the sentence could not be located verbatim in the
+      //    page — she had edited it since, or it came from the fix card and
+      //    no longer matched — citationPoint returned null and the whole
+      //    placement was skipped. Now it falls back to her caret, and then to
+      //    the end of the current part, the same ladder the word buttons use.
+      // 2. IT LIED. `placed` was set to true whether or not the text actually
+      //    went in, so the card said "In — at the end of your sentence" over a
+      //    sentence with no citation in it, and the only other message it
+      //    could give was "already in your sentence" — which was also what a
+      //    total failure looked like. Placement is now confirmed by reading
+      //    the document back.
+      const already = c.inText && docPlainText().includes(c.inText);
       let placed = false;
-      if (pt && c.inText) {
-        let blk = pt.node.parentElement; while (blk && blk !== docBody && !/^(P|DIV|LI|H1|H2|H3)$/.test(blk.tagName)) blk = blk.parentElement;
-        const around = blockText(blk && blk !== docBody ? blk : docBody);
-        if (!around.includes(c.inText)) {
-          const sel = window.getSelection(); const r = document.createRange(); r.setStart(pt.node, pt.offset); r.collapse(true); sel.removeAllRanges(); sel.addRange(r); docBody.focus();
-          const ok = document.execCommand('insertText', false, (pt.spaceBefore ? ' ' : '') + c.inText);
-          if (!ok) { r.insertNode(document.createTextNode((pt.spaceBefore ? ' ' : '') + c.inText)); }
-          placed = true;
+      if (c.inText && !already) {
+        const pt = citationPoint(sentence);
+        const sel = window.getSelection();
+        let ready = false;
+        if (pt) {
+          const r = document.createRange(); r.setStart(pt.node, pt.offset); r.collapse(true);
+          sel.removeAllRanges(); sel.addRange(r); ready = true;
+        } else if (sel && sel.rangeCount && docBody.contains(sel.getRangeAt(0).startContainer)) {
+          ready = true;                                   // wherever her cursor is
+        } else {
+          const paras = partParagraphs(cid);
+          const target = paras[paras.length - 1] || docBody.lastElementChild;
+          if (target) { const r = document.createRange(); r.selectNodeContents(target); r.collapse(false); sel.removeAllRanges(); sel.addRange(r); ready = true; }
+        }
+        if (ready) {
+          docBody.focus();
+          const r0 = sel.getRangeAt(0);
+          const pre = document.createRange(); pre.setStart(docBody, 0); pre.setEnd(r0.startContainer, r0.startOffset);
+          const needSpace = pt ? pt.spaceBefore : !/\s$/.test(pre.toString());
+          const ins = (needSpace ? ' ' : '') + c.inText;
+          if (!document.execCommand('insertText', false, ins)) {
+            const r = sel.getRangeAt(0); r.insertNode(document.createTextNode(ins)); r.collapse(false);
+          }
+          placed = docPlainText().includes(c.inText);     // did it really go in?
         }
       }
       // 2. the reference list entry (deduped) + the drawer + the notebook
@@ -5016,11 +5047,18 @@
       } catch (_) {
         state.reqMet[cid] = Array.from(new Set([...(state.reqMet[cid] || []), 'citation', 'reference'])); renderBoard(); renderInlineDots(); refreshExpectations();
       }
-      showToolPop('<div class="pc-head">' + escHtml(c.inText) + '</div><div class="pc-line">' + (placed ? 'In — at the end of your sentence, and the reference is on your list.' : 'That citation is already in your sentence — the reference is on your list.') + '</div>' + (c.warnings && c.warnings.length ? '<div class="pc-eg">Check: ' + escHtml(c.warnings.join('; ')) + '</div>' : ''), { kind: 'Auto cite', anchor });
+      const said = placed ? 'In — at the end of your sentence, and the reference is on your list.'
+        : already ? 'That citation was already in your writing — the reference is on your list.'
+        : 'The reference is on your list, but I could not find the sentence to put "' + c.inText + '" into. Put your cursor where it belongs and press the source again.';
+      showToolPop('<div class="pc-head">' + escHtml(c.inText) + '</div><div class="pc-line">' + escHtml(said) + '</div>' + (c.warnings && c.warnings.length ? '<div class="pc-eg">Check: ' + escHtml(c.warnings.join('; ')) + '</div>' : ''), { kind: 'Auto cite', anchor });
       clearTimeout(state.citePopTimer); state.citePopTimer = setTimeout(hideToolPop, 3500);
       state.docSnapshot = docPlainText();
     }
-    function escapeRe(x) { return String(x).replace(/[.*+?^${}()|[\]\\]/g, '\\    // ── Dictation: speak the answer into the coach box ────────────────────'); }
+    // Its replacement string had a comment line spliced into it, so instead of
+    // escaping a regex special it pasted a sentence of English in. Nothing
+    // calls it today, which is the only reason it never showed — a landmine,
+    // not a bug yet. Restored to what it was meant to be.
+    function escapeRe(x) { return String(x).replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); }
     document.getElementById('btn-auto-cite').addEventListener('click', () => runAutoCite({}));
     window.__qwriterCite = { runAutoCite, useCitation, sentenceAtCaret, citationPoint, renderRefsList, references: () => state.references };
 
