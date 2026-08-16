@@ -996,6 +996,30 @@
     .bb-num { font-size: 11px; color: var(--text-muted); padding: 3px 8px; border-radius: 9px; box-shadow: var(--neu-inset-sm); }
     .bb-num b { color: var(--text); font-weight: 700; margin-right: 3px; }
     .bb-src-use { font-size: 11px; color: var(--text-muted); font-style: italic; margin-top: 8px; line-height: 1.45; }
+    /* The story as POINTS, not a paragraph (Sarah, 16 Aug: "a sea of words"). */
+    .bb-story { margin: 0 0 6px; padding-left: 16px; }
+    .bb-story li { font-size: 12px; color: var(--text); line-height: 1.5; margin: 2px 0; overflow-wrap: anywhere; }
+    .bb-story li b { font-weight: 700; }
+    .brief-asks-list li .ba-label { display: block; font-weight: 700; color: var(--text); font-size: 12px; }
+    .brief-asks-list li .ba-text { display: block; font-size: 11px; color: var(--text-muted); line-height: 1.45; }
+    /* When Q speaks: on a pause, or when you press Continue. */
+    .mode-seg { display: inline-flex; gap: 6px; }
+    .mode-seg button {
+      border: none; border-radius: 10px; padding: 5px 10px; cursor: pointer;
+      font-family: 'Space Grotesk', sans-serif; font-size: 11px; font-weight: 600;
+      background: var(--bg); color: var(--text-muted); box-shadow: var(--neu-raised-xs);
+    }
+    .mode-seg button.on { color: var(--text); box-shadow: var(--neu-inset-sm); }
+    .mode-seg button.on::before { content: '● '; color: var(--accent); }
+    .q-go {
+      border: none; border-radius: 12px; padding: 5px 12px; cursor: pointer; flex-shrink: 0;
+      font-family: 'Space Grotesk', sans-serif; font-size: 11px; font-weight: 700;
+      background: var(--bg); color: var(--text); box-shadow: var(--neu-raised-sm);
+    }
+    .q-go:hover { box-shadow: var(--neu-raised-xs); }
+    .q-go:active { box-shadow: var(--neu-inset-sm); }
+    .q-go::before { content: '● '; color: var(--accent); }
+    .q-go.busy { opacity: 0.6; pointer-events: none; }
     .bb-src-wait { font-size: 12px; color: var(--text-muted); line-height: 1.5; }
     .bb-src-wait .q-btn { margin-left: 6px; }
     .tb-budget { margin-left: auto; font-size: 10px; font-weight: 700; color: var(--text-muted); white-space: nowrap; }
@@ -1236,7 +1260,14 @@
           <span style="font-size:12px; color:var(--text-muted)">seconds at the end of a sentence</span>
         </div>
       </div>
-      <div class="setup-field" style="flex:1; font-size:11px; color:var(--text-faint); line-height:1.4">Q reads what you write and asks the next question when you stop. He never types on your page.</div>
+      <div class="setup-field" style="flex:2">
+        <div class="setup-label">Q speaks…</div>
+        <div class="mode-seg" id="mode-seg" role="radiogroup" aria-label="When Q speaks">
+          <button type="button" data-mode="pause" title="Q reads what you wrote when you stop at the end of a sentence for the seconds set on the left">when I pause</button>
+          <button type="button" data-mode="button" title="Q waits. Nothing happens while you think — press Continue when you want him to read what you wrote">only when I press Continue</button>
+        </div>
+        <div style="font-size:11px; color:var(--text-faint); line-height:1.4; margin-top:5px" id="mode-note">He never types on your page.</div>
+      </div>
     </div>
     <div style="display:flex; justify-content:flex-end; gap:10px; align-items:center">
       <span id="setup-voice-status" style="font-size:11px; color:var(--text-faint);"></span>
@@ -1253,6 +1284,7 @@
         <span id="meta-saved" title="Everything on this page is saved to your account as you type">Not yet saved</span>
         <span class="meta-spacer"></span>
         <button type="button" class="meta-btn" id="doc-mic" title="Talk straight onto the page — your words land where the cursor is, so a terminology button drops into the sentence you are saying. Tap again to stop."><svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-1px"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg> Talk</button>
+        <button type="button" class="meta-btn hidden" id="doc-go" title="Q reads what you have written since he last looked — press when you are ready, not before">● Continue →</button>
         <button type="button" class="meta-btn" id="btn-download" title="Download what is on the page as a Word file">↓ Download</button>
         <button type="button" class="meta-btn primary" id="btn-finish" title="Q marks it like the marker, then walks it with you sentence by sentence — highlight, what's missing, the fix, tools, Check it">Mark &amp; fix →</button>
       </div>
@@ -1355,6 +1387,7 @@
       <div class="coach-input-row">
         <input class="coach-input" id="coach-input" type="text"
           placeholder="Ask Q…" autocomplete="off" />
+        <button type="button" class="q-go hidden" id="coach-go" title="Q reads what you have written since he last looked and comes back — one line, then the next thing">Continue →</button>
         <button type="button" class="q-mic" id="coach-mic" title="Tap and talk — your words type themselves into the box. Tap again to stop, then press Enter."><svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg></button>
       </div>
     </div>
@@ -1513,7 +1546,7 @@
       docSnapshot: '',        // doc text at time Q last asked a question
       qWordsWritten: 0,       // words Q has inserted into the doc this session
       gradeScheme: 'GCSE (9-1)',
-      settings: { pauseMs: 7000 },
+      settings: { pauseMs: 7000, coachMode: 'pause' },   // coachMode: 'pause' | 'button' (Sarah, 16 Aug: "a toggle… when I stop to think he starts to ask the question in a different way and I'm still thinking")
       brickCounts: {},        // { criterionId: { voiced, total } } — counts only, never the essay
       essayReady: false,
       sources: [],            // [{name, chars}] supporting documents (text lives server-side)
@@ -1630,6 +1663,43 @@
       state.settings.pauseMs = secs * 1000;
     }
     pauseInput.addEventListener('change', () => { readPauseSetting(); persist({ settings: state.settings }); });
+    // WHEN Q SPEAKS. 'pause' = the watcher reads the page when she stops at a
+    // sentence end; 'button' = nothing fires on its own — she presses
+    // Continue (coach card, or next to Talk on the paper) when she is ready.
+    const modeSeg = document.getElementById('mode-seg');
+    const modeNote = document.getElementById('mode-note');
+    const coachGo = document.getElementById('coach-go');
+    const docGo = document.getElementById('doc-go');
+    function coachModeIsButton() { return (state.settings.coachMode || 'pause') === 'button'; }
+    function applyCoachMode() {
+      const btn = coachModeIsButton();
+      modeSeg.querySelectorAll('button').forEach(b => b.classList.toggle('on', b.dataset.mode === (btn ? 'button' : 'pause')));
+      coachGo.classList.toggle('hidden', !btn);
+      docGo.classList.toggle('hidden', !btn);
+      pauseInput.disabled = btn;
+      modeNote.textContent = btn ? 'Q waits while you think. Press Continue and he reads what you wrote. He never types on your page.' : 'Q reads what you write and comes back when you stop. He never types on your page.';
+      if (btn) clearTimeout(probeTimer);
+    }
+    modeSeg.addEventListener('click', e => {
+      const b = e.target.closest('button[data-mode]'); if (!b) return;
+      state.settings.coachMode = b.dataset.mode === 'button' ? 'button' : 'pause';
+      applyCoachMode();
+      persist({ settings: state.settings });
+      if (!coachModeIsButton()) maybeLiveProbe();
+    });
+    // Continue: exactly what a pause would have done, when SHE says so.
+    let continueBusy = false;
+    async function continueNow() {
+      if (continueBusy || !state.brief) return;
+      continueBusy = true; coachGo.classList.add('busy'); docGo.classList.add('busy');
+      try {
+        clearTimeout(probeTimer);
+        if (state.editing) { await checkCurrentSentence({ fromPause: true }); }
+        else { await askNextQuestion({ trigger: 'pause', fromButton: true }); }
+      } finally { continueBusy = false; coachGo.classList.remove('busy'); docGo.classList.remove('busy'); }
+    }
+    coachGo.addEventListener('click', continueNow);
+    docGo.addEventListener('click', continueNow);
 
     startBtn.addEventListener('click', async () => {
       state.relateAnchor  = relateInput.value.trim();
@@ -2309,6 +2379,16 @@
     // fold: what it is, the story in a few lines, the people, the numbers to
     // have to hand, the problems it sets up, and how to use it. She answers
     // questions about the case from this, never from the document.
+    // The story as short points, one per sentence, the numbers in bold — not
+    // a paragraph to wade through.
+    function storyPointsHtml(story) {
+      const t = String(story || '').replace(/\s+/g, ' ').trim();
+      if (!t) return '';
+      const parts = t.split(/(?<=[.!?])\s+(?=[A-Z0-9£$"'(])/).map(x => x.trim()).filter(Boolean);
+      const bold = x => escHtml(x).replace(/((?:£|\$|€)\s?\d[\d,.]*[kKmM]?|\b\d[\d,.]*%|\b\d[\d,.]*\b)/g, '<b>$1</b>');
+      if (parts.length <= 1) return `<div class="bb-src-story">${bold(t)}</div>`;
+      return `<ul class="bb-story">${parts.map(x => `<li>${bold(x)}</li>`).join('')}</ul>`;
+    }
     function sourceDigestsHtml() {
       const esc = escHtml;
       // The scenario INSIDE the brief comes first — it is the story every
@@ -2329,9 +2409,9 @@
         const problems = (d.problems || []).length ? `<div class="bb-src-sec"><span class="bb-src-lab">What's going wrong / to decide</span><ul>${d.problems.map(p => `<li>${esc(p)}</li>`).join('')}</ul></div>` : '';
         return `<div class="bb-src" data-src="${esc(s.name)}">
           <div class="bb-src-head">${s.isBrief ? '📖' : '📎'} ${esc(d.whatItIs || s.name)}</div>
-          <div class="bb-src-story">${esc(d.theStory || '')}</div>
+          ${storyPointsHtml(d.theStory)}
           ${people}${numbers}${problems}
-          ${d.useIt ? `<div class="bb-src-use">${esc(d.useIt)}</div>` : ''}
+          ${d.useIt ? `<div class="bb-src-sec"><span class="bb-src-lab">Use it for</span><div class="bb-src-use" style="margin-top:0">${esc(d.useIt)}</div></div>` : ''}
         </div>`;
       }).join('');
     }
@@ -2406,7 +2486,7 @@
       const metaBits = [];
       if (data.wordCount) metaBits.push('Words: ' + esc(data.wordCount));
       if (data.deadline) metaBits.push('Due: ' + esc(data.deadline));
-      const listHtml = criteria.map((c, i) => `<li><span class="cid" title="${esc(c.id)}">${i + 1}.</span>${esc(c.text)}</li>`).join('');
+      const listHtml = criteria.map((c, i) => `<li><span class="cid" title="${esc(c.id)}">${i + 1}.</span><span class="ba-label">${esc(criterionLabel(c))}${c.wordBudget ? ' <span style="font-weight:500;color:var(--text-muted)">· ~' + esc(String(c.wordBudget)) + ' words</span>' : ''}</span><span class="ba-text">${esc(c.text)}</span></li>`).join('');
       const foldOpen = !!(panelLayout.brief && panelLayout.brief.fold);
 
       body.innerHTML = `<div class="bb-line">${esc(line)}</div>
@@ -3059,7 +3139,13 @@
       setCoach({ msg: 'Marking this question…', section: 'MARK & FIX · ' + (whereInfo(cid) ? 'Q' + whereInfo(cid).n : ''), thinking: true, inputVisible: false, step: false });
       let m;
       try {
-        m = await api('/writer/mark-part', { criterionId: cid, partText: text, gradeScheme: state.gradeScheme || '' }, { timeoutMs: 60000 });
+        const first = await api('/writer/mark-part', { criterionId: cid, partText: text, gradeScheme: state.gradeScheme || '' }, { timeoutMs: 60000 });
+        // The server runs it as a job now (the full mark for one question is
+        // too big to hold at Railway's edge); older servers answer inline.
+        if (first && first.status && first.status !== 'done' && !first.band) {
+          const job = await waitForJob('mark-part', { onTick: (secs) => setCoach({ msg: 'Marking this question… ' + secs + 's', section: 'MARK & FIX · ' + (whereInfo(cid) ? 'Q' + whereInfo(cid).n : ''), thinking: true, inputVisible: false, step: false }) });
+          m = job.result || {};
+        } else m = (first && first.result) || first;
       } catch (e) {
         appendBoardItem({ type: 'note', label: 'note', text: 'Could not mark this question (' + shortCause(e) + ') — moving on; Mark & fix at the end still covers it.', quiet: true });
         then && then(); return;
@@ -3883,10 +3969,16 @@
         const reaction = trigger === 'pause' && d.reaction ? String(d.reaction).trim() : '';
         const wordsLine = misused.length ? misused.map(m => '"' + m.term + '" is on the page but not used — ' + m.why).join(' ') : '';
         const ack = opts.ack ? String(opts.ack) : (d.acknowledge && trigger === 'answer' ? String(d.acknowledge) : [reaction, wordsLine].filter(Boolean).join(' '));
+        // Mid-step, a pause is a READ, not a new ask: the step's own question
+        // stays on the card word for word — his reaction/words line goes above
+        // it. Sarah, 16 Aug: "when I stop to think he starts to ask the
+        // question in a different way and I'm still thinking."
+        const stepInfoNow = inStep ? currentStepInfo() : null;
+        const keepQuestion = trigger === 'pause' && stepInfoNow && stepInfoNow.step && stepInfoNow.step.prompt;
         setCoach({
-          supply: d.supply ? String(d.supply).trim() : '',
+          supply: keepQuestion ? '' : (d.supply ? String(d.supply).trim() : ''),
           ack: ack ? ack.replace(/\s+$/, '') : '',
-          msg: question,
+          msg: keepQuestion ? stepInfoNow.step.prompt : question,
           section: d.done ? 'ALL COVERED' : '',
           move: moved,
           hint: d.done ? 'Every part has something. Mark & fix when you\'re ready.' : (d.hint || ''),
@@ -4863,6 +4955,7 @@
     function maybeLiveProbe() {
       clearTimeout(probeTimer);
       if (!state.brief || briefRunning) return;
+      if (coachModeIsButton()) return;                                    // she presses Continue; nothing fires on its own
       if (typeof markRunning !== 'undefined' && markRunning) return;   // the mark is reading the page — no live turn under it
       const pauseMs = state.settings.pauseMs || 7000;
       const rearm = (ms) => { probeTimer = setTimeout(maybeLiveProbe, ms || PROBE_RETRY_MS); };
@@ -5957,6 +6050,8 @@
       catch (e) { setSavedLabel('error', 'couldn\'t load your last session (' + shortCause(e) + ')'); return; }
       const t = d.tutor;
       if (t && t.settings && t.settings.pauseMs) { state.settings.pauseMs = t.settings.pauseMs; pauseInput.value = String(Math.round(t.settings.pauseMs / 1000)); }
+      if (t && t.settings && t.settings.coachMode) state.settings.coachMode = t.settings.coachMode === 'button' ? 'button' : 'pause';
+      applyCoachMode();
       if (t && t.gradeScheme) { state.gradeScheme = t.gradeScheme; gradeSchemeSelect.value = t.gradeScheme; }
       if (t && t.yearGroup) { state.yearGroup = t.yearGroup; yearSelect.value = t.yearGroup; }
       if (t && t.relateAnchor) { state.relateAnchor = t.relateAnchor; relateInput.value = t.relateAnchor; }
@@ -6084,10 +6179,11 @@
         }
       }
     }
+    applyCoachMode();
     loadProjects().then(restoreSession, restoreSession);
     // Test hooks (no data, no secrets): lets the harness exercise the page-side
     // helpers without a paid call. Harmless in production.
-    window.__qwriterTest = { findInDoc, replaceInDoc, appendReference, docPlainText, splitCheck: (t) => endsSentence(t), runEditPass, checkCurrentSentence, showEditItem, state: () => state, currentEditText, partParagraphs };
+    window.__qwriterTest = { findInDoc, replaceInDoc, appendReference, docPlainText, splitCheck: (t) => endsSentence(t), runEditPass, checkCurrentSentence, showEditItem, state: () => state, currentEditText, partParagraphs, setBrief, storyPointsHtml };
 
 
     // (The old per-card drag code lived here — every panel now goes through makePanel above.)

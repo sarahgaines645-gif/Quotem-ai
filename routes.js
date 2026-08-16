@@ -1217,6 +1217,7 @@ router.post('/writer/projects/remove', requirePerson, express.json({ limit: '4kb
         writeTutorIndex(req.person.id, idx);
         // Nothing may keep serving the removed one by accident.
         for (const kind of ['brief', 'essay', 'plan', 'assemble', 'mark']) writerJobs.delete(writerJobKey(tutorScope(req.person.id, id), kind));
+        for (const k of [...writerJobs.keys()]) if (k.startsWith(tutorScope(req.person.id, id) + ':mark-part:')) writerJobs.delete(k);
         res.json({ ok: true, ...projectsView(req.person.id) });
     } catch (e) { projectsErr(res, e, 'Could not remove that assignment'); }
 });
@@ -1290,7 +1291,7 @@ function readStoredDocText(personId) {
 // the notebook by the caller, so a Railway restart mid-poll loses the
 // in-flight job but never a finished one.
 const writerJobs = new Map();
-const WRITER_JOB_STEP = { brief: 'brief step', essay: 'model answer', mark: 'marking', assemble: 'assembly', edit: 'editing pass', plan: 'part plan' };
+const WRITER_JOB_STEP = { brief: 'brief step', essay: 'model answer', mark: 'marking', 'mark-part': 'marking this question', assemble: 'assembly', edit: 'editing pass', plan: 'part plan' };
 const SOURCE_MAX = 6, SOURCE_CHARS = 80000, SOURCE_TOTAL = 300000;
 
 // The hidden model essay is written server-side after the brief lands (and
@@ -1375,7 +1376,8 @@ function voiceBricks(personId, brickIds) {
 }
 function writerJobKey(personId, kind) { return `${personId}:${kind}`; }
 function startWriterJob(personId, kind, run, meta) {
-    const key = writerJobKey(personId, kind);
+    // meta.keySuffix: one job per ITEM of a kind (mark-part is per question).
+    const key = writerJobKey(personId, kind + (meta && meta.keySuffix ? ':' + meta.keySuffix : ''));
     const existing = writerJobs.get(key);
     if (existing && existing.status === 'running') return existing;
     const job = { kind, status: 'running', startedAt: Date.now(), finishedAt: null, result: null, error: null, meta: meta || null };
@@ -1408,15 +1410,25 @@ function jobView(job) {
 router.get('/writer/job/:kind', requirePerson, (req, res) => {
     const kind = String(req.params.kind || '');
     if (!WRITER_JOB_STEP[kind]) return res.status(404).json({ error: 'Unknown job kind.' });
-    const job = writerJobs.get(writerJobKey(writerScope(req), kind));
+    // mark-part jobs are keyed per question (mark-part:<criterionId>); with
+    // ?criterionId= that one, without it the most recent live one for this scope.
+    const partQ = String(req.query.criterionId || '').replace(/\s+/g, '');
+    const job = kind === 'mark-part'
+        ? (partQ ? writerJobs.get(writerJobKey(writerScope(req), 'mark-part:' + partQ))
+            : [...writerJobs.entries()].filter(([k]) => k.startsWith(writerScope(req) + ':mark-part:')).map(([, j]) => j).sort((a, b) => b.startedAt - a.startedAt)[0])
+        : writerJobs.get(writerJobKey(writerScope(req), kind));
     if (job) {
         const view = jobView(job);
         if (kind === 'brief' && view.result) view.result = publicBrief(view.result);
         return ukJson(res, { ok: true, ...view });
     }
     const t = readTutor(writerScope(req));
+    // mark-part: the notebook keeps one per question (partMarks[criterionId]);
+    // the page says which with ?criterionId= — without it there is nothing to
+    // hand back (which question?), so null.
     const saved = kind === 'brief' ? (t.brief ? publicBrief(t.brief) : null)
         : kind === 'mark' ? (t.lastMark || null)
+        : kind === 'mark-part' ? (partQ && t.partMarks && t.partMarks[partQ] ? t.partMarks[partQ] : null)
         : kind === 'essay' ? (t.modelEssay ? { essayReady: true, brickCounts: t.brickCounts || {}, coverage: t.coverage || {}, bricks: qWriter.allBrickIds(t.modelEssay).length, notes: t.modelEssay.notes, match: matchFor(t) } : null)
         : kind === 'edit' ? (t.lastEdit || null)
         : kind === 'plan' ? (t.plans && t.planWanted && t.plans[t.planWanted] ? t.plans[t.planWanted] : null)
@@ -2514,28 +2526,44 @@ router.post('/writer/explain', requirePerson, express.json({ limit: '16kb' }), a
 // POST /writer/mark-section — grade a completed section (red/amber/green)
 // POST /writer/mark-part { criterionId, partText } — mark ONE question the
 // moment she finishes it (Sarah, 16 Aug: "we need to have Q doing the mark and
-// fix as you answer each question so you actually get direction"). One
-// criterion, her paragraphs for it, three fixes at most, low effort — a
-// fraction of the whole-document mark, which arrives too late to act on.
-// Synchronous: it is small, and a job to poll would cost more than it saves.
+// fix as you answer each question so you actually get direction"). Later the
+// same night: "we need the full treatment of the mark and fix at every section
+// we write." So it is the full Mark & fix for ONE part (q-writer.js markPart)
+// — medium effort, up to ten fixes — and, like /writer/mark, it is a JOB:
+// Railway's ~60s edge cannot kill it mid-call.
+// Poll GET /writer/job/mark-part?criterionId=X; { sync:true } waits inline.
+// The result lands in the notebook as partMarks[criterionId] and the terms /
+// requirements it reports go into termsFit / reqMet like the sentence check.
 router.post('/writer/mark-part', requirePerson, express.json({ limit: '256kb' }), writerTooLarge('That part is too long to mark in one go.'), async (req, res) => {
     const t = readTutor(writerScope(req));
     if (!t.brief) return res.status(400).json({ error: 'No brief yet — upload the task first.', code: 'no_brief' });
     const criterionId = String(req.body?.criterionId || '').replace(/\s+/g, '');
     if (!t.brief.criteria.some(c => c.id === criterionId)) return res.status(400).json({ error: 'That part is not in the brief.', code: 'bad_part' });
-    try {
+    const partText = String(req.body?.partText || '');
+    const gradeScheme = String(req.body?.gradeScheme || t.gradeScheme || '');
+    const scope = writerScope(req);
+    // One job PER QUESTION (key mark-part:<criterionId>) — two parts marked
+    // close together never share a job or hand each other's result back.
+    const job = startWriterJob(scope, 'mark-part', async () => {
         const r = await qWriter.markPart({
             brief: t.brief,
             essay: t.modelEssay || null,
             plan: (t.plans || {})[criterionId] || null,
             criterionId,
-            partText: String(req.body?.partText || ''),
-            gradeScheme: String(req.body?.gradeScheme || t.gradeScheme || ''),
+            partText,
+            gradeScheme,
         });
-        ukJson(res, { ok: true, ...r });
-    } catch (e) {
-        writerFail(res, e, '[writer/mark-part]', 'marking this question');
+        const ex = noteExpectations(scope, criterionId, r.termsUsed || [], r.requirementsMet || []);
+        const saved = { ...r, at: Date.now() };
+        // Merge: one entry per question, the others stay as they were.
+        const t2 = writeTutor(scope, { partMarks: { ...(readTutor(scope).partMarks || {}), [criterionId]: saved } });
+        return { ...saved, termsFit: t2.termsFit || (ex && ex.termsFit) || {}, reqMet: t2.reqMet || (ex && ex.reqMet) || {} };
+    }, { criterionId, keySuffix: criterionId });
+    if (req.body?.sync) {
+        while (job.status === 'running') await new Promise(r => setTimeout(r, 250));
+        return res.status(job.status === 'done' ? 200 : (job.error?.status || 502)).json(qWriter.ukPolishResponse({ ok: job.status === 'done', ...jobView(job) }));
     }
+    ukJson(res, { ok: true, ...jobView(job) });
 });
 
 router.post('/writer/mark-section', requirePerson, express.json({ limit: '64kb' }), async (req, res) => {

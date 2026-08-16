@@ -48,7 +48,7 @@ const UK_LINE = 'House style: British English throughout — UK spelling (organi
 // originally worded it"). The student has not read the brief and never will;
 // each question must stand on its own in plain, everyday words.
 const PLAIN_QUESTION_RULE = `HOW EVERY QUESTION IS WORDED — as if the student had already said "I don't understand":
-- Plain, concrete, everyday British English about real things (a job, a shop, a team, a family, a lesson, a case, the company or topic in front of them — whatever the subject is). One short question — never more than about 35 words for the question itself. A concrete example or scenario may sit in front of it, in one short sentence.
+- Plain, concrete, everyday British English about real things (a job, a shop, a team, a family, a lesson, a case, the company or topic in front of them — whatever the subject is). One short question — about 20 words for the question itself. A concrete example or scenario may sit in front of it, in one short sentence.
 - Name the academic term ONCE, in passing, so they learn it — "…that's what the brief calls a 'primary source'" — but never open with the term and never read the brief's jargon back at them ("discuss", "critically evaluate", "with reference to").
 - The student has not read and will not read the brief. Never say "as the brief asks" or "see criterion X" — carry the meaning inside the question itself (the scenario, the example, the term named once) so they never need to open the document or the board.
 - Never a list of questions. One question, one idea.
@@ -116,9 +116,13 @@ const WHY_THE_GAME = 'These are YOUR essays. These are YOUR marks — no other A
 const GAME_RULE = 'This is a game you are playing: steer the student, question by question, tool by tool, until their essay matches yours. Score = how close they are (the match score they can see goes up as they get closer — you may say so: "that took you to 60% on this part"). You never reveal the target; you win by steering.';
 // No marker-speak where the student can hear it: warm, short, steering.
 const COACH_VOICE = 'HOW YOU SOUND TO THE STUDENT: a coach mid-game, warm and short — "Closer." "That\'s it — next." "One thing still missing: …" "Nearly — say what \'valuing\' looks like in real life." Never marker language ("improve", "develop further", "criterion", "AC1.4", "the marker wants") in anything the student reads. Never a rewritten sentence.';
+// Sarah, 16 Aug 2026 (live-testing): "I feel we could be getting to the answers
+// quicker if Q was more to the point." One stable rule, appended at the END of
+// the block so the cached prefix above it still serves.
+const TO_THE_POINT = 'TO THE POINT: no preamble, no restating what they wrote, no "Great —" / "Let\'s think about", no reasons for asking. Ask the question. If you supply an idea, two short sentences at most, then the ask. Sarah, 16 Aug: "we could be getting to the answers quicker if Q was more to the point."';
 // ONE stable block, top of the system prompt (after UK_LINE) ⇒ the prompt
-// cache still serves.
-const MISSION_BLOCK = TUTOR_MISSION + '\n' + WHY_THE_GAME + '\n' + GAME_RULE + '\n' + COACH_VOICE + '\n' + BRICK_LOOP_RULE;
+// cache still serves. New rules go on the END (TO_THE_POINT), never the top.
+const MISSION_BLOCK = TUTOR_MISSION + '\n' + WHY_THE_GAME + '\n' + GAME_RULE + '\n' + COACH_VOICE + '\n' + BRICK_LOOP_RULE + '\n' + TO_THE_POINT;
 function withMission(systemPrompt) {
     const sys = String(systemPrompt || '');
     return sys.startsWith(MISSION_BLOCK) ? sys : MISSION_BLOCK + '\n\n' + sys;
@@ -181,6 +185,15 @@ function capWords(str, n) {
     if (words.length <= n) return s;
     const cut = words.slice(0, n).join(' ');
     return /[.!?]["'”’)\]]*$/.test(cut) ? cut : cut.replace(/[,;:]$/, '') + '…';
+}
+// A supplied idea, held to "two short sentences at most" (TO_THE_POINT): the
+// first nSentences sentences, then capWords at nWords. Never the student's text.
+function capSentences(str, nSentences, nWords) {
+    const s = String(str || '').replace(/\s+/g, ' ').trim();
+    if (!s) return '';
+    const parts = splitSentences(s).map(x => x.trim()).filter(Boolean);
+    const kept = parts.length > nSentences ? parts.slice(0, nSentences).join(' ') : s;
+    return capWords(kept, nWords);
 }
 
 // Accuracy-critical calls (reading the brief, marking, references, teaching)
@@ -656,11 +669,11 @@ function normaliseProbe(r, brief, essay, plan) {
     const brickIds = new Set(allBrickIds(essay).map(b => b.brickId));
     const criterionId = ids.has(String(r.criterionId || '').replace(/\s+/g, '')) ? String(r.criterionId).replace(/\s+/g, '') : (brief.criteria[0] && brief.criteria[0].id) || '';
     return {
-        question: capWords(r.question, 35),
+        question: capWords(r.question, 24),
         criterionId,
-        hint: r.hint ? String(r.hint) : null,
+        hint: r.hint ? capWords(r.hint, 14) || null : null,
         answer: r.answer ? String(r.answer).trim() : null,
-        supply: r.supply ? String(r.supply).trim() : null,
+        supply: r.supply ? capSentences(r.supply, 2, 45) || null : null,
         thenAsk: r.thenAsk ? String(r.thenAsk).trim() : null,
         acknowledge: r.acknowledge ? String(r.acknowledge) : null,
         coveredSoFar: Array.isArray(r.coveredSoFar) ? r.coveredSoFar.map(x => String(x).replace(/\s+/g, '')).filter(x => ids.has(x)) : [],
@@ -670,7 +683,7 @@ function normaliseProbe(r, brief, essay, plan) {
         // The words, judged — only real expected terms, canonical spelling.
         termsUsed: (Array.isArray(r.termsUsed) ? r.termsUsed : []).map(x => termCanon(plan, x)).filter(Boolean),
         termsMisused: (Array.isArray(r.termsMisused) ? r.termsMisused : []).map(m => ({ term: termCanon(plan, m && m.term), why: String((m && m.why) || '').trim() })).filter(m => m.term && m.why).slice(0, 4),
-        reaction: r.reaction ? String(r.reaction).trim().split(/\n+/)[0].trim() || null : null,
+        reaction: r.reaction ? capWords(String(r.reaction).trim().split(/\n+/)[0], 12) || null : null,
     };
 }
 // An expected term as the plan spells it, or '' if it is not one.
@@ -786,18 +799,27 @@ ${plans ? Object.values(plans).map(p => p && p.criterionId ? '[' + p.criterionId
 // Both point the same way. The whole-document mark is the most expensive call
 // in the app (20,000 tokens, medium effort) and it lands at the very end, when
 // the writing is finished and the direction is too late to use. One question's
-// worth is a fraction of that: one criterion, her paragraphs for it, three
-// fixes at most, low effort. Small and quick, while she can still act on it.
+// worth is a fraction of that: one criterion, her paragraphs for it.
+//
+// Sarah, 16 Aug, later the same night: "we need the full treatment of the mark
+// and fix at every section we write." So this is NOT a lite mark — it is the
+// end-of-essay Mark & fix, for ONE question: same rules (weakest first, quote
+// her phrase, needs, tools, brick, never a replacement sentence, coach voice),
+// up to MAX_CRITIQUE items, medium effort, real headroom — and it reports the
+// expected terms used / requirements met the way the full mark does per
+// criterion. It runs as a job (routes.js) so Railway's edge cannot kill it.
 function partMarkSchema() { return {
     type: 'object', additionalProperties: false,
-    required: ['band', 'strongest', 'missingForTop', 'critique'],
+    required: ['band', 'strongest', 'missingForTop', 'critique', 'termsUsed', 'requirementsMet'],
     properties: {
         band: { type: 'string', enum: ['top', 'mid', 'low', 'missing'] },
         strongest: { type: 'string', description: 'ONE short line naming the best thing she actually did in this part, quoting a few of her own words. Never flattery — if it is thin, say what the one real point is.' },
         missingForTop: { type: 'string', description: 'The ONE concrete thing between this part and the top band. A named idea, an example, a figure, a source, the other side of the argument. Never "develop further".' },
+        termsUsed: { type: 'array', items: { type: 'string' }, description: 'Of this part\'s EXPECTED TERMS, the ones her answer uses correctly (exact term as listed) — the idea behind the word is on the page. Empty if none listed / none used.' },
+        requirementsMet: { type: 'array', items: { type: 'string' }, description: 'Of this part\'s REQUIREMENTS, the kinds her answer satisfies. Empty if none.' },
         critique: {
             type: 'array',
-            description: 'AT MOST 3 sentences of hers worth fixing, weakest first. Only sentences that fall short; skip what already works. Empty if the part is genuinely fine.',
+            description: 'MARK & FIX for this question — the full treatment, the same as the end-of-essay mark: every sentence of hers that falls short of the brick it should be voicing, weakest first, then in order. AT MOST 10 — she works through them one at a time. Skip sentences that already match. Empty if the part is genuinely fine.',
             items: {
                 type: 'object', additionalProperties: false,
                 required: ['sentence', 'missing', 'fix', 'targetBrickId', 'suggestedTools', 'needs'],
@@ -818,7 +840,7 @@ async function markPart({ brief, essay, plan, criterionId, partText, gradeScheme
     const crit = brief.criteria.find(c => c.id === criterionId);
     if (!crit) throw new Error('That part is not in the brief.');
     const text = String(partText || '').trim();
-    if (!text) return { band: 'missing', strongest: '', missingForTop: 'There is nothing on the page for this part yet.', critique: [] };
+    if (!text) return { criterionId, band: 'missing', strongest: '', missingForTop: 'There is nothing on the page for this part yet.', termsUsed: [], requirementsMet: [], critique: [] };
     const bricks = bricksOfCriterion(essay, criterionId);
     const system = withMission(`You are marking ONE question of this assignment, the moment the student finishes it — so the direction arrives while they can still use it. ${gradeScheme ? `Grade scheme: ${gradeScheme}.` : ''}
 
@@ -826,8 +848,10 @@ Rules:
 - Judge ONLY this question. Say nothing about the rest of the document.
 - Evidence is their own words: quote a phrase of theirs.
 - "missingForTop" is the ONE thing between this and the top band, concrete enough to act on in the next five minutes.
-- At most THREE sentences in the critique, weakest first. If the part is genuinely fine, return an empty critique and say so in "strongest".
+- MARK & FIX — the full treatment, exactly as the end-of-essay mark does it: "critique" is the sentence-by-sentence fix list she works through straight away. Every sentence of hers that falls short of the brick it should be voicing, weakest first, then in order (at most ten). For each: "missing" (one plain line, coach voice, what is missing), "fix" (the concrete thing to go and DO — find one piece of evidence, name the idea, give the example, put a number on it — never the words themselves), the brick it should be voicing ("targetBrickId"), the requirement kinds it lacks ("needs" — they show as the coloured dots), and the one to three tools that lead HER to write it. Copy each sentence VERBATIM from the numbered list. If the part is genuinely fine, return an empty critique and say so in "strongest".
+- EXPECTATIONS: report which expected terms her answer uses correctly ("termsUsed" — the idea behind the word is on the page; a word dropped in as a label is NOT used) and which requirements it satisfies ("requirementsMet").
 - Never write a replacement sentence. The fix says what to go and do, never the words.
+- Coach voice, no marker language in anything she reads.
 ${PLAIN_QUESTION_RULE}
 
 ${LEADING_QUESTION_RULE}
@@ -839,8 +863,12 @@ ${expectationsForPrompt(plan)}
 ${bricks.length ? '\nWHAT A TOP ANSWER CONTAINS (your model answer — never quote it to them):\n' + bricks.map(b => `(${b.brickId}) ${b.gist}`).join('\n') : ''}`);
     const sentences = splitSentences(text).map(x => x.trim()).filter(x => x.length > 2).slice(0, 60);
     const user = `THEIR ANSWER TO THIS QUESTION (numbered sentences):\n${sentences.map((x, i) => `${i + 1}. ${x}`).join('\n')}\n\nMark this question.`;
-    const r = await callAccurate(system, user, { maxTokens: 2500, schema: partMarkSchema(), effort: 'low' });
+    // Full treatment ⇒ the full mark's effort, and headroom for up to ten
+    // verbatim sentences plus thinking (the whole-document mark needed 20,000
+    // for ~30 sentences across every part; one part gets 9,000).
+    const r = await callAccurate(system, user, { maxTokens: 9000, schema: partMarkSchema(), effort: 'medium' });
     const brickIds = new Set(bricks.map(b => b.brickId));
+    const kinds = new Set(((plan && plan.requirements) || []).map(x => x.kind));
     const critique = (Array.isArray(r && r.critique) ? r.critique : []).map(it => ({
         sentence: String(it.sentence || '').trim(),
         missing: capWords(it.missing, 12),
@@ -849,12 +877,15 @@ ${bricks.length ? '\nWHAT A TOP ANSWER CONTAINS (your model answer — never quo
         suggestedTools: (Array.isArray(it.suggestedTools) ? it.suggestedTools : []).map(String).filter(t => EDIT_TOOLS.includes(t) || t === 'cite').slice(0, 3),
         needs: (Array.isArray(it.needs) ? it.needs : []).map(String).filter(k => REQ_KINDS.includes(k)),
         criterionId,
-    })).filter(it => it.sentence && (it.missing || it.fix)).slice(0, 3);
+    })).filter(it => it.sentence && (it.missing || it.fix)).slice(0, MAX_CRITIQUE);
     return {
         criterionId,
         band: ['top', 'mid', 'low', 'missing'].includes(r && r.band) ? r.band : 'low',
-        strongest: String((r && r.strongest) || '').trim(),
-        missingForTop: String((r && r.missingForTop) || '').trim(),
+        strongest: capWords(r && r.strongest, 22),
+        missingForTop: capWords(r && r.missingForTop, 22),
+        // termCanon: the plan's spelling, so the route's set add/delete matches.
+        termsUsed: (r && Array.isArray(r.termsUsed) ? r.termsUsed : []).map(x => termCanon(plan, x)).filter(Boolean),
+        requirementsMet: (r && Array.isArray(r.requirementsMet) ? r.requirementsMet : []).map(String).filter(x => kinds.has(x)),
         critique,
     };
 }
@@ -1313,7 +1344,7 @@ ${expectationsForPrompt(plan)}`);
     const closeness = ['match', 'closer', 'missing'].includes(r && r.closeness) ? r.closeness : 'closer';
     const kinds = new Set((plan && plan.requirements || []).map(x => x.kind));
     return {
-        closeness, hint: String((r && r.hint) || (closeness === 'match' ? 'That\'s it — next.' : 'Closer.')).trim(),
+        closeness, hint: capWords((r && r.hint) || (closeness === 'match' ? 'That\'s it — next.' : 'Closer.'), 14),
         // termCanon: the plan's spelling, so the route's set add/delete matches.
         termsUsed: (r && Array.isArray(r.termsUsed) ? r.termsUsed : []).map(x => termCanon(plan, x)).filter(Boolean),
         requirementsMet: (r && Array.isArray(r.requirementsMet) ? r.requirementsMet : []).map(String).filter(x => kinds.has(x)),
@@ -1626,8 +1657,8 @@ function normalisePlan(r, criterionId, bricks) {
             tags: kind === 'tag' ? (Array.isArray(s.tags) ? s.tags : []).map((t, k) => ({ name: String(t.name || '').trim(), colour: TAG_COLOURS.includes(t.colour) ? t.colour : TAG_COLOURS[k % TAG_COLOURS.length], meaning: String(t.meaning || '').trim() })).filter(t => t.name).slice(0, 4) : [],
             itemsFrom: (kind === 'tag' || kind === 'proscons') && s.itemsFrom ? String(s.itemsFrom).replace(/\s+/g, '') : null,
             side: (kind === 'argue' || kind === 'switch') && s.side ? String(s.side).trim() : null,
-            hint: s.hint ? String(s.hint).trim() : null,
-            supply: ['ask', 'argue', 'switch', 'recommend', 'list'].includes(kind) && s.supply ? String(s.supply).trim() : null,
+            hint: s.hint ? capWords(s.hint, 14) || null : null,
+            supply: ['ask', 'argue', 'switch', 'recommend', 'list'].includes(kind) && s.supply ? capSentences(s.supply, 2, 45) || null : null,
             thenAsk: ['ask', 'argue', 'switch', 'recommend', 'list'].includes(kind) && s.supply && s.thenAsk ? String(s.thenAsk).trim() : null,
             lesson: kind === 'teach' && s.lesson ? String(s.lesson).trim() : null,
             example: kind === 'teach' && s.example ? String(s.example).trim() : null,
@@ -1637,7 +1668,7 @@ function normalisePlan(r, criterionId, bricks) {
     if (!steps.length) throw new Error('The plan had no usable steps — try again.');
     factsFirst(steps);
     noTheoryBeforeFacts(steps);
-    for (const s of steps) s.prompt = capWords(leadingAsk(s.prompt), 35);
+    for (const s of steps) s.prompt = capWords(leadingAsk(s.prompt), 24);
     listNeedsASentence(steps);
     trimToMaxSteps(steps);
     // A numbers step with no rows becomes a plain ask; a tag/proscons step
@@ -1778,12 +1809,12 @@ Which bricks are voiced, is the step filled, and what is the one thing to ask if
     const r = await callAccurate(system, user, { maxTokens: 700, schema: STEP_CHECK_SCHEMA, effort: 'low' });
     const allowed = new Set(step.targetBrickIds || []);
     const filled = !!(r && r.filled);
-    const supply = r && r.supply && !filled ? String(r.supply).trim() : null;
+    const supply = r && r.supply && !filled ? capSentences(r.supply, 2, 45) || null : null;
     const kinds = new Set((plan && plan.requirements || []).map(x => x.kind));
     // Not filled and the model gave no ask back = the page had nothing to show
     // and moved on — full credit for an unfilled step. The step's own thenAsk /
     // prompt is the ask again; never filled:false with followUp:null.
-    const followUp = filled ? null : capWords((supply && r.thenAsk) || (r && r.followUp) || step.thenAsk || step.prompt, 30) || null;
+    const followUp = filled ? null : capWords((supply && r.thenAsk) || (r && r.followUp) || step.thenAsk || step.prompt, 22) || null;
     return {
         // termCanon: the plan's spelling, so the route's set add/delete matches.
         termsUsed: (r && Array.isArray(r.termsUsed) ? r.termsUsed : []).map(x => termCanon(plan, x)).filter(Boolean),
@@ -1837,7 +1868,7 @@ ${bricks.length ? 'THE BRICKS THE ASK IS FISHING FOR (Q\'s eyes only — teach t
         term: String(r.term || '').trim(),
         lesson: String(r.lesson).trim(),
         example: String(r.example || '').trim(),
-        applyAsk: capWords(r.applyAsk || ask, 35),
+        applyAsk: capWords(r.applyAsk || ask, 24),
         searchTerms: (Array.isArray(r.searchTerms) ? r.searchTerms : []).map(String).filter(Boolean).slice(0, 3),
     };
 }
@@ -2388,8 +2419,8 @@ function ukPolishResponse(value, key, parentKey) {
 }
 
 module.exports = {
-    ukPolishResponse, ukText, UK_LINE, PLAIN_QUESTION_RULE, withHouseStyle, plainLabel, capWords, parseWeight, termCanon,
-    TUTOR_MISSION, WHY_THE_GAME, GAME_RULE, COACH_VOICE, MISSION_BLOCK, withMission, BRICK_LOOP_RULE,
+    ukPolishResponse, ukText, UK_LINE, PLAIN_QUESTION_RULE, withHouseStyle, plainLabel, capWords, capSentences, parseWeight, termCanon,
+    TUTOR_MISSION, WHY_THE_GAME, GAME_RULE, COACH_VOICE, MISSION_BLOCK, withMission, BRICK_LOOP_RULE, TO_THE_POINT, MAX_CRITIQUE,
     toolHelp, checkSentence, matchScore, EDIT_TOOLS, TOOL_SCHEMA, CHECK_SCHEMA,
     planPart, normalisePlan, planForPrompt, tagItems, checkStep, brickById, bricksOfCriterion,
     PLAN_SCHEMA, TAG_SCHEMA, STEP_CHECK_SCHEMA, STEP_KINDS, TAG_COLOURS,
