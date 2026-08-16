@@ -1163,9 +1163,9 @@
             stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/>
           </svg>
-          <span>Drop your task / homework here — or paste / click</span>
+          <span>Drop your task here — one file or several (the questions + the marking guide) — or paste / click</span>
         </button>
-        <input type="file" id="source-file-input" style="display:none" />
+        <input type="file" id="source-file-input" style="display:none" multiple />
       </div>
       <!-- References bar — sits between source and body -->
       <div class="refs-bar" id="refs-bar">
@@ -3808,7 +3808,7 @@
         const btn = document.createElement('button');
         btn.type = 'button'; btn.className = 'source-add'; btn.id = 'source-add-btn';
         btn.title = 'Drop, paste, or click to add your homework / task';
-        btn.innerHTML = '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg><span>Drop your task / homework here — or paste text / click</span>';
+        btn.innerHTML = '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg><span>Drop your task here — one file or several — or paste text / click</span>';
         btn.addEventListener('click', () => { sourceMode = 'brief'; sourceFileInput.multiple = false; sourceFileInput.click(); });
         sourceSlot.appendChild(btn);
         // A link, e.g. the course page the assignment lives on
@@ -3922,51 +3922,85 @@
       });
     }
 
-    async function loadSourceFile(file) {
-      if (!file) return;
+    // Read ONE file to text (or an image data URL). Throws with a plain reason.
+    async function readTaskFile(file) {
       const name = file.name || 'pasted file';
-      sourceState.name = name + ' (loading…)';
-      sourceState.text = null; sourceState.imageDataUrl = null;
+      const lower = name.toLowerCase();
+      if (file.type.startsWith('image/')) return { name, imageDataUrl: await fileToDataUrl(file), text: null };
+      if (lower.endsWith('.pdf') || lower.endsWith('.docx')
+          || file.type === 'application/pdf'
+          || file.type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') {
+        const mb = file.size / (1024 * 1024);
+        if (mb > 36) throw new Error(name + ' is ' + mb.toFixed(1) + ' MB — over the 36 MB limit. Export it as a PDF without images, or upload only the pages with the tasks.');
+        setCoach({ msg: 'Reading ' + name + ' (' + mb.toFixed(1) + ' MB)…', thinking: true, inputVisible: false });
+        const dataUrl = await fileToDataUrl(file);
+        // api() surfaces the server's plain reason (413 too big, 400 corrupt /
+        // unsupported, 401 signed out) instead of a generic line.
+        const data = await api('/extract-text', { dataUrl, name }, { timeoutMs: 120000 });
+        const text = (data.text || '').trim();
+        if (text.length < 200) throw new Error(data.warning || (name + ' came back nearly empty (' + text.length + ' characters) — probably scanned images, not text. Try a PDF with real text, or paste the task as text.'));
+        return { name, text, imageDataUrl: null };
+      }
+      if (lower.endsWith('.txt') || lower.endsWith('.md') || file.type.startsWith('text/')) {
+        const text = await fileToText(file);
+        if ((text || '').trim().length < 40) throw new Error(name + ' is nearly empty — paste the task instead.');
+        return { name, text, imageDataUrl: null };
+      }
+      if (lower.endsWith('.doc')) throw new Error('Old Word .doc files can\'t be read here — open ' + name + ' in Word and save as .docx (or PDF), then try again.');
+      throw new Error(name + ' isn\'t a supported type — try PDF, Word (.docx), an image, or plain text.');
+    }
+
+    // THE BRIEF CAN BE MORE THAN ONE FILE. Sarah, 16 Aug: "it's not allowing me
+    // to upload 2 docs from the start and I need both to make the whole
+    // question and brief." A CIPD assignment arrives as the questions in one
+    // document and the marking guidance / assessment criteria in another —
+    // neither is the brief on its own. Two things were wrong:
+    //   - drop two files together and only files[0] was read; the second was
+    //     thrown away without a word;
+    //   - drop a second file after the first and it REPLACED the brief,
+    //     resetting the session, instead of joining it.
+    // Now every file dropped before the brief exists is read, and they go to
+    // Q as ONE task, each under its own name so he knows which is which. A
+    // file dropped AFTER the brief is a supporting source, as before, unless
+    // it is dropped within a minute of the brief landing — then it is treated
+    // as the missing half and the brief is re-read with both.
+    let briefFiles = [];          // [{ name, text }] — the documents that make up the task
+    let briefLandedAt = 0;
+    function joinedBriefText() {
+      if (briefFiles.length === 1) return briefFiles[0].text;
+      return briefFiles.map((f, i) => '=== DOCUMENT ' + (i + 1) + ' of ' + briefFiles.length + ': ' + f.name + ' ===\n' + f.text).join('\n\n');
+    }
+    async function loadSourceFile(fileOrFiles) {
+      const files = (Array.isArray(fileOrFiles) ? fileOrFiles : [fileOrFiles]).filter(Boolean);
+      if (!files.length) return;
+      sourceState.name = files.map(f => f.name).join(' + ') + ' (loading…)';
       renderSourceSlot();
       try {
-        const lower = name.toLowerCase();
-        if (file.type.startsWith('image/')) {
-          sourceState.imageDataUrl = await fileToDataUrl(file);
-          sourceState.name = name;
-        } else if (lower.endsWith('.pdf') || lower.endsWith('.docx')
-                   || file.type === 'application/pdf'
-                   || file.type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') {
-          const mb = file.size / (1024 * 1024);
-          if (mb > 36) throw new Error('This file is ' + mb.toFixed(1) + ' MB — over the 36 MB limit. Export the brief as a PDF without images, or upload only the pages with the tasks.');
-          setCoach({ msg: 'Reading the file (' + mb.toFixed(1) + ' MB)…', thinking: true, inputVisible: false });
-          const dataUrl = await fileToDataUrl(file);
-          // api() surfaces the server's plain reason (413 too big, 400 corrupt /
-          // unsupported, 401 signed out) instead of a generic line.
-          const data = await api('/extract-text', { dataUrl, name }, { timeoutMs: 120000 });
-          const text = (data.text || '').trim();
-          if (text.length < 200) throw new Error(data.warning || 'That file came back nearly empty (' + text.length + ' characters) — probably scanned images, not text. Try a PDF with real text, or paste the task as text.');
-          sourceState.text = text;
-          sourceState.name = name;
-        } else if (lower.endsWith('.txt') || lower.endsWith('.md') || file.type.startsWith('text/')) {
-          sourceState.text = await fileToText(file);
-          sourceState.name = name;
-          if ((sourceState.text || '').trim().length < 40) throw new Error('That text file is nearly empty — paste the task instead.');
-        } else if (lower.endsWith('.doc')) {
-          throw new Error('Old Word .doc files can\'t be read here — open it in Word and save as .docx (or PDF), then try again.');
-        } else {
-          throw new Error('That file type isn\'t supported — try PDF, Word (.docx), an image, or plain text.');
-        }
-        renderSourceSlot();
-
-        // The WHOLE extracted text goes to the brief step (it is stored
-        // server-side there); an image task still rides the chat path.
-        if (sourceState.text) {
-          await runBrief(sourceState.text, name);
-        } else if (sourceState.imageDataUrl) {
+        const read = [];
+        for (const f of files) read.push(await readTaskFile(f));
+        const image = read.find(r => r.imageDataUrl);
+        const texts = read.filter(r => r.text);
+        if (image && !texts.length) {
+          // A photographed task rides the chat path, as before.
+          sourceState.imageDataUrl = image.imageDataUrl; sourceState.text = null; sourceState.name = image.name;
+          renderSourceSlot();
           await runBriefViaChat('[image task — Q will use vision]');
+          return;
         }
+        // Adding to a brief that just landed → it was the other half.
+        const addingToFresh = state.brief && briefLandedAt && (Date.now() - briefLandedAt) < 60000 && briefFiles.length;
+        if (!addingToFresh) briefFiles = [];
+        for (const t of texts) if (!briefFiles.some(b => b.name === t.name)) briefFiles.push({ name: t.name, text: t.text });
+        sourceState.text = joinedBriefText();
+        sourceState.imageDataUrl = null;
+        sourceState.name = briefFiles.map(f => f.name).join(' + ');
+        renderSourceSlot();
+        // The WHOLE text of every document goes to the brief step (stored
+        // server-side there).
+        await runBrief(sourceState.text, sourceState.name);
+        briefLandedAt = Date.now();
       } catch (e) {
-        sourceState.name = null; sourceState.text = null; sourceState.imageDataUrl = null;
+        sourceState.name = null; sourceState.text = null; sourceState.imageDataUrl = null; briefFiles = [];
         renderSourceSlot();
         setCoach({ msg: 'Couldn\'t load that: ' + shortCause(e), section: 'FILE', hint: 'You can always paste the task as text.', inputVisible: true });
       }
@@ -3976,7 +4010,7 @@
       const files = Array.from(ev.target.files || []);
       if (files.length) {
         if (sourceMode === 'support') files.forEach(f => loadSupportingFile(f));
-        else loadSourceFile(files[0]);
+        else loadSourceFile(files);   // ALL of them — the brief may be two documents
       }
       sourceMode = 'brief';
       ev.target.value = '';
@@ -4024,8 +4058,11 @@
       e.preventDefault(); dragDepth = 0; dropOverlay.classList.remove('show');
       const files = Array.from((e.dataTransfer && e.dataTransfer.files) || []);
       if (!files.length) return;
-      if (state.brief) files.forEach(f => loadSupportingFile(f));   // the brief is in — this is a co-doc
-      else loadSourceFile(files[0]);
+      // A brief that landed under a minute ago is probably half a brief —
+      // the second file joins it. Otherwise, with a brief in, it is a co-doc.
+      const briefIsFresh = state.brief && briefLandedAt && (Date.now() - briefLandedAt) < 60000;
+      if (state.brief && !briefIsFresh) files.forEach(f => loadSupportingFile(f));
+      else loadSourceFile(files);   // ALL of them
     });
 
     // ── "I don't understand this" ─────────────────────────────────────────
