@@ -2153,81 +2153,98 @@
         { at: 80,  id: 'scarf', label: 'scarf', kind: 'wear',  icon: '🧣' },
         { at: 100, id: 'bed',   label: 'bed',   kind: 'home',  icon: '🛏️' },
       ];
-      // Palette letters → colours. '.' is transparent.
-      const PAL = {
-        w: '#f7f1e3', s: '#e2d6bf', k: '#7d6a4f', p: '#b98b5b', o: '#f2a95a', d: '#5b4636',
-        b: '#a06f45', c: '#f3dcbb', n: '#2b2b2b', e: '#ffffff', t: '#e88aa5', g: '#f6c65b',
-        h: '#e07a3f', r: '#d64545', y: '#f6d33c', l: '#7cc4f2', v: '#8d6bd8', z: '#5aa870', q: '#c9a86b',
-      };
-      // Sprite maps. Rows are strings of palette letters.
+      // Sprites — outlined, shaded pixel art (drawn and checked by render, 16 Aug).
+      const PAL = {"n":"#3b2a1f","w":"#fbf6ea","s":"#e8dcc4","S":"#d4c4a5","k":"#6f5b45","p":"#b98b5b","o":"#f2a95a","x":"#ffffff","b":"#b07a48","B":"#8a5a30","c":"#f7e8d0","C":"#e6d0ad","e":"#ffffff","i":"#2a2a2a","t":"#ef97ad","K":"#1c1c1c","h":"#f5a850","H":"#d8842e","m":"#fde9d3","M":"#f0d3b0","P":"#f4b9c8","y":"#f6d33c","Y":"#d9b21e","r":"#e04b5a","R":"#b53445","g":"#f6c65b","q":"#c9a86b","Q":"#a5843f","v":"#8d6bd8","V":"#6b4fb0","l":"#9fd3f7","z":"#5aa870"};
       const EGG_BASE = [
-        '....wwww....',
-        '...wwwwww...',
-        '..wwwwwwww..',
-        '.wwwwwwwwww.',
-        '.wwwwwwwwww.',
-        'wwwwwwwwwwww',
-        'wwwwwwwwwwww',
-        'wwwwwwwwwwww',
-        'wwwwwwwwwwsw',
-        '.wwwwwwwwss.',
-        '.wwwwwwwsss.',
-        '..wwwwwsss..',
-        '...ssssss...',
-        '....ssss....',
+        "........nnnnnn........",
+        "......nnwwwwwwnn......",
+        ".....nwwxwwwwwwwn.....",
+        "....nwwxwwwwwwwwwn....",
+        "...nwwwxwwwwwwwwwwn...",
+        "...nwwwwwwwwwwwwwwn...",
+        "..nwwwwwwwwwwwwwwwsn..",
+        "..nwwwwwwwwwwwwwwwsn..",
+        ".nwwwwwwwwwwwwwwwwssn.",
+        ".nwwwwwwwwwwwwwwwwssn.",
+        ".nwwwwwwwwwwwwwwwsssn.",
+        "nwwwwwwwwwwwwwwwwsssSn",
+        "nwwwwwwwwwwwwwwwwsssSn",
+        "nwwwwwwwwwwwwwwwssssSn",
+        "nwwwwwwwwwwwwwwwssssSn",
+        "nwwwwwwwwwwwwwwsssssSn",
+        ".nwwwwwwwwwwwwsssssSn.",
+        ".nwwwwwwwwwwwwsssssSn.",
+        ".nwwwwwwwwwwwssssssSn.",
+        "..nwwwwwwwwwsssssssn..",
+        "..nwwwwwwwwsssssssSn..",
+        "...nwwwwwsssssssSSn...",
+        "...nwwwssssssssSSSn...",
+        "....nssssssssSSSSn....",
+        ".....nnssssSSSSnn.....",
+        ".......nnnnnnnn.......",
       ];
-      const EGG_PUPPY_SPOTS = [[3, 4], [4, 4], [3, 5], [7, 8], [8, 8], [8, 9], [5, 10], [2, 7]];
-      const EGG_HAM_STRIPES = [[2, 4], [3, 4], [4, 4], [5, 4], [6, 4], [7, 4], [8, 4], [9, 4], [1, 8], [2, 8], [3, 8], [4, 8], [5, 8], [6, 8], [7, 8], [8, 8], [9, 8], [10, 8]];
-      const CRACKS = [ // pixels that turn dark as the egg cracks, in order
-        [[6, 3], [5, 4], [6, 5]],
-        [[7, 6], [6, 7], [7, 8]],
-        [[3, 6], [4, 6], [8, 3], [9, 4]],
-        [[5, 9], [4, 10], [8, 10], [9, 9]],
-      ];
+      const EGG_PUPPY_SPOTS = [[6,9],[7,9],[6,10],[7,10],[8,10],[7,11],[13,7],[14,7],[14,8],[11,15],[12,15],[11,16],[12,16],[13,16],[12,17],[5,18],[6,18],[6,19],[15,19],[16,19],[16,20]];
+      const EGG_HAM_STRIPES = [[1,8],[2,8],[3,8],[4,8],[5,8],[6,8],[7,8],[8,8],[9,8],[10,8],[11,8],[12,8],[13,8],[14,8],[15,8],[16,8],[17,8],[18,8],[19,8],[20,8],[1,9],[2,9],[3,9],[4,9],[5,9],[6,9],[7,9],[8,9],[9,9],[10,9],[11,9],[12,9],[13,9],[14,9],[15,9],[16,9],[17,9],[18,9],[19,9],[20,9],[1,15],[2,15],[3,15],[4,15],[5,15],[6,15],[7,15],[8,15],[9,15],[10,15],[11,15],[12,15],[13,15],[14,15],[15,15],[16,15],[17,15],[18,15],[19,15],[20,15],[1,16],[2,16],[3,16],[4,16],[5,16],[6,16],[7,16],[8,16],[9,16],[10,16],[11,16],[12,16],[13,16],[14,16],[15,16],[16,16],[17,16],[18,16],[19,16],[20,16],[1,21],[2,21],[3,21],[4,21],[5,21],[6,21],[7,21],[8,21],[9,21],[10,21],[11,21],[12,21],[13,21],[14,21],[15,21],[16,21],[17,21],[18,21],[19,21],[20,21]];
+      const CRACKS = [[[10,4],[9,5],[10,6],[11,7]],[[11,7],[12,8],[11,9],[12,10],[13,11]],[[13,11],[12,12],[13,13],[14,14],[8,3],[9,4]],[[6,12],[7,12],[8,13],[9,13],[13,13],[14,15],[15,16]],[[7,17],[8,18],[9,19],[10,20],[15,17],[16,18],[15,19]]];
       const PUPPY = [
-        '..bb........bb..',
-        '.bbbb......bbbb.',
-        '.bbbbccccccbbbb.',
-        '..bbccccccccbb..',
-        '..ccccccccccccc.',
-        '.cccncccccnccc..',
-        '.cccncccccnccc..',
-        '.ccccccccccccc..',
-        '..cccccnncccc...',
-        '..ccccnnnnccc...',
-        '...ccccccccc....',
-        '.bbbbbbbbbbbbb..',
-        '.bbbbbbbbbbbbb.b',
-        '.bbbbbbbbbbbbbbb',
-        '.bbb.bbbbb.bbb..',
-        '.bbb.bbbbb.bbb..',
+        "......nnn..........nnn......",
+        ".....nbbbn........nbbbn.....",
+        "....nbbBbbn......nbbBbbn....",
+        "....nbbbbbnnnnnnnnbbbbbn....",
+        "...nbbbbnccccccccnbbbbbn....",
+        "...nbbbnccccccccccnbbbbn....",
+        "...nbbncccccccccccnbbbn.....",
+        "...nbbnccccccccccccnbbn.....",
+        "...nbbnbbbccnncccncnbbn.....",
+        "...nbnbBbbcnienceincnbn.....",
+        "....nnbbbbcniinciiincn......",
+        "....nbbbbccccccccccccn......",
+        "....ncccccccccKKcccccn......",
+        ".....nccccccccKKccccn.......",
+        ".....ncccccccnnnnccccn......",
+        "......ncccccnttttnccn.......",
+        "......nnccccnnnnnnccnn......",
+        ".....ncccccccccccccccn......",
+        "....nccccccccccccccccnn.....",
+        "....nccbbcccccccccbbccnbn...",
+        "....ncbBbbcccccccbBbbcnbbn..",
+        "....ncbbbbcccccccbbbbcnbBn..",
+        "....nnbbbnnnnnnnnnbbbnnbbn..",
+        ".....nnnnn.......nnnnn.nnn..",
       ];
       const HAMSTER = [
-        '..oo......oo..',
-        '.oooo....oooo.',
-        '.ooooooooooooo',
-        'oooooooooooooo',
-        'ooonoooooonooo',
-        'ooonoooooonooo',
-        'ooooooooooooo.',
-        'occcccnncccco.',
-        'occcccccccccoo',
-        'oocccccccccooo',
-        'oooooooooooooo',
-        '.oooooooooooo.',
-        '..oo.oooo.oo..',
-        '..oo.oooo.oo..',
+        ".....nnnn........nnnn.....",
+        "....nhPPhn......nhPPhn....",
+        "....nhPPPhn....nhPPPhn....",
+        "...nhhhhhhhnnnnhhhhhhhn...",
+        "..nhhhhhhhhhhhhhhhhhhhhn..",
+        ".nhhhhhhhhhhhhhhhhhhhhhhn.",
+        ".nhhhhhhhhhhhhhhhhhhhhhhn.",
+        "nhhhhhnnhhhhhhhhhhnnhhhhhn",
+        "nhhhhnienhhhhhhhhnienhhhhn",
+        "nhhhhniinhhhhhhhhniinhhhhn",
+        "nhhhhhnnhhhmmmmhhhnnhhhhhn",
+        "nhhhhhhhhhmmmKmmmhhhhhhhhn",
+        "nhPPhhhhhhmmmmmmmhhhhhhPPn",
+        "nhPPhhhhhhhmmmmmhhhhhhhPPn",
+        "nhhhhhhhhhmmmmmmmhhhhhhhhn",
+        "nhhhhhhhhmmmmmmmmmhhhhhhhn",
+        "nhhhhhhhmmmmmmmmmmmhhhhhhn",
+        ".nhhhhhhmmmmmmmmmmmhhhhhn.",
+        ".nHhhhhhhmmmmmmmmmhhhhhHn.",
+        "..nHhhhhhhhhhhhhhhhhhhHn..",
+        "...nHHhPPhHHHHHHHhPPhHHn..",
+        "....nnnnnnnnnnnnnnnnnnn...",
       ];
       const ITEMS = {
-        bone:    ['e....e', 'ee..ee', '.eeee.', '.eeee.', 'ee..ee', 'e....e'],
-        biscuit: ['.qqqq.', 'qqkqqq', 'qqqqkq', 'qkqqqq', 'qqqkqq', '.qqqq.'],
-        seed:    ['..kk..', '.kgkk.', 'kgggkk', 'kgggkk', '.kkkk.', '..kk..'],
-        ball:    ['.yyyy.', 'yyeyyy', 'yyyyyy', 'yyyyyy', 'yyyyye', '.yyyy.'],
-        heart:   ['.rr.rr.', 'rrrrrrr', 'rrrrrrr', '.rrrrr.', '..rrr..', '...r...'],
-        bow:     ['tt...tt', 'tttttttt', '.tttttt.', 'tttttttt', 'tt...tt'],
-        hat:     ['..nnnn..', '..nnnn..', '..nnnn..', 'nnnnnnnn'],
-        scarf:   ['rrrrrrrr', 'rrrrrrrr', '.....rr.', '.....rr.'],
-        bed:     ['v..........v', 'v..........v', 'vvvvvvvvvvvv', 'vllllllllllv', 'vllllllllllv', 'vvvvvvvvvvvv'],
+        bone: ["nn......nn","nccnnnnccn","nccccccccn","nccccccccn","nccnnnnccn","nn......nn"],
+        seed: ["...nn...","..nkkn..",".nkggkkn",".nkggkkn",".nkkgkkn","..nkkkn.","...nn..."],
+        ball: ["..nnnn..",".nyyyyn.","nyeyyyyn","nyyyyYyn","nyyyYYyn","nyyYYYyn",".nYYYYn.","..nnnn.."],
+        heart: [".nn.nn.","nrrnrrn","nrrrrrn","nrRRRrn",".nRRRn.","..nRn..","...n..."],
+        bow: ["nn.....nn","nttn.nttn","ntttttttn","ntttttttn","nttn.nttn","nn.....nn"],
+        hat: ["...nnnnnn...","...niiiin...","...niiiin...","...niiiin...","nnnniiiinnnn","niiiiiiiiiin","nnnnnnnnnnnn"],
+        scarf: ["nrrrrrrrrrrn","nrRrrrrrRrrn","nrrrrrrrrrrn",".......nrrn.",".......nrRn.",".......nrrn.","........nn.."],
+        bed: ["nvvn................nvvn","nvVn................nvVn","nvvvvvvvvvvvvvvvvvvvvvvn","nvllllllllllllllllllllvn","nvllllllllllllllllllllvn","nVVVVVVVVVVVVVVVVVVVVVVn",".nnnnnnnnnnnnnnnnnnnnnn."],
       };
 
       let canvas = null, ctx = null, W = 0, H = 0, raf = 0, t0 = 0;
@@ -2265,10 +2282,10 @@
       function eggMap(p) {
         const m = EGG_BASE.map((r) => r.split(''));
         const marks = p.kind === 'hamster' ? EGG_HAM_STRIPES : EGG_PUPPY_SPOTS;
-        for (const [x, y] of marks) if (m[y] && m[y][x] && m[y][x] !== '.') m[y][x] = p.kind === 'hamster' ? 'o' : 'p';
+        for (const [x, y] of marks) if (m[y] && m[y][x] && m[y][x] !== '.' && m[y][x] !== 'n') m[y][x] = p.kind === 'hamster' ? 'o' : 'p';
         // cracks appear a stage at a time across the 15 answers
         const stages = Math.min(CRACKS.length, Math.floor((p.correct / HATCH_AT) * (CRACKS.length + 1)));
-        for (let i = 0; i < stages; i++) for (const [x, y] of CRACKS[i]) if (m[y] && m[y][x] && m[y][x] !== '.') m[y][x] = 'k';
+        for (let i = 0; i < stages; i++) for (const [x, y] of CRACKS[i]) if (m[y] && m[y][x] && m[y][x] !== '.' && m[y][x] !== 'n') m[y][x] = 'k';
         return m.map((r) => r.join(''));
       }
       function draw(now) {
@@ -2280,29 +2297,29 @@
         const bob = Math.sin(time * 2.2) * 2;
         const cx = W / 2, floor = H - 22;
         if (stage === 'egg') {
-          const scale = 6;
+          const scale = 4;
           const map = eggMap(p);
           const w = map[0].length * scale, h = map.length * scale;
           const wob = anim && anim.kind === 'crack' ? Math.sin(time * 40) * 3 : 0;
           px(map, cx - w / 2 + wob, floor - h + bob * 0.5, scale);
         } else {
           const map = p.kind === 'hamster' ? HAMSTER : PUPPY;
-          const scale = stage === 'baby' ? 4 : stage === 'young' ? 5 : 6;
+          const scale = stage === 'baby' ? 3 : stage === 'young' ? 4 : 5;
           const w = map[0].length * scale, h = map.length * scale;
           let x = cx - w / 2, y = floor - h + bob;
           if (anim && anim.kind === 'play') { x += Math.sin(time * 6) * 14; y -= Math.abs(Math.sin(time * 9)) * 10; }
-          if (p.inBed && p.correct >= 100) { px(ITEMS.bed, cx - 36, floor - 20, 6); y += 6; }
-          // baby: bigger eyes (recolour a neighbour pixel)
-          px(map, x, y, scale, stage === 'baby' ? {} : {});
+          if (p.inBed && p.correct >= 100) { px(ITEMS.bed, cx - 60, floor - 22, 5); y += 4; }
+          px(map, x, y, scale);
           const wear = new Set(p.wearing || []);
-          if (wear.has('scarf')) px(ITEMS.scarf, x + w * 0.2, y + h * 0.5, scale * 0.6);
-          if (wear.has('bow'))   px(ITEMS.bow, x + w * 0.62, y - scale * 1.5, scale * 0.5);
-          if (wear.has('hat'))   px(ITEMS.hat, x + w * 0.28, y - scale * 3.2, scale * 0.6);
+          const ham = p.kind === 'hamster';
+          if (wear.has('scarf')) px(ITEMS.scarf, x + w * 0.24, y + h * (ham ? 0.74 : 0.62), scale * 0.5);
+          if (wear.has('bow'))   px(ITEMS.bow, x + w * (ham ? 0.72 : 0.66), y - scale * 1.2, scale * 0.45);
+          if (wear.has('hat'))   px(ITEMS.hat, x + w * 0.5 - 6 * scale * 0.5, y - 7 * scale * 0.5 + scale * (ham ? 2.2 : 1.6), scale * 0.5);
           if (anim && anim.kind === 'eat') {
             const k = Math.max(0, (anim.until - now) / anim.len);       // 1 → 0
-            px(ITEMS[anim.item] || ITEMS.biscuit, x + w * 0.35, y + h * 0.55, 4 * k + 0.5);
+            px(ITEMS[anim.item] || ITEMS.bone, x + w * 0.38, y + h * 0.58, 2.6 * k + 0.4);
           }
-          if (anim && anim.kind === 'play') px(ITEMS.ball, x + w + 6 + Math.sin(time * 6) * 10, floor - 24 - Math.abs(Math.sin(time * 9)) * 30, 4);
+          if (anim && anim.kind === 'play') px(ITEMS.ball, x + w + 6 + Math.sin(time * 6) * 10, floor - 24 - Math.abs(Math.sin(time * 9)) * 30, 3);
           if (anim && (anim.kind === 'love' || anim.kind === 'eat' || anim.kind === 'hatch')) {
             const k = Math.max(0, (anim.until - now) / anim.len);
             px(ITEMS.heart, x + w * 0.7, y - 30 + k * 26, 3);
@@ -2417,7 +2434,7 @@
         canvas = $('pet-canvas'); if (!canvas) return;
         ctx = canvas.getContext('2d');
         const dpr = Math.min(2, window.devicePixelRatio || 1);
-        W = 172; H = 150;
+        W = 172; H = 156;
         canvas.width = W * dpr; canvas.height = H * dpr; canvas.style.width = W + 'px'; canvas.style.height = H + 'px';
         ctx.scale(dpr, dpr); ctx.imageSmoothingEnabled = false;
         mounted = true;
