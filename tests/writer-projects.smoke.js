@@ -108,7 +108,7 @@ async function main() {
   ok(x.d.tutor && x.d.tutor.editPos && x.d.tutor.editPos.index === 3, 'editPos saved and read back');
 
   // 8. new routes with {} → 4xx not 500
-  for (const u of ['/writer/projects/open', '/writer/projects/rename', '/writer/projects/remove']) { x = await j('POST', u, {}); ok(x.status >= 400 && x.status < 500, u + ' {} → ' + x.status); }
+  for (const u of ['/writer/projects/open', '/writer/projects/rename', '/writer/projects/remove', '/writer/proofread', '/writer/mark-part']) { x = await j('POST', u, {}); ok(x.status >= 400 && x.status < 500, u + ' {} → ' + x.status); }
 
   // 9. served page has the switcher + header helper
   const page = await (await fetch(BASE + '/writer', { headers: { Cookie: cookie } })).text();

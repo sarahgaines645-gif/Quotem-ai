@@ -1935,6 +1935,22 @@ router.post('/writer/tool', requirePerson, express.json({ limit: '32kb' }), asyn
     }
 });
 
+// POST /writer/proofread { kind: 'spelling' | 'grammar', text } — one pass
+// over the page; verbatim spans + minimal corrections. The Editing panel
+// marks every one on the page and offers Fix / Fix all. (17 Aug)
+router.post('/writer/proofread', requirePerson, express.json({ limit: '512kb' }), writerTooLarge('That is too much text to check in one go — check a section at a time.'), async (req, res) => {
+    const kind = String(req.body?.kind || 'spelling');
+    const text = String(req.body?.text || '');
+    if (!qWriter.PROOF_KINDS.includes(kind)) return res.status(400).json({ error: 'Which check? Spelling or grammar.', code: 'bad_kind' });
+    if (!text.trim()) return res.status(400).json({ error: 'There is nothing on the page to check yet.', code: 'empty' });
+    try {
+        const r = await qWriter.proofread({ text, kind });
+        ukJson(res, { ok: true, ...r });
+    } catch (e) {
+        writerFail(res, e, '[writer/proofread]', kind + ' check');
+    }
+});
+
 // POST /writer/check-sentence — the student rewrote the highlighted sentence;
 // Q compares it to the brick and answers with a closeness cue (never the
 // target). match ⇒ the brick counts as voiced; closer ⇒ half credit. The

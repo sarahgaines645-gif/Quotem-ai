@@ -1353,6 +1353,54 @@ ${targetForPrompt(brief, essay, brickId)}`);
     };
 }
 
+// ── PROOFREAD (Sarah, 17 Aug: "an editing panel where we can press spelling
+// and it will highlight all spelling mistakes… words, phrases, grammar").
+// One pass over the page for ONE kind of slip. Every "wrong" is a VERBATIM
+// span of her text (so the page can find and mark it); "right" is the
+// minimal correction of that span alone. Never style, never her argument,
+// never a rewritten sentence — spelling is spelling, grammar is grammar.
+const PROOF_KINDS = ['spelling', 'grammar'];
+const PROOF_SCHEMA = {
+    type: 'object', additionalProperties: false,
+    required: ['issues'],
+    properties: {
+        issues: {
+            type: 'array', maxItems: 60,
+            items: {
+                type: 'object', additionalProperties: false,
+                required: ['wrong', 'right', 'why'],
+                properties: {
+                    wrong: { type: 'string', description: 'The exact span from the text, character for character (2 to 12 words for grammar; the single misspelt word for spelling). It MUST appear verbatim in the text.' },
+                    right: { type: 'string', description: 'That span corrected — the smallest change that fixes it. Same words otherwise.' },
+                    why: { type: 'string', description: 'Five to ten plain words: what was wrong ("its → it\'s: belongs-to vs it is").' },
+                },
+            },
+        },
+    },
+};
+const PROOF_BRIEFS = {
+    spelling: 'SPELLING ONLY: words spelt wrong (technowlogy → technology, desisions → decisions, loose → lose where "lose" is meant, veriety → variety, safty → safety). British spelling is correct (organisation, colour, programme). Proper nouns, brand names and the names in the brief are not mistakes. Do NOT touch grammar, punctuation, word choice or style.',
+    grammar: 'GRAMMAR AND PUNCTUATION ONLY: subject–verb agreement, tense slips, missing or wrong apostrophes (its/it\'s, employees\' ), run-on sentences that need a full stop, a missing capital at a sentence start, "there/their/they\'re", "effect/affect", double words ("on on"). Do NOT change spelling that is merely non-standard, word choice, style, or the argument. The smallest fix only.',
+};
+async function proofread({ text, kind }) {
+    if (!PROOF_KINDS.includes(kind)) throw new Error('Unknown proofreading pass.');
+    const body = String(text || '').trim();
+    if (!body) throw new Error('There is nothing on the page to check yet.');
+    const system = withHouseStyle(`You are proofreading a student\'s draft for ONE kind of slip. ${PROOF_BRIEFS[kind]}
+Return every instance you find (up to 60), each as the exact span from the text and its minimal correction. If there are none, return an empty list. Never rewrite sentences; never comment on content.`);
+    const user = `THE TEXT:
+${body.slice(0, 60000)}
+
+List the ${kind} slips.`;
+    const r = await callAccurate(system, user, { maxTokens: 6000, schema: PROOF_SCHEMA, effort: 'low' });
+    const seen = new Set();
+    const issues = (Array.isArray(r && r.issues) ? r.issues : []).map(x => ({ wrong: String(x.wrong || '').trim(), right: String(x.right || '').trim(), why: capWords(x.why, 14) }))
+        // real, findable, and a change
+        .filter(x => x.wrong && x.right && x.wrong !== x.right && body.includes(x.wrong) && !seen.has(x.wrong) && seen.add(x.wrong))
+        .slice(0, 60);
+    return { kind, issues };
+}
+
 // ── The check: their rewritten sentence against the brick. A closeness cue,
 // never the target text.
 const CHECK_SCHEMA = {
@@ -2454,7 +2502,7 @@ function ukPolishResponse(value, key, parentKey) {
 module.exports = {
     ukPolishResponse, ukText, UK_LINE, PLAIN_QUESTION_RULE, withHouseStyle, plainLabel, capWords, capSentences, parseWeight, termCanon,
     TUTOR_MISSION, WHY_THE_GAME, GAME_RULE, COACH_VOICE, MISSION_BLOCK, withMission, BRICK_LOOP_RULE, TO_THE_POINT, MAX_CRITIQUE,
-    toolHelp, checkSentence, matchScore, EDIT_TOOLS, TOOL_SCHEMA, CHECK_SCHEMA,
+    toolHelp, checkSentence, matchScore, EDIT_TOOLS, TOOL_SCHEMA, CHECK_SCHEMA, proofread, PROOF_KINDS,
     planPart, normalisePlan, planForPrompt, tagItems, checkStep, brickById, bricksOfCriterion,
     PLAN_SCHEMA, TAG_SCHEMA, STEP_CHECK_SCHEMA, STEP_KINDS, TAG_COLOURS,
     teachFor, relabelCriteria, labelLooksGenerated, TEACH_SCHEMA, LABELS_SCHEMA,

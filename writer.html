@@ -1112,6 +1112,36 @@
     .wb-done::before { content: '● '; color: var(--accent); }
     .wb-empty { font-size: 14px; color: var(--text-faint); font-style: italic; }
     .wb-open-btn { margin-left: 6px; }
+    /* ── THE EDITING PANEL (Sarah, 17 Aug: "an editing panel where we can press
+       spelling and it will highlight all spelling mistakes. all the improvement
+       buttons can be on there — highlight the sentence(s) and use those
+       buttons, or press the button and then highlight"). */
+    .ed-panel { width: 300px; }
+    .ed-body { padding: 10px 12px 12px; overflow: auto; }
+    .ed-hint { font-size: 11px; color: var(--text-muted); line-height: 1.45; margin-bottom: 8px; }
+    .ed-hint b { color: var(--text); }
+    .ed-sec { font-size: 9px; font-weight: 700; letter-spacing: 0.09em; text-transform: uppercase; color: var(--text-faint); margin: 10px 0 5px; }
+    .ed-tools { display: flex; flex-wrap: wrap; gap: 6px; }
+    .ed-tools .q-btn { font-size: 11px; }
+    .ed-tools .q-btn.armed { box-shadow: var(--neu-inset-sm); color: var(--accent); }
+    .ed-pass { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+    .ed-status { font-size: 11px; color: var(--text-muted); margin-top: 6px; }
+    .ed-issues { display: flex; flex-direction: column; gap: 4px; margin-top: 6px; }
+    .ed-issue { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 6px; align-items: center; padding: 6px 8px; border-radius: 10px; box-shadow: var(--neu-raised-xs); cursor: pointer; }
+    .ed-issue:hover { box-shadow: var(--neu-raised-sm); }
+    .ed-issue.done { opacity: 0.45; }
+    .ed-issue .ed-w { font-size: 12px; color: var(--text); overflow-wrap: anywhere; }
+    .ed-issue .ed-w s { color: var(--accent); text-decoration-color: var(--accent); }
+    .ed-issue .ed-w b { font-weight: 700; }
+    .ed-issue .ed-y { font-size: 10px; color: var(--text-muted); }
+    .ed-issue .ed-fix { border: none; border-radius: 8px; padding: 4px 8px; font-family: 'Space Grotesk', sans-serif; font-size: 10px; font-weight: 700; background: var(--bg); color: var(--text); box-shadow: var(--neu-raised-xs); cursor: pointer; }
+    .ed-issue .ed-fix::before { content: '● '; color: var(--accent); }
+    ::highlight(q-proof) { text-decoration: underline wavy var(--accent); text-decoration-thickness: 2px; text-underline-offset: 3px; }
+    ::highlight(q-proof-one) { background: rgba(233,30,99,0.14); }
+    .pc-explain { font-size: 12px; color: var(--text); line-height: 1.5; margin-top: 6px; }
+    .pc-links { display: flex; gap: 10px; margin-top: 8px; font-size: 11px; }
+    .pc-links a { color: var(--text-muted); text-decoration: none; }
+    .pc-links a:hover { color: var(--accent); }
     @media (max-width: 700px) { .wb-ask { font-size: 17px; } .wb-tile { font-size: 14px; } .wb-pc { grid-template-columns: 1fr; } }
     .bb-src-wait .q-btn { margin-left: 6px; }
     .tb-budget { margin-left: auto; font-size: 10px; font-weight: 700; color: var(--text-muted); white-space: nowrap; }
@@ -1488,6 +1518,7 @@
           placeholder="Ask Q…" autocomplete="off" />
         <button type="button" class="q-go hidden" id="coach-go" title="Q reads what you have written since he last looked and comes back — one line, then the next thing">Continue →</button>
         <button type="button" class="q-mic" id="coach-wb" title="The whiteboard — the list, sorting, numbers or lesson we are on, big enough to teach on" aria-label="Open the whiteboard" style="font-size:13px">▦</button>
+        <button type="button" class="q-mic" id="coach-ed" title="Editing — spelling and grammar passes over the page, and the improvement tools: highlight, then press" aria-label="Open the editing panel" style="font-size:13px">✎</button>
         <button type="button" class="q-mic" id="coach-mic" title="Tap and talk — your words type themselves into the box. Tap again to stop, then press Enter."><svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg></button>
       </div>
     </div>
@@ -1515,6 +1546,14 @@
   </div>
 
   <!-- The Video panel — an explainer opens here, on its own raised movable card (same panel manager) -->
+  <div class="qpanel ed-panel hidden" id="edit-panel" data-panel="edit">
+    <div class="panel-head" id="edit-panel-head">
+      <span class="panel-title">✎ Editing</span>
+      <button type="button" class="panel-min" id="edit-panel-tog" title="Minimise" aria-label="Minimise the editing panel">−</button>
+    </div>
+    <div class="panel-body ed-body" id="edit-body"></div>
+    <div class="panel-grip" title="Drag to resize"></div>
+  </div>
   <div class="qpanel wb-panel hidden" id="wb-panel" data-panel="wb">
     <div class="panel-head" id="wb-panel-head">
       <span class="panel-title" id="wb-title">▦ Whiteboard</span>
@@ -2065,6 +2104,10 @@
         const under = !b.classList.contains('hidden') ? b.getBoundingClientRect().bottom + 10 : 12;
         return { w: 300, left: 12, top: Math.min(under, window.innerHeight - 260) };
       },
+    });
+    const editPanel = makePanel(document.getElementById('edit-panel'), 'edit', {
+      minW: 240, minH: 160,
+      defaults: () => ({ w: 300, left: Math.max(PANEL_M, window.innerWidth - 300 - 16), top: Math.min(window.innerHeight - 320, 420) }),
     });
     const wbPanel = makePanel(document.getElementById('wb-panel'), 'wb', {
       minW: 320, minH: 200,
@@ -3727,16 +3770,25 @@
       const cid = dot.dataset.cid, kind = dot.dataset.req; const rq = reqOf(cid, kind);
       const tool = REQ_TOOL[kind] || 'weak'; const label = DOT_ACTION_LABEL[tool] || tool;
       const it = { sentence: dot.dataset.sentence || '', targetBrickId: null, criterionId: cid };
-      showToolPop('<div class="pc-head"><span class="pc-dot" style="--dc:' + rq.colour + '"></span>' + escHtml(rq.label) + '</div><div class="pc-line">' + escHtml(dot.dataset.why || (rq.label + ' goes here.')) + '</div><button type="button" class="q-btn primary" id="dot-action">' + escHtml(label) + '</button>', { anchor: dot, kind: 'Missing here' });
+      // Sarah, 17 Aug: "I don't know what this means… I want it to cover
+      // people that are struggling." So the button here is EXPLAIN THIS — Q
+      // says in plain words what the thing is, with an everyday example. The
+      // tools live on the Editing panel.
+      showToolPop('<div class="pc-head"><span class="pc-dot" style="--dc:' + rq.colour + '"></span>' + escHtml(rq.label) + '</div><div class="pc-line">' + escHtml(dot.dataset.why || (rq.label + ' goes here.')) + '</div><div class="pc-explain" id="dot-explain"></div><button type="button" class="q-btn primary" id="dot-action">Explain this →</button><div class="pc-links"><a href="#" id="dot-edit">✎ Editing tools</a><a href="#" id="dot-here">Put my cursor here</a></div>', { anchor: dot, kind: 'Missing here' });
       toolPopEl.classList.add('dotpop');
       const btn = toolPopEl.querySelector('#dot-action');
-      btn.addEventListener('click', () => {
-        caretBeforeDot(dot);
-        toolPopEl.classList.remove('dotpop');
-        if (tool === 'cite' && typeof runAutoCite === 'function') { runAutoCite({ sentence: it.sentence, criterionId: cid, anchor: dot, dot }); return; }
-        state.currentCriterionId = cid; state.currentSection = cid;
-        runTool(tool === 'cite' ? 'references' : tool, it, '', { anchor: dot });
+      btn.addEventListener('click', async () => {
+        const out = toolPopEl.querySelector('#dot-explain'); if (!out) return;
+        btn.disabled = true; out.textContent = 'Q is putting it plainly…';
+        try {
+          const d = await api('/writer/explain', { concept: rq.label + (dot.dataset.why ? ' — ' + dot.dataset.why : ''), subject: (state.brief && (state.brief.title || state.brief.whatItWants)) || '', yearGroup: state.yearGroup || '' }, { timeoutMs: 45000 });
+          out.textContent = String(d.explanation || '').trim() || 'Q could not put that plainly — try again.';
+          appendBoardItem({ type: 'explain', text: rq.label + ' — ' + String(d.explanation || '').trim(), criterionId: cid });
+          btn.textContent = 'Explain it another way'; btn.disabled = false;
+        } catch (e) { out.textContent = 'Could not explain that (' + shortCause(e) + ') — try again.'; btn.disabled = false; }
       });
+      toolPopEl.querySelector('#dot-edit').addEventListener('click', (e) => { e.preventDefault(); caretBeforeDot(dot); openEditPanel(); });
+      toolPopEl.querySelector('#dot-here').addEventListener('click', (e) => { e.preventDefault(); caretBeforeDot(dot); toolPopEl.classList.remove('dotpop'); hideToolPop(); });
     }
     document.addEventListener('click', (e) => {
       const dot = e.target.closest('.q-idot'); if (!dot) return;
@@ -3890,6 +3942,113 @@
         startPart(id, { moveFrom: state.currentCriterionId });
       }
     });
+    // ── THE EDITING PANEL ──────────────────────────────────────────────────
+    // Tools: highlight text on the page then press — or press, then highlight
+    // (the tool arms and runs on the next selection). Passes: Spelling /
+    // Grammar mark every slip on the page (CSS Highlight API) and list them
+    // with Fix / Fix all — the smallest change to HER word, never a rewrite.
+    const edBody = document.getElementById('edit-body');
+    const ED_TOOL_ORDER = ['cite', 'weak', 'terminology', 'synonyms', 'dictionary', 'strategies', 'cases', 'references'];
+    let edArmed = null;                 // a tool waiting for a highlight
+    let edProof = { kind: null, issues: [], busy: false };
+    function docSelection() {
+      const sel = window.getSelection();
+      if (!sel || sel.rangeCount === 0 || sel.isCollapsed) return null;
+      const r = sel.getRangeAt(0);
+      if (!docBody.contains(r.startContainer) || !docBody.contains(r.endContainer)) return null;
+      const text = sel.toString().replace(/\s+/g, ' ').trim();
+      return text ? { text, range: r.cloneRange() } : null;
+    }
+    function edToolItem(selText) {
+      return { sentence: selText, targetBrickId: null, criterionId: state.currentCriterionId || firstPartId() };
+    }
+    function edRunTool(tool) {
+      const sel = docSelection();
+      if (!sel) {
+        // press first, then highlight
+        edArmed = tool; renderEditPanel();
+        setCoach({ msg: 'Now highlight the words on the page — ' + (EDIT_TOOL_LABELS[tool] || tool) + ' runs on what you pick.', hint: 'Drag across a sentence, or double-click a word.', inputVisible: false, step: false, actions: [{ label: 'Cancel', quiet: true, onClick: () => { edArmed = null; renderEditPanel(); } }] });
+        return;
+      }
+      edArmed = null; renderEditPanel();
+      const it = edToolItem(sel.text);
+      if (tool === 'cite') { runAutoCite({ sentence: sel.text, criterionId: it.criterionId }); return; }
+      const needsWord = tool === 'synonyms' || tool === 'dictionary';
+      const word = needsWord && !/\s/.test(sel.text) && sel.text.length <= 40 ? sel.text : '';
+      if (needsWord && !word) { showToolPop('<div class="pc-line">Pick ONE word for that — double-click it on the page, then press again.</div>', { kind: EDIT_TOOL_LABELS[tool] || tool }); return; }
+      runTool(tool, it, word, {});
+    }
+    // press, then highlight: the next selection inside the page runs it
+    docBody.addEventListener('mouseup', () => { if (!edArmed) return; const sel = docSelection(); if (!sel) return; const t = edArmed; edArmed = null; renderEditPanel(); setTimeout(() => edRunTool(t), 0); });
+    function edFindRanges(wrong) {
+      const out = []; const { text, map } = docTextMap();
+      let from = 0;
+      while (from < text.length) {
+        const at = text.indexOf(wrong, from); if (at < 0) break;
+        const r = document.createRange(); r.setStart(map[at].node, map[at].offset); r.setEnd(map[at + wrong.length - 1].node, map[at + wrong.length - 1].offset + 1);
+        out.push(r); from = at + wrong.length;
+      }
+      return out;
+    }
+    function edPaint(oneWrong) {
+      try {
+        if (!(window.CSS && CSS.highlights && window.Highlight)) return;
+        const all = [], one = [];
+        for (const is of edProof.issues) { if (is.done) continue; const rs = edFindRanges(is.wrong); all.push(...rs); if (oneWrong && is.wrong === oneWrong) one.push(...rs); }
+        CSS.highlights.set('q-proof', new Highlight(...all));
+        if (one.length) CSS.highlights.set('q-proof-one', new Highlight(...one)); else CSS.highlights.delete('q-proof-one');
+      } catch (_) {}
+    }
+    function edClearPaint() { try { if (window.CSS && CSS.highlights) { CSS.highlights.delete('q-proof'); CSS.highlights.delete('q-proof-one'); } } catch (_) {} }
+    async function edRunPass(kind) {
+      if (edProof.busy) return;
+      const text = docPlainText();
+      if (!text.trim()) { edProof = { kind, issues: [], busy: false, note: 'Nothing on the page yet.' }; renderEditPanel(); return; }
+      edProof = { kind, issues: [], busy: true }; edClearPaint(); renderEditPanel();
+      try {
+        const d = await api('/writer/proofread', { kind, text }, { timeoutMs: 90000 });
+        edProof = { kind, issues: (d.issues || []).map(x => ({ ...x, done: false })), busy: false, note: '' };
+      } catch (e) {
+        edProof = { kind, issues: [], busy: false, note: 'That check didn\'t answer (' + shortCause(e) + ') — try again.' };
+      }
+      renderEditPanel(); edPaint();
+    }
+    function edFix(i) {
+      const is = edProof.issues[i]; if (!is || is.done) return;
+      let n = 0; while (findInDoc(is.wrong) && n < 50) { if (!replaceInDoc(is.wrong, is.right)) break; n++; }
+      is.done = true; scheduleAutosave(); renderEditPanel(); edPaint();
+    }
+    function edFixAll() { edProof.issues.forEach((_, i) => edFix(i)); }
+    function edGoTo(i) {
+      const is = edProof.issues[i]; if (!is) return;
+      const hit = findInDoc(is.wrong); if (!hit) return;
+      const r = document.createRange(); r.setStart(hit.start.node, hit.start.offset); r.setEnd(hit.end.node, hit.end.offset + 1);
+      const sel = window.getSelection(); sel.removeAllRanges(); sel.addRange(r);
+      const b = r.getBoundingClientRect(); if (b && (b.top < 80 || b.bottom > window.innerHeight - 120)) window.scrollBy({ top: b.top - Math.round(window.innerHeight * 0.4), behavior: 'smooth' });
+      edPaint(is.wrong);
+    }
+    function renderEditPanel() {
+      if (editPanel.el.classList.contains('hidden')) return;
+      const tools = ED_TOOL_ORDER.map(t => `<button type="button" class="q-btn${edArmed === t ? ' armed' : ''}" data-ed-tool="${t}" title="${escHtml(ED_TOOL_TIPS[t] || '')}">${escHtml(EDIT_TOOL_LABELS[t] || t)}</button>`).join('');
+      const left = edProof.issues.filter(x => !x.done).length;
+      const list = edProof.issues.map((is, i) => `<div class="ed-issue${is.done ? ' done' : ''}" data-ed-i="${i}"><div><div class="ed-w"><s>${escHtml(is.wrong)}</s> → <b>${escHtml(is.right)}</b></div><div class="ed-y">${escHtml(is.why || '')}</div></div>${is.done ? '<span class="ed-y">fixed</span>' : `<button type="button" class="ed-fix" data-ed-fix="${i}">Fix</button>`}</div>`).join('');
+      const status = edProof.busy ? 'Checking the page…' : edProof.note ? edProof.note : edProof.kind ? (edProof.issues.length ? left + ' ' + edProof.kind + ' slip' + (left === 1 ? '' : 's') + ' marked on the page — click one to jump to it.' : 'No ' + edProof.kind + ' slips found on the page.') : '';
+      edBody.innerHTML = `<div class="ed-hint"><b>Highlight</b> words on the page, then press a tool — or press, then highlight.${edArmed ? ' <b>' + escHtml(EDIT_TOOL_LABELS[edArmed] || edArmed) + ' is waiting for your highlight.</b>' : ''}</div>
+        <div class="ed-sec">Improve</div><div class="ed-tools">${tools}</div>
+        <div class="ed-sec">Check the whole page</div>
+        <div class="ed-pass"><button type="button" class="q-btn${edProof.kind === 'spelling' && edProof.busy ? ' armed' : ''}" data-ed-pass="spelling">Spelling</button><button type="button" class="q-btn${edProof.kind === 'grammar' && edProof.busy ? ' armed' : ''}" data-ed-pass="grammar">Grammar</button>${left ? '<button type="button" class="q-btn quiet" id="ed-fixall">Fix all</button>' : ''}</div>
+        ${status ? `<div class="ed-status">${escHtml(status)}</div>` : ''}
+        ${list ? `<div class="ed-issues">${list}</div>` : ''}`;
+      edBody.querySelectorAll('[data-ed-tool]').forEach(b => b.addEventListener('click', () => edRunTool(b.dataset.edTool)));
+      edBody.querySelectorAll('[data-ed-pass]').forEach(b => b.addEventListener('click', () => edRunPass(b.dataset.edPass)));
+      const fa = document.getElementById('ed-fixall'); if (fa) fa.addEventListener('click', edFixAll);
+      edBody.querySelectorAll('[data-ed-fix]').forEach(b => b.addEventListener('click', (e) => { e.stopPropagation(); edFix(Number(b.dataset.edFix)); }));
+      edBody.querySelectorAll('.ed-issue').forEach(row => row.addEventListener('click', () => edGoTo(Number(row.dataset.edI))));
+    }
+    const ED_TOOL_TIPS = { cite: 'A real source for the highlighted claim, put in Harvard', weak: 'What is weak in the highlighted sentence — and what would make it strong', terminology: 'The proper term for what you highlighted', synonyms: 'Other words for the ONE word you highlighted', dictionary: 'What the ONE word you highlighted means', strategies: 'The theory or model that fits what you highlighted', cases: 'A case or example that fits', references: 'What to read for this point' };
+    function openEditPanel() { showPanel('edit'); revealPanel('edit'); renderEditPanel(); }
+    document.getElementById('coach-ed').addEventListener('click', openEditPanel);
+
     // ── THE WHITEBOARD ────────────────────────────────────────────────────
     // What the teaching board shows small, at teaching size: the step's ask,
     // Q's line, and the scaffold. Same state (stepStateOf), so anything typed
@@ -5662,6 +5821,7 @@
         // caret at the end of the pink sentence, then Q's help for the missing thing
         try { if (editHighlight && editHighlight.range) { const r = editHighlight.range.cloneRange(); r.collapse(false); const sel = window.getSelection(); sel.removeAllRanges(); sel.addRange(r); docBody.focus(); } } catch (_) {}
         showEditItem({ note, editing: true });
+        openEditPanel();
         const first = suggested[0] || (needLabels.length && /source|reference|cite/i.test(needLabels.join(' ')) ? 'cite' : 'weak');
         if (first) setTimeout(() => useTool(first, it), 60);
       };
@@ -6555,7 +6715,7 @@
     loadProjects().then(restoreSession, restoreSession);
     // Test hooks (no data, no secrets): lets the harness exercise the page-side
     // helpers without a paid call. Harmless in production.
-    window.__qwriterTest = { findInDoc, replaceInDoc, appendReference, docPlainText, splitCheck: (t) => endsSentence(t), runEditPass, checkCurrentSentence, showEditItem, state: () => state, currentEditText, partParagraphs, setBrief, storyPointsHtml, renderInlineDots, termsForBoard, setCoach, bandListHtml, showEditItem };
+    window.__qwriterTest = { findInDoc, replaceInDoc, appendReference, docPlainText, splitCheck: (t) => endsSentence(t), runEditPass, checkCurrentSentence, showEditItem, state: () => state, currentEditText, partParagraphs, setBrief, storyPointsHtml, renderInlineDots, termsForBoard, setCoach, bandListHtml, showEditItem, openEditPanel, renderEditPanel, edState: () => edProof, edSetProof: (p2) => { edProof = p2; renderEditPanel(); edPaint(); } };
 
 
     // (The old per-card drag code lived here — every panel now goes through makePanel above.)
