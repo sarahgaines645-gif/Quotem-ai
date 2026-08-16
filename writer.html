@@ -4746,7 +4746,7 @@
       }
       const text = docPlainText();
       const delta = text.startsWith(state.docSnapshot) ? text.slice(state.docSnapshot.length) : text;
-      if (delta.trim().split(/s+/).filter(w => /[a-z0-9]/i.test(w)).length < PROBE_MIN_NEW_WORDS) return;   // truly nothing new — wait for the next keystroke
+      if (delta.trim().split(/\s+/).filter(w => /[a-z0-9]/i.test(w)).length < PROBE_MIN_NEW_WORDS) return;   // truly nothing new — wait for the next keystroke
       const idle = Date.now() - (lastInputAt || 0);
       if (idle < pauseMs) return rearm(pauseMs - idle);
       const finished = endsSentence(text) || /\n\s*$/.test(text);
