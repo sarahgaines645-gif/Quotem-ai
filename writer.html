@@ -728,7 +728,7 @@
       font-size: 10px; font-weight: 700; color: var(--text-muted); letter-spacing: 0.02em;
       margin-bottom: 8px; line-height: 1.35;
     }
-    .tb-earlier { margin-bottom: 10px; }
+    .tb-earlier { margin-bottom: 20px; }
     .tb-earlier > summary {
       list-style: none; cursor: pointer; font-size: 11px; color: var(--text-muted);
       user-select: none; padding: 4px 8px; border-radius: 10px; box-shadow: var(--neu-raised-xs);
@@ -739,7 +739,7 @@
     .tb-earlier[open] > summary { box-shadow: var(--neu-inset-sm); margin-bottom: 8px; }
     /* One rhythm: 12px body, 9px labels, line-height 1.5; no italics; answers
        in the page's normal ink, marked by the "you" label + a hairline rule. */
-    .tb-items { display: flex; flex-direction: column; gap: 10px; }
+    .tb-items { display: flex; flex-direction: column; gap: 14px; }
     .tb-item { display: block; min-width: 0; }
     .tb-item.tb-click { cursor: pointer; }
     .tb-label {
@@ -866,6 +866,10 @@
     }
     .q-mic:hover { color: var(--accent); }
     .q-mic.listening { box-shadow: var(--neu-inset-sm); color: var(--accent); }
+    .meta-btn.listening { box-shadow: var(--neu-inset-sm); color: var(--accent); }
+    .meta-btn.listening svg { animation: micpulse 1.1s ease-in-out infinite; }
+    @keyframes micpulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
+    @media (prefers-reduced-motion: reduce) { .meta-btn.listening svg { animation: none; } }
     .q-mic.hidden { display: none; }
     .source-list { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
     .source-chip.support { font-size: 11px; }
@@ -895,7 +899,23 @@
     .q-lesson .ql-more { display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: center; }
 
     /* ── Scaffolded coaching: the agenda + the scaffold widgets on the board ── */
-    .tb-agenda { margin: 0 0 10px; padding: 8px 10px; border-radius: 10px; box-shadow: var(--neu-raised-xs); }
+    /* ── The board is read at a glance, or not at all ─────────────────────
+       Sarah, 16 Aug: "teaching board still needs more formatting. to split it
+       all up. it's too crowded." Six blocks were stacked 10px apart with no
+       captions, so the eye had nothing to grab: the step, the words, the
+       worksheet and the conversation all ran together as one grey column.
+       Each block is now a card with air around it and a small caption saying
+       what it is. Space is the formatting — nothing new to read. */
+    .tb-agenda, .tb-expect, .tb-worksheet, .tb-current { position: relative; }
+    .tb-agenda::before, .tb-expect .ex-title, .tb-worksheet::before, .tb-current::before {
+      display: block; font-size: 9px; font-weight: 700; letter-spacing: 0.09em;
+      text-transform: uppercase; color: var(--text-faint); margin-bottom: 6px;
+    }
+    .tb-agenda::before { content: 'Now'; }
+    .tb-worksheet::before { content: 'Worksheet'; }
+    .tb-current::before { content: 'Q & you'; }
+    .tb-current:empty::before, .tb-worksheet:empty::before { content: none; }
+    .tb-agenda { margin: 0 0 20px; padding: 12px 14px; border-radius: 12px; box-shadow: var(--neu-raised-xs); }
     .tb-role { font-size: 12px; font-weight: 600; color: var(--text); line-height: 1.45; margin-bottom: 6px; }
     /* One step, then a row of beads. No list of what is coming. */
     .tb-now { font-size: 14px; font-weight: 600; color: var(--text); line-height: 1.45; }
@@ -906,11 +926,11 @@
     .st-bead.cur { background: var(--accent); box-shadow: none; transform: scale(1.35); }
     .tb-count { font-size: 10px; color: var(--text-faint); font-weight: 600; letter-spacing: 0.04em; }
     .tb-scaf { margin: 6px 0 4px; }
-    .tb-worksheet { margin: 0 0 10px; }
+    .tb-worksheet { margin: 0 0 20px; padding: 12px 14px; border-radius: 12px; box-shadow: var(--neu-raised-xs); }
     /* THE WORD BOARD (Sarah, 15 Aug 23:40): a card of words as BUTTONS per
        part — nothing else on it. Hover / long-press a word → a little popup
        card with the meaning + one everyday example. */
-    .tb-expect { margin: 0 0 10px; padding: 8px 10px; border-radius: 10px; box-shadow: var(--neu-raised-sm); }
+    .tb-expect { margin: 0 0 20px; padding: 12px 14px; border-radius: 12px; box-shadow: var(--neu-raised-sm); }
     .tb-expect .ex-title { display: block; font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--accent); margin-bottom: 4px; }
     .tb-expect .ex-title .ex-part { color: var(--text-muted); text-transform: none; letter-spacing: 0.02em; font-weight: 600; margin-left: 4px; }
     .tb-expect .ex-ask { font-size: 12px; font-weight: 600; color: var(--text); line-height: 1.45; margin-bottom: 6px; }
@@ -951,6 +971,15 @@
     .q-popcard.dotpop .pc-dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; border: 2px solid var(--dc, #999); box-sizing: border-box; margin-right: 6px; vertical-align: middle; position: relative; top: -1px; }
     .q-popcard.dotpop .q-btn { margin-top: 6px; }
     .doc-body p.student-line { position: relative; }
+    /* The question number on the page — a real heading, in the document's own
+       serif, so the download reads like a submission and she can see at a
+       glance which answer is which. */
+    .doc-body p.q-part-head {
+      font-family: 'Lora', Georgia, serif; font-weight: 600; font-size: 15px;
+      color: var(--text); margin: 26px 0 10px; padding-bottom: 6px;
+      border-bottom: 1px solid rgba(0,0,0,0.12);
+    }
+    .doc-body p.q-part-head:first-child { margin-top: 0; }
     .q-crit .qc-dots { margin-left: 6px; vertical-align: middle; }
     .tb-worksheet .tb-ws { margin: 4px 0 8px; }
     .sc-table td.sc-gap { font-weight: 700; color: var(--accent); white-space: nowrap; }
@@ -1101,6 +1130,7 @@
         <span id="meta-words">0 words</span>
         <span id="meta-saved" title="Everything on this page is saved to your account as you type">Not yet saved</span>
         <span class="meta-spacer"></span>
+        <button type="button" class="meta-btn" id="doc-mic" title="Talk straight onto the page — your words land where the cursor is, so a terminology button drops into the sentence you are saying. Tap again to stop."><svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-1px"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg> Talk</button>
         <button type="button" class="meta-btn" id="btn-download" title="Download what is on the page as a Word file">↓ Download</button>
         <button type="button" class="meta-btn primary" id="btn-finish" title="Q marks it like the marker, then walks it with you sentence by sentence — highlight, what's missing, the fix, tools, Check it">Mark &amp; fix →</button>
       </div>
@@ -2481,6 +2511,29 @@
     }
     // One paragraph per step (list / numbers / proscons), replaced in place
     // when the step changes; argue / switch answers are their own paragraphs.
+    // QUESTION NUMBERS ON THE PAGE. Sarah, 16 Aug: "the doc needs question
+    // numbers so we know what it refers to and we can tidy it up." Without
+    // them the document is one undivided run of paragraphs and there is no
+    // way to see which answer belongs to which question — hers had four
+    // questions' worth of writing in a single column.
+    //
+    // A real heading, not furniture: it belongs in the download too, because
+    // a CIPD or degree submission is headed by question anyway. Written once,
+    // above the part's first paragraph, and never duplicated.
+    function ensurePartHeading(cid) {
+      if (!cid) return null;
+      const existing = docBody.querySelector('p.q-part-head[data-part="' + CSS.escape(cid) + '"]');
+      if (existing) return existing;
+      const w = whereInfo(cid);
+      if (!w) return null;
+      const h = document.createElement('p');
+      h.className = 'q-part-head';
+      h.setAttribute('data-part', cid);
+      h.textContent = 'Question ' + w.n + ' — ' + w.label;
+      if (!docBody.textContent.trim() && !docBody.innerHTML.trim()) docBody.innerHTML = '';
+      docBody.appendChild(h);
+      return h;
+    }
     function putStepOnPage(cid, step, text, { append } = {}) {
       text = String(text || '').trim();
       const key = cid + ':' + step.id;
@@ -2489,6 +2542,7 @@
         if (existing) { if (text) existing.textContent = text; else existing.remove(); wordEl.textContent = countWords() + ' words'; scheduleAutosave(); state.docSnapshot = docPlainText(); return existing; }
       }
       if (!text) return null;
+      ensurePartHeading(cid);
       const p = insertQText(text, false, { focus: false });
       if (p) { p.setAttribute('data-step', key); state.docSnapshot = docPlainText(); }
       setTimeout(() => { try { refreshExpectations(); } catch (_) {} }, 0);
@@ -5004,6 +5058,83 @@
     micBtn.addEventListener('click', () => {
       if (!SpeechRec) { coachHint.textContent = 'Dictation isn\'t available in this browser — type your answer instead (Edge or Chrome can listen).'; return; }
       micBtn.classList.contains('listening') ? stopDictation() : startDictation();
+    });
+
+    // ── TALK STRAIGHT ONTO THE PAGE ───────────────────────────────────────
+    // Sarah, 16 Aug: "when you press the mic to answer it should be writing it
+    // on the doc so when you press the terminology button they go into your
+    // sentence. unless Q is working on an answer with you."
+    //
+    // Both are true, so both exist rather than one guessing: the coach card's
+    // mic still answers Q when he is working through something with her, and
+    // the page has its own. Dictating onto the page puts the caret in the
+    // document, which is what makes a terminology button land in the sentence
+    // she is actually speaking — the button inserts at the caret, and until
+    // now the caret was never in the document while she talked.
+    //
+    // Only FINAL chunks are written. Interim words rewrite themselves as the
+    // recogniser changes its mind, and rewriting the document under her hands
+    // would fight her cursor and her undo history.
+    const docMic = document.getElementById('doc-mic');
+    let docRec = null;
+    function docCaretInPage() {
+      const sel = window.getSelection();
+      return sel && sel.rangeCount && docBody.contains(sel.getRangeAt(0).startContainer);
+    }
+    function putCaretAtEnd() {
+      const last = docBody.lastElementChild || docBody;
+      const range = document.createRange();
+      range.selectNodeContents(last); range.collapse(false);
+      const sel = window.getSelection(); sel.removeAllRanges(); sel.addRange(range);
+      docBody.focus();
+    }
+    function stopDocDictation(why) {
+      docMic.classList.remove('listening');
+      docMic.textContent = docMic.textContent.replace(/^Listening.*/, '');
+      if (docRec) { try { docRec.stop(); } catch (_) {} docRec = null; }
+      setSavedLabel && scheduleAutosave();
+      if (why) coachHint.textContent = why;
+    }
+    function startDocDictation() {
+      if (!docCaretInPage()) putCaretAtEnd();
+      docRec = new SpeechRec();
+      docRec.continuous = true; docRec.interimResults = true; docRec.lang = 'en-GB';
+      docRec.addEventListener('result', (e) => {
+        let finalChunk = '';
+        for (let i = e.resultIndex; i < e.results.length; i++) if (e.results[i].isFinal) finalChunk += e.results[i][0].transcript;
+        if (!finalChunk.trim()) return;
+        if (!docCaretInPage()) putCaretAtEnd();
+        const sel = window.getSelection(); const r0 = sel.getRangeAt(0);
+        const pre = document.createRange(); pre.setStart(docBody, 0); pre.setEnd(r0.startContainer, r0.startOffset);
+        const before = pre.toString();
+        const text = (before.length && !/\s$/.test(before) ? ' ' : '') + finalChunk.trim();
+        if (!document.execCommand('insertText', false, text)) {
+          const r = sel.getRangeAt(0); r.insertNode(document.createTextNode(text)); r.collapse(false);
+        }
+        wordEl.textContent = countWords() + ' words';
+        scheduleAutosave(); scheduleLiveProbe();
+        try { refreshExpectations(); } catch (_) {}
+      });
+      docRec.addEventListener('error', (e) => {
+        const why = e.error === 'not-allowed' || e.error === 'service-not-allowed' ? 'microphone blocked — allow it in the address bar'
+          : e.error === 'no-speech' ? 'didn\'t hear anything'
+          : e.error === 'network' ? 'no connection for dictation'
+          : 'dictation stopped (' + e.error + ')';
+        stopDocDictation('Mic: ' + why + '. Type on the page instead, or tap Talk again.');
+      });
+      // The recogniser gives up on its own every so often; if she has not
+      // pressed stop, start listening again.
+      docRec.addEventListener('end', () => { if (docMic.classList.contains('listening')) { try { docRec.start(); } catch (_) { stopDocDictation(); } } });
+      try {
+        docRec.start(); docMic.classList.add('listening');
+        coachHint.textContent = 'Listening — talk and it goes on the page. Press a word button any time and it drops into your sentence.';
+      } catch (e) { docRec = null; coachHint.textContent = 'Couldn\'t start the mic: ' + shortCause(e); }
+    }
+    docMic.addEventListener('click', () => {
+      if (!SpeechRec) { coachHint.textContent = 'Dictation isn\'t available in this browser — Edge or Chrome can listen.'; return; }
+      if (docMic.classList.contains('listening')) { stopDocDictation(); return; }
+      if (micBtn.classList.contains('listening')) stopDictation();   // one ear at a time
+      startDocDictation();
     });
 
 
