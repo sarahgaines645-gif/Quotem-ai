@@ -383,6 +383,52 @@
       padding: 12px 14px 10px; z-index: 100;
     }
     .tower-card.hidden { display: none; }
+    /* The pet — the tube's mirror on the left. Same card, same depth. */
+    .pet-card {
+      position: fixed; left: 28px; top: 50%; transform: translateY(-50%);
+      width: 200px; background: var(--bg); border-radius: 18px;
+      box-shadow: 10px 10px 28px #ababab, -8px -8px 20px #ffffff;
+      padding: 12px 14px 10px; z-index: 100;
+    }
+    .pet-card.hidden { display: none; }
+    .pet-card .pet-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 6px; }
+    .pet-card .pet-title { font-size: 12px; font-weight: 700; color: var(--text); letter-spacing: 0.02em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .pet-card .pet-scene { text-align: center; }
+    .pet-card canvas { display: block; margin: 0 auto; image-rendering: pixelated; image-rendering: crisp-edges; }
+    .pet-card .pet-line { font-size: 10.5px; color: var(--text-muted); text-align: center; margin: 4px 0 6px; line-height: 1.35; }
+    .pet-card .pet-acts { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; }
+    .pet-act {
+      border: none; cursor: pointer; font-family: inherit; font-size: 12px; line-height: 1;
+      padding: 6px 9px; border-radius: 12px; background: var(--bg); color: var(--text);
+      box-shadow: var(--neu-raised-xs); transition: box-shadow 0.15s;
+    }
+    .pet-act:hover { box-shadow: var(--neu-raised-sm); }
+    .pet-act:active, .pet-act.on { box-shadow: var(--neu-inset-xs, inset 2px 2px 5px #ababab, inset -1px -1px 4px #ffffff); }
+    .pet-card .pet-choose { text-align: center; padding: 6px 0 4px; }
+    .pet-card .pet-choose .pc-q { font-size: 11px; color: var(--text-muted); margin-bottom: 8px; }
+    .pet-card .pet-eggs { display: flex; gap: 10px; justify-content: center; }
+    .pet-egg-btn {
+      border: none; cursor: pointer; font-family: inherit; font-size: 10.5px; color: var(--text);
+      padding: 8px 8px 6px; border-radius: 14px; background: var(--bg); box-shadow: var(--neu-raised-xs);
+      display: flex; flex-direction: column; align-items: center; gap: 4px; width: 78px;
+    }
+    .pet-egg-btn:hover { box-shadow: var(--neu-raised-sm); }
+    .pet-egg-btn .egg { width: 26px; height: 32px; border-radius: 50% 50% 50% 50% / 60% 60% 40% 40%; background: #f7f1e3; box-shadow: inset -3px -3px 6px #e2d6bf; position: relative; }
+    .pet-egg-btn .egg.spots::before { content: ''; position: absolute; left: 6px; top: 8px; width: 7px; height: 7px; border-radius: 50%; background: #b98b5b; box-shadow: 10px 12px 0 -1px #b98b5b, 4px 16px 0 -2px #b98b5b; }
+    .pet-egg-btn .egg.stripes::before { content: ''; position: absolute; left: 3px; right: 3px; top: 10px; height: 4px; background: #f2a95a; box-shadow: 0 9px 0 0 #f2a95a; border-radius: 2px; }
+    .pet-card .pet-name-wrap { display: flex; gap: 6px; margin-top: 8px; }
+    .pet-card .pet-name-wrap input {
+      flex: 1; min-width: 0; font: inherit; font-size: 11px; padding: 6px 9px; border: none; border-radius: 10px;
+      background: var(--bg); color: var(--text); box-shadow: var(--neu-inset-xs, inset 2px 2px 5px #ababab, inset -1px -1px 4px #ffffff);
+    }
+    .pet-card .pet-name-wrap input:focus { outline: none; }
+    .pet-card .pet-toast { font-size: 10.5px; color: var(--text); text-align: center; margin-top: 6px; }
+    .pet-card .pet-toast.hidden, .pet-card .pet-name-wrap.hidden, .pet-card .pet-choose.hidden, .pet-card .pet-scene.hidden { display: none; }
+    .pet-card.collapsed .pet-scene, .pet-card.collapsed .pet-choose, .pet-card.collapsed .pet-name-wrap, .pet-card.collapsed .pet-toast { display: none; }
+    .pet-card.collapsed { width: auto; }
+    html.teen .pet-card { box-shadow: 0 0 0 1px rgba(255,255,255,0.09), 0 24px 60px -18px rgba(0,0,0,0.95), 0 0 30px -12px rgba(255,45,149,0.25); }
+    html.teen .pet-title { color: var(--neon-1, #ff2d95); text-shadow: 0 0 8px rgba(255,45,149,0.5); }
+    @media (max-width: 1100px) { .pet-card { left: 10px; width: 176px; } }
     .tower-head { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
     .tower-title {
       font-size: 10px; font-weight: 700; text-transform: uppercase;
@@ -528,6 +574,7 @@
     /* Compact game strip below 980px (side card would overlap the paper) */
     @media (max-width: 980px) {
       body { padding-bottom: 205px; }
+      .pet-card { top: auto; bottom: 178px; left: 10px; transform: none; width: 176px; }
       .tower-card {
         top: auto; bottom: 10px; right: 10px; left: 10px; transform: none;
         width: auto; padding: 8px 12px 6px;
@@ -1053,6 +1100,31 @@
     </div>
   </div>
 
+  <!-- The pet — egg → hatch → grow, fed and dressed with right answers -->
+  <div class="pet-card hidden" id="pet-card">
+    <div class="pet-head">
+      <span class="pet-title" id="pet-title">Your egg</span>
+      <button type="button" class="tower-mute" id="pet-toggle" title="Tuck away / bring back" aria-label="Tuck the pet away">▾</button>
+    </div>
+    <div class="pet-choose" id="pet-choose">
+      <div class="pc-q">Pick an egg — it cracks a little every time you get one right</div>
+      <div class="pet-eggs">
+        <button type="button" class="pet-egg-btn" id="pet-pick-puppy"><span class="egg spots"></span>spotty egg</button>
+        <button type="button" class="pet-egg-btn" id="pet-pick-hamster"><span class="egg stripes"></span>stripy egg</button>
+      </div>
+    </div>
+    <div class="pet-scene hidden" id="pet-scene">
+      <canvas id="pet-canvas"></canvas>
+      <div class="pet-line" id="pet-line"></div>
+      <div class="pet-acts" id="pet-acts"></div>
+      <div class="pet-name-wrap hidden" id="pet-name-wrap">
+        <input id="pet-name-input" type="text" maxlength="18" placeholder="Give it a name" autocomplete="off" />
+        <button type="button" class="pet-act" id="pet-name-save">✓</button>
+      </div>
+      <div class="pet-toast hidden" id="pet-toast"></div>
+    </div>
+  </div>
+
   <!-- Settings cog to re-open setup -->
   <button class="setup-cog hidden" id="setup-cog" title="Change subject or topic" aria-label="Open settings">
     <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -1176,6 +1248,7 @@
       const towerCard = $('tower-card');
       const wasHidden = towerCard.classList.contains('hidden');
       towerCard.classList.toggle('hidden', state.stage !== 'build');
+      pet.render();
       if (state.stage === 'build' && wasHidden) {
         // canvas had zero size while hidden — measure it again once laid out
         requestAnimationFrame(() => { game.resize(); game.wake(); });
@@ -2026,6 +2099,7 @@
 
       // The tube reacts first — any new run record rides the same save below
       game.answer(correct);
+      pet.answer(correct);   // the egg cracks / the pet earns a treat — same save
 
       // The light show (teen mode only; sensible fires nothing)
       if (correct) { state.fxStreak += 1; state.wrongRun = 0; } else { state.fxStreak = 0; state.wrongRun += 1; }
@@ -2060,6 +2134,309 @@
     // answer dumps a splash in. If the pile reaches the top, the tube
     // overflows — run over, tube resets, nothing else is lost.
     // Fast or correct: that's the whole game.
+
+    // ── The pet — an egg that cracks with every right answer ─────────────
+    // Sarah, 16 Aug: "a puppy and hamster like the DS dogs and Tamagotchis.
+    // It starts as an egg and every question you get right it cracks, on
+    // the 15th it hatches, then it grows as you answer, and the more you
+    // answer the more food, clothes etc you get to play with it."
+    // Pixel art on a canvas (that DS feel), state in the progress book so it
+    // travels with the student. It never dies and never nags: hearts drift
+    // down if it's left a while and come straight back when you play.
+    const pet = (() => {
+      const HATCH_AT = 15;
+      const STAGES = [ { at: 0, name: 'egg' }, { at: HATCH_AT, name: 'baby' }, { at: 60, name: 'young' }, { at: 120, name: 'grown' } ];
+      const UNLOCKS = [
+        { at: 20,  id: 'ball',  label: 'ball',  kind: 'toy',   icon: '🎾' },
+        { at: 35,  id: 'bow',   label: 'bow',   kind: 'wear',  icon: '🎀' },
+        { at: 55,  id: 'hat',   label: 'hat',   kind: 'wear',  icon: '🎩' },
+        { at: 80,  id: 'scarf', label: 'scarf', kind: 'wear',  icon: '🧣' },
+        { at: 100, id: 'bed',   label: 'bed',   kind: 'home',  icon: '🛏️' },
+      ];
+      // Palette letters → colours. '.' is transparent.
+      const PAL = {
+        w: '#f7f1e3', s: '#e2d6bf', k: '#7d6a4f', p: '#b98b5b', o: '#f2a95a', d: '#5b4636',
+        b: '#a06f45', c: '#f3dcbb', n: '#2b2b2b', e: '#ffffff', t: '#e88aa5', g: '#f6c65b',
+        h: '#e07a3f', r: '#d64545', y: '#f6d33c', l: '#7cc4f2', v: '#8d6bd8', z: '#5aa870', q: '#c9a86b',
+      };
+      // Sprite maps. Rows are strings of palette letters.
+      const EGG_BASE = [
+        '....wwww....',
+        '...wwwwww...',
+        '..wwwwwwww..',
+        '.wwwwwwwwww.',
+        '.wwwwwwwwww.',
+        'wwwwwwwwwwww',
+        'wwwwwwwwwwww',
+        'wwwwwwwwwwww',
+        'wwwwwwwwwwsw',
+        '.wwwwwwwwss.',
+        '.wwwwwwwsss.',
+        '..wwwwwsss..',
+        '...ssssss...',
+        '....ssss....',
+      ];
+      const EGG_PUPPY_SPOTS = [[3, 4], [4, 4], [3, 5], [7, 8], [8, 8], [8, 9], [5, 10], [2, 7]];
+      const EGG_HAM_STRIPES = [[2, 4], [3, 4], [4, 4], [5, 4], [6, 4], [7, 4], [8, 4], [9, 4], [1, 8], [2, 8], [3, 8], [4, 8], [5, 8], [6, 8], [7, 8], [8, 8], [9, 8], [10, 8]];
+      const CRACKS = [ // pixels that turn dark as the egg cracks, in order
+        [[6, 3], [5, 4], [6, 5]],
+        [[7, 6], [6, 7], [7, 8]],
+        [[3, 6], [4, 6], [8, 3], [9, 4]],
+        [[5, 9], [4, 10], [8, 10], [9, 9]],
+      ];
+      const PUPPY = [
+        '..bb........bb..',
+        '.bbbb......bbbb.',
+        '.bbbbccccccbbbb.',
+        '..bbccccccccbb..',
+        '..ccccccccccccc.',
+        '.cccncccccnccc..',
+        '.cccncccccnccc..',
+        '.ccccccccccccc..',
+        '..cccccnncccc...',
+        '..ccccnnnnccc...',
+        '...ccccccccc....',
+        '.bbbbbbbbbbbbb..',
+        '.bbbbbbbbbbbbb.b',
+        '.bbbbbbbbbbbbbbb',
+        '.bbb.bbbbb.bbb..',
+        '.bbb.bbbbb.bbb..',
+      ];
+      const HAMSTER = [
+        '..oo......oo..',
+        '.oooo....oooo.',
+        '.ooooooooooooo',
+        'oooooooooooooo',
+        'ooonoooooonooo',
+        'ooonoooooonooo',
+        'ooooooooooooo.',
+        'occcccnncccco.',
+        'occcccccccccoo',
+        'oocccccccccooo',
+        'oooooooooooooo',
+        '.oooooooooooo.',
+        '..oo.oooo.oo..',
+        '..oo.oooo.oo..',
+      ];
+      const ITEMS = {
+        bone:    ['e....e', 'ee..ee', '.eeee.', '.eeee.', 'ee..ee', 'e....e'],
+        biscuit: ['.qqqq.', 'qqkqqq', 'qqqqkq', 'qkqqqq', 'qqqkqq', '.qqqq.'],
+        seed:    ['..kk..', '.kgkk.', 'kgggkk', 'kgggkk', '.kkkk.', '..kk..'],
+        ball:    ['.yyyy.', 'yyeyyy', 'yyyyyy', 'yyyyyy', 'yyyyye', '.yyyy.'],
+        heart:   ['.rr.rr.', 'rrrrrrr', 'rrrrrrr', '.rrrrr.', '..rrr..', '...r...'],
+        bow:     ['tt...tt', 'tttttttt', '.tttttt.', 'tttttttt', 'tt...tt'],
+        hat:     ['..nnnn..', '..nnnn..', '..nnnn..', 'nnnnnnnn'],
+        scarf:   ['rrrrrrrr', 'rrrrrrrr', '.....rr.', '.....rr.'],
+        bed:     ['v..........v', 'v..........v', 'vvvvvvvvvvvv', 'vllllllllllv', 'vllllllllllv', 'vvvvvvvvvvvv'],
+      };
+
+      let canvas = null, ctx = null, W = 0, H = 0, raf = 0, t0 = 0;
+      let anim = null;   // { kind: 'eat'|'play'|'hatch'|'love', item, until }
+      let mounted = false;
+
+      const P = () => {
+        const pr = state.progress;
+        if (!pr.pet) pr.pet = { kind: null, correct: 0, treats: 0, happy: 80, wearing: [], name: '', hatchedAt: null, lastSeen: Date.now(), inBed: false, unlockedSeen: [] };
+        return pr.pet;
+      };
+      const stageOf = (p) => { let s = STAGES[0]; for (const st of STAGES) if (p.correct >= st.at) s = st; return s.name; };
+      const unlockedItems = (p) => UNLOCKS.filter((u) => p.correct >= u.at);
+      const nextUnlock = (p) => UNLOCKS.find((u) => p.correct < u.at);
+
+      // Happiness drifts down 2 an hour while away, never below 35.
+      function settle() {
+        const p = P();
+        const now = Date.now();
+        const hrs = Math.max(0, (now - (p.lastSeen || now)) / 3600000);
+        if (hrs > 0.25) p.happy = Math.max(35, Math.round(p.happy - hrs * 2));
+        p.lastSeen = now;
+      }
+
+      // ── drawing ──
+      function px(map, x, y, scale, opts = {}) {
+        for (let r = 0; r < map.length; r++) for (let c = 0; c < map[r].length; c++) {
+          let ch = map[r][c];
+          if (ch === '.') continue;
+          if (opts.recolour && opts.recolour[ch]) ch = opts.recolour[ch];
+          ctx.fillStyle = PAL[ch] || ch;
+          ctx.fillRect(Math.round(x + c * scale), Math.round(y + r * scale), scale, scale);
+        }
+      }
+      function eggMap(p) {
+        const m = EGG_BASE.map((r) => r.split(''));
+        const marks = p.kind === 'hamster' ? EGG_HAM_STRIPES : EGG_PUPPY_SPOTS;
+        for (const [x, y] of marks) if (m[y] && m[y][x] && m[y][x] !== '.') m[y][x] = p.kind === 'hamster' ? 'o' : 'p';
+        // cracks appear a stage at a time across the 15 answers
+        const stages = Math.min(CRACKS.length, Math.floor((p.correct / HATCH_AT) * (CRACKS.length + 1)));
+        for (let i = 0; i < stages; i++) for (const [x, y] of CRACKS[i]) if (m[y] && m[y][x] && m[y][x] !== '.') m[y][x] = 'k';
+        return m.map((r) => r.join(''));
+      }
+      function draw(now) {
+        if (!ctx) return;
+        const p = P();
+        const time = (now - t0) / 1000;
+        ctx.clearRect(0, 0, W, H);
+        const stage = stageOf(p);
+        const bob = Math.sin(time * 2.2) * 2;
+        const cx = W / 2, floor = H - 22;
+        if (stage === 'egg') {
+          const scale = 6;
+          const map = eggMap(p);
+          const w = map[0].length * scale, h = map.length * scale;
+          const wob = anim && anim.kind === 'crack' ? Math.sin(time * 40) * 3 : 0;
+          px(map, cx - w / 2 + wob, floor - h + bob * 0.5, scale);
+        } else {
+          const map = p.kind === 'hamster' ? HAMSTER : PUPPY;
+          const scale = stage === 'baby' ? 4 : stage === 'young' ? 5 : 6;
+          const w = map[0].length * scale, h = map.length * scale;
+          let x = cx - w / 2, y = floor - h + bob;
+          if (anim && anim.kind === 'play') { x += Math.sin(time * 6) * 14; y -= Math.abs(Math.sin(time * 9)) * 10; }
+          if (p.inBed && p.correct >= 100) { px(ITEMS.bed, cx - 36, floor - 20, 6); y += 6; }
+          // baby: bigger eyes (recolour a neighbour pixel)
+          px(map, x, y, scale, stage === 'baby' ? {} : {});
+          const wear = new Set(p.wearing || []);
+          if (wear.has('scarf')) px(ITEMS.scarf, x + w * 0.2, y + h * 0.5, scale * 0.6);
+          if (wear.has('bow'))   px(ITEMS.bow, x + w * 0.62, y - scale * 1.5, scale * 0.5);
+          if (wear.has('hat'))   px(ITEMS.hat, x + w * 0.28, y - scale * 3.2, scale * 0.6);
+          if (anim && anim.kind === 'eat') {
+            const k = Math.max(0, (anim.until - now) / anim.len);       // 1 → 0
+            px(ITEMS[anim.item] || ITEMS.biscuit, x + w * 0.35, y + h * 0.55, 4 * k + 0.5);
+          }
+          if (anim && anim.kind === 'play') px(ITEMS.ball, x + w + 6 + Math.sin(time * 6) * 10, floor - 24 - Math.abs(Math.sin(time * 9)) * 30, 4);
+          if (anim && (anim.kind === 'love' || anim.kind === 'eat' || anim.kind === 'hatch')) {
+            const k = Math.max(0, (anim.until - now) / anim.len);
+            px(ITEMS.heart, x + w * 0.7, y - 30 + k * 26, 3);
+            if (anim.kind === 'hatch') { px(ITEMS.heart, x - 20, y - 10 + k * 20, 3); px(ITEMS.heart, x + w + 8, y + k * 20, 3); }
+          }
+        }
+        // ground shadow
+        ctx.fillStyle = 'rgba(0,0,0,0.08)';
+        ctx.beginPath(); ctx.ellipse(cx, floor + 6, 44, 6, 0, 0, Math.PI * 2); ctx.fill();
+        if (anim && now > anim.until) { anim = null; renderCard(); }
+        raf = requestAnimationFrame(draw);
+      }
+      function play(kind, item, ms) { anim = { kind, item, len: ms, until: performance.now() + ms }; }
+
+      // ── card ──
+      function renderCard() {
+        if (!mounted) return;
+        const p = P();
+        const card = $('pet-card');
+        const stage = stageOf(p);
+        const showCard = state.stage === 'build';
+        card.classList.toggle('hidden', !showCard);
+        // choose an egg
+        $('pet-choose').classList.toggle('hidden', !!p.kind);
+        $('pet-scene').classList.toggle('hidden', !p.kind);
+        if (!p.kind) return;
+        const title = p.name ? p.name : (stage === 'egg' ? (p.kind === 'hamster' ? 'Hamster egg' : 'Puppy egg') : (p.kind === 'hamster' ? 'Your hamster' : 'Your puppy'));
+        $('pet-title').textContent = title;
+        // line under the scene
+        let line;
+        if (stage === 'egg') {
+          const left = HATCH_AT - p.correct;
+          line = left > 0 ? left + ' more right answer' + (left === 1 ? '' : 's') + ' and it hatches' : 'Hatching…';
+        } else {
+          const nx = nextUnlock(p);
+          const stageNext = STAGES.find((s) => s.at > p.correct);
+          const bits = [];
+          bits.push('❤'.repeat(Math.max(1, Math.round((p.happy || 50) / 25))) + ' ' + (p.happy >= 75 ? 'happy' : p.happy >= 50 ? 'okay' : 'a bit lonely'));
+          if (nx) bits.push(nx.icon + ' at ' + nx.at + ' (' + Math.max(0, nx.at - p.correct) + ' to go)');
+          else if (stageNext) bits.push('grows at ' + stageNext.at);
+          line = bits.join(' · ');
+        }
+        $('pet-line').textContent = line;
+        // actions
+        const acts = $('pet-acts');
+        acts.innerHTML = '';
+        if (stage !== 'egg') {
+          const mk = (label, title, fn, on) => {
+            const b = document.createElement('button');
+            b.type = 'button'; b.className = 'pet-act' + (on ? ' on' : ''); b.textContent = label; b.title = title;
+            b.addEventListener('click', fn); acts.appendChild(b);
+          };
+          const food = p.kind === 'hamster' ? 'seed' : 'bone';
+          mk((p.kind === 'hamster' ? '🌻' : '🦴') + ' ' + p.treats, p.treats ? 'Feed — you have ' + p.treats + ' treat' + (p.treats === 1 ? '' : 's') : 'Get a question right to earn a treat', () => {
+            if (p.treats <= 0) return;
+            p.treats -= 1; p.happy = Math.min(100, p.happy + 8);
+            play('eat', food, 1400); saveProgress(); renderCard();
+          }, false);
+          for (const u of unlockedItems(p)) {
+            if (u.kind === 'toy') mk(u.icon, 'Play ' + u.label, () => { p.happy = Math.min(100, p.happy + 12); play('play', u.id, 2200); saveProgress(); }, false);
+            else if (u.kind === 'wear') mk(u.icon, (p.wearing.includes(u.id) ? 'Take off the ' : 'Put on the ') + u.label, () => {
+              p.wearing = p.wearing.includes(u.id) ? p.wearing.filter((x) => x !== u.id) : [...p.wearing, u.id];
+              play('love', null, 900); saveProgress(); renderCard();
+            }, p.wearing.includes(u.id));
+            else if (u.kind === 'home') mk(u.icon, p.inBed ? 'Wake up' : 'Bed time', () => { p.inBed = !p.inBed; saveProgress(); renderCard(); }, p.inBed);
+          }
+        }
+        // name box shows once, after hatch
+        const nameWrap = $('pet-name-wrap');
+        nameWrap.classList.toggle('hidden', !(stage !== 'egg' && !p.name));
+      }
+
+      function choose(kind) {
+        const p = P();
+        p.kind = kind; p.correct = 0; p.treats = 0; p.happy = 80; p.wearing = []; p.name = ''; p.hatchedAt = null;
+        saveProgress(); renderCard();
+      }
+
+      // A right answer: crack / hatch / grow / treat / unlock. Wrong: nothing —
+      // this pet never punishes.
+      function answer(correct) {
+        const p = P();
+        if (!p.kind || !correct) return;
+        const before = stageOf(p);
+        p.correct += 1;
+        if (before !== 'egg') p.treats += 1;
+        p.happy = Math.min(100, (p.happy || 50) + 1);
+        const after = stageOf(p);
+        if (before === 'egg' && after !== 'egg') {
+          p.hatchedAt = new Date().toISOString();
+          p.treats += 3;                                   // a welcome gift
+          play('hatch', null, 2600);
+          toastPet((p.kind === 'hamster' ? 'Your hamster' : 'Your puppy') + ' hatched! 🎉 Give it a name.');
+        } else if (before === 'egg') {
+          play('crack', null, 500);
+        } else if (before !== after) {
+          play('hatch', null, 2000);
+          toastPet((p.name || 'Your pet') + ' grew! 🌱');
+        }
+        const nu = UNLOCKS.find((u) => u.at === p.correct);
+        if (nu) toastPet('New: ' + nu.icon + ' ' + nu.label + ' — ' + (p.name || 'your pet') + ' can have it now.');
+        renderCard();
+      }
+      function toastPet(msg) {
+        const el = $('pet-toast'); if (!el) return;
+        el.textContent = msg; el.classList.remove('hidden');
+        clearTimeout(el._t); el._t = setTimeout(() => el.classList.add('hidden'), 4200);
+      }
+
+      function mount() {
+        if (mounted) return;
+        canvas = $('pet-canvas'); if (!canvas) return;
+        ctx = canvas.getContext('2d');
+        const dpr = Math.min(2, window.devicePixelRatio || 1);
+        W = 172; H = 150;
+        canvas.width = W * dpr; canvas.height = H * dpr; canvas.style.width = W + 'px'; canvas.style.height = H + 'px';
+        ctx.scale(dpr, dpr); ctx.imageSmoothingEnabled = false;
+        mounted = true;
+        settle();
+        $('pet-pick-puppy').addEventListener('click', () => choose('puppy'));
+        $('pet-pick-hamster').addEventListener('click', () => choose('hamster'));
+        $('pet-name-save').addEventListener('click', () => {
+          const v = $('pet-name-input').value.trim().slice(0, 18);
+          if (!v) return; P().name = v; saveProgress(); renderCard();
+        });
+        $('pet-name-input').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('pet-name-save').click(); });
+        $('pet-toggle').addEventListener('click', () => { $('pet-card').classList.toggle('collapsed'); });
+        t0 = performance.now();
+        raf = requestAnimationFrame(draw);
+        renderCard();
+      }
+      return { mount, answer, render: renderCard };
+    })();
+
     const game = (() => {
       const INCHES = 12;            // logical tube height
       const DRAIN_INCH = 1;         // base flush per correct answer
@@ -3132,6 +3509,7 @@
       renderStrip();
       renderShelf();
       game.init($('tower-canvas'));
+      pet.mount();
       $('tower-mute').textContent = state.progress.quiz.muted ? '🔇' : '🔈';
       updateGameStats();
       // seed the Exam Room's "don't repeat" list from the book
