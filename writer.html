@@ -406,7 +406,7 @@
     .q-popcard .cite-opt .co-warn { display: block; font-size: 9px; color: var(--accent); margin-top: 2px; }
     /* what this source would back in her sentence, and how strongly — to choose by (Sarah, 17 Aug) */
     .q-popcard .cite-opt .co-backs { display: block; font-size: 10px; color: var(--text); margin-top: 3px; line-height: 1.4; }
-    .q-popcard .cite-opt .co-str { display: inline-block; font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; padding: 1px 6px; border-radius: 6px; box-shadow: var(--neu-inset-sm); margin-right: 6px; color: var(--text-muted); }
+    .q-popcard .cite-opt .co-str { display: inline-block; font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; margin-right: 6px; color: var(--text-muted); }
     .q-popcard .cite-opt .co-str.strong { color: #2e9e4a; } .q-popcard .cite-opt .co-str.fair { color: #b07f0a; } .q-popcard .cite-opt .co-str.weak { color: var(--accent); }
     .q-popcard .cite-opt .co-why { color: var(--text-muted); }
     .q-popcard .cite-sent { font-size: 10px; color: var(--text-muted); font-style: italic; margin-bottom: 6px; line-height: 1.35; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
@@ -844,7 +844,7 @@
     .tb-text p { margin: 0 0 6px; }
     .tb-text p:last-child { margin-bottom: 0; }
     .tb-qtext { font-weight: 500; }
-    .tb-item.tb-fresh { box-shadow: var(--neu-inset-sm); padding: 8px 10px 8px 12px; margin: 0 -2px; border-radius: 8px; }
+    .tb-item.tb-fresh { box-shadow: var(--neu-raised-xs); padding: 8px 10px 8px 12px; margin: 0 -2px; border-radius: 8px; }
     .tb-atext { color: var(--text); }
     .tb-ntext { color: var(--text-muted); }
     .tb-earlier .tb-items { gap: 8px; }
@@ -1044,7 +1044,7 @@
        in the coach box, or on the whiteboard. */
     /* Neumorphic, not a wash (Sarah, 17 Aug: "this app is neumorphic, this breaks the design style"):
        the fresh ask sits in an inset well; the accent is a dot, not a fill. */
-    .tb-now.fresh { box-shadow: var(--neu-inset-sm); padding: 8px 10px 8px 12px; margin: 0 -2px 2px; }
+    .tb-now.fresh { box-shadow: var(--neu-raised-xs); padding: 8px 10px 8px 12px; margin: 0 -2px 2px; }   /* RAISED — you read it (the indent rule) */
     .tb-now.fresh::before { content: '● '; color: var(--accent); font-size: 11px; vertical-align: 2px; }
     .coach-card .q-msg:empty { display: none; }
     .tb-track { display: flex; align-items: center; gap: 8px; margin-top: 8px; }
@@ -1110,7 +1110,7 @@
     .mk-part.top .bd { background: #28a745; } .mk-part.mid .bd { background: #e6a817; } .mk-part.low .bd { background: var(--accent); }
     .mk-item { display: grid; grid-template-columns: 16px minmax(0,1fr); gap: 8px; align-items: baseline; padding: 6px 8px; border-radius: 10px; cursor: pointer; margin-bottom: 4px; box-shadow: var(--neu-raised-xs); }
     .mk-item:hover { box-shadow: var(--neu-raised-sm); }
-    .mk-item.cur { box-shadow: var(--neu-inset-sm); }
+    .mk-item.cur { box-shadow: var(--neu-raised-sm); }
     .mk-item.done { opacity: 0.55; }
     .mk-item .mk-st { font-size: 12px; font-weight: 700; color: var(--text-faint); }
     .mk-item.cur .mk-st { color: var(--accent); }
@@ -1140,7 +1140,7 @@
     .wb-tile .wb-x:hover { color: var(--accent); }
     .wb-cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 12px; }
     /* hers: notes on the board, and moving a tile */
-    .wb-tile.mine { border-left-color: transparent; box-shadow: var(--neu-inset-sm); font-weight: 500; }
+    .wb-tile.mine { border-left-color: transparent; font-weight: 500; }
     .wb-tile.movable { cursor: pointer; }
     .wb-move { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin: -4px 0 6px; }
     .wb-move .wb-move-l { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-faint); margin-right: 2px; }
@@ -1152,7 +1152,7 @@
     .wb-col-h:has(.wb-emoji)::before { content: none; }
     .wb-tile .wb-note { display: block; font-size: 11px; font-weight: 600; color: var(--text-muted); margin-top: 2px; letter-spacing: 0.01em; }
     .wb-lines { display: flex; flex-direction: column; gap: 6px; margin-top: 14px; }
-    .wb-line { display: flex; gap: 10px; align-items: baseline; font-size: 17px; font-weight: 600; color: var(--text); overflow-wrap: anywhere; padding: 8px 12px; border-radius: 12px; box-shadow: var(--neu-inset-sm); }
+    .wb-line { display: flex; gap: 10px; align-items: baseline; font-size: 17px; font-weight: 600; color: var(--text); overflow-wrap: anywhere; padding: 8px 12px; border-radius: 12px; box-shadow: var(--neu-raised-sm); }
     .wb-line .wb-line-i { font-size: 15px; font-weight: 700; color: var(--accent); flex-shrink: 0; }
     .wb-line-sum { font-variant-numeric: tabular-nums; letter-spacing: 0.02em; }
     .wb-line-note { font-weight: 500; font-size: 15px; color: var(--text-muted); }
@@ -1242,7 +1242,7 @@
     .ed-issue .ed-v.weak { color: #1e88e5; }
     .ed-issue .ed-steer { font-size: 11px; color: var(--text); margin-top: 2px; }
     .ed-issue .ed-steer b { font-weight: 700; }
-    .ed-issue .ed-v { display: inline-block; font-size: 9px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; padding: 1px 6px; border-radius: 6px; margin-right: 6px; vertical-align: 1px; box-shadow: var(--neu-inset-sm); color: var(--text-muted); }
+    .ed-issue .ed-v { display: inline-block; font-size: 9px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; margin-right: 6px; vertical-align: 1px; color: var(--text-muted); }
     .ed-issue .ed-v.cut { color: var(--accent); }
     .ed-issue .ed-v.tighten { color: #b07f0a; }
     .ed-issue .ed-w.trim s { color: var(--text-muted); text-decoration-color: var(--text-muted); }
@@ -1293,7 +1293,7 @@
     .sb-tag { font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--accent); margin-left: 6px; }
     .sb-point { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 2px 8px; align-items: baseline; margin-top: 4px; cursor: pointer; padding: 3px 6px; border-radius: 8px; }
     .sb-point:hover { box-shadow: var(--neu-raised-xs); }
-    .sb-str { font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; padding: 1px 6px; border-radius: 6px; box-shadow: var(--neu-inset-sm); color: var(--text-muted); white-space: nowrap; }
+    .sb-str { font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-muted); white-space: nowrap; }
     .sb-str.strong { color: #2e9e4a; } .sb-str.fair { color: #b07f0a; } .sb-str.weak { color: var(--accent); }
     .sb-pt { font-size: 11px; color: var(--text); line-height: 1.4; overflow-wrap: anywhere; }
     .sb-pt.sb-none { color: var(--text-faint); font-style: italic; }
