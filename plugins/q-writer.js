@@ -1317,6 +1317,7 @@ const TOOL_SCHEMA = {
         nudge: { type: 'string', description: 'One line pushing them to write it: "Now say your sentence using it." Never the sentence.' },
         fromSource: nullable('string'),
         flagged: { type: 'boolean', description: 'true when this comes from Q\'s own knowledge rather than an uploaded source (cases / references) or when any detail should be verified.' },
+        todo: { anyOf: [{ type: 'array', items: { type: 'string' } }, { type: 'null' }], description: 'facts tool ONLY (null for every other tool): 2 to 4 numbered steps telling the student WHAT TO DO with the facts — which fact to use (by its number), where in their paragraph it goes (after which of their words), and what to say it shows for the point. Plain, each 20 words or fewer. Never the sentence for them.' },
     },
 };
 const TOOL_BRIEFS = {
@@ -1327,7 +1328,7 @@ const TOOL_BRIEFS = {
     cases: 'CASE STUDIES: a real case or company that illustrates the point — FROM THE UPLOADED SOURCES FIRST (fromSource = the document name, flagged=false); only if none fits, one from your own knowledge that you are confident is real (flagged=true, say "check this" in the nudge). Never invent. headline = the case, points = what happened and why it fits here.',
     references: 'REFERENCES: support for the claim in the sentence — FROM THE UPLOADED SOURCES FIRST (fromSource = document name, flagged=false), formatted Harvard in the headline with the inline citation in points[0]; otherwise a real, well-known work you are confident exists (flagged=true, mark [verify] on any doubtful detail). NEVER invent a source. If nothing real supports it, say so in the headline and suggest what kind of source would.',
     weak: 'WHAT IS WEAK: one plain line on what is weak in this sentence (headline), two or three lines on what a strong version would DO — name the idea, give an example, show why it matters (points) — never the strong sentence itself. Then the nudge.',
-    facts: 'FIND FACTS IN THE CASE: from THE CASE / BRIEF TEXT below (and the uploaded sources), list 4 to 8 things the student could USE to support or sharpen this sentence — a figure, a name, an event, a decision, a stated problem, a quoted line. Each point = the fact as the text has it (numbers and names verbatim, short) + " — " + how it helps THIS sentence, in plain words. headline = "From the case: N things you could use" (or, if the case has nothing for this sentence, say so and name the kind of evidence that would help). fromSource = "the brief" or the document name. flagged = false unless a fact is NOT in the text. NEVER invent a fact, a number or a name that is not in the text. example = null. nudge = one line pushing them to write the fact into their sentence in their own words.',
+    facts: 'FIND FACTS IN THE CASE (Sarah, 17 Aug: "list facts that I could use and then suggest what to do"): from THE CASE / BRIEF TEXT below (and the uploaded sources), list 3 to 6 FACTS the student could USE for this sentence — a figure, a name, an event, a decision, a quoted line — the concrete, checkable kind, not themes. Each point = the fact as the text has it (numbers, names and quoted words VERBATIM, 4 to 16 words) + " — " + where it sits in the case (the section / paragraph / who says it, 2 to 6 words). No "how it helps" in the points — that goes in todo. todo = 2 to 4 steps: WHAT TO DO — which fact (by number) to use, after which of the student\'s own words it goes, and what to say it shows for THIS point; never the sentence itself. headline = "From the case: N facts you could use" (or, if the case has nothing for this sentence, say so and name the kind of evidence that would). fromSource = "the brief" or the document name. flagged = false unless a fact is NOT in the text. NEVER invent a fact, a number or a name that is not in the text. example = null. nudge = one line, warm, pushing them to write it in their own words.',
 };
 
 async function toolHelp({ tool, sentence, word, brickId, brief, essay, sources, yearGroup, caseText, want, focus }) {
@@ -1360,6 +1361,7 @@ ${targetForPrompt(brief, essay, brickId)}`);
         nudge: String(r.nudge || 'Now say your sentence using it.').trim(),
         fromSource: r.fromSource ? String(r.fromSource).slice(0, 160) : null,
         flagged: !!r.flagged,
+        todo: tool === 'facts' && Array.isArray(r.todo) ? r.todo.map(x => capWords(String(x), 26)).filter(Boolean).slice(0, 4) : null,
     };
 }
 
