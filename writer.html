@@ -1091,6 +1091,16 @@
     .wb-tile .wb-x { border: none; background: transparent; color: var(--text-faint); cursor: pointer; font-size: 14px; line-height: 1; padding: 0 2px; }
     .wb-tile .wb-x:hover { color: var(--accent); }
     .wb-cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 12px; }
+    /* Q's marks on the board: an emoji per group, a note on a tile, his lines under the columns */
+    .wb-col-h .wb-emoji { font-size: 16px; line-height: 1; }
+    .wb-col-h .wb-emoji + .wb-name { margin-left: 2px; }
+    .wb-col-h:has(.wb-emoji)::before { content: none; }
+    .wb-tile .wb-note { display: block; font-size: 11px; font-weight: 600; color: var(--text-muted); margin-top: 2px; letter-spacing: 0.01em; }
+    .wb-lines { display: flex; flex-direction: column; gap: 6px; margin-top: 14px; }
+    .wb-line { display: flex; gap: 10px; align-items: baseline; font-size: 17px; font-weight: 600; color: var(--text); overflow-wrap: anywhere; padding: 8px 12px; border-radius: 12px; box-shadow: var(--neu-inset-sm); }
+    .wb-line .wb-line-i { font-size: 15px; font-weight: 700; color: var(--accent); flex-shrink: 0; }
+    .wb-line-sum { font-variant-numeric: tabular-nums; letter-spacing: 0.02em; }
+    .wb-line-note { font-weight: 500; font-size: 15px; color: var(--text-muted); }
     .wb-col { padding: 10px 12px 12px; border-radius: 14px; box-shadow: var(--neu-inset-sm); }
     .wb-col-h { font-size: 12px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: var(--tagc, var(--text-muted)); margin-bottom: 8px; display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px 6px; }
     .wb-col-h .wb-name { white-space: nowrap; }
@@ -3544,7 +3554,9 @@
         tally('tag', cid);
         const d = await api('/writer/tag', { criterionId: cid, stepId: step.id, items }, { timeoutMs: 60000 });
         if (d.cached) { const c = state.calls[cid]; if (c && c.tag > 0) { c.tag -= 1; persist({ calls: state.calls }); } }
-        st.tags = {}; for (const t of (d.tagged || [])) st.tags[t.item] = t.tag;
+        st.tags = {}; st.notes = {}; for (const t of (d.tagged || [])) { st.tags[t.item] = t.tag; if (t.note) st.notes[t.item] = t.note; }
+        st.groups = {}; for (const g of (d.groups || [])) if (g && g.tag) st.groups[g.tag] = { emoji: g.emoji || '', headline: g.headline || '' };
+        st.board = Array.isArray(d.board) ? d.board : [];
         st.legend = d.line || '';
         renderBoard(); persistSteps();
         setCoach({ msg: st.legend || step.prompt, hint: 'Look at the colours on the board — then Next.', where: whereText(whereInfo(cid)), inputVisible: false, showNudge: true, actions: stepActions(cid, step, st) });
@@ -4394,15 +4406,20 @@
     function wbTilesHtml(items, tst, tagStep, { removable } = {}) {
       const tags = tagStep ? (tagStep.tags || []) : [];
       const byName = Object.fromEntries(tags.map(t => [t.name, t]));
-      const tile = (x, i, name) => { const t = name ? byName[name] : null; const c = t ? (TAG_CSS[t.colour] || '#999') : null;
-        return `<span class="wb-tile"${c ? ` data-tag="${escHtml(name)}" style="--tagc:${c}"` : (tst ? ' data-tag="?"' : '')}><span class="wb-n">${i + 1}</span><span>${escHtml(x)}</span>${removable ? `<button type="button" class="wb-x" data-rm="${i}" title="Take it off">×</button>` : ''}</span>`; };
+      const noteOf = (x) => { const ns = tst && tst.notes; if (!ns) return ''; if (ns[x]) return ns[x]; const w = String(x).trim().toLowerCase(); for (const k of Object.keys(ns)) if (String(k).trim().toLowerCase() === w) return ns[k]; return ''; };
+      const tile = (x, i, name) => { const t = name ? byName[name] : null; const c = t ? (TAG_CSS[t.colour] || '#999') : null; const note = noteOf(x);
+        return `<span class="wb-tile"${c ? ` data-tag="${escHtml(name)}" style="--tagc:${c}"` : (tst ? ' data-tag="?"' : '')}><span class="wb-n">${i + 1}</span><span>${escHtml(x)}${note ? `<span class="wb-note">${escHtml(note)}</span>` : ''}</span>${removable ? `<button type="button" class="wb-x" data-rm="${i}" title="Take it off">×</button>` : ''}</span>`; };
       if (!tst) return `<div class="wb-tiles">${items.map((x, i) => tile(x, i, null)).join('')}</div>`;
       const groups = new Map(); const loose = [];
       items.forEach((x, i) => { const name = tagOf(tst, x); if (name && byName[name]) { if (!groups.has(name)) groups.set(name, []); groups.get(name).push([x, i]); } else loose.push([x, i]); });
-      const cols = tags.filter(t => groups.has(t.name)).map(t => `<div class="wb-col" style="--tagc:${TAG_CSS[t.colour] || '#999'}"><div class="wb-col-h"><span class="wb-name">${escHtml(t.name)}</span>${t.meaning ? `<span class="wb-mean">— ${escHtml(t.meaning)}</span>` : ''}</div><div class="wb-tiles">${groups.get(t.name).map(([x, i]) => tile(x, i, t.name)).join('')}</div></div>`).join('');
+      const gmark = (name) => (tst.groups && tst.groups[name]) || {};
+      const cols = tags.filter(t => groups.has(t.name)).map(t => { const g = gmark(t.name); return `<div class="wb-col" style="--tagc:${TAG_CSS[t.colour] || '#999'}"><div class="wb-col-h">${g.emoji ? `<span class="wb-emoji">${escHtml(g.emoji)}</span>` : ''}<span class="wb-name">${escHtml(t.name)}</span>${(g.headline || t.meaning) ? `<span class="wb-mean">— ${escHtml(g.headline || t.meaning)}</span>` : ''}</div><div class="wb-tiles">${groups.get(t.name).map(([x, i]) => tile(x, i, t.name)).join('')}</div></div>`; }).join('');
       const rest = loose.length ? `<div class="wb-col"><div class="wb-col-h"><span class="wb-name">not sorted</span></div><div class="wb-tiles">${loose.map(([x, i]) => tile(x, i, null)).join('')}</div></div>` : '';
-      const legend = `<div class="wb-legend">${tags.map(t => `<span style="--tagc:${TAG_CSS[t.colour] || '#999'}"><b>${escHtml(t.name)}</b>${t.meaning ? ' — ' + escHtml(t.meaning) : ''}</span>`).join('')}</div>`;
-      return `<div class="wb-cols">${cols}${rest}</div>${legend}`;
+      // Q's lines on the board: a sum written out, an arrow to the conclusion, a note.
+      const ICON = { sum: '∑', arrow: '→', note: '✎' };
+      const lines = (tst.board || []).length ? `<div class="wb-lines">${tst.board.map(b => `<div class="wb-line wb-line-${escHtml(b.kind)}"><span class="wb-line-i">${ICON[b.kind] || '✎'}</span><span>${escHtml(String(b.text).replace(/^→\s*/, ''))}</span></div>`).join('')}</div>` : '';
+      const legend = `<div class="wb-legend">${tags.map(t => { const g = gmark(t.name); return `<span style="--tagc:${TAG_CSS[t.colour] || '#999'}">${g.emoji ? escHtml(g.emoji) + ' ' : ''}<b>${escHtml(t.name)}</b>${(g.headline || t.meaning) ? ' — ' + escHtml(g.headline || t.meaning) : ''}</span>`; }).join('')}</div>`;
+      return `<div class="wb-cols">${cols}${rest}</div>${lines}${legend}`;
     }
     function scaffoldWidgetHtml() {
       const info = currentStepInfo(); if (!info) return '';

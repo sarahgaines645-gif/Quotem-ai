@@ -1917,11 +1917,21 @@ function planForPrompt(plan, stepId) {
 }
 
 // ── TAG: Q sorts the student's list into the plan's tags. One small call. ──
+// Sarah, 17 Aug: "you write them on the whiteboard… and then he will
+// rearrange them and use colour and emojis and formatting to show you how
+// they are categorised or different or whatever. if he needs to write out a
+// sum he can." So the sort carries Q's MARKS for the whiteboard: an emoji and
+// a headline per group, a short note on the tiles worth pointing at, and up
+// to three lines he writes on the board — a sum with the real numbers, an
+// arrow to the conclusion, a note. Her words stay verbatim; his marks sit
+// beside them.
 const TAG_SCHEMA = {
     type: 'object', additionalProperties: false,
-    required: ['tagged', 'line'],
+    required: ['tagged', 'line', 'groups', 'board'],
     properties: {
-        tagged: { type: 'array', items: { type: 'object', additionalProperties: false, required: ['item', 'tag'], properties: { item: { type: 'string', description: 'The student\'s item, verbatim.' }, tag: { type: 'string', description: 'One of the tag names given.' } } } },
+        tagged: { type: 'array', items: { type: 'object', additionalProperties: false, required: ['item', 'tag', 'note'], properties: { item: { type: 'string', description: 'The student\'s item, verbatim.' }, tag: { type: 'string', description: 'One of the tag names given.' }, note: { type: 'string', description: 'Usually "". On the 1-3 tiles worth pointing at, Q\'s mark in 2-6 words ("the odd one out", "biggest cost", "this one is both", "👈 start here"). Teaching, not praise.' } } } },
+        groups: { type: 'array', items: { type: 'object', additionalProperties: false, required: ['tag', 'emoji', 'headline'], properties: { tag: { type: 'string', description: 'The tag name, exactly as given.' }, emoji: { type: 'string', description: 'ONE emoji for the group (💰 ⏰ ❤️ 🛠️ ⚖️ 📈 …).' }, headline: { type: 'string', description: 'The group in 2-6 everyday words, as a column heading ("costs the firm cash", "everyone gets these").' } } } },
+        board: { type: 'array', maxItems: 3, items: { type: 'object', additionalProperties: false, required: ['kind', 'text'], properties: { kind: { type: 'string', enum: ['sum', 'arrow', 'note'] }, text: { type: 'string', description: 'sum: written out with the real numbers from the list / brief ("4 flexible + 2 fixed = 6 benefits", "£1,200 × 12 = £14,400 a year") — never invented numbers; arrow: the conclusion the sorting points to, one line ("→ most of what they get costs the firm nothing"); note: one plain teaching line. 16 words or fewer each.' } } }, description: '0 to 3 lines Q writes on the board under the columns. A sum ONLY when there are real numbers to add. Empty when there is nothing worth writing.' },
         line: { type: 'string', description: 'ONE plain line to the student saying what the colours mean, e.g. "The pink ones you chose yourself — flexible; the blue ones everyone gets — fixed."' },
     },
 };
@@ -1932,6 +1942,7 @@ async function tagItems({ brief, plan, step, items }) {
     const system = withMission(`You are Q, sorting the student's own list into tags on the teaching board (the step: "${step.prompt}"). Use ONLY these tags:
 ${step.tags.map(t => `- ${t.name} (${t.colour}) — ${t.meaning}`).join('\n')}
 Every item gets exactly one tag. Keep each item verbatim. Then ONE plain line telling the student what the colours mean, in everyday words, naming the term once if you are teaching it.
+You are TEACHING ON A WHITEBOARD: give each group an emoji and a 2-6 word headline; put a 2-6 word note on the one to three tiles worth pointing at (the odd one out, the biggest, the one that is both — teaching, not praise; the rest ""); and write 0-3 lines on the board under the columns — a SUM written out with real numbers when the list or brief has numbers ("4 flexible + 2 fixed = 6"), an ARROW line drawing the conclusion the sorting shows, or a NOTE. Never invent a number. Nothing goes on the student's page — this is the board.
 ${PLAIN_QUESTION_RULE}
 
 ${LEADING_QUESTION_RULE}
@@ -1939,16 +1950,18 @@ ${LEADING_QUESTION_RULE}
 THE BRIEF (for context)
 ${briefForPrompt(brief).slice(0, 2500)}`);
     const user = `THE STUDENT'S LIST:\n${list.map((x, i) => `${i + 1}. ${x}`).join('\n')}\n\nSort it.`;
-    const r = await callAccurate(system, user, { maxTokens: 800, schema: TAG_SCHEMA, effort: 'low' });
+    const r = await callAccurate(system, user, { maxTokens: 1400, schema: TAG_SCHEMA, effort: 'low' });
     const names = new Set(step.tags.map(t => t.name));
-    const byItem = new Map();
+    const byItem = new Map(); const noteOf = new Map();
     for (const t of (r && Array.isArray(r.tagged) ? r.tagged : [])) {
         const item = String(t.item || '').trim();
-        if (item && names.has(t.tag)) byItem.set(item.toLowerCase(), t.tag);
+        if (item && names.has(t.tag)) { byItem.set(item.toLowerCase(), t.tag); const n = capWords(String(t.note || '').trim(), 8); if (n) noteOf.set(item.toLowerCase(), n); }
     }
     // Every item comes back tagged — unmatched ones take the first tag, flagged.
-    const tagged = list.map(item => ({ item, tag: byItem.get(item.toLowerCase()) || step.tags[0].name, guessed: !byItem.has(item.toLowerCase()) }));
-    return { tagged, line: String((r && r.line) || '').trim() || step.prompt, tags: step.tags };
+    const tagged = list.map(item => ({ item, tag: byItem.get(item.toLowerCase()) || step.tags[0].name, guessed: !byItem.has(item.toLowerCase()), note: noteOf.get(item.toLowerCase()) || '' }));
+    const groups = (r && Array.isArray(r.groups) ? r.groups : []).filter(g => g && names.has(g.tag)).map(g => ({ tag: g.tag, emoji: String(g.emoji || '').trim().slice(0, 4), headline: capWords(String(g.headline || '').trim(), 8) })).slice(0, step.tags.length);
+    const board = (r && Array.isArray(r.board) ? r.board : []).filter(b => b && ['sum', 'arrow', 'note'].includes(b.kind) && String(b.text || '').trim()).map(b => ({ kind: b.kind, text: capWords(String(b.text).trim(), 20) })).slice(0, 3);
+    return { tagged, line: String((r && r.line) || '').trim() || step.prompt, tags: step.tags, groups, board };
 }
 
 // ── CHECK an argue / switch / recommend / ask answer against the step's
