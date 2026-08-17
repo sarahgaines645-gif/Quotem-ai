@@ -1446,6 +1446,9 @@
     .wb-cb.on { box-shadow: var(--neu-inset-sm); }
     /* The action bar — QB2 has Send / Save / Change / Copy; ours sends to HER PAGE. */
     .wb-acts { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 14px; padding-top: 12px; border-top: 1px solid rgba(0,0,0,0.07); }
+    /* Asked, not guessed: where on the page this should land. */
+    .wb-ask { margin-top: 12px; padding: 10px 12px; border-radius: 11px; box-shadow: var(--neu-raised-xs); border-left: 3px solid var(--accent); font-size: 12.5px; line-height: 1.5; color: var(--text); }
+    .wb-ask.hidden { display: none; }
     /* The board's own editor. A small input is a well; this is the whole
        surface, and sinking it when she presses Edit makes the board look
        indented (Sarah, 17 Aug: "indented again"). So it stays the raised card
@@ -4208,12 +4211,35 @@
       if (!terms && !dots) return '';
       return `<div class="q-words" id="coach-words" data-cid="${escHtml(cid)}">${terms}${dots}</div>`;
     }
+    // WHERE WE WERE WORKING. Sarah, 17 Aug: "I just pressed add to page and it
+    // put it at the beginning of the doc not where we were working."
+    // Clicking a panel takes the selection out of the page, and focusing a
+    // contenteditable with NO live selection collapses the caret to the START —
+    // so anything inserted landed at the top of her essay. The last caret
+    // INSIDE the page is remembered here and restored before any insert.
+    let lastDocRange = null;
+    document.addEventListener('selectionchange', () => {
+      const sel = window.getSelection();
+      if (sel && sel.rangeCount && docBody.contains(sel.getRangeAt(0).startContainer)) {
+        try { lastDocRange = sel.getRangeAt(0).cloneRange(); } catch (_) {}
+      }
+    });
+    // true = there is now a live caret in the page. false = we genuinely do not
+    // know where she was working, and the caller must ASK rather than guess.
+    function restoreDocCaret() {
+      const sel = window.getSelection();
+      if (sel && sel.rangeCount && docBody.contains(sel.getRangeAt(0).startContainer)) return true;
+      if (lastDocRange && docBody.contains(lastDocRange.startContainer)) {
+        try { sel.removeAllRanges(); sel.addRange(lastDocRange); docBody.focus(); return true; } catch (_) {}
+      }
+      return false;
+    }
     // Press a term → it goes into the sentence at the caret (execCommand keeps
     // Ctrl+Z); no caret in the page → onto the end of this part's last paragraph.
     function insertTermAtCaret(term) {
       const t = String(term || '').trim(); if (!t) return;
       const sel = window.getSelection();
-      let inDoc = sel && sel.rangeCount && docBody.contains(sel.getRangeAt(0).startContainer);
+      let inDoc = restoreDocCaret();
       if (!inDoc) {
         const paras = partParagraphs(state.currentCriterionId);
         let target = paras[paras.length - 1];
@@ -5022,6 +5048,7 @@
           + `<button type="button" class="q-btn quiet" id="wb-cancel">Cancel</button></div>`;
       }
       return wbMdHtml(d.src)
+        + `<div class="wb-ask hidden" id="wb-ask"></div>`
         + `<div class="wb-acts">`
         + `<button type="button" class="q-btn primary" id="wb-send">Send to my page →</button>`
         + `<button type="button" class="q-btn" id="wb-edit">Edit this</button>`
@@ -5055,11 +5082,26 @@
       if (send) send.addEventListener('click', () => {
         const text = wbSendText(state.wbDoc.src);
         if (!text) { send.textContent = 'Nothing to send'; setTimeout(() => { send.textContent = 'Send to my page →'; }, 1400); return; }
-        docBody.focus();
-        const ok = document.execCommand('insertText', false, (docPlainText().trim() ? ' ' : '') + text + ' ');
-        if (!ok) { const p = document.createElement('p'); p.className = 'student-line'; p.textContent = text; docBody.appendChild(p); }
+        // NEVER GUESS WHERE IT GOES. If we do not know where she was working,
+        // ask — putting it at the top of her essay is worse than waiting
+        // (Sarah, 17 Aug: "if there wasn't a point that we working from it
+        // should have said where should I place this").
+        if (!restoreDocCaret()) {
+          const ask = document.getElementById('wb-ask');
+          if (ask) { ask.textContent = 'Where should this go? Click the spot on your page, then press Send again.'; ask.classList.remove('hidden'); }
+          send.textContent = 'Click where it goes →';
+          return;
+        }
+        const sel = window.getSelection();
+        const r0 = sel.getRangeAt(0);
+        const pre = document.createRange(); pre.setStart(docBody, 0); pre.setEnd(r0.startContainer, r0.startOffset);
+        const before = pre.toString();
+        const needsSpace = before.length > 0 && !/\s$/.test(before);
+        const ok = document.execCommand('insertText', false, (needsSpace ? ' ' : '') + text + ' ');
+        if (!ok) { const r = sel.getRangeAt(0); r.insertNode(document.createTextNode((needsSpace ? ' ' : '') + text + ' ')); r.collapse(false); }
         wordEl.textContent = countWords() + ' words'; scheduleAutosave();
         try { refreshExpectations(); } catch (_) {}
+        const ask = document.getElementById('wb-ask'); if (ask) ask.classList.add('hidden');
         send.textContent = '✓ On your page'; setTimeout(() => { send.textContent = 'Send to my page →'; }, 1600);
       });
       const ed = document.getElementById('wb-edit');
