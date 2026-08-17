@@ -549,7 +549,12 @@
     .coach-card .q-actions .q-btn { text-align: center; font-size: 10.5px; padding: 5px 9px; flex: 0 0 auto; }
     .coach-card .q-actions .q-btn.big { flex: 1 1 100%; font-size: 13px; padding: 10px 14px; }
     /* Talking to Q: the thread on the card — you / Q, last few exchanges, scrolls */
-    .coach-card .q-chat { display: flex; flex-direction: column; gap: 10px; max-height: 52vh; overflow-y: auto; margin: 0 0 10px; padding-right: 4px; scrollbar-width: thin; }
+    .coach-card .q-chat { display: flex; flex-direction: column; gap: 12px; margin: 0 0 12px; }
+    .coach-card .q-thread:not(:empty) { border-bottom: 1px solid rgba(0,0,0,0.08); margin-bottom: 12px; }
+    .coach-card .q-chat-more { font-size: 10px; color: var(--text-faint); margin-bottom: 2px; }
+    /* Each message says which part of the work it came from, so a jump
+       from the chat to the marking explains itself. */
+    .coach-card .q-chat-sec { font-size: 8.5px; font-weight: 700; letter-spacing: 0.07em; text-transform: uppercase; color: var(--accent); margin-left: 6px; }
     .coach-card .q-chat-m { display: block; min-width: 0; }
     .coach-card .q-chat-who { display: block; font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-muted); margin-bottom: 2px; }
     .coach-card .q-chat-m.q .q-chat-who::before { content: '● '; color: var(--accent); }
@@ -1072,6 +1077,13 @@
       color: var(--text-muted); margin: 12px 0 5px;
     }
     .q-bandlist .q-band-sec.mk-first { color: var(--accent); }
+    /* Auto cite being honest: nothing strong was found, and the way out. */
+    .cite-warn { font-size: 12px; line-height: 1.5; color: var(--text); margin: 4px 0 8px; }
+    .cite-warn b { font-weight: 700; }
+    .cite-again { display: flex; gap: 6px; margin-bottom: 10px; }
+    .cite-term { flex: 1; min-width: 0; border: none; outline: none; border-radius: 10px; padding: 7px 10px;
+      font-family: 'Space Grotesk', sans-serif; font-size: 12px; color: var(--text);
+      background: var(--bg); box-shadow: var(--neu-raised-xs); }
     .q-bandlist .q-band-sec:first-child { margin-top: 0; }
     .q-mk-block { margin: 8px 0 4px; }
     .q-mk-block .q-mk-l { display: block; font-size: 9px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; margin-bottom: 4px; }
@@ -2852,10 +2864,14 @@
     state.chatLog = state.chatLog || [];
     state.liveSay = null;
     function threadHtml() {
-      return state.chatLog.slice(-40).map(m => {
+      const all = state.chatLog, shown = all.slice(-14);
+      const more = all.length - shown.length;
+      return (more > 0 ? `<div class="q-chat-more">${more} earlier ${more === 1 ? 'message' : 'messages'}</div>` : '')
+        + shown.map(m => {
         const hint = m.hint ? `<div class="q-chat-h">${qMd(m.hint)}</div>` : '';
         const hl = m.highlight ? ' <span class="q-chat-hl">● on the page</span>' : '';
-        return `<div class="q-chat-m ${m.role === 'q' ? 'q' : 'me'}"><span class="q-chat-who">${m.role === 'q' ? 'Q' : 'you'}${hl}</span><div class="q-chat-t">${qMd(m.text)}</div>${hint}</div>`;
+        const sec = m.section ? `<span class="q-chat-sec">${escHtml(m.section)}</span>` : '';
+        return `<div class="q-chat-m ${m.role === 'q' ? 'q' : 'me'}"><span class="q-chat-who">${m.role === 'q' ? 'Q' : 'you'}${sec}${hl}</span><div class="q-chat-t">${qMd(m.text)}</div>${hint}</div>`;
       }).join('');
     }
     function renderThread() {
@@ -2876,7 +2892,7 @@
     // The live block becomes history. Called before anything replaces it.
     function flushLive() {
       const p = state.liveSay; state.liveSay = null;
-      if (p && p.text) pushSaid({ role: 'q', text: p.text, hint: p.hint || '' });
+      if (p && p.text) pushSaid({ role: 'q', text: p.text, hint: p.hint || '', section: p.section || '' });
     }
     function sayMe(text) { flushLive(); pushSaid({ role: 'me', text: String(text || '') }); renderThread(); }
     function setCoach({ msg, section, hint, actions, inputVisible, thinking, showNudge, where, move, moveHtml, step, role, supply, ack }) {
@@ -2940,7 +2956,7 @@
       // panel, so it is not archived as text.
       const saidNow = [moveHtml ? '' : (move || ack || ''), supply || '', msg || '']
         .map(s => String(s || '').trim()).filter(Boolean).join('\n\n');
-      state.liveSay = thinking || !saidNow ? null : { text: saidNow, hint: hint || '' };
+      state.liveSay = thinking || !saidNow ? null : { text: saidNow, hint: hint || '', section: section || '' };
       // A conversation reads to the newest line, not back to the top.
       const body = document.getElementById('coach-body');
       body.scrollTop = state.chatLog.length ? body.scrollHeight : 0;
@@ -8288,7 +8304,7 @@
       refsYours.innerHTML = list.length ? '<span class="ry-title">Your references (' + list.length + ')</span>' + list.map(r => '<div class="ry-item">' + escHtml(r.reference) + (r.fromUpload ? '<span class="ry-tag">your upload</span>' : '') + '</div>').join('') : '';
     }
     let citeBusy = false;
-    async function runAutoCite({ sentence, criterionId, anchor, dot } = {}) {
+    async function runAutoCite({ sentence, criterionId, anchor, dot, hint } = {}) {
       if (citeBusy) return;
       const cid = criterionId || state.currentCriterionId;
       const sent = String(sentence || sentenceAtCaret() || (state.editing ? currentEditText() : '') || '').replace(/\s+/g, ' ').trim();
@@ -8299,7 +8315,7 @@
       showToolPop('<div class="cite-sent">' + escHtml(sent) + '</div><div class="pc-line">Finding real sources…</div>', { kind, anchor });
       toolPopEl.classList.add('cite');
       try {
-        const d = await api('/writer/cite', { sentence: sent, criterionId: cid }, { timeoutMs: 40000 });
+        const d = await api('/writer/cite', { sentence: sent, criterionId: cid, hint: hint || '' }, { timeoutMs: 40000 });
         tally('cite', cid);
         const cands = Array.isArray(d.candidates) ? d.candidates : [];
         if (!cands.length) {
@@ -8313,10 +8329,31 @@
           const meta = [who, c.year, c.journal || c.publisher || (c.type === 'book' ? 'book' : '')].filter(Boolean).join(' · ');
           const backs = (c.strength || c.backs) ? '<span class="co-backs">' + (c.strength ? '<span class="co-str ' + escHtml(c.strength) + '">' + escHtml(c.strength) + '</span>' : '') + (c.backs ? 'backs: ' + escHtml(c.backs) : '') + (c.strengthWhy ? ' <span class="co-why">— ' + escHtml(c.strengthWhy) + '</span>' : '') + '</span>' : '';
           return '<button type="button" class="q-btn cite-opt" data-i="' + i + '">' + (c.fromUpload ? '<span class="co-tag">from your uploads</span>' : '') + '<span class="co-title">' + escHtml(c.title || '') + '</span><span class="co-meta">' + escHtml(meta) + ' — ' + escHtml(c.inText || '') + '</span>' + backs + (c.snippet ? '<span class="co-snip">“' + escHtml(c.snippet.slice(0, 140)) + (c.snippet.length > 140 ? '…' : '') + '”</span>' : '') + ((c.warnings || []).length ? '<span class="co-warn">check: ' + escHtml(c.warnings.join('; ')) + '</span>' : '') + '</button>';
-        }).join('') + '<div class="pc-nudge">Press one — it goes in as a Harvard citation and joins your reference list.</div>';
-        showToolPop(html, { kind, anchor });
+        }).join('');
+        // NOTHING STRONG IS NOT A CHOICE OF FIVE (Sarah, 17 Aug: "why do I only
+        // have the choice for weak citations"). When the best I found is FAIR
+        // or WEAK, say so above the list and offer the real fix — name the idea
+        // and I search for THAT — instead of five near-misses styled as options.
+        const best = cands.some(c => c.strength === 'strong') ? 'strong' : cands.some(c => c.strength === 'fair') ? 'fair' : 'weak';
+        const head = best === 'strong' ? ''
+          : '<div class="cite-warn"><b>' + (best === 'fair' ? 'None of these really backs that sentence.' : 'These are all weak for that sentence.')
+            + '</b> Your sentence says shortage and gap — everyday words, so the search matched papers from other fields. Name the idea and I will look for that instead.</div>'
+            + '<div class="cite-again"><input class="cite-term" id="cite-term" placeholder="the idea, e.g. labour market segmentation" autocomplete="off"><button type="button" class="q-btn" id="cite-go">Search that →</button></div>';
+        const foot = '<div class="pc-nudge">' + (best === 'strong' ? 'Press one — it goes in as a Harvard citation and joins your reference list.' : 'You can still press one, but a marker will see it does not back the point.') + '</div>';
+        showToolPop('<div class="cite-sent">' + escHtml(sent) + '</div>' + head + html.replace('<div class="cite-sent">' + escHtml(sent) + '</div>', '') + foot, { kind, anchor });
         toolPopEl.classList.add('cite');
         toolPopEl.querySelectorAll('.cite-opt').forEach(b => b.addEventListener('click', () => useCitation(cands[Number(b.dataset.i)], sent, cid, { anchor, dot })));
+        const goBtn = toolPopEl.querySelector('#cite-go');
+        if (goBtn) {
+          const again = () => {
+            const term = (toolPopEl.querySelector('#cite-term') || {}).value || '';
+            if (!term.trim()) return;
+            citeBusy = false; runAutoCite({ anchor, dot, sentence: sent, criterionId: cid, hint: term.trim() });
+          };
+          goBtn.addEventListener('click', again);
+          const inp = toolPopEl.querySelector('#cite-term');
+          if (inp) inp.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); again(); } });
+        }
       } catch (e) {
         showToolPop('<div class="pc-line">The source search did not answer (' + escHtml(shortCause(e)) + ') — try again, or use the References tool.</div>', { kind, anchor });
       } finally { citeBusy = false; }

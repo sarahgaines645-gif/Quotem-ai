@@ -91,7 +91,7 @@ const WEAK = new Set(('staff people person company companies work works working 
 // on Organisational Commitment and Intention to Quit". The subject is
 // deliberately NOT appended — it swamps the topic and returns generic field
 // surveys ("A Systematic Review of Human Resource Management Systems").
-function buildQuery(claimSentence, subject) {
+function buildQuery(claimSentence, subject, hint, exclude) {
     // Sarah, 16 Aug: "This is a classic example of the Equity Theory (Kang et
     // al., 2010)" found nothing, because the first two content words are
     // "classic example". A student frames before they name the thing, so the
@@ -105,7 +105,25 @@ function buildQuery(claimSentence, subject) {
     //
     // Any citation already in the sentence is stripped first: "(Kang et al.,
     // 2010)" would otherwise put an author's surname into the search.
-    const cleaned = String(claimSentence || '').replace(/\([^)]*\d{4}[a-z]?\)/g, ' ').replace(/\s+/g, ' ').trim();
+    let cleaned = String(claimSentence || '').replace(/\([^)]*\d{4}[a-z]?\)/g, ' ').replace(/\s+/g, ' ').trim();
+    // THE CASE STUDY'S OWN NAME IS NOT A SEARCH TERM. "There is already a
+    // shortage at Portstride" put a fictional company into an academic index
+    // (Sarah, 17 Aug: "why do I only have the choice for weak citations") — it
+    // matches nothing, so the search fell back to shortage / gap / grow and
+    // answered with infrastructure economics, New Zealand water engineers and
+    // the global chip shortage. The names of the things in HER case come out
+    // before the query is built.
+    for (const name of (Array.isArray(exclude) ? exclude : [exclude]).filter(Boolean)) {
+        const n = String(name).trim();
+        if (n.length < 3) continue;
+        const target = n.toLowerCase();
+        let i = cleaned.toLowerCase().indexOf(target);
+        while (i >= 0) {
+            cleaned = cleaned.slice(0, i) + ' ' + cleaned.slice(i + n.length);
+            i = cleaned.toLowerCase().indexOf(target, i);
+        }
+    }
+    cleaned = cleaned.replace(/\s+/g, ' ').trim();
     // Measured on the live index: the named concept ON ITS OWN is the best
     // query there is. "Equity Theory" returns "Equity: theory and research"
     // and "What Should Be Done with Equity Theory?". The same phrase padded
@@ -116,8 +134,30 @@ function buildQuery(claimSentence, subject) {
     // the field sort below do the narrowing instead.
     const named = namedConcept(cleaned);
     if (named) return '"' + named + '"';
+    // THE IDEA THIS PART IS SUPPOSED TO NAME. Sarah, 17 Aug: "why do I only
+    // have the choice for weak citations" — her sentence was "there is already
+    // a shortage at Portstride so this gap will grow", whose only content
+    // words are shortage / gap / grow / problem. Those are real words in every
+    // field on earth, so the index answered with a 1999 infrastructure paper,
+    // New Zealand water engineers and the global chip shortage: all real, all
+    // useless. When she has not named a concept, the plan's expected term for
+    // this part is the concept, and it goes in first.
+    const hinted = String(hint || '').replace(/\s+/g, ' ').trim();
+    if (hinted && hinted.split(' ').length <= 6) return '"' + hinted + '"';
     const kw = keywords(cleaned, 12);
     const strong = kw.filter(w => !WEAK.has(w));
+    // GENERIC ON ITS OWN IS NOT A QUERY. With nothing but everyday nouns, the
+    // field is the only thing that makes the search mean anything — the
+    // opposite of the named-concept case, where the subject swamps the topic.
+    // "already", "very", "quite" — framing words that survive keywords();
+    //  the test is whether anything SUBJECT-BEARING is left, not whether every
+    //  single word is on the list.
+    const bearing = strong.filter(w => !GENERIC.has(w) && !FRAMING.has(w));
+    const generic = strong.length && !bearing.length;
+    if (generic && subject) {
+        const subjWords = keywords(subject, 3);
+        if (subjWords.length) return strong.slice(0, 3).concat(subjWords).join(' ');
+    }
     if (strong.length < 2) {
         const fallback = strong.concat(kw.filter(w => !strong.includes(w))).slice(0, 5);
         if (fallback.length < 4 && subject) for (const w of keywords(subject, 4)) if (!fallback.includes(w)) fallback.push(w);
@@ -129,7 +169,7 @@ function buildQuery(claimSentence, subject) {
     // the law fixture came back empty. Take the span of the original sentence
     // from the first strong word to the second, and only quote it if it is
     // still short enough to be a real term.
-    const span = phraseSpan(claimSentence, strong[0], strong[1]);
+    const span = phraseSpan(cleaned, strong[0], strong[1]);
     // "doctrine of precedent" is a term. "Photosynthesis lets plants" is a
     // sentence fragment, and quoting it asks the index for something nobody
     // ever wrote. Only join the two words when what sits between them is a
@@ -168,6 +208,14 @@ function namedConcept(sentence) {
     }
     return '';
 }
+// Framing words a student writes around the point (they are not the point).
+const FRAMING = new Set(('already still also just really very quite often always never sometimes many much more '
+    + 'most less least often lots plenty perhaps maybe clearly obviously simply generally usually').split(' '));
+// Words that name a situation, not a subject: alone they match every field.
+const GENERIC = new Set(('shortage shortages gap gaps problem problems issue issues challenge challenges '
+    + 'increase increases increasing rising rise grow growth growing fall falling decline declining change '
+    + 'changes impact impacts effect effects cost costs benefit benefits risk risks number numbers level '
+    + 'levels rate rates result results situation situations trend trends demand supply pressure pressures').split(' '));
 const CONNECTORS = new Set(['of', 'in', 'on', 'for', 'and', 'the', 'a', 'to', 'by', 'at', 'with', 'from']);
 function isTermSpan(span) {
     const words = span.split(' ');
@@ -472,11 +520,11 @@ async function searchCrossref(query, max) {
 /**
  * findSources — uploads first, then the indexes. Never invents.
  */
-async function findSources({ claimSentence, subject, level, uploadedSources, max = 5, extractMeta } = {}) {
+async function findSources({ claimSentence, subject, level, uploadedSources, max = 5, extractMeta, hint, exclude } = {}) {
     const claim = String(claimSentence || '').replace(/\s+/g, ' ').trim();
     if (!claim) return { candidates: [], searched: { uploads: 0, openalex: false, crossref: false }, note: 'Put the cursor at the end of the sentence you want to back up.' };
     const kw = keywords(claim, 12);
-    const query = buildQuery(claim, subject);
+    const query = buildQuery(claim, subject, hint, exclude);
     const searched = { uploads: 0, openalex: false, crossref: false };
     const ups = await uploadCandidates(uploadedSources, kw, keywords(subject, 6), extractMeta, max);
     searched.uploads = ups.length;

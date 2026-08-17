@@ -419,6 +419,15 @@ router.get('/unicorn3d', (req, res) => {
     res.sendFile(path.join(__dirname, 'unicorn3d.html'));
 });
 
+// The rig bench — the skeleton on its own, with any dance dropped onto it and
+// the real record playing through YouTube's player. This is the page to open
+// when the question is "does this rig work", rather than "does the show look
+// right": it shows the 52 bones, and it says in numbers how many of them the
+// chosen dance actually moves.
+router.get('/rig', (req, res) => {
+    res.sendFile(path.join(__dirname, 'rig.html'));
+});
+
 // Q's personal finance page.
 router.get('/finance', (req, res) => {
     res.sendFile(path.join(__dirname, 'finance.html'));
@@ -1787,7 +1796,25 @@ router.post('/writer/cite', requirePerson, express.json({ limit: '32kb' }), asyn
         return meta;
     };
     try {
-        const out = await qCite.findSources({ claimSentence: sentence, subject: (t.brief && t.brief.subject) || '', level: t.yearGroup || '', uploadedSources: t.sources || [], max: 5, extractMeta });
+        // THE IDEA THIS PART IS MEANT TO NAME, as the search anchor. A sentence
+        // of everyday words ("there is already a shortage… this gap will grow")
+        // has nothing in it for an index to hold on to; the plan already knows
+        // the concept the marker expects here (Sarah, 17 Aug: "why do I only
+        // have the choice for weak citations"). Her own typed term wins over
+        // both.
+        const critId = String(req.body?.criterionId || t.currentCriterionId || '').trim();
+        const plan = critId && t.plans ? t.plans[critId] : null;
+        const expected = (plan && Array.isArray(plan.expectedTerms) ? plan.expectedTerms : []).map(String).filter(Boolean);
+        // The expected term this sentence is closest to — a term that shares a
+        // word with what she wrote, else the part's first. It is only ever a
+        // SEARCH anchor; nothing is written onto her page from it.
+        const sentWords = new Set(sentence.toLowerCase().replace(/[^a-z\s]/g, ' ').split(/\s+/).filter(w => w.length > 4));
+        const planTerm = expected.find(term => term.toLowerCase().split(/\s+/).some(w => w.length > 4 && sentWords.has(w))) || expected[0] || '';
+        const hint = String(req.body?.hint || '').trim() || planTerm;
+        const out = await qCite.findSources({ claimSentence: sentence, subject: (t.brief && t.brief.subject) || '', level: t.yearGroup || '', uploadedSources: t.sources || [], max: 5, extractMeta, hint,
+            // The case study's own name (and the brief's) never go into an
+            // academic search — they are fiction to the index.
+            exclude: [t.brief && t.brief.scenario && t.brief.scenario.name, ...(t.sources || []).map(x => x && x.digest && x.digest.name)].filter(Boolean) });
         // What each would back, and how strongly — so she can choose (17 Aug). A failed judgement leaves the list as it was.
         let candidates = out.candidates || [];
         let note = out.note || '';
