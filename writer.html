@@ -1363,7 +1363,33 @@
     /* MARKING panel */
     .mk-panel { width: 340px; }
     .mk-body { padding: 10px 12px 12px; overflow: auto; }
-    .mk-sec { font-size: 9px; font-weight: 700; letter-spacing: 0.09em; text-transform: uppercase; color: var(--accent); margin: 10px 0 5px; }
+    /* THE MARKING PANEL reads like a mark sheet, not a paragraph (Sarah,
+       17 Aug: "the marking css needs to be formatted better so you can see
+       exactly what you have otherwise its a wall of text"). Sections are
+       separated by a rule; the numbers are tiles — value first and big, label
+       small under it; everything raised, nothing indented. */
+    .mk-sec {
+      font-size: 9px; font-weight: 700; letter-spacing: 0.09em; text-transform: uppercase;
+      color: var(--accent); margin: 16px 0 7px; padding-top: 12px;
+      border-top: 1px solid rgba(0,0,0,0.08);
+    }
+    .mk-sec:first-child { margin-top: 2px; padding-top: 0; border-top: none; }
+    .mk-tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(76px, 1fr)); gap: 6px; margin-bottom: 4px; }
+    .mk-tile {
+      display: flex; flex-direction: column; align-items: flex-start; gap: 1px;
+      padding: 9px 10px; border-radius: 12px; border: none; text-align: left;
+      background: var(--bg); box-shadow: var(--neu-raised-xs);
+      font-family: 'Space Grotesk', sans-serif; min-width: 0;
+    }
+    .mk-tile.act { cursor: pointer; }
+    .mk-tile.act:hover { box-shadow: var(--neu-raised-sm); }
+    .mk-tile.zero { opacity: 0.55; }
+    .mk-tile .mk-v { font-size: 19px; font-weight: 700; color: var(--text); line-height: 1.1; }
+    .mk-tile.act .mk-v { color: var(--accent); }
+    .mk-tile .mk-lab { font-size: 10px; color: var(--text-muted); font-weight: 600; overflow-wrap: anywhere; }
+    .mk-tile .mk-sub { font-size: 9px; color: var(--text-faint); }
+    .mk-note { font-size: 11px; color: var(--text-muted); line-height: 1.45; margin-top: 6px; }
+    #mk-cut-all { margin-top: 4px; }
     .mk-empty { font-size: 12px; color: var(--text-muted); line-height: 1.5; }
     .mk-part { display: grid; grid-template-columns: auto minmax(0,1fr) auto; gap: 8px; align-items: center; font-size: 12px; padding: 4px 6px; border-radius: 8px; }
     .mk-part .bd { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
@@ -1378,6 +1404,13 @@
     .mk-item.done .mk-st { color: #28a745; }
     .mk-item .mk-s { font-size: 11px; color: var(--text); line-height: 1.4; overflow-wrap: anywhere; }
     .mk-item .mk-w { font-size: 10px; color: var(--text-muted); line-height: 1.35; margin-top: 1px; }
+    /* A done row SAYS it is done — a tick on its own inside a "to fix" list
+       reads as a contradiction (Sarah, 17 Aug). */
+    .mk-item .mk-tag {
+      display: inline-block; margin-right: 6px; font-size: 8.5px; font-weight: 700;
+      letter-spacing: 0.08em; text-transform: uppercase; color: #1f8a3a; vertical-align: 1px;
+    }
+    .mk-item.done .mk-s { text-decoration: none; color: var(--text-muted); }
     .mk-foot { font-size: 11px; color: var(--text-muted); margin-top: 8px; line-height: 1.45; }
     .wb-body { padding: 14px 18px 16px; overflow: auto; }
     .wb-ask { font-size: 20px; font-weight: 700; line-height: 1.3; color: var(--text); overflow-wrap: anywhere; }
@@ -7152,11 +7185,30 @@
         .catch(() => []);   // one pass failing must never cost her the mark
       const [spelling, grammar, trim, weak] = await Promise.all([call('spelling'), call('grammar'), call('trim'), call('weak')]);
       const here = (is) => is && is.wrong && !!findInDoc(is.wrong);
+      const sp = spelling.filter(is => here(is) && is.right);
+      const gr = grammar.filter(is => here(is) && is.right);
       return {
-        quick: spelling.concat(grammar).filter(is => here(is) && is.right),
+        spelling: sp, grammar: gr,            // kept apart so the marking says how many of each
+        quick: sp.concat(gr),
         cut: trim.filter(is => is.verdict === 'cut' && here(is)),
         tighten: trim.filter(is => is.verdict !== 'cut' && here(is)),
         weak: weak.filter(here),
+        at: Date.now(),
+      };
+    }
+    // What the page has on it RIGHT NOW — recounted every render, so a cut or
+    // a rewrite drops the number in front of her (Sarah, 17 Aug: "the cutting
+    // isn't in the marking, the what's weak, spelling error count, grammar
+    // error count, word count").
+    function markStats() {
+      const t = state.tidy || {};
+      const live = (arr) => (arr || []).filter(is => is && is.wrong && !is.done && !!findInDoc(is.wrong)).length;
+      return {
+        read: !!t.at,
+        words: countWords(),
+        target: (state.brief && state.brief.wordCount) ? String(state.brief.wordCount).replace(/[^0-9,\- ]/g, '').trim() : '',
+        cut: live(t.cut), tighten: live(t.tighten), weak: live(t.weak),
+        spelling: live(t.spelling), grammar: live(t.grammar),
       };
     }
     // One press: the junk off, the spellings right. Only ever things she said
@@ -7313,16 +7365,64 @@
             + (gap ? `<div class="mk-gap">${escHtml(up ? 'For a ' + up + ': ' + gap : gap)}</div>` : '');
         }).join('');
       }
-      const list = items.length ? `<div class="mk-sec">Sentences to fix (${items.filter(it => !!findInDoc(it.sentence)).length} left)</div>` + items.map((it, i) => {
-        const onPage = !!findInDoc(it.sentence);
-        const cur = walkOn() && i === state.editIndex && onPage;
-        const cls = cur ? ' cur' : (!onPage ? ' done' : '');
-        const st = cur ? '●' : (!onPage ? '✓' : '○');
-        return `<div class="mk-item${cls}" data-mk-i="${i}"><span class="mk-st">${st}</span><div><div class="mk-s">${escHtml(it.sentence.length > 90 ? it.sentence.slice(0, 89) + '…' : it.sentence)}</div>${it.why ? `<div class="mk-w">${escHtml(it.why)}</div>` : ''}</div></div>`;
-      }).join('') : '';
-      const empty = !bands && !list ? '<div class="mk-empty">Nothing marked yet — press <b>Mark & fix →</b> when a question is written, or finish a step and Q marks that bit.</div>' : '';
-      const foot = list ? '<div class="mk-foot">Press a sentence to go to it. ✓ = you changed it. Q stays on the coach card — ask him anything while this is open.</div>' : '';
-      markBody.innerHTML = bands + list + empty + foot;
+      // THE PAGE AT A GLANCE — the numbers first, big, so she can see exactly
+      // what she has without reading a paragraph. Press one to go to it.
+      const s = markStats();
+      const tile = (v, label, sub, pass) => {
+        const t = `<span class="mk-v">${escHtml(String(v))}</span><span class="mk-lab">${escHtml(label)}</span>${sub ? `<span class="mk-sub">${escHtml(sub)}</span>` : ''}`;
+        return pass && v ? `<button type="button" class="mk-tile act" data-mk-pass="${escHtml(pass)}">${t}</button>` : `<div class="mk-tile${v ? '' : ' zero'}">${t}</div>`;
+      };
+      const stats = `<div class="mk-sec">The page right now</div><div class="mk-tiles">`
+        + tile(s.words, s.words === 1 ? 'word' : 'words', s.target ? 'asked for ' + s.target : '')
+        + (s.read ? tile(s.cut, 'to cut', '', 'trim') : '')
+        + (s.read ? tile(s.tighten, 'too long', '', 'trim') : '')
+        + (s.read ? tile(s.weak, s.weak === 1 ? 'weak line' : 'weak lines', '', 'weak') : '')
+        + (s.read ? tile(s.spelling, 'spelling', '', 'spelling') : '')
+        + (s.read ? tile(s.grammar, 'grammar', '', 'grammar') : '')
+        + `</div>`
+        + (s.read ? '' : '<div class="mk-note">Press <b>Mark & fix →</b> and Q reads the whole page — cuts, weak lines, spelling and grammar — before he marks it.</div>');
+      // What Q wants taken off the page, listed here so she can do it from the
+      // mark itself rather than remembering another panel.
+      const cuts = ((state.tidy && state.tidy.cut) || []).map((is, i) => ({ is, i })).filter(x => !x.is.done && !!findInDoc(x.is.wrong));
+      const cutList = cuts.length ? `<div class="mk-sec">Not part of the essay (${cuts.length})</div>` + cuts.map(x =>
+        `<div class="mk-item cut" data-mk-cut="${x.i}"><span class="mk-st">✕</span><div><div class="mk-s"><s>${escHtml(x.is.wrong.length > 90 ? x.is.wrong.slice(0, 89) + '…' : x.is.wrong)}</s></div>${x.is.why ? `<div class="mk-w">${escHtml(x.is.why)}</div>` : ''}</div></div>`).join('')
+        + `<button type="button" class="q-btn" id="mk-cut-all">Take all ${cuts.length} off →</button>` : '';
+      // TO DO AND DONE ARE TWO LISTS, AND DONE SAYS "FIXED" (Sarah, 17 Aug:
+      // "this isnt clear as to 4 left to fix… why are they there if they are
+      // fixed. If theyve been fixed they should say fixed."). A tick on a row
+      // sitting inside "4 left to fix" read as four contradictions.
+      const row = (it, i, { done } = {}) => {
+        const cur = !done && walkOn() && i === state.editIndex;
+        const st = done ? '✓' : cur ? '●' : '○';
+        const tag = done ? '<span class="mk-tag">fixed</span>' : '';
+        return `<div class="mk-item${done ? ' done' : cur ? ' cur' : ''}" data-mk-i="${i}"><span class="mk-st">${st}</span><div><div class="mk-s">${tag}${escHtml(it.sentence.length > 90 ? it.sentence.slice(0, 89) + '…' : it.sentence)}</div>${it.why ? `<div class="mk-w">${escHtml(it.why)}</div>` : ''}</div></div>`;
+      };
+      const todo = [], done = [];
+      items.forEach((it, i) => (findInDoc(it.sentence) ? todo : done).push({ it, i }));
+      const list = (todo.length ? `<div class="mk-sec">To fix (${todo.length})</div>` + todo.map(x => row(x.it, x.i)).join('') : '')
+        + (done.length ? `<div class="mk-sec">Fixed (${done.length})</div>` + done.map(x => row(x.it, x.i, { done: true })).join('') : '');
+      const empty = !bands && !list && !s.read ? '<div class="mk-empty">Nothing marked yet — press <b>Mark & fix →</b> when a question is written, or finish a step and Q marks that bit.</div>' : '';
+      const foot = list ? '<div class="mk-foot">Press a sentence to go to it. A sentence moves to <b>Fixed</b> when you have rewritten it. Q stays on the coach card — ask him anything while this is open.</div>' : '';
+      markBody.innerHTML = stats + bands + cutList + list + empty + foot;
+      // A tile with a number on it opens that list on the page.
+      markBody.querySelectorAll('[data-mk-pass]').forEach(el => el.addEventListener('click', () => {
+        const kind = el.dataset.mkPass;
+        const from = kind === 'trim' ? ((state.tidy.cut || []).concat(state.tidy.tighten || []))
+          : kind === 'weak' ? (state.tidy.weak || [])
+          : (state.tidy[kind] || []);
+        edProof = { kind, issues: from.filter(is => !is.done && !!findInDoc(is.wrong)), busy: false, note: '' };
+        try { renderEditPanel(); edPaint(); openEditPanel(); } catch (_) {}
+      }));
+      markBody.querySelectorAll('[data-mk-cut]').forEach(el => el.addEventListener('click', () => {
+        const is = (state.tidy.cut || [])[Number(el.dataset.mkCut)]; if (!is) return;
+        let n = 0; while (findInDoc(is.wrong) && n < 50) { if (!cutFromDoc(is.wrong)) break; n++; }
+        is.done = true; scheduleAutosave(); renderMarkPanel();
+      }));
+      const cutAll = document.getElementById('mk-cut-all');
+      if (cutAll) cutAll.addEventListener('click', () => {
+        for (const is of (state.tidy.cut || [])) { let n = 0; while (findInDoc(is.wrong) && n < 50) { if (!cutFromDoc(is.wrong)) break; n++; } is.done = true; }
+        scheduleAutosave(); renderMarkPanel();
+      });
       markBody.querySelectorAll('.mk-item').forEach(el => el.addEventListener('click', () => {
         const i = Number(el.dataset.mkI); const it = (state.editItems || [])[i]; if (!it) return;
         if (!findInDoc(it.sentence)) return;   // rewritten — nothing to go to
@@ -8716,7 +8816,7 @@
     loadProjects().then(restoreSession, restoreSession);
     // Test hooks (no data, no secrets): lets the harness exercise the page-side
     // helpers without a paid call. Harmless in production.
-    window.__qwriterTest = { presentStep, renderBoard, renderWhiteboard, startedAsk, showToolPop, findInDoc, replaceInDoc, appendReference, docPlainText, splitCheck: (t) => endsSentence(t), runEditPass, checkCurrentSentence, showEditItem, state: () => state, currentEditText, partParagraphs, setBrief, storyPointsHtml, renderInlineDots, termsForBoard, setCoach, bandListHtml, showEditItem, openEditPanel, renderEditPanel, edState: () => edProof, edSetProof: (p2) => { edProof = p2; renderEditPanel(); edPaint(); }, sayMe, renderThread, syncWorkArea, showPanel, revealPanel, runTidyPasses, applyTidy, mergeWalk, markAndFix, walkItemsFromMark };
+    window.__qwriterTest = { presentStep, renderBoard, renderWhiteboard, startedAsk, showToolPop, findInDoc, replaceInDoc, appendReference, docPlainText, splitCheck: (t) => endsSentence(t), runEditPass, checkCurrentSentence, showEditItem, state: () => state, currentEditText, partParagraphs, setBrief, storyPointsHtml, renderInlineDots, termsForBoard, setCoach, bandListHtml, showEditItem, openEditPanel, renderEditPanel, edState: () => edProof, edSetProof: (p2) => { edProof = p2; renderEditPanel(); edPaint(); }, sayMe, renderThread, syncWorkArea, showPanel, revealPanel, runTidyPasses, applyTidy, mergeWalk, markAndFix, walkItemsFromMark, renderMarkPanel, markStats, gradeWord };
 
 
     // (The old per-card drag code lived here — every panel now goes through makePanel above.)
