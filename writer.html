@@ -1623,7 +1623,7 @@
       <div class="q-step" id="coach-step"></div>
       <div class="q-supply" id="coach-supply"></div>
       <div class="q-msg" id="coach-msg">Drop your task in above and I'll read it. I ask, you write — in your own words. You never have to read the brief.</div>
-      <div class="q-integrity" id="coach-integrity">Your words, Q's structure. Q never writes on your page.</div>
+      <div class="q-integrity hidden" id="coach-integrity"></div>
       <div class="q-hint" id="coach-hint"></div>
       <div class="q-actions hidden" id="coach-actions"></div>
       <div class="q-quiet-row" id="coach-quiet"></div>
@@ -2824,8 +2824,8 @@
         const cur = c.id === state.currentCriterionId ? ' current' : '';
         const bc = state.brickCounts && state.brickCounts[c.id];
         const pct = state.match && state.match.perCriterion && state.match.perCriterion[c.id] != null ? state.match.perCriterion[c.id] : null;
-        const count = pct != null ? `<span class="cov-pct">${pct}%</span>` : (bc && bc.total ? `<span class="cov-count">${bc.voiced}/${bc.total}</span>` : '');
-        const title = c.id + ' — ' + String(c.text || '').replace(/\s+/g, ' ').trim() + (pct != null ? ' — match ' + pct + '%' : '');
+        const count = '';   // no numbers on the strip (Sarah, 17 Aug: "AI and working life 0% — I don't want everything written out like this")
+        const title = c.id + ' — ' + String(c.text || '').replace(/\s+/g, ' ').trim();
         return `<div class="cov-item${cur}" data-cov="${cov}" data-id="${escHtml(c.id)}" title="${escHtml(title)}">
           <span class="cov-dot"></span><span class="cov-text">${escHtml(criterionLabel(c))}<span class="cov-id">${escHtml(c.id)}</span>${count}</span></div>`;
       }).join('');
@@ -3443,7 +3443,7 @@
       }
       let next = idx + 1;
       while (next < plan.steps.length && stepStateOf(cid, plan.steps[next].id).filled) next++;
-      const ackLine = (a ? a + (pct != null && step.kind !== 'list' ? ' ' + pct + '% on this part.' : '') : '');
+      const ackLine = a || '';   // no percentages to the student (Sarah, 17 Aug)
       // A bit of WRITING is marked the moment it is done — the marks go on
       // that paragraph, before the next point. Scaffold steps (list, numbers,
       // sorting, pros/cons, lessons) are not writing; they move straight on.
@@ -4304,8 +4304,8 @@
       const is = edProof.issues[i]; if (!is) return;
       edGoTo(i);
       const what = is.verdict === 'weak' ? 'Make this stronger' : 'Say this in fewer words';
-      if (walkOn()) { showToolPop('<div class="pc-head">' + escHtml(what) + '</div><div class="pc-line">' + escHtml(is.steer || is.why || '') + '</div><div class="pc-nudge">Rewrite it on the page in your own words — I never write it for you.</div>', { kind: is.verdict === 'weak' ? 'What\'s weak' : 'Trim' }); return; }
-      setCoach({ msg: what + ' — ' + (is.steer || is.why || ''), hint: (is.verdict === 'weak' ? (is.why ? 'Why it\'s weak: ' + is.why + ' ' : '') : (is.why ? is.why + ' ' : '')) + 'Rewrite it on the page in your own words — I never write it for you. The mark comes off when it\'s changed.', inputVisible: false, step: false, showNudge: false });
+      if (walkOn()) { showToolPop('<div class="pc-head">' + escHtml(what) + '</div><div class="pc-line">' + escHtml(is.steer || is.why || '') + '</div><div class="pc-nudge">Rewrite it on the page — the mark comes off when it changes.</div>', { kind: is.verdict === 'weak' ? 'What\'s weak' : 'Trim' }); return; }
+      setCoach({ msg: what + ' — ' + (is.steer || is.why || ''), hint: (is.verdict === 'weak' ? (is.why ? 'Why it\'s weak: ' + is.why + ' ' : '') : (is.why ? is.why + ' ' : '')) + 'Rewrite it on the page — the mark comes off when it changes.', inputVisible: false, step: false, showNudge: false });
     }
     // The page changed: any tighten / weak sentence that is no longer there as it was is done.
     let edSweepT = null;
@@ -4427,7 +4427,7 @@
       const note = f.note ? `<div class="wb-empty">${escHtml(f.note)}</div>` : '';
       const nudge = f.nudge && !todo ? `<div class="wb-say"><b>Use it</b> — ${escHtml(f.nudge)}</div>` : '';
       const go = (wbFindDot || f.sentence) && f.items.length ? `<button type="button" class="q-btn primary" id="wb-find-go">Go to the sentence →</button>` : '';
-      return head + facts + todo + note + nudge + `<div class="wb-hint">${go} Nothing here goes on your page by itself — you write it, in your words. <a href="#" id="wb-find-back">← back to the step</a></div>`;
+      return head + facts + todo + note + nudge + `<div class="wb-hint">${go} <a href="#" id="wb-find-back">← back to the step</a></div>`;
     }
     function renderWhiteboard() {
       if (!wbOpen()) return;
@@ -4714,6 +4714,22 @@
         `This is asking you for ${n} thing${n === 1 ? '' : 's'}:\n${list}${n > 6 ? '\n…and ' + (n - 6) + ' more (see the board)' : ''}` +
         (b.wordCount ? `\n\nAround ${b.wordCount}.` : '') +
         (b.prerequisites && b.prerequisites.length ? `\n\nHave to hand: ${b.prerequisites.slice(0, 3).join('; ')}.` : '');
+      // Sarah, 17 Aug: "I have just uploaded the docs and pasted all the work
+      // I've done so far… Q didn't recognise this." A page with real writing on
+      // it is a DRAFT: no opener as if it were blank — Q says he has read it and
+      // the way in is Mark & fix (question by question), or carry on writing.
+      const draftWords = docPlainText().split(/\s+/).filter(Boolean).length;
+      if (draftWords >= 120) {
+        state.currentQuestion = ''; state.openerDone = true;
+        state.currentCriterionId = criteria[0] ? criteria[0].id : ''; state.currentSection = state.currentCriterionId;
+        state.docSnapshot = docPlainText(); state.qCount = 0;
+        appendBoardItem({ type: 'note', label: 'the task', text: found });
+        renderCoverage();
+        setCoach({ msg: 'You\'ve already got ' + draftWords + ' words on the page — I\'ve read them. Press Mark & fix and I go through it question by question, or carry on writing and I follow.', section: 'YOUR DRAFT', hint: '', inputVisible: true, showNudge: false, actions: [{ label: 'Mark & fix →', primary: true, big: true, onClick: () => markAndFix() }] });
+        coachInput.placeholder = 'Ask Q…';
+        persist({ currentQuestion: '', openerDone: true, currentCriterionId: state.currentCriterionId, coverage: state.coverage, currentSection: state.currentCriterionId });
+        return;
+      }
       // The opener IS question 1 — no model call, no waiting.
       const opener = b.opener || 'Tell me, in your own words, what you already know about this. One line is plenty.';
       state.currentQuestion = opener;
@@ -5005,7 +5021,7 @@
       if (plan && plan.role) lines.push(plan.role);
       if (info) lines.push('You\'re on step ' + info.n + ' of ' + info.N + ' (' + (STEP_KIND_LABEL[info.kind] || info.kind) + '): ' + info.step.prompt);
       const m = state.match;
-      if (m && w) lines.push('Match: ' + (m.perCriterion[w.id] != null ? m.perCriterion[w.id] + '% on this part, ' : '') + m.overall + '% overall.');
+      // (no match percentages — Sarah, 17 Aug)
       if (plan) {
         const ss = ssFor(state.currentCriterionId);
         const left = plan.steps.filter(x => !(ss.steps[x.id] && ss.steps[x.id].filled) && !(info && x.id === info.step.id));
@@ -6106,10 +6122,10 @@
       }
       const m = state.lastMark;
       const from = state.markStartPct, to = state.match ? state.match.overall : null;
-      const climb = from != null && to != null ? (from === to ? to + '% overall.' : from + '% → ' + to + '% overall.') : '';
+      const climb = '';   // no percentages (Sarah, 17 Aug)
       setCoach({
         msg: nothing ? 'Nothing I\'d change — every sentence is doing its job. ' + climb : 'That\'s the pass done — every word on the page still yours. ' + climb + ' Mark it again and I\'ll find the next things, or download it.',
-        section: 'MARK & FIX', moveHtml: bandListHtml(m), hint: '',
+        section: 'MARK & FIX', hint: '',   // the bands live on the ✓ Marking panel, once (Sarah, 17 Aug: "two of the same thing")
         actions: [
           { label: '↻ Mark & fix again', primary: true, big: true, onClick: () => markAndFix() },
           { label: '📄 Assemble & download', onClick: () => assembleAndOffer() },
@@ -6218,9 +6234,7 @@
         // Scaffolded coaching: the opener is answered and no step is live →
         // the first part starts now (its plan was kicked server-side).
         if (state.openerDone && !state.currentStep && !partStarting && !state.editing) startPart(state.currentCriterionId || firstPartId());
-        if (reason !== 'restore') {
-          appendBoardItem({ type: 'note', label: 'plan', text: 'Q has the whole answer in his head now — every one of the ' + (state.brief.criteria || []).length + ' questions' + (state.sources.length ? ', using your ' + state.sources.length + ' document' + (state.sources.length === 1 ? '' : 's') : '') + '. From here each question aims at the next thing you haven\'t said yet.' });
-        }
+        // (Sarah, 17 Aug: "it's irrelevant what Q is doing" — no note about the plan landing.)
       } catch (e) {
         appendBoardItem({ type: 'note', label: 'plan', text: 'Q\'s plan (the full answer he steers by) didn\'t finish: ' + shortCause(e) + ' — coaching still works from the outline; tap here to retry.', action: () => { essayWatching = false; watchEssay('restore-kick'); } });
       } finally {
@@ -6412,7 +6426,7 @@
       setCoach({
         msg: '',
         section: 'MARK & FIX · SENTENCE ' + (i + 1) + ' OF ' + items.length,
-        where, moveHtml: bandListHtml(state.lastMark), step: false,
+        where, step: false,
         hint: editing ? 'Rewrite it on the page — type or talk — then Check it.' : (i === 0 ? 'The pink sentence on the page is the one we\'re on.' : ''),
         actions: editing ? [
           { label: '✓ Check it', primary: true, big: true, onClick: () => checkCurrentSentence() },
@@ -6566,7 +6580,7 @@
         if (d.closeness === 'match') {
           const wm = whereInfo(); const pct = wm && state.match && state.match.perCriterion ? state.match.perCriterion[wm.id] : null;
           state.markPassChanged = (state.markPassChanged || 0) + 1;
-          setCoach({ msg: cue + (pct != null ? ' That took you to ' + pct + '% on this part.' : ''), section: 'MARK & FIX · SENTENCE ' + (state.editIndex + 1) + ' OF ' + items.length, moveHtml: bandListHtml(state.lastMark), step: false, actions: [{ label: 'Next →', primary: true, big: true, onClick: () => { state.editIndex++; showEditItem(); } }, { label: 'Stop for now', quiet: true, onClick: () => endFixPass() }], inputVisible: false });
+          setCoach({ msg: cue, section: 'MARK & FIX · SENTENCE ' + (state.editIndex + 1) + ' OF ' + items.length, step: false, actions: [{ label: 'Next →', primary: true, big: true, onClick: () => { state.editIndex++; showEditItem(); } }, { label: 'Stop for now', quiet: true, onClick: () => endFixPass() }], inputVisible: false });
           clearTimeout(state.editAdvanceTimer);
           state.editAdvanceTimer = setTimeout(() => { if (state.editing && items[state.editIndex] === it) { state.editIndex++; showEditItem(); } }, 2500);
         } else {
@@ -6601,6 +6615,8 @@
       renderScore(); renderCoverage();
     }
     function renderScore() {
+      // Sarah, 17 Aug: "Match percentage is just for me so that can be gotten rid of." Nothing on the card.
+      coachScore.innerHTML = ''; return;
       const m = state.match; const w = whereInfo();
       if (!m || !state.brief) { coachScore.innerHTML = ''; return; }
       const part = w && m.perCriterion[w.id] != null ? m.perCriterion[w.id] : null;
