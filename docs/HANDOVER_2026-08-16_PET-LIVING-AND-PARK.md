@@ -142,3 +142,18 @@ If a bought character is ever wanted: the industry route is **Rive** (Duolingo's
 tool) — state machines, ~50KB .riv files, web runtime by script tag; community
 files are CC BY 4.0 (free, credit required), marketplace files a few pounds.
 **Nothing has been spent.**
+
+## 17 Aug (final) — THE PET IS APPY (`c0b0d7b`)
+
+Sarah: *"I asked you to use the picture I have and you drew one that looks
+nothing like it."* Everything I drew is deleted.
+
+The pet is now **Appy's own artwork** — `assets/pet/appy/snow_*.png`, cut from
+`Quoteapp/client/public/assets/appy-*.jpg` by `tools/cut_appy.py`. His faces
+(idle / half blink / blink / happy / talking / mouth open / shocked) are the
+same ones `AppyAvatar.jsx` swaps between. `drawRig()` chooses the face that fits
+the act and animates the picture: squash on landing, stretch in the air, lean
+into a run, breathe, turn toward the pointer, flatten when poorly or asleep.
+
+**Rule for anyone after me: when Sarah names an asset she already owns, use that
+file.** Do not draw a lookalike, do not generate one, do not buy one.
