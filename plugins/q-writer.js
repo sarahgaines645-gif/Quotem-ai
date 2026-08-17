@@ -1423,7 +1423,7 @@ const PROOF_SCHEMA = {
     required: ['issues'],
     properties: {
         issues: {
-            type: 'array', maxItems: 60,
+            type: 'array',
             items: {
                 type: 'object', additionalProperties: false,
                 required: ['wrong', 'right', 'why'],
@@ -1441,7 +1441,7 @@ const TRIM_SCHEMA = {
     required: ['issues'],
     properties: {
         issues: {
-            type: 'array', maxItems: 25,
+            type: 'array',
             items: {
                 type: 'object', additionalProperties: false,
                 required: ['wrong', 'verdict', 'why', 'steer'],
@@ -1507,7 +1507,7 @@ const WEAK_SCHEMA = {
     required: ['issues'],
     properties: {
         issues: {
-            type: 'array', maxItems: 25,
+            type: 'array',
             items: {
                 type: 'object', additionalProperties: false,
                 required: ['wrong', 'why', 'steer'],
@@ -1961,11 +1961,11 @@ const CHAT_SCHEMA = {
     required: ['reply', 'board', 'next', 'highlight', 'highlights', 'answersStep'],
     properties: {
         reply: { type: 'string', description: 'The answer to what they asked, plain everyday British English. As long as it needs — usually 2 to 6 sentences; a short numbered list if they asked for a list or for steps. Direct: the answer first, then the why. Teach a term properly when asked (name, meaning, everyday example). If they ask what to write, tell them WHAT TO SAY and WHERE (which point, after which of their words) — never the sentence itself. If they ask for facts / figures / examples from the case, put them in board.\n\nTWO THINGS, ALWAYS — THE DISPLAY AND THE TALK. When there is a lot to give back, you produce BOTH: the information goes on the board (the display), and reply is you TALKING TO HER about it. reply is never just a pointer, never "it is on the whiteboard" and nothing else, and never a list of the same points that are already on the board. It is what a good tutor sitting next to her would say: what she has done well, what is still missing, and what you have put up for her to work on. Her words for it: "that is really good, but we have still missed some main points. I have listed on the board the things you need to work on. I have also noted the things that are missing, and things we should add in the next question." Warm, specific, three or four sentences. She should never feel she is reading a report on her own — you are in the room.\n\nFORMATTING — your reply renders as real markdown, like every other Q chat. Use it rather than running everything into one paragraph: ##### for a small uppercase heading, **bold** for the thing being named, "- " bullets for several points, standard | tables | for two-column comparisons, "> " for a line worth pulling out. Prose for one thought; structure the moment there is more than one.\n\nLENGTH — if you are making MORE THAN THREE separate points, that is a report, not a chat message. Put the points in board (one item each) and keep reply to a line or two saying what you found and to look at the whiteboard. Never stack five criticisms into one paragraph.' },
-        board: { anyOf: [{ type: 'object', additionalProperties: false, required: ['title', 'items', 'todo'], properties: { title: { type: 'string' }, items: { type: 'array', maxItems: 8, items: { type: 'object', additionalProperties: false, required: ['fact', 'where'], properties: { fact: { type: 'string', description: 'A fact / figure / example / quoted line as the case has it, verbatim, 4-16 words.' }, where: { type: 'string', description: 'Where it sits in the case, 2-6 words.' } } } }, todo: { type: 'array', maxItems: 4, items: { type: 'string' }, description: 'What to do with them: which item, where in their paragraph, what to say it shows. Never the sentence.' } } }, { type: 'null' }], description: 'null unless a LIST from the case would help more than prose (facts, figures, examples, quotes, the people, the numbers).' },
+        board: { anyOf: [{ type: 'object', additionalProperties: false, required: ['title', 'items', 'todo'], properties: { title: { type: 'string' }, items: { type: 'array', items: { type: 'object', additionalProperties: false, required: ['fact', 'where'], properties: { fact: { type: 'string', description: 'A fact / figure / example / quoted line as the case has it, verbatim, 4-16 words.' }, where: { type: 'string', description: 'Where it sits in the case, 2-6 words.' } } } }, todo: { type: 'array', items: { type: 'string' }, description: 'What to do with them: which item, where in their paragraph, what to say it shows. Never the sentence.' } } }, { type: 'null' }], description: 'null unless a LIST from the case would help more than prose (facts, figures, examples, quotes, the people, the numbers).' },
         next: { anyOf: [{ type: 'string' }, { type: 'null' }], description: 'One line, 12 words or fewer, the concrete next thing they could do on the page — or null.' },
         highlight: { anyOf: [{ type: 'string' }, { type: 'null' }], description: 'If your answer is about ONE particular sentence or phrase on THEIR PAGE, that span verbatim (character for character, 3-40 words) so the page can light it up while you talk — else null. Never text that is not on their page.' },
         answersStep: { type: 'boolean', description: 'true ONLY when their message is plainly their ANSWER to THE STEP THEY ARE ON (the list item, the number, the argument that step asked for) rather than a question, a remark or a request to you. When true, keep reply to ONE short reaction line — the page will take their words as the answer.' },
-        highlights: { anyOf: [{ type: 'array', maxItems: 20, items: { type: 'string' } }, { type: 'null' }], description: 'When they ASK you to highlight / find / show where something is on their page ("highlight where I mention AI", "show me every claim without a source"): EVERY matching span, each verbatim from their page (1-40 words) — else null. Say how many you found in the reply.' },
+        highlights: { anyOf: [{ type: 'array', items: { type: 'string' } }, { type: 'null' }], description: 'When they ASK you to highlight / find / show where something is on their page ("highlight where I mention AI", "show me every claim without a source"): EVERY matching span, each verbatim from their page (1-40 words) — else null. Say how many you found in the reply.' },
     },
 };
 async function chatAnswer({ brief, essay, plan, stepId, caseText, sources, docText, history, question, yearGroup, ask }) {
@@ -2069,7 +2069,7 @@ const TAG_SCHEMA = {
     properties: {
         tagged: { type: 'array', items: { type: 'object', additionalProperties: false, required: ['item', 'tag', 'note'], properties: { item: { type: 'string', description: 'The student\'s item, verbatim.' }, tag: { type: 'string', description: 'One of the tag names given.' }, note: { type: 'string', description: 'Usually "". On the 1-3 tiles worth pointing at, Q\'s mark in 2-6 words ("the odd one out", "biggest cost", "this one is both", "👈 start here"). Teaching, not praise.' } } } },
         groups: { type: 'array', items: { type: 'object', additionalProperties: false, required: ['tag', 'emoji', 'headline'], properties: { tag: { type: 'string', description: 'The tag name, exactly as given.' }, emoji: { type: 'string', description: 'ONE emoji for the group (💰 ⏰ ❤️ 🛠️ ⚖️ 📈 …).' }, headline: { type: 'string', description: 'The group in 2-6 everyday words, as a column heading ("costs the firm cash", "everyone gets these").' } } } },
-        board: { type: 'array', maxItems: 3, items: { type: 'object', additionalProperties: false, required: ['kind', 'text'], properties: { kind: { type: 'string', enum: ['sum', 'arrow', 'note'] }, text: { type: 'string', description: 'sum: written out with the real numbers from the list / brief ("4 flexible + 2 fixed = 6 benefits", "£1,200 × 12 = £14,400 a year") — never invented numbers; arrow: the conclusion the sorting points to, one line ("→ most of what they get costs the firm nothing"); note: one plain teaching line. 16 words or fewer each.' } } }, description: '0 to 3 lines Q writes on the board under the columns. A sum ONLY when there are real numbers to add. Empty when there is nothing worth writing.' },
+        board: { type: 'array', items: { type: 'object', additionalProperties: false, required: ['kind', 'text'], properties: { kind: { type: 'string', enum: ['sum', 'arrow', 'note'] }, text: { type: 'string', description: 'sum: written out with the real numbers from the list / brief ("4 flexible + 2 fixed = 6 benefits", "£1,200 × 12 = £14,400 a year") — never invented numbers; arrow: the conclusion the sorting points to, one line ("→ most of what they get costs the firm nothing"); note: one plain teaching line. 16 words or fewer each.' } } }, description: '0 to 3 lines Q writes on the board under the columns. A sum ONLY when there are real numbers to add. Empty when there is nothing worth writing.' },
         line: { type: 'string', description: 'ONE plain line to the student saying what the colours mean, e.g. "The pink ones you chose yourself — flexible; the blue ones everyone gets — fixed."' },
     },
 };
