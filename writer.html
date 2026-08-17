@@ -1273,6 +1273,7 @@
     .tb-cover .ex-title { display: block; font-size: 9px; font-weight: 700; letter-spacing: 0.09em; text-transform: uppercase; color: var(--text-faint); margin-bottom: 6px; }
     .tb-cover .ex-part { font-weight: 500; letter-spacing: 0.02em; text-transform: none; margin-left: 6px; }
     .tb-cover .ex-ask { font-size: 13px; font-weight: 700; color: var(--text); line-height: 1.4; margin-bottom: 8px; overflow-wrap: anywhere; }
+    .cv-rings { display: flex; align-items: center; gap: 8px; font-size: 11px; font-weight: 700; color: var(--text); margin: 2px 0 8px; }
     .cv-rows { display: flex; flex-direction: column; gap: 5px; }
     .cv-row { display: grid; grid-template-columns: auto minmax(0,1fr) auto; gap: 8px; align-items: center; font-size: 12px; color: var(--text); line-height: 1.35; }
     .cv-row .cv-s { font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-faint); white-space: nowrap; }
@@ -3801,7 +3802,7 @@
       const rows = reqs.map(rq => `<div class="cv-row${met.has(rq.kind) ? ' met' : ''}"><span class="q-dot${met.has(rq.kind) ? ' met' : ''}" style="--dc:${rq.colour || REQ_COLOURS[rq.kind] || '#999'}" data-req="${escHtml(rq.kind)}" data-cid="${escHtml(cid)}"></span><span class="cv-l">${escHtml(rq.label || REQ_LABELS[rq.kind] || rq.kind)}</span><span class="cv-s">${met.has(rq.kind) ? '✓ in' : 'to do'}</span></div>`).join('');
       const n = reqs.filter(rq => met.has(rq.kind)).length;
       const w = whereInfo(cid);
-      return `<div class="tb-cover" data-cid="${escHtml(cid)}"><span class="ex-title">To cover<span class="ex-part">${w ? escHtml('Part ' + w.n) : ''}${reqs.length ? escHtml(' · ' + n + ' of ' + reqs.length + ' in') : ''}</span></span>${plan.minimalAsk ? `<div class="ex-ask">${escHtml(plan.minimalAsk)}</div>` : ''}${rows ? `<div class="cv-rows">${rows}</div>` : ''}</div>`;
+      return `<div class="tb-cover" data-cid="${escHtml(cid)}"><span class="ex-title">To cover<span class="ex-part">${w ? escHtml('Part ' + w.n) : ''}${reqs.length ? escHtml(' · ' + n + ' of ' + reqs.length + ' in') : ''}</span></span>${plan.minimalAsk ? `<div class="ex-ask">${escHtml(plan.minimalAsk)}</div>` : ''}${reqs.length ? `<div class="cv-rings">${reqDotsHtml(cid)} <b>must be in this part</b></div>` : ''}${rows ? `<div class="cv-rows">${rows}</div>` : ''}</div>`;
     }
     // THE WORD BOARD card for a part: the one-line ask, the words as BUTTONS
     // (nothing else — meanings live on the hover card), "Still to use", the
