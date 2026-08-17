@@ -367,7 +367,7 @@ const BRIEF_SCHEMA = {
         scenario: {
             anyOf: [{ type: 'null' }, {
                 type: 'object', additionalProperties: false,
-                required: ['name', 'kind', 'whatItIs', 'theStory', 'people', 'numbers', 'strengths', 'problems', 'useIt'],
+                required: ['name', 'kind', 'whatItIs', 'theStory', 'facts', 'sections', 'people', 'numbers', 'strengths', 'problems', 'useIt'],
                 properties: {
                     name: { type: 'string', description: 'The SUBJECT of the scenario in as few words as possible — the organisation, person, case or text it is about. Usually one or two words: "Datacore", "Portstride", "R v Brown", "Nestlé UK". Copied exactly as written in the document. Never a sentence. Empty string only if the document truly names nothing.' },
                     kind: { type: 'string', description: 'What that subject IS, in 3-6 words, no verb. "Global logistics and supply chain", "Mid-sized software firm", "Criminal appeal, House of Lords". Never a sentence.' },
@@ -377,6 +377,8 @@ const BRIEF_SCHEMA = {
                     numbers: { type: 'array', items: { type: 'object', additionalProperties: false, required: ['label', 'value'], properties: { label: { type: 'string' }, value: { type: 'string' } } }, description: 'Figures worth having to hand — headcount, turnover, pay, dates, percentages — copied EXACTLY as stated, never rounded or invented. Up to 10.' },
                     strengths: { type: 'array', items: { type: 'string' }, description: 'What the subject has GOING FOR IT — the pros, one short line each, the figure in the line where there is one ("4,800 staff across 12 countries", "30 years in the market"). These read next to `problems` as a pros-and-cons pair on the fact card. Up to 6. Empty if none.' },
                     problems: { type: 'array', items: { type: 'string' }, description: 'What is going AGAINST it — the cons: the problems, tensions and decisions the scenario sets up, one short plain line each, the figure in the line where there is one ("struggling to pay salaries", "loses too many warehouse staff"). These are usually what the questions are about. Up to 6.' },
+                    facts: { type: 'array', items: { type: 'object', additionalProperties: false, required: ['label', 'value'], properties: { label: { type: 'string' }, value: { type: 'string' } } }, description: 'THE OVERVIEW TABLE, the way a company fact sheet opens — what the subject IS, in label/value rows: Industry, Size, Headquarters, Founded, Operations, Services, Client sectors, Competitive advantage, Sector, Jurisdiction, Date — whichever of these the document actually states, in its own words. Value 2-12 words, copied, never invented, never a sentence. Up to 10 rows. Empty only if the document states no such facts.' },
+                    sections: { type: 'array', items: { type: 'object', additionalProperties: false, required: ['heading', 'icon', 'bullets'], properties: { heading: { type: 'string', description: 'The section title in the document\'s own terms, 2-5 words: "Workforce Composition", "External Pressures", "Digital Transformation Programme", "Labour Market Challenges".' }, icon: { type: 'string', description: 'ONE emoji that fits the section, or an empty string.' }, bullets: { type: 'array', items: { type: 'string' }, description: 'Up to 6 points, one line each, figures and proportions copied exactly ("65% operational — warehouse staff and drivers"). Everyday words. Never a paragraph.' } } }, description: 'THE BODY OF THE FACT SHEET — the document broken into the sections it actually has, in its order, each with its points. This is what the student reads INSTEAD of the document, so nothing a question could hinge on is left out. Up to 6 sections. Empty if the document is too short to have sections.' },
                     useIt: { type: 'string', description: 'ONE plain sentence on how the scenario is used in the answers: "when a question says \'your organisation\' it means this company — use its numbers and its problems as your examples."' },
                 },
             }],
@@ -537,6 +539,8 @@ function normaliseBrief(b) {
         kind: String(sc.kind || '').trim().slice(0, 80),
         whatItIs: String(sc.whatItIs || '').trim(),
         theStory: String(sc.theStory || '').trim(),
+        facts: (Array.isArray(sc.facts) ? sc.facts : []).map(f => ({ label: String((f && f.label) || '').trim(), value: String((f && f.value) || '').trim() })).filter(f => f.label && f.value).slice(0, 10),
+        sections: (Array.isArray(sc.sections) ? sc.sections : []).map(x => ({ heading: String((x && x.heading) || '').trim(), icon: String((x && x.icon) || '').trim().slice(0, 4), bullets: (Array.isArray(x && x.bullets) ? x.bullets : []).map(String).map(b => b.trim()).filter(Boolean).slice(0, 6) })).filter(x => x.heading && x.bullets.length).slice(0, 6),
         people: (Array.isArray(sc.people) ? sc.people : []).map(p => ({ who: String((p && p.who) || '').trim(), what: String((p && p.what) || '').trim() })).filter(p => p.who).slice(0, 6),
         numbers: (Array.isArray(sc.numbers) ? sc.numbers : []).map(n => ({ label: String((n && n.label) || '').trim(), value: String((n && n.value) || '').trim() })).filter(n => n.label && n.value).slice(0, 10),
         strengths: (Array.isArray(sc.strengths) ? sc.strengths : []).map(String).map(s => s.trim()).filter(Boolean).slice(0, 6),
@@ -1064,7 +1068,7 @@ ${briefForPrompt(brief)}`;
 // source, shown on the brief board.
 const SOURCE_DIGEST_SCHEMA = {
     type: 'object', additionalProperties: false,
-    required: ['name', 'kind', 'whatItIs', 'theStory', 'people', 'numbers', 'strengths', 'problems', 'useIt'],
+    required: ['name', 'kind', 'whatItIs', 'theStory', 'facts', 'sections', 'people', 'numbers', 'strengths', 'problems', 'useIt'],
     properties: {
         name: { type: 'string', description: 'The SUBJECT of this document in as few words as possible — the organisation, person, case or text it is about. Usually one or two words: "Datacore", "Portstride", "R v Brown", "Nestlé UK". Copied exactly as written. Never a sentence. Empty string only if the document truly names nothing.' },
         kind: { type: 'string', description: 'What that subject IS, in 3-6 words, no verb. "Global logistics and supply chain", "Mid-sized software firm", "Criminal appeal, House of Lords". Never a sentence.' },
@@ -1074,6 +1078,8 @@ const SOURCE_DIGEST_SCHEMA = {
         numbers: { type: 'array', items: { type: 'object', additionalProperties: false, required: ['label', 'value'], properties: { label: { type: 'string' }, value: { type: 'string' } } }, description: 'The figures worth having to hand — headcount, turnover, salaries, dates, percentages, budgets. Copied EXACTLY as the document states them, never rounded or invented. Up to 10. Empty if none.' },
         strengths: { type: 'array', items: { type: 'string' }, description: 'What the subject has GOING FOR IT — the pros, one short line each, the figure in the line where there is one ("4,800 staff across 12 countries", "30 years in the market"). These read next to `problems` as a pros-and-cons pair on the fact card. Up to 6. Empty if none.' },
         problems: { type: 'array', items: { type: 'string' }, description: 'What is going AGAINST it — the cons: the problems, tensions and decisions the case sets up, each ONE short plain line, the figure in the line where there is one ("struggling to pay salaries", "loses too many warehouse staff"). These are usually what the questions are about. Up to 6.' },
+        facts: { type: 'array', items: { type: 'object', additionalProperties: false, required: ['label', 'value'], properties: { label: { type: 'string' }, value: { type: 'string' } } }, description: 'THE OVERVIEW TABLE, the way a company fact sheet opens — what the subject IS, in label/value rows: Industry, Size, Headquarters, Founded, Operations, Services, Client sectors, Competitive advantage, Sector, Jurisdiction, Date — whichever of these the document actually states, in its own words. Value 2-12 words, copied, never invented, never a sentence. Up to 10 rows. Empty only if the document states no such facts.' },
+        sections: { type: 'array', items: { type: 'object', additionalProperties: false, required: ['heading', 'icon', 'bullets'], properties: { heading: { type: 'string', description: 'The section title in the document\'s own terms, 2-5 words: "Workforce Composition", "External Pressures", "Digital Transformation Programme", "Labour Market Challenges".' }, icon: { type: 'string', description: 'ONE emoji that fits the section, or an empty string.' }, bullets: { type: 'array', items: { type: 'string' }, description: 'Up to 6 points, one line each, figures and proportions copied exactly ("65% operational — warehouse staff and drivers"). Everyday words. Never a paragraph.' } } }, description: 'THE BODY OF THE FACT SHEET — the document broken into the sections it actually has, in its order, each with its points. This is what the student reads INSTEAD of the document, so nothing a question could hinge on is left out. Up to 6 sections. Empty if the document is too short to have sections.' },
         useIt: { type: 'string', description: 'ONE plain sentence telling her how this document is meant to be used in her answers — "when a question says \'the organisation\', it means this company; use its numbers and its problems as your examples."' },
     },
 };
@@ -1100,6 +1106,8 @@ ${brief ? '\nTHE QUESTIONS (already extracted):\n' + (brief.criteria || []).map(
         kind: String(sc.kind || '').trim().slice(0, 80),
         whatItIs: String(sc.whatItIs || '').trim(),
         theStory: String(sc.theStory || '').trim(),
+        facts: (Array.isArray(sc.facts) ? sc.facts : []).map(f => ({ label: String((f && f.label) || '').trim(), value: String((f && f.value) || '').trim() })).filter(f => f.label && f.value).slice(0, 10),
+        sections: (Array.isArray(sc.sections) ? sc.sections : []).map(x => ({ heading: String((x && x.heading) || '').trim(), icon: String((x && x.icon) || '').trim().slice(0, 4), bullets: (Array.isArray(x && x.bullets) ? x.bullets : []).map(String).map(b => b.trim()).filter(Boolean).slice(0, 6) })).filter(x => x.heading && x.bullets.length).slice(0, 6),
         people: (Array.isArray(sc.people) ? sc.people : []).map(p => ({ who: String((p && p.who) || '').trim(), what: String((p && p.what) || '').trim() })).filter(p => p.who).slice(0, 6),
         numbers: (Array.isArray(sc.numbers) ? sc.numbers : []).map(n => ({ label: String((n && n.label) || '').trim(), value: String((n && n.value) || '').trim() })).filter(n => n.label && n.value).slice(0, 10),
         strengths: (Array.isArray(sc.strengths) ? sc.strengths : []).map(String).map(s => s.trim()).filter(Boolean).slice(0, 6),
@@ -1123,6 +1131,8 @@ ${brief ? '\nTHE ASSIGNMENT THIS DOCUMENT SUPPORTS (so you know what matters in 
         kind: String((r && r.kind) || '').trim().slice(0, 80),
         whatItIs: String((r && r.whatItIs) || '').trim(),
         theStory: String((r && r.theStory) || '').trim(),
+        facts: (Array.isArray((r || {}).facts) ? (r || {}).facts : []).map(f => ({ label: String((f && f.label) || '').trim(), value: String((f && f.value) || '').trim() })).filter(f => f.label && f.value).slice(0, 10),
+        sections: (Array.isArray((r || {}).sections) ? (r || {}).sections : []).map(x => ({ heading: String((x && x.heading) || '').trim(), icon: String((x && x.icon) || '').trim().slice(0, 4), bullets: (Array.isArray(x && x.bullets) ? x.bullets : []).map(String).map(b => b.trim()).filter(Boolean).slice(0, 6) })).filter(x => x.heading && x.bullets.length).slice(0, 6),
         people: (Array.isArray(r && r.people) ? r.people : []).map(p => ({ who: String((p && p.who) || '').trim(), what: String((p && p.what) || '').trim() })).filter(p => p.who).slice(0, 6),
         numbers: (Array.isArray(r && r.numbers) ? r.numbers : []).map(n => ({ label: String((n && n.label) || '').trim(), value: String((n && n.value) || '').trim() })).filter(n => n.label && n.value).slice(0, 10),
         strengths: (Array.isArray(r && r.strengths) ? r.strengths : []).map(String).map(s => s.trim()).filter(Boolean).slice(0, 6),

@@ -1271,6 +1271,26 @@
     .fc-rule { height: 1px; background: rgba(0,0,0,0.07); margin: 11px 0; }
     /* Stat tiles — the value IS the tile (her card rule: bold value, small
        muted label, no placeholder furniture). */
+    /* THE FACT SHEET — the shape Q's own chat gives her: a heading, an
+       Overview table of label/value rows, then the document's real sections
+       with their points. Rows are separated by hairlines, never sunken. */
+    .fs-h {
+      font-size: 12.5px; font-weight: 700; color: var(--accent);
+      margin: 10px 0 6px; letter-spacing: -0.01em;
+    }
+    .fs-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+    .fs-table th, .fs-table td {
+      text-align: left; vertical-align: top; padding: 7px 8px 7px 0;
+      border-bottom: 1px solid rgba(0,0,0,0.07); overflow-wrap: anywhere;
+    }
+    .fs-table tr:last-child th, .fs-table tr:last-child td { border-bottom: none; }
+    .fs-table th { font-weight: 700; color: var(--text); width: 38%; padding-right: 12px; }
+    .fs-table td { color: var(--text); }
+    .fs-table b { font-weight: 700; }
+    .fs-sec { margin-top: 10px; }
+    .fs-list { margin: 0; padding-left: 17px; }
+    .fs-list li { font-size: 12px; line-height: 1.5; color: var(--text); margin: 4px 0; overflow-wrap: anywhere; }
+    .fs-list li b { font-weight: 700; }
     .fc-stats { display: flex; flex-wrap: wrap; gap: 6px; }
     .fc-stat {
       display: flex; flex-direction: column; gap: 1px; min-width: 0;
@@ -3262,6 +3282,14 @@
              ${kind ? `<div class="fc-kind">${esc(kind)}</div>` : (d.whatItIs ? `<div class="fc-kind">${esc(d.whatItIs)}</div>` : '')}`
           : `<span class="fc-lab">${s.isBrief ? '📖 Case study' : '📎 Case study'}</span>
              <div class="fc-kind" style="font-size:13px;color:var(--text);font-weight:600">${esc(d.whatItIs || s.name)}</div>`;
+        // THE FACT SHEET (Sarah, 17 Aug: "I asked Q in my chat to format the
+        // brief and this is what he did. thats what Id expect the fact sheet to
+        // look like"). The Overview table first — what this place IS, row by
+        // row — then the document's own sections with their points.
+        const facts = (d.facts || []).length
+          ? `<div class="fs-h">Overview</div><table class="fs-table"><tbody>${d.facts.map(f => `<tr><th>${esc(f.label)}</th><td>${bold(f.value)}</td></tr>`).join('')}</tbody></table>` : '';
+        const sections = (d.sections || []).length
+          ? d.sections.map(x => `<div class="fs-sec"><div class="fs-h">${x.icon ? esc(x.icon) + ' ' : ''}${esc(x.heading)}</div><ul class="fs-list">${x.bullets.map(b => `<li>${bold(b)}</li>`).join('')}</ul></div>`).join('') : '';
         const stats = (d.numbers || []).length
           ? `<div class="fc-stats">${d.numbers.map(n => `<span class="fc-stat"><b>${esc(n.value)}</b><span>${esc(n.label)}</span></span>`).join('')}</div>` : '';
         const pros = (d.strengths || []).length
@@ -3275,6 +3303,8 @@
           ? `<details class="fc-more"><summary>The whole story</summary>${storyPointsHtml(d.theStory)}${d.useIt ? `<div class="bb-src-use">${esc(d.useIt)}</div>` : ''}</details>` : '';
         return `<div class="bb-src" data-src="${esc(s.name)}">
           ${head}
+          ${facts ? '<div class="fc-rule"></div>' + facts : ''}
+          ${sections ? '<div class="fc-rule"></div>' + sections : ''}
           ${stats ? '<div class="fc-rule"></div>' + stats : ''}
           ${proscons ? '<div class="fc-rule"></div>' + proscons : ''}
           ${people ? '<div class="fc-rule"></div>' + people : ''}
@@ -8888,7 +8918,7 @@
     loadProjects().then(restoreSession, restoreSession);
     // Test hooks (no data, no secrets): lets the harness exercise the page-side
     // helpers without a paid call. Harmless in production.
-    window.__qwriterTest = { presentStep, renderBoard, renderWhiteboard, startedAsk, showToolPop, findInDoc, replaceInDoc, appendReference, docPlainText, splitCheck: (t) => endsSentence(t), runEditPass, checkCurrentSentence, showEditItem, state: () => state, currentEditText, partParagraphs, setBrief, storyPointsHtml, renderInlineDots, termsForBoard, setCoach, bandListHtml, showEditItem, openEditPanel, renderEditPanel, edState: () => edProof, edSetProof: (p2) => { edProof = p2; renderEditPanel(); edPaint(); }, sayMe, renderThread, syncWorkArea, showPanel, revealPanel, runTidyPasses, applyTidyItem, mergeWalk, markAndFix, walkItemsFromMark, renderMarkPanel, markStats, gradeWord };
+    window.__qwriterTest = { presentStep, renderBoard, renderWhiteboard, startedAsk, showToolPop, findInDoc, replaceInDoc, appendReference, docPlainText, splitCheck: (t) => endsSentence(t), runEditPass, checkCurrentSentence, showEditItem, state: () => state, currentEditText, partParagraphs, setBrief, storyPointsHtml, renderInlineDots, termsForBoard, setCoach, bandListHtml, showEditItem, openEditPanel, renderEditPanel, edState: () => edProof, edSetProof: (p2) => { edProof = p2; renderEditPanel(); edPaint(); }, sayMe, renderThread, syncWorkArea, showPanel, revealPanel, runTidyPasses, applyTidyItem, mergeWalk, refreshSourceDigests, sourceDigestsHtml, markAndFix, walkItemsFromMark, renderMarkPanel, markStats, gradeWord };
 
 
     // (The old per-card drag code lived here — every panel now goes through makePanel above.)
