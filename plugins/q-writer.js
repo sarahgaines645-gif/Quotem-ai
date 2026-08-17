@@ -1330,7 +1330,7 @@ const TOOL_BRIEFS = {
     facts: 'FIND FACTS IN THE CASE: from THE CASE / BRIEF TEXT below (and the uploaded sources), list 4 to 8 things the student could USE to support or sharpen this sentence — a figure, a name, an event, a decision, a stated problem, a quoted line. Each point = the fact as the text has it (numbers and names verbatim, short) + " — " + how it helps THIS sentence, in plain words. headline = "From the case: N things you could use" (or, if the case has nothing for this sentence, say so and name the kind of evidence that would help). fromSource = "the brief" or the document name. flagged = false unless a fact is NOT in the text. NEVER invent a fact, a number or a name that is not in the text. example = null. nudge = one line pushing them to write the fact into their sentence in their own words.',
 };
 
-async function toolHelp({ tool, sentence, word, brickId, brief, essay, sources, yearGroup, caseText }) {
+async function toolHelp({ tool, sentence, word, brickId, brief, essay, sources, yearGroup, caseText, want }) {
     if (!EDIT_TOOLS.includes(tool)) throw new Error('Unknown tool.');
     if (!String(sentence || '').trim()) throw new Error('No sentence to work on.');
     const srcBlock = (tool === 'cases' || tool === 'references' || tool === 'strategies')
@@ -1346,7 +1346,9 @@ Rules: plain everyday British English; short; never a rewritten version of their
 THE BRIEF (for context)
 ${briefForPrompt(brief).slice(0, 4000)}
 ${targetForPrompt(brief, essay, brickId)}`);
-    const user = `THE HIGHLIGHTED SENTENCE: "${String(sentence).slice(0, 600)}"${word ? `\nTHE WORD THEY PICKED: "${String(word).slice(0, 60)}"` : ''}\n${srcBlock}\n\nGive the ${tool} help.`;
+    const WANT = { figures: 'FIGURES — numbers, percentages, money, dates, counts, as the text has them', examples: 'EXAMPLES — events, decisions, named people or roles, things that happened', quotes: 'QUOTES — short lines from the text, verbatim, that could be quoted' };
+    const wantLine = tool === 'facts' && WANT[String(want || '')] ? `\nTHEY WANT: ${WANT[want]}. Give those first; other useful facts after.` : '';
+    const user = `THE HIGHLIGHTED SENTENCE: "${String(sentence).slice(0, 600)}"${word ? `\nTHE WORD THEY PICKED: "${String(word).slice(0, 60)}"` : ''}${wantLine}\n${srcBlock}\n\nGive the ${tool} help.`;
     const r = await callAccurate(system, user, { maxTokens: tool === 'facts' ? 1800 : 1200, schema: TOOL_SCHEMA, effort: 'low' });
     if (!r || typeof r !== 'object' || !String(r.headline || '').trim()) throw new Error('The tool came back empty — try again.');
     return {

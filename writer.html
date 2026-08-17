@@ -1113,6 +1113,11 @@
     .wb-pc-cell.empty { color: var(--text-faint); font-style: italic; }
     .wb-pc-cell .wb-pc-l { display: block; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-faint); margin-bottom: 2px; }
     .wb-pc-cell.cur { box-shadow: var(--neu-inset-sm), 0 0 0 2px var(--accent) inset; }
+    .wb-finds { display: flex; flex-direction: column; gap: 8px; margin-top: 8px; }
+    .wb-find { display: flex; gap: 10px; align-items: flex-start; padding: 8px 12px; border-radius: 12px; box-shadow: var(--neu-raised-xs); font-size: 15px; line-height: 1.4; color: var(--text); overflow-wrap: anywhere; }
+    .wb-find b { font-weight: 700; }
+    .wb-find .wb-use { font-size: 13px; color: var(--text-muted); margin-top: 2px; }
+    .wb-hint a { color: var(--text-muted); text-decoration: underline dotted; text-underline-offset: 3px; }
     .wb-lesson { font-size: 17px; line-height: 1.5; color: var(--text); }
     .wb-lesson .wb-term { display: block; font-size: 24px; font-weight: 700; margin-bottom: 8px; }
     .wb-lesson .wb-eg { display: block; margin-top: 10px; font-size: 14px; color: var(--text-muted); font-style: italic; }
@@ -3022,6 +3027,7 @@
       const plan = planFor(cid); if (!plan) return;
       if (idx >= plan.steps.length) { finishPart(cid); return; }
       const step = plan.steps[idx];
+      state.wbFind = null;   // a new step: the whiteboard shows the step again
       const ss = ssFor(cid); ss.stepIndex = idx;
       const st = stepStateOf(cid, step.id);
       state.currentStep = { criterionId: cid, stepId: step.id };
@@ -3834,17 +3840,43 @@
         return;
       }
       const cid = dot.dataset.cid, kind = dot.dataset.req; const rq = reqOf(cid, kind);
-      const tool = REQ_TOOL[kind] || 'weak'; const label = DOT_ACTION_LABEL[tool] || tool;
       const it = { sentence: dot.dataset.sentence || '', targetBrickId: null, criterionId: cid };
-      // Sarah, 17 Aug: "I don't know what this means… I want it to cover
-      // people that are struggling." So the button here is EXPLAIN THIS — Q
-      // says in plain words what the thing is, with an everyday example. The
-      // tools live on the Editing panel.
-      // Sarah, 17 Aug: "when the ring represents a source and you press it it
-      // should say auto cite" / "it still says editing tools at the bottom.
-      // that needs to be taken off we have it on the page."
-      const isSource = tool === 'cite';
-      showToolPop('<div class="pc-head"><span class="pc-dot" style="--dc:' + rq.colour + '"></span>' + escHtml(rq.label) + '</div><div class="pc-line">' + escHtml(dot.dataset.why || (rq.label + ' goes here.')) + '</div><div class="pc-explain" id="dot-explain"></div><button type="button" class="q-btn primary" id="dot-action">' + (isSource ? 'Auto cite →' : 'Explain this →') + '</button><div class="pc-links">' + (isSource ? '<a href="#" id="dot-explain-link">Explain this</a>' : '') + '<a href="#" id="dot-here">Put my cursor here</a></div>', { anchor: dot, kind: 'Missing here' });
+      // Sarah, 17 Aug: "This is what I mean by not getting to the point. it
+      // should say 'the job theory you are describing is…' and the button
+      // should say Add this and then puts in the name. every circle that
+      // represents a problem should have a button to fix it. if it pulls up
+      // info from somewhere else that's a lot, it can go on the whiteboard…
+      // 'find figures' — then it will pull all useful info, put it on the
+      // whiteboard and tell you how to use it in the essay."
+      //
+      // So: ONE line that is the point, ONE button that does the fix.
+      //   theory                       → "The theory you're describing is X."   [Add this →]  (X into the sentence)
+      //   figure / calculation         → "Put a real figure from the case here."  [Find figures →]  → whiteboard
+      //   example / case-study         → "Put a real example from the case here." [Find examples →] → whiteboard
+      //   quotation                    → "Quote the case here."                  [Find quotes →]   → whiteboard
+      //   citation / reference         → "Back this up with a source."           [Auto cite →]
+      //   statute / case-law / primary → "Name the law / case / source here."     [Find the source →] (references)
+      //   anything else                → the plan's why                           [Find facts →]    → whiteboard
+      // "Explain this" is a small link on every ring; so is "Put my cursor here".
+      const RING = {
+        theory: { line: 'The theory you\'re describing is', act: 'add' },
+        figure: { line: 'Put a real figure from the case here.', act: 'find', want: 'figures', label: 'Find figures →' },
+        calculation: { line: 'Show the working with real figures from the case.', act: 'find', want: 'figures', label: 'Find figures →' },
+        example: { line: 'Put a real example from the case here.', act: 'find', want: 'examples', label: 'Find examples →' },
+        'case-study': { line: 'Put a real case here.', act: 'find', want: 'examples', label: 'Find examples →' },
+        quotation: { line: 'Quote the case here.', act: 'find', want: 'quotes', label: 'Find quotes →' },
+        citation: { line: 'Back this up with a source.', act: 'cite' }, reference: { line: 'Back this up with a source.', act: 'cite' },
+        statute: { line: 'Name the law here.', act: 'refs' }, 'case-law': { line: 'Name the case here.', act: 'refs' }, 'primary-source': { line: 'Name the source here.', act: 'refs' },
+      };
+      const spec = RING[kind] || { line: dot.dataset.why || (rq.label + ' goes here.'), act: 'find', want: 'any', label: 'Find facts →' };
+      // A first guess at the name from the plan's own label ("the resource-based view or HPWS named").
+      const guess = String(rq.label || '').replace(/\s+(named|name it|is named|mentioned|cited|used|shown|given)\.?$/i, '').replace(/^(a|an|the)\s+(theory|model|framework)\s+(called|named)\s+/i, '').trim();
+      const btnLabel = spec.act === 'add' ? 'Add this →' : spec.act === 'cite' ? 'Auto cite →' : spec.act === 'refs' ? 'Find the source →' : spec.label;
+      const lineHtml = spec.act === 'add'
+        ? '<div class="pc-line" id="dot-line">' + escHtml(spec.line) + ' <b id="dot-name">' + escHtml(guess || '…') + '</b>.</div><div class="pc-line" id="dot-fit" style="color:var(--text-muted)"></div>'
+        : '<div class="pc-line" id="dot-line">' + escHtml(spec.line) + '</div>';
+      const kindWord = String(kind || 'point').replace(/-/g, ' ').replace(/^\w/, c => c.toUpperCase());
+      showToolPop('<div class="pc-head"><span class="pc-dot" style="--dc:' + rq.colour + '"></span>' + escHtml(kindWord) + '</div>' + lineHtml + '<div class="pc-explain" id="dot-explain"></div><button type="button" class="q-btn primary" id="dot-action">' + escHtml(btnLabel) + '</button><div class="pc-links"><a href="#" id="dot-explain-link">Explain this</a><a href="#" id="dot-here">Put my cursor here</a></div>', { anchor: dot, kind: 'Missing here' });
       toolPopEl.classList.add('dotpop');
       const btn = toolPopEl.querySelector('#dot-action');
       const explainNow = async (out, b) => {
@@ -3856,19 +3888,31 @@
           b.textContent = 'Explain it another way'; b.disabled = false;
         } catch (e) { out.textContent = 'Could not explain that (' + shortCause(e) + ') — try again.'; b.disabled = false; }
       };
-      if (isSource) {
+      const ex = toolPopEl.querySelector('#dot-explain-link'); if (ex) ex.addEventListener('click', (e) => { e.preventDefault(); const out = toolPopEl.querySelector('#dot-explain'); if (out) explainNow(out, ex); });
+      if (spec.act === 'add') {
+        // The exact name, from the strategies tool (one small call); the
+        // label's guess stands in until it lands. Add this → the name goes
+        // into her sentence at the ring — the same as pressing a word button.
+        let name = /\bor\b/i.test(guess) ? '' : guess;
+        const fit = toolPopEl.querySelector('#dot-fit'); const nameEl = toolPopEl.querySelector('#dot-name');
+        if (fit) fit.textContent = 'Checking the exact name…';
+        api('/writer/tool', { tool: 'strategies', sentence: it.sentence || (rq.label + ' — ' + (dot.dataset.why || '')), word: '', brickId: null, yearGroup: state.yearGroup || '' }, { timeoutMs: 45000 })
+          .then(d => { const h = String((d && d.headline) || '').trim(); if (h) { name = h; if (nameEl) nameEl.textContent = h; } if (fit) fit.textContent = (d && d.points && d.points[0]) ? String(d.points[0]) : ''; })
+          .catch(() => { if (fit) fit.textContent = name ? '' : 'Could not check the name — pick one from the two above and write it in.'; });
+        btn.addEventListener('click', () => {
+          const n = name || (nameEl ? nameEl.textContent.replace(/\s*\.$/, '') : '');
+          if (!n || n === '…') { if (fit) fit.textContent = 'Which one? Put your cursor here and type the one you mean.'; return; }
+          caretBeforeDot(dot); insertTermAtCaret(n); toolPopEl.classList.remove('dotpop'); hideToolPop();
+          setTimeout(() => { try { renderInlineDots(); } catch (_) {} }, 50);
+        });
+      } else if (spec.act === 'cite') {
         btn.addEventListener('click', () => { caretBeforeDot(dot); toolPopEl.classList.remove('dotpop'); runAutoCite({ sentence: it.sentence, criterionId: cid, anchor: dot, dot }); });
-        const ex = toolPopEl.querySelector('#dot-explain-link'); if (ex) ex.addEventListener('click', (e) => { e.preventDefault(); const out = toolPopEl.querySelector('#dot-explain'); if (out) explainNow(out, ex); });
-      } else btn.addEventListener('click', async () => {
-        const out = toolPopEl.querySelector('#dot-explain'); if (!out) return;
-        btn.disabled = true; out.textContent = 'Q is putting it plainly…';
-        try {
-          const d = await api('/writer/explain', { concept: rq.label + (dot.dataset.why ? ' — ' + dot.dataset.why : ''), subject: (state.brief && (state.brief.title || state.brief.whatItWants)) || '', yearGroup: state.yearGroup || '' }, { timeoutMs: 45000 });
-          out.textContent = String(d.explanation || '').trim() || 'Q could not put that plainly — try again.';
-          appendBoardItem({ type: 'explain', text: rq.label + ' — ' + String(d.explanation || '').trim(), criterionId: cid });
-          btn.textContent = 'Explain it another way'; btn.disabled = false;
-        } catch (e) { out.textContent = 'Could not explain that (' + shortCause(e) + ') — try again.'; btn.disabled = false; }
-      });
+      } else if (spec.act === 'refs') {
+        btn.addEventListener('click', () => { caretBeforeDot(dot); toolPopEl.classList.remove('dotpop'); runTool('references', it, '', { anchor: dot }); });
+      } else {
+        // Find figures / examples / quotes / facts → the whiteboard, with how to use each.
+        btn.addEventListener('click', () => { caretBeforeDot(dot); toolPopEl.classList.remove('dotpop'); hideToolPop(); findToWhiteboard({ sentence: it.sentence, criterionId: cid, want: spec.want || 'any', title: btnLabel.replace(/\s*→$/, ''), forLabel: rq.label }); });
+      }
       toolPopEl.querySelector('#dot-here').addEventListener('click', (e) => { e.preventDefault(); caretBeforeDot(dot); toolPopEl.classList.remove('dotpop'); hideToolPop(); });
     }
     document.addEventListener('click', (e) => {
@@ -4064,6 +4108,7 @@
       edArmed = null; renderEditPanel();
       const it = edToolItem(sel.text);
       if (tool === 'cite') { runAutoCite({ sentence: sel.text, criterionId: it.criterionId }); return; }
+      if (tool === 'facts') { findToWhiteboard({ sentence: sel.text, criterionId: it.criterionId, want: 'any', title: 'Facts in the case', forLabel: '' }); return; }
       const needsWord = tool === 'synonyms' || tool === 'dictionary';
       const word = needsWord && !/\s/.test(sel.text) && sel.text.length <= 40 ? sel.text : '';
       if (needsWord && !word) { showToolPop('<div class="pc-line">Pick ONE word for that — double-click it on the page, then press again.</div>', { kind: EDIT_TOOL_LABELS[tool] || tool }); return; }
@@ -4219,8 +4264,40 @@
     const wbBody = document.getElementById('wb-body');
     const wbTitle = document.getElementById('wb-title');
     function wbOpen() { return !wbPanel.el.classList.contains('hidden'); }
+    // FROM THE CASE on the whiteboard (Sarah, 17 Aug: "it will pull all
+    // useful info, put it on the whiteboard and tell you how to use it in
+    // the essay"). state.wbFind = { title, forLabel, items: [{fact, use}],
+    // nudge, busy, note } — shown on top of the step until she goes back.
+    async function findToWhiteboard({ sentence, criterionId, want, title, forLabel }) {
+      state.wbFind = { title: title || 'From the case', forLabel: forLabel || '', items: [], nudge: '', busy: true, note: '' };
+      showPanel('wb'); revealPanel('wb'); renderWhiteboard();
+      try {
+        const d = await api('/writer/tool', { tool: 'facts', sentence: sentence || (forLabel || 'this point'), word: '', brickId: null, yearGroup: state.yearGroup || '', want: want || 'any' }, { timeoutMs: 60000 });
+        tally('cite', criterionId);
+        const items = (d.points || []).map(p => { const s = String(p); const i = s.indexOf(' — '); return i > 0 ? { fact: s.slice(0, i).trim(), use: s.slice(i + 3).trim() } : { fact: s.trim(), use: '' }; }).filter(x => x.fact);
+        state.wbFind = { title: title || 'From the case', forLabel: forLabel || '', items, nudge: String(d.nudge || ''), busy: false, note: items.length ? '' : String(d.headline || 'The case has nothing for this — say what kind of evidence would help and look for it.'), headline: String(d.headline || ''), fromSource: d.fromSource || '' };
+        appendBoardItem({ type: 'note', label: title || 'From the case', text: String(d.headline || '').slice(0, 120), quiet: true });
+      } catch (e) {
+        state.wbFind = { title: title || 'From the case', forLabel: forLabel || '', items: [], nudge: '', busy: false, note: 'Could not read the case (' + shortCause(e) + ') — try again.' };
+      }
+      renderWhiteboard();
+    }
+    function wbFindHtml(f) {
+      const head = `<div class="wb-ask"><span class="wb-step">From the case${f.forLabel ? escHtml(' · for: ' + f.forLabel) : ''}</span>${escHtml(f.title)}</div>`;
+      if (f.busy) return head + '<div class="wb-empty">Q is reading the case for you…</div>';
+      const tiles = f.items.length ? `<div class="wb-finds">${f.items.map((x, i) => `<div class="wb-find"><span class="wb-n">${i + 1}</span><div><b>${escHtml(x.fact)}</b>${x.use ? `<div class="wb-use">${escHtml(x.use)}</div>` : ''}</div></div>`).join('')}</div>` : '';
+      const note = f.note ? `<div class="wb-empty">${escHtml(f.note)}</div>` : '';
+      const nudge = f.nudge ? `<div class="wb-say"><b>Use it</b> — ${escHtml(f.nudge)}</div>` : '';
+      return head + tiles + note + nudge + `<div class="wb-hint">Nothing here goes on your page by itself — write the one you use into your sentence, in your words. <a href="#" id="wb-find-back">← back to the step</a></div>`;
+    }
     function renderWhiteboard() {
       if (!wbOpen()) return;
+      if (state.wbFind) {
+        wbTitle.textContent = '▦ Whiteboard · from the case';
+        wbBody.innerHTML = wbFindHtml(state.wbFind);
+        const back = document.getElementById('wb-find-back'); if (back) back.addEventListener('click', (e) => { e.preventDefault(); state.wbFind = null; renderWhiteboard(); });
+        return;
+      }
       const info = currentStepInfo();
       if (!info) { wbBody.innerHTML = '<div class="wb-empty">Nothing on the board yet — the next list, sorting, numbers or lesson lands here.</div>'; return; }
       const { step, cid, n, N } = info; const st = stepStateOf(cid, step.id);
@@ -6120,6 +6197,7 @@
           return;
         }
       }
+      if (tool === 'facts') { findToWhiteboard({ sentence: it.sentence, criterionId: it.criterionId, want: 'any', title: 'Facts in the case', forLabel: '' }); return; }
       await runTool(tool, it, word);
     }
     async function runTool(tool, it, word, { anchor } = {}) {
