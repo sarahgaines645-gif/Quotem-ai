@@ -1272,7 +1272,7 @@
        part — nothing else on it. Hover / long-press a word → a little popup
        card with the meaning + one everyday example. */
     .tb-expect { margin: 0 0 20px; padding: 12px 14px; border-radius: 12px; box-shadow: var(--neu-raised-sm); }
-    .tb-cover { position: relative; margin: 16px 0 4px; padding: 0; }   /* space is the divider — no lines */
+    .tb-cover { position: relative; margin: 0 0 20px; padding: 12px 14px; border-radius: 12px; box-shadow: var(--neu-raised-sm); }
     .cv-n { margin-left: auto; font-size: 9px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-faint); }
     .tb-cover .ex-title { display: block; font-size: 9px; font-weight: 700; letter-spacing: 0.09em; text-transform: uppercase; color: var(--text-faint); margin-bottom: 6px; }
     .tb-cover .ex-part { font-weight: 500; letter-spacing: 0.02em; text-transform: none; margin-left: 6px; }
@@ -2946,7 +2946,7 @@
       const current = (qi >= 0 ? items.slice(qi) : items.slice()).filter(it => !it.quiet);
       const w = whereInfo();
       const whereHtml = w ? `<div class="tb-where">${escHtml(whereText(w))}</div>` : '';
-      const agendaHtml = scaffoldAgendaHtml() + expectHtml(state.currentCriterionId) + sourcesBoardHtml();
+      const agendaHtml = coverHtml(state.currentCriterionId) + scaffoldAgendaHtml() + expectHtml(state.currentCriterionId) + sourcesBoardHtml();   // summary card first, then QUESTIONS
       const earlierHtml = earlier.length
         ? `<details class="tb-earlier" id="tb-earlier"${state.boardEarlierOpen ? ' open' : ''}><summary>Earlier (${earlier.length})</summary><div class="tb-items">${earlier.map((it) => boardItemHtml(it, items.indexOf(it), true)).join('')}</div></details>`
         : '';
@@ -3807,7 +3807,7 @@
       const n = reqs.filter(rq => met.has(rq.kind)).length;
       const w = whereInfo(cid);
       // (no re-worded part question here — Sarah, 17 Aug: "what's this?" — the brief board has the question)
-      return `<div class="tb-cover" data-cid="${escHtml(cid)}">${reqs.length ? `<div class="cv-rings">${reqDotsHtml(cid)} <b>must be in</b>${reqs.length ? `<span class="cv-n">${n} of ${reqs.length} in</span>` : ''}</div>` : ''}${rows ? `<div class="cv-rows">${rows}</div>` : ''}</div>`;
+      return `<div class="tb-cover" data-cid="${escHtml(cid)}"><span class="ex-title">To cover<span class="ex-part">${w ? escHtml('Part ' + w.n) : ''}</span></span>${reqs.length ? `<div class="cv-rings">${reqDotsHtml(cid)} <b>must be in</b>${reqs.length ? `<span class="cv-n">${n} of ${reqs.length} in</span>` : ''}</div>` : ''}${rows ? `<div class="cv-rows">${rows}</div>` : ''}</div>`;
     }
     // THE WORD BOARD card for a part: the one-line ask, the words as BUTTONS
     // (nothing else — meanings live on the hover card), "Still to use", the
@@ -4161,7 +4161,6 @@
       return `<div class="tb-agenda" id="tb-agenda">`
         + (ask ? `<div class="tb-now${askIsFresh(ask) ? ' fresh' : ''}" id="tb-now">${escHtml(ask)}</div>` : '')
         + `<div class="tb-track"><span class="st-beads">${beads}</span><span class="tb-count">${n} of ${plan.steps.length}</span>${budget}</div>`
-        + coverHtml(cid)   // Sarah, 17 Aug: "put it in the card at the top" — the part's question, the rings, what must be in
         + parts
         + `</div>`;
     }
