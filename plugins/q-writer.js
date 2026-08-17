@@ -1931,11 +1931,12 @@ function planForPrompt(plan, stepId) {
 // goes on the whiteboard as `board`; the reply says so.
 const CHAT_SCHEMA = {
     type: 'object', additionalProperties: false,
-    required: ['reply', 'board', 'next'],
+    required: ['reply', 'board', 'next', 'highlight'],
     properties: {
         reply: { type: 'string', description: 'The answer to what they asked, plain everyday British English. As long as it needs — usually 2 to 6 sentences; a short numbered list if they asked for a list or for steps. Direct: the answer first, then the why. Teach a term properly when asked (name, meaning, everyday example). If they ask what to write, tell them WHAT TO SAY and WHERE (which point, after which of their words) — never the sentence itself. If they ask for facts / figures / examples from the case, put them in board and say "on the whiteboard" here.' },
         board: { anyOf: [{ type: 'object', additionalProperties: false, required: ['title', 'items', 'todo'], properties: { title: { type: 'string' }, items: { type: 'array', maxItems: 8, items: { type: 'object', additionalProperties: false, required: ['fact', 'where'], properties: { fact: { type: 'string', description: 'A fact / figure / example / quoted line as the case has it, verbatim, 4-16 words.' }, where: { type: 'string', description: 'Where it sits in the case, 2-6 words.' } } } }, todo: { type: 'array', maxItems: 4, items: { type: 'string' }, description: 'What to do with them: which item, where in their paragraph, what to say it shows. Never the sentence.' } } }, { type: 'null' }], description: 'null unless a LIST from the case would help more than prose (facts, figures, examples, quotes, the people, the numbers).' },
         next: { anyOf: [{ type: 'string' }, { type: 'null' }], description: 'One line, 12 words or fewer, the concrete next thing they could do on the page — or null.' },
+        highlight: { anyOf: [{ type: 'string' }, { type: 'null' }], description: 'If your answer is about ONE particular sentence or phrase on THEIR PAGE, that span verbatim (character for character, 3-40 words) so the page can light it up while you talk — else null. Never text that is not on their page.' },
     },
 };
 async function chatAnswer({ brief, essay, plan, stepId, caseText, sources, docText, history, question, yearGroup, ask }) {
@@ -1949,6 +1950,7 @@ async function chatAnswer({ brief, essay, plan, stepId, caseText, sources, docTe
 - If they ask how they are doing or what is left: say plainly, from their page against the parts of the brief.
 - Never read out the model answer or its wording; never say what grade the essay "should" get.
 - Plain, warm, direct British English. No lists of questions back at them.
+- If what you say is about ONE sentence or phrase on their page, put that span in "highlight" verbatim — the page lights it up while you talk, so you can say "this sentence" and they see which.
 ${ageHint}
 
 THE BRIEF
@@ -1978,7 +1980,9 @@ Answer as Q.`;
         const items = r.board.items.map(x => ({ fact: String((x && x.fact) || '').trim(), use: String((x && x.where) || '').trim() })).filter(x => x.fact).slice(0, 8);
         if (items.length) board = { title: String(r.board.title || 'From the case').trim().slice(0, 60), items, todo: (Array.isArray(r.board.todo) ? r.board.todo : []).map(x => capWords(String(x), 26)).filter(Boolean).slice(0, 4) };
     }
-    return { reply, board, next: r && r.next ? capWords(String(r.next), 14) : null };
+    const hl = r && r.highlight ? String(r.highlight).replace(/\s+/g, ' ').trim() : '';
+    const docNorm = String(docText || '').replace(/\s+/g, ' ');
+    return { reply, board, next: r && r.next ? capWords(String(r.next), 14) : null, highlight: hl && docNorm.includes(hl) ? hl : null };
 }
 
 // ── JUDGE THE SOURCE CANDIDATES (Sarah, 17 Aug: "when we auto cite they

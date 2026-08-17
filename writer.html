@@ -483,6 +483,7 @@
     .coach-card .q-chat-t p:last-child { margin-bottom: 0; }
     .coach-card .q-chat-m.me { border-left: 2px solid rgba(0,0,0,0.16); padding-left: 8px; }
     .coach-card .q-chat-m.me .q-chat-t { color: var(--text-muted); }
+    .coach-card .q-chat-hl { text-transform: none; letter-spacing: 0; color: var(--accent); font-weight: 600; margin-left: 6px; }
     .q-btn {
       padding: 6px 10px; border: none; border-radius: 12px;
       font-family: 'Space Grotesk', sans-serif; font-size: 11px; font-weight: 500;
@@ -967,8 +968,13 @@
       padding: 8px 10px; margin-bottom: 8px; max-height: 32vh; overflow-y: auto; white-space: pre-wrap;
     }
     .q-cause { font-size: 11px; color: var(--text-muted); line-height: 1.4; margin-bottom: 6px; }
-    .coach-input-row { display: flex; align-items: center; gap: 6px; }
-    .coach-input-row input.coach-input { flex: 1; }
+    /* Sarah, 17 Aug: "the part you type is under the buttons." With Continue →
+       and the three round buttons on the same line, a 236px card left the box
+       a few pixels wide. The box has the whole first line; the buttons sit on
+       their own line under it, right-aligned. */
+    .coach-input-row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+    .coach-input-row input.coach-input { flex: 1 1 100%; }
+    .coach-input-row input.coach-input.hidden + .q-go, .coach-input-row .q-go { margin-right: auto; }
     .q-mic {
       width: 26px; height: 26px; border-radius: 50%; border: none; flex-shrink: 0;
       background: var(--bg); color: var(--text-muted); cursor: pointer;
@@ -1228,6 +1234,8 @@
     ::highlight(q-trim-cut) { background: rgba(233,30,99,0.14); text-decoration: line-through; text-decoration-color: var(--accent); text-decoration-thickness: 1.5px; }
     ::highlight(q-trim-tight) { background: rgba(230,168,23,0.20); }
     ::highlight(q-weak) { background: rgba(30,136,229,0.14); }
+    /* Q's finger on the page while he talks (Sarah, 17 Aug: "can Q highlight what he wants when he's talking to you?") */
+    ::highlight(q-say) { background: rgba(233,30,99,0.16); text-decoration: underline; text-decoration-color: var(--accent); text-decoration-thickness: 2px; text-underline-offset: 3px; }
     .ed-issue .ed-v.weak { color: #1e88e5; }
     .ed-issue .ed-steer { font-size: 11px; color: var(--text); margin-top: 2px; }
     .ed-issue .ed-steer b { font-weight: 700; }
@@ -5022,10 +5030,10 @@
     state.chatMode = false;
     function chatThreadHtml() {
       const last = state.chatLog.slice(-6);
-      return `<div class="q-chat">${last.map(m => `<div class="q-chat-m ${m.role === 'q' ? 'q' : 'me'}"><span class="q-chat-who">${m.role === 'q' ? 'Q' : 'you'}</span><div class="q-chat-t">${paragraphsHtml(m.text)}</div></div>`).join('')}</div>`;
+      return `<div class="q-chat">${last.map(m => `<div class="q-chat-m ${m.role === 'q' ? 'q' : 'me'}"><span class="q-chat-who">${m.role === 'q' ? 'Q' : 'you'}${m.highlight ? ' <span class="q-chat-hl" title="Q has highlighted this on your page">● on the page</span>' : ''}</span><div class="q-chat-t">${paragraphsHtml(m.text)}</div></div>`).join('')}</div>`;
     }
     function leaveChat() {
-      state.chatMode = false;
+      state.chatMode = false; qSayPaint(null);
       if (walkOn()) { coachCard.classList.add('wide'); showEditItem(); return; }
       const info = currentStepInfo();
       if (info) presentStep(info.cid, info.idx, { restore: true }); else setCoach({ msg: '', hint: 'Keep writing — I read as you go.', inputVisible: true, showNudge: true });
@@ -5040,15 +5048,29 @@
       coachInput.placeholder = 'Ask Q…';
       const box = coachActions.querySelector('.q-chat'); if (box) box.scrollTop = box.scrollHeight;
     }
+    // Q points at the page while he talks: the span his reply is about,
+    // painted and scrolled to; off when the chat moves on or closes.
+    function qSayPaint(span) {
+      try {
+        if (!(window.CSS && CSS.highlights && window.Highlight)) return;
+        if (!span) { CSS.highlights.delete('q-say'); return; }
+        const rs = edFindRanges(String(span).replace(/\s+/g, ' ').trim());
+        if (!rs.length) { CSS.highlights.delete('q-say'); return; }
+        CSS.highlights.set('q-say', new Highlight(...rs));
+        const b = rs[0].getBoundingClientRect(); if (b && (b.top < 80 || b.bottom > window.innerHeight - 120)) window.scrollBy({ top: b.top - Math.round(window.innerHeight * 0.4), behavior: 'smooth' });
+      } catch (_) {}
+    }
     async function chatWithQ(text) {
       state.chatMode = true;
+      qSayPaint(null);
       state.chatLog.push({ role: 'me', text });
       showChat({ thinking: true });
       try {
         const d = await api('/writer/chat', { text, history: state.chatLog.slice(-11, -1), docText: docPlainText().slice(-9000), criterionId: state.currentCriterionId || null, stepId: state.currentStep ? state.currentStep.stepId : null, ask: currentAskText() || '', yearGroup: state.yearGroup || '' }, { timeoutMs: 90000 });
         tally('probe', state.currentCriterionId);
-        state.chatLog.push({ role: 'q', text: String(d.reply || '').trim() });
+        state.chatLog.push({ role: 'q', text: String(d.reply || '').trim(), highlight: d.highlight || null });
         appendBoardItem({ type: 'explain', text: String(d.reply || '').trim(), quiet: true });
+        if (d.highlight) qSayPaint(d.highlight);
         if (d.board && Array.isArray(d.board.items) && d.board.items.length) {
           state.wbFind = { title: d.board.title || 'From the case', forLabel: '', sentence: '', items: d.board.items, todo: d.board.todo || [], nudge: '', busy: false, note: '' };
           showPanel('wb'); revealPanel('wb'); renderWhiteboard();
