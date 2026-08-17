@@ -1359,7 +1359,14 @@ ${targetForPrompt(brief, essay, brickId)}`);
 // span of her text (so the page can find and mark it); "right" is the
 // minimal correction of that span alone. Never style, never her argument,
 // never a rewritten sentence — spelling is spelling, grammar is grammar.
-const PROOF_KINDS = ['spelling', 'grammar'];
+// TRIM (Sarah, 17 Aug): "a button to highlight unnecessary writing. like if
+// someone's written 3 lines about something that the essay could do without.
+// the feedback will need to be varied though. there needs to be outright
+// 'don't need this' and 'we need this but get to the point'." Same rails as
+// spelling / grammar — verbatim spans, marked on the page, Fix / Fix all —
+// with a VERDICT per span: cut (right = '') or tighten (right = the same
+// point in fewer words, her words kept as far as possible).
+const PROOF_KINDS = ['spelling', 'grammar', 'trim'];
 const PROOF_SCHEMA = {
     type: 'object', additionalProperties: false,
     required: ['issues'],
@@ -1378,14 +1385,34 @@ const PROOF_SCHEMA = {
         },
     },
 };
+const TRIM_SCHEMA = {
+    type: 'object', additionalProperties: false,
+    required: ['issues'],
+    properties: {
+        issues: {
+            type: 'array', maxItems: 25,
+            items: {
+                type: 'object', additionalProperties: false,
+                required: ['wrong', 'verdict', 'right', 'why'],
+                properties: {
+                    wrong: { type: 'string', description: 'The exact span from the text, character for character — one whole sentence, or two or three sentences that run together. It MUST appear verbatim in the text. Never a fragment of a sentence.' },
+                    verdict: { type: 'string', enum: ['cut', 'tighten'], description: 'cut = the essay does not need this at all (repeats a point already made, off the question, padding, filler, a preamble). tighten = the point IS needed but it takes too long to make.' },
+                    right: { type: 'string', description: 'For cut: an empty string. For tighten: the same point in fewer words — keep the student\'s own words and facts, remove the padding, at most half the length. Never a new idea, never a new fact.' },
+                    why: { type: 'string', description: 'Plain words for a student, 6 to 14: for cut, why the essay does not need it ("says the same as the sentence before"); for tighten, what to keep and what to lose ("keep the figure, lose the run-up").' },
+                },
+            },
+        },
+    },
+};
 const PROOF_BRIEFS = {
     spelling: 'SPELLING ONLY: words spelt wrong (technowlogy → technology, desisions → decisions, loose → lose where "lose" is meant, veriety → variety, safty → safety). British spelling is correct (organisation, colour, programme). Proper nouns, brand names and the names in the brief are not mistakes. Do NOT touch grammar, punctuation, word choice or style.',
     grammar: 'GRAMMAR AND PUNCTUATION ONLY: subject–verb agreement, tense slips, missing or wrong apostrophes (its/it\'s, employees\' ), run-on sentences that need a full stop, a missing capital at a sentence start, "there/their/they\'re", "effect/affect", double words ("on on"). Do NOT change spelling that is merely non-standard, word choice, style, or the argument. The smallest fix only.',
 };
-async function proofread({ text, kind }) {
+async function proofread({ text, kind, context }) {
     if (!PROOF_KINDS.includes(kind)) throw new Error('Unknown proofreading pass.');
     const body = String(text || '').trim();
     if (!body) throw new Error('There is nothing on the page to check yet.');
+    if (kind === 'trim') return trimPass(body, context);
     const system = withHouseStyle(`You are proofreading a student\'s draft for ONE kind of slip. ${PROOF_BRIEFS[kind]}
 Return every instance you find (up to 60), each as the exact span from the text and its minimal correction. If there are none, return an empty list. Never rewrite sentences; never comment on content.`);
     const user = `THE TEXT:
@@ -1399,6 +1426,27 @@ List the ${kind} slips.`;
         .filter(x => x.wrong && x.right && x.wrong !== x.right && body.includes(x.wrong) && !seen.has(x.wrong) && seen.add(x.wrong))
         .slice(0, 60);
     return { kind, issues };
+}
+async function trimPass(body, context) {
+    const ctx = String(context || '').trim();
+    const system = withHouseStyle(`You are reading a student's draft for ONE thing: writing the essay does not need, or takes too long over. You are on the student's side — every span you mark costs them words they could spend on marks.
+Two verdicts, and you must use the right one:
+- CUT: the essay does not need this at all — it repeats a point already made, it is off the question, it is a run-up or preamble ("In this essay I will…", "It is important to note that"), it is padding or filler, or it says what the marker already knows. right = "".
+- TIGHTEN: the point IS needed but takes too long to make — three sentences where one would do, the same thing said twice in a row, a fact buried in wind-up. right = the same point in fewer words, KEEPING the student's own words, figures and examples; drop only the padding. At most half the length. Never a new idea, never a new fact, never your own argument.
+Rules: spans are whole sentences, verbatim, character for character (curly quotes, spelling mistakes and all). Do not mark spelling, grammar or style. Do not mark a sentence just because it is long — only if the essay would lose nothing (cut) or nothing but wind-up (tighten). If the writing is tight, return an empty list. Never rewrite the whole thing; at most 25 spans, the ones that cost the most words first.${ctx ? `\n\nWHAT THE ESSAY IS FOR (judge "needed" against this):\n${ctx.slice(0, 2500)}` : ''}`);
+    const user = `THE TEXT:\n${body.slice(0, 60000)}\n\nMark what the essay does not need (cut) and what takes too long (tighten).`;
+    const r = await callAccurate(system, user, { maxTokens: 6000, schema: TRIM_SCHEMA, effort: 'medium' });
+    const seen = new Set();
+    const issues = (Array.isArray(r && r.issues) ? r.issues : []).map(x => {
+        const verdict = x.verdict === 'cut' ? 'cut' : 'tighten';
+        const wrong = String(x.wrong || '').trim();
+        let right = verdict === 'cut' ? '' : String(x.right || '').trim();
+        return { wrong, verdict, right, why: capWords(x.why, 16) };
+    })
+        // real, findable, whole, and a change: a cut is a change; a tighten must actually be shorter and not empty
+        .filter(x => x.wrong && x.wrong.split(/\s+/).length >= 4 && body.includes(x.wrong) && (x.verdict === 'cut' || (x.right && x.right !== x.wrong && x.right.length < x.wrong.length)) && !seen.has(x.wrong) && seen.add(x.wrong))
+        .slice(0, 25);
+    return { kind: 'trim', issues };
 }
 
 // ── The check: their rewritten sentence against the brick. A closeness cue,

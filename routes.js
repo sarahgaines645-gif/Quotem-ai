@@ -1941,10 +1941,11 @@ router.post('/writer/tool', requirePerson, express.json({ limit: '32kb' }), asyn
 router.post('/writer/proofread', requirePerson, express.json({ limit: '512kb' }), writerTooLarge('That is too much text to check in one go — check a section at a time.'), async (req, res) => {
     const kind = String(req.body?.kind || 'spelling');
     const text = String(req.body?.text || '');
-    if (!qWriter.PROOF_KINDS.includes(kind)) return res.status(400).json({ error: 'Which check? Spelling or grammar.', code: 'bad_kind' });
+    if (!qWriter.PROOF_KINDS.includes(kind)) return res.status(400).json({ error: 'Which check? Spelling, grammar or trim.', code: 'bad_kind' });
     if (!text.trim()) return res.status(400).json({ error: 'There is nothing on the page to check yet.', code: 'empty' });
+    const context = String(req.body?.context || '').slice(0, 4000);
     try {
-        const r = await qWriter.proofread({ text, kind });
+        const r = await qWriter.proofread({ text, kind, context });
         ukJson(res, { ok: true, ...r });
     } catch (e) {
         writerFail(res, e, '[writer/proofread]', kind + ' check');

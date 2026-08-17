@@ -1152,6 +1152,14 @@
     .ed-issue .ed-fix::before { content: '● '; color: var(--accent); }
     ::highlight(q-proof) { text-decoration: underline wavy var(--accent); text-decoration-thickness: 2px; text-underline-offset: 3px; }
     ::highlight(q-proof-one) { background: rgba(233,30,99,0.14); }
+    /* TRIM: cut = the accent wash + a line through it (the essay does not
+       need it); tighten = an amber wash (needed, but get to the point). */
+    ::highlight(q-trim-cut) { background: rgba(233,30,99,0.14); text-decoration: line-through; text-decoration-color: var(--accent); text-decoration-thickness: 1.5px; }
+    ::highlight(q-trim-tight) { background: rgba(230,168,23,0.20); }
+    .ed-issue .ed-v { display: inline-block; font-size: 9px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; padding: 1px 6px; border-radius: 6px; margin-right: 6px; vertical-align: 1px; box-shadow: var(--neu-inset-sm); color: var(--text-muted); }
+    .ed-issue .ed-v.cut { color: var(--accent); }
+    .ed-issue .ed-v.tighten { color: #b07f0a; }
+    .ed-issue .ed-w.trim s { color: var(--text-muted); text-decoration-color: var(--text-muted); }
     .pc-explain { font-size: 12px; color: var(--text); line-height: 1.5; margin-top: 6px; }
     .pc-links { display: flex; gap: 10px; margin-top: 8px; font-size: 11px; }
     .pc-links a { color: var(--text-muted); text-decoration: none; }
@@ -4035,20 +4043,29 @@
     function edPaint(oneWrong) {
       try {
         if (!(window.CSS && CSS.highlights && window.Highlight)) return;
-        const all = [], one = [];
-        for (const is of edProof.issues) { if (is.done) continue; const rs = edFindRanges(is.wrong); all.push(...rs); if (oneWrong && is.wrong === oneWrong) one.push(...rs); }
+        const all = [], one = [], cut = [], tight = [];
+        for (const is of edProof.issues) { if (is.done) continue; const rs = edFindRanges(is.wrong); (edProof.kind === 'trim' ? (is.verdict === 'cut' ? cut : tight) : all).push(...rs); if (oneWrong && is.wrong === oneWrong) one.push(...rs); }
         CSS.highlights.set('q-proof', new Highlight(...all));
+        CSS.highlights.set('q-trim-cut', new Highlight(...cut));
+        CSS.highlights.set('q-trim-tight', new Highlight(...tight));
         if (one.length) CSS.highlights.set('q-proof-one', new Highlight(...one)); else CSS.highlights.delete('q-proof-one');
       } catch (_) {}
     }
-    function edClearPaint() { try { if (window.CSS && CSS.highlights) { CSS.highlights.delete('q-proof'); CSS.highlights.delete('q-proof-one'); } } catch (_) {} }
+    function edClearPaint() { try { if (window.CSS && CSS.highlights) { CSS.highlights.delete('q-proof'); CSS.highlights.delete('q-proof-one'); CSS.highlights.delete('q-trim-cut'); CSS.highlights.delete('q-trim-tight'); } } catch (_) {} }
+    // What the essay is for — so "needed" is judged against the question,
+    // not in the abstract. Short: the title, what it wants, the parts, the count.
+    function trimContext() {
+      const b = state.brief; if (!b) return '';
+      const parts = (b.criteria || []).map((c, i) => 'Q' + (i + 1) + ': ' + (c.label || '') + (c.text ? ' — ' + c.text : '')).join('\n');
+      return [b.title ? 'Title: ' + b.title : '', b.whatItWants ? 'What it wants: ' + b.whatItWants : '', b.wordCount ? 'Word count: ' + b.wordCount : '', parts].filter(Boolean).join('\n');
+    }
     async function edRunPass(kind) {
       if (edProof.busy) return;
       const text = docPlainText();
       if (!text.trim()) { edProof = { kind, issues: [], busy: false, note: 'Nothing on the page yet.' }; renderEditPanel(); return; }
       edProof = { kind, issues: [], busy: true }; edClearPaint(); renderEditPanel();
       try {
-        const d = await api('/writer/proofread', { kind, text }, { timeoutMs: 90000 });
+        const d = await api('/writer/proofread', { kind, text, context: kind === 'trim' ? trimContext() : '' }, { timeoutMs: 120000 });
         edProof = { kind, issues: (d.issues || []).map(x => ({ ...x, done: false })), busy: false, note: '' };
       } catch (e) {
         edProof = { kind, issues: [], busy: false, note: 'That check didn\'t answer (' + shortCause(e) + ') — try again.' };
@@ -4057,10 +4074,27 @@
     }
     function edFix(i) {
       const is = edProof.issues[i]; if (!is || is.done) return;
-      let n = 0; while (findInDoc(is.wrong) && n < 50) { if (!replaceInDoc(is.wrong, is.right)) break; n++; }
+      let n = 0;
+      if (is.verdict === 'cut' || is.right === '') { while (findInDoc(is.wrong) && n < 50) { if (!cutFromDoc(is.wrong)) break; n++; } }
+      else while (findInDoc(is.wrong) && n < 50) { if (!replaceInDoc(is.wrong, is.right)) break; n++; }
       is.done = true; scheduleAutosave(); renderEditPanel(); edPaint();
     }
     function edFixAll() { edProof.issues.forEach((_, i) => edFix(i)); }
+    // Take a span off the page — with the one space after it, so the
+    // sentences either side close up. Undoable with Ctrl-Z like any typing.
+    function cutFromDoc(span) {
+      const hit = findInDoc(span + ' ') || findInDoc(span);
+      if (!hit) return false;
+      const range = document.createRange();
+      range.setStart(hit.start.node, hit.start.offset);
+      range.setEnd(hit.end.node, hit.end.offset + 1);
+      const sel = window.getSelection(); sel.removeAllRanges(); sel.addRange(range);
+      docBody.focus();
+      let ok = false; try { ok = document.execCommand('delete'); } catch (_) { ok = false; }
+      if (!ok || findInDoc(span)) { try { range.deleteContents(); } catch (_) { return false; } }
+      wordEl.textContent = countWords() + ' words';
+      return true;
+    }
     function edGoTo(i) {
       const is = edProof.issues[i]; if (!is) return;
       const hit = findInDoc(is.wrong); if (!hit) return;
@@ -4073,12 +4107,21 @@
       if (edBody.classList.contains('hidden')) return;
       const tools = ED_TOOL_ORDER.map(t => `<button type="button" class="q-btn${edArmed === t ? ' armed' : ''}" data-ed-tool="${t}" title="${escHtml(ED_TOOL_TIPS[t] || '')}">${escHtml(EDIT_TOOL_LABELS[t] || t)}</button>`).join('');
       const left = edProof.issues.filter(x => !x.done).length;
-      const list = edProof.issues.map((is, i) => `<div class="ed-issue${is.done ? ' done' : ''}" data-ed-i="${i}"><div><div class="ed-w"><s>${escHtml(is.wrong)}</s> → <b>${escHtml(is.right)}</b></div><div class="ed-y">${escHtml(is.why || '')}</div></div>${is.done ? '<span class="ed-y">fixed</span>' : `<button type="button" class="ed-fix" data-ed-fix="${i}">Fix</button>`}</div>`).join('');
-      const status = edProof.busy ? 'Checking the page…' : edProof.note ? edProof.note : edProof.kind ? (edProof.issues.length ? left + ' ' + edProof.kind + ' slip' + (left === 1 ? '' : 's') + ' marked on the page — click one to jump to it.' : 'No ' + edProof.kind + ' slips found on the page.') : '';
+      const trim = edProof.kind === 'trim';
+      const list = edProof.issues.map((is, i) => {
+        const v = trim ? `<span class="ed-v ${is.verdict === 'cut' ? 'cut' : 'tighten'}">${is.verdict === 'cut' ? 'Cut' : 'Tighten'}</span>` : '';
+        const w = trim && is.verdict === 'cut' ? `<s>${escHtml(is.wrong)}</s>` : `<s>${escHtml(is.wrong)}</s> → <b>${escHtml(is.right)}</b>`;
+        const btn = is.done ? `<span class="ed-y">${trim ? (is.verdict === 'cut' ? 'cut' : 'tightened') : 'fixed'}</span>` : `<button type="button" class="ed-fix" data-ed-fix="${i}">${trim ? (is.verdict === 'cut' ? 'Cut it' : 'Tighten') : 'Fix'}</button>`;
+        return `<div class="ed-issue${is.done ? ' done' : ''}" data-ed-i="${i}"><div><div class="ed-w${trim ? ' trim' : ''}">${v}${w}</div><div class="ed-y">${escHtml(is.why || '')}</div></div>${btn}</div>`;
+      }).join('');
+      const nCut = trim ? edProof.issues.filter(x => !x.done && x.verdict === 'cut').length : 0, nTight = trim ? left - nCut : 0;
+      const status = edProof.busy ? (trim ? 'Reading the page for what it can do without…' : 'Checking the page…') : edProof.note ? edProof.note : !edProof.kind ? ''
+        : trim ? (edProof.issues.length ? (left ? [nCut ? nCut + ' to cut' : '', nTight ? nTight + ' to tighten' : ''].filter(Boolean).join(', ') + ' — marked on the page; pink is not needed, amber needs to get to the point. Click one to jump to it.' : 'All trimmed.') : 'Nothing to trim — the page is tight.')
+        : (edProof.issues.length ? left + ' ' + edProof.kind + ' slip' + (left === 1 ? '' : 's') + ' marked on the page — click one to jump to it.' : 'No ' + edProof.kind + ' slips found on the page.');
       edBody.innerHTML = `<div class="ed-hint"><b>Highlight</b> words on the page, then press a tool — or press, then highlight.${edArmed ? ' <b>' + escHtml(EDIT_TOOL_LABELS[edArmed] || edArmed) + ' is waiting for your highlight.</b>' : ''}</div>
         <div class="ed-sec">Improve</div><div class="ed-tools">${tools}</div>
         <div class="ed-sec">Check the whole page</div>
-        <div class="ed-pass"><button type="button" class="q-btn${edProof.kind === 'spelling' && edProof.busy ? ' armed' : ''}" data-ed-pass="spelling">Spelling</button><button type="button" class="q-btn${edProof.kind === 'grammar' && edProof.busy ? ' armed' : ''}" data-ed-pass="grammar">Grammar</button>${left ? '<button type="button" class="q-btn quiet" id="ed-fixall">Fix all</button>' : ''}</div>
+        <div class="ed-pass"><button type="button" class="q-btn${edProof.kind === 'spelling' && edProof.busy ? ' armed' : ''}" data-ed-pass="spelling">Spelling</button><button type="button" class="q-btn${edProof.kind === 'grammar' && edProof.busy ? ' armed' : ''}" data-ed-pass="grammar">Grammar</button><button type="button" class="q-btn${edProof.kind === 'trim' && edProof.busy ? ' armed' : ''}" data-ed-pass="trim" title="What the essay does not need (cut) and what takes too long to say (tighten) — marked on the page, with the shorter version">Trim</button>${left ? '<button type="button" class="q-btn quiet" id="ed-fixall">' + (trim ? 'Trim all' : 'Fix all') + '</button>' : ''}</div>
         ${status ? `<div class="ed-status">${escHtml(status)}</div>` : ''}
         ${list ? `<div class="ed-issues">${list}</div>` : ''}`;
       edBody.querySelectorAll('[data-ed-tool]').forEach(b => b.addEventListener('click', () => edRunTool(b.dataset.edTool)));
