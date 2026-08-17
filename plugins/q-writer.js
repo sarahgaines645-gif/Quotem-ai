@@ -1230,7 +1230,10 @@ function coverageFromBricks(essay, voiced, fallback) {
 // button. ie find facts in the case to support this sentence. Q then pulls
 // up a list of things you could use." From the case / brief text she
 // uploaded (and any sources) — never from Q's own head.
-const EDIT_TOOLS = ['terminology', 'synonyms', 'dictionary', 'strategies', 'cases', 'references', 'weak', 'facts'];
+// bridge (Sarah, 17 Aug, on the Auto cite card): "the bit 'now put that in
+// your own words' — these instructions need to stand out… and ideas on what
+// to write." Ideas = angles for HER line linking the source to her case.
+const EDIT_TOOLS = ['terminology', 'synonyms', 'dictionary', 'strategies', 'cases', 'references', 'weak', 'facts', 'bridge'];
 const EDIT_SCHEMA = {
     type: 'object', additionalProperties: false,
     required: ['items'],
@@ -1328,6 +1331,7 @@ const TOOL_BRIEFS = {
     cases: 'CASE STUDIES: a real case or company that illustrates the point — FROM THE UPLOADED SOURCES FIRST (fromSource = the document name, flagged=false); only if none fits, one from your own knowledge that you are confident is real (flagged=true, say "check this" in the nudge). Never invent. headline = the case, points = what happened and why it fits here.',
     references: 'REFERENCES: support for the claim in the sentence — FROM THE UPLOADED SOURCES FIRST (fromSource = document name, flagged=false), formatted Harvard in the headline with the inline citation in points[0]; otherwise a real, well-known work you are confident exists (flagged=true, mark [verify] on any doubtful detail). NEVER invent a source. If nothing real supports it, say so in the headline and suggest what kind of source would.',
     weak: 'WHAT IS WEAK: one plain line on what is weak in this sentence (headline), two or three lines on what a strong version would DO — name the idea, give an example, show why it matters (points) — never the strong sentence itself. Then the nudge.',
+    bridge: 'IDEAS FOR THE LINE THAT USES THE SOURCE: the student just cited a source after their sentence; THE WORD THEY PICKED holds what the source actually says. Give 3 angles for the ONE line they now write in their own words linking the source to THEIR case — each point 8-16 words, starting "Say how…" / "Say why…" / "Point out that…", tied to a real name, figure or situation from the brief. headline = "Ideas for your line" (exactly). example = null. Never a sentence for them to paste; never quote the source back.',
     facts: 'FIND FACTS IN THE CASE (Sarah, 17 Aug: "list facts that I could use and then suggest what to do"): from THE CASE / BRIEF TEXT below (and the uploaded sources), list 3 to 6 FACTS the student could USE for this sentence — a figure, a name, an event, a decision, a quoted line — the concrete, checkable kind, not themes. Each point = the fact as the text has it (numbers, names and quoted words VERBATIM, 4 to 16 words) + " — " + where it sits in the case (the section / paragraph / who says it, 2 to 6 words). No "how it helps" in the points — that goes in todo. todo = 2 to 4 steps: WHAT TO DO — which fact (by number) to use, after which of the student\'s own words it goes, and what to say it shows for THIS point; never the sentence itself. headline = "From the case: N facts you could use" (or, if the case has nothing for this sentence, say so and name the kind of evidence that would). fromSource = "the brief" or the document name. flagged = false unless a fact is NOT in the text. NEVER invent a fact, a number or a name that is not in the text. example = null. nudge = one line, warm, pushing them to write it in their own words.',
 };
 
