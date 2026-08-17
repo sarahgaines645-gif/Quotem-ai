@@ -858,10 +858,11 @@ function partMarkSchema() { return {
             description: 'MARK & FIX for this question — the full treatment, the same as the end-of-essay mark: every sentence of hers that falls short of the brick it should be voicing, weakest first, then in order. AT MOST 10 — she works through them one at a time. Skip sentences that already match. Empty if the part is genuinely fine.',
             items: {
                 type: 'object', additionalProperties: false,
-                required: ['sentence', 'missing', 'fix', 'targetBrickId', 'suggestedTools', 'needs'],
+                required: ['sentence', 'missing', 'say', 'fix', 'targetBrickId', 'suggestedTools', 'needs'],
                 properties: {
                     sentence: { type: 'string', description: 'HER sentence, verbatim from the numbered list, so the page can highlight it.' },
-                    missing: { type: 'string', description: 'ONE plain line, coach voice, saying what is missing. Never marker jargon.' },
+                    missing: { type: 'string', description: 'ONE plain line, coach voice, saying what is missing. Never marker jargon. This goes on the WHITEBOARD as the written detail — `say` is what you actually speak to her.' },
+                    say: { type: 'string', description: 'What you SAY to her about this sentence, as a person sitting next to her — 1-2 warm sentences. Not a re-reading of `missing` and `fix`; those are written up on the whiteboard beside you. Bring it up the way a tutor would: what she was going for, what is off, and the offer. "The citation on this one is about laser fibres, not jobs — easy fix, want me to find one that actually covers deskilling?" Never marker jargon, never a rewritten sentence.' },
                     fix: { type: 'string', description: 'The concrete thing to go and do — name the idea, give one example, put a number on it, back it with a source. NEVER the words themselves.' },
                     targetBrickId: { anyOf: [{ type: 'string' }, { type: 'null' }] },
                     suggestedTools: { type: 'array', items: { type: 'string', enum: EDIT_TOOLS.concat(['cite']) } },
@@ -918,6 +919,9 @@ ${bricks.length ? '\nWHAT A TOP ANSWER CONTAINS (your model answer — never quo
     const critique = (Array.isArray(r && r.critique) ? r.critique : []).map(it => ({
         sentence: String(it.sentence || '').trim(),
         missing: capWords(it.missing, 12),
+        // Q's spoken line for this sentence — the chat half of say-and-show.
+        // NOT capped to a few words: it is talk, not a label.
+        say: String(it.say || '').replace(/\s+/g, ' ').trim().slice(0, 320),
         fix: capWords(it.fix, 16),
         targetBrickId: it.targetBrickId && brickIds.has(String(it.targetBrickId).replace(/\s+/g, '')) ? String(it.targetBrickId).replace(/\s+/g, '') : null,
         suggestedTools: (Array.isArray(it.suggestedTools) ? it.suggestedTools : []).map(String).filter(t => EDIT_TOOLS.includes(t) || t === 'cite').slice(0, 3),
@@ -2024,7 +2028,7 @@ const CITE_JUDGE_SCHEMA = {
         judged: { type: 'array', items: { type: 'object', additionalProperties: false, required: ['i', 'backs', 'strength', 'why'], properties: {
             i: { type: 'integer', description: 'The candidate number as listed.' },
             backs: { type: 'string', description: 'What in the student\'s sentence this source would back, 5-12 plain words ("that software now sets the targets", "the link between monitoring and trust").' },
-            strength: { type: 'string', enum: ['strong', 'fair', 'weak'], description: 'strong = squarely on this point, a serious source; fair = related, partial, or older; weak = a stretch — different topic, sector or claim.' },
+            strength: { type: 'string', enum: ['strong', 'fair', 'weak', 'none'], description: 'strong = squarely on this point, a serious source; fair = related, partial, or older; weak = a stretch, but a marker would still accept the link — same field, adjacent claim; none = it does NOT back this sentence at all: a different topic, a different field, or it only shares a word ("skill failure" in sports psychology against a sentence about AI deskilling). Say none whenever you would not put your own name to the citation — an honest "nothing here fits" is always better than a citation the marker will pull apart. Never stretch to be helpful.' },
             why: { type: 'string', description: 'Why, 4-10 words ("peer-reviewed, exactly this", "retail, not warehousing", "about well-being, not trust").' },
         } } },
     },
@@ -2045,7 +2049,7 @@ Judge each.`;
     const out = [];
     for (const j of (r && Array.isArray(r.judged) ? r.judged : [])) {
         const i = Number(j.i) - 1; if (!(i >= 0 && i < list.length)) continue;
-        out[i] = { backs: capWords(String(j.backs || '').trim(), 14), strength: ['strong', 'fair', 'weak'].includes(j.strength) ? j.strength : '', why: capWords(String(j.why || '').trim(), 12) };
+        out[i] = { backs: capWords(String(j.backs || '').trim(), 14), strength: ['strong', 'fair', 'weak', 'none'].includes(j.strength) ? j.strength : '', why: capWords(String(j.why || '').trim(), 12) };
     }
     return out;
 }

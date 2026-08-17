@@ -95,7 +95,7 @@
       display: none;
     }
     .proj-menu.open { display: block; }
-    .proj-menu .proj-title { font-size: 11px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text); padding: 6px 8px 4px; }
+    .proj-menu .proj-title { font-size: 11px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--accent); padding: 6px 8px 4px; }
     .proj-list { max-height: 50vh; overflow-y: auto; display: flex; flex-direction: column; gap: 2px; }
     .proj-row {
       display: grid; grid-template-columns: 12px minmax(0, 1fr) auto; align-items: center; gap: 8px;
@@ -377,7 +377,7 @@
     .qpanel.min { height: auto !important; min-height: 0; width: auto !important; min-width: 0; max-width: 260px; border-radius: 20px; }
     .qpanel.min .panel-body, .qpanel.min .panel-grip, .qpanel.min .panel-foot { display: none; }
     .qpanel.min .panel-head { padding: 8px 14px; cursor: pointer; }
-    .qpanel.min .panel-title { color: var(--text); }   /* a minimised panel is still a title — not greyed out (Sarah, 17 Aug) */
+    .qpanel.min .panel-title { color: var(--accent); }   /* a minimised panel is still a title — not greyed out (Sarah, 17 Aug) */
 
     /* ── The coach card ─────────────────────────────────────────────────── */
     .coach-card { width: 236px; }
@@ -440,7 +440,7 @@
     .q-popcard .cite-sent { font-size: 10px; color: var(--text-muted); font-style: italic; margin-bottom: 6px; line-height: 1.35; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
     .refs-yours { display: flex; flex-direction: column; gap: 4px; margin-bottom: 12px; }
     .refs-yours:empty { display: none; }
-    .refs-yours .ry-title { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text); }
+    .refs-yours .ry-title { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--accent); }
     .refs-yours .ry-item { font-family: 'Lora', Georgia, serif; font-size: 12px; line-height: 1.5; color: var(--text); padding: 4px 8px; border-radius: 8px; box-shadow: var(--neu-raised-xs); overflow-wrap: anywhere; }
     .refs-yours .ry-item .ry-tag { font-family: 'Space Grotesk', sans-serif; font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--accent); margin-left: 6px; }
     .q-tool-out:empty { display: none; }
@@ -1122,12 +1122,13 @@
        Each block is now a card with air around it and a small caption saying
        what it is. Space is the formatting — nothing new to read. */
     .tb-agenda, .tb-expect, .tb-worksheet, .tb-current { position: relative; }
-    /* A card's TITLE is read in full ink — greyed-out titles are not for
-       titles (Sarah, 17 Aug). Small labels ON a value stay muted; the name of
-       the card does not. */
+    /* A card's TITLE is PINK — the same accent the panel titles wear, so a card
+       title reads as a title (Sarah, 17 Aug: "titles shouldn't be greyed out",
+       then "titles should be in pink"). Small labels ON a value stay muted;
+       the name of the card does not. */
     .tb-agenda::before, .tb-expect .ex-title, .tb-worksheet::before, .tb-current::before {
       display: block; font-size: 9px; font-weight: 700; letter-spacing: 0.09em;
-      text-transform: uppercase; color: var(--text); margin-bottom: 6px;
+      text-transform: uppercase; color: var(--accent); margin-bottom: 6px;
     }
     .tb-agenda::before { content: 'Questions'; }   /* Sarah, 17 Aug: "change that name to Questions" */
     .tb-worksheet::before { content: 'Worksheet'; }
@@ -1185,7 +1186,7 @@
        cons side by side, who's in it, and the original one press away. The
        paragraph is folded shut — nothing is lost, but nothing is a wall. */
     .bb-src { margin: 10px 0 14px; padding: 14px 15px; border-radius: 14px; box-shadow: var(--neu-raised-sm); background: var(--bg); }
-    .fc-lab { display: block; font-size: 9px; font-weight: 700; letter-spacing: 0.11em; text-transform: uppercase; color: var(--text); margin-bottom: 3px; }
+    .fc-lab { display: block; font-size: 9px; font-weight: 700; letter-spacing: 0.11em; text-transform: uppercase; color: var(--accent); margin-bottom: 3px; }
     .fc-name { font-size: 22px; font-weight: 700; color: var(--text); line-height: 1.15; overflow-wrap: anywhere; }
     .fc-kind { font-size: 11px; color: var(--text-muted); line-height: 1.4; margin-top: 2px; overflow-wrap: anywhere; }
     .fc-rule { height: 1px; background: rgba(0,0,0,0.07); margin: 11px 0; }
@@ -1256,7 +1257,7 @@
     .bb-src-head { font-size: 13px; font-weight: 700; color: var(--text); line-height: 1.4; margin-bottom: 6px; overflow-wrap: anywhere; }
     .bb-src-story { font-size: 13px; color: var(--text); line-height: 1.55; margin-bottom: 8px; }
     .bb-src-sec { margin: 8px 0; }
-    .bb-src-lab { display: block; font-size: 9px; font-weight: 700; letter-spacing: 0.09em; text-transform: uppercase; color: var(--text); margin-bottom: 4px; }
+    .bb-src-lab { display: block; font-size: 9px; font-weight: 700; letter-spacing: 0.09em; text-transform: uppercase; color: var(--accent); margin-bottom: 4px; }
     .bb-src-sec ul { margin: 0; padding-left: 16px; }
     .bb-src-sec li { font-size: 12px; color: var(--text); line-height: 1.5; overflow-wrap: anywhere; }
     .bb-src-nums { display: flex; flex-wrap: wrap; gap: 6px; }
@@ -1299,7 +1300,7 @@
     /* MARKING panel */
     .mk-panel { width: 340px; }
     .mk-body { padding: 10px 12px 12px; overflow: auto; }
-    .mk-sec { font-size: 9px; font-weight: 700; letter-spacing: 0.09em; text-transform: uppercase; color: var(--text); margin: 10px 0 5px; }
+    .mk-sec { font-size: 9px; font-weight: 700; letter-spacing: 0.09em; text-transform: uppercase; color: var(--accent); margin: 10px 0 5px; }
     .mk-empty { font-size: 12px; color: var(--text-muted); line-height: 1.5; }
     .mk-part { display: grid; grid-template-columns: auto minmax(0,1fr) auto; gap: 8px; align-items: center; font-size: 12px; padding: 4px 6px; border-radius: 8px; }
     .mk-part .bd { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
@@ -1377,7 +1378,7 @@
     .wb-pc-cell.cur { box-shadow: var(--neu-inset-sm), 0 0 0 2px var(--accent) inset; }
     .wb-for { font-size: 13px; color: var(--text-muted); margin: 6px 0 4px; overflow-wrap: anywhere; }
     .wb-for i { color: var(--text); font-style: italic; }
-    .wb-sec { font-size: 10px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--text); margin: 14px 0 6px; }
+    .wb-sec { font-size: 10px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--accent); margin: 14px 0 6px; }
     /* A report on the display: one raised row per point, the thing it is about
        named first and bold, what's wrong with it after (Sarah's card rule). */
     .wb-rep { display: flex; flex-direction: column; gap: 7px; margin: 10px 0 4px; }
@@ -1419,7 +1420,7 @@
     .ed-body { padding: 10px 12px 12px; overflow: auto; }
     .ed-hint { font-size: 11px; color: var(--text-muted); line-height: 1.45; margin-bottom: 8px; }
     .ed-hint b { color: var(--text); }
-    .ed-sec { font-size: 9px; font-weight: 700; letter-spacing: 0.09em; text-transform: uppercase; color: var(--text); margin: 10px 0 5px; }
+    .ed-sec { font-size: 9px; font-weight: 700; letter-spacing: 0.09em; text-transform: uppercase; color: var(--accent); margin: 10px 0 5px; }
     .ed-tools { display: flex; flex-wrap: wrap; gap: 6px; }
     .ed-tools .q-btn { font-size: 11px; }
     .ed-tools .q-btn.armed { box-shadow: var(--neu-inset-sm); color: var(--accent); }
@@ -1479,7 +1480,7 @@
     .tb-expect { margin: 0 0 20px; padding: 12px 14px; border-radius: 12px; box-shadow: var(--neu-raised-sm); }
     .tb-cover { position: relative; margin: 0 0 20px; padding: 12px 14px; border-radius: 12px; box-shadow: var(--neu-raised-sm); }
     .cv-n { margin-left: auto; font-size: 9px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-faint); }
-    .tb-cover .ex-title { display: block; font-size: 9px; font-weight: 700; letter-spacing: 0.09em; text-transform: uppercase; color: var(--text); margin-bottom: 6px; }
+    .tb-cover .ex-title { display: block; font-size: 9px; font-weight: 700; letter-spacing: 0.09em; text-transform: uppercase; color: var(--accent); margin-bottom: 6px; }
     .tb-cover .ex-part { font-weight: 500; letter-spacing: 0.02em; text-transform: none; margin-left: 6px; }
     .tb-cover .ex-ask { font-size: 13px; font-weight: 700; color: var(--text); line-height: 1.4; margin-bottom: 8px; overflow-wrap: anywhere; }
     .cv-rings { display: flex; align-items: center; gap: 8px; font-size: 11px; font-weight: 700; color: var(--text); margin: 10px 0 8px; }
@@ -1490,7 +1491,7 @@
     .cv-row.met .cv-l { color: var(--text); }   /* Sarah, 17 Aug: "not grey — it's not for titles" */
     /* SOURCES on the teaching board: citation · the point it backs · how strong (Sarah, 17 Aug) */
     .tb-sources { position: relative; margin: 0 0 20px; padding: 12px 14px; border-radius: 12px; box-shadow: var(--neu-raised-sm); }
-    .tb-sources .ex-title { display: block; font-size: 9px; font-weight: 700; letter-spacing: 0.09em; text-transform: uppercase; color: var(--text); margin-bottom: 8px; }
+    .tb-sources .ex-title { display: block; font-size: 9px; font-weight: 700; letter-spacing: 0.09em; text-transform: uppercase; color: var(--accent); margin-bottom: 8px; }
     .tb-sources .ex-part { font-weight: 500; letter-spacing: 0.02em; text-transform: none; margin-left: 6px; }
     .sb-ref { margin-bottom: 10px; }
     .sb-ref:last-child { margin-bottom: 0; }
@@ -1881,7 +1882,7 @@
   <!-- Q's brief board — one line in Q's words + how far we are; the formal brief behind "Show the brief" -->
   <div class="qpanel brief-board hidden" id="brief-board" data-panel="brief">
     <div class="panel-head" id="brief-board-head">
-      <span class="panel-title" id="brief-board-badge">📋 Your brief</span>
+      <span class="panel-title" id="brief-board-badge">Your brief</span>
       <button type="button" class="panel-min" id="brief-board-tog" title="Minimise" aria-label="Minimise the brief board">−</button>
     </div>
     <div class="panel-body" id="brief-board-body"></div>
@@ -1891,7 +1892,7 @@
   <!-- Q's teaching board — where we are, the current question + latest hint; everything earlier folded -->
   <div class="qpanel teach-board hidden" id="teach-board" data-panel="teach">
     <div class="panel-head" id="teach-board-head">
-      <span class="panel-title" id="teach-board-badge">📝 Teaching board</span>
+      <span class="panel-title" id="teach-board-badge">Teaching board</span>
       <button type="button" class="panel-min" id="teach-board-tog" title="Minimise" aria-label="Minimise the teaching board">−</button>
     </div>
     <div class="panel-body" id="teach-board-body"></div>
@@ -3239,8 +3240,10 @@
       // Earlier — the board never carries help text.
       const earlier = (qi > 0 ? items.slice(0, qi) : []).concat(items.slice(Math.max(qi, 0)).filter(it => it.quiet && qi >= 0));
       const current = (qi >= 0 ? items.slice(qi) : items.slice()).filter(it => !it.quiet);
-      const w = whereInfo();
-      const whereHtml = w ? `<div class="tb-where">${escHtml(whereText(w))}</div>` : '';
+      // No "Part 1 of 4 — AI and working life" line (Sarah, 17 Aug: "get rid
+      // of this"). The Q1-Q4 row already says which part she is on, and the
+      // part's name is on the brief board.
+      const whereHtml = '';
       const agendaHtml = scaffoldAgendaHtml() + coverHtml(state.currentCriterionId) + expectHtml(state.currentCriterionId) + sourcesBoardHtml();   // QUESTIONS first, then TO COVER (Sarah, 17 Aug)
       const earlierHtml = earlier.length
         ? `<details class="tb-earlier" id="tb-earlier"${state.boardEarlierOpen ? ' open' : ''}><summary>Earlier (${earlier.length})</summary><div class="tb-items">${earlier.map((it) => boardItemHtml(it, items.indexOf(it), true)).join('')}</div></details>`
@@ -4102,7 +4105,7 @@
       const n = reqs.filter(rq => met.has(rq.kind)).length;
       const w = whereInfo(cid);
       // (no re-worded part question here — Sarah, 17 Aug: "what's this?" — the brief board has the question)
-      return `<div class="tb-cover" data-cid="${escHtml(cid)}"><span class="ex-title">To cover<span class="ex-part">${w ? escHtml('Part ' + w.n) : ''}${escHtml(' · ' + n + ' of ' + reqs.length + ' in')}</span></span>${rows ? `<div class="cv-rows">${rows}</div>` : ''}</div>`;
+      return `<div class="tb-cover" data-cid="${escHtml(cid)}"><span class="ex-title">To cover<span class="ex-part">${escHtml(n + ' of ' + reqs.length + ' in')}</span></span>${rows ? `<div class="cv-rows">${rows}</div>` : ''}</div>`;
     }
     // THE WORD BOARD card for a part: the one-line ask, the words as BUTTONS
     // (nothing else — meanings live on the hover card), "Still to use", the
@@ -4116,7 +4119,7 @@
       const left = termsForBoard(cid).filter(t => !fits.has(t.toLowerCase()) && !termSeen(cid, t, text));
       const w = whereInfo(cid);
       if (!terms) return '';
-      return `<div class="tb-expect" data-cid="${escHtml(cid)}"><span class="ex-title">Word board<span class="ex-part">${w ? escHtml('Part ' + w.n + ' — ' + w.label) : ''}</span></span>${terms ? `<div class="ex-terms">${terms}</div>` : ''}${left.length ? `<div class="ex-left"><b>Still to use:</b> ${left.map(escHtml).join(', ')}</div>` : (terms ? '<div class="ex-left"><b>Every expected word is in.</b></div>' : '')}</div>`;
+      return `<div class="tb-expect" data-cid="${escHtml(cid)}"><span class="ex-title">Word board</span>${terms ? `<div class="ex-terms">${terms}</div>` : ''}${left.length ? `<div class="ex-left"><b>Still to use:</b> ${left.map(escHtml).join(', ')}</div>` : (terms ? '<div class="ex-left"><b>Every expected word is in.</b></div>' : '')}</div>`;
     }
     // The compact mirror on the coach card (Mark & fix): buttons + dots only.
     function coachWordsHtml(cid) {
@@ -5479,9 +5482,14 @@
     function showChat({ thinking } = {}) {
       const info = currentStepInfo();
       let acts = [];
-      if (walkOn()) acts = [{ label: 'Back to the marking →', quiet: true, onClick: leaveChat }];
+      // Q IS ALWAYS THERE — no mode to leave. In a Mark & fix walk the chat
+      // sits ON the fix card: the walk keeps its own buttons and its own
+      // heading, and the thread appears above them. There is no "Back to the
+      // marking", because she never left it (Sarah, 17 Aug: "he should be
+      // there as a chat all the time as a tutor and a mentor").
+      if (walkOn()) acts = state.walkActions || [];
       else if (info) acts = stepActions(info.cid, info.step, stepStateOf(info.cid, info.step.id));
-      setCoach({ msg: thinking ? 'Q is thinking…' : '', thinking: !!thinking, section: 'Q', step: false, hint: '', inputVisible: !thinking, showNudge: false, actions: acts });
+      setCoach({ msg: thinking ? 'Q is thinking…' : '', thinking: !!thinking, section: walkOn() ? (state.walkSection || 'Q') : 'Q', step: false, hint: '', inputVisible: !thinking, showNudge: false, actions: acts });
       const th = document.createElement('div'); th.innerHTML = chatThreadHtml();
       coachActions.insertBefore(th.firstChild, coachActions.firstChild);
       coachInput.placeholder = 'Ask Q…';
@@ -6834,36 +6842,60 @@
         const first = suggested[0] || (needLabels.length && /source|reference|cite/i.test(needLabels.join(' ')) ? 'cite' : 'weak');
         if (first) setTimeout(() => useTool(first, it), 60);
       };
-      setCoach({
-        msg: '',
-        section: 'MARK & FIX · SENTENCE ' + (i + 1) + ' OF ' + items.length,
-        where, step: false,
-        hint: editing ? 'Rewrite it on the page — type or talk — then Check it.' : (i === 0 ? 'The pink sentence on the page is the one we\'re on.' : ''),
-        actions: editing ? [
-          { label: '✓ Check it', primary: true, big: true, onClick: () => checkCurrentSentence() },
-          // Sarah, 16 Aug: "when you're editing you can no longer access the
-          // mic to write." The fix stage hides the coach box, and the only mic
-          // lived inside it — so the way to talk is on the card that says so.
-          { label: 'Talk', quiet: true, onClick: () => toggleDocDictation() },
-          { label: 'Skip', quiet: true, onClick: () => { state.editIndex++; showEditItem(); } },
-          { label: 'Stop for now', quiet: true, onClick: () => endFixPass() },
-        ] : [
-          ...problemActions,
-          { label: 'Edit this now →', primary: true, big: true, onClick: editNow },
-          { label: 'Skip', quiet: true, onClick: () => { state.editIndex++; showEditItem(); } },
-          { label: 'Stop for now', quiet: true, onClick: () => endFixPass() },
+      // Kept on state so that TALKING to Q during a walk does not throw the
+      // marking away. showChat reuses this exact list — same buttons, same
+      // closures — so the thread appears ON the fix card instead of replacing
+      // it (Sarah, 17 Aug: "I don't want this back to marking when I speak to
+      // Q. he should be there as a chat all the time as a tutor and a mentor").
+      const walkActions = editing ? [
+        { label: '✓ Check it', primary: true, big: true, onClick: () => checkCurrentSentence() },
+        // Sarah, 16 Aug: "when you're editing you can no longer access the
+        // mic to write." The fix stage hides the coach box, and the only mic
+        // lived inside it — so the way to talk is on the card that says so.
+        { label: 'Talk', quiet: true, onClick: () => toggleDocDictation() },
+        { label: 'Skip', quiet: true, onClick: () => { state.editIndex++; showEditItem(); } },
+        { label: 'Stop for now', quiet: true, onClick: () => endFixPass() },
+      ] : [
+        ...problemActions,
+        { label: 'Edit this now →', primary: true, big: true, onClick: editNow },
+        { label: 'Skip', quiet: true, onClick: () => { state.editIndex++; showEditItem(); } },
+        { label: 'Stop for now', quiet: true, onClick: () => endFixPass() },
+      ];
+      state.walkActions = walkActions;
+      state.walkSection = 'MARK & FIX · SENTENCE ' + (i + 1) + ' OF ' + items.length;
+      // SAY AND SHOW, on the walk too (Sarah, 17 Aug: "this needs to go on the
+      // whiteboard and Q needs to start bringing it up. that is a chat and
+      // that's what it's for"). The written detail — her sentence, what is
+      // missing, what to do — goes on the DISPLAY. The card is Q talking about
+      // it, with the buttons that act on it. It used to be the other way
+      // round: the detail crammed onto the card as furniture, and msg:'' —
+      // Q silent again, for the fifth time today.
+      state.wbReport = null; state.wbFind = null; state.wbLesson = null;
+      state.wbReport = {
+        title: 'Sentence ' + (i + 1) + ' of ' + items.length,
+        kicker: where || 'Mark & fix',
+        lead: it.sentence || '',
+        rows: [
+          { head: 'Missing', text: missingLine },
+          { head: 'Do this', text: doLine },
         ],
+      };
+      showPanel('wb'); revealPanel('wb'); renderWhiteboard();
+      // Q's own line about this sentence when the mark gave us one; otherwise
+      // his written line, so he is never silent on a card with his name on it.
+      const saidLine = String(it.say || '').trim() || missingLine;
+      setCoach({
+        msg: saidLine,
+        section: state.walkSection,
+        where, step: false,
+        hint: editing ? 'Rewrite it on the page — type or talk — then Check it.' : (i === 0 ? 'The pink sentence is the one we\'re on — the detail\'s on the whiteboard.' : ''),
+        actions: walkActions,
         // Sarah, 17 Aug: "when it's in marking mode you can't speak to Q." The
         // box stays open through the walk; anything typed there is a question
-        // to Q (chat), and "← Back to writing" comes back to this sentence.
+        // to Q (chat), and the walk keeps its buttons while they talk.
         inputVisible: true,
       });
       coachInput.placeholder = 'Ask Q anything about this…';
-      // The two lines that matter — whole sentences, never clipped.
-      const crit = document.createElement('div'); crit.className = 'q-crit';
-      crit.innerHTML = '<div class="qc-row"><span class="qc-l">Missing</span><span class="qc-v">' + escHtml(missingLine) + '</span></div>'
-        + '<div class="qc-row"><span class="qc-l">Do this</span><span class="qc-v qc-do">' + escHtml(doLine) + '</span></div>';
-      coachActions.insertBefore(crit, coachActions.firstChild);
       if (!editing) return;
       // Editing: the tool buttons (suggested first) and where Q's help lands.
       const row = document.createElement('div'); row.className = 'q-tools';

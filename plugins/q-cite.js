@@ -187,6 +187,17 @@ function phraseSpan(sentence, first, second) {
 // Is this work actually ABOUT the sentence? An index result that shares no
 // word with what the student wrote is the pugs paper. Uploads are exempt —
 // they were matched on the student's own source text already.
+// This is a CHEAP first pass, not a relevance judgement, and it must stay
+// generous. Sarah, 17 Aug: Auto cite offered "Choking under pressure: Multiple
+// routes to skill failure" (sports psychology) against a sentence about AI
+// taking away the skill set needed to do a job — one shared word, "skill".
+// Tightening this to two shared words was tried and REVERTED: measured against
+// the same sentence it also drops "Automation, algorithmic management and the
+// deskilling of warehouse work", because the student's other keywords ("take",
+// "away", "needed", "perform") are framing words that never appear in an
+// academic title. Word overlap cannot tell relevance from coincidence here.
+// The real gate is the semantic one — judgeCiteCandidates can now answer
+// `none`, and /writer/cite drops those before she ever sees them.
 function isRelevant(work, kw) {
     const want = kw.filter(w => w.length > 3 && !WEAK.has(w));
     if (!want.length) return true;

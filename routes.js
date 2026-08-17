@@ -413,6 +413,12 @@ router.get('/unicorn', (req, res) => {
     res.sendFile(path.join(__dirname, 'unicorn.html'));
 });
 
+// The 3D test bench — six rigged unicorns doing the generated dance. This is
+// Sarah's page for LOOKING at it before any of it goes near the quiz.
+router.get('/unicorn3d', (req, res) => {
+    res.sendFile(path.join(__dirname, 'unicorn3d.html'));
+});
+
 // Q's personal finance page.
 router.get('/finance', (req, res) => {
     res.sendFile(path.join(__dirname, 'finance.html'));
@@ -1784,14 +1790,30 @@ router.post('/writer/cite', requirePerson, express.json({ limit: '32kb' }), asyn
         const out = await qCite.findSources({ claimSentence: sentence, subject: (t.brief && t.brief.subject) || '', level: t.yearGroup || '', uploadedSources: t.sources || [], max: 5, extractMeta });
         // What each would back, and how strongly — so she can choose (17 Aug). A failed judgement leaves the list as it was.
         let candidates = out.candidates || [];
+        let note = out.note || '';
         if (candidates.length) {
             try {
                 const judged = await qWriter.judgeCiteCandidates({ sentence, candidates, brief: t.brief });
                 candidates = candidates.map((c, i) => judged[i] ? { ...c, backs: judged[i].backs, strength: judged[i].strength, strengthWhy: judged[i].why } : c);
+                // A SOURCE THAT DOES NOT BACK THE SENTENCE IS NOT AN OPTION.
+                // Sarah, 17 Aug: "I used auto cite for that… why has it provided
+                // me with one citation that is too weak to use?" The judge had
+                // already said it was about the wrong topic, and the page
+                // offered it anyway with "press one — it goes in". Offering a
+                // citation the marker will pull apart is worse than offering
+                // nothing, so `none` is dropped here and never reaches her.
+                const dropped = candidates.filter(c => c.strength === 'none');
+                if (dropped.length) {
+                    console.log('[writer/cite] dropped ' + dropped.length + ' off-topic candidate(s): ' + dropped.map(c => (c.title || '').slice(0, 60)).join(' | '));
+                    candidates = candidates.filter(c => c.strength !== 'none');
+                }
+                if (!candidates.length) {
+                    note = 'I found real papers but none of them actually back that sentence — I am not going to hand you a citation a marker would pull apart. Try naming the idea in the sentence more plainly, or use the References tool to add the source you have in mind.';
+                }
             } catch (e) { console.warn('[writer/cite] judge failed:', e.message); }
         }
         // Titles / names / references are never "polished" — they are the source's own words.
-        res.json({ ok: true, sentence, candidates, searched: out.searched, note: out.note ? qWriter.ukText(out.note) : '' });
+        res.json({ ok: true, sentence, candidates, searched: out.searched, note: note ? qWriter.ukText(note) : '' });
     } catch (e) {
         writerFail(res, e, '[writer/cite]', 'source search');
     }
