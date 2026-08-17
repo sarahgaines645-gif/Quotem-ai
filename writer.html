@@ -1379,6 +1379,65 @@
     .wb-for { font-size: 13px; color: var(--text-muted); margin: 6px 0 4px; overflow-wrap: anywhere; }
     .wb-for i { color: var(--text); font-style: italic; }
     .wb-sec { font-size: 10px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--accent); margin: 14px 0 6px; }
+    /* ── THE DISPLAY, QB2-style (Sarah, 17 Aug) ──────────────────────────────
+       Headings in the accent, callout cards, real tables, tappable boxes.
+       Same shapes QBCanvas.jsx draws, in Quotem's neumorphic clothes. */
+    .wb-p { font-size: 13px; line-height: 1.55; color: var(--text); margin: 3px 0; overflow-wrap: anywhere; }
+    .wb-sp { height: 8px; }
+    .wb-hr { border: none; border-top: 1px solid rgba(0,0,0,0.08); margin: 14px 0; }
+    .wb-h { color: var(--accent); font-weight: 800; margin: 14px 0 5px; overflow-wrap: anywhere; }
+    .wb-h1 { font-size: 17px; border-bottom: 2px solid rgba(233,30,99,0.25); padding-bottom: 4px; }
+    .wb-h2 { font-size: 15px; }
+    .wb-h3 { font-size: 13.5px; }
+    .wb-h4 { font-size: 12px; letter-spacing: 0.04em; text-transform: uppercase; }
+    .wb-h5 { font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; }
+    .wb-ul, .wb-ol { margin: 6px 0; padding-left: 20px; }
+    .wb-ul li, .wb-ol li { font-size: 13px; line-height: 1.5; color: var(--text); margin: 3px 0; overflow-wrap: anywhere; }
+    .wb-q { margin: 8px 0; padding: 4px 0 4px 11px; border-left: 3px solid var(--accent); font-style: italic; color: var(--text); font-size: 13px; line-height: 1.5; }
+    .wb-p code, .wb-ul code, .wb-tw code, .wb-table2 code { font-family: 'Lora', Georgia, serif; font-weight: 600; padding: 1px 5px; border-radius: 5px; box-shadow: var(--neu-inset-sm); }
+    /* Callout cards — the emoji sets the edge colour, the card stays var(--bg). */
+    .wb-call {
+      display: flex; gap: 8px; align-items: flex-start;
+      padding: 9px 11px; margin: 6px 0; border-radius: 11px;
+      box-shadow: var(--neu-raised-xs); border-left: 3px solid var(--co, var(--text));
+      font-size: 13px; line-height: 1.5; color: var(--text); overflow-wrap: anywhere;
+    }
+    .wb-call .wb-call-i { flex-shrink: 0; }
+    .wb-call.ok   { --co: #2e7d32; }
+    .wb-call.warn { --co: #e6a817; }
+    .wb-call.bad  { --co: #dc3545; }
+    .wb-call.info { --co: #1e88e5; }
+    .wb-call.tip  { --co: #7b1fa2; }
+    /* Wide table → a stacked card per row. */
+    .wb-tw { margin: 10px 0; display: flex; flex-direction: column; gap: 8px; }
+    .wb-tw-card { padding: 10px 12px; border-radius: 11px; box-shadow: var(--neu-raised-xs); }
+    .wb-tw-h { font-weight: 800; color: var(--accent); margin-bottom: 4px; font-size: 13px; overflow-wrap: anywhere; }
+    .wb-tw-r { font-size: 12px; line-height: 1.5; color: var(--text); overflow-wrap: anywhere; }
+    .wb-tw-l { color: var(--text-muted); font-weight: 700; }
+    /* Narrow table → a real table that scrolls rather than squashing. */
+    .wb-tscroll { overflow-x: auto; margin: 10px 0; }
+    .wb-table2 { border-collapse: collapse; width: 100%; font-size: 12.5px; }
+    .wb-table2 th { text-align: left; padding: 6px 9px; border-bottom: 2px solid var(--accent); font-weight: 800; color: var(--text); overflow-wrap: anywhere; }
+    .wb-table2 td { padding: 6px 9px; border-bottom: 1px solid rgba(0,0,0,0.07); vertical-align: top; color: var(--text); overflow-wrap: anywhere; }
+    /* Tappable box — neumorphic, pressed when ticked. */
+    .wb-cb {
+      width: 18px; height: 18px; flex-shrink: 0; border: none; cursor: pointer;
+      border-radius: 6px; background: var(--bg); box-shadow: var(--neu-raised-xs);
+      font-family: 'Space Grotesk', sans-serif; font-size: 11px; font-weight: 800;
+      color: var(--accent); line-height: 1; padding: 0;
+      display: inline-flex; align-items: center; justify-content: center;
+      vertical-align: -4px; margin-right: 6px;
+    }
+    .wb-cb:hover { box-shadow: var(--neu-raised-sm); }
+    .wb-cb.on { box-shadow: var(--neu-inset-sm); }
+    /* The action bar — QB2 has Send / Save / Change / Copy; ours sends to HER PAGE. */
+    .wb-acts { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 14px; padding-top: 12px; border-top: 1px solid rgba(0,0,0,0.07); }
+    .wb-edit {
+      width: 100%; min-height: 220px; resize: vertical;
+      font-family: 'Space Grotesk', sans-serif; font-size: 13px; line-height: 1.55;
+      color: var(--text); background: var(--bg); border: none; outline: none;
+      border-radius: 12px; box-shadow: var(--neu-inset-sm); padding: 12px 14px;
+    }
     /* A report on the display: one raised row per point, the thing it is about
        named first and bold, what's wrong with it after (Sarah's card rule). */
     .wb-rep { display: flex; flex-direction: column; gap: 7px; margin: 10px 0 4px; }
@@ -2046,6 +2105,8 @@
       yearGroup: '',
       analysis: null,
       brief: null,            // the structured brief (skeleton stays server-side)
+      wbDoc: null,            // { title, src } — the markdown ON the display (QB2-style); ticks persist in src
+      wbEditing: false,       // she is editing the display's source
       coverage: {},           // { criterionId: 'none' | 'partial' | 'covered' }
       coachHistory: [],       // [{question, answer, criterionId}]
       currentQuestion: '',
@@ -4758,6 +4819,133 @@
       const go = (wbFindDot || f.sentence) && f.items.length ? `<button type="button" class="q-btn primary" id="wb-find-go">Go to the sentence →</button>` : '';
       return head + facts + todo + note + nudge + `<div class="wb-hint">${go} <a href="#" id="wb-find-back">← back to the step</a></div>`;
     }
+    // ══ THE WHITEBOARD IS A DISPLAY, LIKE QB2's ═══════════════════════════
+    // Sarah, 17 Aug: "This is QB2's display. I expect it to act the same way as
+    // he does. colours. Q in Quotem has tables. that's what the whiteboard
+    // does… the user should be able to press buttons, edit text on the
+    // whiteboard, tick stuff and then send it to page. it's interactive."
+    //
+    // So the board holds a MARKDOWN SOURCE (state.wbDoc) and renders it the way
+    // QBCanvas.jsx renders QB2's: headings, callout lines, blockquotes, code,
+    // 2-column tables as a grid, 3+ column tables as stacked cards (a wide
+    // table crushed into a narrow panel is one word per line), and [ ] / [x]
+    // tokens as tappable boxes.
+    //
+    // The checkbox helpers below are PORTED VERBATIM from
+    // Quoteapp/client/src/utils/checkboxMd.js — pure string functions, no React,
+    // written to be shared. A tap reports the token's ABSOLUTE character
+    // position so the source is flipped exactly there and the tick persists.
+    // Do not re-derive this; it is proven in QB2.
+    const cbIsTokenAt = (s, i) => s[i] === '[' && s[i + 2] === ']' && (s[i + 1] === ' ' || s[i + 1] === 'x' || s[i + 1] === 'X');
+    function splitCheckboxParts(text) {
+      const s = String(text == null ? '' : text); const parts = [];
+      let i = 0, textStart = 0;
+      const pushText = (end) => { if (end > textStart) parts.push({ type: 'text', text: s.slice(textStart, end) }); };
+      while (i < s.length) {
+        const ch = s[i];
+        if (ch === '`') { const close = s.indexOf('`', i + 1); if (close !== -1) { i = close + 1; continue; } i += 1; continue; }
+        if (ch === '[' && i + 2 < s.length && cbIsTokenAt(s, i)) { pushText(i); parts.push({ type: 'box', checked: s[i + 1] !== ' ', off: i }); i += 3; textStart = i; continue; }
+        i += 1;
+      }
+      pushText(s.length); return parts;
+    }
+    function fencedLineFlags(lines) {
+      let inFence = false;
+      return lines.map(ln => { if (/^\s*(```|~~~)/.test(ln)) { inFence = !inFence; return true; } return inFence; });
+    }
+    function toggleCheckboxAt(source, pos) {
+      const s = String(source == null ? '' : source);
+      if (!Number.isInteger(pos) || pos < 0 || pos + 3 > s.length) return s;
+      if (!cbIsTokenAt(s, pos)) return s;
+      return s.slice(0, pos) + (s[pos + 1] === ' ' ? '[x]' : '[ ]') + s.slice(pos + 3);
+    }
+
+    // Inline markdown → HTML, escaped first. Checkbox tokens become buttons
+    // carrying their absolute offset in data-cb.
+    function wbInline(s, at, live) {
+      const run = (txt) => escHtml(txt)
+        .replace(/`([^`]+)`/g, '<code>$1</code>')
+        .replace(/\*\*([^*]+)\*\*/g, '<b>$1</b>')
+        .replace(/(^|[^*])\*([^*\n]+)\*/g, '$1<i>$2</i>');
+      if (!live) return run(String(s == null ? '' : s));
+      const parts = splitCheckboxParts(s);
+      if (!parts.some(p => p.type === 'box')) return run(String(s == null ? '' : s));
+      return parts.map(p => p.type === 'box'
+        ? `<button type="button" class="wb-cb${p.checked ? ' on' : ''}" data-cb="${at + p.off}" aria-pressed="${p.checked}">${p.checked ? '✓' : ''}</button>`
+        : run(p.text)).join('');
+    }
+    // Split a table row into cells, keeping each cell's offset within the line
+    // so a checkbox in a column can still be toggled in place (QB2's trick).
+    function wbCells(ln) {
+      let s = 0, e = ln.length;
+      const lead = ln.match(/^\s*\|/); if (lead) s = lead[0].length;
+      const trail = ln.match(/\|\s*$/); if (trail) e -= trail[0].length;
+      const cells = []; let cs = s;
+      for (let k = s; k <= e; k++) {
+        if (k === e || ln[k] === '|') { const raw = ln.slice(cs, k); cells.push({ text: raw.trim(), off: cs + raw.match(/^\s*/)[0].length }); cs = k + 1; }
+      }
+      return cells;
+    }
+    const WB_CALLOUT = { '🟢': 'ok', '✅': 'ok', '🟡': 'warn', '⚠️': 'warn', '🔴': 'bad', '❌': 'bad', 'ℹ️': 'info', '💡': 'tip' };
+    function wbMdHtml(src) {
+      const lines = String(src == null ? '' : src).split('\n');
+      const starts = []; { let acc = 0; for (const ln of lines) { starts.push(acc); acc += ln.length + 1; } }
+      const fenced = fencedLineFlags(lines);
+      const out = []; let bullets = null; let ol = null;
+      const flush = () => { if (bullets) { out.push('<ul class="wb-ul">' + bullets.join('') + '</ul>'); bullets = null; } if (ol) { out.push('<ol class="wb-ol">' + ol.join('') + '</ol>'); ol = null; } };
+      for (let i = 0; i < lines.length; i++) {
+        const line = lines[i]; const at = starts[i]; const live = !fenced[i];
+        const isRow = /^\s*\|.*\|\s*$/.test(line);
+        const sepNext = i + 1 < lines.length && /^\s*\|?[\s:|-]+\|[\s:|-]*$/.test(lines[i + 1]) && lines[i + 1].includes('-');
+        if (isRow && sepNext) {
+          flush();
+          const header = wbCells(line); const rows = []; let j = i + 2;
+          while (j < lines.length && /^\s*\|.*\|\s*$/.test(lines[j])) { rows.push({ cells: wbCells(lines[j]), at: starts[j] }); j++; }
+          if (header.length >= 3) {
+            // Wide table → one stacked card per row (QBCanvas does the same:
+            // three columns crushed into a narrow panel is unreadable).
+            // An index column is "#", "No." or an unheaded first column. NOT
+            // "Item" — QBCanvas's regex includes it, but a column headed Item
+            // is the description, i.e. the row's TITLE. Treating it as an index
+            // put the Qty in the heading ("Replace fascia & soffit E6040. 1").
+            const idxCol = /^(#|no\.?)?$/i.test((header[0] && header[0].text) || '');
+            out.push('<div class="wb-tw">' + rows.map(row => {
+              const r = row.cells; const ti = idxCol && r.length > 1 ? 1 : 0;
+              const prefix = idxCol && r[0] && r[0].text ? escHtml(r[0].text.replace(/\.$/, '')) + '. ' : '';
+              const head = '<div class="wb-tw-h">' + prefix + wbInline((r[ti] && r[ti].text) || '', row.at + ((r[ti] && r[ti].off) || 0), live) + '</div>';
+              const body = r.map((c, ci) => (ci === 0 && idxCol) || ci === ti || !c.text ? '' :
+                '<div class="wb-tw-r"><span class="wb-tw-l">' + escHtml((header[ci] && header[ci].text) || '') + ':</span> ' + wbInline(c.text, row.at + c.off, live) + '</div>').join('');
+              return '<div class="wb-tw-card">' + head + body + '</div>';
+            }).join('') + '</div>');
+          } else {
+            out.push('<div class="wb-tscroll"><table class="wb-table2"><thead><tr>'
+              + header.map(c => '<th>' + wbInline(c.text, at + c.off, live) + '</th>').join('')
+              + '</tr></thead><tbody>'
+              + rows.map(row => '<tr>' + row.cells.map(c => '<td>' + wbInline(c.text, row.at + c.off, live) + '</td>').join('') + '</tr>').join('')
+              + '</tbody></table></div>');
+          }
+          i = j - 1; continue;
+        }
+        if (/^\s*(-{3,}|\*{3,}|_{3,})\s*$/.test(line)) { flush(); out.push('<hr class="wb-hr">'); continue; }
+        const b = line.match(/^\s*[-*]\s+(.*)/);
+        const n = line.match(/^\s*\d+\.\s+(.*)/);
+        const h = line.match(/^\s*(#{1,5})\s+(.*)/);
+        const q = line.match(/^\s*>\s?(.*)/);
+        if (b) { if (ol) flush(); (bullets = bullets || []).push('<li>' + wbInline(b[1], at + line.length - b[1].length, live) + '</li>'); continue; }
+        if (n) { if (bullets) flush(); (ol = ol || []).push('<li>' + wbInline(n[1], at + line.length - n[1].length, live) + '</li>'); continue; }
+        flush();
+        if (h) { const lvl = h[1].length; out.push('<div class="wb-h wb-h' + lvl + '">' + wbInline(h[2], at + line.length - h[2].length, live) + '</div>'); continue; }
+        if (q) { out.push('<blockquote class="wb-q">' + wbInline(q[1], at + line.length - q[1].length, live) + '</blockquote>'); continue; }
+        if (!line.trim()) { out.push('<div class="wb-sp"></div>'); continue; }
+        // Callout line: an emoji at the front colours the card (QB2's rule).
+        const key = Object.keys(WB_CALLOUT).find(k => line.trim().startsWith(k));
+        if (key) { out.push('<div class="wb-call ' + WB_CALLOUT[key] + '"><span class="wb-call-i">' + key + '</span><span>' + wbInline(line.trim().slice(key.length).trim(), at + line.indexOf(key) + key.length, live) + '</span></div>'); continue; }
+        out.push('<div class="wb-p">' + wbInline(line, at, live) + '</div>');
+      }
+      flush();
+      return out.join('');
+    }
+
     // A REPORT ON THE WHITEBOARD — Q's display channel, the way QB2 sends a
     // quote to the display instead of typing it into the chat (Sarah, 17 Aug:
     // "for this amount of feedback Q should be using the whiteboard as a
@@ -4796,8 +4984,86 @@
         + more
         + `<div class="wb-hint">Read it, then press <b>Got it</b> on Q's card — he'll ask you to use it.</div>`;
     }
+    // THE DISPLAY IS INTERACTIVE — tick it, edit it, send it to the page.
+    // state.wbDoc = { title, src } where src is Q's markdown. Everything Q
+    // shows can live here, so one surface handles all of it.
+    function showOnWhiteboard(title, src) {
+      state.wbDoc = { title: title || 'Whiteboard', src: String(src || '') };
+      state.wbReport = null; state.wbFind = null; state.wbLesson = null;
+      showPanel('wb'); revealPanel('wb'); renderWhiteboard();
+      persist({ wbDoc: state.wbDoc });
+    }
+    function wbDocHtml(d) {
+      if (state.wbEditing) {
+        return `<textarea class="wb-edit" id="wb-src" spellcheck="true"></textarea>`
+          + `<div class="wb-acts"><button type="button" class="q-btn primary" id="wb-save">Done editing</button>`
+          + `<button type="button" class="q-btn quiet" id="wb-cancel">Cancel</button></div>`;
+      }
+      return wbMdHtml(d.src)
+        + `<div class="wb-acts">`
+        + `<button type="button" class="q-btn primary" id="wb-send">Send to my page →</button>`
+        + `<button type="button" class="q-btn" id="wb-edit">Edit this</button>`
+        + `<button type="button" class="q-btn quiet" id="wb-copy">Copy</button>`
+        + `<button type="button" class="q-btn quiet" id="wb-clear">Clear</button>`
+        + `</div>`;
+    }
+    // What "send to my page" sends: the TICKED lines if anything is ticked,
+    // otherwise the whole thing — minus Q's headings and furniture, because
+    // her page is her essay, not his board. Never a rewritten sentence: this
+    // only moves across what is already written on the board.
+    function wbSendText(src) {
+      const lines = String(src || '').split('\n');
+      const ticked = lines.filter(l => /\[[xX]\]/.test(l));
+      const use = ticked.length ? ticked : lines;
+      return use
+        .filter(l => !/^\s*(#{1,5})\s+/.test(l) && !/^\s*(-{3,}|\*{3,}|_{3,})\s*$/.test(l) && !/^\s*\|?[\s:|-]+\|[\s:|-]*$/.test(l))
+        .map(l => l.replace(/\[[ xX]\]/g, '').replace(/^\s*[-*]\s+/, '').replace(/^\s*\d+\.\s+/, '').replace(/\s+/g, ' ').trim())
+        .filter(Boolean).join(' ');
+    }
+    function wireWbDoc(d) {
+      if (state.wbEditing) {
+        const ta = document.getElementById('wb-src'); if (ta) { ta.value = d.src; ta.focus(); }
+        const save = document.getElementById('wb-save');
+        if (save) save.addEventListener('click', () => { const t = document.getElementById('wb-src'); if (t) { state.wbDoc.src = t.value; persist({ wbDoc: state.wbDoc }); } state.wbEditing = false; renderWhiteboard(); });
+        const cancel = document.getElementById('wb-cancel');
+        if (cancel) cancel.addEventListener('click', () => { state.wbEditing = false; renderWhiteboard(); });
+        return;
+      }
+      const send = document.getElementById('wb-send');
+      if (send) send.addEventListener('click', () => {
+        const text = wbSendText(state.wbDoc.src);
+        if (!text) { send.textContent = 'Nothing to send'; setTimeout(() => { send.textContent = 'Send to my page →'; }, 1400); return; }
+        docBody.focus();
+        const ok = document.execCommand('insertText', false, (docPlainText().trim() ? ' ' : '') + text + ' ');
+        if (!ok) { const p = document.createElement('p'); p.className = 'student-line'; p.textContent = text; docBody.appendChild(p); }
+        wordEl.textContent = countWords() + ' words'; scheduleAutosave();
+        try { refreshExpectations(); } catch (_) {}
+        send.textContent = '✓ On your page'; setTimeout(() => { send.textContent = 'Send to my page →'; }, 1600);
+      });
+      const ed = document.getElementById('wb-edit');
+      if (ed) ed.addEventListener('click', () => { state.wbEditing = true; renderWhiteboard(); });
+      const cp = document.getElementById('wb-copy');
+      if (cp) cp.addEventListener('click', async () => { try { await navigator.clipboard.writeText(state.wbDoc.src); cp.textContent = 'Copied'; setTimeout(() => { cp.textContent = 'Copy'; }, 1400); } catch (_) {} });
+      const cl = document.getElementById('wb-clear');
+      if (cl) cl.addEventListener('click', () => { state.wbDoc = null; state.wbEditing = false; persist({ wbDoc: null }); renderWhiteboard(); });
+    }
+    // A tick flips the token in the SOURCE at its exact offset, so it persists.
+    document.addEventListener('click', (e) => {
+      const b = e.target.closest('.wb-cb[data-cb]'); if (!b || !state.wbDoc) return;
+      e.preventDefault();
+      const pos = Number(b.dataset.cb);
+      const next = toggleCheckboxAt(state.wbDoc.src, pos);
+      if (next === state.wbDoc.src) return;   // the text moved under us — leave it alone
+      state.wbDoc.src = next; persist({ wbDoc: state.wbDoc }); renderWhiteboard();
+    });
     function renderWhiteboard() {
       if (!wbOpen()) return;
+      if (state.wbDoc) {
+        wbTitle.textContent = '▦ ' + (state.wbDoc.title || 'Whiteboard');
+        wbBody.innerHTML = wbDocHtml(state.wbDoc);
+        wireWbDoc(state.wbDoc);
+        return;
+      }
       if (state.wbLesson) {
         wbTitle.textContent = '▦ Whiteboard · ' + (state.wbLesson.term || 'a quick lesson');
         wbBody.innerHTML = wbLessonHtml(state.wbLesson);
@@ -7747,6 +8013,9 @@
         state.partMarkDone = Object.fromEntries(Object.keys(state.partMarks).map(k => [k, true]));
         state.termsFit = t.termsFit && typeof t.termsFit === 'object' ? t.termsFit : {};
         state.reqMet = t.reqMet && typeof t.reqMet === 'object' ? t.reqMet : {};
+        // The display and its ticks survive a refresh — a ticked-off list she
+        // half worked through must still be there when she comes back.
+        state.wbDoc = t.wbDoc && typeof t.wbDoc === 'object' && typeof t.wbDoc.src === 'string' ? t.wbDoc : null;
         state.references = Array.isArray(t.references) ? t.references : [];
         state.inlineDots = t.inlineDots && typeof t.inlineDots === 'object' ? t.inlineDots : {};
         state.stepMarks = t.stepMarks && typeof t.stepMarks === 'object' ? t.stepMarks : {};
