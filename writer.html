@@ -1071,6 +1071,7 @@
       font-size: 9px; font-weight: 700; letter-spacing: 0.09em; text-transform: uppercase;
       color: var(--text-muted); margin: 12px 0 5px;
     }
+    .q-bandlist .q-band-sec.mk-first { color: var(--accent); }
     .q-bandlist .q-band-sec:first-child { margin-top: 0; }
     .q-mk-block { margin: 8px 0 4px; }
     .q-mk-block .q-mk-l { display: block; font-size: 9px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; margin-bottom: 4px; }
@@ -1420,6 +1421,8 @@
     .mk-tile.act { cursor: pointer; }
     .mk-tile.act:hover { box-shadow: var(--neu-raised-sm); }
     .mk-tile.zero { opacity: 0.55; }
+    /* The words tile carries the brief's own wording, so it gets the room. */
+    .mk-tiles .mk-tile:first-child { grid-column: span 2; }
     .mk-tile .mk-v { font-size: 19px; font-weight: 700; color: var(--text); line-height: 1.1; }
     .mk-tile.act .mk-v { color: var(--accent); }
     .mk-tile .mk-lab { font-size: 10px; color: var(--text-muted); font-weight: 600; overflow-wrap: anywhere; }
@@ -7241,7 +7244,7 @@
       const listBlock = (label, items, cls) => items.length
         ? `<div class="q-mk-block ${cls}"><span class="q-mk-l">${escHtml(label)}</span><ul>${items.map(x => `<li>${escHtml(x)}</li>`).join('')}</ul></div>` : '';
       return `<div class="q-bandlist">`
-        + `<div class="q-band-sec">Each question</div>`
+        + `<div class="q-band-sec mk-first">The mark · each question</div>`
         + rows
         + listBlock('What stays', strong, 'stay')
         + listBlock('What is missing', missing, 'gone')
@@ -7453,7 +7456,7 @@
       const cs = (state.brief && state.brief.criteria) || [];
       let bands = '';
       if (m && m.overall) {
-        bands = `<div class="mk-sec">The mark</div>` + bandListHtml(m);
+        bands = bandListHtml(m);   // it brings its own headings
       } else if (cs.some(c => state.partMarks && state.partMarks[c.id])) {
         bands = `<div class="mk-sec">Marks so far</div>` + cs.filter(c => state.partMarks[c.id]).map(c => {
           const pm = state.partMarks[c.id];
