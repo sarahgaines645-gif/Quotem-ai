@@ -5054,7 +5054,8 @@
       try {
         if (!(window.CSS && CSS.highlights && window.Highlight)) return;
         if (!span) { CSS.highlights.delete('q-say'); return; }
-        const rs = edFindRanges(String(span).replace(/\s+/g, ' ').trim());
+        const spans = Array.isArray(span) ? span : [span];
+        const rs = []; for (const sp of spans) rs.push(...edFindRanges(String(sp).replace(/\s+/g, ' ').trim()));
         if (!rs.length) { CSS.highlights.delete('q-say'); return; }
         CSS.highlights.set('q-say', new Highlight(...rs));
         const b = rs[0].getBoundingClientRect(); if (b && (b.top < 80 || b.bottom > window.innerHeight - 120)) window.scrollBy({ top: b.top - Math.round(window.innerHeight * 0.4), behavior: 'smooth' });
@@ -5066,11 +5067,12 @@
       state.chatLog.push({ role: 'me', text });
       showChat({ thinking: true });
       try {
-        const d = await api('/writer/chat', { text, history: state.chatLog.slice(-11, -1), docText: docPlainText().slice(-9000), criterionId: state.currentCriterionId || null, stepId: state.currentStep ? state.currentStep.stepId : null, ask: currentAskText() || '', yearGroup: state.yearGroup || '' }, { timeoutMs: 90000 });
+        const d = await api('/writer/chat', { text, history: state.chatLog.slice(-11, -1).map(m => ({ role: m.role, text: m.text })), docText: docPlainText().slice(0, 24000), criterionId: state.currentCriterionId || null, stepId: state.currentStep ? state.currentStep.stepId : null, ask: currentAskText() || '', yearGroup: state.yearGroup || '' }, { timeoutMs: 90000 });
         tally('probe', state.currentCriterionId);
-        state.chatLog.push({ role: 'q', text: String(d.reply || '').trim(), highlight: d.highlight || null });
+        const spans = (Array.isArray(d.highlights) && d.highlights.length ? d.highlights : []).concat(d.highlight ? [d.highlight] : []);
+        state.chatLog.push({ role: 'q', text: String(d.reply || '').trim(), highlight: spans.length ? spans : null });
         appendBoardItem({ type: 'explain', text: String(d.reply || '').trim(), quiet: true });
-        if (d.highlight) qSayPaint(d.highlight);
+        if (spans.length) qSayPaint(spans);
         if (d.board && Array.isArray(d.board.items) && d.board.items.length) {
           state.wbFind = { title: d.board.title || 'From the case', forLabel: '', sentence: '', items: d.board.items, todo: d.board.todo || [], nudge: '', busy: false, note: '' };
           showPanel('wb'); revealPanel('wb'); renderWhiteboard();

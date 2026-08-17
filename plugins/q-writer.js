@@ -1931,12 +1931,13 @@ function planForPrompt(plan, stepId) {
 // goes on the whiteboard as `board`; the reply says so.
 const CHAT_SCHEMA = {
     type: 'object', additionalProperties: false,
-    required: ['reply', 'board', 'next', 'highlight'],
+    required: ['reply', 'board', 'next', 'highlight', 'highlights'],
     properties: {
         reply: { type: 'string', description: 'The answer to what they asked, plain everyday British English. As long as it needs — usually 2 to 6 sentences; a short numbered list if they asked for a list or for steps. Direct: the answer first, then the why. Teach a term properly when asked (name, meaning, everyday example). If they ask what to write, tell them WHAT TO SAY and WHERE (which point, after which of their words) — never the sentence itself. If they ask for facts / figures / examples from the case, put them in board and say "on the whiteboard" here.' },
         board: { anyOf: [{ type: 'object', additionalProperties: false, required: ['title', 'items', 'todo'], properties: { title: { type: 'string' }, items: { type: 'array', maxItems: 8, items: { type: 'object', additionalProperties: false, required: ['fact', 'where'], properties: { fact: { type: 'string', description: 'A fact / figure / example / quoted line as the case has it, verbatim, 4-16 words.' }, where: { type: 'string', description: 'Where it sits in the case, 2-6 words.' } } } }, todo: { type: 'array', maxItems: 4, items: { type: 'string' }, description: 'What to do with them: which item, where in their paragraph, what to say it shows. Never the sentence.' } } }, { type: 'null' }], description: 'null unless a LIST from the case would help more than prose (facts, figures, examples, quotes, the people, the numbers).' },
         next: { anyOf: [{ type: 'string' }, { type: 'null' }], description: 'One line, 12 words or fewer, the concrete next thing they could do on the page — or null.' },
         highlight: { anyOf: [{ type: 'string' }, { type: 'null' }], description: 'If your answer is about ONE particular sentence or phrase on THEIR PAGE, that span verbatim (character for character, 3-40 words) so the page can light it up while you talk — else null. Never text that is not on their page.' },
+        highlights: { anyOf: [{ type: 'array', maxItems: 20, items: { type: 'string' } }, { type: 'null' }], description: 'When they ASK you to highlight / find / show where something is on their page ("highlight where I mention AI", "show me every claim without a source"): EVERY matching span, each verbatim from their page (1-40 words) — else null. Say how many you found in the reply.' },
     },
 };
 async function chatAnswer({ brief, essay, plan, stepId, caseText, sources, docText, history, question, yearGroup, ask }) {
@@ -1951,6 +1952,7 @@ async function chatAnswer({ brief, essay, plan, stepId, caseText, sources, docTe
 - Never read out the model answer or its wording; never say what grade the essay "should" get.
 - Plain, warm, direct British English. No lists of questions back at them.
 - If what you say is about ONE sentence or phrase on their page, put that span in "highlight" verbatim — the page lights it up while you talk, so you can say "this sentence" and they see which.
+- If they ASK you to highlight / find / show where something is on their page, put EVERY matching span in "highlights" (verbatim) and say how many in the reply ("Highlighted 4 places you mention AI — the second and fourth are the ones without a source.").
 ${ageHint}
 
 THE BRIEF
@@ -1964,7 +1966,7 @@ ${sources && sources.length ? '\nOTHER UPLOADED SOURCES:\n' + sourcesForPrompt(s
     const hist = (Array.isArray(history) ? history : []).slice(-10).map(h => `${h.role === 'q' ? 'Q' : 'STUDENT'}: ${String(h.text || '').slice(0, 800)}`).join('\n');
     const user = `${ask ? `THE STEP THEY ARE ON: ${String(ask).slice(0, 300)}
 ` : ''}THEIR PAGE SO FAR:
-${boundDoc(docText, 7000) || '(blank page)'}
+${boundDoc(docText, 20000) || '(blank page)'}
 
 THE CONVERSATION SO FAR:
 ${hist || '(this is the first message)'}
@@ -1982,7 +1984,8 @@ Answer as Q.`;
     }
     const hl = r && r.highlight ? String(r.highlight).replace(/\s+/g, ' ').trim() : '';
     const docNorm = String(docText || '').replace(/\s+/g, ' ');
-    return { reply, board, next: r && r.next ? capWords(String(r.next), 14) : null, highlight: hl && docNorm.includes(hl) ? hl : null };
+    const hls = (r && Array.isArray(r.highlights) ? r.highlights : []).map(x => String(x || '').replace(/\s+/g, ' ').trim()).filter(x => x && docNorm.includes(x)).slice(0, 20);
+    return { reply, board, next: r && r.next ? capWords(String(r.next), 14) : null, highlight: hl && docNorm.includes(hl) ? hl : null, highlights: hls.length ? hls : null };
 }
 
 // ── JUDGE THE SOURCE CANDIDATES (Sarah, 17 Aug: "when we auto cite they
