@@ -157,3 +157,38 @@ into a run, breathe, turn toward the pointer, flatten when poorly or asleep.
 
 **Rule for anyone after me: when Sarah names an asset she already owns, use that
 file.** Do not draw a lookalike, do not generate one, do not buy one.
+
+## 17 Aug (later still) — HE PLAYS HER FILM (`19cb989`)
+
+Sarah: *"you keep giving me a picture that is flicking or sqashing. I want it to
+move… hands that can open and move around like he would in a film. if grok can
+do it in 60 seconds then we can find something."*
+
+She was right, and the film already existed in her own repo:
+**`Quoteapp/client/public/assets/appy-video.mp4`** — 6s, 24fps, 560×560, white
+paper: Appy waving his little pink hands, cheering with both arms up, tumbling,
+blinking.
+
+**Pipeline (free, repeatable):** `tools/appy_clips.py`
+1. ffmpeg (via the `imageio-ffmpeg` wheel — no install needed) pulls frames at 12fps.
+2. Each frame is matted with the same measured-paper cut as `tools/cut_appy.py`.
+3. All frames of a clip share ONE bounding box (feet on the bottom edge) so he
+   never jitters between frames.
+4. Writes `assets/pet/appy/clips/<name>.webp` sprite sheets (6 cols, 200px cells)
+   + `manifest.json`. Whole set = 377KB.
+
+**Clips today:** idle 12f · blink 5f · talk 12f · hands 12f · cheer 8f · tumble 16f.
+`CLIPS`/`clipFor()` in `revise.html` map mood → clip: hungry = hands out asking,
+right answer / fed / greeting = cheer, crossing the glass = tumble, at the glass =
+talk, asleep/poorly = shut-eye frame held, leaning over a treat = talk + strip warp.
+
+**To add more (walk, eat, sleep, wave):** generate a clip from a still of Appy in
+Grok Imagine (image-to-video, free, seconds — 6–15s, 720p, downloads as mp4;
+keep the plain white background and a fixed camera), save the mp4, then add its
+frame ranges to `CLIPS` in `tools/appy_clips.py` and re-run. No code changes.
+xAI's Grok Imagine is also on Replicate/fal if it ever needs to be automated —
+her `REPLICATE_API_TOKEN` and Kling keys already exist, but **nothing has been
+spent and nothing should be without her yes**.
+
+**Known gap:** there is no walk cycle in the 6 seconds, so travelling across the
+glass uses his tumble. A 6s "walks to the left on white" clip would fix it.
