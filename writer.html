@@ -844,7 +844,7 @@
     .tb-text p { margin: 0 0 6px; }
     .tb-text p:last-child { margin-bottom: 0; }
     .tb-qtext { font-weight: 500; }
-    .tb-item.tb-fresh { box-shadow: var(--neu-raised-xs); padding: 8px 10px 8px 12px; margin: 0 -2px; border-radius: 8px; }
+    .tb-item.tb-fresh { box-shadow: var(--neu-raised-sm); background: rgba(233,30,99,0.10); padding: 8px 10px 8px 12px; margin: 0 -2px; border-radius: 8px; }
     .tb-atext { color: var(--text); }
     .tb-ntext { color: var(--text-muted); }
     .tb-earlier .tb-items { gap: 8px; }
@@ -1044,8 +1044,7 @@
        in the coach box, or on the whiteboard. */
     /* Neumorphic, not a wash (Sarah, 17 Aug: "this app is neumorphic, this breaks the design style"):
        the fresh ask sits in an inset well; the accent is a dot, not a fill. */
-    .tb-now.fresh { box-shadow: var(--neu-raised-xs); padding: 8px 10px 8px 12px; margin: 0 -2px 2px; }   /* RAISED — you read it (the indent rule) */
-    .tb-now.fresh::before { content: '● '; color: var(--accent); font-size: 11px; vertical-align: 2px; }
+    .tb-now.fresh { box-shadow: var(--neu-raised-sm); background: rgba(233,30,99,0.10); padding: 8px 10px 8px 12px; margin: 0 -2px 2px; }   /* RAISED (never inset — you read it) and the pink wash she liked */
     .coach-card .q-msg:empty { display: none; }
     .tb-track { display: flex; align-items: center; gap: 8px; margin-top: 8px; }
     .st-beads { display: inline-flex; gap: 5px; align-items: center; }
@@ -1277,7 +1276,7 @@
     .tb-cover .ex-title { display: block; font-size: 9px; font-weight: 700; letter-spacing: 0.09em; text-transform: uppercase; color: var(--text-faint); margin-bottom: 6px; }
     .tb-cover .ex-part { font-weight: 500; letter-spacing: 0.02em; text-transform: none; margin-left: 6px; }
     .tb-cover .ex-ask { font-size: 13px; font-weight: 700; color: var(--text); line-height: 1.4; margin-bottom: 8px; overflow-wrap: anywhere; }
-    .cv-rings { display: flex; align-items: center; gap: 8px; font-size: 11px; font-weight: 700; color: var(--text); margin: 2px 0 8px; }
+    .cv-rings { display: flex; align-items: center; gap: 8px; font-size: 11px; font-weight: 700; color: var(--text); margin: 10px 0 8px; }
     .cv-rows { display: flex; flex-direction: column; gap: 5px; }
     .cv-row { display: grid; grid-template-columns: auto minmax(0,1fr) auto; gap: 8px; align-items: center; font-size: 12px; color: var(--text); line-height: 1.35; }
     .cv-row .cv-s { font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-faint); white-space: nowrap; }
@@ -2946,7 +2945,7 @@
       const current = (qi >= 0 ? items.slice(qi) : items.slice()).filter(it => !it.quiet);
       const w = whereInfo();
       const whereHtml = w ? `<div class="tb-where">${escHtml(whereText(w))}</div>` : '';
-      const agendaHtml = coverHtml(state.currentCriterionId) + scaffoldAgendaHtml() + expectHtml(state.currentCriterionId) + sourcesBoardHtml();   // summary card first, then QUESTIONS
+      const agendaHtml = scaffoldAgendaHtml() + coverHtml(state.currentCriterionId) + expectHtml(state.currentCriterionId) + sourcesBoardHtml();   // QUESTIONS first, then TO COVER (Sarah, 17 Aug)
       const earlierHtml = earlier.length
         ? `<details class="tb-earlier" id="tb-earlier"${state.boardEarlierOpen ? ' open' : ''}><summary>Earlier (${earlier.length})</summary><div class="tb-items">${earlier.map((it) => boardItemHtml(it, items.indexOf(it), true)).join('')}</div></details>`
         : '';
@@ -3807,7 +3806,7 @@
       const n = reqs.filter(rq => met.has(rq.kind)).length;
       const w = whereInfo(cid);
       // (no re-worded part question here — Sarah, 17 Aug: "what's this?" — the brief board has the question)
-      return `<div class="tb-cover" data-cid="${escHtml(cid)}"><span class="ex-title">To cover<span class="ex-part">${w ? escHtml('Part ' + w.n) : ''}</span></span>${reqs.length ? `<div class="cv-rings">${reqDotsHtml(cid)} <b>must be in</b>${reqs.length ? `<span class="cv-n">${n} of ${reqs.length} in</span>` : ''}</div>` : ''}${rows ? `<div class="cv-rows">${rows}</div>` : ''}</div>`;
+      return `<div class="tb-cover" data-cid="${escHtml(cid)}"><span class="ex-title">To cover<span class="ex-part">${w ? escHtml('Part ' + w.n) : ''}${escHtml(' · ' + n + ' of ' + reqs.length + ' in')}</span></span>${rows ? `<div class="cv-rows">${rows}</div>` : ''}</div>`;
     }
     // THE WORD BOARD card for a part: the one-line ask, the words as BUTTONS
     // (nothing else — meanings live on the hover card), "Still to use", the
@@ -4161,6 +4160,7 @@
       return `<div class="tb-agenda" id="tb-agenda">`
         + (ask ? `<div class="tb-now${askIsFresh(ask) ? ' fresh' : ''}" id="tb-now">${escHtml(ask)}</div>` : '')
         + `<div class="tb-track"><span class="st-beads">${beads}</span><span class="tb-count">${n} of ${plan.steps.length}</span>${budget}</div>`
+        + ((plan.requirements || []).length ? `<div class="cv-rings">${reqDotsHtml(cid)} <b>must be in</b></div>` : '')   // the rings belong with the question (Sarah, 17 Aug)
         + parts
         + `</div>`;
     }
