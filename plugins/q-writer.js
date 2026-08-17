@@ -750,7 +750,7 @@ const MARK_SCHEMA = {
             type: 'array',
             items: {
                 type: 'object', additionalProperties: false,
-                required: ['criterionId', 'band', 'label', 'evidence', 'missingForTop', 'nextQuestion', 'voicedBrickIds', 'termsUsed', 'requirementsMet'],
+                required: ['criterionId', 'band', 'label', 'evidence', 'got', 'addNext', 'missingForTop', 'nextQuestion', 'voicedBrickIds', 'termsUsed', 'requirementsMet'],
                 properties: {
                     criterionId: { type: 'string' },
                     label: { type: 'string', description: 'The grade THIS part would get on its own, in the student\'s scheme — the same words as the overall label ("Pass", "Merit", "Distinction", "Grade 6"…). Empty only if the scheme names no grades.' },
@@ -759,6 +759,22 @@ const MARK_SCHEMA = {
                     band: { type: 'string', enum: ['top', 'mid', 'low', 'missing'] },
                     voicedBrickIds: { type: 'array', items: { type: 'string' }, description: 'The model answer\'s brick ids that THIS DRAFT genuinely voices under this criterion (the point made in their words, with its example or reason) — the honest tally the visible score is built from. Empty if none.' },
                     evidence: { type: 'string', description: 'What in THEIR document earns this band — quote a phrase.' },
+                    got: { type: 'array', maxItems: 4, items: { type: 'string' }, description: 'WHAT THEY HAVE GOT, in plain English, one line each, 6-16 words: "you spotted that algorithmic management takes control away from supervisors", "the psychological contract idea is in there", "Hackman and Oldham named correctly". Their actual work, named — never flattery, never a mark-scheme phrase. Empty only if there is genuinely nothing yet.' },
+                    addNext: {
+                        type: 'array', maxItems: 4,
+                        description: 'WHAT TO ADD NEXT — the heart of the mark. THE STUDENT HAS NOT STUDIED THIS SUBJECT. "Needs the deskilling / neo-Taylorism framing named properly" is useless to them: it names a thing they have never heard of and leaves them stuck. Each item must TEACH the idea and then tell them exactly what to write. 2 to 4 items, most important first.',
+                        items: {
+                            type: 'object', additionalProperties: false,
+                            required: ['title', 'gap', 'concept', 'prompt', 'example'],
+                            properties: {
+                                title: { type: 'string', description: 'The move, 2-5 words, imperative: "Name the theory", "Explain the accountability gap", "Split the workforce".' },
+                                gap: { type: 'string', description: 'ONE sentence, plain English, what is missing — starting from what they DID write: "You described machines taking over the tasks, but you never name what that is."' },
+                                concept: { type: 'string', description: 'THE IDEA, TAUGHT. Two or three plain sentences that give them enough to write about it without having studied it: what it is, how it works, why it matters here. "When machines strip the skill and judgement out of a job and reduce it to following instructions, that is neo-Taylorism — Taylor\'s scientific management, reborn through algorithms." Everyday words. Never assume the term is known.' },
+                                prompt: { type: 'string', description: 'THE INSTRUCTION: how much to write, about what, tied to THEIR case, and the source if there is one. "Write one sentence naming this where you talk about picking, and cite a source on algorithmic management." Concrete enough to do in the next five minutes.' },
+                                example: { type: 'string', description: 'ONE model sentence in a NEUTRAL example — a different company, a general case — that shows the shape of the sentence they need. It is there to be adapted, never pasted: it must NOT be about their own case in a form they could copy word for word onto the page. Empty string if an example would only invite copying.' },
+                            },
+                        },
+                    },
                     missingForTop: { type: 'string', description: 'Exactly what the top band still needs here — concrete, in one or two sentences. Empty string if already top.' },
                     nextQuestion: { type: 'string', description: 'The ONE question that would pull the missing piece out of them. Empty string if already top.' },
                 },
@@ -802,6 +818,8 @@ async function markLikeMarker({ brief, essay, docText, gradeScheme, plans }) {
 Rules:
 - Every criterion gets a band: top / mid / low / missing (missing = the document does not address it at all).
 - Evidence must be from THEIR text — quote a phrase.
+- THE MARK TEACHES OR IT IS USELESS. This student has NOT studied the subject — that is the whole reason they are here. Every item of "addNext" gives them: the gap in plain English (starting from what they did write), the idea itself TAUGHT in two or three everyday sentences, the exact instruction (how much to write, where, tied to their own case, with the source), and one model sentence about a DIFFERENT case they can adapt. Marker language with no teaching in it ("needs the deskilling / neo-Taylorism framing named properly") is a failure, however accurate it is.
+- "got" is what they have actually done, in plain English — the mark opens with it. Never flattery, never a mark-scheme phrase.
 - "missingForTop" is the exact gap for THAT criterion — concrete: the model, example, evaluation, comparison, or evidence the top band expects and they have not given. Not "develop further".
 - "nextQuestion" is the one question a tutor would ask to pull that missing piece out of the student. Never contains the answer. It is worded for a student who has NOT read the brief:
 ${PLAIN_QUESTION_RULE}
@@ -974,6 +992,14 @@ function normaliseMark(r, brief, essayForMark, plans) {
         termsUsed: (Array.isArray(p.termsUsed) ? p.termsUsed : []).map(x => termCanon(plans && plans[String(p.criterionId || '').replace(/\s+/g, '')], x)).filter(Boolean),
         requirementsMet: (Array.isArray(p.requirementsMet) ? p.requirementsMet : []).map(String).filter(x => { const pl = plans && plans[String(p.criterionId || '').replace(/\s+/g, '')]; return pl && (pl.requirements || []).some(rq => rq.kind === x); }),
         evidence: String(p.evidence || ''),
+        got: (Array.isArray(p.got) ? p.got : []).map(String).map(x => x.trim()).filter(Boolean).slice(0, 4),
+        addNext: (Array.isArray(p.addNext) ? p.addNext : []).map(a => ({
+            title: String((a && a.title) || '').trim(),
+            gap: String((a && a.gap) || '').trim(),
+            concept: String((a && a.concept) || '').trim(),
+            prompt: String((a && a.prompt) || '').trim(),
+            example: String((a && a.example) || '').trim(),
+        })).filter(a => a.title && (a.concept || a.prompt)).slice(0, 4),
         missingForTop: String(p.missingForTop || ''),
         nextQuestion: String(p.nextQuestion || ''),
     })).filter(p => ids.includes(p.criterionId) && !seen.has(p.criterionId) && seen.add(p.criterionId));

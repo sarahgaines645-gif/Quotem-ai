@@ -1093,6 +1093,23 @@
     .q-mk-block li { font-size: 12px; line-height: 1.45; color: var(--text); margin: 3px 0; overflow-wrap: anywhere; }
     .q-bandlist .bd.missing { background-color: transparent; box-shadow: inset 0 0 0 2px var(--text-faint); }
     .q-bandlist .q-band-w.missing { color: var(--text-faint); }
+    /* A QUESTION'S CARD: grade, what she has, then the moves that teach. */
+    .q-bandlist .q-qcard { margin: 8px 0 12px; }
+    .q-got { margin: 5px 0 8px; }
+    .q-got .q-got-l { display: block; font-size: 9px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: #1f8a3a; margin-bottom: 3px; }
+    .q-got ul { margin: 0; padding-left: 16px; }
+    .q-got li { font-size: 12px; line-height: 1.45; color: var(--text); margin: 3px 0; overflow-wrap: anywhere; }
+    .q-add { margin: 6px 0 4px; }
+    .q-add .q-add-l { display: block; font-size: 9px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--accent); margin-bottom: 5px; }
+    .q-add-item { padding: 11px 13px; border-radius: 13px; box-shadow: var(--neu-raised-xs); margin-bottom: 8px; }
+    .q-add-h { display: flex; align-items: baseline; gap: 7px; font-size: 13px; font-weight: 700; color: var(--text); margin-bottom: 5px; }
+    .q-add-n { font-size: 10px; font-weight: 700; color: var(--accent); }
+    .q-add-gap { font-size: 12px; line-height: 1.5; color: var(--text-muted); margin-bottom: 5px; overflow-wrap: anywhere; }
+    .q-add-con { font-size: 12.5px; line-height: 1.55; color: var(--text); margin-bottom: 6px; overflow-wrap: anywhere; }
+    .q-add-do { font-size: 12.5px; line-height: 1.5; color: var(--text); overflow-wrap: anywhere; }
+    .q-add-do b { font-weight: 700; }
+    .q-add-eg { margin-top: 7px; font-size: 12px; line-height: 1.5; color: var(--text-muted); font-family: 'Lora', Georgia, serif; overflow-wrap: anywhere; }
+    .q-add-eg .q-add-eg-l { display: block; font-family: 'Space Grotesk', sans-serif; font-size: 8.5px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-faint); margin-bottom: 2px; }
     /* Why it is that grade, what each part still needs, and the way up. */
     .mk-gap { font-size: 11px; line-height: 1.45; color: var(--text-muted); margin: 1px 0 7px 16px; overflow-wrap: anywhere; }
     .q-bandlist .q-band-why { font-size: 12px; line-height: 1.5; color: var(--text); margin: 2px 0 8px; overflow-wrap: anywhere; }
@@ -7242,11 +7259,34 @@
       if (!m || !m.overall) return '';
       const cs = (state.brief && state.brief.criteria) || [];
       const per = (m.perCriterion || []);
+      // EACH QUESTION IS A CARD THAT TEACHES (Sarah, 17 Aug, with Q's spec):
+      // the grade, then WHAT YOU'VE GOT in plain English, then WHAT TO ADD
+      // NEXT — each one the gap, the idea taught, the instruction, and a model
+      // sentence about someone else's case to adapt. "Needs the neo-Taylorism
+      // framing named properly" is useless to a student who has never heard of
+      // it; that is the whole product.
       const rows = per.map(p => {
         const gap = String(p.missingForTop || '').trim();
         const started = p.band !== 'missing';
-        return `<div class="q-band-row"><span class="bd ${escHtml(p.band)}"></span><span class="q-band-l">${escHtml(labelFor(p.criterionId))}</span><span class="q-band-w ${escHtml(p.band)}">${escHtml(gradeWord(p))}</span></div>`
-          + (gap ? `<div class="q-band-gap">${escHtml(started ? gap : 'Not written yet — ' + gap.charAt(0).toLowerCase() + gap.slice(1))}</div>` : '');
+        const got = (p.got || []).filter(Boolean);
+        const next = (p.addNext || []).filter(a => a && a.title);
+        const gotHtml = got.length
+          ? `<div class="q-got"><span class="q-got-l">What you've got</span><ul>${got.map(x => `<li>${escHtml(x)}</li>`).join('')}</ul></div>` : '';
+        const nextHtml = next.length
+          ? `<div class="q-add"><span class="q-add-l">What to add next</span>${next.map((a, i) => `
+              <div class="q-add-item">
+                <div class="q-add-h"><span class="q-add-n">${i + 1}</span>${escHtml(a.title)}</div>
+                ${a.gap ? `<div class="q-add-gap">${escHtml(a.gap)}</div>` : ''}
+                ${a.concept ? `<div class="q-add-con">${escHtml(a.concept)}</div>` : ''}
+                ${a.prompt ? `<div class="q-add-do"><b>Do this —</b> ${escHtml(a.prompt)}</div>` : ''}
+                ${a.example ? `<div class="q-add-eg"><span class="q-add-eg-l">the shape of it — write your own version</span>${escHtml(a.example)}</div>` : ''}
+              </div>`).join('')}</div>` : '';
+        return `<div class="q-qcard">`
+          + `<div class="q-band-row"><span class="bd ${escHtml(p.band)}"></span><span class="q-band-l">${escHtml(labelFor(p.criterionId))}</span><span class="q-band-w ${escHtml(p.band)}">${escHtml(gradeWord(p))}</span></div>`
+          + gotHtml
+          + nextHtml
+          + (!nextHtml && gap ? `<div class="q-band-gap">${escHtml(started ? gap : 'Not written yet — ' + gap.charAt(0).toLowerCase() + gap.slice(1))}</div>` : '')
+          + `</div>`;
       }).join('');
       const done = per.filter(p => p.band !== 'missing').length;
       const total = per.length || cs.length;
