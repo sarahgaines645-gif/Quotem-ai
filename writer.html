@@ -1230,6 +1230,21 @@
        part — nothing else on it. Hover / long-press a word → a little popup
        card with the meaning + one everyday example. */
     .tb-expect { margin: 0 0 20px; padding: 12px 14px; border-radius: 12px; box-shadow: var(--neu-raised-sm); }
+    /* SOURCES on the teaching board: citation · the point it backs · how strong (Sarah, 17 Aug) */
+    .tb-sources { position: relative; margin: 0 0 20px; padding: 12px 14px; border-radius: 12px; box-shadow: var(--neu-raised-sm); }
+    .tb-sources .ex-title { display: block; font-size: 9px; font-weight: 700; letter-spacing: 0.09em; text-transform: uppercase; color: var(--text-faint); margin-bottom: 8px; }
+    .tb-sources .ex-part { font-weight: 500; letter-spacing: 0.02em; text-transform: none; margin-left: 6px; }
+    .sb-ref { margin-bottom: 10px; }
+    .sb-ref:last-child { margin-bottom: 0; }
+    .sb-cite { font-size: 12px; font-weight: 700; color: var(--text); overflow-wrap: anywhere; }
+    .sb-tag { font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--accent); margin-left: 6px; }
+    .sb-point { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 2px 8px; align-items: baseline; margin-top: 4px; cursor: pointer; padding: 3px 6px; border-radius: 8px; }
+    .sb-point:hover { box-shadow: var(--neu-raised-xs); }
+    .sb-str { font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; padding: 1px 6px; border-radius: 6px; box-shadow: var(--neu-inset-sm); color: var(--text-muted); white-space: nowrap; }
+    .sb-str.strong { color: #2e9e4a; } .sb-str.fair { color: #b07f0a; } .sb-str.weak { color: var(--accent); }
+    .sb-pt { font-size: 11px; color: var(--text); line-height: 1.4; overflow-wrap: anywhere; }
+    .sb-pt.sb-none { color: var(--text-faint); font-style: italic; }
+    .sb-why { grid-column: 2; font-size: 10px; color: var(--text-muted); line-height: 1.35; }
     .tb-expect .ex-title { display: block; font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--accent); margin-bottom: 4px; }
     .tb-expect .ex-title .ex-part { color: var(--text-muted); text-transform: none; letter-spacing: 0.02em; font-weight: 600; margin-left: 4px; }
     .tb-expect .ex-ask { font-size: 12px; font-weight: 600; color: var(--text); line-height: 1.45; margin-bottom: 6px; }
@@ -2864,7 +2879,7 @@
       const current = (qi >= 0 ? items.slice(qi) : items.slice()).filter(it => !it.quiet);
       const w = whereInfo();
       const whereHtml = w ? `<div class="tb-where">${escHtml(whereText(w))}</div>` : '';
-      const agendaHtml = scaffoldAgendaHtml() + expectHtml(state.currentCriterionId);
+      const agendaHtml = scaffoldAgendaHtml() + expectHtml(state.currentCriterionId) + sourcesBoardHtml();
       const earlierHtml = earlier.length
         ? `<details class="tb-earlier" id="tb-earlier"${state.boardEarlierOpen ? ' open' : ''}><summary>Earlier (${earlier.length})</summary><div class="tb-items">${earlier.map((it) => boardItemHtml(it, items.indexOf(it), true)).join('')}</div></details>`
         : '';
@@ -2881,6 +2896,12 @@
           btn.textContent = open ? 'more' : 'less';
         });
       });
+      teachBody.querySelectorAll('.sb-point[data-jump]').forEach(el => el.addEventListener('click', () => {
+        const hit = findInDoc(el.dataset.jump); if (!hit) return;
+        const r = document.createRange(); r.setStart(hit.start.node, hit.start.offset); r.setEnd(hit.end.node, hit.end.offset + 1);
+        const sel = window.getSelection(); sel.removeAllRanges(); sel.addRange(r); docBody.focus();
+        const b = r.getBoundingClientRect(); if (b && (b.top < 80 || b.bottom > window.innerHeight - 120)) window.scrollBy({ top: b.top - Math.round(window.innerHeight * 0.4), behavior: 'smooth' });
+      }));
       teachBody.querySelectorAll('.tb-item.tb-click').forEach(el => {
         const it = items[Number(el.dataset.idx)];
         if (it && it.action) el.addEventListener('click', () => it.action());
@@ -4053,9 +4074,9 @@
         const cov = state.coverage[c.id] || 'none';
         return `<button type="button" class="tb-part${on}" data-part-id="${escHtml(c.id)}" data-cov="${cov}" title="${escHtml(criterionLabel(c))}">Q${i + 1}</button>`;
       }).join('')}<span class="tb-partlab">${escHtml(criterionLabel(cs[Math.max(0, cs.findIndex(c => c.id === cid))] || cs[0]))}</span></div>` : '';
-      const ask = liveAsk(cid, here) || plan.role;
+      const ask = liveAsk(cid, here) || plan.role || '';
       return `<div class="tb-agenda" id="tb-agenda">`
-        + `<div class="tb-now${askIsFresh(ask) ? ' fresh' : ''}" id="tb-now">${escHtml(ask)}</div>`
+        + (ask ? `<div class="tb-now${askIsFresh(ask) ? ' fresh' : ''}" id="tb-now">${escHtml(ask)}</div>` : '')
         + `<div class="tb-track"><span class="st-beads">${beads}</span><span class="tb-count">${n} of ${plan.steps.length}</span>${budget}</div>`
         + parts
         + `</div>`;
@@ -6511,11 +6532,39 @@
       return { node: map[j - 1].node, offset: map[j - 1].offset + 1, spaceBefore: true };
     }
     function referenceKey(c) { return String(c.doi || c.id || c.reference || '').toLowerCase(); }
-    function noteReference(c) {
+    // Sarah, 17 Aug: "a list in the teaching board that has all the sources,
+    // citations and the points they are making next to them and how strong
+    // they are to prove that point." Each reference remembers the sentence it
+    // was put behind (the point) and Q's honest strength for THAT point.
+    function noteReference(c, { point, criterionId } = {}) {
       const key = referenceKey(c); if (!key) return;
-      if (!state.references.some(r => r.key === key)) state.references.push({ key, inText: c.inText || '', reference: c.reference || '', title: c.title || '', year: c.year || '', fromUpload: !!c.fromUpload, sourceName: c.sourceName || null, at: Date.now() });
+      let r = state.references.find(x => x.key === key);
+      if (!r) { r = { key, inText: c.inText || '', reference: c.reference || '', title: c.title || '', year: c.year || '', fromUpload: !!c.fromUpload, sourceName: c.sourceName || null, at: Date.now(), points: [] }; state.references.push(r); }
+      if (!Array.isArray(r.points)) r.points = [];
+      const pt = String(point || '').replace(/\s+/g, ' ').trim();
+      if (pt && !r.points.some(p => p.text === pt)) r.points.push({ text: pt, criterionId: criterionId || state.currentCriterionId || '', strength: '', why: '', at: Date.now() });
       persist({ references: state.references });
-      renderRefsList();
+      renderRefsList(); renderBoard();
+      return r;
+    }
+    function noteStrength(c, point, strengthLine) {
+      const key = referenceKey(c); const r = state.references.find(x => x.key === key); if (!r) return;
+      const pt = String(point || '').replace(/\s+/g, ' ').trim();
+      const p = (r.points || []).find(x => x.text === pt); if (!p) return;
+      const m = String(strengthLine || '').match(/^\s*(strong|fair|weak)\s*[—\-–:]?\s*(.*)$/i);
+      p.strength = m ? m[1].toLowerCase() : ''; p.why = m ? m[2].trim() : String(strengthLine || '').trim();
+      persist({ references: state.references }); renderBoard();
+    }
+    const STRENGTH_WORD = { strong: 'strong', fair: 'fair', weak: 'weak' };
+    function sourcesBoardHtml() {
+      const refs = (state.references || []).filter(r => r && r.inText);
+      if (!refs.length) return '';
+      const rows = refs.map(r => {
+        const pts = (r.points || []);
+        const ptHtml = pts.length ? pts.map(p => `<div class="sb-point" data-jump="${escHtml(p.text)}"><span class="sb-str ${escHtml(p.strength || 'none')}" title="${escHtml(p.why || (p.strength ? '' : 'Q has not judged this yet'))}">${escHtml(STRENGTH_WORD[p.strength] || '…')}</span><span class="sb-pt">${escHtml(p.text.length > 110 ? p.text.slice(0, 109) + '…' : p.text)}</span>${p.why ? `<span class="sb-why">${escHtml(p.why)}</span>` : ''}</div>`).join('') : '<div class="sb-point"><span class="sb-str none">—</span><span class="sb-pt sb-none">on your list, not yet behind a sentence</span></div>';
+        return `<div class="sb-ref"><div class="sb-cite">${escHtml(r.inText)}${r.fromUpload ? '<span class="sb-tag">your upload</span>' : ''}</div>${ptHtml}</div>`;
+      }).join('');
+      return `<div class="tb-sources" id="tb-sources"><span class="ex-title">Sources<span class="ex-part">${refs.length} cited</span></span>${rows}</div>`;
     }
     const refsYours = document.getElementById('refs-yours');
     function renderRefsList() {
@@ -6603,7 +6652,7 @@
       }
       // 2. the reference list entry (deduped) + the drawer + the notebook
       appendReference(c.reference);
-      noteReference(c);
+      noteReference(c, { point: sentence, criterionId: cid });
       wordEl.textContent = countWords() + ' words'; scheduleAutosave();
       // 3. the citation / reference dot for this part clears (the notebook's honest read is told)
       try {
@@ -6631,7 +6680,7 @@
       // The ideas: angles for HER line (a small call), landing under the pink instruction.
       if (c.snippet) {
         api('/writer/tool', { tool: 'bridge', sentence: String(sentence || '').slice(0, 600), word: String(c.snippet).slice(0, 400), brickId: null, yearGroup: state.yearGroup || '' }, { timeoutMs: 45000 })
-          .then(d => { const ul = document.getElementById('cite-ideas'); if (!ul) return; const pts = (d && d.points || []).slice(0, 3); ul.innerHTML = pts.length ? pts.map(p => '<li>' + escHtml(p) + '</li>').join('') : '<li style="color:var(--text-muted)">Say what it means for your company — one line, your words.</li>'; })
+          .then(d => { if (d && d.strength) noteStrength(c, sentence, d.strength); const ul = document.getElementById('cite-ideas'); if (!ul) return; const pts = (d && d.points || []).slice(0, 3); ul.innerHTML = pts.length ? pts.map(p => '<li>' + escHtml(p) + '</li>').join('') : '<li style="color:var(--text-muted)">Say what it means for your company — one line, your words.</li>'; })
           .catch(() => { const ul = document.getElementById('cite-ideas'); if (ul) ul.innerHTML = '<li style="color:var(--text-muted)">Say what it means for your company — one line, your words.</li>'; });
       }
       state.docSnapshot = docPlainText();
