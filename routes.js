@@ -2497,6 +2497,9 @@ const TUTOR_KEYS = [
     // so the board came back empty every refresh. `wbWork` is her own writing
     // on the board, keyed by part — it must never be lost.
     'wbDoc', 'wbWork',
+    // what Q's reading of the page found (cuts, weak lines, spelling, grammar) —
+    // the marking panel's counts come from this, so it must survive a refresh.
+    'tidy',
 ];
 router.post('/writer/tutor', requirePerson, express.json({ limit: '4mb' }), writerTooLarge('The session is too big to save in one go (over 4 MB). Trim very long pasted text out of the page and it will save again.'), async (req, res) => {
     try {

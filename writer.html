@@ -7266,7 +7266,7 @@
         setCoach({ msg: 'Reading it properly first — spelling, grammar, what to cut, what is weak…', section: 'MARK & FIX', thinking: true, inputVisible: false, step: false });
         tidy = await runTidyPasses(text);
       } catch (_) {}
-      state.tidy = tidy;
+      state.tidy = tidy; persist({ tidy });
       // Nothing in the way: straight on to the mark.
       if (!tidy.cut.length && !tidy.quick.length) { markRunning = false; return doTheMark(); }
       const bits = [];
@@ -7416,12 +7416,12 @@
       markBody.querySelectorAll('[data-mk-cut]').forEach(el => el.addEventListener('click', () => {
         const is = (state.tidy.cut || [])[Number(el.dataset.mkCut)]; if (!is) return;
         let n = 0; while (findInDoc(is.wrong) && n < 50) { if (!cutFromDoc(is.wrong)) break; n++; }
-        is.done = true; scheduleAutosave(); renderMarkPanel();
+        is.done = true; scheduleAutosave(); persist({ tidy: state.tidy }); renderMarkPanel();
       }));
       const cutAll = document.getElementById('mk-cut-all');
       if (cutAll) cutAll.addEventListener('click', () => {
         for (const is of (state.tidy.cut || [])) { let n = 0; while (findInDoc(is.wrong) && n < 50) { if (!cutFromDoc(is.wrong)) break; n++; } is.done = true; }
-        scheduleAutosave(); renderMarkPanel();
+        scheduleAutosave(); persist({ tidy: state.tidy }); renderMarkPanel();
       });
       markBody.querySelectorAll('.mk-item').forEach(el => el.addEventListener('click', () => {
         const i = Number(el.dataset.mkI); const it = (state.editItems || [])[i]; if (!it) return;
@@ -8751,6 +8751,8 @@
         state.wbNotes = t.wbNotes && typeof t.wbNotes === 'object' ? t.wbNotes : {};
         // Her work area comes back with her — it is her writing, not Q's.
         state.wbWork = t.wbWork && typeof t.wbWork === 'object' ? t.wbWork : {};
+        // Q's reading of the page (the marking counts) comes back with her.
+        state.tidy = t.tidy && typeof t.tidy === 'object' ? t.tidy : null;
         try { workKeyShown = null; syncWorkArea(); } catch (_) {}
         state.chatLog = Array.isArray(t.chatLog) ? t.chatLog.filter(m => m && (m.role === 'q' || m.role === 'me') && m.text).slice(-40) : [];
         state.docSnapshot = t.probeSnapshot && docPlainText().endsWith(t.probeSnapshot) ? docPlainText() : docPlainText();
