@@ -1406,6 +1406,7 @@
     .mk-item .mk-w { font-size: 10px; color: var(--text-muted); line-height: 1.35; margin-top: 1px; }
     /* A done row SAYS it is done — a tick on its own inside a "to fix" list
        reads as a contradiction (Sarah, 17 Aug). */
+    .mk-item .mk-acts { display: flex; gap: 6px; margin-top: 6px; }
     .mk-item .mk-tag {
       display: inline-block; margin-right: 6px; font-size: 8.5px; font-weight: 700;
       letter-spacing: 0.08em; text-transform: uppercase; color: #1f8a3a; vertical-align: 1px;
@@ -7174,10 +7175,13 @@
     // asides and misspelt words in it, and marking THAT. A mark on that page
     // is worthless however good the marker is.
     //
-    // So Mark it reads the page properly first: the four passes run together,
-    // the junk comes off on one press, and only then does the marker see it.
-    // What is left over (weak claims, waffle) is not a separate panel any
-    // more — it joins the fix walk after the marker's own sentences.
+    // So Mark it reads the page properly first: the four passes run together
+    // and everything they find is SUGGESTED in the marking panel, each line
+    // with its own button. Q never takes anything off her page himself
+    // (Sarah, 17 Aug: "he shouldnt cut anything he should suggest what to cut
+    // in the marking pannel"). What is left over (weak claims, waffle) is not
+    // a separate panel any more — it joins the fix walk after the marker's own
+    // sentences.
     async function runTidyPasses(text) {
       const ctx = trimContext();
       const call = (kind) => api('/writer/proofread', { kind, text, context: kind === 'trim' || kind === 'weak' ? ctx : '' }, { timeoutMs: 120000 })
@@ -7211,24 +7215,25 @@
         spelling: live(t.spelling), grammar: live(t.grammar),
       };
     }
-    // One press: the junk off, the spellings right. Only ever things she said
-    // yes to — Q still never writes a sentence of hers.
-    function applyTidy(t) {
-      let cuts = 0, fixes = 0;
-      for (const is of t.cut) { let n = 0; while (findInDoc(is.wrong) && n < 50) { if (!cutFromDoc(is.wrong)) break; n++; cuts++; } is.done = true; }
-      for (const is of t.quick) {
-        let n = 0; while (findInDoc(is.wrong) && n < 50) { if (!replaceInDoc(is.wrong, is.right)) break; n++; fixes++; }
-        is.done = true;
+    // ONE LINE, HER PRESS. Q suggests; a line only leaves the page when she
+    // presses the button beside it. There is no "and Q does the rest".
+    function applyTidyItem(is, set) {
+      const t = set || state.tidy || {};
+      if (!is || is.done) return 0;
+      let n = 0;
+      if (is.verdict === 'cut') { while (findInDoc(is.wrong) && n < 50) { if (!cutFromDoc(is.wrong)) break; n++; } }
+      else if (is.right) {
+        while (findInDoc(is.wrong) && n < 50) { if (!replaceInDoc(is.wrong, is.right)) break; n++; }
         // A correction inside a weak sentence used to ORPHAN it: the span no
         // longer matched the page, so the weak item silently dropped out of
         // the walk and she never saw it. Move the spans with the text.
-        if (n) for (const other of t.weak.concat(t.tighten)) {
+        if (n) for (const other of (t.weak || []).concat(t.tighten || [])) {
           if (other.wrong && other.wrong.indexOf(is.wrong) >= 0) other.wrong = other.wrong.split(is.wrong).join(is.right);
         }
       }
-      scheduleAutosave();
-      try { edClearPaint(); } catch (_) {}
-      return { cuts, fixes };
+      is.done = true;
+      scheduleAutosave(); persist({ tidy: state.tidy });
+      return n;
     }
     // The marker's sentences first, then what is left of weak / waffle — one
     // walk, not four lists in a panel she has to remember to open.
@@ -7273,16 +7278,19 @@
       if (tidy.cut.length) bits.push('**' + tidy.cut.length + '** ' + (tidy.cut.length === 1 ? 'line that is not part of the essay' : 'lines that are not part of the essay'));
       if (tidy.quick.length) bits.push('**' + tidy.quick.length + '** ' + (tidy.quick.length === 1 ? 'spelling or grammar slip' : 'spelling and grammar slips'));
       const sample = tidy.cut.slice(0, 3).map(is => '- ' + (is.why || 'not part of the essay') + ' — "' + String(is.wrong).replace(/\s+/g, ' ').slice(0, 60) + (String(is.wrong).length > 60 ? '…' : '') + '"').join('\n');
+      // I SUGGEST, YOU DECIDE. Nothing is removed for her, and no button here
+      // removes several things at once — the list is in the marking panel with
+      // a button per line, and she can mark it now regardless.
       setCoach({
-        msg: 'Before I mark it: ' + bits.join(' and ') + '.' + (sample ? '\n\n' + sample : ''),
-        hint: 'Marking a page with those still in it marks the mess, not your writing.',
+        msg: 'I would take ' + bits.join(' and ') + ' out before this is marked.' + (sample ? '\n\n' + sample : ''),
+        hint: 'They are listed in the marking panel with a button each — nothing comes off your page unless you press it.',
         section: 'BEFORE THE MARK', inputVisible: false, step: false, showNudge: false,
         actions: [
-          { label: 'Take them off and mark it →', primary: true, big: true, onClick: () => { const r = applyTidy(tidy); appendBoardItem({ type: 'note', label: 'tidied', text: r.cuts + ' cut, ' + r.fixes + ' corrected before marking.', quiet: true }); doTheMark(); } },
-          { label: 'Show me on the page', onClick: () => { edProof = { kind: 'trim', issues: tidy.cut.concat(tidy.tighten), busy: false, note: '' }; try { renderEditPanel(); edPaint(); openEditPanel(); } catch (_) {} } },
-          { label: 'Mark it as it is', quiet: true, onClick: () => doTheMark() },
+          { label: 'Show me the list →', primary: true, big: true, onClick: () => { try { openMarkPanel(); } catch (_) {} } },
+          { label: 'Mark it now', onClick: () => doTheMark() },
         ],
       });
+      try { openMarkPanel(); } catch (_) {}
       markRunning = false; btnFinish.disabled = false;
     }
     async function doTheMark() {
@@ -7380,13 +7388,14 @@
         + (s.read ? tile(s.spelling, 'spelling', '', 'spelling') : '')
         + (s.read ? tile(s.grammar, 'grammar', '', 'grammar') : '')
         + `</div>`
-        + (s.read ? '' : '<div class="mk-note">Press <b>Mark & fix →</b> and Q reads the whole page — cuts, weak lines, spelling and grammar — before he marks it.</div>');
-      // What Q wants taken off the page, listed here so she can do it from the
-      // mark itself rather than remembering another panel.
+        + (s.read ? '' : '<div class="mk-note">Press <b>Mark & fix →</b> and Q reads the whole page first — he finds the lines he would cut, the weak ones, and the spelling and grammar, and lists them here for you. He never changes anything himself.</div>');
+      // WHAT Q WOULD CUT — a suggestion with a button beside it, never a thing
+      // he does (Sarah, 17 Aug: "he shouldnt cut anything he should suggest
+      // what to cut in the marking pannel").
       const cuts = ((state.tidy && state.tidy.cut) || []).map((is, i) => ({ is, i })).filter(x => !x.is.done && !!findInDoc(x.is.wrong));
-      const cutList = cuts.length ? `<div class="mk-sec">Not part of the essay (${cuts.length})</div>` + cuts.map(x =>
-        `<div class="mk-item cut" data-mk-cut="${x.i}"><span class="mk-st">✕</span><div><div class="mk-s"><s>${escHtml(x.is.wrong.length > 90 ? x.is.wrong.slice(0, 89) + '…' : x.is.wrong)}</s></div>${x.is.why ? `<div class="mk-w">${escHtml(x.is.why)}</div>` : ''}</div></div>`).join('')
-        + `<button type="button" class="q-btn" id="mk-cut-all">Take all ${cuts.length} off →</button>` : '';
+      const cutList = cuts.length ? `<div class="mk-sec">Q would cut (${cuts.length})</div>` + cuts.map(x =>
+        `<div class="mk-item cut"><span class="mk-st">✕</span><div><div class="mk-s"><s>${escHtml(x.is.wrong.length > 90 ? x.is.wrong.slice(0, 89) + '…' : x.is.wrong)}</s></div>${x.is.why ? `<div class="mk-w">${escHtml(x.is.why)}</div>` : ''}<div class="mk-acts"><button type="button" class="q-btn" data-mk-cut="${x.i}">Cut it</button><button type="button" class="q-btn quiet" data-mk-keep="${x.i}">Keep it</button></div></div></div>`).join('')
+        + `<div class="mk-foot">Your call on every one — Q only points at them.</div>` : '';
       // TO DO AND DONE ARE TWO LISTS, AND DONE SAYS "FIXED" (Sarah, 17 Aug:
       // "this isnt clear as to 4 left to fix… why are they there if they are
       // fixed. If theyve been fixed they should say fixed."). A tick on a row
@@ -7413,16 +7422,17 @@
         edProof = { kind, issues: from.filter(is => !is.done && !!findInDoc(is.wrong)), busy: false, note: '' };
         try { renderEditPanel(); edPaint(); openEditPanel(); } catch (_) {}
       }));
-      markBody.querySelectorAll('[data-mk-cut]').forEach(el => el.addEventListener('click', () => {
-        const is = (state.tidy.cut || [])[Number(el.dataset.mkCut)]; if (!is) return;
-        let n = 0; while (findInDoc(is.wrong) && n < 50) { if (!cutFromDoc(is.wrong)) break; n++; }
-        is.done = true; scheduleAutosave(); persist({ tidy: state.tidy }); renderMarkPanel();
+      // Her press, one line: cut it, or keep it and it stops being suggested.
+      markBody.querySelectorAll('[data-mk-cut]').forEach(el => el.addEventListener('click', (e) => {
+        e.stopPropagation();
+        applyTidyItem((state.tidy.cut || [])[Number(el.dataset.mkCut)]);
+        renderMarkPanel();
       }));
-      const cutAll = document.getElementById('mk-cut-all');
-      if (cutAll) cutAll.addEventListener('click', () => {
-        for (const is of (state.tidy.cut || [])) { let n = 0; while (findInDoc(is.wrong) && n < 50) { if (!cutFromDoc(is.wrong)) break; n++; } is.done = true; }
-        scheduleAutosave(); persist({ tidy: state.tidy }); renderMarkPanel();
-      });
+      markBody.querySelectorAll('[data-mk-keep]').forEach(el => el.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const is = (state.tidy.cut || [])[Number(el.dataset.mkKeep)]; if (!is) return;
+        is.done = true; persist({ tidy: state.tidy }); renderMarkPanel();
+      }));
       markBody.querySelectorAll('.mk-item').forEach(el => el.addEventListener('click', () => {
         const i = Number(el.dataset.mkI); const it = (state.editItems || [])[i]; if (!it) return;
         if (!findInDoc(it.sentence)) return;   // rewritten — nothing to go to
@@ -8818,7 +8828,7 @@
     loadProjects().then(restoreSession, restoreSession);
     // Test hooks (no data, no secrets): lets the harness exercise the page-side
     // helpers without a paid call. Harmless in production.
-    window.__qwriterTest = { presentStep, renderBoard, renderWhiteboard, startedAsk, showToolPop, findInDoc, replaceInDoc, appendReference, docPlainText, splitCheck: (t) => endsSentence(t), runEditPass, checkCurrentSentence, showEditItem, state: () => state, currentEditText, partParagraphs, setBrief, storyPointsHtml, renderInlineDots, termsForBoard, setCoach, bandListHtml, showEditItem, openEditPanel, renderEditPanel, edState: () => edProof, edSetProof: (p2) => { edProof = p2; renderEditPanel(); edPaint(); }, sayMe, renderThread, syncWorkArea, showPanel, revealPanel, runTidyPasses, applyTidy, mergeWalk, markAndFix, walkItemsFromMark, renderMarkPanel, markStats, gradeWord };
+    window.__qwriterTest = { presentStep, renderBoard, renderWhiteboard, startedAsk, showToolPop, findInDoc, replaceInDoc, appendReference, docPlainText, splitCheck: (t) => endsSentence(t), runEditPass, checkCurrentSentence, showEditItem, state: () => state, currentEditText, partParagraphs, setBrief, storyPointsHtml, renderInlineDots, termsForBoard, setCoach, bandListHtml, showEditItem, openEditPanel, renderEditPanel, edState: () => edProof, edSetProof: (p2) => { edProof = p2; renderEditPanel(); edPaint(); }, sayMe, renderThread, syncWorkArea, showPanel, revealPanel, runTidyPasses, applyTidyItem, mergeWalk, markAndFix, walkItemsFromMark, renderMarkPanel, markStats, gradeWord };
 
 
     // (The old per-card drag code lived here — every panel now goes through makePanel above.)
