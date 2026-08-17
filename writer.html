@@ -463,6 +463,16 @@
       display: flex; flex-direction: column; gap: 6px; margin-bottom: 8px;
     }
     .coach-card .q-actions.hidden { display: none; }
+    /* Talking to Q: the thread on the card — you / Q, last few exchanges, scrolls */
+    .coach-card .q-chat { display: flex; flex-direction: column; gap: 8px; max-height: 42vh; overflow-y: auto; margin: 0 0 10px; padding-right: 4px; scrollbar-width: thin; }
+    .coach-card .q-chat-m { display: block; min-width: 0; }
+    .coach-card .q-chat-who { display: block; font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-muted); margin-bottom: 2px; }
+    .coach-card .q-chat-m.q .q-chat-who::before { content: '● '; color: var(--accent); }
+    .coach-card .q-chat-t { font-size: 13px; line-height: 1.5; color: var(--text); overflow-wrap: anywhere; }
+    .coach-card .q-chat-t p { margin: 0 0 6px; }
+    .coach-card .q-chat-t p:last-child { margin-bottom: 0; }
+    .coach-card .q-chat-m.me { border-left: 2px solid rgba(0,0,0,0.16); padding-left: 8px; }
+    .coach-card .q-chat-m.me .q-chat-t { color: var(--text-muted); }
     .q-btn {
       padding: 6px 10px; border: none; border-radius: 12px;
       font-family: 'Space Grotesk', sans-serif; font-size: 11px; font-weight: 500;
@@ -3037,6 +3047,7 @@
     // scaffold widget; the coach card carries the ask (with the frame line
     // the first time) and the right hint for the kind.
     function presentStep(cid, idx, { ack, moved, frame, restore } = {}) {
+      state.chatMode = false;
       try {
         const plan0 = planFor(cid); const s0 = plan0 && plan0.steps[idx];
         if (s0 && WB_KINDS.has(s0.kind) && !restore) { showPanel('wb'); revealPanel('wb'); }
@@ -4880,9 +4891,58 @@
     }
     // A question for Q: answered plainly (one probe call, trigger 'question'),
     // then the current ask again. Nothing recorded, nothing on the page.
+    // ── CHAT WITH Q (Sarah, 17 Aug: "can I now talk to Q as a chat that will
+    // actually help and answer me"). A question opens CHAT MODE: Q answers
+    // properly (its own route, full context, no 24-word cap), the exchange
+    // shows as a thread on the card, and what she types next stays in the
+    // chat — a follow-up is never mistaken for an answer to the step. "← Back
+    // to writing" (or Next / Done on the step) closes it. A list from the case
+    // lands on the whiteboard.
+    state.chatLog = state.chatLog || [];
+    state.chatMode = false;
+    function chatThreadHtml() {
+      const last = state.chatLog.slice(-6);
+      return `<div class="q-chat">${last.map(m => `<div class="q-chat-m ${m.role === 'q' ? 'q' : 'me'}"><span class="q-chat-who">${m.role === 'q' ? 'Q' : 'you'}</span><div class="q-chat-t">${paragraphsHtml(m.text)}</div></div>`).join('')}</div>`;
+    }
+    function leaveChat() {
+      state.chatMode = false;
+      if (walkOn()) { coachCard.classList.add('wide'); showEditItem(); return; }
+      const info = currentStepInfo();
+      if (info) presentStep(info.cid, info.idx, { restore: true }); else setCoach({ msg: '', hint: 'Keep writing — I read as you go.', inputVisible: true, showNudge: true });
+      coachInput.placeholder = state.currentStep ? 'Type your answer…' : 'Ask Q…';
+    }
+    function showChat({ thinking, next } = {}) {
+      const info = currentStepInfo();
+      const acts = [{ label: walkOn() ? '← Back to the marking' : '← Back to writing', quiet: true, onClick: leaveChat }];
+      setCoach({ msg: thinking ? 'Q is thinking…' : '', thinking: !!thinking, section: 'TALKING TO Q', step: false, hint: next ? 'Next you could: ' + next : (info ? 'Ask me anything — your step waits on the board.' : 'Ask me anything.'), inputVisible: !thinking, showNudge: false, actions: acts });
+      const th = document.createElement('div'); th.innerHTML = chatThreadHtml();
+      coachActions.insertBefore(th.firstChild, coachActions.firstChild);
+      coachInput.placeholder = 'Ask Q…';
+      const box = coachActions.querySelector('.q-chat'); if (box) box.scrollTop = box.scrollHeight;
+    }
+    async function chatWithQ(text) {
+      state.chatMode = true;
+      state.chatLog.push({ role: 'me', text });
+      showChat({ thinking: true });
+      try {
+        const d = await api('/writer/chat', { text, history: state.chatLog.slice(-11, -1), docText: docPlainText().slice(-9000), criterionId: state.currentCriterionId || null, stepId: state.currentStep ? state.currentStep.stepId : null, ask: currentAskText() || '', yearGroup: state.yearGroup || '' }, { timeoutMs: 90000 });
+        tally('probe', state.currentCriterionId);
+        state.chatLog.push({ role: 'q', text: String(d.reply || '').trim() });
+        appendBoardItem({ type: 'explain', text: String(d.reply || '').trim(), quiet: true });
+        if (d.board && Array.isArray(d.board.items) && d.board.items.length) {
+          state.wbFind = { title: d.board.title || 'From the case', forLabel: '', sentence: '', items: d.board.items, todo: d.board.todo || [], nudge: '', busy: false, note: '' };
+          showPanel('wb'); revealPanel('wb'); renderWhiteboard();
+        }
+        showChat({ next: d.next || '' });
+      } catch (e) {
+        state.chatLog.push({ role: 'q', text: 'I couldn\'t answer that just now (' + shortCause(e) + ') — ask again.' });
+        showChat({});
+      }
+      coachInput.focus();
+    }
     async function answerStudentQuestion(text) {
       if (!state.brief) { await askQ(text); return; }
-      if (/i don'?t understand|dont understand|not sure what you mean|what do you mean|explain|stuck/i.test(text) && (state.currentQuestion || state.currentStep)) { teachNow(); return; }
+      await chatWithQ(text); return;
       const ask = currentAskText();
       setCoach({ msg: 'Let me answer that…', thinking: true, inputVisible: false });
       try {
@@ -4908,6 +4968,8 @@
       }
     }
     async function submitCoachText(text, { intent } = {}) {
+      if (state.chatMode && !intent && !state.awaitingWord) { if (/^(back|back to writing|back to it|done|carry on|continue|ok back)\.?$/i.test(text.trim())) { leaveChat(); return; } await chatWithQ(text); return; }
+      if (walkOn() && !intent && !state.awaitingWord) { await chatWithQ(text); return; }   // in a Mark & fix walk the box is Q's ear
       const kind = intent || (state.awaitingWord ? 'answer' : classifyCoachInput(text));
       if (kind === 'progress') { showProgress(); return; }
       if (kind === 'question') { await answerStudentQuestion(text); return; }
@@ -6161,8 +6223,12 @@
           { label: 'Skip', quiet: true, onClick: () => { state.editIndex++; showEditItem(); } },
           { label: 'Stop for now', quiet: true, onClick: () => endFixPass() },
         ],
-        inputVisible: false,
+        // Sarah, 17 Aug: "when it's in marking mode you can't speak to Q." The
+        // box stays open through the walk; anything typed there is a question
+        // to Q (chat), and "← Back to writing" comes back to this sentence.
+        inputVisible: true,
       });
+      coachInput.placeholder = 'Ask Q anything about this…';
       // The two lines that matter — whole sentences, never clipped.
       const crit = document.createElement('div'); crit.className = 'q-crit';
       crit.innerHTML = '<div class="qc-row"><span class="qc-l">Missing</span><span class="qc-v">' + escHtml(missingLine) + '</span></div>'

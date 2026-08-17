@@ -1916,6 +1916,65 @@ function planForPrompt(plan, stepId) {
     return lines.join('\n');
 }
 
+// ── CHAT WITH Q (Sarah, 17 Aug: "can I now talk to Q as a chat that will
+// actually help and answer me"). Not a coaching probe with a 24-word cap: a
+// proper answer to what she asked, from the brief, the plan for the part she
+// is on, the CASE TEXT she uploaded, and her own page — as long as the
+// question needs. He still never writes her sentences and never reads the
+// model answer out. If a list would help (facts, figures, examples), it
+// goes on the whiteboard as `board`; the reply says so.
+const CHAT_SCHEMA = {
+    type: 'object', additionalProperties: false,
+    required: ['reply', 'board', 'next'],
+    properties: {
+        reply: { type: 'string', description: 'The answer to what they asked, plain everyday British English. As long as it needs — usually 2 to 6 sentences; a short numbered list if they asked for a list or for steps. Direct: the answer first, then the why. Teach a term properly when asked (name, meaning, everyday example). If they ask what to write, tell them WHAT TO SAY and WHERE (which point, after which of their words) — never the sentence itself. If they ask for facts / figures / examples from the case, put them in board and say "on the whiteboard" here.' },
+        board: { anyOf: [{ type: 'object', additionalProperties: false, required: ['title', 'items', 'todo'], properties: { title: { type: 'string' }, items: { type: 'array', maxItems: 8, items: { type: 'object', additionalProperties: false, required: ['fact', 'where'], properties: { fact: { type: 'string', description: 'A fact / figure / example / quoted line as the case has it, verbatim, 4-16 words.' }, where: { type: 'string', description: 'Where it sits in the case, 2-6 words.' } } } }, todo: { type: 'array', maxItems: 4, items: { type: 'string' }, description: 'What to do with them: which item, where in their paragraph, what to say it shows. Never the sentence.' } } }, { type: 'null' }], description: 'null unless a LIST from the case would help more than prose (facts, figures, examples, quotes, the people, the numbers).' },
+        next: { anyOf: [{ type: 'string' }, { type: 'null' }], description: 'One line, 12 words or fewer, the concrete next thing they could do on the page — or null.' },
+    },
+};
+async function chatAnswer({ brief, essay, plan, stepId, caseText, sources, docText, history, question, yearGroup, ask }) {
+    const q = String(question || '').trim();
+    if (!q) throw new Error('Ask Q something first — the box is empty.');
+    const ageHint = yearGroup ? `Year group: ${yearGroup}. Talk to them in the language of their age.` : '';
+    const system = withMission(`You are Q, this student's tutor, in CONVERSATION. They asked you something in the coach box. Answer it — properly, plainly, usefully — the way a good tutor sitting next to them would.\nRULES\n- Answer the question they asked, first. Then the why, if it helps. As long as it needs; no padding, no preamble.\n- Everything you know is below: the brief, the marker's expectations for the part they are on, THE CASE TEXT they uploaded, and their page. Use the case: real names, figures, events, quoted lines. Never invent a fact.
+- Teach when asked (a term, a theory, a model): name it, say what it means in everyday words, give an everyday example, then how it applies to THEIR case.
+- If they ask what to write / how to answer / what a paragraph needs: tell them WHAT TO SAY and WHERE — the points, in order, and what evidence — never a sentence for them to paste. Their words, their page.
+- If they ask for facts / figures / examples / quotes from the case, or for "the numbers", "the people", "what happened": put the list on the whiteboard (board) — verbatim, with where each sits — with 2-4 todo lines on how to use them; say "on the whiteboard" in the reply.
+- If they ask how they are doing or what is left: say plainly, from their page against the parts of the brief.
+- Never read out the model answer or its wording; never say what grade the essay "should" get.
+- Plain, warm, direct British English. No lists of questions back at them.
+${ageHint}
+
+THE BRIEF
+${briefForPrompt(brief).slice(0, 5000)}
+${plan ? '\nTHE PLAN FOR THE PART THEY ARE ON\n' + planForPrompt(plan, stepId).slice(0, 3000) + '\n' + expectationsForPrompt(plan).slice(0, 1500) : ''}
+${essay ? '\n' + essayForPrompt(essay).slice(0, 6000) + '\n(The model answer is for your understanding only — never quote it, never paraphrase a sentence of it to them.)' : ''}
+
+THE CASE TEXT THEY UPLOADED (the only source of facts):
+${String(caseText || '').slice(0, 24000) || '(not stored — use the scenario in the brief above)'}
+${sources && sources.length ? '\nOTHER UPLOADED SOURCES:\n' + sourcesForPrompt(sources, { perSource: 6000, total: 12000 }) : ''}`);
+    const hist = (Array.isArray(history) ? history : []).slice(-10).map(h => `${h.role === 'q' ? 'Q' : 'STUDENT'}: ${String(h.text || '').slice(0, 800)}`).join('\n');
+    const user = `${ask ? `THE STEP THEY ARE ON: ${String(ask).slice(0, 300)}
+` : ''}THEIR PAGE SO FAR:
+${boundDoc(docText, 7000) || '(blank page)'}
+
+THE CONVERSATION SO FAR:
+${hist || '(this is the first message)'}
+
+STUDENT: ${q.slice(0, 1200)}
+
+Answer as Q.`;
+    const r = await callAccurate(system, user, { maxTokens: 1600, schema: CHAT_SCHEMA, effort: 'medium' });
+    const reply = String((r && r.reply) || '').trim();
+    if (!reply) throw new Error('Q went quiet — try again.');
+    let board = null;
+    if (r && r.board && Array.isArray(r.board.items) && r.board.items.length) {
+        const items = r.board.items.map(x => ({ fact: String((x && x.fact) || '').trim(), use: String((x && x.where) || '').trim() })).filter(x => x.fact).slice(0, 8);
+        if (items.length) board = { title: String(r.board.title || 'From the case').trim().slice(0, 60), items, todo: (Array.isArray(r.board.todo) ? r.board.todo : []).map(x => capWords(String(x), 26)).filter(Boolean).slice(0, 4) };
+    }
+    return { reply, board, next: r && r.next ? capWords(String(r.next), 14) : null };
+}
+
 // ── TAG: Q sorts the student's list into the plan's tags. One small call. ──
 // Sarah, 17 Aug: "you write them on the whiteboard… and then he will
 // rearrange them and use colour and emojis and formatting to show you how
@@ -2615,7 +2674,7 @@ function ukPolishResponse(value, key, parentKey) {
 module.exports = {
     ukPolishResponse, ukText, UK_LINE, PLAIN_QUESTION_RULE, withHouseStyle, plainLabel, capWords, capSentences, parseWeight, termCanon,
     TUTOR_MISSION, WHY_THE_GAME, GAME_RULE, COACH_VOICE, MISSION_BLOCK, withMission, BRICK_LOOP_RULE, TO_THE_POINT, MAX_CRITIQUE,
-    toolHelp, checkSentence, matchScore, EDIT_TOOLS, TOOL_SCHEMA, CHECK_SCHEMA, proofread, PROOF_KINDS,
+    toolHelp, checkSentence, matchScore, EDIT_TOOLS, TOOL_SCHEMA, CHECK_SCHEMA, proofread, PROOF_KINDS, chatAnswer, CHAT_SCHEMA,
     planPart, normalisePlan, planForPrompt, tagItems, checkStep, brickById, bricksOfCriterion,
     PLAN_SCHEMA, TAG_SCHEMA, STEP_CHECK_SCHEMA, STEP_KINDS, TAG_COLOURS,
     teachFor, relabelCriteria, labelLooksGenerated, TEACH_SCHEMA, LABELS_SCHEMA,

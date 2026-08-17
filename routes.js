@@ -1494,6 +1494,31 @@ router.post('/writer/mark', requirePerson, express.json({ limit: '2mb' }), write
     ukJson(res, { ok: true, ...jobView(job) });
 });
 
+// POST /writer/chat — a real conversation with Q (17 Aug): { text, history[], docText, criterionId, stepId, ask }.
+// Full context server-side (brief, plan, model essay for his own understanding, the stored case text, sources).
+router.post('/writer/chat', requirePerson, express.json({ limit: '1mb' }), writerTooLarge('That is too much text for one message (over 1 MB).'), async (req, res) => {
+    const personId = writerScope(req);
+    const t = readTutor(personId);
+    if (!t.brief) return res.status(400).json({ error: 'No brief yet — upload the task first so I know what the marker wants.', code: 'no_brief' });
+    const b = req.body || {};
+    const text = String(b.text || '').trim();
+    if (!text) return res.status(400).json({ ok: false, error: 'Ask Q something first — the box is empty.', code: 'empty_question', retryable: false });
+    try {
+        const cid = String(b.criterionId || t.currentCriterionId || '').replace(/\s+/g, '');
+        const stored = readStoredDocText(personId);
+        const r = await qWriter.chatAnswer({
+            brief: t.brief, essay: t.modelEssay || null,
+            plan: (t.plans && t.plans[cid]) || null, stepId: b.stepId ? String(b.stepId) : null,
+            caseText: stored && stored.text ? stored.text : '', sources: t.sources || [],
+            docText: String(b.docText || ''), history: Array.isArray(b.history) ? b.history.slice(-10) : [],
+            question: text, yearGroup: b.yearGroup || t.yearGroup || '', ask: b.ask ? String(b.ask) : '',
+        });
+        ukJson(res, { ok: true, ...r });
+    } catch (e) {
+        writerFail(res, e, '[writer/chat]', 'chat');
+    }
+});
+
 // POST /writer/probe — ONE probing question toward the ideal answer, from the
 // student's live document. The brief + skeleton come from the notebook (never
 // re-sent by the page); the page sends the doc text (bounded server-side),
