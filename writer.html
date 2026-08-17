@@ -7095,6 +7095,71 @@
         (m.perCriterion || []).map(p => '<span><span class="bd ' + escHtml(p.band) + '"></span>' + escHtml(labelFor(p.criterionId)) + '</span>').join('') + '</div>';
     }
     let markRunning = false;
+    // ── MARK IT = THE WHOLE CHECK ─────────────────────────────────────────
+    // Sarah, 17 Aug: "this should all be in mark it. otherwise you are working
+    // on bad foundations." Spelling, Grammar, Trim and What's weak were four
+    // buttons she had to remember to press — so the marker was reading a page
+    // that still had duplicated sentences, pasted editing notes, personal
+    // asides and misspelt words in it, and marking THAT. A mark on that page
+    // is worthless however good the marker is.
+    //
+    // So Mark it reads the page properly first: the four passes run together,
+    // the junk comes off on one press, and only then does the marker see it.
+    // What is left over (weak claims, waffle) is not a separate panel any
+    // more — it joins the fix walk after the marker's own sentences.
+    async function runTidyPasses(text) {
+      const ctx = trimContext();
+      const call = (kind) => api('/writer/proofread', { kind, text, context: kind === 'trim' || kind === 'weak' ? ctx : '' }, { timeoutMs: 120000 })
+        .then(d => (d.issues || []).map(x => Object.assign({}, x, { kind, done: false })))
+        .catch(() => []);   // one pass failing must never cost her the mark
+      const [spelling, grammar, trim, weak] = await Promise.all([call('spelling'), call('grammar'), call('trim'), call('weak')]);
+      const here = (is) => is && is.wrong && !!findInDoc(is.wrong);
+      return {
+        quick: spelling.concat(grammar).filter(is => here(is) && is.right),
+        cut: trim.filter(is => is.verdict === 'cut' && here(is)),
+        tighten: trim.filter(is => is.verdict !== 'cut' && here(is)),
+        weak: weak.filter(here),
+      };
+    }
+    // One press: the junk off, the spellings right. Only ever things she said
+    // yes to — Q still never writes a sentence of hers.
+    function applyTidy(t) {
+      let cuts = 0, fixes = 0;
+      for (const is of t.cut) { let n = 0; while (findInDoc(is.wrong) && n < 50) { if (!cutFromDoc(is.wrong)) break; n++; cuts++; } is.done = true; }
+      for (const is of t.quick) {
+        let n = 0; while (findInDoc(is.wrong) && n < 50) { if (!replaceInDoc(is.wrong, is.right)) break; n++; fixes++; }
+        is.done = true;
+        // A correction inside a weak sentence used to ORPHAN it: the span no
+        // longer matched the page, so the weak item silently dropped out of
+        // the walk and she never saw it. Move the spans with the text.
+        if (n) for (const other of t.weak.concat(t.tighten)) {
+          if (other.wrong && other.wrong.indexOf(is.wrong) >= 0) other.wrong = other.wrong.split(is.wrong).join(is.right);
+        }
+      }
+      scheduleAutosave();
+      try { edClearPaint(); } catch (_) {}
+      return { cuts, fixes };
+    }
+    // The marker's sentences first, then what is left of weak / waffle — one
+    // walk, not four lists in a panel she has to remember to open.
+    function mergeWalk(markItems, tidy) {
+      const key = (s) => String(s || '').replace(/\s+/g, ' ').trim().toLowerCase().slice(0, 80);
+      const seen = new Set(markItems.map(it => key(it.sentence)));
+      const extra = [];
+      for (const is of ((tidy && tidy.weak) || []).concat((tidy && tidy.tighten) || [])) {
+        const k = key(is.wrong);
+        if (!k || seen.has(k) || is.done) continue;
+        if (!findInDoc(is.wrong)) continue;              // she has already changed it
+        seen.add(k);
+        extra.push({
+          sentence: is.wrong,
+          why: is.why || '',
+          fix: is.steer || (is.verdict === 'tighten' ? 'Say this in fewer words.' : ''),
+          targetBrickId: null, suggestedTools: [], criterionId: '', needs: [],
+        });
+      }
+      return markItems.concat(extra);
+    }
     async function markAndFix() {
       if (markRunning) return;
       // A walk already on comes back to the sentence we were on (a tool, the
@@ -7103,6 +7168,36 @@
       if (!state.brief) { setCoach({ msg: 'Drop your task in first — I mark against the brief.', inputVisible: true }); return; }
       const text = docPlainText();
       if (!text.trim()) { setCoach({ msg: 'There is nothing on the page yet — answer a step or write on the page first.', inputVisible: true, showNudge: !!state.currentStep }); return; }
+      markRunning = true;
+      coachCard.classList.add('wide');
+      btnFinish.disabled = true;
+      let tidy = { quick: [], cut: [], tighten: [], weak: [] };
+      try {
+        setCoach({ msg: 'Reading it properly first — spelling, grammar, what to cut, what is weak…', section: 'MARK & FIX', thinking: true, inputVisible: false, step: false });
+        tidy = await runTidyPasses(text);
+      } catch (_) {}
+      state.tidy = tidy;
+      // Nothing in the way: straight on to the mark.
+      if (!tidy.cut.length && !tidy.quick.length) { markRunning = false; return doTheMark(); }
+      const bits = [];
+      if (tidy.cut.length) bits.push('**' + tidy.cut.length + '** ' + (tidy.cut.length === 1 ? 'line that is not part of the essay' : 'lines that are not part of the essay'));
+      if (tidy.quick.length) bits.push('**' + tidy.quick.length + '** ' + (tidy.quick.length === 1 ? 'spelling or grammar slip' : 'spelling and grammar slips'));
+      const sample = tidy.cut.slice(0, 3).map(is => '- ' + (is.why || 'not part of the essay') + ' — "' + String(is.wrong).replace(/\s+/g, ' ').slice(0, 60) + (String(is.wrong).length > 60 ? '…' : '') + '"').join('\n');
+      setCoach({
+        msg: 'Before I mark it: ' + bits.join(' and ') + '.' + (sample ? '\n\n' + sample : ''),
+        hint: 'Marking a page with those still in it marks the mess, not your writing.',
+        section: 'BEFORE THE MARK', inputVisible: false, step: false, showNudge: false,
+        actions: [
+          { label: 'Take them off and mark it →', primary: true, big: true, onClick: () => { const r = applyTidy(tidy); appendBoardItem({ type: 'note', label: 'tidied', text: r.cuts + ' cut, ' + r.fixes + ' corrected before marking.', quiet: true }); doTheMark(); } },
+          { label: 'Show me on the page', onClick: () => { edProof = { kind: 'trim', issues: tidy.cut.concat(tidy.tighten), busy: false, note: '' }; try { renderEditPanel(); edPaint(); openEditPanel(); } catch (_) {} } },
+          { label: 'Mark it as it is', quiet: true, onClick: () => doTheMark() },
+        ],
+      });
+      markRunning = false; btnFinish.disabled = false;
+    }
+    async function doTheMark() {
+      if (markRunning) return;
+      const text = docPlainText();
       markRunning = true;
       clearTimeout(probeTimer);
       state.currentStep = null; state.awaitingWord = null; persistSteps();
@@ -7122,7 +7217,8 @@
         applyExpectations(m);
         state.markStartPct = state.match ? state.match.overall : null;
         appendBoardItem({ type: 'note', label: 'marked', text: 'Marked: ' + bandLine(m) + '. ' + (m.overall.summary || ''), quiet: true });
-        const items = walkItemsFromMark(m);
+        // The marker's sentences AND what the reading found — one walk.
+        const items = mergeWalk(walkItemsFromMark(m), state.tidy);
         state.editItems = items; state.editIndex = 0; state.editing = true; state.editDone = false; state.markPassChanged = 0;
         state.editWalkKind = 'mark'; state.editStepKey = null;
         persist({ lastMark: m });
@@ -8562,7 +8658,7 @@
     loadProjects().then(restoreSession, restoreSession);
     // Test hooks (no data, no secrets): lets the harness exercise the page-side
     // helpers without a paid call. Harmless in production.
-    window.__qwriterTest = { presentStep, renderBoard, renderWhiteboard, startedAsk, showToolPop, findInDoc, replaceInDoc, appendReference, docPlainText, splitCheck: (t) => endsSentence(t), runEditPass, checkCurrentSentence, showEditItem, state: () => state, currentEditText, partParagraphs, setBrief, storyPointsHtml, renderInlineDots, termsForBoard, setCoach, bandListHtml, showEditItem, openEditPanel, renderEditPanel, edState: () => edProof, edSetProof: (p2) => { edProof = p2; renderEditPanel(); edPaint(); }, sayMe, renderThread, syncWorkArea, showPanel, revealPanel };
+    window.__qwriterTest = { presentStep, renderBoard, renderWhiteboard, startedAsk, showToolPop, findInDoc, replaceInDoc, appendReference, docPlainText, splitCheck: (t) => endsSentence(t), runEditPass, checkCurrentSentence, showEditItem, state: () => state, currentEditText, partParagraphs, setBrief, storyPointsHtml, renderInlineDots, termsForBoard, setCoach, bandListHtml, showEditItem, openEditPanel, renderEditPanel, edState: () => edProof, edSetProof: (p2) => { edProof = p2; renderEditPanel(); edPaint(); }, sayMe, renderThread, syncWorkArea, showPanel, revealPanel, runTidyPasses, applyTidy, mergeWalk, markAndFix, walkItemsFromMark };
 
 
     // (The old per-card drag code lived here — every panel now goes through makePanel above.)
