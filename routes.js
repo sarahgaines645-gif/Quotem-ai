@@ -2492,6 +2492,11 @@ const TUTOR_KEYS = [
     'editPos',
     // the per-part marks the page keeps (16 Aug) — dropped on refresh before.
     'partMarks',
+    // the display (what Q has put on the whiteboard) and HER WORK AREA on it
+    // (17 Aug). The page already restored `wbDoc`; it was never in this list,
+    // so the board came back empty every refresh. `wbWork` is her own writing
+    // on the board, keyed by part — it must never be lost.
+    'wbDoc', 'wbWork',
 ];
 router.post('/writer/tutor', requirePerson, express.json({ limit: '4mb' }), writerTooLarge('The session is too big to save in one go (over 4 MB). Trim very long pasted text out of the page and it will save again.'), async (req, res) => {
     try {

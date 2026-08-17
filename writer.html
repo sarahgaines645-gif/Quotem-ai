@@ -119,7 +119,7 @@
     .proj-act.armed { color: var(--accent); box-shadow: var(--neu-inset-sm); width: auto; padding: 0 8px; font-weight: 700; }
     .proj-row input.proj-rename {
       width: 100%; border: none; border-radius: 8px; padding: 4px 8px; font-family: 'Space Grotesk', sans-serif; font-size: 13px; font-weight: 700;
-      background: var(--bg); color: var(--text); box-shadow: var(--neu-inset-sm); outline: none;
+      background: var(--bg); color: var(--text); box-shadow: var(--neu-raised-xs); outline: none;
     }
     .proj-new {
       margin-top: 6px; width: 100%; border: none; border-radius: 10px; padding: 9px 10px; cursor: pointer; text-align: left;
@@ -164,7 +164,7 @@
     .setup-voice-toggle:hover { color: var(--accent); }
     .setup-voice-area {
       width: 100%; font-family: 'Space Grotesk', sans-serif; font-size: 12px;
-      background: var(--bg); box-shadow: var(--neu-inset-sm);
+      background: var(--bg); box-shadow: var(--neu-raised-xs);
       border: none; outline: none; border-radius: 10px;
       padding: 10px 12px; resize: none; color: var(--text);
       line-height: 1.5; margin-top: 6px;
@@ -174,7 +174,7 @@
 
     .setup-input {
       width: 100%; font-family: 'Space Grotesk', sans-serif; font-size: 12px;
-      background: var(--bg); box-shadow: var(--neu-inset-sm);
+      background: var(--bg); box-shadow: var(--neu-raised-xs);
       border: none; outline: none; border-radius: 10px;
       padding: 8px 12px; color: var(--text);
     }
@@ -182,7 +182,7 @@
 
     .setup-select {
       font-family: 'Space Grotesk', sans-serif; font-size: 12px;
-      background: var(--bg); box-shadow: var(--neu-inset-sm);
+      background: var(--bg); box-shadow: var(--neu-raised-xs);
       border: none; outline: none; border-radius: 10px;
       padding: 8px 12px; color: var(--text); cursor: pointer;
       width: 100%;
@@ -268,7 +268,7 @@
     .source-chip {
       display: inline-flex; align-items: center; gap: 8px;
       padding: 7px 12px 7px 14px; background: var(--bg);
-      box-shadow: var(--neu-inset-sm); border-radius: 14px;
+      box-shadow: var(--neu-raised-xs); border-radius: 14px;
       font-family: 'Space Grotesk', sans-serif; font-size: 12px; color: var(--text-muted); max-width: 100%;
     }
     .source-chip .name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 240px; }
@@ -282,7 +282,7 @@
     .source-link-row { display: inline-flex; align-items: center; gap: 6px; max-width: 100%; }
     .source-link-input {
       width: 260px; max-width: 55vw; padding: 7px 12px; border: none; background: var(--bg);
-      box-shadow: var(--neu-inset-sm); border-radius: 14px; outline: none;
+      box-shadow: var(--neu-raised-xs); border-radius: 14px; outline: none;
       font-family: 'Space Grotesk', sans-serif; font-size: 12px; color: var(--text);
     }
     .source-link-go {
@@ -559,6 +559,45 @@
     .coach-card .q-chat-m.me { border-left: 2px solid rgba(0,0,0,0.16); padding-left: 8px; }
     .coach-card .q-chat-m.me .q-chat-t { color: var(--text-muted); }
     .coach-card .q-chat-hl { text-transform: none; letter-spacing: 0; color: var(--accent); font-weight: 600; margin-left: 6px; }
+    /* THE THREAD IS FORMATTED (Sarah, 17 Aug: "this needs formatting please —
+       like Q does on the main chat page"). It used to render as flat paragraphs,
+       so Q's headings, bold and lists arrived as literal ** and #. Same renderer
+       as chat.html now (qMd → marked), and the same furniture the live message
+       block already had. Headings step down by SIZE, never by colour. */
+    .coach-card .q-chat-t > :first-child { margin-top: 0; }
+    .coach-card .q-chat-t > :last-child { margin-bottom: 0; }
+    .coach-card .q-chat-t h1 { font-size: 15px; font-weight: 700; margin: 10px 0 5px; }
+    .coach-card .q-chat-t h2 { font-size: 14px; font-weight: 700; margin: 10px 0 5px; }
+    .coach-card .q-chat-t h3 { font-size: 12.5px; font-weight: 700; margin: 9px 0 4px; }
+    .coach-card .q-chat-t h4, .coach-card .q-chat-t h5 {
+      font-size: 9.5px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase;
+      color: var(--text); margin: 9px 0 4px;
+    }
+    .coach-card .q-chat-t strong { font-weight: 700; color: var(--text); }
+    .coach-card .q-chat-t em { font-style: italic; }
+    .coach-card .q-chat-t ul, .coach-card .q-chat-t ol { margin: 4px 0 7px; padding-left: 17px; }
+    .coach-card .q-chat-t li { margin: 3px 0; line-height: 1.5; overflow-wrap: anywhere; }
+    .coach-card .q-chat-t li > p { margin: 0 0 4px; }
+    .coach-card .q-chat-t code { font-family: 'Lora', Georgia, serif; font-weight: 600; }
+    .coach-card .q-chat-t pre {
+      background: var(--bg); box-shadow: var(--neu-raised-xs); border-radius: 10px;
+      padding: 9px 11px; margin: 7px 0; white-space: pre-wrap; overflow-wrap: anywhere;
+    }
+    .coach-card .q-chat-t pre code { box-shadow: none; padding: 0; }
+    .coach-card .q-chat-t blockquote {
+      margin: 6px 0; padding: 2px 0 2px 9px; border-left: 3px solid var(--accent); color: var(--text);
+    }
+    .coach-card .q-chat-t blockquote p { margin: 0; }
+    .coach-card .q-chat-t a { color: var(--text); text-decoration: underline; text-underline-offset: 2px; }
+    .coach-card .q-chat-t hr { border: none; height: 1px; background: var(--shadow-dark); opacity: 0.4; margin: 12px 0; }
+    .coach-card .q-chat-t table { border-collapse: collapse; font-size: 11.5px; width: 100%; }
+    .coach-card .q-chat-t th { text-align: left; font-size: 9px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text); padding: 3px 9px 3px 0; white-space: nowrap; }
+    .coach-card .q-chat-t td { padding: 3px 9px 3px 0; vertical-align: top; color: var(--text); }
+    /* The line that came with a question ("this goes on the board, not the
+       paper") stays attached to it in the history — quieter, never lost. */
+    .coach-card .q-chat-h { font-size: 11.5px; color: var(--text-muted); line-height: 1.45; margin-top: 3px; }
+    .coach-card .q-chat-h p { margin: 0 0 4px; }
+    .coach-card .q-chat-h > :last-child { margin-bottom: 0; }
     .q-btn {
       padding: 6px 10px; border: none; border-radius: 12px;
       font-family: 'Space Grotesk', sans-serif; font-size: 11px; font-weight: 500;
@@ -736,7 +775,7 @@
     }
     .ref-para-sug {
       background: var(--bg); border-radius: 10px;
-      box-shadow: var(--neu-inset-sm);
+      box-shadow: var(--neu-raised-xs);
       padding: 9px 12px; margin-bottom: 8px;
       display: flex; flex-direction: column; gap: 4px;
     }
@@ -835,7 +874,7 @@
 
     .refs-input {
       width: 100%; font-family: 'Space Grotesk', sans-serif; font-size: 12px;
-      background: var(--bg); box-shadow: var(--neu-inset-sm);
+      background: var(--bg); box-shadow: var(--neu-raised-xs);
       border: none; outline: none; border-radius: 10px;
       padding: 10px 12px; resize: none; color: var(--text); line-height: 1.5;
     }
@@ -855,7 +894,7 @@
     .refs-formatted {
       font-family: 'Lora', Georgia, serif;
       font-size: 13px; line-height: 1.6; color: var(--text);
-      background: var(--bg); box-shadow: var(--neu-inset-sm);
+      background: var(--bg); box-shadow: var(--neu-raised-xs);
       border-radius: 10px; padding: 10px 14px;
       white-space: pre-wrap; word-break: break-word;
     }
@@ -874,7 +913,7 @@
     .refs-suggestions { display: flex; flex-direction: column; gap: 10px; }
     .ref-suggestion {
       background: var(--bg); border-radius: 10px;
-      box-shadow: var(--neu-inset-sm); padding: 10px 14px;
+      box-shadow: var(--neu-raised-xs); padding: 10px 14px;
       display: flex; flex-direction: column; gap: 4px;
     }
     .ref-suggestion .ref-text {
@@ -1408,7 +1447,7 @@
     .wb-ul, .wb-ol { margin: 6px 0; padding-left: 20px; }
     .wb-ul li, .wb-ol li { font-size: 13px; line-height: 1.5; color: var(--text); margin: 3px 0; overflow-wrap: anywhere; }
     .wb-q { margin: 8px 0; padding: 4px 0 4px 11px; border-left: 3px solid var(--accent); font-style: italic; color: var(--text); font-size: 13px; line-height: 1.5; }
-    .wb-p code, .wb-ul code, .wb-tw code, .wb-table2 code { font-family: 'Lora', Georgia, serif; font-weight: 600; padding: 1px 5px; border-radius: 5px; box-shadow: var(--neu-inset-sm); }
+    .wb-p code, .wb-ul code, .wb-tw code, .wb-table2 code { font-family: 'Lora', Georgia, serif; font-weight: 600; padding: 1px 5px; border-radius: 5px; box-shadow: var(--neu-raised-xs); }
     /* Callout cards — the emoji sets the edge colour, the card stays var(--bg). */
     .wb-call {
       display: flex; gap: 8px; align-items: flex-start;
@@ -1448,14 +1487,14 @@
     .wb-acts { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 14px; padding-top: 12px; border-top: 1px solid rgba(0,0,0,0.07); }
     /* Nothing wasted at the top: the panel's title bar already names the board. */
     .wb-body > *:first-child { margin-top: 0; }
-    /* Click any line to edit it — it says so on hover, and lifts while live. */
+    /* Click any line to edit it. NOTHING APPEARS ON HOVER (Sarah, 17 Aug: "I
+       don't want all these half invisible boxes to appear as I move the cursor
+       over it") — the text cursor is the only hint, and a well appears ONLY
+       once she is actually typing in the line. */
     .wb-body [data-ln] { cursor: text; border-radius: 8px; }
-    /* A blank line is somewhere to work — big enough to aim at. */
     .wb-body .wb-sp[data-ln] { min-height: 24px; }
-    .wb-body .wb-sp[data-ln]:hover { box-shadow: var(--neu-inset-sm); }
-    .wb-body [data-ln]:hover { box-shadow: var(--neu-raised-xs); }
     .wb-body [data-ln][contenteditable="true"] {
-      outline: none; box-shadow: var(--neu-raised-sm);
+      outline: none; box-shadow: var(--neu-raised-xs);
       padding: 4px 8px; margin: -4px -8px;
     }
     /* Asked, not guessed: where on the page this should land. */
@@ -1472,6 +1511,27 @@
       border-radius: 12px; box-shadow: var(--neu-raised-xs); padding: 12px 14px;
     }
     .wb-edit:focus { box-shadow: var(--neu-raised-sm); }
+    /* HER WORK AREA — the one thing on this panel she types into, so it is the
+       one thing that is INSET. Q's board above stays raised and untouched. */
+    .wb-work { flex-shrink: 0; padding: 10px 12px 4px; border-top: 1px solid var(--border-subtle, rgba(0,0,0,0.07)); }
+    .wb-work.off .wb-work-in, .wb-work.off .wb-work-acts, .wb-work.off .wb-work-say { display: none; }
+    .wb-work-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; }
+    .wb-work-l { font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-muted); }
+    .wb-work-tog {
+      background: none; border: none; cursor: pointer; padding: 0 4px;
+      font-family: 'Space Grotesk', sans-serif; font-size: 13px; color: var(--text-muted);
+    }
+    .wb-work-in {
+      width: 100%; min-height: 82px; resize: vertical; display: block;
+      font-family: 'Space Grotesk', sans-serif; font-size: 13px; line-height: 1.55;
+      color: var(--text); background: var(--bg); border: none; outline: none;
+      border-radius: 12px; box-shadow: var(--neu-raised-xs); padding: 10px 12px;
+      box-sizing: border-box;
+    }
+    .wb-work-in::placeholder { color: var(--text-faint); }
+    .wb-work-acts { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+    .wb-work-say { margin-top: 8px; font-size: 11.5px; line-height: 1.45; color: var(--text); }
+    .wb-work-say.hidden { display: none; }
     /* A report on the display: one raised row per point, the thing it is about
        named first and bold, what's wrong with it after (Sarah's card rule). */
     .wb-rep { display: flex; flex-direction: column; gap: 7px; margin: 10px 0 4px; }
@@ -1495,7 +1555,7 @@
     .wb-words { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
     .wb-words .q-term { font-size: 14px; padding: 8px 14px; }
     .wb-input-row { display: flex; gap: 8px; margin-top: 14px; align-items: center; }
-    .wb-input { flex: 1; border: none; border-radius: 12px; padding: 10px 14px; font-family: 'Space Grotesk', sans-serif; font-size: 15px; background: var(--bg); color: var(--text); box-shadow: var(--neu-inset-sm); outline: none; }
+    .wb-input { flex: 1; border: none; border-radius: 12px; padding: 10px 14px; font-family: 'Space Grotesk', sans-serif; font-size: 15px; background: var(--bg); color: var(--text); box-shadow: var(--neu-raised-xs); outline: none; }
     .wb-done { border: none; border-radius: 12px; padding: 9px 14px; cursor: pointer; font-family: 'Space Grotesk', sans-serif; font-size: 13px; font-weight: 700; background: var(--bg); color: var(--text); box-shadow: var(--neu-raised-sm); }
     .wb-done::before { content: '● '; color: var(--accent); }
     .wb-empty { font-size: 14px; color: var(--text-faint); font-style: italic; }
@@ -1690,7 +1750,7 @@
     .sc-table th { font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-muted); text-align: left; padding: 2px 4px; }
     .sc-table td { padding: 2px 4px; vertical-align: middle; color: var(--text); }
     .sc-table td.sc-lab { font-weight: 600; width: 34%; overflow-wrap: anywhere; }
-    .sc-table input { width: 100%; min-width: 0; font-family: 'Space Grotesk', sans-serif; font-size: 11px; padding: 4px 6px; border: none; border-radius: 8px; background: var(--bg); box-shadow: var(--neu-inset-sm); color: var(--text); outline: none; }
+    .sc-table input { width: 100%; min-width: 0; font-family: 'Space Grotesk', sans-serif; font-size: 11px; padding: 4px 6px; border: none; border-radius: 8px; background: var(--bg); box-shadow: var(--neu-raised-xs); color: var(--text); outline: none; }
     .sc-table tr.cur td.sc-lab { color: var(--accent); }
     .sc-pc { display: flex; flex-direction: column; gap: 6px; }
     .sc-pc .pc-item { padding: 6px 8px; border-radius: 8px; box-shadow: var(--neu-raised-xs); border-left: 4px solid var(--tagc, rgba(0,0,0,0.12)); }
@@ -1942,6 +2002,11 @@
     <div class="panel-body" id="coach-body">
       <div class="q-where" id="coach-where"></div>
       <div class="q-score" id="coach-score"></div>
+      <!-- THE CONVERSATION. Everything Q has said and everything she has said,
+           in order, always here. Nothing that happens on the page, the board or
+           the marking wipes it (Sarah, 17 Aug: "I need to have a flowing
+           conversation with Q"). The newest thing he says is the block below. -->
+      <div class="q-thread" id="coach-thread"></div>
       <div class="q-move" id="coach-move"></div>
       <div class="q-role" id="coach-role"></div>
       <div class="q-section" id="coach-section"></div>
@@ -2016,6 +2081,26 @@
       <button type="button" class="panel-min" id="wb-panel-tog" title="Minimise" aria-label="Minimise the whiteboard">−</button>
     </div>
     <div class="panel-body wb-body" id="wb-body"></div>
+    <!-- HER SPACE ON THE BOARD (Sarah, 17 Aug: "that's not what I meant when I
+         said I wanted to be able to work on the whiteboard" — clicking Q's
+         lines to edit them is not working on it). She writes here; Q's advice
+         above stays exactly where it is; nothing switches screens. It lives
+         OUTSIDE wb-body so no re-render of Q's content can wipe it, and it is
+         saved per part. -->
+    <div class="wb-work" id="wb-work">
+      <div class="wb-work-head">
+        <span class="wb-work-l">Your work</span>
+        <button type="button" class="wb-work-tog" id="wb-work-tog" aria-label="Hide your work area">–</button>
+      </div>
+      <textarea class="wb-work-in" id="wb-work-in" spellcheck="true" rows="3"
+        placeholder="Try it here — this is yours. It stays until you clear it."></textarea>
+      <div class="wb-work-acts">
+        <button type="button" class="q-btn primary" id="wb-work-send">Put this on my page →</button>
+        <button type="button" class="q-btn" id="wb-work-ask">Q, have a look →</button>
+        <button type="button" class="q-btn quiet" id="wb-work-clear">Clear</button>
+      </div>
+      <div class="wb-work-say hidden" id="wb-work-say"></div>
+    </div>
     <div class="panel-grip" title="Drag to resize"></div>
   </div>
   <div class="qpanel video-panel hidden" id="video-panel" data-panel="video">
@@ -2637,6 +2722,7 @@
     // "That's the first part covered — now the second: …" when Q moves on.
     // Actions: primary/big = the one thing to do; quiet = small text links.
     const coachWhere = document.getElementById('coach-where');
+    const coachThread = document.getElementById('coach-thread');
     const coachMove  = document.getElementById('coach-move');
     const coachQuiet = document.getElementById('coach-quiet');
     const coachStepEl = document.getElementById('coach-step');
@@ -2665,8 +2751,55 @@
           .replace(/<\/table>/g, '</table></div>');
       } catch (e) { return safe.replace(/\n/g, '<br>'); }
     }
+    // ── ONE CONVERSATION, NEVER RESET ─────────────────────────────────────
+    // Sarah, 17 Aug: "his advice disappeared and it went to another screen on
+    // the chat which I've asked so many times for it not to do. I need to have
+    // a flowing conversation with Q."
+    //
+    // WHY IT KEPT HAPPENING: the thread was only ever inserted by showChat(),
+    // into coachActions — and setCoach() (106 call sites: every step, mark,
+    // tool, reaction) begins by emptying coachActions. So a step arriving, a
+    // tool finishing or a board press erased everything he had just said. The
+    // card was a stack of screens with a chat as one of them.
+    //
+    // NOW: the card is the conversation. What Q says LIVE sits in the message
+    // block at the bottom with its buttons; the moment anything replaces it, it
+    // moves up into the thread instead of being destroyed. Her lines go in the
+    // same thread. Nothing is ever wiped.
+    state.chatLog = state.chatLog || [];
+    state.liveSay = null;
+    function threadHtml() {
+      return state.chatLog.slice(-40).map(m => {
+        const hint = m.hint ? `<div class="q-chat-h">${qMd(m.hint)}</div>` : '';
+        const hl = m.highlight ? ' <span class="q-chat-hl">● on the page</span>' : '';
+        return `<div class="q-chat-m ${m.role === 'q' ? 'q' : 'me'}"><span class="q-chat-who">${m.role === 'q' ? 'Q' : 'you'}${hl}</span><div class="q-chat-t">${qMd(m.text)}</div>${hint}</div>`;
+      }).join('');
+    }
+    function renderThread() {
+      if (!coachThread) return;
+      const had = state.chatLog.length;
+      coachThread.innerHTML = had ? `<div class="q-chat">${threadHtml()}</div>` : '';
+      const box = coachThread.querySelector('.q-chat'); if (box) box.scrollTop = box.scrollHeight;
+    }
+    function pushSaid(entry) {
+      const last = state.chatLog[state.chatLog.length - 1];
+      const t = String(entry.text || '').trim();
+      if (!t) return;
+      if (last && last.role === entry.role && String(last.text || '').trim() === t) return;   // the same thing twice is not a conversation
+      state.chatLog.push(Object.assign({}, entry, { text: t }));
+      if (state.chatLog.length > 60) state.chatLog = state.chatLog.slice(-60);
+      persist({ chatLog: state.chatLog.slice(-40) });
+    }
+    // The live block becomes history. Called before anything replaces it.
+    function flushLive() {
+      const p = state.liveSay; state.liveSay = null;
+      if (p && p.text) pushSaid({ role: 'q', text: p.text, hint: p.hint || '' });
+    }
+    function sayMe(text) { flushLive(); pushSaid({ role: 'me', text: String(text || '') }); renderThread(); }
     function setCoach({ msg, section, hint, actions, inputVisible, thinking, showNudge, where, move, moveHtml, step, role, supply, ack }) {
       if (!thinking && isBoardAsk(msg)) msg = '';   // the question is on the board — once
+      flushLive();                                  // what he said last is kept, not erased
+      renderThread();
       coachMsg.classList.toggle('thinking', !!thinking);
       if (thinking) coachMsg.textContent = msg || ''; else coachMsg.innerHTML = msg ? qMd(msg) : '';
       coachMsg.classList.toggle('ask', !thinking && !!msg && !!(state.brief));
@@ -2718,7 +2851,16 @@
       }
       // A minimised coach card with something new to say: bring it back.
       if (msg && coachCard.classList.contains('min') && !thinking) setMin(coachPanel, false);
-      document.getElementById('coach-body').scrollTop = 0;
+      // WHAT IS BEING SAID NOW — held, not printed and forgotten. The next call
+      // to setCoach (a step, a mark, a tool) moves this into the thread above.
+      // moveHtml is a rendered block (the band list) and lives on the marking
+      // panel, so it is not archived as text.
+      const saidNow = [moveHtml ? '' : (move || ack || ''), supply || '', msg || '']
+        .map(s => String(s || '').trim()).filter(Boolean).join('\n\n');
+      state.liveSay = thinking || !saidNow ? null : { text: saidNow, hint: hint || '' };
+      // A conversation reads to the newest line, not back to the top.
+      const body = document.getElementById('coach-body');
+      body.scrollTop = state.chatLog.length ? body.scrollHeight : 0;
     }
 
     coachWhere.addEventListener('click', () => {
@@ -5000,7 +5142,9 @@
         // the DOM as a button, so writing the block back would silently drop
         // the tick. Those stay tickable, and "Edit this" still opens the whole
         // source. Losing her ticks quietly would be worse than one exception.
-        const editable = (pre) => hasCbToken(line) ? '' : ' data-ln="' + i + '" data-pre="' + escHtml(pre) + '" title="Click to edit"';
+        // No title= here: a tooltip card on every line sits ON TOP of the words
+        // she is reading (Sarah, 17 Aug — a "Click to edit" card over Q's text).
+        const editable = (pre) => hasCbToken(line) ? '' : ' data-ln="' + i + '" data-pre="' + escHtml(pre) + '"';
         if (b) { if (ol) flush(); (bullets = bullets || []).push('<li' + editable(line.slice(0, line.length - b[1].length)) + '>' + wbInline(b[1], at + line.length - b[1].length, live) + '</li>'); continue; }
         if (n) { if (bullets) flush(); (ol = ol || []).push('<li' + editable(line.slice(0, line.length - n[1].length)) + '>' + wbInline(n[1], at + line.length - n[1].length, live) + '</li>'); continue; }
         flush();
@@ -5082,7 +5226,6 @@
         + `<div class="wb-ask hidden" id="wb-ask"></div>`
         + `<div class="wb-acts">`
         + `<button type="button" class="q-btn primary" id="wb-send">Send to my page →</button>`
-        + `<button type="button" class="q-btn" id="wb-work">+ Room to work</button>`
         + `<button type="button" class="q-btn quiet" id="wb-edit">Edit this</button>`
         + `<button type="button" class="q-btn quiet" id="wb-copy">Copy</button>`
         + `<button type="button" class="q-btn quiet" id="wb-clear">Clear</button>`
@@ -5136,27 +5279,9 @@
         const ask = document.getElementById('wb-ask'); if (ask) ask.classList.add('hidden');
         send.textContent = '✓ On your page'; setTimeout(() => { send.textContent = 'Send to my page →'; }, 1600);
       });
-      // "+ Room to work" — three blank lines at the bottom (each one clickable
-      // and typeable) and the panel grows to make space, so she can start
-      // working ON the board instead of only reading it.
-      const work = document.getElementById('wb-work');
-      if (work) work.addEventListener('click', () => {
-        state.wbDoc.src = String(state.wbDoc.src).replace(/\s*$/, '') + '\n\n\n\n';
-        persist({ wbDoc: state.wbDoc });
-        try {
-          const el = wbPanel.el;
-          if (!el.classList.contains('min') && !isDocked()) {
-            const h = el.getBoundingClientRect().height;
-            const room = Math.min(h + 170, window.innerHeight - 2 * PANEL_M);
-            el.style.height = Math.round(room) + 'px';
-            const l = getL(wbPanel); l.h = Math.round(room); saveLayout();
-          }
-        } catch (_) {}
-        renderWhiteboard();
-        const blanks = wbBody.querySelectorAll('.wb-sp[data-ln]');
-        const last = blanks[blanks.length - 1];
-        if (last) { last.setAttribute('contenteditable', 'true'); last.focus(); }
-      });
+      // ("+ Room to work" — three blank lines to click into — is gone. Her
+      //  place to work is the work area at the bottom of this panel, which
+      //  nothing Q does can overwrite.)
       const ed = document.getElementById('wb-edit');
       if (ed) ed.addEventListener('click', () => { state.wbEditing = true; renderWhiteboard(); });
       const cp = document.getElementById('wb-copy');
@@ -5240,8 +5365,83 @@
       if (next === state.wbDoc.src) return;   // the text moved under us — leave it alone
       state.wbDoc.src = next; persist({ wbDoc: state.wbDoc }); renderWhiteboard();
     });
+    // ── HER WORK AREA ─────────────────────────────────────────────────────
+    // Sarah, 17 Aug: "he just said why don't you try writing, and when I
+    // clicked on the whiteboard his advice disappeared and it went to another
+    // screen." So this is hers: it sits below Q's board, outside the part that
+    // re-renders, it is saved per part, and using it changes nothing else on
+    // the screen. When she wants him to read it, she presses one button and
+    // his answer arrives in the conversation — his advice stays where it is.
+    state.wbWork = state.wbWork || {};
+    const wbWorkWrap = document.getElementById('wb-work');
+    const wbWorkIn = document.getElementById('wb-work-in');
+    const wbWorkSay = document.getElementById('wb-work-say');
+    function workKey() { return state.currentCriterionId || 'main'; }
+    let workKeyShown = null, workSaveT = 0, workClearArmed = false;
+    function syncWorkArea() {
+      const k = workKey();
+      if (k === workKeyShown) return;      // never overwrite what she is typing
+      workKeyShown = k;
+      wbWorkIn.value = String(state.wbWork[k] || '');
+    }
+    function workSay(msg) {
+      if (!msg) { wbWorkSay.classList.add('hidden'); wbWorkSay.textContent = ''; return; }
+      wbWorkSay.textContent = msg; wbWorkSay.classList.remove('hidden');
+    }
+    wbWorkIn.addEventListener('input', () => {
+      state.wbWork[workKeyShown || workKey()] = wbWorkIn.value;
+      clearTimeout(workSaveT);
+      workSaveT = setTimeout(() => persist({ wbWork: state.wbWork }), 700);
+      workSay('');
+    });
+    document.getElementById('wb-work-tog').addEventListener('click', () => {
+      wbWorkWrap.classList.toggle('off');
+      document.getElementById('wb-work-tog').textContent = wbWorkWrap.classList.contains('off') ? '+' : '–';
+    });
+    document.getElementById('wb-work-send').addEventListener('click', () => {
+      const text = wbWorkIn.value.replace(/\s+$/, '');
+      const btn = document.getElementById('wb-work-send');
+      if (!text.trim()) { workSay('Write something here first.'); return; }
+      // Never guess where it goes — the same rule as the board's own Send.
+      if (!restoreDocCaret()) {
+        workSay('Where should this go? Click the spot on your page, then press again.');
+        btn.textContent = 'Click where it goes →';
+        return;
+      }
+      const sel = window.getSelection();
+      const r0 = sel.getRangeAt(0);
+      const pre = document.createRange(); pre.setStart(docBody, 0); pre.setEnd(r0.startContainer, r0.startOffset);
+      const before = pre.toString();
+      const needsSpace = before.length > 0 && !/\s$/.test(before);
+      const out = (needsSpace ? ' ' : '') + text.replace(/\s*\n\s*\n\s*/g, '\n').trim() + ' ';
+      const ok = document.execCommand('insertText', false, out);
+      if (!ok) { const r = sel.getRangeAt(0); r.insertNode(document.createTextNode(out)); r.collapse(false); }
+      wordEl.textContent = countWords() + ' words'; scheduleAutosave();
+      try { refreshExpectations(); } catch (_) {}
+      workSay('');
+      btn.textContent = '✓ On your page';
+      setTimeout(() => { btn.textContent = 'Put this on my page →'; }, 1600);
+    });
+    document.getElementById('wb-work-ask').addEventListener('click', async () => {
+      const text = wbWorkIn.value.trim();
+      if (!text) { workSay('Write something here first and I\'ll read it.'); return; }
+      workSay('');
+      await chatWithQ('Have a look at what I\'ve written on the board:\n\n' + text);
+    });
+    document.getElementById('wb-work-clear').addEventListener('click', () => {
+      const btn = document.getElementById('wb-work-clear');
+      if (!workClearArmed) {                       // her writing never goes on one press
+        workClearArmed = true; btn.textContent = 'Clear it?';
+        setTimeout(() => { workClearArmed = false; btn.textContent = 'Clear'; }, 4000);
+        return;
+      }
+      workClearArmed = false; btn.textContent = 'Clear';
+      wbWorkIn.value = ''; state.wbWork[workKeyShown || workKey()] = '';
+      persist({ wbWork: state.wbWork }); workSay('');
+    });
     function renderWhiteboard() {
       if (!wbOpen()) return;
+      syncWorkArea();
       if (state.wbDoc) {
         wbTitle.textContent = '▦ ' + (state.wbDoc.title || 'Whiteboard');
         wbBody.innerHTML = wbDocHtml(state.wbDoc);
@@ -5920,10 +6120,6 @@
     // lands on the whiteboard.
     state.chatLog = state.chatLog || [];
     state.chatMode = false;
-    function chatThreadHtml() {
-      const last = state.chatLog.slice(-40);
-      return `<div class="q-chat">${last.map(m => `<div class="q-chat-m ${m.role === 'q' ? 'q' : 'me'}"><span class="q-chat-who">${m.role === 'q' ? 'Q' : 'you'}${m.highlight ? ' <span class="q-chat-hl" title="Q has highlighted this on your page">● on the page</span>' : ''}</span><div class="q-chat-t">${paragraphsHtml(m.text)}</div></div>`).join('')}</div>`;
-    }
     function leaveChat() {
       state.chatMode = false; qSayPaint(null);
       if (walkOn()) { coachCard.classList.add('wide'); showEditItem(); return; }
@@ -5946,11 +6142,11 @@
       // there as a chat all the time as a tutor and a mentor").
       if (walkOn()) acts = state.walkActions || [];
       else if (info) acts = stepActions(info.cid, info.step, stepStateOf(info.cid, info.step.id));
+      // The thread is the card now (rendered by setCoach, above the live block)
+      // — it is not inserted here any more, which is what used to make it
+      // vanish the moment anything else called setCoach.
       setCoach({ msg: thinking ? 'Q is thinking…' : '', thinking: !!thinking, section: walkOn() ? (state.walkSection || 'Q') : 'Q', step: false, hint: '', inputVisible: !thinking, showNudge: false, actions: acts });
-      const th = document.createElement('div'); th.innerHTML = chatThreadHtml();
-      coachActions.insertBefore(th.firstChild, coachActions.firstChild);
       coachInput.placeholder = 'Ask Q…';
-      const box = coachActions.querySelector('.q-chat'); if (box) box.scrollTop = box.scrollHeight;
     }
     // Q points at the page while he talks: the span his reply is about,
     // painted and scrolled to; off when the chat moves on or closes.
@@ -5968,16 +6164,15 @@
     async function chatWithQ(text) {
       state.chatMode = true;
       qSayPaint(null);
-      state.chatLog.push({ role: 'me', text }); persist({ chatLog: state.chatLog.slice(-40) });
+      sayMe(text);   // her line joins the thread (and Q's last line is kept, not wiped)
       showChat({ thinking: true });
       try {
         const d = await api('/writer/chat', { text, history: state.chatLog.slice(-11, -1).map(m => ({ role: m.role, text: m.text })), docText: docPlainText().slice(0, 24000), criterionId: state.currentCriterionId || null, stepId: state.currentStep ? state.currentStep.stepId : null, ask: currentAskText() || '', yearGroup: state.yearGroup || '' }, { timeoutMs: 90000 });
         tally('probe', state.currentCriterionId);
         const spans = (Array.isArray(d.highlights) && d.highlights.length ? d.highlights : []).concat(d.highlight ? [d.highlight] : []);
-        state.chatLog.push({ role: 'q', text: String(d.reply || '').trim(), highlight: spans.length ? spans : null });
+        pushSaid({ role: 'q', text: String(d.reply || '').trim(), highlight: spans.length ? spans : null });
         appendBoardItem({ type: 'explain', text: String(d.reply || '').trim(), quiet: true });
         if (spans.length) qSayPaint(spans);
-        persist({ chatLog: state.chatLog.slice(-40) });
         // Q says that was her ANSWER to the step (not a question to him) → it
         // goes through the step exactly as if she had typed it there.
         if (d.answersStep && state.currentStep && !walkOn() && classifyCoachInput(text) !== 'question') {
@@ -5992,7 +6187,7 @@
         }
         showChat({ next: d.next || '' });
       } catch (e) {
-        state.chatLog.push({ role: 'q', text: 'I couldn\'t answer that just now (' + shortCause(e) + ') — ask again.' });
+        pushSaid({ role: 'q', text: 'I couldn\'t answer that just now (' + shortCause(e) + ') — ask again.' });
         showChat({});
         // the last message shows the moment it fails too
       }
@@ -6026,6 +6221,10 @@
       }
     }
     async function submitCoachText(text, { intent } = {}) {
+      // EVERYTHING SHE SAYS IS IN THE CONVERSATION — an answer to a step reads
+      // back as much as a question does. (pushSaid ignores an immediate repeat,
+      // so chatWithQ adding it again is a no-op.)
+      sayMe(text);
       if (state.chatMode && !intent && !state.awaitingWord) { if (/^(back|back to writing|back to it|done|carry on|continue|ok back)\.?$/i.test(text.trim())) { leaveChat(); return; } await chatWithQ(text); return; }
       if (walkOn() && !intent && !state.awaitingWord) { await chatWithQ(text); return; }   // in a Mark & fix walk the box is Q's ear
       const kind = intent || (state.awaitingWord ? 'answer' : classifyCoachInput(text));
@@ -8296,6 +8495,9 @@
         state.currentQuestion = t.currentQuestion || '';
         state.askFresh = typeof t.askFresh === 'string' && t.askFresh ? t.askFresh : null;
         state.wbNotes = t.wbNotes && typeof t.wbNotes === 'object' ? t.wbNotes : {};
+        // Her work area comes back with her — it is her writing, not Q's.
+        state.wbWork = t.wbWork && typeof t.wbWork === 'object' ? t.wbWork : {};
+        try { workKeyShown = null; syncWorkArea(); } catch (_) {}
         state.chatLog = Array.isArray(t.chatLog) ? t.chatLog.filter(m => m && (m.role === 'q' || m.role === 'me') && m.text).slice(-40) : [];
         state.docSnapshot = t.probeSnapshot && docPlainText().endsWith(t.probeSnapshot) ? docPlainText() : docPlainText();
         boardFromSteps();
@@ -8360,7 +8562,7 @@
     loadProjects().then(restoreSession, restoreSession);
     // Test hooks (no data, no secrets): lets the harness exercise the page-side
     // helpers without a paid call. Harmless in production.
-    window.__qwriterTest = { presentStep, renderBoard, renderWhiteboard, startedAsk, showToolPop, findInDoc, replaceInDoc, appendReference, docPlainText, splitCheck: (t) => endsSentence(t), runEditPass, checkCurrentSentence, showEditItem, state: () => state, currentEditText, partParagraphs, setBrief, storyPointsHtml, renderInlineDots, termsForBoard, setCoach, bandListHtml, showEditItem, openEditPanel, renderEditPanel, edState: () => edProof, edSetProof: (p2) => { edProof = p2; renderEditPanel(); edPaint(); } };
+    window.__qwriterTest = { presentStep, renderBoard, renderWhiteboard, startedAsk, showToolPop, findInDoc, replaceInDoc, appendReference, docPlainText, splitCheck: (t) => endsSentence(t), runEditPass, checkCurrentSentence, showEditItem, state: () => state, currentEditText, partParagraphs, setBrief, storyPointsHtml, renderInlineDots, termsForBoard, setCoach, bandListHtml, showEditItem, openEditPanel, renderEditPanel, edState: () => edProof, edSetProof: (p2) => { edProof = p2; renderEditPanel(); edPaint(); }, sayMe, renderThread, syncWorkArea, showPanel, revealPanel };
 
 
     // (The old per-card drag code lived here — every panel now goes through makePanel above.)
