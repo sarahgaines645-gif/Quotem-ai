@@ -1062,21 +1062,21 @@
        the overall first and bold. Colours: green top, amber middle, accent
        lower, grey missing. */
     .q-bandlist { display: flex; flex-direction: column; gap: 3px; }
-    .q-bandlist .q-band-all { font-size: 12px; color: var(--text); margin-bottom: 3px; }
-    .q-bandlist .q-band-all b { font-weight: 700; }
-    .q-bandlist .q-band-all span { color: var(--text-muted); font-weight: 500; margin-left: 4px; }
-    .q-bandlist .q-band-row { display: grid; grid-template-columns: 9px minmax(0, 1fr) auto; align-items: center; gap: 7px; font-size: 11px; line-height: 1.35; }
-    .q-bandlist .q-band-row .bd { width: 8px; height: 8px; border-radius: 50%; }
-    .q-bandlist .q-band-l { color: var(--text); font-weight: 600; overflow-wrap: anywhere; }
-    .q-bandlist .q-band-w { font-weight: 700; white-space: nowrap; }
+    .q-bandlist .q-band-all, .mk-block .q-band-all { font-size: 12px; color: var(--text); margin-bottom: 3px; }
+    .q-bandlist .q-band-all b, .mk-block .q-band-all b { font-weight: 700; }
+    .q-bandlist .q-band-all span, .mk-block .q-band-all span { color: var(--text-muted); font-weight: 500; margin-left: 7px; }
+    .q-bandlist .q-band-row, .mk-block .q-band-row { display: grid; grid-template-columns: 9px minmax(0, 1fr) auto; align-items: center; gap: 7px; font-size: 11px; line-height: 1.35; }
+    .q-bandlist .q-band-row .bd, .mk-block .q-band-row .bd { width: 8px; height: 8px; border-radius: 50%; }
+    .q-bandlist .q-band-l, .mk-block .q-band-l { color: var(--text); font-weight: 600; overflow-wrap: anywhere; }
+    .q-bandlist .q-band-w, .mk-block .q-band-w { font-weight: 700; white-space: nowrap; }
     /* THE MARK IN PIECES, not a paragraph: each question its own row with its
        own grade, then WHAT STAYS and WHAT IS MISSING as lists — the shape of
        the TO COVER card she asked me to work like (Sarah, 17 Aug). */
-    .q-bandlist .q-band-sec {
+    .q-bandlist .q-band-sec, .mk-block .q-band-sec {
       font-size: 9px; font-weight: 700; letter-spacing: 0.09em; text-transform: uppercase;
       color: var(--text-muted); margin: 12px 0 5px;
     }
-    .q-bandlist .q-band-sec.mk-first { color: var(--accent); }
+    .q-bandlist .q-band-sec.mk-first, .mk-block .q-band-sec.mk-first { color: var(--accent); }
     /* Auto cite being honest: nothing strong was found, and the way out. */
     .cite-warn { font-size: 12px; line-height: 1.5; color: var(--text); margin: 4px 0 8px; }
     .cite-warn b { font-weight: 700; }
@@ -1091,10 +1091,14 @@
     .q-mk-block.gone .q-mk-l { color: var(--accent); }
     .q-mk-block ul { margin: 0; padding-left: 16px; }
     .q-mk-block li { font-size: 12px; line-height: 1.45; color: var(--text); margin: 3px 0; overflow-wrap: anywhere; }
-    .q-bandlist .bd.missing { background-color: transparent; box-shadow: inset 0 0 0 2px var(--text-faint); }
-    .q-bandlist .q-band-w.missing { color: var(--text-faint); }
+    .q-bandlist .bd.missing, .mk-block .bd.missing { background-color: transparent; box-shadow: inset 0 0 0 2px var(--text-faint); }
+    .q-bandlist .q-band-w.missing, .mk-block .q-band-w.missing { color: var(--text-faint); }
     /* A QUESTION'S CARD: grade, what she has, then the moves that teach. */
-    .q-bandlist .q-qcard { margin: 8px 0 12px; }
+    .q-mk-ul { margin: 0; padding-left: 16px; }
+    .q-mk-ul li { font-size: 12px; line-height: 1.5; color: var(--text); margin: 4px 0; overflow-wrap: anywhere; }
+    .q-qcard .mk-ico { font-size: 11px; font-weight: 700; }
+    .q-qcard .mk-title { color: var(--text); font-size: 11px; letter-spacing: 0.02em; text-transform: none; font-weight: 700; }
+    .q-qcard .mk-count { text-transform: uppercase; letter-spacing: 0.06em; }
     .q-got { margin: 5px 0 8px; }
     .q-got .q-got-l { display: block; font-size: 9px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: #1f8a3a; margin-bottom: 3px; }
     .q-got ul { margin: 0; padding-left: 16px; }
@@ -1112,19 +1116,20 @@
     .q-add-eg .q-add-eg-l { display: block; font-family: 'Space Grotesk', sans-serif; font-size: 8.5px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-faint); margin-bottom: 2px; }
     /* Why it is that grade, what each part still needs, and the way up. */
     .mk-gap { font-size: 11px; line-height: 1.45; color: var(--text-muted); margin: 1px 0 7px 16px; overflow-wrap: anywhere; }
-    .q-bandlist .q-band-why { font-size: 12px; line-height: 1.5; color: var(--text); margin: 2px 0 8px; overflow-wrap: anywhere; }
-    .q-bandlist .q-band-gap { font-size: 11px; line-height: 1.45; color: var(--text-muted); margin: 1px 0 7px 16px; overflow-wrap: anywhere; }
-    .q-bandlist .q-band-next { margin-top: 9px; padding-top: 8px; border-top: 1px solid rgba(0,0,0,0.07); font-size: 12px; line-height: 1.5; color: var(--text); overflow-wrap: anywhere; }
-    .q-bandlist .q-band-next-l { display: block; font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--accent); margin-bottom: 3px; }
-    .q-bandlist .q-band-next p { margin: 0 0 5px; }
-    .q-bandlist .q-band-next > :last-child { margin-bottom: 0; }
-    .q-bandlist .q-band-next ul, .q-bandlist .q-band-next ol { margin: 3px 0 5px; padding-left: 17px; }
-    .q-bandlist .q-band-next li { margin: 2px 0; }
-    .q-bandlist .bd.top, .q-bandlist .q-band-w.top { background-color: #28a745; color: #1f8a3a; }
-    .q-bandlist .bd.mid, .q-bandlist .q-band-w.mid { background-color: #e6a817; color: #b07f05; }
+    .q-bandlist .q-band-why, .mk-block .q-band-why { font-size: 12px; line-height: 1.5; color: var(--text); margin: 2px 0 8px; overflow-wrap: anywhere; }
+    .q-bandlist .q-band-gap, .mk-block .q-band-gap { font-size: 11px; line-height: 1.45; color: var(--text-muted); margin: 1px 0 7px 16px; overflow-wrap: anywhere; }
+    .q-bandlist .q-band-next, .mk-block .q-band-next { margin-top: 9px; padding-top: 8px; border-top: 1px solid rgba(0,0,0,0.07); font-size: 12px; line-height: 1.5; color: var(--text); overflow-wrap: anywhere; }
+    .q-bandlist .q-band-next-l, .mk-block .q-band-next-l { display: block; font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--accent); margin-bottom: 3px; }
+    .q-bandlist .q-band-next p, .mk-block .q-band-next p { margin: 0 0 5px; }
+    .q-bandlist .q-band-next > :last-child, .mk-block .q-band-next > :last-child { margin-bottom: 0; }
+    .q-bandlist .q-band-next ul, .mk-block .q-band-next ul, .q-bandlist .q-band-next ol, .mk-block .q-band-next ol { margin: 3px 0 5px; padding-left: 18px; list-style: disc outside; }
+    .mk-block .q-band-next li { display: list-item; }
+    .q-bandlist .q-band-next li, .mk-block .q-band-next li { margin: 2px 0; }
+    .q-bandlist .bd.top, .q-bandlist .q-band-w.top, .mk-block .bd.top, .q-bandlist .q-band-w.top { background-color: #28a745; color: #1f8a3a; }
+    .q-bandlist .bd.mid, .q-bandlist .q-band-w.mid, .mk-block .bd.mid, .q-bandlist .q-band-w.mid { background-color: #e6a817; color: #b07f05; }
     .q-bandlist .bd.low, .q-bandlist .q-band-w.low { background-color: var(--accent); color: var(--accent); }
     .q-bandlist .bd.missing, .q-bandlist .q-band-w.missing { background-color: #9a9a9a; color: var(--text-muted); }
-    .q-bandlist .q-band-w { background-color: transparent !important; }
+    .q-bandlist .q-band-w, .mk-block .q-band-w { background-color: transparent !important; }
     .q-lesson { font-size: 12px; line-height: 1.5; color: var(--text); margin-bottom: 8px; padding: 8px 10px; border-radius: 10px; box-shadow: var(--neu-raised-xs); overflow-wrap: anywhere; }
     .q-lesson .ql-term { font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--accent); margin-bottom: 3px; }
     .q-lesson .ql-eg { color: var(--text-muted); margin-top: 4px; }
@@ -1434,12 +1439,40 @@
        exactly what you have otherwise its a wall of text"). Sections are
        separated by a rule; the numbers are tiles — value first and big, label
        small under it; everything raised, nothing indented. */
+    /* THE BLOCK — the pattern from her own job page (Sarah, 17 Aug: "everything
+       is layed out and easy to see with different colours… a design that
+       seperates things a bit"): each section its own raised card with a
+       coloured rail down the left, an icon well, and a small uppercase title.
+       Same palette as the rest of the app; the colour separates, it never
+       fills. */
+    .mk-block {
+      position: relative; margin: 0 0 12px; padding: 13px 14px 14px 17px;
+      border-radius: 16px; box-shadow: var(--neu-raised-xs);
+    }
+    .mk-block::before {
+      content: ''; position: absolute; left: 5px; top: 13px; bottom: 13px; width: 4px;
+      border-radius: 4px; background: var(--rail, var(--accent));
+    }
+    .mk-block-head { display: flex; align-items: center; gap: 9px; margin-bottom: 9px; }
+    .mk-ico {
+      width: 28px; height: 28px; flex: 0 0 28px; border-radius: 10px;
+      display: grid; place-items: center; font-size: 13px; line-height: 1;
+      box-shadow: var(--neu-raised-xs); background: var(--bg); color: var(--rail, var(--accent));
+    }
+    .mk-title {
+      font-size: 9.5px; font-weight: 700; letter-spacing: 0.09em; text-transform: uppercase;
+      color: var(--text-muted);
+    }
+    .mk-count { font-size: 9.5px; font-weight: 700; color: var(--rail, var(--accent)); margin-left: auto; }
     .mk-sec {
       font-size: 9px; font-weight: 700; letter-spacing: 0.09em; text-transform: uppercase;
       color: var(--accent); margin: 16px 0 7px; padding-top: 12px;
       border-top: 1px solid rgba(0,0,0,0.08);
     }
     .mk-sec:first-child { margin-top: 2px; padding-top: 0; border-top: none; }
+    /* Inside a block the old section rules are furniture — quieten them. */
+    .mk-block .mk-sec, .mk-block .q-band-sec { display: none; }
+    .mk-block .q-bandlist { gap: 0; }
     .mk-tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(76px, 1fr)); gap: 6px; margin-bottom: 4px; }
     .mk-tile {
       display: flex; flex-direction: column; align-items: flex-start; gap: 1px;
@@ -7281,8 +7314,11 @@
                 ${a.prompt ? `<div class="q-add-do"><b>Do this —</b> ${escHtml(a.prompt)}</div>` : ''}
                 ${a.example ? `<div class="q-add-eg"><span class="q-add-eg-l">the shape of it — write your own version</span>${escHtml(a.example)}</div>` : ''}
               </div>`).join('')}</div>` : '';
-        return `<div class="q-qcard">`
-          + `<div class="q-band-row"><span class="bd ${escHtml(p.band)}"></span><span class="q-band-l">${escHtml(labelFor(p.criterionId))}</span><span class="q-band-w ${escHtml(p.band)}">${escHtml(gradeWord(p))}</span></div>`
+        const rail = { top: '#28a745', mid: '#e6a817', low: '#e0245e', missing: '#9aa0ad' }[p.band] || '#e0245e';
+        return `<div class="mk-block q-qcard" style="--rail:${rail}">`
+          + `<div class="mk-block-head"><span class="mk-ico">${started ? 'Q' + (cs.findIndex(c => c.id === p.criterionId) + 1) : '·'}</span>`
+          + `<span class="mk-title">${escHtml(labelFor(p.criterionId))}</span>`
+          + `<span class="mk-count">${escHtml(gradeWord(p))}</span></div>`
           + gotHtml
           + nextHtml
           + (!nextHtml && gap ? `<div class="q-band-gap">${escHtml(started ? gap : 'Not written yet — ' + gap.charAt(0).toLowerCase() + gap.slice(1))}</div>` : '')
@@ -7299,16 +7335,14 @@
       const toNext = String(m.overall.toNext || '').trim();
       const listBlock = (label, items, cls) => items.length
         ? `<div class="q-mk-block ${cls}"><span class="q-mk-l">${escHtml(label)}</span><ul>${items.map(x => `<li>${escHtml(x)}</li>`).join('')}</ul></div>` : '';
-      return `<div class="q-bandlist">`
-        + `<div class="q-band-sec mk-first">The mark · each question</div>`
-        + rows
-        + listBlock('What stays', strong, 'stay')
-        + listBlock('What is missing', missing, 'gone')
-        + `<div class="q-band-sec">If you handed it in now</div>`
-        + `<div class="q-band-all"><b>${escHtml(gradeWord(m.overall))}</b><span>${escHtml(total ? done + ' of ' + total + ' questions answered' : 'overall')}${schemeNote ? ' · ' + escHtml(schemeNote) : ''}</span></div>`
-        + (why ? `<div class="q-band-why">${escHtml(why)}</div>` : '')
-        + (toNext ? `<div class="q-band-next"><span class="q-band-next-l">${escHtml(nextL ? 'To get a ' + nextL : 'To take it higher')}</span>${qMd(toNext)}</div>` : '')
-        + `</div>`;
+      const BAND_RAIL = { top: '#28a745', mid: '#e6a817', low: '#e0245e', missing: '#9aa0ad' };
+      return rows
+        + (strong.length ? mkBlock('What stays', '✓', '#28a745', `<ul class="q-mk-ul">${strong.map(x => `<li>${escHtml(x)}</li>`).join('')}</ul>`, strong.length) : '')
+        + (missing.length ? mkBlock('What is missing', '○', '#e0245e', `<ul class="q-mk-ul">${missing.map(x => `<li>${escHtml(x)}</li>`).join('')}</ul>`, missing.length) : '')
+        + mkBlock('If you handed it in now', '★', '#8b5cf6',
+            `<div class="q-band-all"><b>${escHtml(gradeWord(m.overall))}</b> <span>${escHtml(total ? done + ' of ' + total + ' questions answered' : 'overall')}${schemeNote ? ' · ' + escHtml(schemeNote) : ''}</span></div>`
+            + (why ? `<div class="q-band-why">${escHtml(why)}</div>` : ''))
+        + (toNext ? mkBlock(nextL ? 'To get a ' + nextL : 'To take it higher', '↑', '#0ea5a4', `<div class="q-band-next">${qMd(toNext)}</div>`) : '');
     }
     function bandsHtml(m) {
       if (!m || !m.overall) return '';
@@ -7505,6 +7539,14 @@
     // sentence as it was is gone from the page). Press one → the walk goes
     // there. The coach card stays free — she can talk to Q while it is open.
     const markBody = document.getElementById('mark-body');
+    // One section of the panel: a raised card, a coloured rail, an icon well
+    // and a small uppercase title — the shape her job page uses.
+    function mkBlock(title, icon, rail, body, count) {
+      return `<div class="mk-block" style="--rail:${escHtml(rail)}">`
+        + `<div class="mk-block-head"><span class="mk-ico">${escHtml(icon)}</span><span class="mk-title">${escHtml(title)}</span>`
+        + (count ? `<span class="mk-count">${escHtml(String(count))}</span>` : '')
+        + `</div>${body}</div>`;
+    }
     function renderMarkPanel() {
       if (markPanel.el.classList.contains('hidden')) return;
       const m = state.lastMark;
@@ -7512,7 +7554,7 @@
       const cs = (state.brief && state.brief.criteria) || [];
       let bands = '';
       if (m && m.overall) {
-        bands = bandListHtml(m);   // it brings its own headings
+        bands = bandListHtml(m);   // it brings its own blocks
       } else if (cs.some(c => state.partMarks && state.partMarks[c.id])) {
         bands = `<div class="mk-sec">Marks so far</div>` + cs.filter(c => state.partMarks[c.id]).map(c => {
           const pm = state.partMarks[c.id];
@@ -7529,7 +7571,7 @@
         const t = `<span class="mk-v">${escHtml(String(v))}</span><span class="mk-lab">${escHtml(label)}</span>${sub ? `<span class="mk-sub">${escHtml(sub)}</span>` : ''}`;
         return pass && v ? `<button type="button" class="mk-tile act" data-mk-pass="${escHtml(pass)}">${t}</button>` : `<div class="mk-tile${v ? '' : ' zero'}">${t}</div>`;
       };
-      const stats = `<div class="mk-sec">The page right now</div><div class="mk-tiles">`
+      const stats = mkBlock('The page right now', '▦', '#3b82f6', `<div class="mk-tiles">`
         + tile(s.words, s.words === 1 ? 'word' : 'words', s.target ? 'asked for ' + s.target : '')
         + (s.read ? tile(s.cut, 'to cut', '', 'trim') : '')
         + (s.read ? tile(s.tighten, 'too long', '', 'trim') : '')
@@ -7537,14 +7579,14 @@
         + (s.read ? tile(s.spelling, 'spelling', '', 'spelling') : '')
         + (s.read ? tile(s.grammar, 'grammar', '', 'grammar') : '')
         + `</div>`
-        + (s.read ? '' : '<div class="mk-note">Press <b>Mark & fix →</b> and Q reads the whole page first — he finds the lines he would cut, the weak ones, and the spelling and grammar, and lists them here for you. He never changes anything himself.</div>');
+        + (s.read ? '' : '<div class="mk-note">Press <b>Mark & fix →</b> and Q reads the whole page first — he finds the lines he would cut, the weak ones, and the spelling and grammar, and lists them here for you. He never changes anything himself.</div>'));
       // WHAT Q WOULD CUT — a suggestion with a button beside it, never a thing
       // he does (Sarah, 17 Aug: "he shouldnt cut anything he should suggest
       // what to cut in the marking pannel").
       const cuts = ((state.tidy && state.tidy.cut) || []).map((is, i) => ({ is, i })).filter(x => !x.is.done);
-      const cutList = cuts.length ? `<div class="mk-sec">Q would cut (${cuts.length})</div>` + cuts.map(x =>
+      const cutList = cuts.length ? mkBlock('Q would cut', '✕', '#e0245e', cuts.map(x =>
         `<div class="mk-item cut"><span class="mk-st">✕</span><div><div class="mk-s"><s>${escHtml(x.is.wrong.length > 90 ? x.is.wrong.slice(0, 89) + '…' : x.is.wrong)}</s></div>${x.is.why ? `<div class="mk-w">${escHtml(x.is.why)}</div>` : ''}<div class="mk-acts">${findInDoc(x.is.wrong) ? `<button type="button" class="q-btn" data-mk-cut="${x.i}">Cut it</button><button type="button" class="q-btn quiet" data-mk-keep="${x.i}">Keep it</button>` : `<span class="mk-note">You have already changed this one — <button type="button" class="q-btn quiet" data-mk-keep="${x.i}">clear it</button></span>`}</div></div></div>`).join('')
-        + `<div class="mk-foot">Your call on every one — Q only points at them.</div>` : '';
+        + `<div class="mk-foot">Your call on every one — Q only points at them.</div>`, cuts.length) : '';
       // TO DO AND DONE ARE TWO LISTS, AND DONE SAYS "FIXED" (Sarah, 17 Aug:
       // "this isnt clear as to 4 left to fix… why are they there if they are
       // fixed. If theyve been fixed they should say fixed."). A tick on a row
@@ -7557,8 +7599,8 @@
       };
       const todo = [], done = [];
       items.forEach((it, i) => (findInDoc(it.sentence) ? todo : done).push({ it, i }));
-      const list = (todo.length ? `<div class="mk-sec">To fix (${todo.length})</div>` + todo.map(x => row(x.it, x.i)).join('') : '')
-        + (done.length ? `<div class="mk-sec">Fixed (${done.length})</div>` + done.map(x => row(x.it, x.i, { done: true })).join('') : '');
+      const list = (todo.length ? mkBlock('To fix', '●', '#e6a817', todo.map(x => row(x.it, x.i)).join(''), todo.length) : '')
+        + (done.length ? mkBlock('Fixed', '✓', '#28a745', done.map(x => row(x.it, x.i, { done: true })).join(''), done.length) : '');
       const empty = !bands && !list && !s.read ? '<div class="mk-empty">Nothing marked yet — press <b>Mark & fix →</b> when a question is written, or finish a step and Q marks that bit.</div>' : '';
       const foot = list ? '<div class="mk-foot">Press a sentence to go to it. A sentence moves to <b>Fixed</b> when you have rewritten it. Q stays on the coach card — ask him anything while this is open.</div>' : '';
       markBody.innerHTML = stats + bands + cutList + list + empty + foot;
