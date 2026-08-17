@@ -3802,7 +3802,7 @@
       const rows = reqs.map(rq => `<div class="cv-row${met.has(rq.kind) ? ' met' : ''}"><span class="q-dot${met.has(rq.kind) ? ' met' : ''}" style="--dc:${rq.colour || REQ_COLOURS[rq.kind] || '#999'}" data-req="${escHtml(rq.kind)}" data-cid="${escHtml(cid)}"></span><span class="cv-l">${escHtml(rq.label || REQ_LABELS[rq.kind] || rq.kind)}</span><span class="cv-s">${met.has(rq.kind) ? '✓ in' : 'to do'}</span></div>`).join('');
       const n = reqs.filter(rq => met.has(rq.kind)).length;
       const w = whereInfo(cid);
-      return `<div class="tb-cover" data-cid="${escHtml(cid)}"><span class="ex-title">To cover<span class="ex-part">${w ? escHtml('Part ' + w.n) : ''}${reqs.length ? escHtml(' · ' + n + ' of ' + reqs.length + ' in') : ''}</span></span>${plan.minimalAsk ? `<div class="ex-ask">${escHtml(plan.minimalAsk)}</div>` : ''}${reqs.length ? `<div class="cv-rings">${reqDotsHtml(cid)} <b>must be in this part</b></div>` : ''}${rows ? `<div class="cv-rows">${rows}</div>` : ''}</div>`;
+      return `<div class="tb-cover" data-cid="${escHtml(cid)}"><span class="ex-title">To cover<span class="ex-part">${w ? escHtml('Part ' + w.n) : ''}${reqs.length ? escHtml(' · ' + n + ' of ' + reqs.length + ' in') : ''}</span></span>${plan.minimalAsk ? `<div class="ex-ask">${escHtml(plan.minimalAsk)}</div>` : ''}${reqs.length ? `<div class="cv-rings">${reqDotsHtml(cid)} <b>must be in</b></div>` : ''}${rows ? `<div class="cv-rows">${rows}</div>` : ''}</div>`;
     }
     // THE WORD BOARD card for a part: the one-line ask, the words as BUTTONS
     // (nothing else — meanings live on the hover card), "Still to use", the
