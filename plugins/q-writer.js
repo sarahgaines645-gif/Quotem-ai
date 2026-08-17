@@ -1366,7 +1366,13 @@ ${targetForPrompt(brief, essay, brickId)}`);
 // spelling / grammar — verbatim spans, marked on the page, Fix / Fix all —
 // with a VERDICT per span: cut (right = '') or tighten (right = the same
 // point in fewer words, her words kept as far as possible).
-const PROOF_KINDS = ['spelling', 'grammar', 'trim'];
+// Sarah, 17 Aug, on seeing "right" for tighten: "no. Q can not write anything
+// to go on the page. he will have to coach them in to writing it shorter." So
+// a trim span carries a STEER (what to keep, what to lose), never a rewrite.
+// WEAK (same night): "the what's weak should cover the whole page not
+// highlighted" — a pass over the page that marks the weak sentences with why
+// and what would make each strong. Coaching passes: nothing to paste in.
+const PROOF_KINDS = ['spelling', 'grammar', 'trim', 'weak'];
 const PROOF_SCHEMA = {
     type: 'object', additionalProperties: false,
     required: ['issues'],
@@ -1393,12 +1399,12 @@ const TRIM_SCHEMA = {
             type: 'array', maxItems: 25,
             items: {
                 type: 'object', additionalProperties: false,
-                required: ['wrong', 'verdict', 'right', 'why'],
+                required: ['wrong', 'verdict', 'why', 'steer'],
                 properties: {
                     wrong: { type: 'string', description: 'The exact span from the text, character for character — one whole sentence, or two or three sentences that run together. It MUST appear verbatim in the text. Never a fragment of a sentence.' },
                     verdict: { type: 'string', enum: ['cut', 'tighten'], description: 'cut = the essay does not need this at all (repeats a point already made, off the question, padding, filler, a preamble). tighten = the point IS needed but it takes too long to make.' },
-                    right: { type: 'string', description: 'For cut: an empty string. For tighten: the same point in fewer words — keep the student\'s own words and facts, remove the padding, at most half the length. Never a new idea, never a new fact.' },
-                    why: { type: 'string', description: 'Plain words for a student, 6 to 14: for cut, why the essay does not need it ("says the same as the sentence before"); for tighten, what to keep and what to lose ("keep the figure, lose the run-up").' },
+                    why: { type: 'string', description: 'Plain words for a student, 6 to 14: for cut, why the essay does not need it ("says the same as the sentence before"); for tighten, why it is too long ("three sentences for one point").' },
+                    steer: { type: 'string', description: 'For tighten: ONE line telling the student what to KEEP and what to LOSE when they rewrite it themselves ("keep the 12% figure and the example; lose the run-up") — never the rewritten sentence, never new words for them to paste. For cut: an empty string.' },
                 },
             },
         },
@@ -1413,6 +1419,7 @@ async function proofread({ text, kind, context }) {
     const body = String(text || '').trim();
     if (!body) throw new Error('There is nothing on the page to check yet.');
     if (kind === 'trim') return trimPass(body, context);
+    if (kind === 'weak') return weakPass(body, context);
     const system = withHouseStyle(`You are proofreading a student\'s draft for ONE kind of slip. ${PROOF_BRIEFS[kind]}
 Return every instance you find (up to 60), each as the exact span from the text and its minimal correction. If there are none, return an empty list. Never rewrite sentences; never comment on content.`);
     const user = `THE TEXT:
@@ -1440,13 +1447,46 @@ Rules: spans are whole sentences, verbatim, character for character (curly quote
     const issues = (Array.isArray(r && r.issues) ? r.issues : []).map(x => {
         const verdict = x.verdict === 'cut' ? 'cut' : 'tighten';
         const wrong = String(x.wrong || '').trim();
-        let right = verdict === 'cut' ? '' : String(x.right || '').trim();
-        return { wrong, verdict, right, why: capWords(x.why, 16) };
+        // Q never hands them a sentence: a steer for tighten, nothing for cut.
+        return { wrong, verdict, right: '', why: capWords(x.why, 16), steer: verdict === 'tighten' ? capWords(x.steer, 22) : '' };
     })
-        // real, findable, whole, and a change: a cut is a change; a tighten must actually be shorter and not empty
-        .filter(x => x.wrong && x.wrong.split(/\s+/).length >= 4 && body.includes(x.wrong) && (x.verdict === 'cut' || (x.right && x.right !== x.wrong && x.right.length < x.wrong.length)) && !seen.has(x.wrong) && seen.add(x.wrong))
+        // real, findable, whole; a tighten needs its steer
+        .filter(x => x.wrong && x.wrong.split(/\s+/).length >= 4 && body.includes(x.wrong) && (x.verdict === 'cut' || x.steer) && !seen.has(x.wrong) && seen.add(x.wrong))
         .slice(0, 25);
     return { kind: 'trim', issues };
+}
+// WEAK — the whole page. Which sentences are weak, why, and what would make
+// each strong. A steer, never the sentence.
+const WEAK_SCHEMA = {
+    type: 'object', additionalProperties: false,
+    required: ['issues'],
+    properties: {
+        issues: {
+            type: 'array', maxItems: 25,
+            items: {
+                type: 'object', additionalProperties: false,
+                required: ['wrong', 'why', 'steer'],
+                properties: {
+                    wrong: { type: 'string', description: 'The exact sentence from the text, character for character. It MUST appear verbatim in the text. One whole sentence.' },
+                    why: { type: 'string', description: 'Plain words for a student, 6 to 14: what makes it weak ("a claim with nothing behind it", "vague — which staff, how many?", "hedges twice", "no example", "describes, does not analyse").' },
+                    steer: { type: 'string', description: 'ONE line on what would make it strong, as a steer they act on themselves ("add the figure from the case study", "say who and how many", "give one example", "say what this means for the recommendation") — never the rewritten sentence.' },
+                },
+            },
+        },
+    },
+};
+async function weakPass(body, context) {
+    const ctx = String(context || '').trim();
+    const system = withHouseStyle(`You are reading a student's draft for ONE thing: the sentences that are WEAK — a claim with nothing behind it, vague where it should be specific, hedged, describing where the question asks for analysis or evaluation, missing the example or figure that would prove it, or not saying what it means for the answer. You are on the student's side.
+For each weak sentence give WHY in plain words and a STEER — what they should do to make it strong. Never write the sentence for them; never quote a model answer; never a new fact they did not have. If the writing is strong, return an empty list. At most 25, weakest first.
+Do not mark spelling, grammar, length or style — only weakness of the point.${ctx ? `\n\nWHAT THE ESSAY IS FOR (judge against this):\n${ctx.slice(0, 2500)}` : ''}`);
+    const user = `THE TEXT:\n${body.slice(0, 60000)}\n\nMark the weak sentences: why, and what would make each strong.`;
+    const r = await callAccurate(system, user, { maxTokens: 6000, schema: WEAK_SCHEMA, effort: 'medium' });
+    const seen = new Set();
+    const issues = (Array.isArray(r && r.issues) ? r.issues : []).map(x => ({ wrong: String(x.wrong || '').trim(), verdict: 'weak', right: '', why: capWords(x.why, 16), steer: capWords(x.steer, 22) }))
+        .filter(x => x.wrong && x.wrong.split(/\s+/).length >= 3 && body.includes(x.wrong) && x.steer && !seen.has(x.wrong) && seen.add(x.wrong))
+        .slice(0, 25);
+    return { kind: 'weak', issues };
 }
 
 // ── The check: their rewritten sentence against the brick. A closeness cue,

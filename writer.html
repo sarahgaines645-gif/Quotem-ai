@@ -1156,6 +1156,10 @@
        need it); tighten = an amber wash (needed, but get to the point). */
     ::highlight(q-trim-cut) { background: rgba(233,30,99,0.14); text-decoration: line-through; text-decoration-color: var(--accent); text-decoration-thickness: 1.5px; }
     ::highlight(q-trim-tight) { background: rgba(230,168,23,0.20); }
+    ::highlight(q-weak) { background: rgba(30,136,229,0.14); }
+    .ed-issue .ed-v.weak { color: #1e88e5; }
+    .ed-issue .ed-steer { font-size: 11px; color: var(--text); margin-top: 2px; }
+    .ed-issue .ed-steer b { font-weight: 700; }
     .ed-issue .ed-v { display: inline-block; font-size: 9px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; padding: 1px 6px; border-radius: 6px; margin-right: 6px; vertical-align: 1px; box-shadow: var(--neu-inset-sm); color: var(--text-muted); }
     .ed-issue .ed-v.cut { color: var(--accent); }
     .ed-issue .ed-v.tighten { color: #b07f0a; }
@@ -3823,10 +3827,26 @@
       // people that are struggling." So the button here is EXPLAIN THIS — Q
       // says in plain words what the thing is, with an everyday example. The
       // tools live on the Editing panel.
-      showToolPop('<div class="pc-head"><span class="pc-dot" style="--dc:' + rq.colour + '"></span>' + escHtml(rq.label) + '</div><div class="pc-line">' + escHtml(dot.dataset.why || (rq.label + ' goes here.')) + '</div><div class="pc-explain" id="dot-explain"></div><button type="button" class="q-btn primary" id="dot-action">Explain this →</button><div class="pc-links"><a href="#" id="dot-edit">✎ Editing tools</a><a href="#" id="dot-here">Put my cursor here</a></div>', { anchor: dot, kind: 'Missing here' });
+      // Sarah, 17 Aug: "when the ring represents a source and you press it it
+      // should say auto cite" / "it still says editing tools at the bottom.
+      // that needs to be taken off we have it on the page."
+      const isSource = tool === 'cite';
+      showToolPop('<div class="pc-head"><span class="pc-dot" style="--dc:' + rq.colour + '"></span>' + escHtml(rq.label) + '</div><div class="pc-line">' + escHtml(dot.dataset.why || (rq.label + ' goes here.')) + '</div><div class="pc-explain" id="dot-explain"></div><button type="button" class="q-btn primary" id="dot-action">' + (isSource ? 'Auto cite →' : 'Explain this →') + '</button><div class="pc-links">' + (isSource ? '<a href="#" id="dot-explain-link">Explain this</a>' : '') + '<a href="#" id="dot-here">Put my cursor here</a></div>', { anchor: dot, kind: 'Missing here' });
       toolPopEl.classList.add('dotpop');
       const btn = toolPopEl.querySelector('#dot-action');
-      btn.addEventListener('click', async () => {
+      const explainNow = async (out, b) => {
+        b.disabled = true; out.textContent = 'Q is putting it plainly…';
+        try {
+          const d = await api('/writer/explain', { concept: rq.label + (dot.dataset.why ? ' — ' + dot.dataset.why : ''), subject: (state.brief && (state.brief.title || state.brief.whatItWants)) || '', yearGroup: state.yearGroup || '' }, { timeoutMs: 45000 });
+          out.textContent = String(d.explanation || '').trim() || 'Q could not put that plainly — try again.';
+          appendBoardItem({ type: 'explain', text: rq.label + ' — ' + String(d.explanation || '').trim(), criterionId: cid });
+          b.textContent = 'Explain it another way'; b.disabled = false;
+        } catch (e) { out.textContent = 'Could not explain that (' + shortCause(e) + ') — try again.'; b.disabled = false; }
+      };
+      if (isSource) {
+        btn.addEventListener('click', () => { caretBeforeDot(dot); toolPopEl.classList.remove('dotpop'); runAutoCite({ sentence: it.sentence, criterionId: cid, anchor: dot, dot }); });
+        const ex = toolPopEl.querySelector('#dot-explain-link'); if (ex) ex.addEventListener('click', (e) => { e.preventDefault(); const out = toolPopEl.querySelector('#dot-explain'); if (out) explainNow(out, ex); });
+      } else btn.addEventListener('click', async () => {
         const out = toolPopEl.querySelector('#dot-explain'); if (!out) return;
         btn.disabled = true; out.textContent = 'Q is putting it plainly…';
         try {
@@ -3836,7 +3856,6 @@
           btn.textContent = 'Explain it another way'; btn.disabled = false;
         } catch (e) { out.textContent = 'Could not explain that (' + shortCause(e) + ') — try again.'; btn.disabled = false; }
       });
-      toolPopEl.querySelector('#dot-edit').addEventListener('click', (e) => { e.preventDefault(); caretBeforeDot(dot); openEditPanel(); });
       toolPopEl.querySelector('#dot-here').addEventListener('click', (e) => { e.preventDefault(); caretBeforeDot(dot); toolPopEl.classList.remove('dotpop'); hideToolPop(); });
     }
     document.addEventListener('click', (e) => {
@@ -4014,6 +4033,7 @@
     }
     function edRunTool(tool) {
       const sel = docSelection();
+      if (!sel && tool === 'weak') { edRunPass('weak'); return; }   // Sarah, 17 Aug: "the what's weak should cover the whole page not highlighted"
       if (!sel) {
         // press first, then highlight
         edArmed = tool; renderEditPanel();
@@ -4043,15 +4063,16 @@
     function edPaint(oneWrong) {
       try {
         if (!(window.CSS && CSS.highlights && window.Highlight)) return;
-        const all = [], one = [], cut = [], tight = [];
-        for (const is of edProof.issues) { if (is.done) continue; const rs = edFindRanges(is.wrong); (edProof.kind === 'trim' ? (is.verdict === 'cut' ? cut : tight) : all).push(...rs); if (oneWrong && is.wrong === oneWrong) one.push(...rs); }
+        const all = [], one = [], cut = [], tight = [], weak = [];
+        for (const is of edProof.issues) { if (is.done) continue; const rs = edFindRanges(is.wrong); (edProof.kind === 'trim' ? (is.verdict === 'cut' ? cut : tight) : edProof.kind === 'weak' ? weak : all).push(...rs); if (oneWrong && is.wrong === oneWrong) one.push(...rs); }
         CSS.highlights.set('q-proof', new Highlight(...all));
         CSS.highlights.set('q-trim-cut', new Highlight(...cut));
         CSS.highlights.set('q-trim-tight', new Highlight(...tight));
+        CSS.highlights.set('q-weak', new Highlight(...weak));
         if (one.length) CSS.highlights.set('q-proof-one', new Highlight(...one)); else CSS.highlights.delete('q-proof-one');
       } catch (_) {}
     }
-    function edClearPaint() { try { if (window.CSS && CSS.highlights) { CSS.highlights.delete('q-proof'); CSS.highlights.delete('q-proof-one'); CSS.highlights.delete('q-trim-cut'); CSS.highlights.delete('q-trim-tight'); } } catch (_) {} }
+    function edClearPaint() { try { if (window.CSS && CSS.highlights) { CSS.highlights.delete('q-proof'); CSS.highlights.delete('q-proof-one'); CSS.highlights.delete('q-trim-cut'); CSS.highlights.delete('q-trim-tight'); CSS.highlights.delete('q-weak'); } } catch (_) {} }
     // What the essay is for — so "needed" is judged against the question,
     // not in the abstract. Short: the title, what it wants, the parts, the count.
     function trimContext() {
@@ -4065,7 +4086,7 @@
       if (!text.trim()) { edProof = { kind, issues: [], busy: false, note: 'Nothing on the page yet.' }; renderEditPanel(); return; }
       edProof = { kind, issues: [], busy: true }; edClearPaint(); renderEditPanel();
       try {
-        const d = await api('/writer/proofread', { kind, text, context: kind === 'trim' ? trimContext() : '' }, { timeoutMs: 120000 });
+        const d = await api('/writer/proofread', { kind, text, context: kind === 'trim' || kind === 'weak' ? trimContext() : '' }, { timeoutMs: 120000 });
         edProof = { kind, issues: (d.issues || []).map(x => ({ ...x, done: false })), busy: false, note: '' };
       } catch (e) {
         edProof = { kind, issues: [], busy: false, note: 'That check didn\'t answer (' + shortCause(e) + ') — try again.' };
@@ -4075,11 +4096,30 @@
     function edFix(i) {
       const is = edProof.issues[i]; if (!is || is.done) return;
       let n = 0;
-      if (is.verdict === 'cut' || is.right === '') { while (findInDoc(is.wrong) && n < 50) { if (!cutFromDoc(is.wrong)) break; n++; } }
+      if (is.verdict === 'cut') { while (findInDoc(is.wrong) && n < 50) { if (!cutFromDoc(is.wrong)) break; n++; } }
+      else if (is.verdict === 'tighten' || is.verdict === 'weak') { edShowMe(i); return; }
       else while (findInDoc(is.wrong) && n < 50) { if (!replaceInDoc(is.wrong, is.right)) break; n++; }
       is.done = true; scheduleAutosave(); renderEditPanel(); edPaint();
     }
-    function edFixAll() { edProof.issues.forEach((_, i) => edFix(i)); }
+    function edFixAll() { edProof.issues.forEach((is, i) => { if (is.verdict === 'cut' || !is.verdict) edFix(i); }); }
+    // Q coaches, never writes: jump to the sentence and put the steer on the
+    // coach card — she rewrites it herself. The row closes when the sentence
+    // is no longer on the page as it was.
+    function edShowMe(i) {
+      const is = edProof.issues[i]; if (!is) return;
+      edGoTo(i);
+      const what = is.verdict === 'weak' ? 'Make this stronger' : 'Say this in fewer words';
+      setCoach({ msg: what + ' — ' + (is.steer || is.why || ''), hint: (is.verdict === 'weak' ? (is.why ? 'Why it\'s weak: ' + is.why + ' ' : '') : (is.why ? is.why + ' ' : '')) + 'Rewrite it on the page in your own words — I never write it for you. The mark comes off when it\'s changed.', inputVisible: false, step: false, showNudge: false });
+    }
+    // The page changed: any tighten / weak sentence that is no longer there as it was is done.
+    let edSweepT = null;
+    function edSweepDone() {
+      if (!edProof.issues.length || edProof.busy) return;
+      let changed = false;
+      for (const is of edProof.issues) { if (!is.done && (is.verdict === 'tighten' || is.verdict === 'weak') && !findInDoc(is.wrong)) { is.done = true; changed = true; } }
+      if (changed) { renderEditPanel(); edPaint(); }
+    }
+    docBody.addEventListener('input', () => { if (edProof.kind === 'trim' || edProof.kind === 'weak') { clearTimeout(edSweepT); edSweepT = setTimeout(edSweepDone, 400); } });
     // Take a span off the page — with the one space after it, so the
     // sentences either side close up. Undoable with Ctrl-Z like any typing.
     function cutFromDoc(span) {
@@ -4107,21 +4147,27 @@
       if (edBody.classList.contains('hidden')) return;
       const tools = ED_TOOL_ORDER.map(t => `<button type="button" class="q-btn${edArmed === t ? ' armed' : ''}" data-ed-tool="${t}" title="${escHtml(ED_TOOL_TIPS[t] || '')}">${escHtml(EDIT_TOOL_LABELS[t] || t)}</button>`).join('');
       const left = edProof.issues.filter(x => !x.done).length;
-      const trim = edProof.kind === 'trim';
+      const trim = edProof.kind === 'trim', weakPass = edProof.kind === 'weak', coachPass = trim || weakPass;
+      const VLAB = { cut: 'Cut', tighten: 'Tighten', weak: 'Weak' };
       const list = edProof.issues.map((is, i) => {
-        const v = trim ? `<span class="ed-v ${is.verdict === 'cut' ? 'cut' : 'tighten'}">${is.verdict === 'cut' ? 'Cut' : 'Tighten'}</span>` : '';
-        const w = trim && is.verdict === 'cut' ? `<s>${escHtml(is.wrong)}</s>` : `<s>${escHtml(is.wrong)}</s> → <b>${escHtml(is.right)}</b>`;
-        const btn = is.done ? `<span class="ed-y">${trim ? (is.verdict === 'cut' ? 'cut' : 'tightened') : 'fixed'}</span>` : `<button type="button" class="ed-fix" data-ed-fix="${i}">${trim ? (is.verdict === 'cut' ? 'Cut it' : 'Tighten') : 'Fix'}</button>`;
-        return `<div class="ed-issue${is.done ? ' done' : ''}" data-ed-i="${i}"><div><div class="ed-w${trim ? ' trim' : ''}">${v}${w}</div><div class="ed-y">${escHtml(is.why || '')}</div></div>${btn}</div>`;
+        const v = coachPass ? `<span class="ed-v ${escHtml(is.verdict || 'weak')}">${VLAB[is.verdict] || 'Weak'}</span>` : '';
+        // Q never shows a rewrite: cut / tighten / weak rows show the sentence as it is, then why, then the steer.
+        const w = coachPass ? (is.verdict === 'cut' ? `<s>${escHtml(is.wrong)}</s>` : `<span>${escHtml(is.wrong)}</span>`) : `<s>${escHtml(is.wrong)}</s> → <b>${escHtml(is.right)}</b>`;
+        const steer = coachPass && is.steer && is.verdict !== 'cut' ? `<div class="ed-steer"><b>${is.verdict === 'weak' ? 'To make it strong:' : 'Keep / lose:'}</b> ${escHtml(is.steer)}</div>` : '';
+        const doneWord = !coachPass ? 'fixed' : is.verdict === 'cut' ? 'cut' : 'rewritten';
+        const btnWord = !coachPass ? 'Fix' : is.verdict === 'cut' ? 'Cut it' : 'Show me →';
+        const btn = is.done ? `<span class="ed-y">${doneWord}</span>` : `<button type="button" class="ed-fix" data-ed-fix="${i}">${btnWord}</button>`;
+        return `<div class="ed-issue${is.done ? ' done' : ''}" data-ed-i="${i}"><div><div class="ed-w${coachPass ? ' trim' : ''}">${v}${w}</div><div class="ed-y">${escHtml(is.why || '')}</div>${steer}</div>${btn}</div>`;
       }).join('');
       const nCut = trim ? edProof.issues.filter(x => !x.done && x.verdict === 'cut').length : 0, nTight = trim ? left - nCut : 0;
-      const status = edProof.busy ? (trim ? 'Reading the page for what it can do without…' : 'Checking the page…') : edProof.note ? edProof.note : !edProof.kind ? ''
-        : trim ? (edProof.issues.length ? (left ? [nCut ? nCut + ' to cut' : '', nTight ? nTight + ' to tighten' : ''].filter(Boolean).join(', ') + ' — marked on the page; pink is not needed, amber needs to get to the point. Click one to jump to it.' : 'All trimmed.') : 'Nothing to trim — the page is tight.')
+      const status = edProof.busy ? (trim ? 'Reading the page for what it can do without…' : weakPass ? 'Reading the page for the weak sentences…' : 'Checking the page…') : edProof.note ? edProof.note : !edProof.kind ? ''
+        : trim ? (edProof.issues.length ? (left ? [nCut ? nCut + ' to cut' : '', nTight ? nTight + ' to say in fewer words' : ''].filter(Boolean).join(', ') + ' — marked on the page; pink is not needed, amber needs to get to the point (you rewrite it — Q only says what to keep). Click one to jump to it.' : 'All trimmed.') : 'Nothing to trim — the page is tight.')
+        : weakPass ? (edProof.issues.length ? (left ? left + ' weak sentence' + (left === 1 ? '' : 's') + ' marked in blue on the page — each says why and what would make it strong. You rewrite; the mark comes off when it changes.' : 'All rewritten.') : 'Nothing weak found on the page.')
         : (edProof.issues.length ? left + ' ' + edProof.kind + ' slip' + (left === 1 ? '' : 's') + ' marked on the page — click one to jump to it.' : 'No ' + edProof.kind + ' slips found on the page.');
       edBody.innerHTML = `<div class="ed-hint"><b>Highlight</b> words on the page, then press a tool — or press, then highlight.${edArmed ? ' <b>' + escHtml(EDIT_TOOL_LABELS[edArmed] || edArmed) + ' is waiting for your highlight.</b>' : ''}</div>
         <div class="ed-sec">Improve</div><div class="ed-tools">${tools}</div>
         <div class="ed-sec">Check the whole page</div>
-        <div class="ed-pass"><button type="button" class="q-btn${edProof.kind === 'spelling' && edProof.busy ? ' armed' : ''}" data-ed-pass="spelling">Spelling</button><button type="button" class="q-btn${edProof.kind === 'grammar' && edProof.busy ? ' armed' : ''}" data-ed-pass="grammar">Grammar</button><button type="button" class="q-btn${edProof.kind === 'trim' && edProof.busy ? ' armed' : ''}" data-ed-pass="trim" title="What the essay does not need (cut) and what takes too long to say (tighten) — marked on the page, with the shorter version">Trim</button>${left ? '<button type="button" class="q-btn quiet" id="ed-fixall">' + (trim ? 'Trim all' : 'Fix all') + '</button>' : ''}</div>
+        <div class="ed-pass"><button type="button" class="q-btn${edProof.kind === 'spelling' && edProof.busy ? ' armed' : ''}" data-ed-pass="spelling">Spelling</button><button type="button" class="q-btn${edProof.kind === 'grammar' && edProof.busy ? ' armed' : ''}" data-ed-pass="grammar">Grammar</button><button type="button" class="q-btn${edProof.kind === 'trim' && edProof.busy ? ' armed' : ''}" data-ed-pass="trim" title="What the essay does not need (cut) and what takes too long to say (tighten) — marked on the page; Q says what to keep, you rewrite">Trim</button><button type="button" class="q-btn${edProof.kind === 'weak' && edProof.busy ? ' armed' : ''}" data-ed-pass="weak" title="The weak sentences on the whole page — why, and what would make each strong">What's weak</button>${(left && !weakPass && (!trim || nCut)) ? '<button type="button" class="q-btn quiet" id="ed-fixall">' + (trim ? 'Cut all' : 'Fix all') + '</button>' : ''}</div>
         ${status ? `<div class="ed-status">${escHtml(status)}</div>` : ''}
         ${list ? `<div class="ed-issues">${list}</div>` : ''}`;
       edBody.querySelectorAll('[data-ed-tool]').forEach(b => b.addEventListener('click', () => edRunTool(b.dataset.edTool)));
@@ -4130,7 +4176,7 @@
       edBody.querySelectorAll('[data-ed-fix]').forEach(b => b.addEventListener('click', (e) => { e.stopPropagation(); edFix(Number(b.dataset.edFix)); }));
       edBody.querySelectorAll('.ed-issue').forEach(row => row.addEventListener('click', () => edGoTo(Number(row.dataset.edI))));
     }
-    const ED_TOOL_TIPS = { cite: 'A real source for the highlighted claim, put in Harvard', weak: 'What is weak in the highlighted sentence — and what would make it strong', terminology: 'The proper term for what you highlighted', synonyms: 'Other words for the ONE word you highlighted', dictionary: 'What the ONE word you highlighted means', strategies: 'The theory or model that fits what you highlighted', cases: 'A case or example that fits', references: 'What to read for this point' };
+    const ED_TOOL_TIPS = { cite: 'A real source for the highlighted claim, put in Harvard', weak: 'What is weak — in what you highlighted, or across the whole page if nothing is highlighted — and what would make it strong', terminology: 'The proper term for what you highlighted', synonyms: 'Other words for the ONE word you highlighted', dictionary: 'What the ONE word you highlighted means', strategies: 'The theory or model that fits what you highlighted', cases: 'A case or example that fits', references: 'What to read for this point' };
     function openEditPanel({ toggle } = {}) {
       const btn = document.getElementById('btn-edit-strip');
       const open = toggle ? edBody.classList.contains('hidden') : true;
