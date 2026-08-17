@@ -730,11 +730,14 @@ const MARK_SCHEMA = {
     required: ['overall', 'perCriterion', 'weakestCriterionId', 'critique'],
     properties: {
         overall: {
-            type: 'object', additionalProperties: false, required: ['band', 'label', 'summary', 'nextLabel', 'toNext'],
+            type: 'object', additionalProperties: false, required: ['band', 'label', 'summary', 'strong', 'missing', 'answeredCount', 'nextLabel', 'toNext'],
             properties: {
                 band: { type: 'string', enum: ['top', 'mid', 'low'] },
                 label: { type: 'string', description: 'The grade in the student\'s scheme, e.g. "Distinction", "Merit", "Grade 7", "2:1", "Pass", "Refer". If the scheme is "as the brief says", use the words the brief itself uses for its bands; if the brief names none, leave this empty.' },
-                summary: { type: 'string', description: 'Two sentences to the student: what is strong (name the actual thing they did), and the single biggest reason it is not the grade above.' },
+                summary: { type: 'string', description: 'ONE sentence to the student: the single biggest reason this is not the grade above. Never a list — the lists are the three fields below.' },
+                strong: { type: 'array', maxItems: 4, items: { type: 'string' }, description: 'WHAT STAYS. Each item names an actual thing in THEIR draft that is working and should not be touched — the point, the theory, the source, in six to fourteen words. Empty only if genuinely nothing works yet.' },
+                missing: { type: 'array', maxItems: 6, items: { type: 'string' }, description: 'WHAT IS MISSING. Each item is one concrete thing the brief wants that is not on the page at all — the unanswered question, the theory never named, the evidence never given. Six to fourteen words each, no preamble.' },
+                answeredCount: { type: 'integer', description: 'How many of the criteria the draft genuinely attempts (has real content for), out of the total.' },
                 nextLabel: { type: 'string', description: 'The NEXT GRADE UP in their scheme — the one word: e.g. "Merit" when they are at Pass, "Distinction" when they are at Merit, "Grade 7" when they are at Grade 6. Empty ONLY if they are already at the top grade or the scheme names no grades.' },
                 toNext: { type: 'string', description: 'HOW TO GET THAT GRADE. The two or three concrete things that would lift THIS draft to nextLabel, each one a thing they can go and do today — name the part, the idea, the evidence, the comparison. Never "develop further", never "add more detail", never a description of what the grade means. If they are already at the top grade, what would keep it there.' },
             },
@@ -800,7 +803,8 @@ Rules:
 ${PLAIN_QUESTION_RULE}
 
 ${LEADING_QUESTION_RULE}
-- Overall band = what this draft would actually get. Be honest; a kind marker still fails a missing criterion.
+- THE MARK IS PER QUESTION FIRST. Every criterion gets its own grade in their scheme ("label") — that is the mark they act on. A criterion with nothing written for it is band "missing": it is NOT graded, it is "not started", and its "missingForTop" says what it needs to become an answer.
+- Overall band = what this draft would get if it were handed in as it is (unanswered questions included — that is the truth of a submission), and "answeredCount" says how many criteria are genuinely attempted, so the student can see the overall grade is dragged by what is not written yet rather than by the quality of what is.
 - SAY THE GRADE IN THEIR WORDS, NOT IN BANDS. "label" per part and overall is the grade the scheme actually uses — Pass / Merit / Distinction, Grade 7, 2:1. A student marked on Pass/Merit/Distinction must never be told "lower band"; they are told "Pass" and what stops it being a Merit.
 - AND SAY HOW TO CLIMB. "nextLabel" is the grade immediately above the one you have given; "toNext" is the two or three concrete things that would get THIS draft there — the idea to name, the evidence to find, the part to answer properly, the comparison to make. A student must never be told the grade without being told the way up.
 - "voicedBrickIds" per criterion: the bricks of the model answer this draft GENUINELY voices (point made in their words with its reason / example). This is the honest tally the student's visible score is rebuilt from — a listed item is not a voiced brick; a claim without its reason is not a voiced brick.
@@ -995,6 +999,9 @@ function normaliseMark(r, brief, essayForMark, plans) {
             band: ['top', 'mid', 'low'].includes(r.overall.band) ? r.overall.band : 'low',
             label: String(r.overall.label || ''),
             summary: String(r.overall.summary || ''),
+            strong: (Array.isArray(r.overall.strong) ? r.overall.strong : []).map(String).filter(Boolean).slice(0, 4),
+            missing: (Array.isArray(r.overall.missing) ? r.overall.missing : []).map(String).filter(Boolean).slice(0, 6),
+            answeredCount: Number.isFinite(r.overall.answeredCount) ? r.overall.answeredCount : null,
             // The grade above, and how to get it (Sarah, 17 Aug: "it doesn't
             // actually say why or what's weak or how you can get to the next
             // grade"). A grade with no way up is not marking, it is scoring.
