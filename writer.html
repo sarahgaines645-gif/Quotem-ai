@@ -1100,7 +1100,7 @@
     .q-qcard .mk-title { color: var(--text); font-size: 11px; letter-spacing: 0.02em; text-transform: none; font-weight: 700; }
     .q-qcard .mk-count { text-transform: uppercase; letter-spacing: 0.06em; }
     .q-got { margin: 5px 0 8px; }
-    .q-got .q-got-l { display: block; font-size: 9px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: #1f8a3a; margin-bottom: 3px; }
+    .q-got .q-got-l { display: block; font-size: 9px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-muted); margin-bottom: 3px; }
     .q-got ul { margin: 0; padding-left: 16px; }
     .q-got li { font-size: 12px; line-height: 1.45; color: var(--text); margin: 3px 0; overflow-wrap: anywhere; }
     .q-add { margin: 6px 0 4px; }
@@ -1450,20 +1450,22 @@
       border-radius: 16px; box-shadow: var(--neu-raised-xs);
     }
     .mk-block::before {
-      content: ''; position: absolute; left: 5px; top: 13px; bottom: 13px; width: 4px;
-      border-radius: 4px; background: var(--rail, var(--accent));
+      content: ''; position: absolute; left: 5px; top: 13px; bottom: 13px; width: 3px;
+      border-radius: 3px; background: var(--rail, var(--border-light, rgba(0,0,0,0.13)));
     }
     .mk-block-head { display: flex; align-items: center; gap: 9px; margin-bottom: 9px; }
     .mk-ico {
       width: 28px; height: 28px; flex: 0 0 28px; border-radius: 10px;
       display: grid; place-items: center; font-size: 13px; line-height: 1;
-      box-shadow: var(--neu-raised-xs); background: var(--bg); color: var(--rail, var(--accent));
+      box-shadow: var(--neu-raised-xs); background: var(--bg); color: var(--accent);
     }
     .mk-title {
       font-size: 9.5px; font-weight: 700; letter-spacing: 0.09em; text-transform: uppercase;
       color: var(--text-muted);
     }
-    .mk-count { font-size: 9.5px; font-weight: 700; color: var(--rail, var(--accent)); margin-left: auto; }
+    .mk-count { font-size: 9.5px; font-weight: 700; color: var(--text-muted); margin-left: auto; }
+    /* The grade is the one word that keeps its own colour. */
+    .q-qcard .mk-count { color: var(--rail, var(--text-muted)); }
     .mk-sec {
       font-size: 9px; font-weight: 700; letter-spacing: 0.09em; text-transform: uppercase;
       color: var(--accent); margin: 16px 0 7px; padding-top: 12px;
@@ -7337,12 +7339,12 @@
         ? `<div class="q-mk-block ${cls}"><span class="q-mk-l">${escHtml(label)}</span><ul>${items.map(x => `<li>${escHtml(x)}</li>`).join('')}</ul></div>` : '';
       const BAND_RAIL = { top: '#28a745', mid: '#e6a817', low: '#e0245e', missing: '#9aa0ad' };
       return rows
-        + (strong.length ? mkBlock('What stays', '✓', '#28a745', `<ul class="q-mk-ul">${strong.map(x => `<li>${escHtml(x)}</li>`).join('')}</ul>`, strong.length) : '')
-        + (missing.length ? mkBlock('What is missing', '○', '#e0245e', `<ul class="q-mk-ul">${missing.map(x => `<li>${escHtml(x)}</li>`).join('')}</ul>`, missing.length) : '')
-        + mkBlock('If you handed it in now', '★', '#8b5cf6',
+        + (strong.length ? mkBlock('What stays', '✓', '', `<ul class="q-mk-ul">${strong.map(x => `<li>${escHtml(x)}</li>`).join('')}</ul>`, strong.length) : '')
+        + (missing.length ? mkBlock('What is missing', '○', '', `<ul class="q-mk-ul">${missing.map(x => `<li>${escHtml(x)}</li>`).join('')}</ul>`, missing.length) : '')
+        + mkBlock('If you handed it in now', '★', '',
             `<div class="q-band-all"><b>${escHtml(gradeWord(m.overall))}</b> <span>${escHtml(total ? done + ' of ' + total + ' questions answered' : 'overall')}${schemeNote ? ' · ' + escHtml(schemeNote) : ''}</span></div>`
             + (why ? `<div class="q-band-why">${escHtml(why)}</div>` : ''))
-        + (toNext ? mkBlock(nextL ? 'To get a ' + nextL : 'To take it higher', '↑', '#0ea5a4', `<div class="q-band-next">${qMd(toNext)}</div>`) : '');
+        + (toNext ? mkBlock(nextL ? 'To get a ' + nextL : 'To take it higher', '↑', '', `<div class="q-band-next">${qMd(toNext)}</div>`) : '');
     }
     function bandsHtml(m) {
       if (!m || !m.overall) return '';
@@ -7542,7 +7544,9 @@
     // One section of the panel: a raised card, a coloured rail, an icon well
     // and a small uppercase title — the shape her job page uses.
     function mkBlock(title, icon, rail, body, count) {
-      return `<div class="mk-block" style="--rail:${escHtml(rail)}">`
+      // No rail colour passed = the neutral one. Colour is for the thing that
+      // MEANS something (how a question is doing), never for decoration.
+      return `<div class="mk-block"${rail ? ` style="--rail:${escHtml(rail)}"` : ''}>`
         + `<div class="mk-block-head"><span class="mk-ico">${escHtml(icon)}</span><span class="mk-title">${escHtml(title)}</span>`
         + (count ? `<span class="mk-count">${escHtml(String(count))}</span>` : '')
         + `</div>${body}</div>`;
@@ -7571,7 +7575,7 @@
         const t = `<span class="mk-v">${escHtml(String(v))}</span><span class="mk-lab">${escHtml(label)}</span>${sub ? `<span class="mk-sub">${escHtml(sub)}</span>` : ''}`;
         return pass && v ? `<button type="button" class="mk-tile act" data-mk-pass="${escHtml(pass)}">${t}</button>` : `<div class="mk-tile${v ? '' : ' zero'}">${t}</div>`;
       };
-      const stats = mkBlock('The page right now', '▦', '#3b82f6', `<div class="mk-tiles">`
+      const stats = mkBlock('The page right now', '▦', '', `<div class="mk-tiles">`
         + tile(s.words, s.words === 1 ? 'word' : 'words', s.target ? 'asked for ' + s.target : '')
         + (s.read ? tile(s.cut, 'to cut', '', 'trim') : '')
         + (s.read ? tile(s.tighten, 'too long', '', 'trim') : '')
@@ -7584,7 +7588,7 @@
       // he does (Sarah, 17 Aug: "he shouldnt cut anything he should suggest
       // what to cut in the marking pannel").
       const cuts = ((state.tidy && state.tidy.cut) || []).map((is, i) => ({ is, i })).filter(x => !x.is.done);
-      const cutList = cuts.length ? mkBlock('Q would cut', '✕', '#e0245e', cuts.map(x =>
+      const cutList = cuts.length ? mkBlock('Q would cut', '✕', '', cuts.map(x =>
         `<div class="mk-item cut"><span class="mk-st">✕</span><div><div class="mk-s"><s>${escHtml(x.is.wrong.length > 90 ? x.is.wrong.slice(0, 89) + '…' : x.is.wrong)}</s></div>${x.is.why ? `<div class="mk-w">${escHtml(x.is.why)}</div>` : ''}<div class="mk-acts">${findInDoc(x.is.wrong) ? `<button type="button" class="q-btn" data-mk-cut="${x.i}">Cut it</button><button type="button" class="q-btn quiet" data-mk-keep="${x.i}">Keep it</button>` : `<span class="mk-note">You have already changed this one — <button type="button" class="q-btn quiet" data-mk-keep="${x.i}">clear it</button></span>`}</div></div></div>`).join('')
         + `<div class="mk-foot">Your call on every one — Q only points at them.</div>`, cuts.length) : '';
       // TO DO AND DONE ARE TWO LISTS, AND DONE SAYS "FIXED" (Sarah, 17 Aug:
@@ -7599,8 +7603,8 @@
       };
       const todo = [], done = [];
       items.forEach((it, i) => (findInDoc(it.sentence) ? todo : done).push({ it, i }));
-      const list = (todo.length ? mkBlock('To fix', '●', '#e6a817', todo.map(x => row(x.it, x.i)).join(''), todo.length) : '')
-        + (done.length ? mkBlock('Fixed', '✓', '#28a745', done.map(x => row(x.it, x.i, { done: true })).join(''), done.length) : '');
+      const list = (todo.length ? mkBlock('To fix', '●', '', todo.map(x => row(x.it, x.i)).join(''), todo.length) : '')
+        + (done.length ? mkBlock('Fixed', '✓', '', done.map(x => row(x.it, x.i, { done: true })).join(''), done.length) : '');
       const empty = !bands && !list && !s.read ? '<div class="mk-empty">Nothing marked yet — press <b>Mark & fix →</b> when a question is written, or finish a step and Q marks that bit.</div>' : '';
       const foot = list ? '<div class="mk-foot">Press a sentence to go to it. A sentence moves to <b>Fixed</b> when you have rewritten it. Q stays on the coach card — ask him anything while this is open.</div>' : '';
       markBody.innerHTML = stats + bands + cutList + list + empty + foot;
