@@ -1931,12 +1931,13 @@ function planForPrompt(plan, stepId) {
 // goes on the whiteboard as `board`; the reply says so.
 const CHAT_SCHEMA = {
     type: 'object', additionalProperties: false,
-    required: ['reply', 'board', 'next', 'highlight', 'highlights'],
+    required: ['reply', 'board', 'next', 'highlight', 'highlights', 'answersStep'],
     properties: {
         reply: { type: 'string', description: 'The answer to what they asked, plain everyday British English. As long as it needs — usually 2 to 6 sentences; a short numbered list if they asked for a list or for steps. Direct: the answer first, then the why. Teach a term properly when asked (name, meaning, everyday example). If they ask what to write, tell them WHAT TO SAY and WHERE (which point, after which of their words) — never the sentence itself. If they ask for facts / figures / examples from the case, put them in board and say "on the whiteboard" here.' },
         board: { anyOf: [{ type: 'object', additionalProperties: false, required: ['title', 'items', 'todo'], properties: { title: { type: 'string' }, items: { type: 'array', maxItems: 8, items: { type: 'object', additionalProperties: false, required: ['fact', 'where'], properties: { fact: { type: 'string', description: 'A fact / figure / example / quoted line as the case has it, verbatim, 4-16 words.' }, where: { type: 'string', description: 'Where it sits in the case, 2-6 words.' } } } }, todo: { type: 'array', maxItems: 4, items: { type: 'string' }, description: 'What to do with them: which item, where in their paragraph, what to say it shows. Never the sentence.' } } }, { type: 'null' }], description: 'null unless a LIST from the case would help more than prose (facts, figures, examples, quotes, the people, the numbers).' },
         next: { anyOf: [{ type: 'string' }, { type: 'null' }], description: 'One line, 12 words or fewer, the concrete next thing they could do on the page — or null.' },
         highlight: { anyOf: [{ type: 'string' }, { type: 'null' }], description: 'If your answer is about ONE particular sentence or phrase on THEIR PAGE, that span verbatim (character for character, 3-40 words) so the page can light it up while you talk — else null. Never text that is not on their page.' },
+        answersStep: { type: 'boolean', description: 'true ONLY when their message is plainly their ANSWER to THE STEP THEY ARE ON (the list item, the number, the argument that step asked for) rather than a question, a remark or a request to you. When true, keep reply to ONE short reaction line — the page will take their words as the answer.' },
         highlights: { anyOf: [{ type: 'array', maxItems: 20, items: { type: 'string' } }, { type: 'null' }], description: 'When they ASK you to highlight / find / show where something is on their page ("highlight where I mention AI", "show me every claim without a source"): EVERY matching span, each verbatim from their page (1-40 words) — else null. Say how many you found in the reply.' },
     },
 };
@@ -1950,7 +1951,7 @@ async function chatAnswer({ brief, essay, plan, stepId, caseText, sources, docTe
 - If they ask for facts / figures / examples / quotes from the case, or for "the numbers", "the people", "what happened": put the list on the whiteboard (board) — verbatim, with where each sits — with 2-4 todo lines on how to use them; say "on the whiteboard" in the reply.
 - If they ask how they are doing or what is left: say plainly, from their page against the parts of the brief.
 - Never read out the model answer or its wording; never say what grade the essay "should" get.
-- Plain, warm, direct British English. No lists of questions back at them.
+- Plain, warm, direct British English. No lists of questions back at them. This is a CONVERSATION: pick up what they said last, answer, and carry on — no sign-offs, no "back to it" lines, no restating their step unless they ask.
 - If what you say is about ONE sentence or phrase on their page, put that span in "highlight" verbatim — the page lights it up while you talk, so you can say "this sentence" and they see which.
 - If they ASK you to highlight / find / show where something is on their page, put EVERY matching span in "highlights" (verbatim) and say how many in the reply ("Highlighted 4 places you mention AI — the second and fourth are the ones without a source.").
 ${ageHint}
@@ -1985,7 +1986,7 @@ Answer as Q.`;
     const hl = r && r.highlight ? String(r.highlight).replace(/\s+/g, ' ').trim() : '';
     const docNorm = String(docText || '').replace(/\s+/g, ' ');
     const hls = (r && Array.isArray(r.highlights) ? r.highlights : []).map(x => String(x || '').replace(/\s+/g, ' ').trim()).filter(x => x && docNorm.includes(x)).slice(0, 20);
-    return { reply, board, next: r && r.next ? capWords(String(r.next), 14) : null, highlight: hl && docNorm.includes(hl) ? hl : null, highlights: hls.length ? hls : null };
+    return { reply, board, next: r && r.next ? capWords(String(r.next), 14) : null, highlight: hl && docNorm.includes(hl) ? hl : null, highlights: hls.length ? hls : null, answersStep: !!(r && r.answersStep) };
 }
 
 // ── JUDGE THE SOURCE CANDIDATES (Sarah, 17 Aug: "when we auto cite they

@@ -474,7 +474,7 @@
     }
     .coach-card .q-actions.hidden { display: none; }
     /* Talking to Q: the thread on the card — you / Q, last few exchanges, scrolls */
-    .coach-card .q-chat { display: flex; flex-direction: column; gap: 8px; max-height: 42vh; overflow-y: auto; margin: 0 0 10px; padding-right: 4px; scrollbar-width: thin; }
+    .coach-card .q-chat { display: flex; flex-direction: column; gap: 10px; max-height: 52vh; overflow-y: auto; margin: 0 0 10px; padding-right: 4px; scrollbar-width: thin; }
     .coach-card .q-chat-m { display: block; min-width: 0; }
     .coach-card .q-chat-who { display: block; font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-muted); margin-bottom: 2px; }
     .coach-card .q-chat-m.q .q-chat-who::before { content: '● '; color: var(--accent); }
@@ -5029,7 +5029,7 @@
     state.chatLog = state.chatLog || [];
     state.chatMode = false;
     function chatThreadHtml() {
-      const last = state.chatLog.slice(-6);
+      const last = state.chatLog.slice(-40);
       return `<div class="q-chat">${last.map(m => `<div class="q-chat-m ${m.role === 'q' ? 'q' : 'me'}"><span class="q-chat-who">${m.role === 'q' ? 'Q' : 'you'}${m.highlight ? ' <span class="q-chat-hl" title="Q has highlighted this on your page">● on the page</span>' : ''}</span><div class="q-chat-t">${paragraphsHtml(m.text)}</div></div>`).join('')}</div>`;
     }
     function leaveChat() {
@@ -5039,10 +5039,17 @@
       if (info) presentStep(info.cid, info.idx, { restore: true }); else setCoach({ msg: '', hint: 'Keep writing — I read as you go.', inputVisible: true, showNudge: true });
       coachInput.placeholder = state.currentStep ? 'Type your answer…' : 'Ask Q…';
     }
-    function showChat({ thinking, next } = {}) {
+    // Sarah, 17 Aug: "this isn't a flowing conversation… then it always says
+    // back to writing. it should just be a flowing chat." So: the card IS the
+    // chat — the whole thread, Q's reply, the box. No "back" link, no "next
+    // you could". When a step is live its own Next / Done buttons sit under
+    // the thread (that is the way on); in a walk, the fix card's buttons.
+    function showChat({ thinking } = {}) {
       const info = currentStepInfo();
-      const acts = [{ label: walkOn() ? '← Back to the marking' : '← Back to writing', quiet: true, onClick: leaveChat }];
-      setCoach({ msg: thinking ? 'Q is thinking…' : '', thinking: !!thinking, section: 'TALKING TO Q', step: false, hint: next ? 'Next you could: ' + next : (info ? 'Ask me anything — your step waits on the board.' : 'Ask me anything.'), inputVisible: !thinking, showNudge: false, actions: acts });
+      let acts = [];
+      if (walkOn()) acts = [{ label: 'Back to the marking →', quiet: true, onClick: leaveChat }];
+      else if (info) acts = stepActions(info.cid, info.step, stepStateOf(info.cid, info.step.id));
+      setCoach({ msg: thinking ? 'Q is thinking…' : '', thinking: !!thinking, section: 'Q', step: false, hint: '', inputVisible: !thinking, showNudge: false, actions: acts });
       const th = document.createElement('div'); th.innerHTML = chatThreadHtml();
       coachActions.insertBefore(th.firstChild, coachActions.firstChild);
       coachInput.placeholder = 'Ask Q…';
@@ -5064,7 +5071,7 @@
     async function chatWithQ(text) {
       state.chatMode = true;
       qSayPaint(null);
-      state.chatLog.push({ role: 'me', text });
+      state.chatLog.push({ role: 'me', text }); persist({ chatLog: state.chatLog.slice(-40) });
       showChat({ thinking: true });
       try {
         const d = await api('/writer/chat', { text, history: state.chatLog.slice(-11, -1).map(m => ({ role: m.role, text: m.text })), docText: docPlainText().slice(0, 24000), criterionId: state.currentCriterionId || null, stepId: state.currentStep ? state.currentStep.stepId : null, ask: currentAskText() || '', yearGroup: state.yearGroup || '' }, { timeoutMs: 90000 });
@@ -5073,6 +5080,14 @@
         state.chatLog.push({ role: 'q', text: String(d.reply || '').trim(), highlight: spans.length ? spans : null });
         appendBoardItem({ type: 'explain', text: String(d.reply || '').trim(), quiet: true });
         if (spans.length) qSayPaint(spans);
+        persist({ chatLog: state.chatLog.slice(-40) });
+        // Q says that was her ANSWER to the step (not a question to him) → it
+        // goes through the step exactly as if she had typed it there.
+        if (d.answersStep && state.currentStep && !walkOn() && classifyCoachInput(text) !== 'question') {
+          state.chatMode = false;
+          try { const handled = await handleStepInput(text); if (handled) { coachInput.focus(); return; } } catch (_) {}
+          state.chatMode = true;
+        }
         if (d.board && Array.isArray(d.board.items) && d.board.items.length) {
           state.wbFind = { title: d.board.title || 'From the case', forLabel: '', sentence: '', items: d.board.items, todo: d.board.todo || [], nudge: '', busy: false, note: '' };
           showPanel('wb'); revealPanel('wb'); renderWhiteboard();
@@ -5081,6 +5096,7 @@
       } catch (e) {
         state.chatLog.push({ role: 'q', text: 'I couldn\'t answer that just now (' + shortCause(e) + ') — ask again.' });
         showChat({});
+        // the last message shows the moment it fails too
       }
       coachInput.focus();
     }
@@ -7296,6 +7312,7 @@
         state.currentQuestion = t.currentQuestion || '';
         state.askFresh = typeof t.askFresh === 'string' && t.askFresh ? t.askFresh : null;
         state.wbNotes = t.wbNotes && typeof t.wbNotes === 'object' ? t.wbNotes : {};
+        state.chatLog = Array.isArray(t.chatLog) ? t.chatLog.filter(m => m && (m.role === 'q' || m.role === 'me') && m.text).slice(-40) : [];
         state.docSnapshot = t.probeSnapshot && docPlainText().endsWith(t.probeSnapshot) ? docPlainText() : docPlainText();
         boardFromSteps();
         renderBoard();
