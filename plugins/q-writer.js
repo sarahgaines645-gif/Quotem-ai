@@ -1662,12 +1662,13 @@ const PLAN_SCHEMA = {
         role: { type: 'string', description: 'ONE plain sentence framing the job of this part in role terms, spoken to the student — "Here you\'re the critic: judge whether the company\'s rewards actually work, then say how you\'d fix them" / "Here you\'re the judge: decide whether this rule is clear enough to be fair" / "Here you\'re the scientist: explain what happens in the leaf and why it matters". Never brief jargon; never "discuss"/"critically evaluate".' },
         steps: {
             type: 'array',
-            description: '3 to 6 scaffold steps in order. Together they must pull EVERY brick of this part out of the student in their own words.',
+            description: 'THE LADDER: 8 to 14 small steps in order, each pulling ONE piece of the answer out of them. Together they must pull EVERY brick of this part out of the student in their own words. A tutor does not ask three big questions; they ask fifteen small ones and the essay is written in fragments by the end.',
             items: {
                 type: 'object', additionalProperties: false,
-                required: ['id', 'kind', 'prompt', 'targetBrickIds', 'terms', 'itemHint', 'rows', 'tags', 'itemsFrom', 'side', 'hint', 'lesson', 'example', 'term', 'supply', 'thenAsk'],
+                required: ['id', 'kind', 'prompt', 'draws', 'targetBrickIds', 'terms', 'itemHint', 'rows', 'tags', 'itemsFrom', 'side', 'hint', 'lesson', 'example', 'term', 'supply', 'thenAsk'],
                 properties: {
                     id: { type: 'string', description: 'Short id, "s1", "s2"…' },
+                    draws: { type: 'string', description: 'WHAT THIS QUESTION PULLS OUT — Q\'s eyes only, never shown. The specific piece of the answer this one question is for: "the four things being introduced, named" / "autonomy and task variety, before the term is used" / "deskilling — they describe it, we label it next" / "the counter-argument, in their own words". If you cannot say what a question draws out, it is not a step.' },
                     terms: { type: 'array', items: { type: 'string' }, description: 'THE WORD BOARD FOR THIS STEP (Sarah, 16 Aug: "the word board needs to be per question"). Of this part\'s expectedTerms, the 2-4 the student should be reaching for while answering THIS step — spelled exactly as in expectedTerms. Showing a part\'s whole vocabulary at every step invites pressing them all in at once, which teaches nothing. Every expected term should belong to at least one step; a term with no natural home can be left out.' },
                     kind: { type: 'string', enum: STEP_KINDS },
                     prompt: { type: 'string', description: 'The ONE concrete ask, plain everyday British English, 35 words or fewer. list: "List every cause you can think of — one per line." numbers: "Put a number on each: what it is now, what it should be." tag: what the colours will mean, one line. proscons: "One good thing and one bad thing about each." argue: "Argue that…, as if you mean it." switch: "Now argue the other side…" recommend: "Which wins, and why?"' },
@@ -1727,7 +1728,14 @@ THE PLAN
     teach     — TEACH-THEN-APPLY (Sarah, 15 Aug: "bear in mind I don't know the answer. No matter how many questions and hints, it is not going to teach me"). Whenever the NEXT step's ask needs a concept, theory or term the student has not shown they know (a theory, a legal test, a formula, a technical term, a named case, a model…), put a teach step BEFORE it: lesson = 2-4 plain sentences in your voice that actually teach it; example = one everyday concrete example; term = the term, named once; prompt = one line saying what you are about to teach and why ("Before you weigh this up, one idea you need: how pay ladders work."). Then the apply step asks them to USE it on their company. Never ask → hint → ask again about something never taught. Hints are only for nudging something already taught or said.
 - ${evaluative ? 'THIS PART IS EVALUATIVE (the marker wants judgement): the steps MUST end with argue → switch → recommend, so the critical evaluation comes out of them as a debate they had with themselves.' : 'If the part asks for judgement, finish with argue → switch → recommend; if it only asks for description or explanation, list / numbers / tag / proscons / ask are enough.'}
 - EXPECTATIONS (Sarah): "minimalAsk" — the brief for this part broken down as minimally as you can, one plain line, 12 words or fewer ("This question wants you to show the good and bad of X."). "expectedTerms" — 6-12 words / short phrases the marker expects to see in this paragraph (the subject terms, theory / case / statute / source names, key nouns of your model answer — whatever this subject is) — they become BUTTONS the student presses to drop the word into their sentence, and go green when the word fits. "termGlossary" — for EVERY expected term, one plain sentence of meaning and one everyday example (this is the hover card — the only place a definition appears; nothing else explains the words). "requirements" — what the paragraph must CONTAIN beyond words (a citation, a reference, a case study, a figure, a theory named, an example, a recommendation; or, when the subject calls for it, a statute, a case, a primary source, a diagram, a quotation, a calculation) — each becomes a coloured dot the student can see, with a key, so they know when they edit that it has to be there.
-- Every brick of this part appears in at least one step's targetBrickIds. Every prompt is ONE concrete ask, 35 words or fewer, in plain everyday British English.
+- THE LADDER (this is the method — Sarah, 17 Aug, from the ladder her own Q wrote): 8 to 14 SMALL steps, not three big ones. Each step does ONE job and says what it does in "draws". Run them in this order:
+    1. GROUND IT IN THEIR CASE FIRST. The opening steps ask about the actual thing in front of them, using the facts of the scenario by name — what is being introduced, who it happens to, what the numbers are. Nothing abstract, no theory, no judgement yet.
+    2. THEN THE LIVED PICTURE. Ask them to picture the person it happens to and say what changes for them ("picture a warehouse worker's shift today — what do they decide for themselves?" then "now an algorithm decides all of that — what has changed?"). This is theory arriving through intuition; the concept comes out of them before it has a name.
+    3. THEN THE JUDGEMENT. Better or worse, and for whom. Then the other side, argued as if they meant it.
+    4. THEN WHAT SHOULD BE DONE — the professional advice the marker pays for.
+    5. NAME THE THEORY AND THE EVIDENCE LAST. Only once they have said the idea in their own words do you give it its label and ask for the source ("what you have just described is called deskilling — here is who wrote about it"). Never open a ladder with a theory name.
+  A student who has answered all of them has written the part in fragments without noticing.
+- Every brick of this part appears in at least one step's targetBrickIds. Every prompt is ONE concrete ask, 30 words or fewer, in plain everyday British English — concrete beats short: name the person, the shift, the figure, the system. Never "what do you think about X?".
 - Q FORMATS, THEY WRITE: whenever the student gives raw material (a list, numbers, an example, a story), Q's job is to ANALYSE it visibly on the board — coloured groups with a legend, the numbers with the gap drawn, the two sides of an argument in colour, the pros/cons grid laid out — and then ask for sentences OFF that structure ("look at the pink ones — why would they all sit in one group? Write me a sentence."; "the gap is 15k — what does that do to how you feel on a Monday?"). Never quiz them on the categorisation. Later steps' prompts refer to the coloured groups / the gap by name.
 - ${PLAIN_QUESTION_RULE}
 
@@ -1743,7 +1751,8 @@ THE BRICKS OF YOUR MODEL ANSWER FOR THIS PART (Q's eyes only — the steps must 
 ${bricks.map(b => `(${b.brickId}) ${b.gist}\n    ${String(b.text || '').slice(0, 700)}`).join('\n')}
 
 Make the plan.`;
-    const r = await callAccurate(system, user, { maxTokens: 2500, schema: PLAN_SCHEMA, effort: 'low' });
+    // The ladder is the product. It was being planned on the cheapest setting.
+    const r = await callAccurate(system, user, { maxTokens: 6000, schema: PLAN_SCHEMA, effort: 'medium' });
     return normalisePlan(r, criterionId, bricks);
 }
 
@@ -1851,7 +1860,15 @@ function listNeedsASentence(steps) {
     return steps;
 }
 
-const MAX_PLAN_STEPS = 6;
+// Sarah, 17 Aug, holding up the 15-question ladder her own Q chat wrote for
+// the same brief: "why isnt the writer q doing this?" Because six of its
+// questions were being DELETED. The model planned the ladder; trimToMaxSteps
+// threw away everything past the sixth step. The cap came from a real problem
+// (her board showed eleven steps as a wall of text, 16 Aug) — but the fix
+// belonged to the DISPLAY, which now shows one step at a time as beads, not to
+// the coaching. A tutor's ladder is 10-15 small questions, each pulling one
+// piece; that is the whole method.
+const MAX_PLAN_STEPS = 15;
 const CLOSING_KINDS = ['argue', 'switch', 'recommend'];
 function trimToMaxSteps(steps) {
     if (steps.length <= MAX_PLAN_STEPS) return steps;
@@ -1901,6 +1918,7 @@ function normalisePlan(r, criterionId, bricks) {
         return {
             id, kind,
             prompt: String(s.prompt || '').trim(),
+            draws: String(s.draws || '').trim(),
             targetBrickIds: (Array.isArray(s.targetBrickIds) ? s.targetBrickIds : []).map(x => String(x).replace(/\s+/g, '')).filter(x => brickIds.has(x)),
             terms: (Array.isArray(s.terms) ? s.terms : []).map(x => String(x || '').replace(/\s+/g, ' ').trim()).filter(Boolean),
             itemHint: kind === 'list' && s.itemHint ? String(s.itemHint).slice(0, 60) : null,
@@ -1919,7 +1937,7 @@ function normalisePlan(r, criterionId, bricks) {
     if (!steps.length) throw new Error('The plan had no usable steps — try again.');
     factsFirst(steps);
     noTheoryBeforeFacts(steps);
-    for (const s of steps) s.prompt = capWords(leadingAsk(s.prompt), 24);
+    for (const s of steps) s.prompt = capWords(leadingAsk(s.prompt), 30);
     listNeedsASentence(steps);
     trimToMaxSteps(steps);
     // A numbers step with no rows becomes a plain ask; a tag/proscons step
