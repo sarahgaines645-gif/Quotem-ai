@@ -544,8 +544,10 @@
       display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-bottom: 8px;
     }
     .coach-card .q-actions.hidden { display: none; }
-    .coach-card .q-actions .q-btn { text-align: center; }
-    .coach-card .q-actions .q-btn.big { flex: 1 1 100%; }
+    /* Secondary actions are small pills that sit SIDE BY SIDE — several per
+       row, not a stack down the card. Only the one main action spans. */
+    .coach-card .q-actions .q-btn { text-align: center; font-size: 10.5px; padding: 5px 9px; flex: 0 0 auto; }
+    .coach-card .q-actions .q-btn.big { flex: 1 1 100%; font-size: 13px; padding: 10px 14px; }
     /* Talking to Q: the thread on the card — you / Q, last few exchanges, scrolls */
     .coach-card .q-chat { display: flex; flex-direction: column; gap: 10px; max-height: 52vh; overflow-y: auto; margin: 0 0 10px; padding-right: 4px; scrollbar-width: thin; }
     .coach-card .q-chat-m { display: block; min-width: 0; }
@@ -1366,7 +1368,7 @@
     .wb-line .wb-line-i { font-size: 15px; font-weight: 700; color: var(--accent); flex-shrink: 0; }
     .wb-line-sum { font-variant-numeric: tabular-nums; letter-spacing: 0.02em; }
     .wb-line-note { font-weight: 500; font-size: 15px; color: var(--text-muted); }
-    .wb-col { padding: 10px 12px 12px; border-radius: 14px; box-shadow: var(--neu-inset-sm); }
+    .wb-col { padding: 10px 12px 12px; border-radius: 14px; box-shadow: var(--neu-raised-xs); }   /* you read these, you don't type into them */
     .wb-col-h { font-size: 12px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: var(--tagc, var(--text-muted)); margin-bottom: 8px; display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px 6px; }
     .wb-col-h .wb-name { white-space: nowrap; }
     .wb-col-h::before { content: ''; width: 10px; height: 10px; border-radius: 50%; background: var(--tagc, var(--text-faint)); }
@@ -1379,15 +1381,15 @@
     .wb-table th { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-faint); text-align: left; padding: 0 10px; }
     .wb-table td { padding: 8px 10px; }
     .wb-table td.wb-lab { font-weight: 700; color: var(--text); }
-    .wb-table td.wb-val { box-shadow: var(--neu-inset-sm); border-radius: 10px; font-weight: 600; min-width: 90px; }
+    .wb-table td.wb-val { box-shadow: var(--neu-raised-xs); border-radius: 10px; font-weight: 600; min-width: 90px; }   /* her answer shown back, not a field */
     .wb-table td.wb-val.empty { color: var(--text-faint); font-weight: 400; }
     .wb-table tr.cur td.wb-lab { color: var(--accent); }
     .wb-pc { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
     .wb-pc-item { grid-column: 1 / -1; font-size: 15px; font-weight: 700; color: var(--tagc, var(--text)); margin-top: 6px; }
-    .wb-pc-cell { padding: 10px 12px; border-radius: 12px; box-shadow: var(--neu-inset-sm); font-size: 14px; color: var(--text); min-height: 42px; }
+    .wb-pc-cell { padding: 10px 12px; border-radius: 12px; box-shadow: var(--neu-raised-xs); font-size: 14px; color: var(--text); min-height: 42px; }   /* her answer shown back, not a field */
     .wb-pc-cell.empty { color: var(--text-faint); font-style: italic; }
     .wb-pc-cell .wb-pc-l { display: block; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-faint); margin-bottom: 2px; }
-    .wb-pc-cell.cur { box-shadow: var(--neu-inset-sm), 0 0 0 2px var(--accent) inset; }
+    .wb-pc-cell.cur { box-shadow: var(--neu-raised-sm), 0 0 0 2px var(--accent) inset; }   /* "the one we're on" lifts — it doesn't sink */
     .wb-for { font-size: 13px; color: var(--text-muted); margin: 6px 0 4px; overflow-wrap: anywhere; }
     .wb-for i { color: var(--text); font-style: italic; }
     .wb-sec { font-size: 10px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--accent); margin: 14px 0 6px; }
@@ -1444,12 +1446,17 @@
     .wb-cb.on { box-shadow: var(--neu-inset-sm); }
     /* The action bar — QB2 has Send / Save / Change / Copy; ours sends to HER PAGE. */
     .wb-acts { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 14px; padding-top: 12px; border-top: 1px solid rgba(0,0,0,0.07); }
+    /* The board's own editor. A small input is a well; this is the whole
+       surface, and sinking it when she presses Edit makes the board look
+       indented (Sarah, 17 Aug: "indented again"). So it stays the raised card
+       it was — she is editing the board, not filling in a box. */
     .wb-edit {
       width: 100%; min-height: 220px; resize: vertical;
       font-family: 'Space Grotesk', sans-serif; font-size: 13px; line-height: 1.55;
       color: var(--text); background: var(--bg); border: none; outline: none;
-      border-radius: 12px; box-shadow: var(--neu-inset-sm); padding: 12px 14px;
+      border-radius: 12px; box-shadow: var(--neu-raised-xs); padding: 12px 14px;
     }
+    .wb-edit:focus { box-shadow: var(--neu-raised-sm); }
     /* A report on the display: one raised row per point, the thing it is about
        named first and bold, what's wrong with it after (Sarah's card rule). */
     .wb-rep { display: flex; flex-direction: column; gap: 7px; margin: 10px 0 4px; }
@@ -4979,9 +4986,12 @@
     function reportToWhiteboard({ title, kicker, lead, rows, say }) {
       if (!rows || !rows.length) return '';
       if (rows.length === 1) return String(lead || title || '');
-      state.wbReport = { title, kicker, lead, rows };
-      state.wbFind = null; state.wbLesson = null;
-      showPanel('wb'); revealPanel('wb'); renderWhiteboard();
+      // Through the real display, as markdown — same surface as everything else.
+      showOnWhiteboard(title || 'Q has read your page', [
+        '## ' + (title || 'Q has read your page'),
+        kicker ? '##### ' + kicker : '',
+        '',
+      ].concat(rows.map(r => '🔴 **' + (r.head || '') + '** — ' + (r.text || ''))).filter((x, i, a) => x !== '' || a[i - 1] !== '').join('\n'));
       return say || `I've listed them on the whiteboard so you can work through them one at a time.`;
     }
     // A LESSON IS A TEACHING ARTEFACT — it belongs on the board he teaches on,
@@ -5366,9 +5376,16 @@
         // something. He used to be handed msg:'' with the lesson bolted on
         // underneath — present on screen, absent as a person (Sarah, 17 Aug:
         // "Q feels unavailable, absent").
-        state.wbReport = null; state.wbFind = null;
-        state.wbLesson = { term: d.term, lesson: d.lesson, example: d.example, links, watch: terms[0] || d.term || ask };
-        showPanel('wb'); revealPanel('wb'); renderWhiteboard();
+        showOnWhiteboard(d.term || 'A quick lesson', [
+          '## ' + (d.term || 'A quick lesson'),
+          '##### the idea you need first',
+          '',
+          String(d.lesson || ''),
+          d.example ? '' : '',
+          d.example ? '> e.g. ' + d.example : '',
+          '',
+          '💡 Read it, then press **Got it** on Q\'s card — he\'ll ask you to use it.',
+        ].filter(Boolean).join('\n'));
         setCoach({
           msg: d.term ? `Right — the idea you need first is **${d.term}**. I've put it on the whiteboard.` : `Let me give you the idea behind that first — it's on the whiteboard.`,
           where: whereText(whereInfo()),
@@ -7138,7 +7155,10 @@
       if (/case stud|real example|other compan|other organisation/i.test(needStr) || suggested.includes('cases')) problemTools.push('cases');
       if (/\bterm|terminolog|proper name for|call(ed)? it/i.test(needStr) || suggested.includes('terminology')) problemTools.push('terminology');
       problemTools.push('facts');
-      const PROBLEM_LABEL = { cite: 'Find a source →', strategies: 'Find the theory →', cases: 'Find a case →', terminology: 'Find the term →', facts: 'Find facts in the case →' };
+      // Short labels — these sat one per row and ate the whole card (Sarah,
+      // 17 Aug: "these are still taking up the whole chat"). The card above
+      // already says what is missing, so the button only has to name the tool.
+      const PROBLEM_LABEL = { cite: 'Find source', strategies: 'Find theory', cases: 'Find case', terminology: 'Find term', facts: 'Find facts' };
       const problemActions = Array.from(new Set(problemTools)).slice(0, 3).map(t => ({ label: PROBLEM_LABEL[t] || (EDIT_TOOL_LABELS[t] + ' →'), onClick: () => useTool(t, it) }));
       const editNow = () => {
         // caret at the end of the pink sentence, then Q's help for the missing thing
@@ -7176,17 +7196,18 @@
       // it, with the buttons that act on it. It used to be the other way
       // round: the detail crammed onto the card as furniture, and msg:'' —
       // Q silent again, for the fifth time today.
-      state.wbReport = null; state.wbFind = null; state.wbLesson = null;
-      state.wbReport = {
-        title: 'Sentence ' + (i + 1) + ' of ' + items.length,
-        kicker: where || 'Mark & fix',
-        lead: it.sentence || '',
-        rows: [
-          { head: 'Missing', text: missingLine },
-          { head: 'Do this', text: doLine },
-        ],
-      };
-      showPanel('wb'); revealPanel('wb'); renderWhiteboard();
+      // Through the REAL display (markdown, colour, callouts) — not the old
+      // fixed-HTML report. Sarah, 17 Aug: "the whiteboard still looks the same."
+      // It did, because nothing was routed through showOnWhiteboard yet.
+      showOnWhiteboard('Sentence ' + (i + 1) + ' of ' + items.length, [
+        '## Sentence ' + (i + 1) + ' of ' + items.length,
+        '',
+        '> ' + String(it.sentence || '').replace(/\s+/g, ' ').trim(),
+        '',
+        '🔴 **Missing** — ' + missingLine,
+        '',
+        '💡 **Do this** — ' + doLine,
+      ].join('\n'));
       // Q's own line about this sentence when the mark gave us one; otherwise
       // his written line, so he is never silent on a card with his name on it.
       const saidLine = String(it.say || '').trim() || missingLine;
