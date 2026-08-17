@@ -3873,7 +3873,7 @@
       const guess = String(rq.label || '').replace(/\s+(named|name it|is named|mentioned|cited|used|shown|given)\.?$/i, '').replace(/^(a|an|the)\s+(theory|model|framework)\s+(called|named)\s+/i, '').trim();
       const btnLabel = spec.act === 'add' ? 'Add this →' : spec.act === 'cite' ? 'Auto cite →' : spec.act === 'refs' ? 'Find the source →' : spec.label;
       const lineHtml = spec.act === 'add'
-        ? '<div class="pc-line" id="dot-line">' + escHtml(spec.line) + ' <b id="dot-name">' + escHtml(guess || '…') + '</b>.</div><div class="pc-line" id="dot-fit" style="color:var(--text-muted)"></div>'
+        ? '<div class="pc-line" id="dot-line">' + escHtml(spec.line) + ' <b id="dot-name">' + escHtml(guess || '…') + '</b>.</div><div class="pc-line" id="dot-fit" style="color:var(--text-muted)"></div>'   // the name is filled by the plan's label or, only if that is generic, by Q — never swapped once shown
         : '<div class="pc-line" id="dot-line">' + escHtml(spec.line) + '</div>';
       const kindWord = String(kind || 'point').replace(/-/g, ' ').replace(/^\w/, c => c.toUpperCase());
       showToolPop('<div class="pc-head"><span class="pc-dot" style="--dc:' + rq.colour + '"></span>' + escHtml(kindWord) + '</div>' + lineHtml + '<div class="pc-explain" id="dot-explain"></div><button type="button" class="q-btn primary" id="dot-action">' + escHtml(btnLabel) + '</button><div class="pc-links"><a href="#" id="dot-explain-link">Explain this</a><a href="#" id="dot-here">Put my cursor here</a></div>', { anchor: dot, kind: 'Missing here' });
@@ -3890,21 +3890,39 @@
       };
       const ex = toolPopEl.querySelector('#dot-explain-link'); if (ex) ex.addEventListener('click', (e) => { e.preventDefault(); const out = toolPopEl.querySelector('#dot-explain'); if (out) explainNow(out, ex); });
       if (spec.act === 'add') {
-        // The exact name, from the strategies tool (one small call); the
-        // label's guess stands in until it lands. Add this → the name goes
-        // into her sentence at the ring — the same as pressing a word button.
-        let name = /\bor\b/i.test(guess) ? '' : guess;
-        const fit = toolPopEl.querySelector('#dot-fit'); const nameEl = toolPopEl.querySelector('#dot-name');
-        if (fit) fit.textContent = 'Checking the exact name…';
-        api('/writer/tool', { tool: 'strategies', sentence: it.sentence || (rq.label + ' — ' + (dot.dataset.why || '')), word: '', brickId: null, yearGroup: state.yearGroup || '' }, { timeoutMs: 45000 })
-          .then(d => { const h = String((d && d.headline) || '').trim(); if (h) { name = h; if (nameEl) nameEl.textContent = h; } if (fit) fit.textContent = (d && d.points && d.points[0]) ? String(d.points[0]) : ''; })
-          .catch(() => { if (fit) fit.textContent = name ? '' : 'Could not check the name — pick one from the two above and write it in.'; });
-        btn.addEventListener('click', () => {
-          const n = name || (nameEl ? nameEl.textContent.replace(/\s*\.$/, '') : '');
-          if (!n || n === '…') { if (fit) fit.textContent = 'Which one? Put your cursor here and type the one you mean.'; return; }
-          caretBeforeDot(dot); insertTermAtCaret(n); toolPopEl.classList.remove('dotpop'); hideToolPop();
-          setTimeout(() => { try { renderInlineDots(); } catch (_) {} }, 50);
-        });
+        // Sarah, 17 Aug: "this opens and says the theory you're explaining
+        // is… then 2 seconds later changes to a different theory." Two
+        // sources disagreed: the plan's label (the marker's expectation for
+        // this point) and a generic "which framework fits this sentence"
+        // call. The plan is the truth. If its label carries the name(s), they
+        // are shown at once and NEVER swapped — "X or Y" becomes two Add
+        // buttons. Only a generic label ("the theory named") asks Q, and
+        // then he is told what the marker expects here, and the line shows
+        // nothing until he answers.
+        const nameEl = toolPopEl.querySelector('#dot-name'); const fit = toolPopEl.querySelector('#dot-fit');
+        const addName = (n) => { caretBeforeDot(dot); insertTermAtCaret(n); toolPopEl.classList.remove('dotpop'); hideToolPop(); setTimeout(() => { try { renderInlineDots(); } catch (_) {} }, 50); };
+        const generic = !guess || /^(a|an|the|this|that|its?|your)?\s*(job design |relevant |named |appropriate |a )?(theory|model|framework|theorist)s?$/i.test(guess);
+        if (!generic) {
+          const names = guess.split(/\s+or\s+/i).map(x => x.trim()).filter(Boolean);
+          if (names.length > 1) {
+            if (nameEl) nameEl.textContent = names.join(' — or — ');
+            btn.textContent = 'Add ' + names[0] + ' →';
+            btn.addEventListener('click', () => addName(names[0]));
+            names.slice(1).forEach(n => { const b2 = document.createElement('button'); b2.type = 'button'; b2.className = 'q-btn primary'; b2.style.marginLeft = '6px'; b2.textContent = 'Add ' + n + ' →'; b2.addEventListener('click', () => addName(n)); btn.insertAdjacentElement('afterend', b2); });
+            if (fit) fit.textContent = 'Either fits the marker\'s expectation here — pick the one your sentence is really about.';
+          } else {
+            btn.addEventListener('click', () => addName(names[0]));
+          }
+        } else {
+          if (nameEl) nameEl.textContent = '…';
+          if (fit) fit.textContent = 'Q is naming it…';
+          btn.disabled = true;
+          let name = '';
+          api('/writer/tool', { tool: 'strategies', sentence: it.sentence || (rq.label + ' — ' + (dot.dataset.why || '')), word: '', brickId: null, yearGroup: state.yearGroup || '', focus: rq.label + (dot.dataset.why ? ' — ' + dot.dataset.why : '') }, { timeoutMs: 45000 })
+            .then(d => { const h = String((d && d.headline) || '').trim(); if (h) { name = h; if (nameEl) nameEl.textContent = h; btn.disabled = false; } if (fit) fit.textContent = (d && d.points && d.points[0]) ? String(d.points[0]) : ''; })
+            .catch(() => { if (fit) fit.textContent = 'Could not name it — put your cursor here and write the one you mean.'; });
+          btn.addEventListener('click', () => { if (name) addName(name); });
+        }
       } else if (spec.act === 'cite') {
         btn.addEventListener('click', () => { caretBeforeDot(dot); toolPopEl.classList.remove('dotpop'); runAutoCite({ sentence: it.sentence, criterionId: cid, anchor: dot, dot }); });
       } else if (spec.act === 'refs') {

@@ -1930,6 +1930,7 @@ router.post('/writer/tool', requirePerson, express.json({ limit: '32kb' }), asyn
             brief: t.brief, essay: t.modelEssay || null, sources: t.sources || [], yearGroup: b.yearGroup || t.yearGroup || '',
             caseText: String(b.tool || '') === 'facts' ? ((readStoredDocText(writerScope(req)) || {}).text || '') : '',
             want: b.want ? String(b.want).slice(0, 20) : '',
+            focus: b.focus ? String(b.focus).slice(0, 300) : '',
         });
         ukJson(res, { ok: true, ...help });
     } catch (e) {
