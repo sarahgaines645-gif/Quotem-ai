@@ -404,6 +404,11 @@
     .q-popcard .cite-opt .co-tag { display: inline-block; font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--accent); margin-right: 5px; }
     .q-popcard .cite-opt .co-snip { display: block; font-size: 10px; color: var(--text-faint); font-style: italic; margin-top: 2px; line-height: 1.35; }
     .q-popcard .cite-opt .co-warn { display: block; font-size: 9px; color: var(--accent); margin-top: 2px; }
+    /* what this source would back in her sentence, and how strongly — to choose by (Sarah, 17 Aug) */
+    .q-popcard .cite-opt .co-backs { display: block; font-size: 10px; color: var(--text); margin-top: 3px; line-height: 1.4; }
+    .q-popcard .cite-opt .co-str { display: inline-block; font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; padding: 1px 6px; border-radius: 6px; box-shadow: var(--neu-inset-sm); margin-right: 6px; color: var(--text-muted); }
+    .q-popcard .cite-opt .co-str.strong { color: #2e9e4a; } .q-popcard .cite-opt .co-str.fair { color: #b07f0a; } .q-popcard .cite-opt .co-str.weak { color: var(--accent); }
+    .q-popcard .cite-opt .co-why { color: var(--text-muted); }
     .q-popcard .cite-sent { font-size: 10px; color: var(--text-muted); font-style: italic; margin-bottom: 6px; line-height: 1.35; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
     .refs-yours { display: flex; flex-direction: column; gap: 4px; margin-bottom: 12px; }
     .refs-yours:empty { display: none; }
@@ -1085,6 +1090,25 @@
        separated into columns, a legend; the numbers table; pros & cons in two
        columns; a lesson in big type. Same state as the teaching board. */
     .wb-panel { width: min(760px, calc(100vw - 32px)); }
+    /* MARKING panel */
+    .mk-panel { width: 340px; }
+    .mk-body { padding: 10px 12px 12px; overflow: auto; }
+    .mk-sec { font-size: 9px; font-weight: 700; letter-spacing: 0.09em; text-transform: uppercase; color: var(--text-faint); margin: 10px 0 5px; }
+    .mk-empty { font-size: 12px; color: var(--text-muted); line-height: 1.5; }
+    .mk-part { display: grid; grid-template-columns: auto minmax(0,1fr) auto; gap: 8px; align-items: center; font-size: 12px; padding: 4px 6px; border-radius: 8px; }
+    .mk-part .bd { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
+    .mk-part .mk-band { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-muted); }
+    .mk-part.top .bd { background: #28a745; } .mk-part.mid .bd { background: #e6a817; } .mk-part.low .bd { background: var(--accent); }
+    .mk-item { display: grid; grid-template-columns: 16px minmax(0,1fr); gap: 8px; align-items: baseline; padding: 6px 8px; border-radius: 10px; cursor: pointer; margin-bottom: 4px; box-shadow: var(--neu-raised-xs); }
+    .mk-item:hover { box-shadow: var(--neu-raised-sm); }
+    .mk-item.cur { box-shadow: var(--neu-inset-sm); }
+    .mk-item.done { opacity: 0.55; }
+    .mk-item .mk-st { font-size: 12px; font-weight: 700; color: var(--text-faint); }
+    .mk-item.cur .mk-st { color: var(--accent); }
+    .mk-item.done .mk-st { color: #28a745; }
+    .mk-item .mk-s { font-size: 11px; color: var(--text); line-height: 1.4; overflow-wrap: anywhere; }
+    .mk-item .mk-w { font-size: 10px; color: var(--text-muted); line-height: 1.35; margin-top: 1px; }
+    .mk-foot { font-size: 11px; color: var(--text-muted); margin-top: 8px; line-height: 1.45; }
     .wb-body { padding: 14px 18px 16px; overflow: auto; }
     .wb-ask { font-size: 20px; font-weight: 700; line-height: 1.3; color: var(--text); overflow-wrap: anywhere; }
     .wb-ask .wb-step { display: block; font-size: 10px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--text-faint); margin-bottom: 4px; }
@@ -1106,6 +1130,13 @@
     .wb-tile .wb-x { border: none; background: transparent; color: var(--text-faint); cursor: pointer; font-size: 14px; line-height: 1; padding: 0 2px; }
     .wb-tile .wb-x:hover { color: var(--accent); }
     .wb-cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 12px; }
+    /* hers: notes on the board, and moving a tile */
+    .wb-tile.mine { border-left-color: transparent; box-shadow: var(--neu-inset-sm); font-weight: 500; }
+    .wb-tile.movable { cursor: pointer; }
+    .wb-move { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin: -4px 0 6px; }
+    .wb-move .wb-move-l { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-faint); margin-right: 2px; }
+    .wb-move .q-btn { font-size: 11px; color: var(--tagc, var(--text)); }
+    .wb-move .q-btn.quiet { color: var(--text-faint); }
     /* Q's marks on the board: an emoji per group, a note on a tile, his lines under the columns */
     .wb-col-h .wb-emoji { font-size: 16px; line-height: 1; }
     .wb-col-h .wb-emoji + .wb-name { margin-left: 2px; }
@@ -1498,6 +1529,7 @@
         <button type="button" class="meta-btn" id="btn-download" title="Download what is on the page as a Word file">↓ Download</button>
         <button type="button" class="meta-btn primary" id="btn-finish" title="Q marks it like the marker, then walks it with you sentence by sentence — highlight, what's missing, the fix, tools, Check it">Mark &amp; fix →</button>
         <button type="button" class="meta-btn" id="btn-edit-strip" title="Editing — the improvement tools (highlight, then press) and the whole-page passes: Spelling, Grammar, Trim, What's weak" aria-expanded="false">✎ Editing</button>
+        <button type="button" class="meta-btn" id="btn-marks" title="The marking, kept up to date — the bands, the sentences still to fix, the ones you've done. Open it any time; Q stays free to talk.">✓ Marks</button>
       </div>
       <div class="source-slot" id="source-slot">
         <button type="button" class="source-add" id="source-add-btn"
@@ -1634,6 +1666,15 @@
       <button type="button" class="panel-min" id="edit-panel-tog" title="Minimise" aria-label="Minimise the editing panel">−</button>
     </div>
     <div class="panel-body ed-body" id="edit-body"></div>
+    <div class="panel-grip" title="Drag to resize"></div>
+  </div>
+  <!-- MARKING — Sarah, 17 Aug: "the marking needs to be a continuous thing that you can open and it stays updated" -->
+  <div class="qpanel mk-panel hidden" id="mark-panel" data-panel="mark">
+    <div class="panel-head" id="mark-panel-head">
+      <span class="panel-title" id="mark-title">✓ Marking</span>
+      <button type="button" class="panel-min" id="mark-panel-tog" title="Minimise" aria-label="Minimise the marking panel">−</button>
+    </div>
+    <div class="panel-body mk-body" id="mark-body"></div>
     <div class="panel-grip" title="Drag to resize"></div>
   </div>
   <div class="qpanel wb-panel hidden" id="wb-panel" data-panel="wb">
@@ -2192,6 +2233,10 @@
     const editPanel = makePanel(document.getElementById('edit-panel'), 'edit', {
       minW: 260, minH: 180,
       defaults: () => ({ w: 340, left: Math.max(PANEL_M, window.innerWidth - 340 - 16), top: Math.min(window.innerHeight - 340, 420) }),
+    });
+    const markPanel = makePanel(document.getElementById('mark-panel'), 'mark', {
+      minW: 260, minH: 200,
+      defaults: () => ({ w: 340, left: Math.max(PANEL_M, window.innerWidth - 340 - 16 - 336), top: 72 }),   // to the LEFT of the coach card (which is 320 wide when it is marking)
     });
     const wbPanel = makePanel(document.getElementById('wb-panel'), 'wb', {
       minW: 320, minH: 200,
@@ -3509,6 +3554,7 @@
         then && then(); return;
       }
       state.partMarks = state.partMarks || {}; state.partMarks[cid] = { band: m.band, strongest: m.strongest, missingForTop: m.missingForTop, at: Date.now() };
+      setTimeout(() => { try { renderMarkPanel(); } catch (_) {} }, 0);
       persist({ partMarks: state.partMarks });
       const bandWord = { top: 'top band', mid: 'middle band', low: 'lower band', missing: 'not there yet' }[m.band] || m.band;
       const items = (m.critique || []).map(it => ({ sentence: it.sentence, why: it.missing || '', fix: it.fix || '', targetBrickId: it.targetBrickId || null, suggestedTools: it.suggestedTools || [], criterionId: cid, needs: Array.isArray(it.needs) ? it.needs : [] }));
@@ -4424,7 +4470,12 @@
         const terms = termButtonsHtml(cid);
         body = terms ? `<div class="wb-words">${terms}</div><div class="wb-hint">Press a word to drop it into your sentence on the page.</div>` : '<div class="wb-hint">Write it on the page — I read as you go.</div>';
       }
-      wbBody.innerHTML = head + say + body;
+      // Sarah, 17 Aug: "I need to be able to use the whiteboard too so it's
+      // interactive." Her notes strip on every board (type, Enter; × takes one
+      // off), and on a sorting board a tile moves when she presses it.
+      wbBody.innerHTML = head + say + body + wbNotesHtml(cid);
+      wireWbNotes(cid);
+      wireWbMoves(cid, step);
       const inp = document.getElementById('wb-input');
       if (inp) {
         inp.addEventListener('input', () => { if (inp.value.trim()) startedAsk(); });
@@ -4440,6 +4491,49 @@
     }
     // Tiles: plain, or coloured + separated into a column per group once Q
     // has sorted them (his colours, his legend — she wrote the words).
+    // ── Her notes on the whiteboard (per part; saved) ────────────────────
+    state.wbNotes = state.wbNotes || {};
+    function wbNotesHtml(cid) {
+      const notes = (state.wbNotes[cid] || []);
+      const tiles = notes.length ? `<div class="wb-tiles wb-mine">${notes.map((n, i) => `<span class="wb-tile mine"><span>${escHtml(n)}</span><button type="button" class="wb-x" data-note-rm="${i}" title="Take it off">×</button></span>`).join('')}</div>` : '';
+      return `<div class="wb-sec" style="margin-top:16px">Your notes</div>${tiles}<div class="wb-input-row"><input class="wb-input" id="wb-note-input" placeholder="Write on the board — a thought, a fact, a question for later — then Enter" autocomplete="off"></div>`;
+    }
+    function wireWbNotes(cid) {
+      const inp = document.getElementById('wb-note-input'); if (!inp) return;
+      inp.addEventListener('keydown', (e) => {
+        if (e.key !== 'Enter') return; e.preventDefault();
+        const v = inp.value.trim(); if (!v) return;
+        (state.wbNotes[cid] = state.wbNotes[cid] || []).push(v); persist({ wbNotes: state.wbNotes });
+        try { startedAsk(); } catch (_) {}
+        renderWhiteboard(); const again = document.getElementById('wb-note-input'); if (again) again.focus();
+      });
+      wbBody.querySelectorAll('[data-note-rm]').forEach(b => b.addEventListener('click', () => { (state.wbNotes[cid] || []).splice(Number(b.dataset.noteRm), 1); persist({ wbNotes: state.wbNotes }); renderWhiteboard(); }));
+    }
+    // ── Moving a tile between Q's groups (her sort beats his) ─────────────
+    function wireWbMoves(cid, step) {
+      const tagStep = step.kind === 'tag' ? step : (planFor(cid).steps || []).find(x => x.kind === 'tag' && x.itemsFrom === step.id);
+      if (!tagStep) return;
+      const tst = stepStateOf(cid, tagStep.id); if (!tst.tags) return;
+      const tags = tagStep.tags || [];
+      wbBody.querySelectorAll('.wb-tile[data-tag]').forEach(tile => {
+        tile.classList.add('movable');
+        tile.addEventListener('click', (e) => {
+          if (e.target.closest('.wb-x') || e.target.closest('.wb-move')) return;
+          wbBody.querySelectorAll('.wb-move').forEach(x => x.remove());
+          const item = tile.querySelector('span:nth-child(2)') ? tile.querySelector('span:nth-child(2)').firstChild.textContent : '';
+          const cur = tile.dataset.tag;
+          const row = document.createElement('div'); row.className = 'wb-move';
+          row.innerHTML = '<span class="wb-move-l">move to</span>' + tags.filter(t => t.name !== cur).map(t => `<button type="button" class="q-btn" data-move-to="${escHtml(t.name)}" style="--tagc:${TAG_CSS[t.colour] || '#999'}">${(tst.groups && tst.groups[t.name] && tst.groups[t.name].emoji) ? escHtml(tst.groups[t.name].emoji) + ' ' : ''}${escHtml(t.name)}</button>`).join('') + '<button type="button" class="q-btn quiet" data-move-cancel="1">×</button>';
+          tile.insertAdjacentElement('afterend', row);
+          row.querySelectorAll('[data-move-to]').forEach(b => b.addEventListener('click', () => {
+            const key = Object.keys(tst.tags).find(k => String(k).trim().toLowerCase() === String(item).trim().toLowerCase()) || item;
+            tst.tags[key] = b.dataset.moveTo; tst.movedByHer = tst.movedByHer || {}; tst.movedByHer[key] = true;
+            persistSteps(); renderBoard(); renderWhiteboard();
+          }));
+          row.querySelector('[data-move-cancel]').addEventListener('click', () => row.remove());
+        });
+      });
+    }
     function wbTilesHtml(items, tst, tagStep, { removable } = {}) {
       const tags = tagStep ? (tagStep.tags || []) : [];
       const byName = Object.fromEntries(tags.map(t => [t.name, t]));
@@ -5890,6 +5984,7 @@
         const job = await waitForJob('mark', { onTick: (secs) => setCoach({ msg: 'Marking it like the marker… ' + secs + 's', section: 'MARK & FIX', thinking: true, inputVisible: false, step: false }) });
         const m = job.result;
         state.lastMark = m;
+        setTimeout(() => { try { openMarkPanel(); } catch (_) {} }, 0);   // the mark lands → the panel opens and stays
         applyCoverage(m.coverage);
         if (m.brickCounts) state.brickCounts = m.brickCounts;
         applyMatch(m.match);   // the marker's honest tally — the score the fix loop climbs from
@@ -5916,8 +6011,51 @@
       }
     }
     // The end of a pass: the band again, the score climb, mark again / download.
+    // ── THE MARKING PANEL: the mark, kept up to date. Bands per part (the
+    // end mark or the per-question marks), then every sentence the mark
+    // flagged: ● the one Q is on, ○ still to do, ✓ done (rewritten — the
+    // sentence as it was is gone from the page). Press one → the walk goes
+    // there. The coach card stays free — she can talk to Q while it is open.
+    const markBody = document.getElementById('mark-body');
+    function renderMarkPanel() {
+      if (markPanel.el.classList.contains('hidden')) return;
+      const m = state.lastMark;
+      const items = state.editItems || [];
+      const cs = (state.brief && state.brief.criteria) || [];
+      let bands = '';
+      if (m && m.overall) {
+        bands = `<div class="mk-sec">The mark</div>` + bandListHtml(m);
+      } else if (cs.some(c => state.partMarks && state.partMarks[c.id])) {
+        bands = `<div class="mk-sec">Marks so far</div>` + cs.filter(c => state.partMarks[c.id]).map(c => { const pm = state.partMarks[c.id]; return `<div class="mk-part ${escHtml(pm.band || '')}"><span class="bd"></span><span>${escHtml(criterionLabel(c))}</span><span class="mk-band">${escHtml(BAND_WORD[pm.band] || pm.band || '')}</span></div>`; }).join('');
+      }
+      const list = items.length ? `<div class="mk-sec">Sentences to fix (${items.filter(it => !!findInDoc(it.sentence)).length} left)</div>` + items.map((it, i) => {
+        const onPage = !!findInDoc(it.sentence);
+        const cur = walkOn() && i === state.editIndex && onPage;
+        const cls = cur ? ' cur' : (!onPage ? ' done' : '');
+        const st = cur ? '●' : (!onPage ? '✓' : '○');
+        return `<div class="mk-item${cls}" data-mk-i="${i}"><span class="mk-st">${st}</span><div><div class="mk-s">${escHtml(it.sentence.length > 90 ? it.sentence.slice(0, 89) + '…' : it.sentence)}</div>${it.why ? `<div class="mk-w">${escHtml(it.why)}</div>` : ''}</div></div>`;
+      }).join('') : '';
+      const empty = !bands && !list ? '<div class="mk-empty">Nothing marked yet — press <b>Mark & fix →</b> when a question is written, or finish a step and Q marks that bit.</div>' : '';
+      const foot = list ? '<div class="mk-foot">Press a sentence to go to it. ✓ = you changed it. Q stays on the coach card — ask him anything while this is open.</div>' : '';
+      markBody.innerHTML = bands + list + empty + foot;
+      markBody.querySelectorAll('.mk-item').forEach(el => el.addEventListener('click', () => {
+        const i = Number(el.dataset.mkI); const it = (state.editItems || [])[i]; if (!it) return;
+        if (!findInDoc(it.sentence)) return;   // rewritten — nothing to go to
+        state.editIndex = i; state.editing = true; state.editDone = false; state.chatMode = false;
+        coachCard.classList.add('wide'); showEditItem();
+      }));
+    }
+    function openMarkPanel({ toggle } = {}) {
+      const isOpen = !markPanel.el.classList.contains('hidden');
+      if (toggle && isOpen) { hidePanel('mark'); return; }
+      showPanel('mark'); revealPanel('mark'); renderMarkPanel();
+    }
+    document.getElementById('btn-marks').addEventListener('click', () => openMarkPanel({ toggle: true }));
+    let mkSweepT = null;
+    docBody.addEventListener('input', () => { if (!markPanel.el.classList.contains('hidden')) { clearTimeout(mkSweepT); mkSweepT = setTimeout(() => { try { renderMarkPanel(); } catch (_) {} }, 500); } });
     function endFixPass({ nothing } = {}) {
       endEditStage();
+      setTimeout(() => { try { renderMarkPanel(); } catch (_) {} }, 0);
       // A per-question pass ends by carrying on to the next question — the
       // whole-document buttons below are for the end-of-essay mark only.
       if (state.partFixThen) {
@@ -6200,6 +6338,7 @@
       persist({ editPos: { kind: state.editWalkKind || 'mark', key: state.editWalkKey || state.editStepKey || null, index: i, at: Date.now() } });
       const where = editWhere(it);
       renderBoard();   // the board's WHERE line follows the sentence's part
+      try { renderMarkPanel(); } catch (_) {}
       const suggested = (it.suggestedTools || []).filter(t => EDIT_TOOL_LABELS[t]);
       const tools = ['cite', 'facts'].concat(suggested.filter(t => t !== 'cite' && t !== 'facts'), EDIT_TOOL_ORDER.filter(t => t !== 'cite' && t !== 'facts' && !suggested.includes(t)));   // Auto cite and the case always lead
       hideToolPop();
@@ -6595,7 +6734,8 @@
         const html = '<div class="cite-sent">' + escHtml(sent) + '</div>' + cands.map((c, i) => {
           const who = (c.authors || []).map(a => a.family).slice(0, 3).join(', ') + ((c.authors || []).length > 3 ? ' et al.' : '');
           const meta = [who, c.year, c.journal || c.publisher || (c.type === 'book' ? 'book' : '')].filter(Boolean).join(' · ');
-          return '<button type="button" class="q-btn cite-opt" data-i="' + i + '">' + (c.fromUpload ? '<span class="co-tag">from your uploads</span>' : '') + '<span class="co-title">' + escHtml(c.title || '') + '</span><span class="co-meta">' + escHtml(meta) + ' — ' + escHtml(c.inText || '') + '</span>' + (c.snippet ? '<span class="co-snip">“' + escHtml(c.snippet.slice(0, 140)) + (c.snippet.length > 140 ? '…' : '') + '”</span>' : '') + ((c.warnings || []).length ? '<span class="co-warn">check: ' + escHtml(c.warnings.join('; ')) + '</span>' : '') + '</button>';
+          const backs = (c.strength || c.backs) ? '<span class="co-backs">' + (c.strength ? '<span class="co-str ' + escHtml(c.strength) + '">' + escHtml(c.strength) + '</span>' : '') + (c.backs ? 'backs: ' + escHtml(c.backs) : '') + (c.strengthWhy ? ' <span class="co-why">— ' + escHtml(c.strengthWhy) + '</span>' : '') + '</span>' : '';
+          return '<button type="button" class="q-btn cite-opt" data-i="' + i + '">' + (c.fromUpload ? '<span class="co-tag">from your uploads</span>' : '') + '<span class="co-title">' + escHtml(c.title || '') + '</span><span class="co-meta">' + escHtml(meta) + ' — ' + escHtml(c.inText || '') + '</span>' + backs + (c.snippet ? '<span class="co-snip">“' + escHtml(c.snippet.slice(0, 140)) + (c.snippet.length > 140 ? '…' : '') + '”</span>' : '') + ((c.warnings || []).length ? '<span class="co-warn">check: ' + escHtml(c.warnings.join('; ')) + '</span>' : '') + '</button>';
         }).join('') + '<div class="pc-nudge">Press one — it goes in as a Harvard citation and joins your reference list.</div>';
         showToolPop(html, { kind, anchor });
         toolPopEl.classList.add('cite');
@@ -6653,6 +6793,7 @@
       // 2. the reference list entry (deduped) + the drawer + the notebook
       appendReference(c.reference);
       noteReference(c, { point: sentence, criterionId: cid });
+      if (c.strength) noteStrength(c, sentence, c.strength + (c.strengthWhy ? ' — ' + c.strengthWhy : ''));   // the chooser's judgement carries to the board at once
       wordEl.textContent = countWords() + ' words'; scheduleAutosave();
       // 3. the citation / reference dot for this part clears (the notebook's honest read is told)
       try {
@@ -7130,6 +7271,7 @@
         });
         state.currentQuestion = t.currentQuestion || '';
         state.askFresh = typeof t.askFresh === 'string' && t.askFresh ? t.askFresh : null;
+        state.wbNotes = t.wbNotes && typeof t.wbNotes === 'object' ? t.wbNotes : {};
         state.docSnapshot = t.probeSnapshot && docPlainText().endsWith(t.probeSnapshot) ? docPlainText() : docPlainText();
         boardFromSteps();
         renderBoard();

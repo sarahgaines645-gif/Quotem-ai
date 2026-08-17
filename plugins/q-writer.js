@@ -1981,6 +1981,44 @@ Answer as Q.`;
     return { reply, board, next: r && r.next ? capWords(String(r.next), 14) : null };
 }
 
+// ── JUDGE THE SOURCE CANDIDATES (Sarah, 17 Aug: "when we auto cite they
+// should have the small points of what this is backing under so you know
+// how to choose them… and strong, weak"). One small call over the shortlist:
+// for each candidate, the point it would back in HER sentence and how
+// strongly, honestly — so she can choose.
+const CITE_JUDGE_SCHEMA = {
+    type: 'object', additionalProperties: false,
+    required: ['judged'],
+    properties: {
+        judged: { type: 'array', items: { type: 'object', additionalProperties: false, required: ['i', 'backs', 'strength', 'why'], properties: {
+            i: { type: 'integer', description: 'The candidate number as listed.' },
+            backs: { type: 'string', description: 'What in the student\'s sentence this source would back, 5-12 plain words ("that software now sets the targets", "the link between monitoring and trust").' },
+            strength: { type: 'string', enum: ['strong', 'fair', 'weak'], description: 'strong = squarely on this point, a serious source; fair = related, partial, or older; weak = a stretch — different topic, sector or claim.' },
+            why: { type: 'string', description: 'Why, 4-10 words ("peer-reviewed, exactly this", "retail, not warehousing", "about well-being, not trust").' },
+        } } },
+    },
+};
+async function judgeCiteCandidates({ sentence, candidates, brief }) {
+    const list = (Array.isArray(candidates) ? candidates : []).slice(0, 6);
+    if (!list.length) return [];
+    const system = withHouseStyle(`You are Q, helping a student choose which source to cite behind ONE sentence of their essay. For each candidate say what in their sentence it would back, and how strongly — honestly. A source that is only loosely about the topic is weak, and you say so; a strong claim needs a strong source. Plain words.
+${brief ? 'THE ASSIGNMENT (context): ' + String(brief.title || '') + ' — ' + String(brief.whatItWants || '').slice(0, 400) : ''}`);
+    const user = `THE SENTENCE: "${String(sentence || '').slice(0, 600)}"
+
+CANDIDATES:
+${list.map((c, i) => `${i + 1}. ${c.title || ''} — ${(c.authors || []).map(a => a && (a.family || a.name || '')).filter(Boolean).slice(0, 3).join(', ')} ${c.year || ''}${c.fromUpload ? ' [the student\'s own upload]' : ''}${c.snippet ? `
+   says: "${String(c.snippet).slice(0, 260)}"` : ''}`).join('\n')}
+
+Judge each.`;
+    const r = await callAccurate(system, user, { maxTokens: 700, schema: CITE_JUDGE_SCHEMA, effort: 'low' });
+    const out = [];
+    for (const j of (r && Array.isArray(r.judged) ? r.judged : [])) {
+        const i = Number(j.i) - 1; if (!(i >= 0 && i < list.length)) continue;
+        out[i] = { backs: capWords(String(j.backs || '').trim(), 14), strength: ['strong', 'fair', 'weak'].includes(j.strength) ? j.strength : '', why: capWords(String(j.why || '').trim(), 12) };
+    }
+    return out;
+}
+
 // ── TAG: Q sorts the student's list into the plan's tags. One small call. ──
 // Sarah, 17 Aug: "you write them on the whiteboard… and then he will
 // rearrange them and use colour and emojis and formatting to show you how
@@ -2680,7 +2718,7 @@ function ukPolishResponse(value, key, parentKey) {
 module.exports = {
     ukPolishResponse, ukText, UK_LINE, PLAIN_QUESTION_RULE, withHouseStyle, plainLabel, capWords, capSentences, parseWeight, termCanon,
     TUTOR_MISSION, WHY_THE_GAME, GAME_RULE, COACH_VOICE, MISSION_BLOCK, withMission, BRICK_LOOP_RULE, TO_THE_POINT, MAX_CRITIQUE,
-    toolHelp, checkSentence, matchScore, EDIT_TOOLS, TOOL_SCHEMA, CHECK_SCHEMA, proofread, PROOF_KINDS, chatAnswer, CHAT_SCHEMA,
+    toolHelp, checkSentence, matchScore, EDIT_TOOLS, TOOL_SCHEMA, CHECK_SCHEMA, proofread, PROOF_KINDS, chatAnswer, CHAT_SCHEMA, judgeCiteCandidates,
     planPart, normalisePlan, planForPrompt, tagItems, checkStep, brickById, bricksOfCriterion,
     PLAN_SCHEMA, TAG_SCHEMA, STEP_CHECK_SCHEMA, STEP_KINDS, TAG_COLOURS,
     teachFor, relabelCriteria, labelLooksGenerated, TEACH_SCHEMA, LABELS_SCHEMA,

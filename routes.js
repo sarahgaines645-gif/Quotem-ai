@@ -1774,8 +1774,16 @@ router.post('/writer/cite', requirePerson, express.json({ limit: '32kb' }), asyn
     };
     try {
         const out = await qCite.findSources({ claimSentence: sentence, subject: (t.brief && t.brief.subject) || '', level: t.yearGroup || '', uploadedSources: t.sources || [], max: 5, extractMeta });
+        // What each would back, and how strongly — so she can choose (17 Aug). A failed judgement leaves the list as it was.
+        let candidates = out.candidates || [];
+        if (candidates.length) {
+            try {
+                const judged = await qWriter.judgeCiteCandidates({ sentence, candidates, brief: t.brief });
+                candidates = candidates.map((c, i) => judged[i] ? { ...c, backs: judged[i].backs, strength: judged[i].strength, strengthWhy: judged[i].why } : c);
+            } catch (e) { console.warn('[writer/cite] judge failed:', e.message); }
+        }
         // Titles / names / references are never "polished" — they are the source's own words.
-        res.json({ ok: true, sentence, candidates: out.candidates, searched: out.searched, note: out.note ? qWriter.ukText(out.note) : '' });
+        res.json({ ok: true, sentence, candidates, searched: out.searched, note: out.note ? qWriter.ukText(out.note) : '' });
     } catch (e) {
         writerFail(res, e, '[writer/cite]', 'source search');
     }
@@ -2422,7 +2430,7 @@ const TUTOR_KEYS = [
     // scaffolded coaching (15 Aug late): where they are in the part plan, the
     // filled scaffolds, the page's model-call tally per part. plans[] itself is
     // written by the plan job only.
-    'stepState', 'currentStep', 'calls', 'openerDone', 'askFresh', 'gradeSchemeChosen',
+    'stepState', 'currentStep', 'calls', 'openerDone', 'askFresh', 'gradeSchemeChosen', 'wbNotes',
     // the marking stage (15 Aug 23:40): the Harvard list the page keeps in
     // sync with the essay, and the dots Q placed inside the student's text.
     'references', 'inlineDots',
