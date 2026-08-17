@@ -1714,7 +1714,7 @@
       setupDone: false,
       docSnapshot: '',        // doc text at time Q last asked a question
       qWordsWritten: 0,       // words Q has inserted into the doc this session
-      gradeScheme: 'GCSE (9-1)',
+      gradeScheme: 'as the brief says',   // Sarah, 17 Aug: "he's still marking in GCSE" — the code default was GCSE 9-1; the brief decides now
       settings: { pauseMs: 7000, coachMode: 'pause' },   // coachMode: 'pause' | 'button' (Sarah, 16 Aug: "a toggle… when I stop to think he starts to ask the question in a different way and I'm still thinking")
       brickCounts: {},        // { criterionId: { voiced, total } } — counts only, never the essay
       essayReady: false,
@@ -3807,7 +3807,7 @@
       const sel = window.getSelection(); sel.removeAllRanges(); sel.addRange(r); docBody.focus();
       return r;
     }
-    const DOT_ACTION_LABEL = { cite: 'Auto cite', references: 'References', cases: 'Case studies', strategies: 'Strategies', terminology: 'Terminology', weak: 'What\'s weak', synonyms: 'Synonyms', dictionary: 'Dictionary' };
+    const DOT_ACTION_LABEL = { cite: 'Auto cite', facts: 'Facts in the case', references: 'References', cases: 'Case studies', strategies: 'Strategies', terminology: 'Terminology', weak: 'What\'s weak', synonyms: 'Synonyms', dictionary: 'Dictionary' };
     // Click a dot → the popup: what's missing right there + ONE action.
     function openDotPopup(dot) {
       if (dot.dataset.mk) {
@@ -4017,7 +4017,7 @@
     // Grammar mark every slip on the page (CSS Highlight API) and list them
     // with Fix / Fix all — the smallest change to HER word, never a rewrite.
     const edBody = document.getElementById('edit-body');
-    const ED_TOOL_ORDER = ['cite', 'weak', 'terminology', 'synonyms', 'dictionary', 'strategies', 'cases', 'references'];
+    const ED_TOOL_ORDER = ['cite', 'facts', 'weak', 'terminology', 'synonyms', 'dictionary', 'strategies', 'cases', 'references'];
     let edArmed = null;                 // a tool waiting for a highlight
     let edProof = { kind: null, issues: [], busy: false };
     function docSelection() {
@@ -4034,10 +4034,18 @@
     function edRunTool(tool) {
       const sel = docSelection();
       if (!sel && tool === 'weak') { edRunPass('weak'); return; }   // Sarah, 17 Aug: "the what's weak should cover the whole page not highlighted"
+      // In a Mark & fix walk the tools work on the pink sentence Q is on — no highlight needed.
+      if (!sel && walkOn() && state.editItems[state.editIndex]) { useTool(tool, state.editItems[state.editIndex]); return; }
       if (!sel) {
         // press first, then highlight
         edArmed = tool; renderEditPanel();
-        setCoach({ msg: 'Now highlight the words on the page — ' + (EDIT_TOOL_LABELS[tool] || tool) + ' runs on what you pick.', hint: 'Drag across a sentence, or double-click a word.', inputVisible: false, step: false, actions: [{ label: 'Cancel', quiet: true, onClick: () => { edArmed = null; renderEditPanel(); } }] });
+        // Sarah, 17 Aug: "after I pressed one of the editing tools the
+        // directions appeared in Q's chat and the marking process was then
+        // over." The fix card is never overwritten by a tool: the direction
+        // goes in the pop-up when a walk is on, on the card only otherwise.
+        const line = 'Now highlight the words on the page — ' + (EDIT_TOOL_LABELS[tool] || tool) + ' runs on what you pick.';
+        if (walkOn()) showToolPop('<div class="pc-line">' + escHtml(line) + '</div><div class="pc-nudge">Drag across a sentence, or double-click a word.</div>', { kind: EDIT_TOOL_LABELS[tool] || tool });
+        else setCoach({ msg: line, hint: 'Drag across a sentence, or double-click a word.', inputVisible: false, step: false, actions: [{ label: 'Cancel', quiet: true, onClick: () => { edArmed = null; renderEditPanel(); } }] });
         return;
       }
       edArmed = null; renderEditPanel();
@@ -4105,10 +4113,12 @@
     // Q coaches, never writes: jump to the sentence and put the steer on the
     // coach card — she rewrites it herself. The row closes when the sentence
     // is no longer on the page as it was.
+    function walkOn() { return !!(state.editing && !state.editDone && state.editItems && state.editItems.length); }
     function edShowMe(i) {
       const is = edProof.issues[i]; if (!is) return;
       edGoTo(i);
       const what = is.verdict === 'weak' ? 'Make this stronger' : 'Say this in fewer words';
+      if (walkOn()) { showToolPop('<div class="pc-head">' + escHtml(what) + '</div><div class="pc-line">' + escHtml(is.steer || is.why || '') + '</div><div class="pc-nudge">Rewrite it on the page in your own words — I never write it for you.</div>', { kind: is.verdict === 'weak' ? 'What\'s weak' : 'Trim' }); return; }
       setCoach({ msg: what + ' — ' + (is.steer || is.why || ''), hint: (is.verdict === 'weak' ? (is.why ? 'Why it\'s weak: ' + is.why + ' ' : '') : (is.why ? is.why + ' ' : '')) + 'Rewrite it on the page in your own words — I never write it for you. The mark comes off when it\'s changed.', inputVisible: false, step: false, showNudge: false });
     }
     // The page changed: any tighten / weak sentence that is no longer there as it was is done.
@@ -4176,7 +4186,7 @@
       edBody.querySelectorAll('[data-ed-fix]').forEach(b => b.addEventListener('click', (e) => { e.stopPropagation(); edFix(Number(b.dataset.edFix)); }));
       edBody.querySelectorAll('.ed-issue').forEach(row => row.addEventListener('click', () => edGoTo(Number(row.dataset.edI))));
     }
-    const ED_TOOL_TIPS = { cite: 'A real source for the highlighted claim, put in Harvard', weak: 'What is weak — in what you highlighted, or across the whole page if nothing is highlighted — and what would make it strong', terminology: 'The proper term for what you highlighted', synonyms: 'Other words for the ONE word you highlighted', dictionary: 'What the ONE word you highlighted means', strategies: 'The theory or model that fits what you highlighted', cases: 'A case or example that fits', references: 'What to read for this point' };
+    const ED_TOOL_TIPS = { cite: 'A real source for the highlighted claim, put in Harvard', facts: 'Things from the case / brief you could use to back up the highlighted sentence — figures, names, events — as a list', weak: 'What is weak — in what you highlighted, or across the whole page if nothing is highlighted — and what would make it strong', terminology: 'The proper term for what you highlighted', synonyms: 'Other words for the ONE word you highlighted', dictionary: 'What the ONE word you highlighted means', strategies: 'The theory or model that fits what you highlighted', cases: 'A case or example that fits', references: 'What to read for this point' };
     function openEditPanel({ toggle } = {}) {
       const btn = document.getElementById('btn-edit-strip');
       const open = toggle ? edBody.classList.contains('hidden') : true;
@@ -5628,6 +5638,9 @@
     let markRunning = false;
     async function markAndFix() {
       if (markRunning) return;
+      // A walk already on comes back to the sentence we were on (a tool, the
+      // strip or a pop-up may have covered the card) — never a second mark.
+      if (walkOn() && state.editIndex < state.editItems.length) { coachCard.classList.add('wide'); showEditItem(); return; }
       if (!state.brief) { setCoach({ msg: 'Drop your task in first — I mark against the brief.', inputVisible: true }); return; }
       const text = docPlainText();
       if (!text.trim()) { setCoach({ msg: 'There is nothing on the page yet — answer a step or write on the page first.', inputVisible: true, showNudge: !!state.currentStep }); return; }
@@ -5854,7 +5867,7 @@
     // the page; "Check it" (or their next pause) compares it to Q's target
     // and answers with a closeness cue — closer / that's it / one thing still
     // missing — never the target text. Then the next sentence.
-    const EDIT_TOOL_LABELS = { cite: 'Auto cite', terminology: 'Terminology', synonyms: 'Synonyms', dictionary: 'Dictionary', strategies: 'Strategies / theories', cases: 'Case studies', references: 'References', weak: 'What\'s weak' };
+    const EDIT_TOOL_LABELS = { cite: 'Auto cite', facts: 'Facts in the case', terminology: 'Terminology', synonyms: 'Synonyms', dictionary: 'Dictionary', strategies: 'Strategies / theories', cases: 'Case studies', references: 'References', weak: 'What\'s weak' };
     const EDIT_TOOL_ORDER = ['cite', 'terminology', 'synonyms', 'dictionary', 'strategies', 'cases', 'references', 'weak'];
     let editHighlight = null;   // { range, block }
     function clearEditHighlight() {
@@ -5954,7 +5967,7 @@
       const where = editWhere(it);
       renderBoard();   // the board's WHERE line follows the sentence's part
       const suggested = (it.suggestedTools || []).filter(t => EDIT_TOOL_LABELS[t]);
-      const tools = ['cite'].concat(suggested.filter(t => t !== 'cite'), EDIT_TOOL_ORDER.filter(t => t !== 'cite' && !suggested.includes(t)));   // Auto cite always leads
+      const tools = ['cite', 'facts'].concat(suggested.filter(t => t !== 'cite' && t !== 'facts'), EDIT_TOOL_ORDER.filter(t => t !== 'cite' && t !== 'facts' && !suggested.includes(t)));   // Auto cite and the case always lead
       hideToolPop();
       const cid = it.criterionId || state.currentCriterionId;
       const why = String(it.why || '').replace(/\s+/g, ' ').trim();
@@ -5962,6 +5975,19 @@
       const needLabels = (it.needs || []).map(k => reqOf(cid, k).label).filter(Boolean);
       const missingLine = why || (needLabels.length ? needLabels.join(' · ') : 'This sentence falls short of the marker\'s standard.');
       const doLine = fix || (needLabels.length ? 'Put in: ' + needLabels.join(', ') + '.' : 'Rewrite it so it says more, on the page.');
+      // Sarah, 17 Aug: "for every problem Q presents we need to have a button.
+      // ie find facts in the case to support this sentence. Q then pulls up a
+      // list of things you could use." The problem's own button(s), on the
+      // card from the start: what THIS problem needs, and always the case.
+      const needStr = (it.needs || []).join(' ') + ' ' + needLabels.join(' ') + ' ' + why + ' ' + fix;
+      const problemTools = [];
+      if (/reference|citation|cite|source/i.test(needStr) || suggested.includes('cite')) problemTools.push('cite');
+      if (/theory|model|framework|strateg/i.test(needStr) || suggested.includes('strategies')) problemTools.push('strategies');
+      if (/case stud|real example|other compan|other organisation/i.test(needStr) || suggested.includes('cases')) problemTools.push('cases');
+      if (/\bterm|terminolog|proper name for|call(ed)? it/i.test(needStr) || suggested.includes('terminology')) problemTools.push('terminology');
+      problemTools.push('facts');
+      const PROBLEM_LABEL = { cite: 'Find a source →', strategies: 'Find the theory →', cases: 'Find a case →', terminology: 'Find the term →', facts: 'Find facts in the case →' };
+      const problemActions = Array.from(new Set(problemTools)).slice(0, 3).map(t => ({ label: PROBLEM_LABEL[t] || (EDIT_TOOL_LABELS[t] + ' →'), onClick: () => useTool(t, it) }));
       const editNow = () => {
         // caret at the end of the pink sentence, then Q's help for the missing thing
         try { if (editHighlight && editHighlight.range) { const r = editHighlight.range.cloneRange(); r.collapse(false); const sel = window.getSelection(); sel.removeAllRanges(); sel.addRange(r); docBody.focus(); } } catch (_) {}
@@ -5984,6 +6010,7 @@
           { label: 'Skip', quiet: true, onClick: () => { state.editIndex++; showEditItem(); } },
           { label: 'Stop for now', quiet: true, onClick: () => endFixPass() },
         ] : [
+          ...problemActions,
           { label: 'Edit this now →', primary: true, big: true, onClick: editNow },
           { label: 'Skip', quiet: true, onClick: () => { state.editIndex++; showEditItem(); } },
           { label: 'Stop for now', quiet: true, onClick: () => endFixPass() },
@@ -6057,7 +6084,7 @@
     // Tool help, shaped for the card: headline, at most a few short lines,
     // the example, the nudge. Synonyms / dictionary keep their list.
     function toolHelpHtml(tool, d) {
-      const listy = tool === 'synonyms' || tool === 'dictionary';
+      const listy = tool === 'synonyms' || tool === 'dictionary' || tool === 'facts';
       const points = (d.points || []).slice(0, listy ? 8 : 3);
       return '<div class="pc-head">' + escHtml(d.headline || '') + (d.flagged ? ' <span class="q-tool-flag" title="From Q\'s own knowledge, not your uploads — check it">check this</span>' : '') + (d.fromSource ? ' <span class="q-tool-src">from ' + escHtml(d.fromSource) + '</span>' : '') + '</div>'
         + (points.length ? (listy ? '<ul class="pc-list">' + points.map(p => '<li>' + escHtml(p) + '</li>').join('') + '</ul>' : points.map(p => '<div class="pc-line">' + escHtml(p) + '</div>').join('')) : '')
@@ -6727,6 +6754,15 @@
       if (t && t.settings && t.settings.coachMode) state.settings.coachMode = t.settings.coachMode === 'button' ? 'button' : 'pause';
       applyCoachMode();
       if (t && t.gradeScheme) { state.gradeScheme = t.gradeScheme; gradeSchemeSelect.value = t.gradeScheme; }
+      // A saved "GCSE (9-1)" was the code default for weeks. On a brief that
+      // plainly is not GCSE (Level 4-8, CIPD, degree, masters, A-level) it is
+      // the old default leaking, not a choice — the brief decides.
+      try {
+        const bt = t && t.brief ? [t.brief.title, t.brief.whatItWants, t.brief.subject, t.brief.youreProducing, (t.brief.gradeBands || {}).top].filter(Boolean).join(' ') : '';
+        if (/^GCSE/i.test(state.gradeScheme || '') && bt && /\blevel\s*[4-8]\b|\bL[4-8]\b|CIPD|CMI|ILM|degree|undergraduate|postgraduate|masters|\bMSc\b|\bMBA\b|\bBSc\b|\bBA\b|university|\bHND\b|\bHNC\b|A-?level|distinction|merit/i.test(bt) && !/GCSE/i.test(bt)) {
+          state.gradeScheme = 'as the brief says'; gradeSchemeSelect.value = state.gradeScheme; persist({ gradeScheme: state.gradeScheme });
+        }
+      } catch (_) {}
       if (t && t.yearGroup) { state.yearGroup = t.yearGroup; yearSelect.value = t.yearGroup; }
       if (t && t.relateAnchor) { state.relateAnchor = t.relateAnchor; relateInput.value = t.relateAnchor; }
       if (t && t.setupDone) { state.setupDone = true; setupStrip.classList.add('hidden'); }

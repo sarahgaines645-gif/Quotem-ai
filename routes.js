@@ -1928,6 +1928,7 @@ router.post('/writer/tool', requirePerson, express.json({ limit: '32kb' }), asyn
             tool: String(b.tool || ''), sentence: String(b.sentence || ''), word: b.word ? String(b.word) : '',
             brickId: b.brickId ? String(b.brickId) : null,
             brief: t.brief, essay: t.modelEssay || null, sources: t.sources || [], yearGroup: b.yearGroup || t.yearGroup || '',
+            caseText: String(b.tool || '') === 'facts' ? ((readStoredDocText(writerScope(req)) || {}).text || '') : '',
         });
         ukJson(res, { ok: true, ...help });
     } catch (e) {

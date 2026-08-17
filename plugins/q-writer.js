@@ -1226,7 +1226,11 @@ function coverageFromBricks(essay, voiced, fallback) {
 // that will lead you into writing HIS words." So the pass returns, per
 // sentence, WHY it should change (one plain line), the brick it is aiming
 // at, and which tools would help. No rewritten sentence, no word swap.
-const EDIT_TOOLS = ['terminology', 'synonyms', 'dictionary', 'strategies', 'cases', 'references', 'weak'];
+// facts (Sarah, 17 Aug): "for every problem Q presents we need to have a
+// button. ie find facts in the case to support this sentence. Q then pulls
+// up a list of things you could use." From the case / brief text she
+// uploaded (and any sources) — never from Q's own head.
+const EDIT_TOOLS = ['terminology', 'synonyms', 'dictionary', 'strategies', 'cases', 'references', 'weak', 'facts'];
 const EDIT_SCHEMA = {
     type: 'object', additionalProperties: false,
     required: ['items'],
@@ -1323,13 +1327,16 @@ const TOOL_BRIEFS = {
     cases: 'CASE STUDIES: a real case or company that illustrates the point — FROM THE UPLOADED SOURCES FIRST (fromSource = the document name, flagged=false); only if none fits, one from your own knowledge that you are confident is real (flagged=true, say "check this" in the nudge). Never invent. headline = the case, points = what happened and why it fits here.',
     references: 'REFERENCES: support for the claim in the sentence — FROM THE UPLOADED SOURCES FIRST (fromSource = document name, flagged=false), formatted Harvard in the headline with the inline citation in points[0]; otherwise a real, well-known work you are confident exists (flagged=true, mark [verify] on any doubtful detail). NEVER invent a source. If nothing real supports it, say so in the headline and suggest what kind of source would.',
     weak: 'WHAT IS WEAK: one plain line on what is weak in this sentence (headline), two or three lines on what a strong version would DO — name the idea, give an example, show why it matters (points) — never the strong sentence itself. Then the nudge.',
+    facts: 'FIND FACTS IN THE CASE: from THE CASE / BRIEF TEXT below (and the uploaded sources), list 4 to 8 things the student could USE to support or sharpen this sentence — a figure, a name, an event, a decision, a stated problem, a quoted line. Each point = the fact as the text has it (numbers and names verbatim, short) + " — " + how it helps THIS sentence, in plain words. headline = "From the case: N things you could use" (or, if the case has nothing for this sentence, say so and name the kind of evidence that would help). fromSource = "the brief" or the document name. flagged = false unless a fact is NOT in the text. NEVER invent a fact, a number or a name that is not in the text. example = null. nudge = one line pushing them to write the fact into their sentence in their own words.',
 };
 
-async function toolHelp({ tool, sentence, word, brickId, brief, essay, sources, yearGroup }) {
+async function toolHelp({ tool, sentence, word, brickId, brief, essay, sources, yearGroup, caseText }) {
     if (!EDIT_TOOLS.includes(tool)) throw new Error('Unknown tool.');
     if (!String(sentence || '').trim()) throw new Error('No sentence to work on.');
     const srcBlock = (tool === 'cases' || tool === 'references' || tool === 'strategies')
-        ? `UPLOADED SOURCES:\n${sourcesForPrompt(sources, { perSource: 12000, total: 30000 })}` : '';
+        ? `UPLOADED SOURCES:\n${sourcesForPrompt(sources, { perSource: 12000, total: 30000 })}`
+        : tool === 'facts'
+        ? `THE CASE / BRIEF TEXT (the only place facts may come from):\n${String(caseText || '').slice(0, 40000) || '(the brief text is not stored — use only THE SCENARIO in the brief above)'}\n\nUPLOADED SOURCES:\n${sourcesForPrompt(sources, { perSource: 8000, total: 16000 })}` : '';
     const ageHint = yearGroup ? `Year group: ${yearGroup}. Pitch it at their level.` : '';
     const system = withMission(`You are Q in the EDITING stage. The student has one sentence highlighted on their page and pressed a tool button. Give ONLY the help that tool gives, in the shape below, so THEY can rewrite the sentence themselves.
 ${TOOL_BRIEFS[tool]}
@@ -1340,11 +1347,11 @@ THE BRIEF (for context)
 ${briefForPrompt(brief).slice(0, 4000)}
 ${targetForPrompt(brief, essay, brickId)}`);
     const user = `THE HIGHLIGHTED SENTENCE: "${String(sentence).slice(0, 600)}"${word ? `\nTHE WORD THEY PICKED: "${String(word).slice(0, 60)}"` : ''}\n${srcBlock}\n\nGive the ${tool} help.`;
-    const r = await callAccurate(system, user, { maxTokens: 1200, schema: TOOL_SCHEMA, effort: 'low' });
+    const r = await callAccurate(system, user, { maxTokens: tool === 'facts' ? 1800 : 1200, schema: TOOL_SCHEMA, effort: 'low' });
     if (!r || typeof r !== 'object' || !String(r.headline || '').trim()) throw new Error('The tool came back empty — try again.');
     return {
         tool,
-        headline: tool === 'references' ? String(r.headline).trim() : capWords(r.headline, 8),
+        headline: tool === 'references' ? String(r.headline).trim() : capWords(r.headline, tool === 'facts' ? 12 : 8),
         points: (Array.isArray(r.points) ? r.points : []).map(x => String(x).trim()).filter(Boolean).slice(0, 8),
         example: r.example ? String(r.example).trim() : null,
         nudge: String(r.nudge || 'Now say your sentence using it.').trim(),
