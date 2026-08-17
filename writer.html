@@ -1446,6 +1446,18 @@
     .wb-cb.on { box-shadow: var(--neu-inset-sm); }
     /* The action bar — QB2 has Send / Save / Change / Copy; ours sends to HER PAGE. */
     .wb-acts { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 14px; padding-top: 12px; border-top: 1px solid rgba(0,0,0,0.07); }
+    /* Nothing wasted at the top: the panel's title bar already names the board. */
+    .wb-body > *:first-child { margin-top: 0; }
+    /* Click any line to edit it — it says so on hover, and lifts while live. */
+    .wb-body [data-ln] { cursor: text; border-radius: 8px; }
+    /* A blank line is somewhere to work — big enough to aim at. */
+    .wb-body .wb-sp[data-ln] { min-height: 24px; }
+    .wb-body .wb-sp[data-ln]:hover { box-shadow: var(--neu-inset-sm); }
+    .wb-body [data-ln]:hover { box-shadow: var(--neu-raised-xs); }
+    .wb-body [data-ln][contenteditable="true"] {
+      outline: none; box-shadow: var(--neu-raised-sm);
+      padding: 4px 8px; margin: -4px -8px;
+    }
     /* Asked, not guessed: where on the page this should land. */
     .wb-ask { margin-top: 12px; padding: 10px 12px; border-radius: 11px; box-shadow: var(--neu-raised-xs); border-left: 3px solid var(--accent); font-size: 12.5px; line-height: 1.5; color: var(--text); }
     .wb-ask.hidden { display: none; }
@@ -4894,6 +4906,8 @@
       }
       pushText(s.length); return parts;
     }
+    // True if the line holds a live (non-code) [ ] / [x] token.
+    function hasCbToken(text) { return splitCheckboxParts(text).some(p => p.type === 'box'); }
     function fencedLineFlags(lines) {
       let inFence = false;
       return lines.map(ln => { if (/^\s*(```|~~~)/.test(ln)) { inFence = !inFence; return true; } return inFence; });
@@ -4976,16 +4990,33 @@
         const n = line.match(/^\s*\d+\.\s+(.*)/);
         const h = line.match(/^\s*(#{1,5})\s+(.*)/);
         const q = line.match(/^\s*>\s?(.*)/);
-        if (b) { if (ol) flush(); (bullets = bullets || []).push('<li>' + wbInline(b[1], at + line.length - b[1].length, live) + '</li>'); continue; }
-        if (n) { if (bullets) flush(); (ol = ol || []).push('<li>' + wbInline(n[1], at + line.length - n[1].length, live) + '</li>'); continue; }
+        // CLICK ANY LINE TO EDIT IT (Sarah, 17 Aug: "ideally anything under the
+        // buttons will be able to edit just by clicking on it"). The renderer
+        // already knows which SOURCE LINE each block came from, so the block
+        // carries that index and its markdown prefix; saving rewrites just that
+        // line and re-renders, which is why the formatting survives.
+        //
+        // A line holding a [ ] token is NOT click-editable: its text lives in
+        // the DOM as a button, so writing the block back would silently drop
+        // the tick. Those stay tickable, and "Edit this" still opens the whole
+        // source. Losing her ticks quietly would be worse than one exception.
+        const editable = (pre) => hasCbToken(line) ? '' : ' data-ln="' + i + '" data-pre="' + escHtml(pre) + '" title="Click to edit"';
+        if (b) { if (ol) flush(); (bullets = bullets || []).push('<li' + editable(line.slice(0, line.length - b[1].length)) + '>' + wbInline(b[1], at + line.length - b[1].length, live) + '</li>'); continue; }
+        if (n) { if (bullets) flush(); (ol = ol || []).push('<li' + editable(line.slice(0, line.length - n[1].length)) + '>' + wbInline(n[1], at + line.length - n[1].length, live) + '</li>'); continue; }
         flush();
-        if (h) { const lvl = h[1].length; out.push('<div class="wb-h wb-h' + lvl + '">' + wbInline(h[2], at + line.length - h[2].length, live) + '</div>'); continue; }
-        if (q) { out.push('<blockquote class="wb-q">' + wbInline(q[1], at + line.length - q[1].length, live) + '</blockquote>'); continue; }
-        if (!line.trim()) { out.push('<div class="wb-sp"></div>'); continue; }
+        if (h) { const lvl = h[1].length; out.push('<div class="wb-h wb-h' + lvl + '"' + editable(line.slice(0, line.length - h[2].length)) + '>' + wbInline(h[2], at + line.length - h[2].length, live) + '</div>'); continue; }
+        if (q) { out.push('<blockquote class="wb-q"' + editable(line.slice(0, line.length - q[1].length)) + '>' + wbInline(q[1], at + line.length - q[1].length, live) + '</blockquote>'); continue; }
+        // A blank line IS workspace — click it and type. Without this an empty
+        // line is an 8px gap with nothing to aim at (Sarah, 17 Aug: "the bottom
+        // extends so you can start working on the whiteboard").
+        if (!line.trim()) { out.push('<div class="wb-sp"' + editable('') + '></div>'); continue; }
         // Callout line: an emoji at the front colours the card (QB2's rule).
         const key = Object.keys(WB_CALLOUT).find(k => line.trim().startsWith(k));
-        if (key) { out.push('<div class="wb-call ' + WB_CALLOUT[key] + '"><span class="wb-call-i">' + key + '</span><span>' + wbInline(line.trim().slice(key.length).trim(), at + line.indexOf(key) + key.length, live) + '</span></div>'); continue; }
-        out.push('<div class="wb-p">' + wbInline(line, at, live) + '</div>');
+        if (key) {
+          const body = line.trim().slice(key.length).trim();
+          out.push('<div class="wb-call ' + WB_CALLOUT[key] + '"><span class="wb-call-i">' + key + '</span><span' + editable(line.slice(0, line.length - body.length)) + '>' + wbInline(body, at + line.indexOf(key) + key.length, live) + '</span></div>'); continue;
+        }
+        out.push('<div class="wb-p"' + editable('') + '>' + wbInline(line, at, live) + '</div>');
       }
       flush();
       return out.join('');
@@ -5051,7 +5082,8 @@
         + `<div class="wb-ask hidden" id="wb-ask"></div>`
         + `<div class="wb-acts">`
         + `<button type="button" class="q-btn primary" id="wb-send">Send to my page →</button>`
-        + `<button type="button" class="q-btn" id="wb-edit">Edit this</button>`
+        + `<button type="button" class="q-btn" id="wb-work">+ Room to work</button>`
+        + `<button type="button" class="q-btn quiet" id="wb-edit">Edit this</button>`
         + `<button type="button" class="q-btn quiet" id="wb-copy">Copy</button>`
         + `<button type="button" class="q-btn quiet" id="wb-clear">Clear</button>`
         + `</div>`;
@@ -5104,6 +5136,27 @@
         const ask = document.getElementById('wb-ask'); if (ask) ask.classList.add('hidden');
         send.textContent = '✓ On your page'; setTimeout(() => { send.textContent = 'Send to my page →'; }, 1600);
       });
+      // "+ Room to work" — three blank lines at the bottom (each one clickable
+      // and typeable) and the panel grows to make space, so she can start
+      // working ON the board instead of only reading it.
+      const work = document.getElementById('wb-work');
+      if (work) work.addEventListener('click', () => {
+        state.wbDoc.src = String(state.wbDoc.src).replace(/\s*$/, '') + '\n\n\n\n';
+        persist({ wbDoc: state.wbDoc });
+        try {
+          const el = wbPanel.el;
+          if (!el.classList.contains('min') && !isDocked()) {
+            const h = el.getBoundingClientRect().height;
+            const room = Math.min(h + 170, window.innerHeight - 2 * PANEL_M);
+            el.style.height = Math.round(room) + 'px';
+            const l = getL(wbPanel); l.h = Math.round(room); saveLayout();
+          }
+        } catch (_) {}
+        renderWhiteboard();
+        const blanks = wbBody.querySelectorAll('.wb-sp[data-ln]');
+        const last = blanks[blanks.length - 1];
+        if (last) { last.setAttribute('contenteditable', 'true'); last.focus(); }
+      });
       const ed = document.getElementById('wb-edit');
       if (ed) ed.addEventListener('click', () => { state.wbEditing = true; renderWhiteboard(); });
       const cp = document.getElementById('wb-copy');
@@ -5138,6 +5191,45 @@
       } catch (err) {
         showOnWhiteboard('Source lookup', '##### Could not check it\n\n' + shortCause(err) + '\n');
       } finally { b.classList.remove('busy'); b.textContent = was; }
+    });
+    // CLICK A LINE ON THE BOARD → edit it in place. The block becomes
+    // contenteditable; Enter or clicking away writes just that source line back
+    // (prefix + her words) and re-renders, so bullets stay bullets and headings
+    // stay headings. Escape abandons the edit.
+    function wbSaveLine(el) {
+      if (!el || !state.wbDoc) return;
+      const ln = Number(el.dataset.ln);
+      const pre = el.dataset.pre || '';
+      const lines = String(state.wbDoc.src).split('\n');
+      if (!Number.isInteger(ln) || ln < 0 || ln >= lines.length) return;
+      const next = pre + String(el.textContent || '').replace(/\s+/g, ' ').trim();
+      el.removeAttribute('contenteditable');
+      if (next === lines[ln]) { renderWhiteboard(); return; }
+      lines[ln] = next;
+      state.wbDoc.src = lines.join('\n');
+      persist({ wbDoc: state.wbDoc });
+      renderWhiteboard();
+    }
+    document.addEventListener('click', (e) => {
+      // A tick, a button or a link inside the line is not an edit.
+      if (e.target.closest('.wb-cb, button, a')) return;
+      const el = e.target.closest('[data-ln][data-pre]');
+      if (!el || !wbBody.contains(el)) return;
+      if (el.getAttribute('contenteditable') === 'true') return;
+      wbBody.querySelectorAll('[contenteditable="true"]').forEach(x => { if (x !== el) wbSaveLine(x); });
+      el.setAttribute('contenteditable', 'true');
+      el.classList.add('wb-editing');
+      el.focus();
+    });
+    wbBody.addEventListener('keydown', (e) => {
+      const el = e.target.closest && e.target.closest('[data-ln][contenteditable="true"]');
+      if (!el) return;
+      if (e.key === 'Enter') { e.preventDefault(); wbSaveLine(el); }
+      if (e.key === 'Escape') { e.preventDefault(); el.removeAttribute('contenteditable'); renderWhiteboard(); }
+    });
+    wbBody.addEventListener('focusout', (e) => {
+      const el = e.target.closest && e.target.closest('[data-ln][contenteditable="true"]');
+      if (el) wbSaveLine(el);
     });
     // A tick flips the token in the SOURCE at its exact offset, so it persists.
     document.addEventListener('click', (e) => {
@@ -7241,9 +7333,10 @@
       // Through the REAL display (markdown, colour, callouts) — not the old
       // fixed-HTML report. Sarah, 17 Aug: "the whiteboard still looks the same."
       // It did, because nothing was routed through showOnWhiteboard yet.
+      // No heading here — the panel's own title bar already says "Sentence N of
+      // M", and repeating it wasted the top of the board (Sarah, 17 Aug: "a lot
+      // of wasted space at the top").
       showOnWhiteboard('Sentence ' + (i + 1) + ' of ' + items.length, [
-        '## Sentence ' + (i + 1) + ' of ' + items.length,
-        '',
         '> ' + String(it.sentence || '').replace(/\s+/g, ' ').trim(),
         '',
         '🔴 **Missing** — ' + missingLine,
