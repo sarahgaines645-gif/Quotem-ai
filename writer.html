@@ -3800,13 +3800,14 @@
     // what you have covered."): the part's ask, then each thing the part must
     // contain — ✓ when it is in, ○ when not — the same dots the page shows.
     function coverHtml(cid) {
-      const plan = planFor(cid); if (!plan || (!plan.minimalAsk && !(plan.requirements || []).length)) return '';
+      const plan = planFor(cid); if (!plan || !(plan.requirements || []).length) return '';
       const met = new Set(state.reqMet[cid] || []);
       const reqs = (plan.requirements || []);
       const rows = reqs.map(rq => `<div class="cv-row${met.has(rq.kind) ? ' met' : ''}"><span class="q-dot${met.has(rq.kind) ? ' met' : ''}" style="--dc:${rq.colour || REQ_COLOURS[rq.kind] || '#999'}" data-req="${escHtml(rq.kind)}" data-cid="${escHtml(cid)}"></span><span class="cv-l">${escHtml(rq.label || REQ_LABELS[rq.kind] || rq.kind)}</span><span class="cv-s">${met.has(rq.kind) ? '✓ in' : 'to do'}</span></div>`).join('');
       const n = reqs.filter(rq => met.has(rq.kind)).length;
       const w = whereInfo(cid);
-      return `<div class="tb-cover" data-cid="${escHtml(cid)}">${plan.minimalAsk ? `<div class="ex-ask">${escHtml(plan.minimalAsk)}</div>` : ''}${reqs.length ? `<div class="cv-rings">${reqDotsHtml(cid)} <b>must be in</b>${reqs.length ? `<span class="cv-n">${n} of ${reqs.length} in</span>` : ''}</div>` : ''}${rows ? `<div class="cv-rows">${rows}</div>` : ''}</div>`;
+      // (no re-worded part question here — Sarah, 17 Aug: "what's this?" — the brief board has the question)
+      return `<div class="tb-cover" data-cid="${escHtml(cid)}">${reqs.length ? `<div class="cv-rings">${reqDotsHtml(cid)} <b>must be in</b>${reqs.length ? `<span class="cv-n">${n} of ${reqs.length} in</span>` : ''}</div>` : ''}${rows ? `<div class="cv-rows">${rows}</div>` : ''}</div>`;
     }
     // THE WORD BOARD card for a part: the one-line ask, the words as BUTTONS
     // (nothing else — meanings live on the hover card), "Still to use", the
