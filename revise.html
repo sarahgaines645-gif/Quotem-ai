@@ -2305,6 +2305,7 @@
         }
         ['bone', 'seed', 'orange', 'ball', 'bow', 'hat', 'scarf', 'bed', 'heart'].forEach((n) => names.push('item_' + n));
         names.forEach(img);
+        preloadAppy();
       }
       // ── FRAME animation: sprite sheets, sliced at runtime ───────────────
       // Sarah, 16 Aug: "move like actual cartoons — run up and down and lick
@@ -2497,259 +2498,73 @@
         if (!framed && b.act === 'approach' && Math.abs(b.x - cx) < 3) setAct(b, 'idle', now, 2500);
       }
 
-      // ── THE RIG — APPY'S FAMILY ───────────────────────────────────────────
-      // Sarah, 17 Aug: "what about appy? he's the original thing we made to
-      // represent the apps." Appy is the answer. He is not an animal with
-      // anatomy — he is ONE FLUFFY BALL with huge glossy eyes, a tiny pink
-      // nose and two little pink feet. That is why he reads as cute, and a
-      // ball is the one shape code can animate properly: it squashes, bounces,
-      // rolls and wobbles. So the pets are Appy's little ones — same face, same
-      // fur, three colours. Drawn in code: no pictures, no downloads, no cost.
-      //
-      // drawRig(kind, stage, pose, cx, by, size, o) — bottom-centre at (cx,by),
-      // `size` = height in px. pose:
-      //   view 'front'|'side'|'lie'; gait (phase) + run 0..1; hop 0..1;
-      //   look {x,y} -1..1; blink 0..1; mouth 'smile'|'open'|'chew'|'o'|'tongue';
-      //   happy; ears -1..1; tilt; breathe; beg; t (seconds); seed.
-      const RIG = {
-        // kind keys stay the same so saved pets keep working
-        puppy:    { fur: '#ffffff', fur2: '#dfe6f0', paw: '#f7bcc4', nose: '#f4a6b0', ear: 'floppy', tuft: 1,
-                    eye: '#3a2418', blush: 'rgba(255,150,165,0.45)', size: 1.0 },
-        hamster:  { fur: '#ffcf7a', fur2: '#f0a94e', paw: '#f7b5a0', nose: '#e58b7a', ear: 'round',  tuft: 1,
-                    eye: '#3a2418', blush: 'rgba(255,140,150,0.42)', size: 0.94 },
-        capybara: { fur: '#c9a7f0', fur2: '#a982e0', paw: '#f7b9d2', nose: '#e58bb0', ear: 'tiny',   tuft: 2,
-                    eye: '#3a2418', blush: 'rgba(255,140,170,0.40)', size: 1.06 },
-      };
-      const STAGE_PROP = { baby: { r: 0.78, eye: 1.12 }, young: { r: 1.0, eye: 1.0 }, grown: { r: 1.18, eye: 0.93 } };
-      // deterministic wobble per pet so two fluffs don't ripple in step
-      function hash01(i, seed) { const x = Math.sin(i * 12.9898 + seed * 78.233) * 43758.5453; return x - Math.floor(x); }
-      // The fluff: a circle whose edge is soft spikes of fur, breathing.
-      function furPath(cx, cy, r, t, seed, squashX, squashY, amp) {
-        const N = 96;                       // many fine strands, not a few lumps
-        const A = amp == null ? 1 : amp;
-        ctx.beginPath();
-        const pt = (i) => {
-          const a = (i / N) * Math.PI * 2 - Math.PI / 2;
-          const n = hash01(i % N, seed) - 0.5;
-          const spike = 1 + A * (0.022 * n + 0.012 * Math.sin(i * 1.7 + t * 1.4 + seed) + 0.008 * Math.sin(i * 4.3 - t * 2.0));
-          return [cx + Math.cos(a) * r * spike * squashX, cy + Math.sin(a) * r * spike * squashY];
-        };
-        let [px, py] = pt(0);
-        ctx.moveTo(px, py);
-        for (let i = 1; i <= N; i++) {
-          const [x, y] = pt(i);
-          const [nx, ny] = pt(i + 1);
-          ctx.quadraticCurveTo(x, y, (x + nx) / 2, (y + ny) / 2);
-          px = x; py = y;
-        }
-        ctx.closePath();
+      // ── APPY — HER PICTURE, MOVED BY CODE ─────────────────────────────────
+      // Sarah, 17 Aug: "I asked you to use the picture I have and you drew one
+      // that looks nothing like it." So: no drawing. These are Appy's own
+      // pictures from the app (`Quoteapp/client/public/assets/appy-*.jpg`), cut
+      // off their white paper and saved with transparency in `assets/pet/appy/`.
+      // The expressions are the ones that already exist for him — idle, half
+      // blink, blink, happy, talking, mouth open, shocked — exactly what
+      // AppyAvatar.jsx swaps between. Everything that MOVES is code: he bounces,
+      // squashes when he lands, leans when he runs, breathes, and turns towards
+      // your pointer. Nothing here is generated and nothing was bought.
+      const APPY_STATES = ['idle', 'blink_half', 'blink', 'happy', 'talk', 'open', 'shocked'];
+      const APPY_IMG = {};
+      function appyImg(state) {
+        const k = APPY_STATES.includes(state) ? state : 'idle';
+        if (!APPY_IMG[k]) { const i = new Image(); i.decoding = 'async'; i.src = '/assets/pet/appy/snow_' + k + '.png'; APPY_IMG[k] = i; }
+        return APPY_IMG[k];
       }
-      // the soft halo of finer fur that makes Appy look touchable
-      function furHalo(cx, cy, r, t, seed, sqx, sqy, F) {
-        ctx.save();
-        for (let pass = 0; pass < 3; pass++) {
-          const rr2 = r * (1.02 + pass * 0.035);
-          ctx.globalAlpha = 0.3 - pass * 0.08;
-          furPath(cx, cy, rr2, t + pass * 1.3, seed + pass * 7, sqx, sqy, 2.4 + pass);
-          ctx.fillStyle = pass === 0 ? F.fur : F.fur2;
-          ctx.fill();
-        }
-        ctx.restore();
+      function preloadAppy() { APPY_STATES.forEach(appyImg); }
+      // Stage = how big he is. He is the same fluff at every age.
+      const STAGE_SCALE = { baby: 0.78, young: 1.0, grown: 1.18 };
+      // Which of his faces fits what he's doing.
+      function appyState(pose) {
+        if (pose.view === 'lie') return 'blink';
+        const m = pose.mouth;
+        if (m === 'chew') return (Math.floor((pose.t || 0) * 6) % 2) ? 'open' : 'talk';
+        if (m === 'open') return 'open';
+        if (m === 'o') return 'shocked';
+        if (m === 'tongue') return 'talk';
+        if (pose.happy) return 'happy';
+        const b = pose.blink || 0;
+        if (b > 0.7) return 'blink';
+        if (b > 0.25) return 'blink_half';
+        return 'idle';
       }
-      // a few longer wisps on top — the bit that says "fluffy" at a glance
-      function wisps(cx, cy, r, t, seed, F) {
-        // fine strands all round the top — soft, not spiky
-        ctx.lineCap = 'round';
-        for (let i = 0; i < 34; i++) {
-          const a = -Math.PI + (i / 33) * Math.PI + (hash01(i, seed) - 0.5) * 0.08;
-          const n = hash01(i * 3 + 1, seed);
-          const L = r * (0.05 + n * 0.07);
-          const sway = Math.sin(t * 1.3 + i * 0.7 + seed) * 0.12;
-          const x0 = cx + Math.cos(a) * r * 0.99, y0 = cy + Math.sin(a) * r * 0.99;
-          ctx.strokeStyle = i % 3 === 0 ? F.fur2 : F.fur;
-          ctx.globalAlpha = 0.75;
-          ctx.lineWidth = 1.1 + n * 0.6;
-          ctx.beginPath(); ctx.moveTo(x0, y0);
-          ctx.quadraticCurveTo(x0 + Math.cos(a + sway) * L * 0.6, y0 + Math.sin(a + sway) * L * 0.6, x0 + Math.cos(a + sway * 2) * L, y0 + Math.sin(a + sway * 2) * L);
-          ctx.stroke();
-        }
-        ctx.globalAlpha = 1; ctx.lineWidth = 2;
-      }
-      // Appy's eye: big, glossy, two highlights, lashes. This is most of the cute.
-      function fluffEye(F, x, y, r, look, blink, happy) {
-        const lx = (look ? look.x : 0) * r * 0.26, ly = (look ? look.y : 0) * r * 0.26;
-        if (happy) {   // ^ ^ — the happy arc
-          ctx.strokeStyle = F.eye; ctx.lineWidth = r * 0.3; ctx.lineCap = 'round';
-          ctx.beginPath(); ctx.arc(x, y + r * 0.45, r * 0.85, Math.PI * 1.18, Math.PI * 1.82); ctx.stroke();
-          ctx.lineWidth = 2; return;
-        }
-        if (blink > 0.8) {   // shut: a soft closed lid with lashes
-          ctx.strokeStyle = F.eye; ctx.lineWidth = r * 0.26; ctx.lineCap = 'round';
-          ctx.beginPath(); ctx.moveTo(x - r * 0.8, y); ctx.quadraticCurveTo(x, y + r * 0.55, x + r * 0.8, y); ctx.stroke();
-          ctx.lineWidth = 2; return;
-        }
-        const sq = 1 - blink * 0.8;
-        ctx.save(); ctx.translate(x + lx, y + ly); ctx.scale(1, sq);
-        // glossy dark eye
-        const g = ctx.createRadialGradient(-r * 0.25, -r * 0.35, r * 0.1, 0, 0, r);
-        g.addColorStop(0, '#5a3a26'); g.addColorStop(0.45, F.eye); g.addColorStop(1, '#241309');
-        ctx.beginPath(); ctx.arc(0, 0, r, 0, Math.PI * 2); ctx.fillStyle = g; ctx.fill();
-        // iris warmth low down
-        ctx.beginPath(); ctx.arc(0, r * 0.3, r * 0.55, 0, Math.PI * 2); ctx.fillStyle = 'rgba(150,90,45,0.55)'; ctx.fill();
-        // highlights
-        ctx.beginPath(); ctx.arc(-r * 0.3, -r * 0.34, r * 0.3, 0, Math.PI * 2); ctx.fillStyle = '#fff'; ctx.fill();
-        ctx.beginPath(); ctx.arc(r * 0.32, r * 0.3, r * 0.14, 0, Math.PI * 2); ctx.fillStyle = 'rgba(255,255,255,0.9)'; ctx.fill();
-        ctx.restore();
-        // lashes
-        ctx.strokeStyle = F.eye; ctx.lineWidth = Math.max(1, r * 0.11); ctx.lineCap = 'round';
-        for (let i = -1; i <= 1; i++) {
-          const a = -Math.PI / 2 + i * 0.42;
-          ctx.beginPath();
-          ctx.moveTo(x + Math.cos(a) * r * 0.95, y + Math.sin(a) * r * 0.95 * sq);
-          ctx.lineTo(x + Math.cos(a) * r * 1.3, y + Math.sin(a) * r * 1.3 * sq);
-          ctx.stroke();
-        }
-        ctx.lineWidth = 2;
-      }
-      function fluffMouth(F, x, y, kind, t, r) {
-        ctx.strokeStyle = '#c4757f'; ctx.lineWidth = Math.max(1.4, r * 0.055); ctx.lineCap = 'round';
-        if (kind === 'open' || kind === 'chew') {
-          const o = (kind === 'chew' ? 0.5 + 0.45 * Math.abs(Math.sin(t * 9)) : 1) * r * 0.2;
-          ctx.beginPath(); ctx.ellipse(x, y + o * 0.4, r * 0.16, o, 0, 0, Math.PI * 2);
-          ctx.fillStyle = '#c4626e'; ctx.fill();
-          ctx.beginPath(); ctx.ellipse(x, y + o * 0.9, r * 0.1, o * 0.45, 0, 0, Math.PI * 2); ctx.fillStyle = '#ff9bb0'; ctx.fill();
-        } else if (kind === 'tongue') {
-          ctx.beginPath(); ctx.ellipse(x, y + r * 0.02, r * 0.13, r * 0.1, 0, 0, Math.PI * 2); ctx.fillStyle = '#c4626e'; ctx.fill();
-          const w = r * (0.1 + 0.012 * Math.sin(t * 10));
-          ctx.beginPath(); ctx.ellipse(x, y + r * 0.14 + Math.sin(t * 10) * r * 0.015, w, w * 1.25, 0, 0, Math.PI * 2);
-          ctx.fillStyle = '#ff9bb0'; ctx.fill();
-        } else if (kind === 'o') {
-          ctx.beginPath(); ctx.ellipse(x, y + r * 0.03, r * 0.075, r * 0.1, 0, 0, Math.PI * 2); ctx.fillStyle = '#c4626e'; ctx.fill();
-        } else {   // a tiny smile
-          ctx.beginPath(); ctx.moveTo(x - r * 0.12, y - r * 0.02); ctx.quadraticCurveTo(x, y + r * 0.09, x + r * 0.12, y - r * 0.02); ctx.stroke();
-        }
-        ctx.lineWidth = 2;
-      }
-      function fluffEars(F, cx, cy, r, k, t, seed) {
-        if (F.ear === 'floppy') {
-          for (const s of [-1, 1]) {
-            const a = s * (0.72 - k * 0.18), L = r * 0.5;
-            const x = cx + Math.cos(-Math.PI / 2 + a) * r * 0.92, y = cy + Math.sin(-Math.PI / 2 + a) * r * 0.92;
-            ctx.save(); ctx.translate(x, y); ctx.rotate(s * (0.5 - k * 0.5) + Math.sin(t * 2 + seed) * 0.05 * s);
-            furPath(0, L * 0.35, L * 0.45, t * 0.6, seed + s, 0.8, 1.25);
-            ctx.fillStyle = F.fur2; ctx.fill();
-            ctx.restore();
-          }
-        } else if (F.ear === 'round') {
-          for (const s of [-1, 1]) {
-            const x = cx + s * r * 0.68, y = cy - r * 0.66;
-            furPath(x, y, r * 0.26, t * 0.6, seed + s * 3, 1, 1);
-            ctx.fillStyle = F.fur2; ctx.fill();
-          }
-        }
-        // 'tiny' ears: nothing — the tufts do the work
-      }
-      // The whole fluff.
+      // Draw him at (cx, by) — bottom centre — `size` tall.
+      // Same signature as before, so every act keeps working.
       function drawRig(kind, stage, pose, cx, by, size, o = {}) {
-        const F = RIG[kind]; if (!F) return false;
-        const S = STAGE_PROP[stage] || STAGE_PROP.young;
-        const t = pose.t || 0, seed = (pose.seed || 0) + 1;
-        ctx.save();
-        ctx.translate(cx, by);
-        const u = size / 100;
-        ctx.scale((o.flip ? -1 : 1) * (o.sx || 1) * u, (o.sy || 1) * u);
-        if (o.rot) ctx.rotate(o.rot);
-        if (o.alpha != null) ctx.globalAlpha = o.alpha;
-        ctx.lineJoin = 'round'; ctx.lineCap = 'round'; ctx.lineWidth = 2;
-
-        const lie = pose.view === 'lie';
+        const im = appyImg(appyState(pose));
+        if (!im.complete || !im.naturalWidth) return false;
+        const t = pose.t || 0, seed = pose.seed || 0;
+        const s = size * (STAGE_SCALE[stage] || 1);
         const hop = pose.hop || 0;
         const run = Math.min(1, pose.run == null ? (pose.gait ? 1 : 0) : pose.run);
         const g = pose.gait || 0;
-        const breathe = Math.sin(t * 2.1 + seed) * (pose.breathe == null ? 1 : pose.breathe);
-        // a ball's whole performance is squash and stretch
         const bounce = run ? Math.abs(Math.sin(g * Math.PI * 2)) : 0;
-        let sqx = 1 + hop * -0.1 + (1 - bounce) * run * 0.05 + breathe * 0.012;
-        let sqy = 1 + hop * 0.14 + bounce * run * 0.06 - breathe * 0.016;
-        if (lie) { sqx = 1.22; sqy = 0.66; }
-        const r = 40 * F.size * S.r;
-        const footY = -2;
-        const cy = footY - r * sqy - (lie ? -r * 0.12 : 0) - hop * 4 - (run ? bounce * 3 : 0);
-
-        // ── feet (behind the fluff so they peek out) ──
-        if (!lie) {
-          const step = run ? Math.sin(g * Math.PI * 2) * r * 0.14 : 0;
-          const lift = run ? Math.max(0, Math.sin(g * Math.PI * 2)) * r * 0.1 : 0;
-          const lift2 = run ? Math.max(0, -Math.sin(g * Math.PI * 2)) * r * 0.1 : 0;
-          const beg = pose.beg ? r * 0.18 : 0;
-          for (const s of [-1, 1]) {
-            const fx = s * r * 0.34 + (s > 0 ? step : -step);
-            const fy = footY - (s > 0 ? lift : lift2) - beg - hop * r * 0.12;
-            ctx.beginPath(); ctx.ellipse(fx, fy - r * 0.07, r * 0.19, r * 0.13, s * 0.1, 0, Math.PI * 2);
-            ctx.fillStyle = F.paw; ctx.fill();
-            // toe beans
-            ctx.fillStyle = 'rgba(0,0,0,0.06)';
-            for (let i = -1; i <= 1; i++) { ctx.beginPath(); ctx.ellipse(fx + i * r * 0.07, fy - r * 0.12, r * 0.03, r * 0.025, 0, 0, Math.PI * 2); ctx.fill(); }
-          }
-        } else {
-          for (const s of [-1, 1]) { ctx.beginPath(); ctx.ellipse(s * r * 0.5, footY - r * 0.06, r * 0.17, r * 0.1, 0, 0, Math.PI * 2); ctx.fillStyle = F.paw; ctx.fill(); }
-        }
-
-        // ── ears behind ──
-        ctx.save(); ctx.rotate(pose.tilt || 0);
-        fluffEars(F, 0, cy, r * Math.min(sqx, sqy), (pose.ears == null ? 0 : pose.ears) + hop * 0.6, t, seed);
-        // ── the body of fluff ──
-        ctx.save();
-        ctx.shadowColor = 'rgba(90,70,60,0.20)'; ctx.shadowBlur = r * 0.35; ctx.shadowOffsetY = r * 0.1;
-        furPath(0, cy, r * 0.98, t, seed, sqx, sqy);
-        ctx.fillStyle = F.fur; ctx.fill();
-        ctx.restore();
-        furHalo(0, cy, r, t, seed, sqx, sqy, F);
-        furPath(0, cy, r, t, seed, sqx, sqy);
-        const bg = ctx.createRadialGradient(-r * 0.35, cy - r * 0.45, r * 0.1, 0, cy, r * 1.15);
-        bg.addColorStop(0, '#ffffff'); bg.addColorStop(0.35, F.fur); bg.addColorStop(1, F.fur2);
-        ctx.fillStyle = bg; ctx.fill();
-        wisps(0, cy, r * Math.min(sqx, sqy), t, seed, F);
-        // soft shadow inside the bottom edge — makes it read as round and soft
-        ctx.save(); furPath(0, cy, r, t, seed, sqx, sqy); ctx.clip();
-        const sh = ctx.createLinearGradient(0, cy + r * 0.1, 0, cy + r * 1.1);
-        sh.addColorStop(0, 'rgba(0,0,0,0)'); sh.addColorStop(1, 'rgba(120,90,70,0.16)');
-        ctx.fillStyle = sh; ctx.fillRect(-r * 1.5, cy - r * 1.5, r * 3, r * 3);
-        ctx.restore();
-
-        // ── the face, low on the ball (baby schema) ──
+        const breathe = Math.sin(t * 2.1 + seed) * (pose.breathe == null ? 1 : pose.breathe);
         const look = pose.look || { x: 0, y: 0 };
-        const fy = cy + r * 0.2 * sqy;                       // face line
-        const er = r * 0.245 * S.eye;                        // EYE radius — huge on purpose
-        const ex = r * 0.36 * sqx;
-        const sideShift = pose.view === 'side' ? r * 0.16 : 0;
-        if (lie) {
-          // asleep: lids and a peaceful line
-          fluffEye(F, -ex * 0.8 + sideShift, fy, er, look, 1, false);
-          fluffEye(F, ex * 0.8 + sideShift, fy, er, look, 1, false);
-        } else {
-          fluffEye(F, -ex + sideShift, fy, er, look, pose.blink || 0, pose.happy);
-          fluffEye(F, ex + sideShift, fy, er, look, pose.blink || 0, pose.happy);
-        }
-        // blush
-        for (const s of [-1, 1]) {
-          const bx = s * r * 0.72 * sqx + sideShift * 0.5, byy = fy + r * 0.16;
-          const bl = ctx.createRadialGradient(bx, byy, 0, bx, byy, r * 0.2);
-          bl.addColorStop(0, F.blush); bl.addColorStop(1, 'rgba(255,150,165,0)');
-          ctx.fillStyle = bl; ctx.beginPath(); ctx.arc(bx, byy, r * 0.2, 0, Math.PI * 2); ctx.fill();
-        }
-        // tiny nose, and the mouth just under it
-        const nx = sideShift, ny = fy + er * 0.75;
-        ctx.beginPath(); ctx.ellipse(nx, ny, r * 0.075, r * 0.055, 0, 0, Math.PI * 2);
-        ctx.fillStyle = F.nose; ctx.fill();
-        ctx.beginPath(); ctx.ellipse(nx - r * 0.02, ny - r * 0.02, r * 0.025, r * 0.018, 0, 0, Math.PI * 2);
-        ctx.fillStyle = 'rgba(255,255,255,0.6)'; ctx.fill();
-        if (!lie) fluffMouth(F, nx, ny + r * 0.13, pose.mouth || 'smile', t, r);
-        ctx.restore();
-
+        // a ball's whole performance: squash when it lands, stretch when it flies
+        let sx = 1 + hop * -0.09 + bounce * run * 0.05 - breathe * 0.012;
+        let sy = 1 + hop * 0.13 - bounce * run * 0.07 + breathe * 0.016;
+        if (pose.view === 'lie') { sx = 1.16; sy = 0.7; }
+        if (pose.beg) { sx *= 0.97; sy *= 1.04; }
+        sx *= (o.sx || 1); sy *= (o.sy || 1);
+        // he leans the way he is going, and turns towards you when you are near
+        const lean = (run ? -0.1 * run : 0) + (pose.tilt || 0) + look.x * 0.05 + (o.rot || 0);
+        const lift = hop * s * 0.05 + (run ? bounce * s * 0.03 : 0);
+        const w = s * sx, h = s * sy;
+        ctx.save();
+        ctx.translate(cx + look.x * s * 0.03, by - lift);
+        if (o.flip) ctx.scale(-1, 1);
+        ctx.rotate(lean * (o.flip ? -1 : 1));
+        if (o.alpha != null) ctx.globalAlpha = o.alpha;
+        ctx.drawImage(im, -w / 2, -h, w, h);
         ctx.restore();
         return true;
       }
+      const RIG = { puppy: 1, hamster: 1, capybara: 1 };   // every pet is Appy
       // Where the mouse is over the glass — the pet's eyes follow it.
       const mouse = { x: null, y: null, at: 0, over: false };
       function lookAt(px, top, size) {
@@ -2785,7 +2600,7 @@
         // blink: a quick shut every few seconds (shared by rig and sheets)
         if (now > b.blinkAt) b.blinkAt = now + 2600 + Math.random() * 3000;
         const tb = b.blinkAt - now;
-        const blinkK = tb < 140 ? 1 : 0;
+        const blinkK = tb < 70 ? 1 : tb < 190 ? 0.4 : 0;   // his half-blink picture, then the shut one
         // where it looks: my pet follows the mouse; friends glance about
         const glance = { x: Math.sin(time * 0.7 + seed * 3) * 0.5, y: Math.cos(time * 0.5 + seed) * 0.25 };
         const lookOf = (x, top) => isMe && mouse.over ? lookAt(x, top, size) : glance;
@@ -2799,7 +2614,7 @@
           b.x += Math.max(-1, Math.min(1, (bx - lag * b.dir - b.x) / 20)) * 2.2; b.y += (0 - b.y) * 0.1;
           px_ = b.x; by = floor + b.y;
           const moving = Math.abs(bx - lag * b.dir - b.x) > 8;
-          if (rig) drewPet = moving ? R({ view: 'side', gait: time * 2.4, run: 1, mouth: 'tongue', tail: time * 9, look: { x: 0.5, y: -0.6 } }, px_, by, size, { flip: b.dir < 0 })
+          if (rig) drewPet = moving ? R({ view: 'side', gait: time * 2.4, run: 1, mouth: 'open', look: { x: b.dir * 0.6, y: -0.4 } }, px_, by, size)
                                     : R({ view: 'front', look: { x: (bx - px_) / 60, y: -0.8 }, mouth: 'open', tail: time * 9, ears: 0.4 }, px_, by, size, { sx, sy });
           else if (moving && framed) drewPet = drawFrame(kind, stage, 'run_side', Math.floor(time * 12), px_, by, size, { flip: b.dir < 0 });
           else if (moving) { const gait = Math.abs(Math.sin(time * 11)); drewPet = drawImg(side, px_, by - gait * 5, size, { flip: b.dir < 0, sx: 1 + gait * 0.04, sy: 1 - gait * 0.05 }); }
@@ -2837,7 +2652,7 @@
         // ── running about / going to see a friend ──
         else if (b.act === 'run' || b.act === 'visit') {
           const trot = Math.min(1, b.speed / 60);
-          if (rig) drewPet = R({ view: 'side', gait: time * (1.6 + trot * 0.8), run: 0.7 + trot * 0.3, tail: time * 6, look: { x: 0.4, y: 0 }, mouth: b.act === 'visit' ? 'open' : 'smile' }, px_, by, size * depth, { flip: b.dir < 0 });
+          if (rig) drewPet = R({ view: 'side', gait: time * (1.6 + trot * 0.8), run: 0.7 + trot * 0.3, look: { x: b.dir * 0.5, y: 0 }, mouth: b.act === 'visit' ? 'open' : 'smile' }, px_, by, size * depth);
           else if (framed) drewPet = drawFrame(kind, stage, 'run_side', Math.floor(time * 12), px_, by, size * depth, { flip: b.dir < 0 });
           else { const gait = Math.abs(Math.sin(time * 11)); dy = -gait * 5; drewPet = drawImg(side, px_, by + dy, size * depth, { flip: b.dir < 0, sx: 1 + gait * 0.04, sy: 1 - gait * 0.05, rot: Math.sin(time * 11) * 0.05 * b.dir }); }
         }
@@ -2857,7 +2672,7 @@
           const big = size * 1.9;
           by = floor + 10; px_ = cx;
           shadowW = size * 0.8; shadowY = by + 3;
-          if (rig) drewPet = R({ view: 'front', mouth: 'tongue', look: { x: Math.sin(time * 4) * 0.4, y: -0.9 }, tail: time * 10, ears: 0.1, tilt: Math.sin(time * 5) * 0.06, blink: fi === 2 ? 0.5 : blinkK }, px_, by, big);
+          if (rig) drewPet = R({ view: 'front', mouth: 'tongue', look: { x: Math.sin(time * 4) * 0.5, y: -0.9 }, tilt: Math.sin(time * 5) * 0.05 }, px_, by, big);
           else drewPet = drawFrame(kind, stage, 'lick', fi, px_, by, big) || drawImg(front, px_, by, big);
           if (isMe && fi === 2 && (!me.licks.length || now - me.licks[me.licks.length - 1].t > 900)) {
             me.licks.push({ x: cx + (Math.random() - 0.5) * 30, y: floor - big * 0.55 + (Math.random() - 0.5) * 20, t: now, w: 46 + Math.random() * 20, h: 30 + Math.random() * 14, a: Math.random() * 0.8 - 0.4 });
@@ -2891,7 +2706,7 @@
         // ── hungry: sits at the front and asks ──
         else if (b.act === 'beg') {
           const wob = Math.sin(time * 3.1);
-          if (rig) drewPet = R({ view: 'front', beg: true, look: { x: 0, y: -1 }, mouth: 'o', ears: -0.5, tilt: Math.sin(time * 1.3) * 0.12, tail: time * 3 }, px_, by, size * depth, { sx: 1 - wob * 0.02, sy: 1 + wob * 0.03 });
+          if (rig) drewPet = R({ view: 'front', beg: true, look: { x: 0, y: -1 }, mouth: 'o', tilt: Math.sin(time * 1.3) * 0.1 }, px_, by, size * depth, { sx: 1 - wob * 0.02, sy: 1 + wob * 0.03 });
           else drewPet = drawImg(front, px_, by, size * depth, { sx: 1 - wob * 0.02, sy: 1 + wob * 0.03, rot: Math.sin(time * 1.3) * 0.04 });
           if (isMe && !anim) {
             // a little thought of food, bobbing
