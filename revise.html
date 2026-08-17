@@ -2437,6 +2437,8 @@
         if (actor === me && r < (free.length ? 0.42 : 0.28)) { setAct(b, 'approach', now, 1400); b.tx = W / 2; b.ty = 0; }
         else if (r < 0.9) {
           b.tx = margin + Math.random() * (W - margin * 2); b.ty = -Math.random() * 14;
+          for (const o of others) if (o.beh.x != null && Math.abs(o.beh.x - b.tx) < size * 0.7) b.tx = o.beh.x + (b.tx < o.beh.x ? -1 : 1) * size * 0.75;
+          b.tx = Math.max(margin, Math.min(W - margin, b.tx));
           b.dir = b.tx >= b.x ? 1 : -1; b.speed = 40 + Math.random() * 30;
           setAct(b, 'run', now, 8000);
         } else setAct(b, 'jump', now, 700);
@@ -2451,7 +2453,12 @@
         const kind = actorKind(actor), stage = actorStage(actor);
         const cx = W / 2;
         const framed = hasSheet(kind, stage, 'run_side');
-        if (b.x == null) { b.x = isMe ? cx : 20 + Math.random() * (W - 40); setAct(b, 'idle', now, 500 + Math.random() * 1500); }
+        if (b.x == null) {
+          const lane = isMe ? 0 : friends.indexOf(actor) + 1;          // 0 = me in the middle, friends either side
+          const spread = Math.min(W * 0.32, size * 0.85);
+          b.x = Math.max(size * 0.5, Math.min(W - size * 0.5, cx + (lane === 0 ? 0 : (lane % 2 ? -1 : 1) * spread * Math.ceil(lane / 2))));
+          setAct(b, 'idle', now, 500 + Math.random() * 1500);
+        }
         const inBed = isMe ? (p.inBed && p.correct >= 100) : actor.mood === 'asleep';
         const poorly = isMe ? isPoorly(p) : actor.mood === 'poorly';
         const hungry = isMe ? isHungry(p) : actor.mood === 'hungry';
@@ -2490,226 +2497,256 @@
         if (!framed && b.act === 'approach' && Math.abs(b.x - cx) < 3) setAct(b, 'idle', now, 2500);
       }
 
-      // ── THE RIG: pets drawn in code and moved like game characters ────────
-      // Sarah, 17 Aug: "I want an interactive pet, not videos — millions of
-      // games do this." They do it with a rig: the pet is PARTS (head, ears,
-      // body, four legs, tail, face) and code moves the joints — legs swing in
-      // gait, the body bobs, ears flop a beat behind, the tail wags, the eyes
-      // follow you, it blinks, squashes on landing. Nothing here is a picture:
-      // it's shapes, so it can do anything we describe and it costs nothing.
-      // Units: pet is ~100 tall standing; origin at the feet, bottom-centre;
-      // faces RIGHT (the caller flips it). `pose` says what to do:
-      //   view 'side'|'front'|'lie'; gait 0..∞ (phase, 0 = standing still);
-      //   run 0..1 (how hard the legs work); hop 0..1 (in the air);
-      //   look {x,y} -1..1 (where the eyes point); blink 0..1; mouth
-      //   'smile'|'open'|'tongue'|'chew'|'o'; happy (eyes as arcs);
-      //   ears -1..1 (down..up); tail (wag phase); tilt (head rad); breathe.
+      // ── THE RIG — APPY'S FAMILY ───────────────────────────────────────────
+      // Sarah, 17 Aug: "what about appy? he's the original thing we made to
+      // represent the apps." Appy is the answer. He is not an animal with
+      // anatomy — he is ONE FLUFFY BALL with huge glossy eyes, a tiny pink
+      // nose and two little pink feet. That is why he reads as cute, and a
+      // ball is the one shape code can animate properly: it squashes, bounces,
+      // rolls and wobbles. So the pets are Appy's little ones — same face, same
+      // fur, three colours. Drawn in code: no pictures, no downloads, no cost.
+      //
+      // drawRig(kind, stage, pose, cx, by, size, o) — bottom-centre at (cx,by),
+      // `size` = height in px. pose:
+      //   view 'front'|'side'|'lie'; gait (phase) + run 0..1; hop 0..1;
+      //   look {x,y} -1..1; blink 0..1; mouth 'smile'|'open'|'chew'|'o'|'tongue';
+      //   happy; ears -1..1; tilt; breathe; beg; t (seconds); seed.
       const RIG = {
-        puppy:    { base: '#ffeccb', shade: '#f4d7a4', hi: 'rgba(255,255,255,0.55)', patch: '#d3894c', line: '#8a5a33', earIn: '#f6b7a0', nose: '#4a2c1c', tongue: '#ff9bb0', blush: 'rgba(255,120,140,0.38)',
-                    ear: 'floppy', tail: 'curl', snout: 'round', cheeks: 0, head: 1.06, body: 0.94, legs: 0.9 },
-        hamster:  { base: '#ffbe64', shade: '#f0a040', hi: 'rgba(255,255,255,0.45)', patch: null, belly: '#fff0d2', line: '#9a5a22', earIn: '#ffd2bd', nose: '#5a3418', tongue: '#ff9bb0', blush: 'rgba(255,120,140,0.36)',
-                    ear: 'round', tail: 'nub', snout: 'small', cheeks: 1, head: 1.1, body: 1.05, legs: 0.65 },
-        capybara: { base: '#e2a866', shade: '#cf8f4c', hi: 'rgba(255,255,255,0.4)', patch: null, line: '#8a5a2e', earIn: '#b8783f', nose: '#4a2c1c', tongue: '#ff9bb0', blush: 'rgba(255,120,140,0.30)',
-                    ear: 'tiny', tail: 'none', snout: 'soft', cheeks: 0, head: 1.02, body: 1.05, legs: 0.75 },
+        // kind keys stay the same so saved pets keep working
+        puppy:    { fur: '#ffffff', fur2: '#dfe6f0', paw: '#f7bcc4', nose: '#f4a6b0', ear: 'floppy', tuft: 1,
+                    eye: '#3a2418', blush: 'rgba(255,150,165,0.45)', size: 1.0 },
+        hamster:  { fur: '#ffcf7a', fur2: '#f0a94e', paw: '#f7b5a0', nose: '#e58b7a', ear: 'round',  tuft: 1,
+                    eye: '#3a2418', blush: 'rgba(255,140,150,0.42)', size: 0.94 },
+        capybara: { fur: '#c9a7f0', fur2: '#a982e0', paw: '#f7b9d2', nose: '#e58bb0', ear: 'tiny',   tuft: 2,
+                    eye: '#3a2418', blush: 'rgba(255,140,170,0.40)', size: 1.06 },
       };
-      const STAGE_PROP = { baby: { head: 1.12, body: 0.86, legs: 0.78 }, young: { head: 1.0, body: 1.0, legs: 1.0 }, grown: { head: 0.92, body: 1.12, legs: 1.14 } };
-      const RIG_LINE = 2.4;
-      function rr(x, y, w, h, r) { ctx.beginPath(); ctx.roundRect ? ctx.roundRect(x, y, w, h, r) : ctx.rect(x, y, w, h); }
-      function ell(x, y, rx, ry, rot) { ctx.beginPath(); ctx.ellipse(x, y, rx, ry, rot || 0, 0, Math.PI * 2); }
-      function fillStroke(fill, line) { if (fill) { ctx.fillStyle = fill; ctx.fill(); } if (line) { ctx.strokeStyle = line; ctx.stroke(); } }
-      // one leg: pivot at (px, py), swings by `ang` (rad, + = forward), length L
-      function leg(R, px, py, L, ang, w, near) {
-        ctx.save(); ctx.translate(px, py); ctx.rotate(-ang);
-        rr(-w / 2, -3, w, L + 3, w / 2); fillStroke(near ? R.base : R.shade, R.line);
-        ell(0, L, w * 0.62, w * 0.42); fillStroke(near ? R.base : R.shade, R.line);   // paw
-        ctx.restore();
+      const STAGE_PROP = { baby: { r: 0.78, eye: 1.12 }, young: { r: 1.0, eye: 1.0 }, grown: { r: 1.18, eye: 0.93 } };
+      // deterministic wobble per pet so two fluffs don't ripple in step
+      function hash01(i, seed) { const x = Math.sin(i * 12.9898 + seed * 78.233) * 43758.5453; return x - Math.floor(x); }
+      // The fluff: a circle whose edge is soft spikes of fur, breathing.
+      function furPath(cx, cy, r, t, seed, squashX, squashY, amp) {
+        const N = 96;                       // many fine strands, not a few lumps
+        const A = amp == null ? 1 : amp;
+        ctx.beginPath();
+        const pt = (i) => {
+          const a = (i / N) * Math.PI * 2 - Math.PI / 2;
+          const n = hash01(i % N, seed) - 0.5;
+          const spike = 1 + A * (0.022 * n + 0.012 * Math.sin(i * 1.7 + t * 1.4 + seed) + 0.008 * Math.sin(i * 4.3 - t * 2.0));
+          return [cx + Math.cos(a) * r * spike * squashX, cy + Math.sin(a) * r * spike * squashY];
+        };
+        let [px, py] = pt(0);
+        ctx.moveTo(px, py);
+        for (let i = 1; i <= N; i++) {
+          const [x, y] = pt(i);
+          const [nx, ny] = pt(i + 1);
+          ctx.quadraticCurveTo(x, y, (x + nx) / 2, (y + ny) / 2);
+          px = x; py = y;
+        }
+        ctx.closePath();
       }
-      function earShape(R, side, k, view) {
-        // side: -1 left/back, +1 right/front (in the pet's own frame). k = ears (-1 down .. 1 up)
+      // the soft halo of finer fur that makes Appy look touchable
+      function furHalo(cx, cy, r, t, seed, sqx, sqy, F) {
         ctx.save();
-        if (R.ear === 'floppy') {
-          ctx.rotate(side * (0.5 - k * 0.7) * (view === 'front' ? 1 : 0.6));
-          ell(side * (view === 'front' ? 9 : 6), 15, 8.5, 17, side * 0.1); fillStroke(R.patch || R.shade, R.line);
-          if (view !== 'front') { ell(side * 6, 16, 4, 10, side * 0.1); fillStroke(R.earIn, null); }
-        } else if (R.ear === 'round') {
-          ctx.rotate(side * (0.1 - k * 0.2));
-          ell(side * 3, -3, 8, 8); fillStroke(R.base, R.line);
-          ell(side * 3, -2.5, 4.6, 4.6); fillStroke(R.earIn, null);
-        } else {   // tiny
-          ctx.rotate(side * (0.2 - k * 0.2));
-          ell(side * 2.5, -1.5, 5, 5.5); fillStroke(R.shade, R.line);
-          ell(side * 2.5, -1, 2.6, 3); fillStroke(R.earIn, null);
+        for (let pass = 0; pass < 3; pass++) {
+          const rr2 = r * (1.02 + pass * 0.035);
+          ctx.globalAlpha = 0.3 - pass * 0.08;
+          furPath(cx, cy, rr2, t + pass * 1.3, seed + pass * 7, sqx, sqy, 2.4 + pass);
+          ctx.fillStyle = pass === 0 ? F.fur : F.fur2;
+          ctx.fill();
         }
         ctx.restore();
       }
-      function eye(R, x, y, r, look, blink, happy) {
-        if (happy) { ctx.beginPath(); ctx.arc(x, y + r * 0.6, r * 1.05, Math.PI * 1.15, Math.PI * 1.85); ctx.lineWidth = RIG_LINE * 1.15; ctx.strokeStyle = R.line; ctx.stroke(); ctx.lineWidth = RIG_LINE; return; }
-        if (blink > 0.85) { ctx.beginPath(); ctx.moveTo(x - r, y); ctx.quadraticCurveTo(x, y + r * 0.5, x + r, y); ctx.strokeStyle = R.line; ctx.stroke(); return; }
-        const sq = 1 - blink * 0.85;
-        ell(x, y, r, r * 1.08 * sq); fillStroke('#fff', R.line);
-        const px = x + (look ? look.x : 0) * r * 0.3, py = y + (look ? look.y : 0) * r * 0.3;
-        ell(px, py, r * 0.74, r * 0.8 * sq); fillStroke('#2b1a14', null);              // big dark pupil = the cute part
-        ell(px, py + r * 0.15, r * 0.5, r * 0.45 * sq); fillStroke('#4a2e22', null);   // a warm lower iris
-        ell(px - r * 0.26, py - r * 0.3, r * 0.26, r * 0.26 * sq); fillStroke('#fff', null);   // sparkle
-        ell(px + r * 0.28, py + r * 0.28, r * 0.12, r * 0.12 * sq); fillStroke('#fff', null);  // little sparkle
-      }
-      function mouth(R, x, y, kind, t) {
-        ctx.strokeStyle = R.line; ctx.lineCap = 'round';
-        if (kind === 'open' || kind === 'chew') {
-          const o = kind === 'chew' ? 1.6 + 2 * Math.abs(Math.sin(t * 9)) : 3.8;
-          ell(x, y + 2, 3.6, o); fillStroke('#7a3a3a', R.line);
-          if (o > 3) { ell(x, y + 3 + o * 0.5, 2.6, o * 0.45); fillStroke(R.tongue, null); }
-        } else if (kind === 'tongue') {
-          ctx.beginPath(); ctx.moveTo(x - 4, y); ctx.quadraticCurveTo(x, y + 3, x + 4, y); ctx.stroke();
-          const w = 4.4 + Math.sin(t * 10) * 0.5;
-          ell(x + 0.5, y + 4.5 + Math.sin(t * 10) * 1.0, w * 0.7, w); fillStroke(R.tongue, R.line);
-        } else if (kind === 'o') {
-          ell(x, y + 1.5, 1.9, 2.2); fillStroke('#7a3a3a', R.line);
-        } else {   // smile: a tiny "w" just under the nose
-          ctx.lineWidth = RIG_LINE * 0.8;
-          ctx.beginPath(); ctx.moveTo(x - 3.5, y - 1); ctx.quadraticCurveTo(x - 1.8, y + 1.8, x, y); ctx.quadraticCurveTo(x + 1.8, y + 1.8, x + 3.5, y - 1); ctx.stroke();
-          ctx.lineWidth = RIG_LINE;
+      // a few longer wisps on top — the bit that says "fluffy" at a glance
+      function wisps(cx, cy, r, t, seed, F) {
+        // fine strands all round the top — soft, not spiky
+        ctx.lineCap = 'round';
+        for (let i = 0; i < 34; i++) {
+          const a = -Math.PI + (i / 33) * Math.PI + (hash01(i, seed) - 0.5) * 0.08;
+          const n = hash01(i * 3 + 1, seed);
+          const L = r * (0.05 + n * 0.07);
+          const sway = Math.sin(t * 1.3 + i * 0.7 + seed) * 0.12;
+          const x0 = cx + Math.cos(a) * r * 0.99, y0 = cy + Math.sin(a) * r * 0.99;
+          ctx.strokeStyle = i % 3 === 0 ? F.fur2 : F.fur;
+          ctx.globalAlpha = 0.75;
+          ctx.lineWidth = 1.1 + n * 0.6;
+          ctx.beginPath(); ctx.moveTo(x0, y0);
+          ctx.quadraticCurveTo(x0 + Math.cos(a + sway) * L * 0.6, y0 + Math.sin(a + sway) * L * 0.6, x0 + Math.cos(a + sway * 2) * L, y0 + Math.sin(a + sway * 2) * L);
+          ctx.stroke();
         }
+        ctx.globalAlpha = 1; ctx.lineWidth = 2;
       }
-      // Draw the pet at (cx, by) with height `size`. Returns true.
+      // Appy's eye: big, glossy, two highlights, lashes. This is most of the cute.
+      function fluffEye(F, x, y, r, look, blink, happy) {
+        const lx = (look ? look.x : 0) * r * 0.26, ly = (look ? look.y : 0) * r * 0.26;
+        if (happy) {   // ^ ^ — the happy arc
+          ctx.strokeStyle = F.eye; ctx.lineWidth = r * 0.3; ctx.lineCap = 'round';
+          ctx.beginPath(); ctx.arc(x, y + r * 0.45, r * 0.85, Math.PI * 1.18, Math.PI * 1.82); ctx.stroke();
+          ctx.lineWidth = 2; return;
+        }
+        if (blink > 0.8) {   // shut: a soft closed lid with lashes
+          ctx.strokeStyle = F.eye; ctx.lineWidth = r * 0.26; ctx.lineCap = 'round';
+          ctx.beginPath(); ctx.moveTo(x - r * 0.8, y); ctx.quadraticCurveTo(x, y + r * 0.55, x + r * 0.8, y); ctx.stroke();
+          ctx.lineWidth = 2; return;
+        }
+        const sq = 1 - blink * 0.8;
+        ctx.save(); ctx.translate(x + lx, y + ly); ctx.scale(1, sq);
+        // glossy dark eye
+        const g = ctx.createRadialGradient(-r * 0.25, -r * 0.35, r * 0.1, 0, 0, r);
+        g.addColorStop(0, '#5a3a26'); g.addColorStop(0.45, F.eye); g.addColorStop(1, '#241309');
+        ctx.beginPath(); ctx.arc(0, 0, r, 0, Math.PI * 2); ctx.fillStyle = g; ctx.fill();
+        // iris warmth low down
+        ctx.beginPath(); ctx.arc(0, r * 0.3, r * 0.55, 0, Math.PI * 2); ctx.fillStyle = 'rgba(150,90,45,0.55)'; ctx.fill();
+        // highlights
+        ctx.beginPath(); ctx.arc(-r * 0.3, -r * 0.34, r * 0.3, 0, Math.PI * 2); ctx.fillStyle = '#fff'; ctx.fill();
+        ctx.beginPath(); ctx.arc(r * 0.32, r * 0.3, r * 0.14, 0, Math.PI * 2); ctx.fillStyle = 'rgba(255,255,255,0.9)'; ctx.fill();
+        ctx.restore();
+        // lashes
+        ctx.strokeStyle = F.eye; ctx.lineWidth = Math.max(1, r * 0.11); ctx.lineCap = 'round';
+        for (let i = -1; i <= 1; i++) {
+          const a = -Math.PI / 2 + i * 0.42;
+          ctx.beginPath();
+          ctx.moveTo(x + Math.cos(a) * r * 0.95, y + Math.sin(a) * r * 0.95 * sq);
+          ctx.lineTo(x + Math.cos(a) * r * 1.3, y + Math.sin(a) * r * 1.3 * sq);
+          ctx.stroke();
+        }
+        ctx.lineWidth = 2;
+      }
+      function fluffMouth(F, x, y, kind, t, r) {
+        ctx.strokeStyle = '#c4757f'; ctx.lineWidth = Math.max(1.4, r * 0.055); ctx.lineCap = 'round';
+        if (kind === 'open' || kind === 'chew') {
+          const o = (kind === 'chew' ? 0.5 + 0.45 * Math.abs(Math.sin(t * 9)) : 1) * r * 0.2;
+          ctx.beginPath(); ctx.ellipse(x, y + o * 0.4, r * 0.16, o, 0, 0, Math.PI * 2);
+          ctx.fillStyle = '#c4626e'; ctx.fill();
+          ctx.beginPath(); ctx.ellipse(x, y + o * 0.9, r * 0.1, o * 0.45, 0, 0, Math.PI * 2); ctx.fillStyle = '#ff9bb0'; ctx.fill();
+        } else if (kind === 'tongue') {
+          ctx.beginPath(); ctx.ellipse(x, y + r * 0.02, r * 0.13, r * 0.1, 0, 0, Math.PI * 2); ctx.fillStyle = '#c4626e'; ctx.fill();
+          const w = r * (0.1 + 0.012 * Math.sin(t * 10));
+          ctx.beginPath(); ctx.ellipse(x, y + r * 0.14 + Math.sin(t * 10) * r * 0.015, w, w * 1.25, 0, 0, Math.PI * 2);
+          ctx.fillStyle = '#ff9bb0'; ctx.fill();
+        } else if (kind === 'o') {
+          ctx.beginPath(); ctx.ellipse(x, y + r * 0.03, r * 0.075, r * 0.1, 0, 0, Math.PI * 2); ctx.fillStyle = '#c4626e'; ctx.fill();
+        } else {   // a tiny smile
+          ctx.beginPath(); ctx.moveTo(x - r * 0.12, y - r * 0.02); ctx.quadraticCurveTo(x, y + r * 0.09, x + r * 0.12, y - r * 0.02); ctx.stroke();
+        }
+        ctx.lineWidth = 2;
+      }
+      function fluffEars(F, cx, cy, r, k, t, seed) {
+        if (F.ear === 'floppy') {
+          for (const s of [-1, 1]) {
+            const a = s * (0.72 - k * 0.18), L = r * 0.5;
+            const x = cx + Math.cos(-Math.PI / 2 + a) * r * 0.92, y = cy + Math.sin(-Math.PI / 2 + a) * r * 0.92;
+            ctx.save(); ctx.translate(x, y); ctx.rotate(s * (0.5 - k * 0.5) + Math.sin(t * 2 + seed) * 0.05 * s);
+            furPath(0, L * 0.35, L * 0.45, t * 0.6, seed + s, 0.8, 1.25);
+            ctx.fillStyle = F.fur2; ctx.fill();
+            ctx.restore();
+          }
+        } else if (F.ear === 'round') {
+          for (const s of [-1, 1]) {
+            const x = cx + s * r * 0.68, y = cy - r * 0.66;
+            furPath(x, y, r * 0.26, t * 0.6, seed + s * 3, 1, 1);
+            ctx.fillStyle = F.fur2; ctx.fill();
+          }
+        }
+        // 'tiny' ears: nothing — the tufts do the work
+      }
+      // The whole fluff.
       function drawRig(kind, stage, pose, cx, by, size, o = {}) {
-        const R = RIG[kind]; if (!R) return false;
+        const F = RIG[kind]; if (!F) return false;
         const S = STAGE_PROP[stage] || STAGE_PROP.young;
-        const t = pose.t || 0;
-        const hs = R.head * S.head, bs = R.body * S.body, ls = R.legs * S.legs;
+        const t = pose.t || 0, seed = (pose.seed || 0) + 1;
         ctx.save();
         ctx.translate(cx, by);
         const u = size / 100;
         ctx.scale((o.flip ? -1 : 1) * (o.sx || 1) * u, (o.sy || 1) * u);
         if (o.rot) ctx.rotate(o.rot);
         if (o.alpha != null) ctx.globalAlpha = o.alpha;
-        ctx.lineWidth = RIG_LINE; ctx.lineJoin = 'round'; ctx.lineCap = 'round';
-        const breathe = Math.sin(t * 2.2 + (pose.seed || 0)) * (pose.breathe == null ? 1 : pose.breathe);
-        const look = pose.look || { x: 0, y: 0 };
-        const blink = pose.blink || 0;
-        const ears = pose.ears == null ? 0 : pose.ears;
-        const wag = pose.tail == null ? t * 4 : pose.tail;
+        ctx.lineJoin = 'round'; ctx.lineCap = 'round'; ctx.lineWidth = 2;
 
-        if (pose.view === 'side') {
-          // ── gait ──
-          const g = pose.gait || 0, run = Math.min(1, pose.run == null ? (g ? 1 : 0) : pose.run);
-          const swing = Math.sin(g * Math.PI * 2), swing2 = Math.sin(g * Math.PI * 2 + Math.PI);
-          const amp = 0.55 * run;
-          const bob = run ? Math.abs(Math.cos(g * Math.PI * 2)) * 3.2 * run : 0;
-          const pitch = run ? Math.sin(g * Math.PI * 2 + 0.6) * 0.06 * run : 0;
-          const hop = pose.hop || 0;
-          const bodyY = -30 * ls - 22 * bs + 20 - bob + breathe * 0.6;   // body centre
-          const bodyRx = 30 * bs, bodyRy = 21 * bs;
-          const legL = 22 * ls, legW = 11.5 * Math.min(bs, 1.15);
-          const hipX = -bodyRx * 0.55, shX = bodyRx * 0.55, legY = bodyY + bodyRy * 0.62;
-          // in the air: legs tuck (front forward, back back)
-          const fA = hop ? 0.7 * hop : 0, bA = hop ? -0.5 * hop : 0;
-          ctx.save(); ctx.translate(0, 0); ctx.rotate(pitch);
-          // far legs (lighter)
-          leg(R, hipX + 2, legY, legL, -swing * amp + bA, legW, false);
-          leg(R, shX - 2, legY, legL, swing2 * amp * 0.9 + fA, legW, false);
-          // tail
-          if (R.tail === 'curl') {
-            ctx.save(); ctx.translate(-bodyRx * 0.92, bodyY - bodyRy * 0.35); ctx.rotate(-0.4 + Math.sin(wag) * 0.5 - (run ? 0.3 : 0));
-            ctx.beginPath(); ctx.moveTo(0, 0); ctx.quadraticCurveTo(-10, -12, -6, -22); ctx.lineWidth = 7; ctx.strokeStyle = R.line; ctx.stroke(); ctx.lineWidth = 3.4; ctx.strokeStyle = R.patch || R.base; ctx.stroke(); ctx.lineWidth = RIG_LINE; ctx.restore();
-          } else if (R.tail === 'nub') { ell(-bodyRx * 0.98, bodyY + 2, 3.5, 3); fillStroke(R.base, R.line); }
-          // body
-          ell(0, bodyY, bodyRx, bodyRy); fillStroke(R.base, R.line);
-          ell(-bodyRx * 0.2, bodyY - bodyRy * 0.45, bodyRx * 0.5, bodyRy * 0.25); fillStroke(R.hi, null);
-          if (R.belly) { ell(2, bodyY + bodyRy * 0.35, bodyRx * 0.6, bodyRy * 0.5); fillStroke(R.belly, null); }
-          if (R.patch) { ell(-bodyRx * 0.35, bodyY - bodyRy * 0.25, bodyRx * 0.36, bodyRy * 0.55, -0.3); fillStroke(R.patch, null); }
-          // near legs
-          leg(R, hipX - 2, legY, legL, swing * amp + bA, legW, true);
-          leg(R, shX + 2, legY, legL, -swing2 * amp * 0.9 + fA, legW, true);
-          ctx.restore();
-          // head (bobs a touch after the body)
-          const hr = 29 * hs;
-          const hx = bodyRx * 0.5 + 2, hy = bodyY - bodyRy * 0.6 - hr * 0.62 - (run ? Math.sin(g * Math.PI * 2 - 0.9) * 1.6 * run : 0) - hop * 3;
-          ctx.save(); ctx.translate(hx, hy); ctx.rotate((pose.tilt || 0) + (run ? -0.08 * run : 0) + hop * -0.12);
-          // far ear (behind the head, hangs down the back)
-          ctx.save(); ctx.translate(-hr * 0.42, -hr * 0.62); earShape(R, -1, ears + (run ? -0.6 : 0) + hop * 0.8, 'side'); ctx.restore();
-          ell(0, 0, hr, hr * 0.96); fillStroke(R.base, R.line);
-          if (R.patch) { ell(hr * 0.1, -hr * 0.4, hr * 0.5, hr * 0.4, 0.25); fillStroke(R.patch, null); }
-          ell(-hr * 0.15, -hr * 0.48, hr * 0.4, hr * 0.2, -0.1); fillStroke(R.hi, null);
-          // muzzle: small and soft, low on the face
-          if (R.snout === 'soft') { ell(hr * 0.62, hr * 0.3, hr * 0.42, hr * 0.28); fillStroke(R.shade, null); ell(hr * 0.98, hr * 0.2, 2.2, 1.8); fillStroke(R.nose, null); }
-          else { if (R.snout !== 'small') { ell(hr * 0.6, hr * 0.35, hr * 0.34, hr * 0.24); fillStroke('#fff6e6', null); } ell(hr * 0.86, hr * 0.26, 3, 2.4); fillStroke(R.nose, null); }
-          if (R.cheeks) { ell(hr * 0.5, hr * 0.42, hr * 0.4, hr * 0.28); fillStroke(R.base, R.line); }
-          // eye (big, low) + mouth
-          eye(R, hr * 0.32, hr * 0.06, hr * 0.22, { x: 0.3 + look.x * 0.5, y: look.y }, blink, pose.happy);
-          if (pose.mouth === 'tongue' || pose.mouth === 'open') { ell(hr * 0.72, hr * 0.56, 2.8, 3.8, 0.3); fillStroke(R.tongue, R.line); }
-          const sb = ctx.createRadialGradient(hr * 0.5, hr * 0.42, 0, hr * 0.5, hr * 0.42, hr * 0.2); sb.addColorStop(0, R.blush); sb.addColorStop(1, 'rgba(255,120,140,0)');
-          ctx.fillStyle = sb; ctx.beginPath(); ctx.arc(hr * 0.5, hr * 0.42, hr * 0.2, 0, Math.PI * 2); ctx.fill();
-          // near ear — at the back-top of the head, in front, so the face stays clear
-          ctx.save(); ctx.translate(-hr * 0.2, -hr * 0.7); earShape(R, -1, ears + (run ? -0.6 : 0) + hop * 0.8, 'side'); ctx.restore();
-          ctx.restore();
+        const lie = pose.view === 'lie';
+        const hop = pose.hop || 0;
+        const run = Math.min(1, pose.run == null ? (pose.gait ? 1 : 0) : pose.run);
+        const g = pose.gait || 0;
+        const breathe = Math.sin(t * 2.1 + seed) * (pose.breathe == null ? 1 : pose.breathe);
+        // a ball's whole performance is squash and stretch
+        const bounce = run ? Math.abs(Math.sin(g * Math.PI * 2)) : 0;
+        let sqx = 1 + hop * -0.1 + (1 - bounce) * run * 0.05 + breathe * 0.012;
+        let sqy = 1 + hop * 0.14 + bounce * run * 0.06 - breathe * 0.016;
+        if (lie) { sqx = 1.22; sqy = 0.66; }
+        const r = 40 * F.size * S.r;
+        const footY = -2;
+        const cy = footY - r * sqy - (lie ? -r * 0.12 : 0) - hop * 4 - (run ? bounce * 3 : 0);
+
+        // ── feet (behind the fluff so they peek out) ──
+        if (!lie) {
+          const step = run ? Math.sin(g * Math.PI * 2) * r * 0.14 : 0;
+          const lift = run ? Math.max(0, Math.sin(g * Math.PI * 2)) * r * 0.1 : 0;
+          const lift2 = run ? Math.max(0, -Math.sin(g * Math.PI * 2)) * r * 0.1 : 0;
+          const beg = pose.beg ? r * 0.18 : 0;
+          for (const s of [-1, 1]) {
+            const fx = s * r * 0.34 + (s > 0 ? step : -step);
+            const fy = footY - (s > 0 ? lift : lift2) - beg - hop * r * 0.12;
+            ctx.beginPath(); ctx.ellipse(fx, fy - r * 0.07, r * 0.19, r * 0.13, s * 0.1, 0, Math.PI * 2);
+            ctx.fillStyle = F.paw; ctx.fill();
+            // toe beans
+            ctx.fillStyle = 'rgba(0,0,0,0.06)';
+            for (let i = -1; i <= 1; i++) { ctx.beginPath(); ctx.ellipse(fx + i * r * 0.07, fy - r * 0.12, r * 0.03, r * 0.025, 0, 0, Math.PI * 2); ctx.fill(); }
+          }
+        } else {
+          for (const s of [-1, 1]) { ctx.beginPath(); ctx.ellipse(s * r * 0.5, footY - r * 0.06, r * 0.17, r * 0.1, 0, 0, Math.PI * 2); ctx.fillStyle = F.paw; ctx.fill(); }
         }
-        else if (pose.view === 'lie') {
-          // lying down: body flat, head on paws, eyes shut unless told otherwise
-          const bodyRx = 34 * bs, bodyRy = 15 * bs, bodyY = -bodyRy - 2 + breathe * 0.5;
-          if (R.tail === 'curl') { ctx.save(); ctx.translate(-bodyRx * 0.9, bodyY); ctx.rotate(0.6 + Math.sin(wag * 0.5) * 0.15); ctx.beginPath(); ctx.moveTo(0, 0); ctx.quadraticCurveTo(-10, -6, -14, 2); ctx.lineWidth = 7; ctx.strokeStyle = R.line; ctx.stroke(); ctx.lineWidth = 3.4; ctx.strokeStyle = R.patch || R.base; ctx.stroke(); ctx.lineWidth = RIG_LINE; ctx.restore(); }
-          ell(0, bodyY, bodyRx, bodyRy); fillStroke(R.base, R.line);
-          if (R.patch) { ell(-bodyRx * 0.3, bodyY - bodyRy * 0.3, bodyRx * 0.3, bodyRy * 0.55, -0.2); fillStroke(R.patch, null); }
-          // paws out front
-          ell(bodyRx * 0.55, -3, 8, 4.5); fillStroke(R.base, R.line); ell(bodyRx * 0.85, -3, 8, 4.5); fillStroke(R.base, R.line);
-          const hr = 24 * hs; ctx.save(); ctx.translate(bodyRx * 0.62, -hr * 0.85 - 2 + breathe * 0.4); ctx.rotate(0.12);
-          ctx.save(); ctx.translate(-hr * 0.45, -hr * 0.55); earShape(R, -1, -0.8, 'side'); ctx.restore();
-          ell(0, 0, hr, hr * 0.94); fillStroke(R.base, R.line);
-          if (R.patch) { ell(hr * 0.15, -hr * 0.28, hr * 0.5, hr * 0.42, 0.25); fillStroke(R.patch, null); }
-          if (R.snout === 'soft') { ell(hr * 0.62, hr * 0.3, hr * 0.42, hr * 0.28); fillStroke(R.shade, null); ell(hr * 0.98, hr * 0.2, 2.2, 1.8); fillStroke(R.nose, null); }
-          else { if (R.snout !== 'small') { ell(hr * 0.6, hr * 0.35, hr * 0.34, hr * 0.24); fillStroke('#fff6e6', null); } ell(hr * 0.86, hr * 0.26, 3, 2.4); fillStroke(R.nose, null); }
-          eye(R, hr * 0.32, hr * 0.06, hr * 0.21, look, pose.blink == null ? 1 : pose.blink, pose.happy);
-          ctx.save(); ctx.translate(-hr * 0.2, -hr * 0.66); earShape(R, -1, -0.9, 'side'); ctx.restore();
-          ctx.restore();
+
+        // ── ears behind ──
+        ctx.save(); ctx.rotate(pose.tilt || 0);
+        fluffEars(F, 0, cy, r * Math.min(sqx, sqy), (pose.ears == null ? 0 : pose.ears) + hop * 0.6, t, seed);
+        // ── the body of fluff ──
+        ctx.save();
+        ctx.shadowColor = 'rgba(90,70,60,0.20)'; ctx.shadowBlur = r * 0.35; ctx.shadowOffsetY = r * 0.1;
+        furPath(0, cy, r * 0.98, t, seed, sqx, sqy);
+        ctx.fillStyle = F.fur; ctx.fill();
+        ctx.restore();
+        furHalo(0, cy, r, t, seed, sqx, sqy, F);
+        furPath(0, cy, r, t, seed, sqx, sqy);
+        const bg = ctx.createRadialGradient(-r * 0.35, cy - r * 0.45, r * 0.1, 0, cy, r * 1.15);
+        bg.addColorStop(0, '#ffffff'); bg.addColorStop(0.35, F.fur); bg.addColorStop(1, F.fur2);
+        ctx.fillStyle = bg; ctx.fill();
+        wisps(0, cy, r * Math.min(sqx, sqy), t, seed, F);
+        // soft shadow inside the bottom edge — makes it read as round and soft
+        ctx.save(); furPath(0, cy, r, t, seed, sqx, sqy); ctx.clip();
+        const sh = ctx.createLinearGradient(0, cy + r * 0.1, 0, cy + r * 1.1);
+        sh.addColorStop(0, 'rgba(0,0,0,0)'); sh.addColorStop(1, 'rgba(120,90,70,0.16)');
+        ctx.fillStyle = sh; ctx.fillRect(-r * 1.5, cy - r * 1.5, r * 3, r * 3);
+        ctx.restore();
+
+        // ── the face, low on the ball (baby schema) ──
+        const look = pose.look || { x: 0, y: 0 };
+        const fy = cy + r * 0.2 * sqy;                       // face line
+        const er = r * 0.245 * S.eye;                        // EYE radius — huge on purpose
+        const ex = r * 0.36 * sqx;
+        const sideShift = pose.view === 'side' ? r * 0.16 : 0;
+        if (lie) {
+          // asleep: lids and a peaceful line
+          fluffEye(F, -ex * 0.8 + sideShift, fy, er, look, 1, false);
+          fluffEye(F, ex * 0.8 + sideShift, fy, er, look, 1, false);
+        } else {
+          fluffEye(F, -ex + sideShift, fy, er, look, pose.blink || 0, pose.happy);
+          fluffEye(F, ex + sideShift, fy, er, look, pose.blink || 0, pose.happy);
         }
-        else {
-          // ── front, sitting ──
-          const hop = pose.hop || 0;
-          const bodyRx = 27 * bs, bodyRy = 26 * bs;
-          const bodyY = -bodyRy + 2 - hop * 2 + breathe * 0.5;
-          const bounce = pose.gait ? Math.abs(Math.sin(pose.gait * Math.PI * 2)) : 0;   // running at you
-          // back legs (haunches) peeking
-          ell(-bodyRx * 0.85, -7, 9, 7); fillStroke(R.shade, R.line); ell(bodyRx * 0.85, -7, 9, 7); fillStroke(R.shade, R.line);
-          // tail peeking (curl) at one side
-          if (R.tail === 'curl') { ctx.save(); ctx.translate(bodyRx * 0.9, bodyY + bodyRy * 0.5); ctx.rotate(0.9 + Math.sin(wag) * 0.45); ctx.beginPath(); ctx.moveTo(0, 0); ctx.quadraticCurveTo(10, -10, 6, -20); ctx.lineWidth = 7; ctx.strokeStyle = R.line; ctx.stroke(); ctx.lineWidth = 3.4; ctx.strokeStyle = R.patch || R.base; ctx.stroke(); ctx.lineWidth = RIG_LINE; ctx.restore(); }
-          // body (a soft pear)
-          ctx.beginPath(); ctx.moveTo(-bodyRx * 0.55, bodyY - bodyRy);
-          ctx.bezierCurveTo(-bodyRx * 1.35, bodyY - bodyRy * 0.2, -bodyRx * 1.15, bodyY + bodyRy, 0, bodyY + bodyRy);
-          ctx.bezierCurveTo(bodyRx * 1.15, bodyY + bodyRy, bodyRx * 1.35, bodyY - bodyRy * 0.2, bodyRx * 0.55, bodyY - bodyRy); ctx.closePath(); fillStroke(R.base, R.line);
-          if (R.belly) { ell(0, bodyY + bodyRy * 0.25, bodyRx * 0.62, bodyRy * 0.6); fillStroke(R.belly, null); }
-          else if (R.snout !== 'box') { ell(0, bodyY + bodyRy * 0.3, bodyRx * 0.5, bodyRy * 0.5); fillStroke(R.snout === 'small' ? R.shade : '#fbf0dc', null); }
-          // front paws — lift alternately when running at you / begging
-          const lift = pose.paws == null ? bounce * 4 : pose.paws;
-          const pw = 8.5 * Math.min(bs, 1.1);
-          leg(R, -bodyRx * 0.42, bodyY + bodyRy * 0.55 - (pose.gait ? lift : 0), 12 * ls, pose.beg ? 0.5 + Math.sin(t * 6) * 0.15 : 0, pw, true);
-          leg(R, bodyRx * 0.42, bodyY + bodyRy * 0.55 - (pose.gait ? 4 - lift : 0), 12 * ls, pose.beg ? 0.5 - Math.sin(t * 6) * 0.15 : 0, pw, true);
-          // head — BIG, round; the face sits in the LOWER half (baby schema)
-          const hr = 34 * hs;
-          ctx.save(); ctx.translate(look.x * 1.5, bodyY - bodyRy * 0.5 - hr * 0.7 - hop * 4 - bounce * 1.5 + breathe * 0.4);
-          ctx.rotate((pose.tilt || 0) + look.x * 0.06);
-          const earK = ears + hop * 0.9 - bounce * 0.5;
-          // ears BEHIND the head, from its top corners, so the face stays a clean circle
-          const ex = R.ear === 'floppy' ? 0.8 : 0.66, ey = R.ear === 'floppy' ? 0.5 : 0.66;
-          ctx.save(); ctx.translate(-hr * ex, -hr * ey); earShape(R, -1, earK, 'front'); ctx.restore();
-          ctx.save(); ctx.translate(hr * ex, -hr * ey); earShape(R, 1, earK, 'front'); ctx.restore();
-          ell(0, 0, hr, hr * 0.96); fillStroke(R.base, R.line);
-          if (R.patch) { ell(hr * 0.5, -hr * 0.42, hr * 0.46, hr * 0.4, 0.5); fillStroke(R.patch, null); }
-          ell(-hr * 0.2, -hr * 0.45, hr * 0.42, hr * 0.22, -0.2); fillStroke(R.hi, null);   // soft top highlight
-          if (R.cheeks) { ell(-hr * 0.6, hr * 0.42, hr * 0.38, hr * 0.28); fillStroke(R.base, R.line); ell(hr * 0.6, hr * 0.42, hr * 0.38, hr * 0.28); fillStroke(R.base, R.line); }
-          // muzzle: small, soft, low
-          if (R.snout === 'soft') { ell(0, hr * 0.5, hr * 0.36, hr * 0.24); fillStroke(R.shade, null); ell(-hr * 0.1, hr * 0.42, 1.8, 1.4); fillStroke(R.nose, null); ell(hr * 0.1, hr * 0.42, 1.8, 1.4); fillStroke(R.nose, null); }
-          else { if (R.snout !== 'small') { ell(0, hr * 0.5, hr * 0.3, hr * 0.2); fillStroke('#fff6e6', null); } ell(0, hr * 0.4, 3.2, 2.5); fillStroke(R.nose, null); }
-          // eyes: big, LOW, close together
-          eye(R, -hr * 0.3, hr * 0.12, hr * 0.21, look, blink, pose.happy);
-          eye(R, hr * 0.3, hr * 0.12, hr * 0.21, look, blink, pose.happy);
-          mouth(R, 0, hr * 0.56, pose.mouth || 'smile', t);
-          // blush: soft, round, under the eyes
-          const bl = ctx.createRadialGradient(-hr * 0.6, hr * 0.32, 0, -hr * 0.6, hr * 0.32, hr * 0.2); bl.addColorStop(0, R.blush); bl.addColorStop(1, 'rgba(255,120,140,0)');
-          ctx.fillStyle = bl; ctx.beginPath(); ctx.arc(-hr * 0.6, hr * 0.32, hr * 0.2, 0, Math.PI * 2); ctx.fill();
-          const br = ctx.createRadialGradient(hr * 0.6, hr * 0.32, 0, hr * 0.6, hr * 0.32, hr * 0.2); br.addColorStop(0, R.blush); br.addColorStop(1, 'rgba(255,120,140,0)');
-          ctx.fillStyle = br; ctx.beginPath(); ctx.arc(hr * 0.6, hr * 0.32, hr * 0.2, 0, Math.PI * 2); ctx.fill();
-          ctx.restore();
+        // blush
+        for (const s of [-1, 1]) {
+          const bx = s * r * 0.72 * sqx + sideShift * 0.5, byy = fy + r * 0.16;
+          const bl = ctx.createRadialGradient(bx, byy, 0, bx, byy, r * 0.2);
+          bl.addColorStop(0, F.blush); bl.addColorStop(1, 'rgba(255,150,165,0)');
+          ctx.fillStyle = bl; ctx.beginPath(); ctx.arc(bx, byy, r * 0.2, 0, Math.PI * 2); ctx.fill();
         }
+        // tiny nose, and the mouth just under it
+        const nx = sideShift, ny = fy + er * 0.75;
+        ctx.beginPath(); ctx.ellipse(nx, ny, r * 0.075, r * 0.055, 0, 0, Math.PI * 2);
+        ctx.fillStyle = F.nose; ctx.fill();
+        ctx.beginPath(); ctx.ellipse(nx - r * 0.02, ny - r * 0.02, r * 0.025, r * 0.018, 0, 0, Math.PI * 2);
+        ctx.fillStyle = 'rgba(255,255,255,0.6)'; ctx.fill();
+        if (!lie) fluffMouth(F, nx, ny + r * 0.13, pose.mouth || 'smile', t, r);
+        ctx.restore();
+
         ctx.restore();
         return true;
       }
@@ -2929,6 +2966,17 @@
         const dt = 1 / 60;
         const actors = [me, ...shown];
         for (const a of actors) step(a, now, sizeFor(actorStage(a)), actors.filter((o) => o !== a), dt);
+        // nobody stands inside anybody else's fur
+        for (let i = 0; i < actors.length; i++) {
+          for (let j = i + 1; j < actors.length; j++) {
+            const A = actors[i], B2 = actors[j];
+            if (A.beh.x == null || B2.beh.x == null) continue;
+            if (['greet', 'visit'].includes(A.beh.act) || ['greet', 'visit'].includes(B2.beh.act)) continue;   // saying hello may be close
+            const want = (sizeFor(actorStage(A)) + sizeFor(actorStage(B2))) * 0.34;
+            const d = B2.beh.x - A.beh.x, ad = Math.abs(d);
+            if (ad < want) { const push = (want - ad) * 0.22 * (d < 0 ? -1 : 1); A.beh.x -= push; B2.beh.x += push; }
+          }
+        }
         // keep everyone on the floor and inside the glass
         for (const a of actors) { const s = sizeFor(actorStage(a)); a.beh.x = Math.max(s * 0.5, Math.min(W - s * 0.5, a.beh.x)); }
         // furthest back first, so the front pet overlaps
