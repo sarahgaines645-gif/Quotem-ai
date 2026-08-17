@@ -1064,6 +1064,16 @@
     .q-bandlist .q-band-row .bd { width: 8px; height: 8px; border-radius: 50%; }
     .q-bandlist .q-band-l { color: var(--text); font-weight: 600; overflow-wrap: anywhere; }
     .q-bandlist .q-band-w { font-weight: 700; white-space: nowrap; }
+    /* Why it is that grade, what each part still needs, and the way up. */
+    .mk-gap { font-size: 11px; line-height: 1.45; color: var(--text-muted); margin: 1px 0 7px 16px; overflow-wrap: anywhere; }
+    .q-bandlist .q-band-why { font-size: 12px; line-height: 1.5; color: var(--text); margin: 2px 0 8px; overflow-wrap: anywhere; }
+    .q-bandlist .q-band-gap { font-size: 11px; line-height: 1.45; color: var(--text-muted); margin: 1px 0 7px 16px; overflow-wrap: anywhere; }
+    .q-bandlist .q-band-next { margin-top: 9px; padding-top: 8px; border-top: 1px solid rgba(0,0,0,0.07); font-size: 12px; line-height: 1.5; color: var(--text); overflow-wrap: anywhere; }
+    .q-bandlist .q-band-next-l { display: block; font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--accent); margin-bottom: 3px; }
+    .q-bandlist .q-band-next p { margin: 0 0 5px; }
+    .q-bandlist .q-band-next > :last-child { margin-bottom: 0; }
+    .q-bandlist .q-band-next ul, .q-bandlist .q-band-next ol { margin: 3px 0 5px; padding-left: 17px; }
+    .q-bandlist .q-band-next li { margin: 2px 0; }
     .q-bandlist .bd.top, .q-bandlist .q-band-w.top { background-color: #28a745; color: #1f8a3a; }
     .q-bandlist .bd.mid, .q-bandlist .q-band-w.mid { background-color: #e6a817; color: #b07f05; }
     .q-bandlist .bd.low, .q-bandlist .q-band-w.low { background-color: var(--accent); color: var(--accent); }
@@ -4031,14 +4041,15 @@
       applyExpectations(m);
       const items = (m.critique || []).map(it => ({ sentence: it.sentence, why: it.missing || '', fix: it.fix || '', targetBrickId: it.targetBrickId || null, suggestedTools: it.suggestedTools || [], criterionId: cid, needs: Array.isArray(it.needs) ? it.needs : [], stepKey: key }));
       state.stepMarks = state.stepMarks || {};
-      state.stepMarks[key] = { band: m.band, strongest: m.strongest || '', missingForTop: m.missingForTop || '', critique: items, at: Date.now() };
+      state.stepMarks[key] = { band: m.band, label: m.label || '', nextLabel: m.nextLabel || '', strongest: m.strongest || '', missingForTop: m.missingForTop || '', critique: items, at: Date.now() };
       renderInlineDots();
-      const bandWord = { top: 'top band', mid: 'middle band', low: 'lower band', missing: 'not there yet' }[m.band] || m.band;
-      const line = 'That bit: ' + bandWord + '.' + (m.strongest ? ' ' + m.strongest : '') + (m.missingForTop ? ' For the top band: ' + m.missingForTop : '');
+      const bandWord = gradeWord(m) || ({ top: 'top band', mid: 'middle band', low: 'lower band', missing: 'not there yet' }[m.band] || m.band);
+      const upWord = m.nextLabel ? 'For a ' + m.nextLabel + ': ' : 'For the top band: ';
+      const line = 'That bit: ' + bandWord + '.' + (m.strongest ? ' ' + m.strongest : '') + (m.missingForTop ? ' ' + upWord + m.missingForTop : '');
       appendBoardItem({ type: 'note', label: 'marked', text: line, quiet: false, criterionId: cid, stepId: step.id });
       const goOn = () => presentStep(cid, next, { ack: ack || '' });
       if (!items.length) {
-        setCoach({ msg: (m.strongest || 'That bit holds up.') + (m.missingForTop ? ' For the top band: ' + m.missingForTop : ''), section: 'MARKED · ' + bandWord.toUpperCase(), actions: [{ label: 'Next →', primary: true, big: true, onClick: goOn }], inputVisible: false, step: false });
+        setCoach({ msg: (m.strongest || 'That bit holds up.') + (m.missingForTop ? ' ' + upWord + m.missingForTop : ''), section: 'MARKED · ' + bandWord.toUpperCase(), actions: [{ label: 'Next →', primary: true, big: true, onClick: goOn }], inputVisible: false, step: false });
         return;
       }
       setCoach({
@@ -4059,7 +4070,7 @@
       state.editStepKey = key; state.editWalkKind = 'step'; state.editWalkKey = key;
       state.partFixThen = then || (() => { const cs = state.currentStep; if (cs) { const plan = planFor(cs.criterionId); const i = plan ? plan.steps.findIndex(x => x.id === cs.stepId) : -1; if (i >= 0) presentStep(cs.criterionId, i, { restore: true }); } });
       state.partFixLabel = 'Next →';
-      const bandWord = { top: 'top band', mid: 'middle band', low: 'lower band', missing: 'not there yet' }[mk.band] || mk.band;
+      const bandWord = gradeWord(mk) || ({ top: 'top band', mid: 'middle band', low: 'lower band', missing: 'not there yet' }[mk.band] || mk.band);
       showEditItem({ note: bandWord + ' — ' + (mk.missingForTop || 'fix these, then on we go') });
     }
     // The automatic analysis of a list: tag it, mark the tag step filled, voice
@@ -4110,14 +4121,15 @@
         appendBoardItem({ type: 'note', label: 'note', text: 'Could not mark this question (' + shortCause(e) + ') — moving on; Mark & fix at the end still covers it.', quiet: true });
         then && then(); return;
       }
-      state.partMarks = state.partMarks || {}; state.partMarks[cid] = { band: m.band, strongest: m.strongest, missingForTop: m.missingForTop, at: Date.now() };
+      state.partMarks = state.partMarks || {}; state.partMarks[cid] = { band: m.band, label: m.label || '', nextLabel: m.nextLabel || '', strongest: m.strongest, missingForTop: m.missingForTop, at: Date.now() };
       setTimeout(() => { try { renderMarkPanel(); } catch (_) {} }, 0);
       persist({ partMarks: state.partMarks });
-      const bandWord = { top: 'top band', mid: 'middle band', low: 'lower band', missing: 'not there yet' }[m.band] || m.band;
+      const bandWord = gradeWord(m) || ({ top: 'top band', mid: 'middle band', low: 'lower band', missing: 'not there yet' }[m.band] || m.band);
+      const upWord = m.nextLabel ? 'For a ' + m.nextLabel + ': ' : 'For the top band: ';
       const items = (m.critique || []).map(it => ({ sentence: it.sentence, why: it.missing || '', fix: it.fix || '', targetBrickId: it.targetBrickId || null, suggestedTools: it.suggestedTools || [], criterionId: cid, needs: Array.isArray(it.needs) ? it.needs : [] }));
-      appendBoardItem({ type: 'note', label: 'marked', text: 'This question: ' + bandWord + '. ' + (m.strongest ? m.strongest + ' ' : '') + (m.missingForTop ? 'For the top band: ' + m.missingForTop : ''), quiet: false, criterionId: cid });
+      appendBoardItem({ type: 'note', label: 'marked', text: 'This question: ' + bandWord + '. ' + (m.strongest ? m.strongest + ' ' : '') + (m.missingForTop ? upWord + m.missingForTop : ''), quiet: false, criterionId: cid });
       if (!items.length) {
-        setCoach({ msg: (m.strongest || 'This question holds up.') + (m.missingForTop ? ' For the top band: ' + m.missingForTop : ''), section: 'MARKED · ' + bandWord.toUpperCase(), actions: [{ label: 'Next question →', primary: true, big: true, onClick: () => then && then() }], inputVisible: false, step: false });
+        setCoach({ msg: (m.strongest || 'This question holds up.') + (m.missingForTop ? ' ' + upWord + m.missingForTop : ''), section: 'MARKED · ' + bandWord.toUpperCase(), actions: [{ label: 'Next question →', primary: true, big: true, onClick: () => then && then() }], inputVisible: false, step: false });
         return;
       }
       state.editItems = items; state.editIndex = 0; state.editing = true; state.editDone = false; state.markPassChanged = 0;
@@ -7074,24 +7086,50 @@
     const btnFinish = document.getElementById('btn-finish');
     btnFinish.addEventListener('click', () => markAndFix());
     const BAND_WORD = { top: 'top band', mid: 'middle band', low: 'lower band', missing: 'missing' };
+    // SAY THE GRADE SHE IS MARKED ON (Sarah, 17 Aug: "this is marked with merit
+    // distinction… it says lower band. that needs to be fixed"). The marker now
+    // returns the grade in her own scheme per part and overall; "lower band" is
+    // only ever the fallback when the scheme genuinely names no grades.
+    function gradeWord(x) {
+      const l = String((x && x.label) || '').trim();
+      if (l) return l;
+      return BAND_WORD[x && x.band] || (x && x.band) || '';
+    }
     function bandLine(m) {
       if (!m || !m.overall) return '';
-      return (m.overall.label ? m.overall.label + ' — ' : '') + (BAND_WORD[m.overall.band] || m.overall.band) + ' · ' + (m.perCriterion || []).map(p => labelFor(p.criterionId) + ': ' + (BAND_WORD[p.band] || p.band)).join(' · ');
+      return gradeWord(m.overall) + ' · ' + (m.perCriterion || []).map(p => labelFor(p.criterionId) + ': ' + gradeWord(p)).join(' · ');
     }
     function walkItemsFromMark(m) {
       return ((m && m.critique) || []).filter(it => it && it.sentence && (it.missing || it.fix)).map(it => ({ sentence: it.sentence, why: it.missing || '', fix: it.fix || '', targetBrickId: it.targetBrickId || null, suggestedTools: it.suggestedTools || [], criterionId: it.criterionId || '', needs: Array.isArray(it.needs) ? it.needs : [] }));
     }
+    // The mark, and the way up. A grade on its own is a score, not marking —
+    // she gets WHY it is that grade (the marker's own words), what each part
+    // is worth, what is still missing in it, and the concrete things that
+    // would make it the next grade (Sarah, 17 Aug: "it doesn't actually say
+    // why or what's weak or how you can get to the next grade").
     function bandListHtml(m) {
       if (!m || !m.overall) return '';
-      const rows = (m.perCriterion || []).map(p => `<div class="q-band-row"><span class="bd ${escHtml(p.band)}"></span><span class="q-band-l">${escHtml(labelFor(p.criterionId))}</span><span class="q-band-w ${escHtml(p.band)}">${escHtml(BAND_WORD[p.band] || p.band)}</span></div>`).join('');
+      const rows = (m.perCriterion || []).map(p => {
+        const gap = String(p.missingForTop || '').trim();
+        return `<div class="q-band-row"><span class="bd ${escHtml(p.band)}"></span><span class="q-band-l">${escHtml(labelFor(p.criterionId))}</span><span class="q-band-w ${escHtml(p.band)}">${escHtml(gradeWord(p))}</span></div>`
+          + (gap ? `<div class="q-band-gap">${escHtml(gap)}</div>` : '');
+      }).join('');
       const scheme = String(state.gradeScheme || '').trim();
       const lbl = String(m.overall.label || '').trim();
       const schemeNote = lbl && scheme && !/as the brief says/i.test(scheme) ? ' · ' + scheme : '';
-      return `<div class="q-bandlist"><div class="q-band-all"><b>${escHtml((BAND_WORD[m.overall.band] || m.overall.band) + (lbl ? ' — ' + lbl : ''))}</b><span>overall${escHtml(schemeNote)}</span></div>${rows}</div>`;
+      const why = String(m.overall.summary || '').trim();
+      const nextL = String(m.overall.nextLabel || '').trim();
+      const toNext = String(m.overall.toNext || '').trim();
+      return `<div class="q-bandlist">`
+        + `<div class="q-band-all"><b>${escHtml(gradeWord(m.overall))}</b><span>overall${escHtml(schemeNote)}</span></div>`
+        + (why ? `<div class="q-band-why">${escHtml(why)}</div>` : '')
+        + rows
+        + (toNext ? `<div class="q-band-next"><span class="q-band-next-l">${escHtml(nextL ? 'To get a ' + nextL : 'To take it higher')}</span>${qMd(toNext)}</div>` : '')
+        + `</div>`;
     }
     function bandsHtml(m) {
       if (!m || !m.overall) return '';
-      return '<div class="q-bands"><b>' + escHtml((m.overall.label ? m.overall.label + ' — ' : '') + (BAND_WORD[m.overall.band] || m.overall.band)) + '</b>' +
+      return '<div class="q-bands"><b>' + escHtml(gradeWord(m.overall)) + '</b>' +
         (m.perCriterion || []).map(p => '<span><span class="bd ' + escHtml(p.band) + '"></span>' + escHtml(labelFor(p.criterionId)) + '</span>').join('') + '</div>';
     }
     let markRunning = false;
@@ -7217,6 +7255,20 @@
         applyExpectations(m);
         state.markStartPct = state.match ? state.match.overall : null;
         appendBoardItem({ type: 'note', label: 'marked', text: 'Marked: ' + bandLine(m) + '. ' + (m.overall.summary || ''), quiet: true });
+        // THE MARK IS SAID, NOT JUST SCORED. The grade in her scheme, why it is
+        // that grade, and the concrete way to the next one — in the
+        // conversation, where it stays while she works through the fixes.
+        {
+          const why = String(m.overall.summary || '').trim();
+          const up = String(m.overall.toNext || '').trim();
+          const nl = String(m.overall.nextLabel || '').trim();
+          pushSaid({ role: 'q', text: [
+            '**' + gradeWord(m.overall) + '** as it stands.',
+            why,
+            up ? (nl ? '**To get a ' + nl + ':**\n\n' + up : '**To take it higher:**\n\n' + up) : '',
+          ].filter(Boolean).join('\n\n') });
+          renderThread();
+        }
         // The marker's sentences AND what the reading found — one walk.
         const items = mergeWalk(walkItemsFromMark(m), state.tidy);
         state.editItems = items; state.editIndex = 0; state.editing = true; state.editDone = false; state.markPassChanged = 0;
@@ -7253,7 +7305,13 @@
       if (m && m.overall) {
         bands = `<div class="mk-sec">The mark</div>` + bandListHtml(m);
       } else if (cs.some(c => state.partMarks && state.partMarks[c.id])) {
-        bands = `<div class="mk-sec">Marks so far</div>` + cs.filter(c => state.partMarks[c.id]).map(c => { const pm = state.partMarks[c.id]; return `<div class="mk-part ${escHtml(pm.band || '')}"><span class="bd"></span><span>${escHtml(criterionLabel(c))}</span><span class="mk-band">${escHtml(BAND_WORD[pm.band] || pm.band || '')}</span></div>`; }).join('');
+        bands = `<div class="mk-sec">Marks so far</div>` + cs.filter(c => state.partMarks[c.id]).map(c => {
+          const pm = state.partMarks[c.id];
+          const gap = String(pm.missingForTop || '').trim();
+          const up = String(pm.nextLabel || '').trim();
+          return `<div class="mk-part ${escHtml(pm.band || '')}"><span class="bd"></span><span>${escHtml(criterionLabel(c))}</span><span class="mk-band">${escHtml(gradeWord(pm))}</span></div>`
+            + (gap ? `<div class="mk-gap">${escHtml(up ? 'For a ' + up + ': ' + gap : gap)}</div>` : '');
+        }).join('');
       }
       const list = items.length ? `<div class="mk-sec">Sentences to fix (${items.filter(it => !!findInDoc(it.sentence)).length} left)</div>` + items.map((it, i) => {
         const onPage = !!findInDoc(it.sentence);

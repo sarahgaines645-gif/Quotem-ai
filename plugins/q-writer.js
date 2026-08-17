@@ -730,20 +730,23 @@ const MARK_SCHEMA = {
     required: ['overall', 'perCriterion', 'weakestCriterionId', 'critique'],
     properties: {
         overall: {
-            type: 'object', additionalProperties: false, required: ['band', 'label', 'summary'],
+            type: 'object', additionalProperties: false, required: ['band', 'label', 'summary', 'nextLabel', 'toNext'],
             properties: {
                 band: { type: 'string', enum: ['top', 'mid', 'low'] },
                 label: { type: 'string', description: 'The grade in the student\'s scheme, e.g. "Distinction", "Merit", "Grade 7", "2:1", "Pass", "Refer". If the scheme is "as the brief says", use the words the brief itself uses for its bands; if the brief names none, leave this empty.' },
-                summary: { type: 'string', description: 'Two sentences to the student: what is strong, and the single biggest thing between them and the top band.' },
+                summary: { type: 'string', description: 'Two sentences to the student: what is strong (name the actual thing they did), and the single biggest reason it is not the grade above.' },
+                nextLabel: { type: 'string', description: 'The NEXT GRADE UP in their scheme — the one word: e.g. "Merit" when they are at Pass, "Distinction" when they are at Merit, "Grade 7" when they are at Grade 6. Empty ONLY if they are already at the top grade or the scheme names no grades.' },
+                toNext: { type: 'string', description: 'HOW TO GET THAT GRADE. The two or three concrete things that would lift THIS draft to nextLabel, each one a thing they can go and do today — name the part, the idea, the evidence, the comparison. Never "develop further", never "add more detail", never a description of what the grade means. If they are already at the top grade, what would keep it there.' },
             },
         },
         perCriterion: {
             type: 'array',
             items: {
                 type: 'object', additionalProperties: false,
-                required: ['criterionId', 'band', 'evidence', 'missingForTop', 'nextQuestion', 'voicedBrickIds', 'termsUsed', 'requirementsMet'],
+                required: ['criterionId', 'band', 'label', 'evidence', 'missingForTop', 'nextQuestion', 'voicedBrickIds', 'termsUsed', 'requirementsMet'],
                 properties: {
                     criterionId: { type: 'string' },
+                    label: { type: 'string', description: 'The grade THIS part would get on its own, in the student\'s scheme — the same words as the overall label ("Pass", "Merit", "Distinction", "Grade 6"…). Empty only if the scheme names no grades.' },
                     termsUsed: { type: 'array', items: { type: 'string' }, description: 'Of this part\'s EXPECTED TERMS, the ones the draft uses correctly (exact term as listed). Empty if none listed.' },
                     requirementsMet: { type: 'array', items: { type: 'string' }, description: 'Of this part\'s REQUIREMENTS, the kinds the draft satisfies. Empty if none.' },
                     band: { type: 'string', enum: ['top', 'mid', 'low', 'missing'] },
@@ -798,6 +801,8 @@ ${PLAIN_QUESTION_RULE}
 
 ${LEADING_QUESTION_RULE}
 - Overall band = what this draft would actually get. Be honest; a kind marker still fails a missing criterion.
+- SAY THE GRADE IN THEIR WORDS, NOT IN BANDS. "label" per part and overall is the grade the scheme actually uses — Pass / Merit / Distinction, Grade 7, 2:1. A student marked on Pass/Merit/Distinction must never be told "lower band"; they are told "Pass" and what stops it being a Merit.
+- AND SAY HOW TO CLIMB. "nextLabel" is the grade immediately above the one you have given; "toNext" is the two or three concrete things that would get THIS draft there — the idea to name, the evidence to find, the part to answer properly, the comparison to make. A student must never be told the grade without being told the way up.
 - "voicedBrickIds" per criterion: the bricks of the model answer this draft GENUINELY voices (point made in their words with its reason / example). This is the honest tally the student's visible score is rebuilt from — a listed item is not a voiced brick; a claim without its reason is not a voiced brick.
 - EXPECTATIONS per part (below, where a plan exists): report per criterion which expected terms the draft uses correctly ("termsUsed") and which requirements it satisfies ("requirementsMet"); in the critique, "needs" = the requirement kinds a sentence is missing.
 - MARK & FIX: "critique" is the sentence-by-sentence fix list the student will work through straight after the mark. Weakest criterion first. For each sentence: "missing" (one plain line, coach voice, what is missing), "fix" (the concrete thing to go and do — find one piece of evidence, name the idea, give the example — never the words themselves), the brick it should be voicing, and the tools that lead them there. Copy each sentence VERBATIM from the numbered draft.
@@ -846,11 +851,13 @@ ${plans ? Object.values(plans).map(p => p && p.criterionId ? '[' + p.criterionId
 // criterion. It runs as a job (routes.js) so Railway's edge cannot kill it.
 function partMarkSchema() { return {
     type: 'object', additionalProperties: false,
-    required: ['band', 'strongest', 'missingForTop', 'critique', 'termsUsed', 'requirementsMet'],
+    required: ['band', 'label', 'nextLabel', 'strongest', 'missingForTop', 'critique', 'termsUsed', 'requirementsMet'],
     properties: {
         band: { type: 'string', enum: ['top', 'mid', 'low', 'missing'] },
+        label: { type: 'string', description: 'The grade this part would get on its own, in the student\'s own scheme — "Pass", "Merit", "Distinction", "Grade 6", "2:1". Never band words like "lower band". Empty only if the scheme names no grades.' },
+        nextLabel: { type: 'string', description: 'The grade immediately above that one, in the same scheme. Empty if already at the top.' },
         strongest: { type: 'string', description: 'ONE short line naming the best thing she actually did in this part, quoting a few of her own words. Never flattery — if it is thin, say what the one real point is.' },
-        missingForTop: { type: 'string', description: 'The ONE concrete thing between this part and the top band. A named idea, an example, a figure, a source, the other side of the argument. Never "develop further".' },
+        missingForTop: { type: 'string', description: 'The ONE concrete thing between this part and the NEXT grade up. A named idea, an example, a figure, a source, the other side of the argument. Never "develop further".' },
         termsUsed: { type: 'array', items: { type: 'string' }, description: 'Of this part\'s EXPECTED TERMS, the ones her answer uses correctly (exact term as listed) — the idea behind the word is on the page. Empty if none listed / none used.' },
         requirementsMet: { type: 'array', items: { type: 'string' }, description: 'Of this part\'s REQUIREMENTS, the kinds her answer satisfies. Empty if none.' },
         critique: {
@@ -894,7 +901,8 @@ ${focusText ? `\nTHE POINT BEING MARKED (what they were asked to write, in plain
 Rules:
 - Judge ONLY this question. Say nothing about the rest of the document.
 - Evidence is their own words: quote a phrase of theirs.
-- "missingForTop" is the ONE thing between this and the top band, concrete enough to act on in the next five minutes.
+- "missingForTop" is the ONE thing between this and the next grade up, concrete enough to act on in the next five minutes.
+- SAY THE GRADE IN HER WORDS: "label" is the grade her scheme uses (Pass / Merit / Distinction, Grade 7, 2:1), never "lower band"; "nextLabel" is the one above it. A grade with no way up is not marking.
 - MARK & FIX — the full treatment, exactly as the end-of-essay mark does it: "critique" is the sentence-by-sentence fix list she works through straight away. Every sentence of hers that falls short of the brick it should be voicing, weakest first, then in order (at most ten). For each: "missing" (one plain line, coach voice, what is missing), "fix" (the concrete thing to go and DO — find one piece of evidence, name the idea, give the example, put a number on it — never the words themselves), the brick it should be voicing ("targetBrickId"), the requirement kinds it lacks ("needs" — they show as the coloured dots), and the one to three tools that lead HER to write it. Copy each sentence VERBATIM from the numbered list. If the part is genuinely fine, return an empty critique and say so in "strongest".
 - EXPECTATIONS: report which expected terms her answer uses correctly ("termsUsed" — the idea behind the word is on the page; a word dropped in as a label is NOT used) and which requirements it satisfies ("requirementsMet").
 - Never write a replacement sentence. The fix says what to go and do, never the words.
@@ -932,6 +940,8 @@ ${bricks.length ? '\nWHAT A TOP ANSWER CONTAINS (your model answer — never quo
         criterionId,
         stepId: stepId || null,
         band: ['top', 'mid', 'low', 'missing'].includes(r && r.band) ? r.band : 'low',
+        label: String((r && r.label) || ''),
+        nextLabel: String((r && r.nextLabel) || ''),
         strongest: capWords(r && r.strongest, 22),
         missingForTop: capWords(r && r.missingForTop, 22),
         // termCanon: the plan's spelling, so the route's set add/delete matches.
@@ -949,6 +959,7 @@ function normaliseMark(r, brief, essayForMark, plans) {
     const per = (Array.isArray(r.perCriterion) ? r.perCriterion : []).map(p => ({
         criterionId: String(p.criterionId || '').replace(/\s+/g, ''),
         band: ['top', 'mid', 'low', 'missing'].includes(p.band) ? p.band : 'low',
+        label: String(p.label || ''),
         voicedBrickIds: (Array.isArray(p.voicedBrickIds) ? p.voicedBrickIds : []).map(x => String(x).replace(/\s+/g, '')).filter(x => brickIdsAll.has(x) && x.split('-')[0] === String(p.criterionId || '').replace(/\s+/g, '')),
         // Canonical spelling (termCanon) — the route adds and removes these by
         // exact string, so the mark must spell them the way the plan does.
@@ -980,7 +991,16 @@ function normaliseMark(r, brief, essayForMark, plans) {
       .map(({ i, ...rest }) => rest)
       .slice(0, MAX_CRITIQUE);   // the schema asks for ten; this is what makes it ten
     return {
-        overall: { band: ['top', 'mid', 'low'].includes(r.overall.band) ? r.overall.band : 'low', label: String(r.overall.label || ''), summary: String(r.overall.summary || '') },
+        overall: {
+            band: ['top', 'mid', 'low'].includes(r.overall.band) ? r.overall.band : 'low',
+            label: String(r.overall.label || ''),
+            summary: String(r.overall.summary || ''),
+            // The grade above, and how to get it (Sarah, 17 Aug: "it doesn't
+            // actually say why or what's weak or how you can get to the next
+            // grade"). A grade with no way up is not marking, it is scoring.
+            nextLabel: String(r.overall.nextLabel || ''),
+            toNext: String(r.overall.toNext || ''),
+        },
         perCriterion: per,
         weakestCriterionId: weakest,
         critique,
