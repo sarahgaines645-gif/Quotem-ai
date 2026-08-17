@@ -1,0 +1,31 @@
+{
+  "fps": 12,
+  "frame": 200,
+  "cols": 6,
+  "clips": {
+    "idle": {
+      "frames": 12,
+      "rows": 2
+    },
+    "blink": {
+      "frames": 5,
+      "rows": 1
+    },
+    "talk": {
+      "frames": 12,
+      "rows": 2
+    },
+    "hands": {
+      "frames": 12,
+      "rows": 2
+    },
+    "cheer": {
+      "frames": 8,
+      "rows": 2
+    },
+    "tumble": {
+      "frames": 16,
+      "rows": 3
+    }
+  }
+}

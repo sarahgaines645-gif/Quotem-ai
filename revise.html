@@ -2306,6 +2306,7 @@
         ['bone', 'seed', 'orange', 'ball', 'bow', 'hat', 'scarf', 'bed', 'heart'].forEach((n) => names.push('item_' + n));
         names.forEach(img);
         preloadAppy();
+        preloadClips();
       }
       // ── FRAME animation: sprite sheets, sliced at runtime ───────────────
       // Sarah, 16 Aug: "move like actual cartoons — run up and down and lick
@@ -2534,6 +2535,67 @@
       // AppyAvatar.jsx swaps between. Everything that MOVES is code: he bounces,
       // squashes when he lands, leans when he runs, breathes, and turns towards
       // your pointer. Nothing here is generated and nothing was bought.
+      // ── HIS FILM, PLAYED BY THE ENGINE ────────────────────────────────
+      // Sarah, 17 Aug: "I want it to move… hands that can open and move around
+      // like he would in a film." She already had that film: appy-video.mp4 in
+      // the app. tools/appy_clips.py cuts it into sprite sheets — real frames of
+      // Appy waving his hands, cheering, tumbling, blinking — and the engine
+      // plays the sheet that fits his mood, 12 frames a second, like a game does.
+      // Stills are only the fallback while a sheet is still downloading.
+      const CLIP_COLS = 6, CLIP_FRAME = 200, CLIP_FPS = 12;
+      const CLIPS = {
+        idle:   { frames: 12 },   // breathing, a blink
+        blink:  { frames: 5 },    // eyes close and open
+        talk:   { frames: 12 },   // mouth going, pleased with himself
+        hands:  { frames: 12 },   // his little hands come up and wave
+        cheer:  { frames: 8 },    // both arms up, mouth wide — the celebration
+        tumble: { frames: 16 },   // rolls right over: how a fluffball crosses a room
+      };
+      const CLIP_IMG = {};
+      function clipImg(name) {
+        if (!CLIPS[name]) return null;
+        if (!CLIP_IMG[name]) { const i = new Image(); i.decoding = 'async'; i.src = '/assets/pet/appy/clips/' + name + '.webp'; CLIP_IMG[name] = i; }
+        return CLIP_IMG[name];
+      }
+      function preloadClips() { Object.keys(CLIPS).forEach(clipImg); }
+      // Which of her clips fits what he is doing, and is it a loop or a one-shot.
+      function clipFor(pose) {
+        if (pose.clip && CLIPS[pose.clip]) return { name: pose.clip, loop: pose.clipLoop !== false };
+        if (pose.view === 'lie') return { name: 'blink', loop: false, hold: 1 };        // last frame: eyes shut
+        if (pose.beg) return { name: 'hands', loop: true };
+        if (pose.happy || pose.hop > 0.15) return { name: 'cheer', loop: pose.hop > 0.15 ? false : true };
+        if (['open', 'chew', 'tongue', 'o'].includes(pose.mouth)) return { name: 'talk', loop: true };
+        if (pose.gait) return { name: 'tumble', loop: true };
+        return { name: 'idle', loop: true };
+      }
+      // draw frame i of a clip, feet at (cx, by), `size` tall
+      function drawClip(name, i, cx, by, size, o = {}) {
+        const c = CLIPS[name]; if (!c) return false;
+        const im = clipImg(name);
+        if (!im || !im.complete || !im.naturalWidth) return false;
+        const n = c.frames;
+        const k = ((i % n) + n) % n;
+        const sx = (k % CLIP_COLS) * CLIP_FRAME, sy = Math.floor(k / CLIP_COLS) * CLIP_FRAME;
+        const w = size * (o.sx || 1), h = size * (o.sy || 1);
+        ctx.save();
+        ctx.translate(cx, by);
+        if (o.flip) ctx.scale(-1, 1);
+        if (o.rot) ctx.rotate(o.rot);
+        if (o.alpha != null) ctx.globalAlpha = o.alpha;
+        if (o.bend) drawWarpedPart(im, sx, sy, -w / 2, -h, w, h, o.bend, o.phase || 0);
+        else ctx.drawImage(im, sx, sy, CLIP_FRAME, CLIP_FRAME, -w / 2, -h, w, h);
+        ctx.restore();
+        return true;
+      }
+      // leaning over the treat: the same strip trick, but on one cell of a sheet
+      function drawWarpedPart(im, sx, sy, x, y, w, h, bend, phase) {
+        const N = 14, sh = CLIP_FRAME / N, dh = h / N;
+        for (let i = 0; i < N; i++) {
+          const up = 1 - (i + 0.5) / N, k = up * up;
+          ctx.drawImage(im, sx, sy + i * sh, CLIP_FRAME, sh + 0.6,
+                        x + bend * k * w * 0.42, y + i * dh, w, dh + 0.6);
+        }
+      }
       const APPY_STATES = ['idle', 'blink_half', 'blink', 'happy', 'talk', 'open', 'shocked'];
       const APPY_IMG = {};
       function appyImg(state) {
@@ -2582,8 +2644,6 @@
       // Draw him at (cx, by) — bottom centre — `size` tall.
       // Same signature as before, so every act keeps working.
       function drawRig(kind, stage, pose, cx, by, size, o = {}) {
-        const im = appyImg(appyState(pose));
-        if (!im.complete || !im.naturalWidth) return false;
         const t = pose.t || 0, seed = pose.seed || 0;
         const s = size * (STAGE_SCALE[stage] || 1);
         const hop = pose.hop || 0;
@@ -2600,19 +2660,28 @@
         sx *= (o.sx || 1); sy *= (o.sy || 1);
         // he leans the way he is going, and turns towards you when you are near
         const lean = (run ? -0.1 * run : 0) + (pose.tilt || 0) + look.x * 0.05 + (o.rot || 0);
-        const lift = hop * s * 0.05 + (run ? bounce * s * 0.03 : 0);
-        const w = s * sx, h = s * sy;
+        const lift = (pose.clip === 'cheer' || pose.clip === 'tumble') ? 0 : hop * s * 0.05 + (run ? bounce * s * 0.03 : 0);
+        ctx.save();
+        // ── play her film ──
+        const clip = clipFor(pose);
+        const frames = CLIPS[clip.name].frames;
+        let fi;
+        if (clip.hold != null) fi = frames - 1;                                  // hold the last frame (asleep)
+        else if (clip.loop) fi = Math.floor((t + seed * 0.7) * CLIP_FPS);
+        else fi = Math.min(frames - 1, Math.floor((pose.phase01 == null ? (t * CLIP_FPS) % frames : pose.phase01 * frames)));
+        const drewClip = drawClip(clip.name, fi, cx + look.x * s * 0.03, by - lift, s, {
+          sx, sy, flip: o.flip, rot: lean, alpha: o.alpha, bend: pose.bend || 0, phase: t * 7 + seed,
+        });
+        if (drewClip) return true;
+        // ── still fallback while a sheet is downloading ──
+        const im = appyImg(appyState(pose));
+        if (!im.complete || !im.naturalWidth) return false;
         ctx.save();
         ctx.translate(cx + look.x * s * 0.03, by - lift);
         if (o.flip) ctx.scale(-1, 1);
         ctx.rotate(lean * (o.flip ? -1 : 1));
         if (o.alpha != null) ctx.globalAlpha = o.alpha;
-        drawWarped(im, -w / 2, -h, w, h, {
-          bend: (pose.bend || 0) + (run ? Math.sin(g * Math.PI * 2) * 0.06 * run : 0),
-          wobble: pose.wobble || (run ? 0.5 * run : 0.12),
-          twist: pose.stretch || 0,
-          phase: t * 7 + seed,
-        });
+        drawWarped(im, -(s * sx) / 2, -(s * sy), s * sx, s * sy, { bend: pose.bend || 0, wobble: 0.1, phase: t * 7 + seed });
         ctx.restore();
         return true;
       }
@@ -2666,8 +2735,8 @@
           b.x += Math.max(-1, Math.min(1, (bx - lag * b.dir - b.x) / 20)) * 2.2; b.y += (0 - b.y) * 0.1;
           px_ = b.x; by = floor + b.y;
           const moving = Math.abs(bx - lag * b.dir - b.x) > 8;
-          if (rig) drewPet = moving ? R({ view: 'side', gait: time * 2.4, run: 1, mouth: 'open', look: { x: b.dir * 0.6, y: -0.4 } }, px_, by, size)
-                                    : R({ view: 'front', look: { x: (bx - px_) / 60, y: -0.8 }, mouth: 'open', tail: time * 9, ears: 0.4 }, px_, by, size, { sx, sy });
+          if (rig) drewPet = moving ? R({ clip: 'tumble', gait: 1 }, px_, by, size, { flip: b.dir < 0 })
+                                    : R({ clip: 'cheer' }, px_, by, size, { sx, sy });
           else if (moving && framed) drewPet = drawFrame(kind, stage, 'run_side', Math.floor(time * 12), px_, by, size, { flip: b.dir < 0 });
           else if (moving) { const gait = Math.abs(Math.sin(time * 11)); drewPet = drawImg(side, px_, by - gait * 5, size, { flip: b.dir < 0, sx: 1 + gait * 0.04, sy: 1 - gait * 0.05 }); }
           else drewPet = drawImg(front, px_, by, size, { sx, sy });
@@ -2677,7 +2746,7 @@
         else if (inBed) {
           if (isMe) drawImg('item_bed', cx, floor + 6, 150);
           const slow = Math.sin(time * 1.1);
-          if (rig) drewPet = R({ view: 'lie', blink: 1, breathe: 1.6, tail: time * 0.6 }, px_, floor + 2, size * 0.92, { flip: !isMe });
+          if (rig) drewPet = R({ view: 'lie' }, px_, floor + 2, size * 0.92, { sy: 0.86, sx: 1.1 });
           else if (framed && hasSheet(kind, stage, 'sleep')) drewPet = drawFrame(kind, stage, 'sleep', -1, px_, floor + 4, size * 0.78, { sx: 1 - slow * 0.012, sy: 1 + slow * 0.02 });
           else drewPet = drawImg(front, px_, floor + 6, size, { sx: 1 - slow * 0.012, sy: 0.96 + slow * 0.02 });
           if (!anim) { ctx.fillStyle = 'rgba(0,0,0,0.35)'; ctx.font = 'bold 11px sans-serif'; const zk = (time % 3) / 3; ctx.globalAlpha = 1 - zk; ctx.fillText('z', px_ + size * 0.42, floor - size * 0.6 - zk * 18); ctx.fillText('z', px_ + size * 0.50, floor - size * 0.7 - zk * 26); ctx.globalAlpha = 1; }
@@ -2686,7 +2755,7 @@
         // ── poorly: lying down, a bit grey, no bounce ──
         else if (b.act === 'poorly') {
           const slow = Math.sin(time * 0.9);
-          if (rig) drewPet = R({ view: 'lie', blink: 0.55, look: { x: 0, y: 0.5 }, breathe: 1.4, tail: 0 }, px_, by + 1, size * 0.92, { alpha: 0.85 });
+          if (rig) drewPet = R({ view: 'lie' }, px_, by + 1, size * 0.92, { alpha: 0.85, sy: 0.84, sx: 1.12 });
           else if (framed && hasSheet(kind, stage, 'sleep')) drewPet = drawFrame(kind, stage, 'sleep', -1, px_, by + 2, size * 0.78, { alpha: 0.82, sx: 1 - slow * 0.01, sy: 1 + slow * 0.015 });
           else drewPet = drawImg(front, px_, by + 2, size * 0.92, { alpha: 0.82, rot: 0.06, sy: 0.9 + slow * 0.015 });
           if (isMe && !anim) { ctx.font = '13px sans-serif'; ctx.globalAlpha = 0.55 + 0.45 * Math.abs(Math.sin(time * 1.4)); ctx.fillText('💧', px_ + size * 0.34, by - size * 0.62); ctx.globalAlpha = 1; }
@@ -2695,9 +2764,9 @@
         else if (busy) {
           if (anim.kind === 'hatch') { const s = k < 0.5 ? easeOutBack(k * 2) : 1; sx *= Math.max(0.05, s); sy *= Math.max(0.05, s); }
           if (anim.kind === 'eat') { rot = -0.10 * Math.sin(k * Math.PI); dy += 3 * Math.sin(k * Math.PI); }
-          if (rig) drewPet = R(anim.kind === 'eat' ? { view: 'front', mouth: k < 0.55 ? 'open' : 'chew', happy: k > 0.55, look: { x: 0.6 - k * 0.6, y: -0.3 }, tail: time * 7, ears: k > 0.55 ? 0.3 : 0 }
-                                : anim.kind === 'love' ? { view: 'front', happy: true, mouth: 'smile', tail: time * 10, ears: 0.6, tilt: Math.sin(time * 6) * 0.08 }
-                                : { view: 'front', look: { x: 0, y: -0.2 }, mouth: 'o', ears: 0.8, tail: time * 6 }, px_, by + dy, size * depth, { sx, sy, rot });
+          if (rig) drewPet = R(anim.kind === 'eat' ? { clip: 'talk', look: { x: 0.6 - k * 0.6, y: -0.3 } }
+                                : anim.kind === 'love' ? { clip: 'cheer', clipLoop: false, phase01: k }
+                                : { clip: 'hands' }, px_, by + dy, size * depth, { sx, sy, rot });
           else if (framed && anim.kind === 'eat' && k > 0.55 && hasSheet(kind, stage, 'idle')) drewPet = drawFrame(kind, stage, 'idle', -1, px_, by + dy, size * depth, { sx, sy, rot });   // eyes shut, savouring
           else drewPet = drawImg(front, px_, by + dy, size * depth, { sx, sy, rot });
         }
@@ -2709,7 +2778,7 @@
             if (rig) drewPet = R({ view: 'front', hop: hp, mouth: hp > 0.5 ? 'open' : 'smile', look: { x: b.dir * 0.6, y: -hp }, wobble: 0.5 }, px_, by - hp * 16, size * depth);
             else drewPet = drawImg(front, px_, by - hp * 16, size * depth);
           } else
-          if (rig) drewPet = R({ view: 'side', gait: time * (1.6 + trot * 0.8), run: 0.7 + trot * 0.3, look: { x: b.dir * 0.5, y: 0 }, mouth: b.act === 'visit' ? 'open' : 'smile' }, px_, by, size * depth);
+          if (rig) drewPet = R({ clip: 'tumble', gait: 1, look: { x: b.dir * 0.4, y: 0 } }, px_, by, size * depth, { flip: b.dir < 0 });
           else if (framed) drewPet = drawFrame(kind, stage, 'run_side', Math.floor(time * 12), px_, by, size * depth, { flip: b.dir < 0 });
           else { const gait = Math.abs(Math.sin(time * 11)); dy = -gait * 5; drewPet = drawImg(side, px_, by + dy, size * depth, { flip: b.dir < 0, sx: 1 + gait * 0.04, sy: 1 - gait * 0.05, rot: Math.sin(time * 11) * 0.05 * b.dir }); }
         }
@@ -2718,7 +2787,7 @@
           const grow = 1 + bk * 0.9;                                  // 1 → 1.9: coming right up to you
           by = floor + 10 * bk; px_ = b.x;
           shadowW = size * 0.42 * grow; shadowY = by + 3;
-          if (rig) drewPet = R({ view: 'front', gait: time * 2.2, look: { x: 0, y: -0.7 }, mouth: 'open', tail: time * 9, ears: -0.2 }, px_, by, size * grow);
+          if (rig) drewPet = R({ clip: 'hands', look: { x: 0, y: -0.7 } }, px_, by, size * grow);
           else if (framed && hasSheet(kind, stage, 'run_front')) drewPet = drawFrame(kind, stage, 'run_front', Math.floor(time * 10), px_, by, size * grow);
           else { const gait = Math.abs(Math.sin(time * 11)); drewPet = drawImg(front, px_, by - gait * 4, size * grow, { sx: 1 + gait * 0.03, sy: 1 - gait * 0.04 }); }
         }
@@ -2729,7 +2798,7 @@
           const big = size * 1.9;
           by = floor + 10; px_ = cx;
           shadowW = size * 0.8; shadowY = by + 3;
-          if (rig) drewPet = R({ view: 'front', mouth: 'tongue', look: { x: Math.sin(time * 4) * 0.5, y: -0.9 }, tilt: Math.sin(time * 5) * 0.05 }, px_, by, big);
+          if (rig) drewPet = R({ clip: 'talk', look: { x: Math.sin(time * 4) * 0.5, y: -0.9 }, tilt: Math.sin(time * 5) * 0.04 }, px_, by, big);
           else drewPet = drawFrame(kind, stage, 'lick', fi, px_, by, big) || drawImg(front, px_, by, big);
           if (isMe && fi === 2 && (!me.licks.length || now - me.licks[me.licks.length - 1].t > 900)) {
             me.licks.push({ x: cx + (Math.random() - 0.5) * 30, y: floor - big * 0.55 + (Math.random() - 0.5) * 20, t: now, w: 46 + Math.random() * 20, h: 30 + Math.random() * 14, a: Math.random() * 0.8 - 0.4 });
@@ -2740,7 +2809,7 @@
           const grow = 1.9 - bk * 0.9;
           by = floor + 10 * (1 - bk); px_ = cx;
           shadowW = size * 0.42 * grow; shadowY = by + 3;
-          if (rig) drewPet = R({ view: 'front', gait: time * 2, look: { x: 0, y: -0.5 }, happy: true, tail: time * 8, mouth: 'tongue' }, px_, by, size * grow);
+          if (rig) drewPet = R({ clip: 'talk', look: { x: 0, y: -0.5 } }, px_, by, size * grow);
           else drewPet = drawImg(front, px_, by, size * grow);
         }
         // ── happy jump / hello hop ──
@@ -2752,7 +2821,7 @@
             // crouch before, stretch in the air, squash on landing
             const air = hop;
             const squash = bk < 0.1 ? 1 - bk * 1.2 : bk > 0.9 ? 1 - (1 - bk) * 1.2 : 1;
-            drewPet = R({ view: 'front', hop: air, happy: air > 0.5, mouth: air > 0.3 ? 'open' : 'smile', ears: air, tail: time * 12, look: { x: b.act === 'greet' ? b.dir * 0.8 : 0, y: -air } }, px_, by - hop * (b.act === 'jump' ? 26 : 22), size * depth, { sx: 1 + (1 - squash) * 0.5 - air * 0.05, sy: squash + air * 0.08 });
+            drewPet = R({ clip: 'cheer', clipLoop: false, phase01: bk, happy: true, look: { x: b.act === 'greet' ? b.dir * 0.8 : 0, y: -air } }, px_, by, size * depth, { sx: 1 + (1 - squash) * 0.15, sy: squash });
           } else if (b.act === 'greet') {
             // face the friend
             if (framed && hasSheet(kind, stage, 'jump')) drewPet = drawFrame(kind, stage, 'jump', fi, px_, by - hop * 22, size * depth);
@@ -2762,7 +2831,7 @@
         }
         // ── walking over to the food ──
         else if (b.act === 'toFood') {
-          if (rig) drewPet = R({ view: 'side', gait: time * 2.6, run: 0.85, mouth: 'open', look: { x: b.dir * 0.7, y: 0.5 }, bend: b.dir * 0.1 }, px_, by, size * depth);
+          if (rig) drewPet = R({ clip: 'hands', look: { x: b.dir * 0.7, y: 0.5 }, bend: b.dir * 0.12 }, px_, by, size * depth, { flip: b.dir < 0 });
           else drewPet = drawImg(front, px_, by, size * depth, { sx, sy });
         }
         // ── head down, eating it off the floor ──
@@ -2772,14 +2841,10 @@
           const chew = k > 0.42;
           const dir = world.food ? (world.food.x >= px_ ? 1 : -1) : (b.dir || 1);
           if (rig) drewPet = R({
-            view: 'front',
-            mouth: chew ? 'chew' : 'open',
-            happy: k > 0.9,
+            clip: 'talk',
             look: { x: dir * 0.5, y: 1 },
-            bend: dir * 0.85 * down,                                  // tips right over the treat
-            wobble: chew ? 1.1 : 0.3,
-            stretch: -0.3 * down + (chew ? Math.abs(Math.sin(time * 9)) * 0.08 : 0),
-          }, px_ + dir * size * 0.1 * down, by, size * depth, { sy: 1 - 0.17 * down, sx: 1 + 0.07 * down, rot: dir * 0.09 * down });
+            bend: dir * 0.8 * down,                                   // tips right over the treat
+          }, px_ + dir * size * 0.08 * down, by, size * depth, { sy: 1 - 0.16 * down, sx: 1 + 0.07 * down, rot: dir * 0.08 * down });
           else drewPet = drawImg(front, px_, by, size * depth, { sx, sy });
           if (isMe && chew) {   // crumbs
             for (let i = 0; i < 3; i++) {
@@ -2793,7 +2858,7 @@
         // ── hungry: sits at the front and asks ──
         else if (b.act === 'beg') {
           const wob = Math.sin(time * 3.1);
-          if (rig) drewPet = R({ view: 'front', beg: true, look: { x: 0, y: -1 }, mouth: 'o', tilt: Math.sin(time * 1.3) * 0.1 }, px_, by, size * depth, { sx: 1 - wob * 0.02, sy: 1 + wob * 0.03 });
+          if (rig) drewPet = R({ clip: 'hands', beg: true, look: { x: 0, y: -1 }, tilt: Math.sin(time * 1.3) * 0.06 }, px_, by, size * depth, { sx: 1 - wob * 0.02, sy: 1 + wob * 0.03 });
           else drewPet = drawImg(front, px_, by, size * depth, { sx: 1 - wob * 0.02, sy: 1 + wob * 0.03, rot: Math.sin(time * 1.3) * 0.04 });
           if (isMe && !anim) {
             // a little thought of food, bobbing
@@ -2809,8 +2874,8 @@
           if (rig) {
             const top = by - size * depth;
             const lk = lookOf(px_, top + size * 0.35);
-            const wagging = isMe && mouse.over;                        // you're near: tail goes
-            drewPet = R({ view: 'front', look: lk, mouth: wagging ? 'tongue' : 'smile', tail: time * (wagging ? 11 : 3.5), ears: wagging ? 0.4 : Math.sin(time * 0.9 + seed) * 0.15, tilt: Math.sin(time * 0.6 + seed) * 0.05 + lk.x * 0.04 }, px_, by, size * depth, { sx, sy });
+            const near = isMe && mouse.over;                            // you came close: he perks up and talks
+            drewPet = R({ clip: near ? 'talk' : 'idle', look: lk, tilt: Math.sin(time * 0.6 + seed) * 0.03 + lk.x * 0.03 }, px_, by, size * depth, { sx, sy });
           }
           else if (closing && framed && hasSheet(kind, stage, 'idle')) drewPet = drawFrame(kind, stage, 'idle', -1, px_, by, size * depth, { sx, sy });   // last frame = eyes shut
           else drewPet = drawImg(front, px_, by, size * depth, { sx, sy });
