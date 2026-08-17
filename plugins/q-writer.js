@@ -122,7 +122,15 @@ const COACH_VOICE = 'HOW YOU SOUND TO THE STUDENT: a coach mid-game, warm and sh
 const TO_THE_POINT = 'TO THE POINT: no preamble, no restating what they wrote, no "Great —" / "Let\'s think about", no reasons for asking. Ask the question. If you supply an idea, two short sentences at most, then the ask. Sarah, 16 Aug: "we could be getting to the answers quicker if Q was more to the point."';
 // ONE stable block, top of the system prompt (after UK_LINE) ⇒ the prompt
 // cache still serves. New rules go on the END (TO_THE_POINT), never the top.
-const MISSION_BLOCK = TUTOR_MISSION + '\n' + WHY_THE_GAME + '\n' + GAME_RULE + '\n' + COACH_VOICE + '\n' + BRICK_LOOP_RULE + '\n' + TO_THE_POINT;
+// Sarah, 17 Aug 2026: "with that amount of information he needs to produce the
+// facts on the whiteboard AND talk to you… like QB2 — if it's an essay of info
+// it goes on the display. He creates 2 messages: one that's formatted on the
+// display and the response to you on the chat, so you don't feel alone."
+// This is the same split QB2 uses (use_channel sends the artefact to a display
+// and QB2 still speaks in the chat). Appended at the END so the cached prefix
+// above it still serves.
+const SAY_AND_SHOW = 'TWO THINGS WHEN THERE IS A LOT — THE DISPLAY AND THE TALK. A pile of information is never a chat message. The information itself goes on the DISPLAY (the whiteboard / the board field): the facts, the list of what is missing, the points to work on, laid out and formatted. What you say to HER is the other thing, and it is you talking, not a summary of the display: what she has done well, what is still missing, what you have put up for her, and what you will pick up in the next question. Three or four warm, specific sentences. Never only a pointer ("it is on the whiteboard"), never a re-list of what is already up there, and never nothing at all — if she is reading a wall on her own with no voice next to it, you have got this wrong. She should feel someone is sitting with her.';
+const MISSION_BLOCK = TUTOR_MISSION + '\n' + WHY_THE_GAME + '\n' + GAME_RULE + '\n' + COACH_VOICE + '\n' + BRICK_LOOP_RULE + '\n' + TO_THE_POINT + '\n' + SAY_AND_SHOW;
 function withMission(systemPrompt) {
     const sys = String(systemPrompt || '');
     return sys.startsWith(MISSION_BLOCK) ? sys : MISSION_BLOCK + '\n\n' + sys;
@@ -359,13 +367,16 @@ const BRIEF_SCHEMA = {
         scenario: {
             anyOf: [{ type: 'null' }, {
                 type: 'object', additionalProperties: false,
-                required: ['whatItIs', 'theStory', 'people', 'numbers', 'problems', 'useIt'],
+                required: ['name', 'kind', 'whatItIs', 'theStory', 'people', 'numbers', 'strengths', 'problems', 'useIt'],
                 properties: {
+                    name: { type: 'string', description: 'The SUBJECT of the scenario in as few words as possible — the organisation, person, case or text it is about. Usually one or two words: "Datacore", "Portstride", "R v Brown", "Nestlé UK". Copied exactly as written in the document. Never a sentence. Empty string only if the document truly names nothing.' },
+                    kind: { type: 'string', description: 'What that subject IS, in 3-6 words, no verb. "Global logistics and supply chain", "Mid-sized software firm", "Criminal appeal, House of Lords". Never a sentence.' },
                     whatItIs: { type: 'string', description: 'ONE plain sentence: what the story is. "A case study about Datacore, a mid-sized software firm, and how it pays people."' },
                     theStory: { type: 'string', description: 'The whole scenario in 3-6 short plain sentences, as you would tell a friend who has not read it. What the organisation / situation / text is, what happened, where it stands now. This is what the student reads INSTEAD of the document.' },
                     people: { type: 'array', items: { type: 'object', additionalProperties: false, required: ['who', 'what'], properties: { who: { type: 'string' }, what: { type: 'string' } } }, description: 'Named people or roles that matter, one short line each. Up to 6. Empty if none.' },
                     numbers: { type: 'array', items: { type: 'object', additionalProperties: false, required: ['label', 'value'], properties: { label: { type: 'string' }, value: { type: 'string' } } }, description: 'Figures worth having to hand — headcount, turnover, pay, dates, percentages — copied EXACTLY as stated, never rounded or invented. Up to 10.' },
-                    problems: { type: 'array', items: { type: 'string' }, description: 'The problems / tensions / decisions the scenario sets up, one plain line each — these are usually what the questions are about. Up to 6.' },
+                    strengths: { type: 'array', items: { type: 'string' }, description: 'What the subject has GOING FOR IT — the pros, one short line each, the figure in the line where there is one ("4,800 staff across 12 countries", "30 years in the market"). These read next to `problems` as a pros-and-cons pair on the fact card. Up to 6. Empty if none.' },
+                    problems: { type: 'array', items: { type: 'string' }, description: 'What is going AGAINST it — the cons: the problems, tensions and decisions the scenario sets up, one short plain line each, the figure in the line where there is one ("struggling to pay salaries", "loses too many warehouse staff"). These are usually what the questions are about. Up to 6.' },
                     useIt: { type: 'string', description: 'ONE plain sentence on how the scenario is used in the answers: "when a question says \'your organisation\' it means this company — use its numbers and its problems as your examples."' },
                 },
             }],
@@ -522,10 +533,13 @@ function normaliseBrief(b) {
     // The scenario, shaped like a source digest so the page shows both the same way.
     const sc = b.scenario && typeof b.scenario === 'object' ? b.scenario : null;
     out.scenario = sc && (String(sc.theStory || '').trim() || String(sc.whatItIs || '').trim()) ? {
+        name: String(sc.name || '').trim().slice(0, 60),
+        kind: String(sc.kind || '').trim().slice(0, 80),
         whatItIs: String(sc.whatItIs || '').trim(),
         theStory: String(sc.theStory || '').trim(),
         people: (Array.isArray(sc.people) ? sc.people : []).map(p => ({ who: String((p && p.who) || '').trim(), what: String((p && p.what) || '').trim() })).filter(p => p.who).slice(0, 6),
         numbers: (Array.isArray(sc.numbers) ? sc.numbers : []).map(n => ({ label: String((n && n.label) || '').trim(), value: String((n && n.value) || '').trim() })).filter(n => n.label && n.value).slice(0, 10),
+        strengths: (Array.isArray(sc.strengths) ? sc.strengths : []).map(String).map(s => s.trim()).filter(Boolean).slice(0, 6),
         problems: (Array.isArray(sc.problems) ? sc.problems : []).map(String).map(s => s.trim()).filter(Boolean).slice(0, 6),
         useIt: String(sc.useIt || '').trim(),
     } : null;
@@ -1019,13 +1033,16 @@ ${briefForPrompt(brief)}`;
 // source, shown on the brief board.
 const SOURCE_DIGEST_SCHEMA = {
     type: 'object', additionalProperties: false,
-    required: ['whatItIs', 'theStory', 'people', 'numbers', 'problems', 'useIt'],
+    required: ['name', 'kind', 'whatItIs', 'theStory', 'people', 'numbers', 'strengths', 'problems', 'useIt'],
     properties: {
+        name: { type: 'string', description: 'The SUBJECT of this document in as few words as possible — the organisation, person, case or text it is about. Usually one or two words: "Datacore", "Portstride", "R v Brown", "Nestlé UK". Copied exactly as written. Never a sentence. Empty string only if the document truly names nothing.' },
+        kind: { type: 'string', description: 'What that subject IS, in 3-6 words, no verb. "Global logistics and supply chain", "Mid-sized software firm", "Criminal appeal, House of Lords". Never a sentence.' },
         whatItIs: { type: 'string', description: 'ONE plain sentence: what this document is. "A case study about a mid-sized software firm, Datacore, and how it pays its people."' },
         theStory: { type: 'string', description: 'The whole thing in 3-5 short plain sentences, as you would tell a friend who has not read it. Everyday words. What the organisation is, what happened, where it is now. This is what she reads INSTEAD of the document.' },
         people: { type: 'array', items: { type: 'object', additionalProperties: false, required: ['who', 'what'], properties: { who: { type: 'string', description: 'A name or role, e.g. "Priya (HR Director)".' }, what: { type: 'string', description: 'One short line: who they are and what they want / did.' } } }, description: 'The named people or roles that matter. Up to 6. Empty if none.' },
         numbers: { type: 'array', items: { type: 'object', additionalProperties: false, required: ['label', 'value'], properties: { label: { type: 'string' }, value: { type: 'string' } } }, description: 'The figures worth having to hand — headcount, turnover, salaries, dates, percentages, budgets. Copied EXACTLY as the document states them, never rounded or invented. Up to 10. Empty if none.' },
-        problems: { type: 'array', items: { type: 'string' }, description: 'The problems / tensions / decisions the case sets up, each ONE plain line. These are usually what the questions are about. Up to 6.' },
+        strengths: { type: 'array', items: { type: 'string' }, description: 'What the subject has GOING FOR IT — the pros, one short line each, the figure in the line where there is one ("4,800 staff across 12 countries", "30 years in the market"). These read next to `problems` as a pros-and-cons pair on the fact card. Up to 6. Empty if none.' },
+        problems: { type: 'array', items: { type: 'string' }, description: 'What is going AGAINST it — the cons: the problems, tensions and decisions the case sets up, each ONE short plain line, the figure in the line where there is one ("struggling to pay salaries", "loses too many warehouse staff"). These are usually what the questions are about. Up to 6.' },
         useIt: { type: 'string', description: 'ONE plain sentence telling her how this document is meant to be used in her answers — "when a question says \'the organisation\', it means this company; use its numbers and its problems as your examples."' },
     },
 };
@@ -1048,10 +1065,13 @@ ${brief ? '\nTHE QUESTIONS (already extracted):\n' + (brief.criteria || []).map(
     const sc = r.scenario && typeof r.scenario === 'object' ? r.scenario : null;
     if (!sc || !(String(sc.theStory || '').trim() || String(sc.whatItIs || '').trim())) throw new Error('Q could not read that document — try again.');
     return {
+        name: String(sc.name || '').trim().slice(0, 60),
+        kind: String(sc.kind || '').trim().slice(0, 80),
         whatItIs: String(sc.whatItIs || '').trim(),
         theStory: String(sc.theStory || '').trim(),
         people: (Array.isArray(sc.people) ? sc.people : []).map(p => ({ who: String((p && p.who) || '').trim(), what: String((p && p.what) || '').trim() })).filter(p => p.who).slice(0, 6),
         numbers: (Array.isArray(sc.numbers) ? sc.numbers : []).map(n => ({ label: String((n && n.label) || '').trim(), value: String((n && n.value) || '').trim() })).filter(n => n.label && n.value).slice(0, 10),
+        strengths: (Array.isArray(sc.strengths) ? sc.strengths : []).map(String).map(s => s.trim()).filter(Boolean).slice(0, 6),
         problems: (Array.isArray(sc.problems) ? sc.problems : []).map(String).map(s => s.trim()).filter(Boolean).slice(0, 6),
         useIt: String(sc.useIt || '').trim(),
     };
@@ -1068,10 +1088,13 @@ ${brief ? '\nTHE ASSIGNMENT THIS DOCUMENT SUPPORTS (so you know what matters in 
     // done. Throw instead so the route's retry path (and the page's retry) fire.
     if (!r || !(String(r.theStory || '').trim() || String(r.whatItIs || '').trim())) throw new Error('Q could not read that document — try again.');
     return {
+        name: String((r && r.name) || '').trim().slice(0, 60),
+        kind: String((r && r.kind) || '').trim().slice(0, 80),
         whatItIs: String((r && r.whatItIs) || '').trim(),
         theStory: String((r && r.theStory) || '').trim(),
         people: (Array.isArray(r && r.people) ? r.people : []).map(p => ({ who: String((p && p.who) || '').trim(), what: String((p && p.what) || '').trim() })).filter(p => p.who).slice(0, 6),
         numbers: (Array.isArray(r && r.numbers) ? r.numbers : []).map(n => ({ label: String((n && n.label) || '').trim(), value: String((n && n.value) || '').trim() })).filter(n => n.label && n.value).slice(0, 10),
+        strengths: (Array.isArray(r && r.strengths) ? r.strengths : []).map(String).map(s => s.trim()).filter(Boolean).slice(0, 6),
         problems: (Array.isArray(r && r.problems) ? r.problems : []).map(String).map(s => s.trim()).filter(Boolean).slice(0, 6),
         useIt: String((r && r.useIt) || '').trim(),
         madeAt: Date.now(),
@@ -1933,7 +1956,7 @@ const CHAT_SCHEMA = {
     type: 'object', additionalProperties: false,
     required: ['reply', 'board', 'next', 'highlight', 'highlights', 'answersStep'],
     properties: {
-        reply: { type: 'string', description: 'The answer to what they asked, plain everyday British English. As long as it needs — usually 2 to 6 sentences; a short numbered list if they asked for a list or for steps. Direct: the answer first, then the why. Teach a term properly when asked (name, meaning, everyday example). If they ask what to write, tell them WHAT TO SAY and WHERE (which point, after which of their words) — never the sentence itself. If they ask for facts / figures / examples from the case, put them in board and say "on the whiteboard" here.' },
+        reply: { type: 'string', description: 'The answer to what they asked, plain everyday British English. As long as it needs — usually 2 to 6 sentences; a short numbered list if they asked for a list or for steps. Direct: the answer first, then the why. Teach a term properly when asked (name, meaning, everyday example). If they ask what to write, tell them WHAT TO SAY and WHERE (which point, after which of their words) — never the sentence itself. If they ask for facts / figures / examples from the case, put them in board.\n\nTWO THINGS, ALWAYS — THE DISPLAY AND THE TALK. When there is a lot to give back, you produce BOTH: the information goes on the board (the display), and reply is you TALKING TO HER about it. reply is never just a pointer, never "it is on the whiteboard" and nothing else, and never a list of the same points that are already on the board. It is what a good tutor sitting next to her would say: what she has done well, what is still missing, and what you have put up for her to work on. Her words for it: "that is really good, but we have still missed some main points. I have listed on the board the things you need to work on. I have also noted the things that are missing, and things we should add in the next question." Warm, specific, three or four sentences. She should never feel she is reading a report on her own — you are in the room.\n\nFORMATTING — your reply renders as real markdown, like every other Q chat. Use it rather than running everything into one paragraph: ##### for a small uppercase heading, **bold** for the thing being named, "- " bullets for several points, standard | tables | for two-column comparisons, "> " for a line worth pulling out. Prose for one thought; structure the moment there is more than one.\n\nLENGTH — if you are making MORE THAN THREE separate points, that is a report, not a chat message. Put the points in board (one item each) and keep reply to a line or two saying what you found and to look at the whiteboard. Never stack five criticisms into one paragraph.' },
         board: { anyOf: [{ type: 'object', additionalProperties: false, required: ['title', 'items', 'todo'], properties: { title: { type: 'string' }, items: { type: 'array', maxItems: 8, items: { type: 'object', additionalProperties: false, required: ['fact', 'where'], properties: { fact: { type: 'string', description: 'A fact / figure / example / quoted line as the case has it, verbatim, 4-16 words.' }, where: { type: 'string', description: 'Where it sits in the case, 2-6 words.' } } } }, todo: { type: 'array', maxItems: 4, items: { type: 'string' }, description: 'What to do with them: which item, where in their paragraph, what to say it shows. Never the sentence.' } } }, { type: 'null' }], description: 'null unless a LIST from the case would help more than prose (facts, figures, examples, quotes, the people, the numbers).' },
         next: { anyOf: [{ type: 'string' }, { type: 'null' }], description: 'One line, 12 words or fewer, the concrete next thing they could do on the page — or null.' },
         highlight: { anyOf: [{ type: 'string' }, { type: 'null' }], description: 'If your answer is about ONE particular sentence or phrase on THEIR PAGE, that span verbatim (character for character, 3-40 words) so the page can light it up while you talk — else null. Never text that is not on their page.' },

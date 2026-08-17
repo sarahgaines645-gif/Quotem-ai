@@ -2865,7 +2865,11 @@ function reportClientError(stage, err, ms, status) {
 // formatting. We pre-escape the input so any `<script>` Q hands back is shown
 // as literal text, never executed. User messages stay as plain escaped text.
 function renderQContent(text) {
-  const safe = escapeHtml(String(text == null ? '' : text));
+  // Escaping turns a line-leading "> " into "&gt; ", so marked never saw a
+  // blockquote and Q's pulled-out lines printed a literal ">" (Sarah, 17 Aug).
+  // Put that one character back: a bare ">" cannot open a tag, so this keeps
+  // the escaping safe. QB2's renderer parses the raw line and never had this.
+  const safe = escapeHtml(String(text == null ? '' : text)).replace(/^&gt;/gm, '>');
   if (typeof marked === 'undefined' || !marked.parse) {
     // CDN failed — fall back to escaped plain text so Q still gets a reply.
     return safe.replace(/\n/g, '<br>');

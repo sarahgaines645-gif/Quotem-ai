@@ -405,6 +405,14 @@ router.get('/revise', (req, res) => {
     res.sendFile(path.join(__dirname, 'revise.html'));
 });
 
+// The dancing-unicorn bench. Sarah's page for LOOKING at the celebration on
+// its own — the real thing lives on /revise, fired by a right answer in Teen
+// mode. Signed-in only: to send this link to somebody without an account,
+// '/unicorn' has to go in PUBLIC_PATHS in server/index.js.
+router.get('/unicorn', (req, res) => {
+    res.sendFile(path.join(__dirname, 'unicorn.html'));
+});
+
 // Q's personal finance page.
 router.get('/finance', (req, res) => {
     res.sendFile(path.join(__dirname, 'finance.html'));
@@ -1880,7 +1888,10 @@ router.post('/writer/source', requirePerson, express.json({ limit: '4mb' }), wri
 router.post('/writer/brief/scenario', requirePerson, express.json({ limit: '4kb' }), async (req, res) => {
     const t = readTutor(writerScope(req));
     if (!t.brief) return res.status(400).json({ error: 'No brief yet — upload the task first.', code: 'no_brief' });
-    if (t.brief.scenario && t.brief.scenario.theStory) return ukJson(res, { ok: true, scenario: t.brief.scenario, cached: true });
+    // `force` re-reads a scenario that was stored before the fact card's fields
+    // (name / kind / strengths) existed. It costs a model call, so it only ever
+    // happens because she pressed "Re-read" — never on its own (Sarah, 17 Aug).
+    if (!req.body?.force && t.brief.scenario && t.brief.scenario.theStory) return ukJson(res, { ok: true, scenario: t.brief.scenario, cached: true });
     const stored = readStoredDocText(writerScope(req));
     if (!stored || !stored.text) return res.status(400).json({ error: 'The brief text is not stored on the server any more — drop the task in again and I read it fresh.', code: 'no_doc' });
     try {
@@ -1913,6 +1924,24 @@ router.post('/writer/source/digest', requirePerson, express.json({ limit: '4kb' 
     } catch (e) {
         writerFail(res, e, '[writer/source/digest]', 'reading that document for you');
     }
+});
+
+// POST /writer/source/original { name } — the ORIGINAL words of a source, so the
+// fact card's "Open the original" can show what Q read (Sarah, 17 Aug: "then a
+// button to open the original"). `__brief` gives the stored task document. Read
+// only, this person's own scope only, and bounded — the text is already capped
+// at SOURCE_CHARS on the way in.
+router.post('/writer/source/original', requirePerson, express.json({ limit: '4kb' }), (req, res) => {
+    const t = readTutor(writerScope(req));
+    const name = String(req.body?.name || '').trim();
+    if (name === '__brief') {
+        const stored = readStoredDocText(writerScope(req));
+        if (!stored || !stored.text) return res.status(400).json({ error: 'The task document is not stored on the server any more — drop it in again to read it here.', code: 'no_doc' });
+        return ukJson(res, { ok: true, name: stored.name || 'The task', text: stored.text });
+    }
+    const src = (t.sources || []).find(s => s.name === name);
+    if (!src || !src.text) return res.status(400).json({ error: 'That document is not in this session.', code: 'no_source' });
+    ukJson(res, { ok: true, name, text: src.text });
 });
 
 // POST /writer/essay — (re)write the hidden model answer. Job: GET /writer/job/essay.

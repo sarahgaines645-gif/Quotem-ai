@@ -30,6 +30,33 @@
          other pages"). One variable, so it stays the same everywhere. */
       --float-shadow: 10px 10px 28px #ababab, -8px -8px 20px #ffffff;
     }
+    /* ── COLOUR SITS ON A CARD — Sarah, 17 Aug 2026 ──────────────────────────
+       "make sure all colours that are not text sit on a white card so the
+       neumorphic style works."
+
+       A card is NEVER the colour. The card is var(--bg) and it carries the
+       --neu-* shadow — that is the only way the raise reads; a coloured fill
+       swallows the shadow and the card goes flat (which is exactly what the
+       pink ask looked like). Colour goes ON the card: a tint panel held
+       inside it, a bar down one side, a dot, or the ink itself. Never a
+       coloured fill wearing the shadow, and never white text on a solid
+       colour. Same as finance.html and the job-site cards.
+
+       .q-tinted = the mechanism. The element is a normal raised bg card; the
+       ::before paints the tint INSIDE it (inset 4px) and sits behind the
+       text, so a strip of card shows all the way round and the shadow reads
+       against it. Set --tint to change the colour. */
+    .q-tinted {
+      position: relative; z-index: 0;
+      background: var(--bg); box-shadow: var(--neu-raised-sm);
+      border-radius: 12px;
+    }
+    .q-tinted::before {
+      content: ''; position: absolute; inset: 2px; z-index: -1;
+      border-radius: 10px; background: var(--tint, rgba(233,30,99,0.10));
+    }
+    .q-tinted.xs { box-shadow: var(--neu-raised-xs); }
+
     * { box-sizing: border-box; margin: 0; padding: 0; }
     html, body {
       background: var(--bg); color: var(--text);
@@ -68,7 +95,7 @@
       display: none;
     }
     .proj-menu.open { display: block; }
-    .proj-menu .proj-title { font-size: 11px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-muted); padding: 6px 8px 4px; }
+    .proj-menu .proj-title { font-size: 11px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text); padding: 6px 8px 4px; }
     .proj-list { max-height: 50vh; overflow-y: auto; display: flex; flex-direction: column; gap: 2px; }
     .proj-row {
       display: grid; grid-template-columns: 12px minmax(0, 1fr) auto; align-items: center; gap: 8px;
@@ -259,16 +286,17 @@
       font-family: 'Space Grotesk', sans-serif; font-size: 12px; color: var(--text);
     }
     .source-link-go {
-      padding: 7px 12px; background: transparent; border: none; cursor: pointer;
+      padding: 7px 12px; background: var(--bg); border: none; cursor: pointer;
       font-family: 'Space Grotesk', sans-serif; font-size: 12px; color: var(--text-muted);
-      box-shadow: 0 0 0 1px rgba(0,0,0,0.06); border-radius: 14px;
+      box-shadow: var(--neu-raised-xs); border-radius: 14px;
     }
-    .source-link-go:hover { color: var(--text); box-shadow: 0 0 0 1px rgba(0,0,0,0.12); }
+    .source-link-go:hover { color: var(--text); box-shadow: var(--neu-raised-sm); }
+    .source-link-go:active { box-shadow: var(--neu-inset-sm); }
 
     /* Drop overlay */
     .drop-overlay {
       position: fixed; inset: 0; z-index: 1000;
-      background: rgba(232,232,232,0.85); backdrop-filter: blur(2px);
+      background: var(--bg);   /* solid, never a faded wash (Sarah's rule) */
       display: none; align-items: center; justify-content: center; pointer-events: none;
       font-family: 'Space Grotesk', sans-serif; font-size: 18px; color: var(--text);
       border: 4px dashed var(--accent);
@@ -349,7 +377,7 @@
     .qpanel.min { height: auto !important; min-height: 0; width: auto !important; min-width: 0; max-width: 260px; border-radius: 20px; }
     .qpanel.min .panel-body, .qpanel.min .panel-grip, .qpanel.min .panel-foot { display: none; }
     .qpanel.min .panel-head { padding: 8px 14px; cursor: pointer; }
-    .qpanel.min .panel-title { color: var(--text-muted); }
+    .qpanel.min .panel-title { color: var(--text); }   /* a minimised panel is still a title — not greyed out (Sarah, 17 Aug) */
 
     /* ── The coach card ─────────────────────────────────────────────────── */
     .coach-card { width: 236px; }
@@ -412,7 +440,7 @@
     .q-popcard .cite-sent { font-size: 10px; color: var(--text-muted); font-style: italic; margin-bottom: 6px; line-height: 1.35; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
     .refs-yours { display: flex; flex-direction: column; gap: 4px; margin-bottom: 12px; }
     .refs-yours:empty { display: none; }
-    .refs-yours .ry-title { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-muted); }
+    .refs-yours .ry-title { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text); }
     .refs-yours .ry-item { font-family: 'Lora', Georgia, serif; font-size: 12px; line-height: 1.5; color: var(--text); padding: 4px 8px; border-radius: 8px; box-shadow: var(--neu-raised-xs); overflow-wrap: anywhere; }
     .refs-yours .ry-item .ry-tag { font-family: 'Space Grotesk', sans-serif; font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--accent); margin-left: 6px; }
     .q-tool-out:empty { display: none; }
@@ -435,9 +463,12 @@
       font-family: 'Space Grotesk', sans-serif; font-size: 9.5px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase;
       color: var(--accent); background: var(--paper, #fbf9f3); padding: 0 5px; border-radius: 6px; line-height: 13px; white-space: nowrap; pointer-events: none;
     }
+    /* WHAT Q SAYS IS IN FULL INK. Sarah, 17 Aug: "his words are grey so you
+       assume they don't look important." Hierarchy on this card comes from
+       SIZE, never from fading his words out. Muted is for labels only. */
     .coach-card .q-move {
-      font-size: 11px; color: var(--text-muted); line-height: 1.4; margin-bottom: 6px;
-      padding: 5px 8px; border-radius: 8px; box-shadow: var(--neu-raised-xs);
+      font-size: 12px; color: var(--text); line-height: 1.45; margin-bottom: 6px;
+      padding: 7px 9px; border-radius: 10px; box-shadow: var(--neu-raised-xs);
     }
     .coach-card .q-move:empty { display: none; }
     /* Three blocks (Sarah, live 15 Aug: "separate the explaining from the
@@ -445,7 +476,7 @@
        the first time a part starts, then folded behind the WHERE line), a
        SUPPLY line (Q's one fact, its own block), then the ASK — the biggest
        text on the card, its own paragraph — then one quiet hint. */
-    .coach-card .q-role { font-size: 11px; color: var(--text-muted); line-height: 1.45; margin-bottom: 8px; padding: 6px 8px; border-radius: 8px; box-shadow: var(--neu-raised-xs); }
+    .coach-card .q-role { font-size: 12px; color: var(--text); line-height: 1.45; margin-bottom: 8px; padding: 7px 9px; border-radius: 10px; box-shadow: var(--neu-raised-xs); }
     .coach-card .q-role:empty { display: none; }
     .coach-card .q-role .q-role-l { display: block; font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-muted); margin-bottom: 2px; }
     .coach-card .q-where.has-role { cursor: pointer; text-decoration: underline dotted; text-underline-offset: 3px; }
@@ -461,18 +492,48 @@
     .coach-card .q-section:empty { display: none; }
     .coach-card .q-msg {
       font-size: 13px; color: var(--text); line-height: 1.45; margin-bottom: 8px;
-      white-space: pre-wrap;
     }
+    /* Q's markdown, rendered — the same furniture the normal Q chat gives him.
+       Headings step down by SIZE, never by fading (Sarah, 17 Aug). */
+    .coach-card .q-msg > :first-child, .coach-card .q-move > :first-child,
+    .coach-card .q-hint > :first-child { margin-top: 0; }
+    .coach-card .q-msg > :last-child, .coach-card .q-move > :last-child,
+    .coach-card .q-hint > :last-child { margin-bottom: 0; }
+    .coach-card .q-msg p, .coach-card .q-move p, .coach-card .q-hint p { margin: 0 0 7px; }
+    .coach-card .q-msg h1, .coach-card .q-move h1 { font-size: 15px; font-weight: 700; margin: 10px 0 5px; }
+    .coach-card .q-msg h2, .coach-card .q-move h2 { font-size: 14px; font-weight: 700; margin: 10px 0 5px; }
+    .coach-card .q-msg h3, .coach-card .q-move h3 { font-size: 12.5px; font-weight: 700; margin: 9px 0 4px; }
+    .coach-card .q-msg h4, .coach-card .q-msg h5,
+    .coach-card .q-move h4, .coach-card .q-move h5 {
+      font-size: 9.5px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase;
+      color: var(--text); margin: 9px 0 4px;
+    }
+    .coach-card .q-msg ul, .coach-card .q-msg ol,
+    .coach-card .q-move ul, .coach-card .q-move ol,
+    .coach-card .q-hint ul, .coach-card .q-hint ol { margin: 4px 0 7px; padding-left: 17px; }
+    .coach-card .q-msg li, .coach-card .q-move li, .coach-card .q-hint li { margin: 3px 0; line-height: 1.45; overflow-wrap: anywhere; }
+    .coach-card .q-msg code, .coach-card .q-move code { font-family: 'Lora', Georgia, serif; font-weight: 600; }
+    .coach-card .q-msg blockquote, .coach-card .q-move blockquote {
+      margin: 6px 0; padding: 2px 0 2px 9px; border-left: 3px solid var(--accent); color: var(--text);
+    }
+    .coach-card .md-table-scroll { overflow-x: auto; margin: 6px 0; }
+    .coach-card .q-msg table { border-collapse: collapse; font-size: 11.5px; }
+    .coach-card .q-msg th { text-align: left; font-size: 9px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text); padding: 3px 9px 3px 0; white-space: nowrap; }
+    .coach-card .q-msg td { padding: 3px 9px 3px 0; vertical-align: top; color: var(--text); }
     .coach-card .q-msg.thinking { font-style: italic; color: var(--text-faint); }
     .coach-card .q-hint {
-      font-size: 11px; color: var(--text-muted); font-style: italic;
-      margin-bottom: 8px; line-height: 1.4;
+      font-size: 11.5px; color: var(--text);
+      margin-bottom: 8px; line-height: 1.45;
     }
     .coach-card .q-hint:empty { display: none; }
+    /* One tidy wrapping row, not a ragged stack (Sarah, 17 Aug: "this is messy
+       for a chat"). The main action still leads — it is the big one. */
     .coach-card .q-actions {
-      display: flex; flex-direction: column; gap: 6px; margin-bottom: 8px;
+      display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-bottom: 8px;
     }
     .coach-card .q-actions.hidden { display: none; }
+    .coach-card .q-actions .q-btn { text-align: center; }
+    .coach-card .q-actions .q-btn.big { flex: 1 1 100%; }
     /* Talking to Q: the thread on the card — you / Q, last few exchanges, scrolls */
     .coach-card .q-chat { display: flex; flex-direction: column; gap: 10px; max-height: 52vh; overflow-y: auto; margin: 0 0 10px; padding-right: 4px; scrollbar-width: thin; }
     .coach-card .q-chat-m { display: block; min-width: 0; }
@@ -497,13 +558,18 @@
     .q-btn.primary { color: var(--text); font-weight: 600; }
     .q-btn.primary::before { content: '● '; color: var(--accent); }
     .q-btn.big { font-size: 13px; padding: 10px 14px; box-shadow: var(--neu-raised-sm); border-radius: 14px; }
-    .q-quiet-row { display: flex; flex-wrap: wrap; gap: 4px 10px; margin: 2px 0 8px; }
+    .q-quiet-row { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 10px; }
     .q-quiet-row:empty { display: none; }
+    /* A secondary button is still a Q button — a small neumorphic pill, not an
+       underlined web link (Sarah, 17 Aug). It reads quieter by being smaller
+       and muted, not by changing species. */
     .q-btn.quiet {
-      box-shadow: none; padding: 2px 0; font-size: 11px; color: var(--text-muted);
-      text-decoration: underline; text-underline-offset: 2px; border-radius: 0;
+      box-shadow: var(--neu-raised-xs); padding: 4px 11px; font-size: 11px;
+      color: var(--text-muted); background: var(--bg);
+      text-decoration: none; border-radius: 12px;
     }
-    .q-btn.quiet:hover { color: var(--text); box-shadow: none; }
+    .q-btn.quiet:hover { color: var(--text); box-shadow: var(--neu-raised-sm); }
+    .q-btn.quiet:active { box-shadow: var(--neu-inset-sm); }
     .q-undo {
       display: block; border: none; background: none; cursor: pointer; padding: 0 0 6px;
       font-family: 'Space Grotesk', sans-serif; font-size: 11px; color: var(--text-muted);
@@ -540,15 +606,26 @@
     .setup-cog.hidden { display: none; }
 
     /* ── Grade bands ─────────────────────────────────────────────────────── */
+    /* The Quotem `.zone`, exactly (PropertyFile.jsx .pfv .zone): a plain raised
+       card — NO tint — with a 3px left border and a short coloured cap at the
+       top of it. The colour is an edge, never a fill (Sarah, 17 Aug: "this is
+       how we do it in quotem"). */
     .grade-band {
+      position: relative; overflow: hidden;
       display: flex; align-items: center; gap: 10px;
-      padding: 8px 14px; margin: 10px 0;
-      border-radius: 8px; font-family: 'Space Grotesk', sans-serif;
+      padding: 12px 16px; margin: 10px 0;
+      border-radius: 12px; font-family: 'Space Grotesk', sans-serif;
       font-size: 12px;
+      background: var(--bg); box-shadow: var(--neu-raised-sm);
+      border-left: 3px solid var(--text);
     }
-    .grade-band[data-grade="red"]   { background: rgba(220,53,69,0.08);  border-left: 3px solid #dc3545; }
-    .grade-band[data-grade="amber"] { background: rgba(255,165,0,0.10);  border-left: 3px solid #e6a817; }
-    .grade-band[data-grade="green"] { background: rgba(40,167,69,0.09);  border-left: 3px solid #28a745; }
+    .grade-band::before {
+      content: ''; position: absolute; left: -3px; top: 0;
+      width: 3px; height: 26px; background: var(--gb-ink, transparent);
+    }
+    .grade-band[data-grade="red"]   { --gb-ink: #dc3545; }
+    .grade-band[data-grade="amber"] { --gb-ink: #e6a817; }
+    .grade-band[data-grade="green"] { --gb-ink: #28a745; }
     .grade-band .gb-dot {
       width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0;
     }
@@ -568,9 +645,10 @@
     .grade-band .gb-improve:hover { color: var(--accent); }
 
     /* ── Improve panel (in coach card) ───────────────────────────────────── */
+    /* RAISED — you read this, you don't type into it (Sarah's indent rule). */
     .improve-suggestion {
-      background: var(--bg); border-radius: 10px;
-      box-shadow: var(--neu-inset-sm); padding: 9px 12px;
+      background: var(--bg); border-radius: 12px;
+      box-shadow: var(--neu-raised-xs); padding: 11px 13px;
       margin-bottom: 8px; display: flex; flex-direction: column; gap: 4px;
     }
     .improve-suggestion .imp-type {
@@ -579,9 +657,17 @@
     }
     .improve-suggestion .imp-text { font-size: 11px; color: var(--text); line-height: 1.45; }
     .improve-suggestion .imp-example { font-size: 10px; color: var(--text-faint); font-style: italic; line-height: 1.4; }
+    /* .zone: raised, plain, colour on the left edge only. */
     .improve-suggestion .imp-craft {
+      position: relative; overflow: hidden;
       font-size: 11px; color: var(--text-muted); line-height: 1.45;
-      background: rgba(233,30,99,0.05); border-radius: 6px; padding: 6px 8px;
+      background: var(--bg); box-shadow: var(--neu-raised-xs);
+      border-radius: 10px; padding: 9px 11px;
+      border-left: 3px solid var(--text);
+    }
+    .improve-suggestion .imp-craft::before {
+      content: ''; position: absolute; left: -3px; top: 0;
+      width: 3px; height: 22px; background: var(--accent);
     }
     .improve-suggestion .imp-craft.hidden { display: none; }
     .improve-suggestion .imp-tellmore {
@@ -619,10 +705,16 @@
     }
     .ref-para-content.hidden { display: none; }
     .ref-para-improve {
+      position: relative; overflow: hidden;
       font-size: 12px; color: var(--text); line-height: 1.5;
-      background: rgba(233,30,99,0.06); border-radius: 8px;
-      padding: 8px 10px; margin-bottom: 10px;
-      border-left: 2px solid var(--accent);
+      background: var(--bg); box-shadow: var(--neu-raised-xs);
+      border-radius: 12px;
+      padding: 11px 13px; margin-bottom: 10px;
+      border-left: 3px solid var(--text);
+    }
+    .ref-para-improve::before {
+      content: ''; position: absolute; left: -3px; top: 0;
+      width: 3px; height: 26px; background: var(--accent);
     }
     .ref-para-improve-label {
       font-size: 10px; font-weight: 600; color: var(--accent);
@@ -697,16 +789,17 @@
       display: inline-flex; align-items: center; gap: 7px;
       padding: 6px 14px; border: none; cursor: pointer;
       font-family: 'Space Grotesk', sans-serif; font-size: 12px;
-      color: var(--text-muted); background: transparent;
-      box-shadow: 0 0 0 1px rgba(0,0,0,0.07); border-radius: 14px;
+      color: var(--text-muted); background: var(--bg);
+      box-shadow: var(--neu-raised-xs); border-radius: 14px;
       transition: color 0.15s, box-shadow 0.15s;
     }
-    .refs-toggle:hover { color: var(--text); box-shadow: 0 0 0 1px rgba(0,0,0,0.14); }
+    .refs-toggle:hover { color: var(--text); box-shadow: var(--neu-raised-sm); }
+    .refs-toggle:active { box-shadow: var(--neu-inset-sm); }
 
     .refs-panel {
-      background: rgba(255,255,255,0.5); border-radius: 10px;
-      padding: 16px; margin: 0 0 24px;
-      border: 1px solid rgba(0,0,0,0.06);
+      background: var(--bg); border-radius: 14px;
+      box-shadow: var(--neu-raised-sm);
+      padding: 18px; margin: 0 0 24px;
     }
     .refs-panel.hidden { display: none; }
 
@@ -844,7 +937,13 @@
     .tb-text p { margin: 0 0 6px; }
     .tb-text p:last-child { margin-bottom: 0; }
     .tb-qtext { font-weight: 500; }
-    .tb-item.tb-fresh { box-shadow: var(--neu-raised-sm); background: rgba(233,30,99,0.10); padding: 8px 10px 8px 12px; margin: 0 -2px; border-radius: 8px; }
+    .tb-item.tb-fresh {
+      background: linear-gradient(135deg,
+        color-mix(in srgb, var(--accent) 16%, var(--bg)),
+        color-mix(in srgb, var(--accent) 4%, var(--bg)));
+      box-shadow: var(--neu-raised-sm);
+      border-radius: 12px; padding: 11px 13px; margin: 0 -2px;
+    }
     .tb-atext { color: var(--text); }
     .tb-ntext { color: var(--text-muted); }
     .tb-earlier .tb-items { gap: 8px; }
@@ -1023,9 +1122,12 @@
        Each block is now a card with air around it and a small caption saying
        what it is. Space is the formatting — nothing new to read. */
     .tb-agenda, .tb-expect, .tb-worksheet, .tb-current { position: relative; }
+    /* A card's TITLE is read in full ink — greyed-out titles are not for
+       titles (Sarah, 17 Aug). Small labels ON a value stay muted; the name of
+       the card does not. */
     .tb-agenda::before, .tb-expect .ex-title, .tb-worksheet::before, .tb-current::before {
       display: block; font-size: 9px; font-weight: 700; letter-spacing: 0.09em;
-      text-transform: uppercase; color: var(--text-faint); margin-bottom: 6px;
+      text-transform: uppercase; color: var(--text); margin-bottom: 6px;
     }
     .tb-agenda::before { content: 'Questions'; }   /* Sarah, 17 Aug: "change that name to Questions" */
     .tb-worksheet::before { content: 'Worksheet'; }
@@ -1034,7 +1136,11 @@
     .tb-agenda { margin: 0 0 20px; padding: 12px 14px; border-radius: 12px; box-shadow: var(--neu-raised-xs); }
     .tb-role { font-size: 12px; font-weight: 600; color: var(--text); line-height: 1.45; margin-bottom: 6px; }
     /* One step, then a row of beads. No list of what is coming. */
-    .tb-now { font-size: 14px; font-weight: 600; color: var(--text); line-height: 1.45; border-radius: 8px; transition: background 0.25s ease, box-shadow 0.25s ease, padding 0.25s ease; }
+    /* The ask reads in the board's own rhythm — the board sets questions at
+       weight 500, not 600, so it stops looking like a different page
+       (Sarah, 17 Aug: "the text in the pink box doesn't look right to the
+       rest of the page"). */
+    .tb-now { font-size: 14px; font-weight: 500; color: var(--text); line-height: 1.5; border-radius: 8px; transition: box-shadow 0.25s ease, padding 0.25s ease; }
     /* Sarah, 17 Aug: "the question is being asked in three different places.
        it should be one — in the teaching board. Q can highlight it when he
        asks a new question and it can stay highlighted until you make a
@@ -1044,7 +1150,21 @@
        in the coach box, or on the whiteboard. */
     /* Neumorphic, not a wash (Sarah, 17 Aug: "this app is neumorphic, this breaks the design style"):
        the fresh ask sits in an inset well; the accent is a dot, not a fill. */
-    .tb-now.fresh { box-shadow: var(--neu-raised-sm); background: rgba(233,30,99,0.10); padding: 8px 10px 8px 12px; margin: 0 -2px 2px; }   /* RAISED (never inset — you read it) and the pink wash she liked */
+    /* The pink is kept — it just sits ON the card now instead of being the
+       card, so the raise reads (Sarah, 17 Aug). See .q-tinted at the top. */
+    /* The pink she asked to keep, done the Quotem way (.gw): a GRADIENT of the
+       colour over the page background — strong at the top-left, almost gone by
+       the bottom-right — so the raised shadow still reads across it. No white
+       frame (Sarah, 17 Aug: "there's just enough white to make it look
+       neumorphic. it's not a frame"). Gentler than .gw's 26%→8% because this
+       is a big surface with text on it, not a 28px icon well. */
+    .tb-now.fresh {
+      background: linear-gradient(135deg,
+        color-mix(in srgb, var(--accent) 16%, var(--bg)),
+        color-mix(in srgb, var(--accent) 4%, var(--bg)));
+      box-shadow: var(--neu-raised-sm);
+      border-radius: 12px; padding: 11px 13px; margin: 0 -2px 2px;
+    }
     .coach-card .q-msg:empty { display: none; }
     .tb-track { display: flex; align-items: center; gap: 8px; margin-top: 8px; }
     .st-beads { display: inline-flex; gap: 5px; align-items: center; }
@@ -1054,11 +1174,89 @@
     .st-bead.cur { background: var(--accent); box-shadow: none; transform: scale(1.35); }
     .tb-count { font-size: 10px; color: var(--text-faint); font-weight: 600; letter-spacing: 0.04em; }
     /* The case study, in plain words, on the brief board */
-    .bb-src { margin: 10px 0 12px; padding: 12px 14px; border-radius: 12px; box-shadow: var(--neu-raised-xs); }
+    /* ── THE FACT CARD (Sarah, 17 Aug) ───────────────────────────────────────
+       "this should read like a fact sheet you'd get for a character on a game.
+       case study as title. raise the card, name of company underneath, you know
+       like when kids compare their cards of superheroes. who, batman, super
+       powers... like that. all the main stuff in points. then a button to open
+       the original. Currently it's a wall of text."
+
+       So: title, NAME big, what it is, the numbers as stat tiles, then pros and
+       cons side by side, who's in it, and the original one press away. The
+       paragraph is folded shut — nothing is lost, but nothing is a wall. */
+    .bb-src { margin: 10px 0 14px; padding: 14px 15px; border-radius: 14px; box-shadow: var(--neu-raised-sm); background: var(--bg); }
+    .fc-lab { display: block; font-size: 9px; font-weight: 700; letter-spacing: 0.11em; text-transform: uppercase; color: var(--text); margin-bottom: 3px; }
+    .fc-name { font-size: 22px; font-weight: 700; color: var(--text); line-height: 1.15; overflow-wrap: anywhere; }
+    .fc-kind { font-size: 11px; color: var(--text-muted); line-height: 1.4; margin-top: 2px; overflow-wrap: anywhere; }
+    .fc-rule { height: 1px; background: rgba(0,0,0,0.07); margin: 11px 0; }
+    /* Stat tiles — the value IS the tile (her card rule: bold value, small
+       muted label, no placeholder furniture). */
+    .fc-stats { display: flex; flex-wrap: wrap; gap: 6px; }
+    .fc-stat {
+      display: flex; flex-direction: column; gap: 1px; min-width: 0;
+      padding: 7px 10px; border-radius: 10px; box-shadow: var(--neu-raised-xs);
+    }
+    .fc-stat b { font-size: 15px; font-weight: 700; color: var(--text); line-height: 1.1; overflow-wrap: anywhere; }
+    .fc-stat span { font-size: 9px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: var(--text-muted); overflow-wrap: anywhere; }
+    /* Pros and cons, side by side — the .zone left edge in green / accent. */
+    .fc-pc { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 8px; }
+    /* Deliberately NOT the .zone dark bar + short cap here: on these two the
+       colour IS the meaning (green = for it, accent = against it), so the edge
+       is coloured its whole length. Everywhere else keeps .zone. */
+    .fc-col {
+      padding: 9px 11px; border-radius: 11px; box-shadow: var(--neu-raised-xs);
+      border-left: 3px solid var(--fc-ink, var(--text));
+    }
+    .fc-col.fc-pro { --fc-ink: #2e7d32; }
+    .fc-col.fc-con { --fc-ink: var(--accent); }
+    .fc-col-h { display: block; font-size: 9px; font-weight: 700; letter-spacing: 0.09em; text-transform: uppercase; color: var(--text); margin-bottom: 5px; }
+    .fc-col ul { margin: 0; padding-left: 14px; }
+    .fc-col li { font-size: 11.5px; color: var(--text); line-height: 1.45; margin: 3px 0; overflow-wrap: anywhere; }
+    .fc-col li b { font-weight: 700; }
+    /* The paragraph, folded shut. */
+    .fc-more { margin-top: 2px; }
+    .fc-more > summary {
+      list-style: none; cursor: pointer; display: inline-block;
+      font-size: 10px; font-weight: 600; color: var(--text-muted);
+      padding: 4px 10px; border-radius: 11px; box-shadow: var(--neu-raised-xs);
+    }
+    .fc-more > summary::-webkit-details-marker { display: none; }
+    .fc-more > summary:hover { color: var(--text); box-shadow: var(--neu-raised-sm); }
+    .fc-more[open] > summary { box-shadow: var(--neu-inset-sm); margin-bottom: 8px; }
+    .fc-acts { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 4px; }
+    /* The original document, floating on a SOLID surface — never a dimmed
+       scrim behind it (Sarah's rule). Reads like the document it is: Lora. */
+    #orig-panel {
+      position: fixed; z-index: 400; right: 24px; bottom: 24px;
+      width: min(560px, calc(100vw - 48px)); max-height: min(76vh, 760px);
+      display: flex; flex-direction: column;
+      background: var(--bg); border-radius: 16px; box-shadow: var(--float-shadow);
+      padding: 14px 16px 16px;
+    }
+    #orig-panel .op-head { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+    #orig-panel .op-title {
+      font-family: 'Space Grotesk', sans-serif; font-size: 11px; font-weight: 700;
+      letter-spacing: 0.08em; text-transform: uppercase; color: var(--text);
+      overflow-wrap: anywhere; min-width: 0;
+    }
+    #orig-panel .op-x {
+      margin-left: auto; flex-shrink: 0; border: none; cursor: pointer;
+      width: 26px; height: 26px; border-radius: 50%;
+      background: var(--bg); color: var(--text); box-shadow: var(--neu-raised-xs);
+      font-family: 'Space Grotesk', sans-serif; font-size: 12px; line-height: 1;
+    }
+    #orig-panel .op-x:hover { box-shadow: var(--neu-raised-sm); }
+    #orig-panel .op-x:active { box-shadow: var(--neu-inset-sm); }
+    #orig-panel .op-body {
+      flex: 1; overflow-y: auto; scrollbar-width: thin;
+      font-family: 'Lora', Georgia, serif; font-size: 13.5px; line-height: 1.65;
+      color: var(--text); white-space: pre-wrap; overflow-wrap: anywhere;
+      padding: 12px 14px; border-radius: 12px; box-shadow: var(--neu-raised-xs);
+    }
     .bb-src-head { font-size: 13px; font-weight: 700; color: var(--text); line-height: 1.4; margin-bottom: 6px; overflow-wrap: anywhere; }
     .bb-src-story { font-size: 13px; color: var(--text); line-height: 1.55; margin-bottom: 8px; }
     .bb-src-sec { margin: 8px 0; }
-    .bb-src-lab { display: block; font-size: 9px; font-weight: 700; letter-spacing: 0.09em; text-transform: uppercase; color: var(--text-faint); margin-bottom: 4px; }
+    .bb-src-lab { display: block; font-size: 9px; font-weight: 700; letter-spacing: 0.09em; text-transform: uppercase; color: var(--text); margin-bottom: 4px; }
     .bb-src-sec ul { margin: 0; padding-left: 16px; }
     .bb-src-sec li { font-size: 12px; color: var(--text); line-height: 1.5; overflow-wrap: anywhere; }
     .bb-src-nums { display: flex; flex-wrap: wrap; gap: 6px; }
@@ -1101,7 +1299,7 @@
     /* MARKING panel */
     .mk-panel { width: 340px; }
     .mk-body { padding: 10px 12px 12px; overflow: auto; }
-    .mk-sec { font-size: 9px; font-weight: 700; letter-spacing: 0.09em; text-transform: uppercase; color: var(--text-faint); margin: 10px 0 5px; }
+    .mk-sec { font-size: 9px; font-weight: 700; letter-spacing: 0.09em; text-transform: uppercase; color: var(--text); margin: 10px 0 5px; }
     .mk-empty { font-size: 12px; color: var(--text-muted); line-height: 1.5; }
     .mk-part { display: grid; grid-template-columns: auto minmax(0,1fr) auto; gap: 8px; align-items: center; font-size: 12px; padding: 4px 6px; border-radius: 8px; }
     .mk-part .bd { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
@@ -1179,7 +1377,15 @@
     .wb-pc-cell.cur { box-shadow: var(--neu-inset-sm), 0 0 0 2px var(--accent) inset; }
     .wb-for { font-size: 13px; color: var(--text-muted); margin: 6px 0 4px; overflow-wrap: anywhere; }
     .wb-for i { color: var(--text); font-style: italic; }
-    .wb-sec { font-size: 10px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--text-faint); margin: 14px 0 6px; }
+    .wb-sec { font-size: 10px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--text); margin: 14px 0 6px; }
+    /* A report on the display: one raised row per point, the thing it is about
+       named first and bold, what's wrong with it after (Sarah's card rule). */
+    .wb-rep { display: flex; flex-direction: column; gap: 7px; margin: 10px 0 4px; }
+    .wb-rep-row {
+      padding: 10px 12px; border-radius: 11px; box-shadow: var(--neu-raised-xs);
+      font-size: 12.5px; line-height: 1.5; color: var(--text); overflow-wrap: anywhere;
+    }
+    .wb-rep-row b { display: block; font-weight: 700; margin-bottom: 2px; }
     .wb-find .wb-where { display: inline-block; margin-left: 8px; font-size: 12px; color: var(--text-faint); font-weight: 500; }
     .wb-todo { margin: 0 0 4px 22px; padding: 0; }
     .wb-todo li { font-size: 15px; line-height: 1.45; color: var(--text); margin: 4px 0; overflow-wrap: anywhere; }
@@ -1213,7 +1419,7 @@
     .ed-body { padding: 10px 12px 12px; overflow: auto; }
     .ed-hint { font-size: 11px; color: var(--text-muted); line-height: 1.45; margin-bottom: 8px; }
     .ed-hint b { color: var(--text); }
-    .ed-sec { font-size: 9px; font-weight: 700; letter-spacing: 0.09em; text-transform: uppercase; color: var(--text-faint); margin: 10px 0 5px; }
+    .ed-sec { font-size: 9px; font-weight: 700; letter-spacing: 0.09em; text-transform: uppercase; color: var(--text); margin: 10px 0 5px; }
     .ed-tools { display: flex; flex-wrap: wrap; gap: 6px; }
     .ed-tools .q-btn { font-size: 11px; }
     .ed-tools .q-btn.armed { box-shadow: var(--neu-inset-sm); color: var(--accent); }
@@ -1273,7 +1479,7 @@
     .tb-expect { margin: 0 0 20px; padding: 12px 14px; border-radius: 12px; box-shadow: var(--neu-raised-sm); }
     .tb-cover { position: relative; margin: 0 0 20px; padding: 12px 14px; border-radius: 12px; box-shadow: var(--neu-raised-sm); }
     .cv-n { margin-left: auto; font-size: 9px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-faint); }
-    .tb-cover .ex-title { display: block; font-size: 9px; font-weight: 700; letter-spacing: 0.09em; text-transform: uppercase; color: var(--text-faint); margin-bottom: 6px; }
+    .tb-cover .ex-title { display: block; font-size: 9px; font-weight: 700; letter-spacing: 0.09em; text-transform: uppercase; color: var(--text); margin-bottom: 6px; }
     .tb-cover .ex-part { font-weight: 500; letter-spacing: 0.02em; text-transform: none; margin-left: 6px; }
     .tb-cover .ex-ask { font-size: 13px; font-weight: 700; color: var(--text); line-height: 1.4; margin-bottom: 8px; overflow-wrap: anywhere; }
     .cv-rings { display: flex; align-items: center; gap: 8px; font-size: 11px; font-weight: 700; color: var(--text); margin: 10px 0 8px; }
@@ -1284,7 +1490,7 @@
     .cv-row.met .cv-l { color: var(--text); }   /* Sarah, 17 Aug: "not grey — it's not for titles" */
     /* SOURCES on the teaching board: citation · the point it backs · how strong (Sarah, 17 Aug) */
     .tb-sources { position: relative; margin: 0 0 20px; padding: 12px 14px; border-radius: 12px; box-shadow: var(--neu-raised-sm); }
-    .tb-sources .ex-title { display: block; font-size: 9px; font-weight: 700; letter-spacing: 0.09em; text-transform: uppercase; color: var(--text-faint); margin-bottom: 8px; }
+    .tb-sources .ex-title { display: block; font-size: 9px; font-weight: 700; letter-spacing: 0.09em; text-transform: uppercase; color: var(--text); margin-bottom: 8px; }
     .tb-sources .ex-part { font-weight: 500; letter-spacing: 0.02em; text-transform: none; margin-left: 6px; }
     .sb-ref { margin-bottom: 10px; }
     .sb-ref:last-child { margin-bottom: 0; }
@@ -1315,13 +1521,25 @@
        pressed in, waiting. Only Q's check earns the green. */
     .q-term.seen { color: var(--text-muted); box-shadow: var(--neu-inset-sm); }
     .q-term.seen::after { content: ' ·'; color: var(--text-faint); }
-    .q-term.fits { color: #fff; background: #2e7d32; box-shadow: none; }
+    /* Green means Q checked it — but the green is the INK and a tick, on the
+       card. Never white text on a solid fill (Sarah, 17 Aug). */
+    .q-term.fits { color: #2e7d32; font-weight: 700; background: var(--bg); box-shadow: var(--neu-raised-xs); }
+    .q-term.fits::after { content: ' ✓'; color: #2e7d32; font-weight: 700; }
     .tb-expect .ex-left { font-size: 10px; color: var(--text-muted); line-height: 1.4; margin-bottom: 4px; }
     .tb-expect .ex-left b { color: var(--text); }
     .q-dots { display: inline-flex; gap: 5px; align-items: center; }
-    .q-dot { width: 11px; height: 11px; border-radius: 50%; border: 2px solid var(--dc, #999); background: transparent; display: inline-block; cursor: pointer; box-sizing: border-box; position: relative; }
+    /* A dot is a plain coloured circle — the same one every other Q page uses
+       (finance .urgency-dot, .logo-mark .dot; hollow ring for not-yet, like
+       finance's .ac-dot). Ring = still needed, filled = it is in. The raise is
+       the SHADOW's white highlight, never a drawn white frame (Sarah, 17 Aug:
+       "there's just enough white to make it look neumorphic. it's not a
+       frame"). No white tick on a solid fill. */
+    .q-dot {
+      width: 11px; height: 11px; border-radius: 50%; border: 2px solid var(--dc, #999);
+      background: transparent; display: inline-block; cursor: pointer;
+      box-sizing: border-box; position: relative;
+    }
     .q-dot.met { background: var(--dc, #999); }
-    .q-dot.met::after { content: ''; position: absolute; left: 2px; top: 0px; width: 3px; height: 5px; border: solid #fff; border-width: 0 1.5px 1.5px 0; transform: rotate(45deg); }
     .tb-expect .ex-key { display: flex; flex-wrap: wrap; gap: 3px 10px; font-size: 10px; color: var(--text-muted); margin-top: 4px; }
     .tb-expect .ex-key span { display: inline-flex; align-items: center; gap: 4px; }
     .tb-expect .ex-key .q-dot { width: 9px; height: 9px; cursor: default; }
@@ -2334,10 +2552,27 @@
     // the WHERE line (tap "Part 1 of 4 — …" to re-read it).
     // supply: Q's one fact, its own block above the ask. ack: one warm line
     // (goes in the move slot when there is no move line).
+    // Q's words render as REAL formatting — headings, bold, lists, tables — the
+    // same as Tink and the normal Q chat (Sarah, 17 Aug: "we need formatting
+    // like tink and the normal q chat has"). Byte-for-byte the renderQContent
+    // from chat.html: pre-escape, then marked, so anything Q hands back that
+    // looks like markup is shown as text and never runs.
+    function qMd(text) {
+      // Escape first so anything tag-shaped is inert, then put back the ONE
+      // character that escaping breaks: a line-leading ">" is a blockquote, and
+      // "&gt;" is not. A bare ">" cannot open a tag, so this stays safe.
+      const safe = escHtml(String(text == null ? '' : text)).replace(/^&gt;/gm, '>');
+      if (typeof marked === 'undefined' || !marked.parse) return safe.replace(/\n/g, '<br>');
+      try {
+        return marked.parse(safe, { breaks: true, gfm: true })
+          .replace(/<table>/g, '<div class="md-table-scroll"><table>')
+          .replace(/<\/table>/g, '</table></div>');
+      } catch (e) { return safe.replace(/\n/g, '<br>'); }
+    }
     function setCoach({ msg, section, hint, actions, inputVisible, thinking, showNudge, where, move, moveHtml, step, role, supply, ack }) {
       if (!thinking && isBoardAsk(msg)) msg = '';   // the question is on the board — once
       coachMsg.classList.toggle('thinking', !!thinking);
-      coachMsg.textContent = msg || '';
+      if (thinking) coachMsg.textContent = msg || ''; else coachMsg.innerHTML = msg ? qMd(msg) : '';
       coachMsg.classList.toggle('ask', !thinking && !!msg && !!(state.brief));
       coachSection.textContent = section || '';
       if (role) { lastRoleText = role; coachRole.innerHTML = '<span class="q-role-l">This part</span>' + escHtml(role); }
@@ -2346,12 +2581,16 @@
       // The step line: "Step 2 of 5 · NUMBERS" while a scaffold step is live.
       const st = step === false ? null : (step || currentStepInfo());
       coachStepEl.innerHTML = st ? 'Step ' + st.n + ' of ' + st.N + ' · <span class="q-step-kind">' + escHtml(STEP_KIND_LABEL[st.kind] || st.kind) + '</span>' : '';
-      coachHint.textContent = hint || '';
-      if (!thinking && state.pendingDotLine) { coachHint.textContent = (hint ? hint + ' ' : '') + state.pendingDotLine; state.pendingDotLine = null; }
-      coachWhere.textContent = where === false ? '' : (typeof where === 'string' ? where : whereText(whereInfo()));
+      coachHint.innerHTML = hint ? qMd(hint) : '';
+      if (!thinking && state.pendingDotLine) { coachHint.innerHTML = qMd((hint ? hint + ' ' : '') + state.pendingDotLine); state.pendingDotLine = null; }
+      // The part is named ONCE, at the top of the teaching board (Sarah, 17 Aug:
+      // "also written here too"). The coach card is Q's talk, not a header — so
+      // it never repeats "Part n of N — label", whoever passes it in.
+      const wLine = where === false ? '' : (typeof where === 'string' ? where : whereText(whereInfo()));
+      coachWhere.textContent = wLine === whereText(whereInfo()) ? '' : wLine;
       coachWhere.classList.toggle('has-role', !!(coachWhere.textContent && !role && (planFor(state.currentCriterionId) || {}).role));
       coachWhere.title = coachWhere.classList.contains('has-role') ? 'Tap to re-read what this part asks of you' : '';
-      if (moveHtml) coachMove.innerHTML = moveHtml; else coachMove.textContent = move || ack || '';
+      if (moveHtml) coachMove.innerHTML = moveHtml; else { const mv = move || ack || ''; coachMove.innerHTML = mv ? qMd(mv) : ''; }
       renderScore();
 
       coachNudge.classList.toggle('hidden', !showNudge);
@@ -2711,14 +2950,43 @@
         const d = s.digest;
         if (!d && s.isBrief) return `<div class="bb-src" data-src="__brief"><div class="bb-src-head">📖 The story the questions are about</div><div class="bb-src-wait">Q is pulling the scenario out of the brief for you… <button type="button" class="q-btn bb-src-retry" data-src="__brief">Read it now</button></div></div>`;
         if (!d) return `<div class="bb-src" data-src="${esc(s.name)}"><div class="bb-src-head">📎 ${esc(s.name)}</div><div class="bb-src-wait">Q is reading this for you — the plain version lands here in a moment. <button type="button" class="q-btn bb-src-retry" data-src="${esc(s.name)}">Read it now</button></div></div>`;
-        const people = (d.people || []).length ? `<div class="bb-src-sec"><span class="bb-src-lab">Who</span><ul>${d.people.map(p => `<li><b>${esc(p.who)}</b> — ${esc(p.what)}</li>`).join('')}</ul></div>` : '';
-        const numbers = (d.numbers || []).length ? `<div class="bb-src-sec"><span class="bb-src-lab">Numbers to hand</span><div class="bb-src-nums">${d.numbers.map(n => `<span class="bb-num"><b>${esc(n.value)}</b> ${esc(n.label)}</span>`).join('')}</div></div>` : '';
-        const problems = (d.problems || []).length ? `<div class="bb-src-sec"><span class="bb-src-lab">What's going wrong / to decide</span><ul>${d.problems.map(p => `<li>${esc(p)}</li>`).join('')}</ul></div>` : '';
+        // THE FACT CARD. Title, the name big, what it is, the numbers as tiles,
+        // pros and cons side by side, who's in it — all points. The paragraph
+        // folds away and the original is one press (Sarah, 17 Aug).
+        // Digests made before `name`/`kind`/`strengths` existed simply don't
+        // show those rows — nothing is re-read, nothing costs a call.
+        const bold = x => esc(x).replace(/((?:£|\$|€)\s?\d[\d,.]*[kKmM]?|\b\d[\d,.]*%|\b\d[\d,.]*\b)/g, '<b>$1</b>');
+        const nm = String(d.name || '').trim();
+        const kind = String(d.kind || '').trim();
+        const head = nm
+          ? `<span class="fc-lab">${s.isBrief ? '📖 Case study' : '📎 Case study'}</span>
+             <div class="fc-name">${esc(nm)}</div>
+             ${kind ? `<div class="fc-kind">${esc(kind)}</div>` : (d.whatItIs ? `<div class="fc-kind">${esc(d.whatItIs)}</div>` : '')}`
+          : `<span class="fc-lab">${s.isBrief ? '📖 Case study' : '📎 Case study'}</span>
+             <div class="fc-kind" style="font-size:13px;color:var(--text);font-weight:600">${esc(d.whatItIs || s.name)}</div>`;
+        const stats = (d.numbers || []).length
+          ? `<div class="fc-stats">${d.numbers.map(n => `<span class="fc-stat"><b>${esc(n.value)}</b><span>${esc(n.label)}</span></span>`).join('')}</div>` : '';
+        const pros = (d.strengths || []).length
+          ? `<div class="fc-col fc-pro"><span class="fc-col-h">Pros</span><ul>${d.strengths.map(x => `<li>${bold(x)}</li>`).join('')}</ul></div>` : '';
+        const cons = (d.problems || []).length
+          ? `<div class="fc-col fc-con"><span class="fc-col-h">Cons</span><ul>${d.problems.map(x => `<li>${bold(x)}</li>`).join('')}</ul></div>` : '';
+        const proscons = (pros || cons) ? `<div class="fc-pc">${pros}${cons}</div>` : '';
+        const people = (d.people || []).length
+          ? `<div class="bb-src-sec"><span class="bb-src-lab">Who</span><ul>${d.people.map(p => `<li><b>${esc(p.who)}</b> — ${esc(p.what)}</li>`).join('')}</ul></div>` : '';
+        const story = String(d.theStory || '').trim()
+          ? `<details class="fc-more"><summary>The whole story</summary>${storyPointsHtml(d.theStory)}${d.useIt ? `<div class="bb-src-use">${esc(d.useIt)}</div>` : ''}</details>` : '';
         return `<div class="bb-src" data-src="${esc(s.name)}">
-          <div class="bb-src-head">${s.isBrief ? '📖' : '📎'} ${esc(d.whatItIs || s.name)}</div>
-          ${storyPointsHtml(d.theStory)}
-          ${people}${numbers}${problems}
-          ${d.useIt ? `<div class="bb-src-sec"><span class="bb-src-lab">Use it for</span><div class="bb-src-use" style="margin-top:0">${esc(d.useIt)}</div></div>` : ''}
+          ${head}
+          ${stats ? '<div class="fc-rule"></div>' + stats : ''}
+          ${proscons ? '<div class="fc-rule"></div>' + proscons : ''}
+          ${people ? '<div class="fc-rule"></div>' + people : ''}
+          <div class="fc-rule"></div>
+          <div class="fc-acts">
+            <button type="button" class="q-btn fc-open" data-src="${esc(s.isBrief ? '__brief' : s.name)}">Open the original</button>
+            ${(nm && (d.strengths || []).length) ? '' : `<button type="button" class="q-btn quiet bb-src-retry" data-src="${esc(s.isBrief ? '__brief' : s.name)}" title="Q reads the document again and fills in the card — this makes one call">Re-read for the card</button>`}
+            ${story ? '' : (d.useIt ? `<span class="bb-src-use">${esc(d.useIt)}</span>` : '')}
+          </div>
+          ${story}
         </div>`;
       }).join('');
     }
@@ -2726,11 +2994,39 @@
       const el = document.getElementById('bb-sources'); if (!el) return;
       el.innerHTML = sourceDigestsHtml();
     }
+    // "Open the original" — the document's own words, in a floating panel on a
+    // SOLID surface (no dimmed scrim). Fetched only when asked for, so the page
+    // never carries the whole document around (Sarah, 17 Aug).
+    function closeOriginal() { const p = document.getElementById('orig-panel'); if (p) p.remove(); }
+    function showOriginal(title, text) {
+      closeOriginal();
+      const p = document.createElement('div');
+      p.id = 'orig-panel';
+      p.innerHTML = `<div class="op-head"><span class="op-title"></span><button type="button" class="op-x" title="Close">✕</button></div><div class="op-body"></div>`;
+      p.querySelector('.op-title').textContent = title || 'The original';
+      p.querySelector('.op-body').textContent = text || '';
+      p.querySelector('.op-x').addEventListener('click', closeOriginal);
+      document.body.appendChild(p);
+    }
+    document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeOriginal(); });
+    document.addEventListener('click', async (e) => {
+      const b = e.target.closest('.fc-open'); if (!b) return;
+      e.preventDefault();
+      const was = b.textContent; b.disabled = true; b.textContent = 'Opening…';
+      try {
+        const d = await api('/writer/source/original', { name: b.dataset.src }, { timeoutMs: 30000 });
+        showOriginal(d.name, d.text);
+      } catch (err) {
+        showOriginal('Could not open it', 'I could not fetch the original just now — ' + shortCause(err) + '. The fact card above is what I read from it.');
+      } finally { b.disabled = false; b.textContent = was; }
+    });
     document.addEventListener('click', async (e) => {
       const b = e.target.closest('.bb-src-retry'); if (!b) return;
       e.preventDefault(); b.disabled = true; b.textContent = 'Reading…';
       try {
-        if (b.dataset.src === '__brief') { await fetchBriefScenario(); return; }
+        // A card already showing a story is a RE-read (she pressed "Re-read for
+        // the card"), so it must bypass the server's cache or nothing changes.
+        if (b.dataset.src === '__brief') { await fetchBriefScenario(!!(state.brief && state.brief.scenario && state.brief.scenario.theStory)); return; }
         const d = await api('/writer/source/digest', { name: b.dataset.src }, { timeoutMs: 60000 });
         state.sources = (state.sources || []).map(s => s.name === d.name ? { ...s, digest: d.digest } : s);
         refreshSourceDigests();
@@ -2739,11 +3035,11 @@
     // A brief read before the scenario existed: one small call pulls the story
     // out of the stored brief text. Once per session, remembered either way.
     let scenarioFetching = false;
-    async function fetchBriefScenario() {
+    async function fetchBriefScenario(force) {
       if (!state.brief || scenarioFetching) return;
       scenarioFetching = true;
       try {
-        const d = await api('/writer/brief/scenario', {}, { timeoutMs: 90000 });
+        const d = await api('/writer/brief/scenario', force ? { force: true } : {}, { timeoutMs: 90000 });
         state.brief.scenario = d.scenario || null;
         state.brief.scenarioChecked = true;
         refreshSourceDigests();
@@ -4155,7 +4451,7 @@
         const on = c.id === cid ? ' on' : '';
         const cov = state.coverage[c.id] || 'none';
         return `<button type="button" class="tb-part${on}" data-part-id="${escHtml(c.id)}" data-cov="${cov}" title="${escHtml(criterionLabel(c))}">Q${i + 1}</button>`;
-      }).join('')}<span class="tb-partlab">${escHtml(criterionLabel(cs[Math.max(0, cs.findIndex(c => c.id === cid))] || cs[0]))}</span></div>` : '';
+      }).join('')}</div>` : '';   // no label beside Q1–Q4 — the part is already named at the top of the board (Sarah, 17 Aug)
       const ask = liveAsk(cid, here) || plan.role || '';
       return `<div class="tb-agenda" id="tb-agenda">`
         + (ask ? `<div class="tb-now${askIsFresh(ask) ? ' fresh' : ''}" id="tb-now">${escHtml(ask)}</div>` : '')
@@ -4428,6 +4724,7 @@
     let wbFindDot = null;   // the ring the find was opened from — "Go to the sentence →" puts the caret there
     async function findToWhiteboard({ sentence, criterionId, want, title, forLabel, dot }) {
       wbFindDot = dot || null;
+      state.wbReport = null; state.wbLesson = null;   // a find takes the display over
       state.wbFind = { title: title || 'From the case', forLabel: forLabel || '', sentence: sentence || '', items: [], todo: [], nudge: '', busy: true, note: '' };
       showPanel('wb'); revealPanel('wb'); renderWhiteboard();
       try {
@@ -4458,8 +4755,58 @@
       const go = (wbFindDot || f.sentence) && f.items.length ? `<button type="button" class="q-btn primary" id="wb-find-go">Go to the sentence →</button>` : '';
       return head + facts + todo + note + nudge + `<div class="wb-hint">${go} <a href="#" id="wb-find-back">← back to the step</a></div>`;
     }
+    // A REPORT ON THE WHITEBOARD — Q's display channel, the way QB2 sends a
+    // quote to the display instead of typing it into the chat (Sarah, 17 Aug:
+    // "for this amount of feedback Q should be using the whiteboard as a
+    // display like QB2 does"). Anything with several points to make goes here,
+    // one row per point, and the coach card keeps ONE line + a way in.
+    function wbReportHtml(r) {
+      const rows = (r.rows || []).map(x => `<div class="wb-rep-row">${x.head ? `<b>${escHtml(x.head)}</b>` : ''}<span>${escHtml(x.text || '')}</span></div>`).join('');
+      return `<div class="wb-ask"><span class="wb-step">${escHtml(r.kicker || 'Q has read your page')}</span>${escHtml(r.title || '')}</div>`
+        + (r.lead ? `<div class="wb-say">${escHtml(r.lead)}</div>` : '')
+        + (rows ? `<div class="wb-rep">${rows}</div>` : '')
+        + `<div class="wb-hint"><a href="#" id="wb-rep-back">← back to the step</a></div>`;
+    }
+    // SAY AND SHOW — the two-message pattern (Sarah, 17 Aug: "he creates 2
+    // messages. one that's formatted on the display and the response to you on
+    // the chat so you don't feel alone"). The rows go on the display; this
+    // returns the sentence Q adds to what he was ALREADY saying, so the chat
+    // stays his voice and never becomes a bare pointer. One item is not a
+    // display — he just says it.
+    function reportToWhiteboard({ title, kicker, lead, rows, say }) {
+      if (!rows || !rows.length) return '';
+      if (rows.length === 1) return String(lead || title || '');
+      state.wbReport = { title, kicker, lead, rows };
+      state.wbFind = null; state.wbLesson = null;
+      showPanel('wb'); revealPanel('wb'); renderWhiteboard();
+      return say || `I've listed them on the whiteboard so you can work through them one at a time.`;
+    }
+    // A LESSON IS A TEACHING ARTEFACT — it belongs on the board he teaches on,
+    // not stuffed under the chat (Sarah, 17 Aug: "this should be on the
+    // whiteboard"). Same markup the teach step already uses.
+    function wbLessonHtml(l) {
+      const more = (l.watch || (l.links || []).length)
+        ? `<div class="ql-more"><span>If you want more:</span>${l.watch ? `<button type="button" class="q-watch" data-watch="${escHtml(l.watch)}"><span class="ico">▶</span>Watch a short explainer</button>` : ''}${(l.links || []).map(x => `<a href="${escHtml(x.url)}" target="_blank" rel="noopener">${escHtml(/youtube/i.test(x.name) ? 'open on YouTube' : x.name)}</a>`).join('')}</div>`
+        : '';
+      return `<div class="wb-ask"><span class="wb-step">The idea you need first</span>${escHtml(l.term || 'A quick lesson')}</div>`
+        + `<div class="wb-lesson">${escHtml(l.lesson || '')}${l.example ? `<span class="wb-eg">e.g. ${escHtml(l.example)}</span>` : ''}</div>`
+        + more
+        + `<div class="wb-hint">Read it, then press <b>Got it</b> on Q's card — he'll ask you to use it.</div>`;
+    }
     function renderWhiteboard() {
       if (!wbOpen()) return;
+      if (state.wbLesson) {
+        wbTitle.textContent = '▦ Whiteboard · ' + (state.wbLesson.term || 'a quick lesson');
+        wbBody.innerHTML = wbLessonHtml(state.wbLesson);
+        return;
+      }
+      if (state.wbReport) {
+        wbTitle.textContent = '▦ Whiteboard · ' + (state.wbReport.title || 'Q has read your page');
+        wbBody.innerHTML = wbReportHtml(state.wbReport);
+        const back = document.getElementById('wb-rep-back');
+        if (back) back.addEventListener('click', (e) => { e.preventDefault(); state.wbReport = null; renderWhiteboard(); });
+        return;
+      }
       if (state.wbFind) {
         wbTitle.textContent = '▦ Whiteboard · from the case';
         wbBody.innerHTML = wbFindHtml(state.wbFind);
@@ -4701,12 +5048,25 @@
         const gotIt = () => {
           // The lesson moves to the board history (once); the apply ask is the ask now.
           appendBoardItem({ type: 'explain', text: (d.term ? d.term + ' — ' : '') + d.lesson + (d.example ? ' e.g. ' + d.example : ''), links, watch: terms[0] || d.term || ask, stepId: info ? info.step.id : null });
+          state.wbLesson = null; renderWhiteboard();
           if (info) presentStep(info.cid, info.idx, { ack: 'Now apply it.' });
           else setCoach({ msg: applyAsk, hint: 'Say it in your own words here.', inputVisible: true, showNudge: true });
           coachInput.focus();
         };
-        setCoach({ msg: '', section: 'A QUICK LESSON', where: whereText(whereInfo()), hint: 'Then I\'ll ask you to apply it — nothing from the lesson goes on your page.', inputVisible: false, showNudge: false, actions: [{ label: 'Got it — ask me again →', primary: true, big: true, onClick: gotIt }] });
-        coachActions.insertAdjacentHTML('afterbegin', lessonHtml({ term: d.term, lesson: d.lesson, example: d.example, links, watch: terms[0] || d.term || ask }));
+        // The LESSON goes on the whiteboard; Q stays on his card and SAYS
+        // something. He used to be handed msg:'' with the lesson bolted on
+        // underneath — present on screen, absent as a person (Sarah, 17 Aug:
+        // "Q feels unavailable, absent").
+        state.wbReport = null; state.wbFind = null;
+        state.wbLesson = { term: d.term, lesson: d.lesson, example: d.example, links, watch: terms[0] || d.term || ask };
+        showPanel('wb'); revealPanel('wb'); renderWhiteboard();
+        setCoach({
+          msg: d.term ? `Right — the idea you need first is **${d.term}**. I've put it on the whiteboard.` : `Let me give you the idea behind that first — it's on the whiteboard.`,
+          where: whereText(whereInfo()),
+          hint: 'Have a read. Then I\'ll ask you to use it — nothing from the lesson goes on your page.',
+          inputVisible: true, showNudge: false,
+          actions: [{ label: 'Got it — ask me again →', primary: true, big: true, onClick: gotIt }],
+        });
       } catch (e) {
         setCoach({ msg: ask, hint: 'Couldn\'t get the lesson just now (' + shortCause(e) + ') — try again.', inputVisible: true, showNudge: true, actions: info ? stepActions(info.cid, info.step, stepStateOf(info.cid, info.step.id)) : [] });
       } finally { teachInFlight = false; }
@@ -4906,7 +5266,6 @@
         // in and left there come off it, and he says why in one line.
         applyExpectations(d);
         const misused = Array.isArray(d.termsMisused) ? d.termsMisused : [];
-        if (misused.length) appendBoardItem({ type: 'note', label: 'words', text: misused.map(m => '"' + m.term + '" — ' + m.why).join(' · '), criterionId: state.currentCriterionId });
         if (Array.isArray(d.termsUsed) && d.termsUsed.length) appendBoardItem({ type: 'note', label: 'used', text: 'Used properly: ' + d.termsUsed.join(', ') + '.', quiet: true, criterionId: state.currentCriterionId });
 
         // WHERE WE ARE: when Q moves to a new criterion, say so in one line.
@@ -4922,7 +5281,18 @@
         // After a PAUSE: his one-line reaction to the writing itself, then the
         // words he is not having, then the ask. That is him watching her write.
         const reaction = trigger === 'pause' && d.reaction ? String(d.reaction).trim() : '';
-        const wordsLine = misused.length ? misused.map(m => '"' + m.term + '" is on the page but not used — ' + m.why).join(' ') : '';
+        // The words he isn't having go on the WHITEBOARD, one row each — they
+        // used to be join(' ')-ed into one run-on paragraph AND appended to the
+        // board, so the same list appeared twice and the coach card became a
+        // wall (Sarah, 17 Aug). Now: the display holds them, the chat keeps one
+        // line that says where to look.
+        const wordsLine = misused.length ? reportToWhiteboard({
+          title: 'Words to earn',
+          kicker: 'On your page but not doing any work',
+          lead: `"${misused[0].term}" is on the page but not used — ${misused[0].why}`,
+          rows: misused.map(m => ({ head: m.term, text: m.why })),
+          say: `There are ${misused.length} words on your page that aren't doing any work yet — I've put them on the whiteboard with what each one still needs from you.`,
+        }) : '';
         const ack = opts.ack ? String(opts.ack) : (d.acknowledge && trigger === 'answer' ? String(d.acknowledge) : [reaction, wordsLine].filter(Boolean).join(' '));
         // Mid-step, a pause is a READ, not a new ask: the step's own question
         // stays on the card word for word — his reaction/words line goes above
@@ -5027,10 +5397,27 @@
       if (QUESTION_ANYWHERE_RE.test(t) && words <= 30 && !/^(my|our|the|we|i think|i believe|they|it|there)\b/i.test(t)) return 'question';
       const info = currentStepInfo();
       const kind = info ? info.step.kind : null;
-      // A list item / a number / a pro or con is normally short — never ambiguous.
+      // A list item / a number / a pro or con IS the answer — that step has a
+      // slot waiting and anything typed fills it.
       if (kind === 'list' || kind === 'numbers' || kind === 'proscons') return 'answer';
-      if (words <= 3 && !CLEAR_SHORT_RE.test(t)) return 'ambiguous';
-      return 'answer';
+      // Short commands still DRIVE the step rather than starting a conversation
+      // about themselves — "yes", "done", "next", "skip" typed at a live step.
+      if (info && words <= 3 && CLEAR_SHORT_RE.test(t)) return 'answer';
+      // EVERYTHING ELSE IS A CHAT. Sarah, 17 Aug: "he's answering like a robot.
+      // I didn't ask a question. I said I haven't studied and want to see if you
+      // can get me an A. it's not behaving like a chat."
+      //
+      // This used to fall through to 'answer', so a remark that wasn't shaped
+      // like a question got pushed through the scaffold and answered with "add
+      // that here, then Enter". The box gated the way INTO a chat on sentence
+      // shape, which is not something a person should have to think about.
+      //
+      // Now: no structured step waiting ⇒ she is talking to him. Q decides
+      // afterwards whether what she said was in fact his step's answer — that
+      // is the `answersStep` flag in chatWithQ — so nothing is lost by
+      // listening first. The 'ambiguous' "is that an answer or a question?"
+      // prompt goes with it: it only ever existed because of this guess.
+      return 'chat';
     }
     // The current ask, restated (so Q can go "back to it").
     function currentAskText() {
@@ -5134,6 +5521,7 @@
           state.chatMode = true;
         }
         if (d.board && Array.isArray(d.board.items) && d.board.items.length) {
+          state.wbReport = null; state.wbLesson = null;   // a fresh find replaces what's on the display
           state.wbFind = { title: d.board.title || 'From the case', forLabel: '', sentence: '', items: d.board.items, todo: d.board.todo || [], nudge: '', busy: false, note: '' };
           showPanel('wb'); revealPanel('wb'); renderWhiteboard();
         }
@@ -5178,17 +5566,11 @@
       const kind = intent || (state.awaitingWord ? 'answer' : classifyCoachInput(text));
       if (kind === 'progress') { showProgress(); return; }
       if (kind === 'question') { await answerStudentQuestion(text); return; }
-      if (kind === 'ambiguous') {
-        setCoach({
-          msg: 'Is that your answer, or a question for me?', hint: '"' + text + '"',
-          actions: [
-            { label: 'That\'s my answer', primary: true, onClick: () => submitCoachText(text, { intent: 'answer' }) },
-            { label: 'A question for Q', onClick: () => submitCoachText(text, { intent: 'question' }) },
-          ],
-          inputVisible: true, showNudge: false,
-        });
-        return;
-      }
+      // She said something that isn't filling a slot — so talk to her. Q reads
+      // it with the brief, the plan, the page and the history, and if it turns
+      // out to have BEEN his step's answer he says so (answersStep) and it goes
+      // through the step from inside chatWithQ. Listening first costs nothing.
+      if (kind === 'chat') { await chatWithQ(text); return; }
 
       // A scaffold step is live: the answer fills the scaffold (list item,
       // number, pro/con, or the argument) — see handleStepInput.
@@ -7317,7 +7699,7 @@
             const byId = new Map(d.labels.map(x => [x.id, x.label]));
             state.brief.criteria.forEach(c => { if (byId.get(c.id)) c.label = byId.get(c.id); });
             setBrief(state.brief); renderBoard(); renderCoverage();
-            const cw = document.getElementById('coach-where'); if (cw && cw.textContent) cw.textContent = whereText(whereInfo());
+            // (the part line lives on the teaching board only — nothing to refresh on the coach card)
           }).catch(() => {});
         }
         // Scaffolded coaching: the plans (server-made), the filled scaffolds,

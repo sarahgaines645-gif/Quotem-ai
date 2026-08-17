@@ -2663,7 +2663,10 @@
   // literal text, then marked turns #, **, lists and tables into real
   // formatting. Tables get a scroll wrapper so the card never squashes them.
   function renderQMarkdown(text) {
-    const safe = esc(String(text == null ? '' : text));
+    // A line-leading "> " becomes "&gt; " when escaped, so marked never saw a
+    // blockquote and Q printed a literal ">" (Sarah, 17 Aug). Put that one
+    // character back — a bare ">" cannot open a tag, so escaping stays safe.
+    const safe = esc(String(text == null ? '' : text)).replace(/^&gt;/gm, '>');
     if (typeof marked === 'undefined' || !marked.parse) return safe.replace(/\n/g, '<br>');
     try {
       return marked.parse(safe, { breaks: true, gfm: true })
