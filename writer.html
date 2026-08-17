@@ -844,7 +844,7 @@
     .tb-text p { margin: 0 0 6px; }
     .tb-text p:last-child { margin-bottom: 0; }
     .tb-qtext { font-weight: 500; }
-    .tb-item.tb-fresh { background: rgba(233,30,99,0.10); box-shadow: inset 3px 0 0 var(--accent); padding: 8px 10px 8px 12px; margin: 0 -4px; border-radius: 8px; }
+    .tb-item.tb-fresh { box-shadow: var(--neu-inset-sm); padding: 8px 10px 8px 12px; margin: 0 -2px; border-radius: 8px; }
     .tb-atext { color: var(--text); }
     .tb-ntext { color: var(--text-muted); }
     .tb-earlier .tb-items { gap: 8px; }
@@ -1042,7 +1042,10 @@
        it; the whiteboard is where Q teaches), and it wears the accent wash
        from the moment Q asks until the first thing she types — on the page,
        in the coach box, or on the whiteboard. */
-    .tb-now.fresh { background: rgba(233,30,99,0.10); box-shadow: inset 3px 0 0 var(--accent); padding: 8px 10px 8px 12px; margin: 0 -4px 2px; }
+    /* Neumorphic, not a wash (Sarah, 17 Aug: "this app is neumorphic, this breaks the design style"):
+       the fresh ask sits in an inset well; the accent is a dot, not a fill. */
+    .tb-now.fresh { box-shadow: var(--neu-inset-sm); padding: 8px 10px 8px 12px; margin: 0 -2px 2px; }
+    .tb-now.fresh::before { content: '● '; color: var(--accent); font-size: 11px; vertical-align: 2px; }
     .coach-card .q-msg:empty { display: none; }
     .tb-track { display: flex; align-items: center; gap: 8px; margin-top: 8px; }
     .st-beads { display: inline-flex; gap: 5px; align-items: center; }
@@ -1269,7 +1272,7 @@
        part — nothing else on it. Hover / long-press a word → a little popup
        card with the meaning + one everyday example. */
     .tb-expect { margin: 0 0 20px; padding: 12px 14px; border-radius: 12px; box-shadow: var(--neu-raised-sm); }
-    .tb-cover { position: relative; margin: 12px 0 4px; padding: 10px 0 0; border-top: 1px solid rgba(0,0,0,0.06); }
+    .tb-cover { position: relative; margin: 16px 0 4px; padding: 0; }   /* space is the divider — no lines */
     .cv-n { margin-left: auto; font-size: 9px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-faint); }
     .tb-cover .ex-title { display: block; font-size: 9px; font-weight: 700; letter-spacing: 0.09em; text-transform: uppercase; color: var(--text-faint); margin-bottom: 6px; }
     .tb-cover .ex-part { font-weight: 500; letter-spacing: 0.02em; text-transform: none; margin-left: 6px; }
