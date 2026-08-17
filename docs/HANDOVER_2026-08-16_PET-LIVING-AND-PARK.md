@@ -118,3 +118,27 @@ them: soft shading (a second darker ellipse on body/head), an idle "sit → stan
 stretch" cycle, walk (slower gait) vs run, a shake, a roll-over, tail visible in
 front view for all kinds, accessories drawn in the same vector style (currently
 still the item PNGs on top).
+
+## 17 Aug (later) — APPY IS THE CHARACTER (`a95a980`)
+
+My drawn dog/hamster/capybara were rejected ("scary", "creepy"). Then Sarah:
+*"what about appy? he's the original thing we made to represent the apps."*
+
+Appy (`Quoteapp/client/public/assets/appy-idle.jpg`, `-happy`, `-shocked`,
+`-talking`, `-blink-half/full`; driven by `client/src/components/AppyAvatar.jsx`
+as swapped JPEGs + a CSS breathe) is a **white fluffy BALL**: huge glossy eyes
+with two highlights and lashes, tiny pink nose, tiny mouth, blush, two little
+pink feet, no anatomy at all.
+
+**The lesson: a ball is the right shape.** It squashes, bounces, rolls and
+wobbles — everything code does well — and it hits the baby schema without
+needing anatomy. The revise pets are now Appy's family, drawn in code:
+snow / butter / lilac (the saved `kind` keys puppy/hamster/capybara are kept so
+existing pets still load). Fur = 96-point fine serrated edge + 3-pass halo + 34
+wisps + ambient shadow; face low on the ball; every act is squash-and-stretch.
+Friends spawn in lanes and push apart so they never stack.
+
+If a bought character is ever wanted: the industry route is **Rive** (Duolingo's
+tool) — state machines, ~50KB .riv files, web runtime by script tag; community
+files are CC BY 4.0 (free, credit required), marketplace files a few pounds.
+**Nothing has been spent.**
