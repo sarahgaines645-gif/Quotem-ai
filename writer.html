@@ -417,6 +417,9 @@
     .q-popcard .pc-line { margin-bottom: 3px; }
     .q-popcard .pc-eg { color: var(--text-muted); margin-bottom: 4px; }
     .q-popcard .pc-nudge { color: var(--text-muted); margin-top: 4px; }
+    /* Where the card can go: her notes, the display, or (the name only) her page. */
+    .q-popcard .pc-acts { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 9px; padding-top: 8px; border-top: 1px solid rgba(0,0,0,0.07); }
+    .q-popcard .pc-acts .q-btn { font-size: 10px; padding: 4px 9px; }
     /* Sarah, 17 Aug: "these instructions need to stand out. so maybe in pink." */
     .q-popcard .pc-do { color: var(--accent); font-weight: 700; margin-top: 8px; line-height: 1.45; }
     .q-popcard .pc-ideas { margin: 6px 0 0 14px; padding: 0; }
@@ -446,7 +449,16 @@
     .q-tool-out:empty { display: none; }
     .q-tool-out { font-size: 11px; color: var(--text-muted); margin-bottom: 6px; }
     .q-tool-head { font-weight: 700; font-size: 12px; margin-bottom: 4px; }
-    .q-tool-flag { font-size: 9px; font-weight: 600; color: var(--accent); text-transform: uppercase; letter-spacing: 0.05em; margin-left: 4px; }
+    .q-tool-flag {
+      font-size: 9px; font-weight: 700; color: var(--text); text-transform: uppercase;
+      letter-spacing: 0.05em; margin-left: 6px; border: none; cursor: pointer;
+      background: var(--bg); box-shadow: var(--neu-raised-xs);
+      border-radius: 10px; padding: 3px 8px;
+      font-family: 'Space Grotesk', sans-serif; vertical-align: 1px;
+    }
+    .q-tool-flag:hover { box-shadow: var(--neu-raised-sm); }
+    .q-tool-flag:active { box-shadow: var(--neu-inset-sm); }
+    .q-tool-flag.busy { opacity: 0.6; cursor: wait; }
     .q-tool-src { font-size: 9px; color: var(--text-faint); margin-left: 4px; }
     .q-tool-points { margin: 0 0 4px 16px; padding: 0; }
     .q-tool-points li { margin-bottom: 2px; }
@@ -5047,6 +5059,34 @@
       const cl = document.getElementById('wb-clear');
       if (cl) cl.addEventListener('click', () => { state.wbDoc = null; state.wbEditing = false; persist({ wbDoc: null }); renderWhiteboard(); });
     }
+    // "find the source →" on a flagged claim: Q runs the same verified lookup
+    // Auto cite uses (OpenAlex / CrossRef, real metadata, Harvard in code) and
+    // puts what he finds on the display. He does the checking, not her.
+    document.addEventListener('click', async (e) => {
+      const b = e.target.closest('.q-tool-flag[data-verify]'); if (!b) return;
+      e.preventDefault();
+      const claim = b.dataset.verify || '';
+      if (!claim || b.classList.contains('busy')) return;
+      b.classList.add('busy'); const was = b.textContent; b.textContent = 'looking…';
+      try {
+        const d = await api('/writer/cite', { sentence: claim }, { timeoutMs: 60000 });
+        const cands = Array.isArray(d.candidates) ? d.candidates : [];
+        if (!cands.length) {
+          showOnWhiteboard('Source for: ' + claim, '##### Nothing verified\n\n' + (d.note || 'I could not find a source I can verify for that.') + '\n');
+        } else {
+          const md = ['##### Sources for', '', claim, '', '---', ''].concat(
+            cands.map(c => {
+              const who = (c.authors || []).map(a => (a && (a.family || a.name)) || '').filter(Boolean).slice(0, 3).join(', ');
+              return '- **' + (c.title || '') + '**' + (who ? ' — ' + who : '') + (c.year ? ' (' + c.year + ')' : '')
+                + (c.strength ? '  \n  ' + String(c.strength).toUpperCase() + (c.backs ? ' — backs: ' + c.backs : '') : '');
+            })
+          ).join('\n');
+          showOnWhiteboard('Sources', md);
+        }
+      } catch (err) {
+        showOnWhiteboard('Source lookup', '##### Could not check it\n\n' + shortCause(err) + '\n');
+      } finally { b.classList.remove('busy'); b.textContent = was; }
+    });
     // A tick flips the token in the SOURCE at its exact offset, so it persists.
     document.addEventListener('click', (e) => {
       const b = e.target.closest('.wb-cb[data-cb]'); if (!b || !state.wbDoc) return;
@@ -7226,11 +7266,71 @@
     function toolHelpHtml(tool, d) {
       const listy = tool === 'synonyms' || tool === 'dictionary' || tool === 'facts';
       const points = (d.points || []).slice(0, listy ? 8 : 3);
-      return '<div class="pc-head">' + escHtml(d.headline || '') + (d.flagged ? ' <span class="q-tool-flag" title="From Q\'s own knowledge, not your uploads — check it">check this</span>' : '') + (d.fromSource ? ' <span class="q-tool-src">from ' + escHtml(d.fromSource) + '</span>' : '') + '</div>'
+      // Sarah, 17 Aug: "why are we telling users that this might be wrong?"
+      // She cannot check it — not knowing the subject is why she is here. So a
+      // flag is never a warning handed back to her; it is Q going and finding
+      // the source himself, with the same verified lookup Auto cite uses.
+      return '<div class="pc-head">' + escHtml(d.headline || '') + (d.flagged ? ' <button type="button" class="q-tool-flag" data-verify="' + escHtml(d.headline || '') + '" title="Q will find the real source for this">find the source →</button>' : '') + (d.fromSource ? ' <span class="q-tool-src">from ' + escHtml(d.fromSource) + '</span>' : '') + '</div>'
         + (points.length ? (listy ? '<ul class="pc-list">' + points.map(p => '<li>' + escHtml(p) + '</li>').join('') + '</ul>' : points.map(p => '<div class="pc-line">' + escHtml(p) + '</div>').join('')) : '')
         + (d.example ? '<div class="pc-eg">e.g. ' + escHtml(d.example) + '</div>' : '')
-        + '<div class="pc-nudge">' + escHtml(d.nudge || 'Now say your sentence using it.') + '</div>';
+        + '<div class="pc-nudge">' + escHtml(d.nudge || 'Now say your sentence using it.') + '</div>'
+        // Sarah, 17 Aug: "these bits need an add to notes", then "there's no
+        // button to add this. Ideally we would press add to whiteboard or
+        // page." A card Q teaches from used to vanish when it closed. Now it
+        // goes somewhere: her notes, the display, or the page.
+        //
+        // → PAGE inserts the NAME only, exactly as the word buttons do. Q's
+        // explanation never goes into her essay — that is the rule the whole
+        // tool rests on. The whiteboard gets the full card, and she chooses
+        // what crosses over from there.
+        + '<div class="pc-acts">'
+        + '<button type="button" class="q-btn quiet pc-note" data-note="' + escHtml(toolCardText(d)) + '">+ Notes</button>'
+        + '<button type="button" class="q-btn quiet pc-toboard" data-kind="' + escHtml(EDIT_TOOL_LABELS[tool] || tool || 'From Q') + '" data-md="' + escHtml(toolCardMd(d)) + '">→ Whiteboard</button>'
+        + (d.headline ? '<button type="button" class="q-btn quiet pc-topage" data-term="' + escHtml(d.headline) + '">→ My page</button>' : '')
+        + '</div>';
     }
+    function toolCardText(d) {
+      return [d.headline || '', (d.points || []).join(' '), d.example ? 'e.g. ' + d.example : ''].filter(Boolean).join(' — ');
+    }
+    // The card as markdown for the display — heading, points as bullets, the
+    // example as a quote, so it renders the way anything else on the board does.
+    function toolCardMd(d) {
+      const out = [];
+      if (d.headline) out.push('## ' + d.headline);
+      if (d.fromSource) out.push('##### from ' + d.fromSource);
+      out.push('');
+      (d.points || []).forEach(p => out.push('- ' + p));
+      if (d.example) { out.push(''); out.push('> e.g. ' + d.example); }
+      if (d.nudge) { out.push(''); out.push('💡 ' + d.nudge); }
+      return out.join('\n');
+    }
+    document.addEventListener('click', (e) => {
+      const tb = e.target.closest('.pc-toboard[data-md]');
+      if (tb) {
+        e.preventDefault();
+        showOnWhiteboard(tb.dataset.kind || 'From Q', tb.dataset.md || '');
+        tb.textContent = '✓ On the board';
+        return;
+      }
+      const tp = e.target.closest('.pc-topage[data-term]');
+      if (tp) {
+        e.preventDefault();
+        try { insertTermAtCaret(tp.dataset.term); tp.textContent = '✓ On your page'; }
+        catch (_) { tp.textContent = 'Put your cursor on the page first'; }
+      }
+    });
+    // Save a tool card into her notes for the part she is on.
+    document.addEventListener('click', (e) => {
+      const b = e.target.closest('.pc-note[data-note]'); if (!b) return;
+      e.preventDefault();
+      const text = String(b.dataset.note || '').trim(); if (!text) return;
+      const cid = state.currentCriterionId || '';
+      state.wbNotes = state.wbNotes || {};
+      (state.wbNotes[cid] = state.wbNotes[cid] || []).push(text);
+      persist({ wbNotes: state.wbNotes });
+      try { renderWhiteboard(); } catch (_) {}
+      b.textContent = '✓ In your notes'; b.disabled = true;
+    });
     window.__qwriterTools = { showToolPop, hideToolPop, toolHelpHtml, runTool: (t, it, w) => runTool(t, it, w) };
     // A tool: one small structured call → help that leads them to write it.
     async function useTool(tool, it) {
