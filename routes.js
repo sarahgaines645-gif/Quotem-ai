@@ -1522,7 +1522,7 @@ router.post('/writer/mark', requirePerson, express.json({ limit: '2mb' }), write
 // The student's context for Q-as-coach: the brief, the part, the question we
 // are on, the page, the case, the sources, the expected words. Compact — Q
 // reads it, he does not recite it.
-function writerCoachContext({ t, cid, plan, stepId, docText, stored, ask, partWords, stepItems }) {
+function writerCoachContext({ t, cid, plan, stepId, docText, stored, ask, partWords, stepItems, furniture }) {
     const nl2 = String.fromCharCode(10);
     const L = [];
     const brief = t.brief || {};
@@ -1574,6 +1574,22 @@ function writerCoachContext({ t, cid, plan, stepId, docText, stored, ask, partWo
         L.push('What is on their page (' + page.split(/\s+/).filter(Boolean).length + ' words; ' + pn + ' essay paragraph' + (pn === 1 ? '' : 's') + ' numbered [P1]…' + (rn ? ', ' + rn + ' references numbered [R1]…' : '') + '; headings are marked; refer to paragraphs by P number and references by R number):' + nl2 + (numbered.length > 9000 ? '…' + numbered.slice(-9000) : numbered));
     }
     else L.push('Their page is empty so far.');
+    // WHAT IS ALREADY ON THE PAGE AND THE BOARD — his tabs, highlights and
+    // stickies (and hers), so he recognises them as tabs and can change or
+    // refer to them (Q's own gap, 18 Aug: 'Q needs to recognise tabs as tabs').
+    try {
+        const f = furniture && typeof furniture === 'object' ? furniture : null;
+        const tabs = f && Array.isArray(f.tabs) ? f.tabs.slice(0, 40) : [];
+        const notes = f && Array.isArray(f.notes) ? f.notes.slice(0, 40) : [];
+        const stickies = f && Array.isArray(f.stickies) ? f.stickies.slice(0, 20) : [];
+        if (tabs.length || notes.length || stickies.length) {
+            const FL = ['ALREADY PLACED (yours unless marked "hers"; to change one, call the same tool again for the same place — it replaces):'];
+            if (tabs.length) FL.push('Tabs: ' + tabs.map(x => '"' + String(x.label || '') + '" (' + String(x.colour || 'grey') + (x.text ? ', on the line "' + String(x.text).slice(0, 60) + '"' : ', ' + (x.side || 'right') + ' of [P' + x.paragraph + ']') + (x.by === 'me' ? ', hers' : '') + ')').join('; '));
+            if (notes.length) FL.push('Highlights: ' + notes.map(x => String(x.colour || 'pink') + ' "' + String(x.text || '').slice(0, 60) + '"' + (x.note ? ' — ' + String(x.note).slice(0, 80) : '')).join('; '));
+            if (stickies.length) FL.push('Stickies on the whiteboard: ' + stickies.map(x => '"' + String(x.text || '').slice(0, 80) + '" (' + String(x.colour || 'yellow') + ')').join('; '));
+            L.push(FL.join(nl2));
+        }
+    } catch (_) {}
     L.push('Reply to their next message as their tutor.');
     return L.join(nl2 + nl2);
 }
@@ -1593,7 +1609,7 @@ router.post('/writer/chat', requirePerson, express.json({ limit: '1mb' }), write
         // A ```display block in his reply is lifted out for the whiteboard.
         // The old structured chatAnswer stays as the fallback if Q is down.
         const plan = (t.plans && t.plans[cid]) || null;
-        const ctx = writerCoachContext({ t, cid, plan, stepId: b.stepId ? String(b.stepId) : null, docText: String(b.docText || ''), stored, ask: b.ask ? String(b.ask) : '', partWords: b.partWords && typeof b.partWords === 'object' ? b.partWords : null, stepItems: Array.isArray(b.stepItems) ? b.stepItems : [] });
+        const ctx = writerCoachContext({ t, cid, plan, stepId: b.stepId ? String(b.stepId) : null, docText: String(b.docText || ''), stored, ask: b.ask ? String(b.ask) : '', partWords: b.partWords && typeof b.partWords === 'object' ? b.partWords : null, stepItems: Array.isArray(b.stepItems) ? b.stepItems : [], furniture: b.furniture && typeof b.furniture === 'object' ? b.furniture : null });
         // HIS MEMORY, not the page's. The same store the general chat uses
         // (one per person, tagged by surface): the coach's own turns are the
         // history, his other conversations come as the read-only digest /chat
@@ -1681,7 +1697,7 @@ router.post('/writer/chat', requirePerson, express.json({ limit: '1mb' }), write
                   } } }
                 // His highlight_passage calls reach the page as they are — it paints them.
                 const paints = (Array.isArray(q.toolCalls) ? q.toolCalls : []).filter(c => c && (c.name === 'highlight_passage' || (c.tool === 'highlight_passage')) && c.result && c.result.painted).map(c => ({ text: c.result.text, note: c.result.note, kind: c.result.kind, colour: c.result.colour || '' }));
-                const tabs = (Array.isArray(q.toolCalls) ? q.toolCalls : []).filter(c => c && c.name === 'tab_paragraph' && c.result && c.result.tabbed).map(c => ({ paragraph: c.result.paragraph, label: c.result.label, colour: c.result.colour, side: c.result.side || 'right' }));
+                const tabs = (Array.isArray(q.toolCalls) ? q.toolCalls : []).filter(c => c && c.name === 'tab_paragraph' && c.result && c.result.tabbed).map(c => ({ paragraph: c.result.paragraph || null, text: c.result.text || '', label: c.result.label, colour: c.result.colour, side: c.result.side || 'right' }));
                 const stickies = (Array.isArray(q.toolCalls) ? q.toolCalls : []).filter(c => c && c.name === 'stick_note' && c.result && c.result.stuck).map(c => ({ text: c.result.text, colour: c.result.colour }));
                 out = { reply, display, options, paints, tabs, stickies, board: null, next: '', highlights: [], answersStep: false, via: 'q', brain, cost: turnCost };
                 if (qpid) { try { appendMessage(qpid, 'user', text, QSURF); appendMessage(qpid, 'assistant', String(q.reply), QSURF); } catch (_) {} }   // a '[page] …' turn is the page speaking for her (a pause / Continue) — kept, so he remembers what she wrote

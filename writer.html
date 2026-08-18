@@ -602,6 +602,13 @@
     .coach-card .q-chat-t ul, .coach-card .q-chat-t ol { margin: 4px 0 7px; padding-left: 17px; }
     .coach-card .q-chat-t li { margin: 3px 0; line-height: 1.5; overflow-wrap: anywhere; }
     .coach-card .q-chat-t li > p { margin: 0 0 4px; }
+    /* Colour in his chat (Sarah, 18 Aug: 'he needs formatting in his chat — colours and bullet points'): a line or a bullet that starts with 🟢 🟡 🔴 ℹ️ 💡 gets the whiteboard's coloured dot */
+    .coach-card .q-chat-t li.q-c { list-style: none; position: relative; }
+    .coach-card .q-chat-t li.q-c::before, .coach-card .q-chat-t p.q-c::before { content: ''; position: absolute; left: -15px; top: 7px; width: 9px; height: 9px; border-radius: 50%; background: var(--lc, #9aa0ad); }
+    .coach-card .q-chat-t p.q-c { position: relative; padding-left: 15px; }
+    .coach-card .q-chat-t p.q-c::before { left: 0; }
+    .coach-card .q-chat-t .q-c.ok { --lc: #28a745; } .coach-card .q-chat-t .q-c.warn { --lc: #e6a817; } .coach-card .q-chat-t .q-c.bad { --lc: var(--accent); } .coach-card .q-chat-t .q-c.info { --lc: #3b82c4; } .coach-card .q-chat-t .q-c.tip { --lc: #7c5cbf; }
+    .coach-card .q-chat-t strong { font-weight: 700; }
     .coach-card .q-chat-t code { font-family: 'Lora', Georgia, serif; font-weight: 600; }
     .coach-card .q-chat-t pre {
       background: var(--bg); box-shadow: var(--neu-raised-xs); border-radius: 10px;
@@ -654,16 +661,17 @@
     }
     .q-undo.hidden { display: none; }
     .q-undo:hover { color: var(--accent); }
-    .coach-card input.coach-input {
-      width: 100%; border: none; outline: none; min-width: 0;
+    .coach-card .coach-input {
+      width: 100%; border: none; outline: none; min-width: 0; display: block;
       background: transparent; box-shadow: none; border-radius: 0;
       padding: 4px 0 5px; border-bottom: 1px solid rgba(0,0,0,0.10);
-      font-family: 'Space Grotesk', sans-serif; font-size: 13px; color: var(--text);
+      font-family: 'Space Grotesk', sans-serif; font-size: 13px; color: var(--text); line-height: 1.4;
+      resize: none; overflow-y: hidden; max-height: 168px;   /* grows as she writes, up to ~8 lines (Q's report, 18 Aug: 'expandable input box') */
       transition: border-color 0.2s;
     }
-    .coach-card input.coach-input:focus { border-bottom-color: var(--accent); }
-    .coach-card input.coach-input::placeholder { color: var(--text-faint); font-style: italic; }
-    .coach-card input.coach-input.hidden { display: none; }
+    .coach-card .coach-input:focus { border-bottom-color: var(--accent); }
+    .coach-card .coach-input::placeholder { color: var(--text-faint); font-style: italic; }
+    .coach-card .coach-input.hidden { display: none; }
     .q-nudge-btns {
       display: flex; gap: 5px; flex-wrap: wrap; margin-bottom: 8px;
     }
@@ -1203,8 +1211,8 @@
        a few pixels wide. The box has the whole first line; the buttons sit on
        their own line under it, right-aligned. */
     .coach-input-row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
-    .coach-input-row input.coach-input { flex: 1 1 100%; }
-    .coach-input-row input.coach-input.hidden + .q-go, .coach-input-row .q-go { margin-right: auto; }
+    .coach-input-row .coach-input { flex: 1 1 100%; }
+    .coach-input-row .coach-input.hidden + .q-go, .coach-input-row .q-go { margin-right: auto; }
     .q-mic {
       width: 26px; height: 26px; border-radius: 50%; border: none; flex-shrink: 0;
       background: var(--bg); color: var(--text-muted); cursor: pointer;
@@ -1866,6 +1874,16 @@
        tab is absolute off it — right edge 16px left of the text for a left tab
        (past the red margin line at 56px), left edge 16px right of the text for
        a right tab — so it sticks out like a notepad tab and takes no space. */
+    .doc-body .q-ptab.x { position: static; margin: 0 6px 0 2px; vertical-align: baseline; border-top: 3px solid var(--tc, #9aa0ad); border-radius: 7px 7px 3px 3px; }   /* a tab INSIDE the text stands on its line, colour on top (Sarah, 18 Aug) */
+    .q-popcard .pc-sw-row { display: flex; gap: 7px; align-items: center; margin: 6px 0 2px; flex-wrap: wrap; }
+    .q-popcard .pc-sw { width: 16px; height: 16px; border-radius: 50%; border: none; padding: 0; cursor: pointer; background: var(--sc, #999); box-shadow: var(--neu-raised-xs); }
+    .q-popcard .pc-sw.on { outline: 2px solid var(--text); outline-offset: 2px; }
+    .q-popcard .pc-seg { display: inline-flex; gap: 5px; margin: 4px 0 2px; }
+    .q-popcard .pc-seg button { border: none; background: var(--bg); color: var(--text-muted); font-family: inherit; font-size: 10px; padding: 3px 8px; border-radius: 9px; box-shadow: var(--neu-raised-xs); cursor: pointer; }
+    .q-popcard .pc-seg button.on { color: var(--text); box-shadow: var(--neu-inset-sm); }
+    .q-popcard .pc-in { width: 100%; box-sizing: border-box; border: none; border-radius: 8px; padding: 6px 8px; font-family: inherit; font-size: 11px; color: var(--text); background: var(--bg); box-shadow: var(--neu-inset-sm); margin: 4px 0 2px; }
+    .q-popcard textarea.pc-in { min-height: 52px; resize: vertical; }
+    .q-popcard .pc-lab { font-size: 9px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-muted); margin-top: 6px; }
     .doc-body .q-ptab-anchor { float: left; width: 0; height: 0; position: relative; overflow: visible; }
     .doc-body .q-ptab-anchor.r { float: right; }
     .doc-body .q-ptab.l { position: absolute; right: 16px; top: 4px; margin: 0; white-space: nowrap; border-top: none; border-left: 4px solid var(--tc, #9aa0ad); border-radius: 4px 8px 8px 4px; }
@@ -2365,8 +2383,8 @@
     <div class="panel-foot">
       <button type="button" class="q-undo hidden" id="coach-undo">Undo — take that last line off the page</button>
       <div class="coach-input-row">
-        <input class="coach-input" id="coach-input" type="text"
-          placeholder="Ask Q…" autocomplete="off" />
+        <textarea class="coach-input" id="coach-input" rows="1"
+          placeholder="Ask Q…" autocomplete="off"></textarea>
         <button type="button" class="q-go hidden" id="coach-go" title="Press when you want Q to look">Continue →</button>
         <button type="button" class="q-mic" id="coach-wb" title="The whiteboard — the list, sorting, numbers or lesson we are on, big enough to teach on" aria-label="Open the whiteboard" style="font-size:13px">▦</button>
         <button type="button" class="q-mic" id="coach-ed" title="Editing — spelling and grammar passes over the page, and the improvement tools: highlight, then press" aria-label="Open the editing panel" style="font-size:13px">✎</button>
@@ -2493,6 +2511,11 @@
     <div class="panel-grip" title="Drag to resize"></div>
   </div>
 
+  <!-- Label this — appears on any selection: her own tab, anywhere in the doc (Sarah, 18 Aug) -->
+  <button class="inline-ref-btn hidden" id="inline-tab-btn" type="button">
+    <svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>
+    Label this
+  </button>
   <!-- Inline reference button — appears when text is selected in the doc -->
   <button class="inline-ref-btn hidden" id="inline-ref-btn" type="button">
     <svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
@@ -3204,8 +3227,14 @@
         const hint = m.hint ? `<div class="q-chat-h">${qMd(m.hint)}</div>` : '';
         const hl = m.highlight ? ' <span class="q-chat-hl">● on the page</span>' : '';
         const sec = m.section ? `<span class="q-chat-sec">${escHtml(m.section)}</span>` : '';
-        return `<div class="q-chat-m ${m.role === 'q' ? 'q' : 'me'}"><span class="q-chat-who">${m.role === 'q' ? 'Q' : 'you'}${sec}${hl}</span><div class="q-chat-t">${m.role === 'q' ? decorateParaRefs(qMd(m.text)) : qMd(m.text)}</div>${hint}</div>`;
+        return `<div class="q-chat-m ${m.role === 'q' ? 'q' : 'me'}"><span class="q-chat-who">${m.role === 'q' ? 'Q' : 'you'}${sec}${hl}</span><div class="q-chat-t">${m.role === 'q' ? decorateParaRefs(colourChat(qMd(m.text))) : qMd(m.text)}</div>${hint}</div>`;
       }).join('');
+    }
+    // A callout emoji at the front of a bullet or a line → the coloured dot
+    // (same colours as the whiteboard); the emoji itself goes.
+    function colourChat(html) {
+      const CK = { '🟢': 'ok', '✅': 'ok', '🟡': 'warn', '⚠️': 'warn', '🔴': 'bad', '❌': 'bad', 'ℹ️': 'info', '💡': 'tip' };
+      return String(html || '').replace(/<(li|p)>\s*(🟢|✅|🟡|⚠️|🔴|❌|ℹ️|💡)\s*/g, (m, tag, e) => '<' + tag + ' class="q-c ' + CK[e] + '">');
     }
     function renderThread() {
       if (!coachThread) return;
@@ -3238,7 +3267,7 @@
       flushLive();                                  // what he said last is kept, not erased
       renderThread();
       coachMsg.classList.toggle('thinking', !!thinking);
-      if (thinking) coachMsg.textContent = msg || ''; else coachMsg.innerHTML = msg ? decorateParaRefs(qMd(msg)) : '';
+      if (thinking) coachMsg.textContent = msg || ''; else coachMsg.innerHTML = msg ? decorateParaRefs(colourChat(qMd(msg))) : '';
       coachMsg.classList.toggle('ask', !thinking && !!msg && !!(state.brief));
       coachSection.textContent = (msg || thinking) ? (section || '') : '';   // no lone label over an empty block (the small 'Q' above the box, 18 Aug)
       if (role) { lastRoleText = role; coachRole.innerHTML = '<span class="q-role-l">This part</span>' + escHtml(role); }
@@ -5162,16 +5191,73 @@
     function addQTabs(list) {
       state.qTabs = state.qTabs || [];
       for (const t of list) {
-        const pn = Number(t.paragraph); if (!Number.isInteger(pn) || pn < 1) continue;
-        // ONE live tab per paragraph: "put it on the other side" MOVES the tab —
-        // it used to add a second one (Q's bug report, 18 Aug: "moving a tab
-        // creates a duplicate"). The page's chips and jumps assume one per P#.
-        for (const old of state.qTabs) if (old && !old.done && Number(old.paragraph) === pn) old.done = true;
-        state.qTabs.push({ paragraph: pn, label: String(t.label || 'note').slice(0, 40), colour: HL_HEX[t.colour] ? t.colour : 'grey', side: ['right', 'left', 'top'].includes(t.side) ? t.side : 'right' });
+        const text = String(t.text || '').replace(/\s+/g, ' ').trim().slice(0, 160);
+        const pn = Number(t.paragraph);
+        if (!text && (!Number.isInteger(pn) || pn < 1)) continue;
+        // ONE live tab per place: "put it on the other side" / "make it blue"
+        // MOVES or RECOLOURS the tab — it used to add a second one (Q's bug
+        // report, 18 Aug: "moving a tab creates a duplicate").
+        for (const old of state.qTabs) { if (!old || old.done) continue; if (text ? old.text === text : (!old.text && Number(old.paragraph) === pn)) old.done = true; }
+        // A tab INSIDE the text stands on its line with the colour on top; a
+        // paragraph tab hangs in the margin (Sarah, 18 Aug).
+        const tab = { label: String(t.label || 'note').slice(0, 40), colour: HL_HEX[t.colour] ? t.colour : 'grey', by: t.by === 'me' ? 'me' : 'q' };
+        if (text) { tab.text = text; tab.side = 'top'; } else { tab.paragraph = pn; tab.side = ['right', 'left', 'top'].includes(t.side) ? t.side : 'right'; }
+        state.qTabs.push(tab);
       }
       renderInlineDots(); try { renderBoard(); } catch (_) {}
       persistQFurniture();
     }
+    // What is on the page and the board right now — sent to Q every turn so he
+    // recognises his tabs, highlights and stickies (and hers) as what they are.
+    function pageFurniture() {
+      try {
+        return {
+          tabs: (state.qTabs || []).filter(t => t && !t.done).slice(-40).map(t => ({ paragraph: t.paragraph || null, text: t.text || '', label: t.label, colour: t.colour, side: t.side, by: t.by || 'q' })),
+          notes: (state.qNotes || []).filter(n => n && !n.done).slice(-40).map(n => ({ text: String(n.text || '').slice(0, 80), note: String(n.note || '').slice(0, 100), kind: n.kind, colour: n.colour || '' })),
+          stickies: (state.wbStickies || []).filter(s => s && !s.done).slice(-20).map(s => ({ text: String(s.text || '').slice(0, 100), colour: s.colour || 'yellow' })),
+        };
+      } catch (_) { return null; }
+    }
+    // THE TAB / STICKY EDITOR (Sarah, 18 Aug: 'being able to put a label anywhere
+    // in the doc and choose colours'). One small card: the label, the colours,
+    // the side (margin tabs only), Take it off. Used for Q's tabs, hers, and stickies.
+    function swatchRowHtml(hexMap, current) { return '<div class="pc-sw-row">' + Object.keys(hexMap).map(k => '<button type="button" class="pc-sw' + (k === current ? ' on' : '') + '" data-sw="' + k + '" style="--sc:' + hexMap[k] + '" title="' + k + '" aria-label="' + k + '"></button>').join('') + '</div>'; }
+    function openTabEditor({ tab, anchor, isNew, text, onSave, onRemove }) {
+      const cur = tab || { label: '', colour: 'pink', side: 'top', text: text || '' };
+      const isText = !!(cur.text || text);
+      const html = '<div class="pc-head">' + (isNew ? 'Label this' : 'This tab') + '</div>'
+        + (isText ? '<div class="pc-line" style="color:var(--text-muted)">on “' + escHtml(String(cur.text || text || '').slice(0, 60)) + (String(cur.text || text || '').length > 60 ? '…' : '') + '”</div>' : '<div class="pc-line" style="color:var(--text-muted)">Paragraph ' + Number(cur.paragraph) + '</div>')
+        + '<div class="pc-lab">Label</div><input class="pc-in" id="pt-label" type="text" maxlength="40" value="' + escHtml(cur.label || '') + '" placeholder="1-4 words" />'
+        + '<div class="pc-lab">Colour</div>' + swatchRowHtml(HL_HEX, cur.colour || 'pink')
+        + (isText ? '' : '<div class="pc-lab">Hangs</div><div class="pc-seg" id="pt-side">' + ['left', 'right', 'top'].map(s => '<button type="button" data-side="' + s + '"' + (s === (cur.side || 'right') ? ' class="on"' : '') + '>' + s + '</button>').join('') + '</div>')
+        + '<div class="pc-acts"><button type="button" class="q-btn primary" id="pt-save">' + (isNew ? 'Put it on' : 'Save') + '</button>' + (isNew ? '' : '<button type="button" class="q-btn quiet" id="pt-off">Take it off</button>') + '</div>';
+      showToolPop(html, { kind: 'tab', anchor });
+      toolPopEl.classList.add('dotpop');
+      let colour = cur.colour || 'pink', side = cur.side || 'right';
+      toolPopEl.querySelectorAll('.pc-sw').forEach(b => b.addEventListener('click', () => { colour = b.dataset.sw; toolPopEl.querySelectorAll('.pc-sw').forEach(x => x.classList.toggle('on', x === b)); }));
+      toolPopEl.querySelectorAll('#pt-side button').forEach(b => b.addEventListener('click', () => { side = b.dataset.side; toolPopEl.querySelectorAll('#pt-side button').forEach(x => x.classList.toggle('on', x === b)); }));
+      const inp = toolPopEl.querySelector('#pt-label'); if (inp) { setTimeout(() => { try { inp.focus(); inp.select(); } catch (_) {} }, 30); inp.addEventListener('keydown', ev => { if (ev.key === 'Enter') { ev.preventDefault(); toolPopEl.querySelector('#pt-save').click(); } }); }
+      toolPopEl.querySelector('#pt-save').addEventListener('click', () => { const label = String(inp ? inp.value : '').trim().slice(0, 40) || 'note'; toolPopEl.classList.remove('dotpop'); hideToolPop(); onSave({ label, colour, side }); });
+      const off = toolPopEl.querySelector('#pt-off'); if (off && onRemove) off.addEventListener('click', () => { toolPopEl.classList.remove('dotpop'); hideToolPop(); onRemove(); });
+    }
+    function openStickyEditor(st, anchor) {
+      const html = '<div class="pc-head">Sticky note</div>'
+        + '<textarea class="pc-in" id="ps-text" maxlength="160" rows="3">' + escHtml(st.text || '') + '</textarea>'
+        + '<div class="pc-lab">Colour</div>' + swatchRowHtml(STICKY_HEX, st.colour || 'yellow')
+        + '<div class="pc-acts"><button type="button" class="q-btn primary" id="ps-save">Save</button><button type="button" class="q-btn" id="ps-go">Send to my page →</button><button type="button" class="q-btn quiet" id="ps-bin">Bin it</button></div>';
+      showToolPop(html, { kind: 'sticky', anchor });
+      let colour = st.colour || 'yellow';
+      toolPopEl.querySelectorAll('.pc-sw').forEach(b => b.addEventListener('click', () => { colour = b.dataset.sw; toolPopEl.querySelectorAll('.pc-sw').forEach(x => x.classList.toggle('on', x === b)); }));
+      const ta = toolPopEl.querySelector('#ps-text'); setTimeout(() => { try { ta.focus(); } catch (_) {} }, 30);
+      toolPopEl.querySelector('#ps-save').addEventListener('click', () => { st.text = String(ta.value || '').trim().slice(0, 160) || st.text; st.colour = STICKY_HEX[colour] ? colour : st.colour; hideToolPop(); persist({ wbStickies: state.wbStickies }); renderStickies(); });
+      toolPopEl.querySelector('#ps-go').addEventListener('click', () => { hideToolPop(); const r = sendTextToPage(String(ta.value || st.text)); if (r === 'ask') { try { workSay('Click the spot on your page, then press → again.'); } catch (_) {} } else if (r === 'sent') { st.done = true; persist({ wbStickies: state.wbStickies }); renderStickies(); } });
+      toolPopEl.querySelector('#ps-bin').addEventListener('click', () => { st.done = true; hideToolPop(); persist({ wbStickies: state.wbStickies }); renderStickies(); });
+    }
+    document.getElementById('inline-tab-btn').addEventListener('click', () => {
+      const text = selectedTabText; if (!text) return;
+      const btn = document.getElementById('inline-tab-btn'); btn.classList.add('hidden');
+      openTabEditor({ isNew: true, text, anchor: btn, onSave: ({ label, colour }) => addQTabs([{ text, label, colour, by: 'me' }]) });
+    });
     function tabForParagraph(pn) { return (state.qTabs || []).find(t => t && !t.done && Number(t.paragraph) === Number(pn)) || null; }
     const CALLOUT_HEX = { ok: '#28a745', warn: '#e6a817', bad: 'var(--accent)', info: '#3b82c4', tip: '#7c5cbf' };
     function miniTabHtml(pn, tab, hintColour) {
@@ -5186,10 +5272,14 @@
     document.addEventListener('click', (e) => { const b = e.target.closest('.q-mtab[data-pn]'); if (!b) return; e.preventDefault(); jumpToParagraph(Number(b.dataset.pn)); });
     // The TABS card on the teaching board: one chip per live tab.
     function tabsBoardHtml() {
-      const live = (state.qTabs || []).filter(t => t && !t.done).slice().sort((a, b) => Number(a.paragraph) - Number(b.paragraph));
+      const all = (state.qTabs || []);
+      const live = all.map((t, i) => ({ t, i })).filter(x => x.t && !x.t.done).sort((a, b) => (a.t.text ? 1 : 0) - (b.t.text ? 1 : 0) || Number(a.t.paragraph || 0) - Number(b.t.paragraph || 0));
       if (!live.length) return '';
-      return '<div class="tb-tabs"><span class="ex-title">Tabs</span><div class="tb-tabs-row">' + live.map(t => miniTabHtml(t.paragraph, t)).join('') + '</div></div>';
+      return '<div class="tb-tabs"><span class="ex-title">Tabs</span><div class="tb-tabs-row">' + live.map(({ t, i }) => t.text
+        ? '<button type="button" class="q-mtab" data-tt="' + i + '" style="--tc:' + (HL_HEX[t.colour] || '#9aa0ad') + '" title="' + escHtml(String(t.text).slice(0, 80)) + '"><span class="pn">¶</span>' + escHtml(t.label) + '</button>'
+        : miniTabHtml(t.paragraph, t)).join('') + '</div></div>';
     }
+    document.addEventListener('click', (e) => { const b = e.target.closest('.q-mtab[data-tt]'); if (!b) return; e.preventDefault(); const t = (state.qTabs || [])[Number(b.dataset.tt)]; if (t && t.text) jumpToSentence(t.text); });
     // [P3] / P3 in Q's messages → the mini tab chip.
     function decorateParaRefs(html) {
       // "[P2] 🟢 …" — no tab yet, but Q coloured it: the chip takes the emoji's
@@ -5199,19 +5289,19 @@
     function renderQTabs() {
       docBody.querySelectorAll('.q-ptab, .q-ptab-anchor').forEach(n => n.remove());
       (state.qTabs || []).forEach((t, i) => {
-        if (!t || t.done) return; const at = paragraphStartNode(t.paragraph);
+        if (!t || t.done) return; const at = t.text ? (function () { const hit = findInDoc(t.text); return hit ? { textNode: hit.start.node, offset: hit.start.offset } : null; })() : paragraphStartNode(t.paragraph);
         // No paragraph with that number on the page → the tab cannot hang anywhere.
         // It used to vanish without a word (Q's report: "first tab_paragraph call
         // fails silently"). Say so once, on the board, and let the tab wait — if
         // the paragraph appears (she writes it) the tab lands on the next render.
-        if (!at) { if (!t.missed) { t.missed = true; try { appendBoardItem({ type: 'note', label: 'note', text: 'Q\'s tab "' + t.label + '" has nowhere to hang yet — there is no paragraph ' + Number(t.paragraph) + ' on the page (' + docParagraphTexts().length + ' at the moment).' }); } catch (_) {} } return; }
+        if (!at) { if (!t.missed) { t.missed = true; try { appendBoardItem({ type: 'note', label: 'note', text: t.text ? 'The tab "' + t.label + '" has nowhere to stand — those words ("' + String(t.text).slice(0, 40) + '…") are not on the page any more.' : 'Q\'s tab "' + t.label + '" has nowhere to hang yet — there is no paragraph ' + Number(t.paragraph) + ' on the page (' + docParagraphTexts().length + ' at the moment).' }); } catch (_) {} } return; }
         t.missed = false;
-        const side = t.side === 'left' ? 'l' : (t.side === 'top' ? 't' : 'r');
+        const side = t.text ? 'x' : (t.side === 'left' ? 'l' : (t.side === 'top' ? 't' : 'r'));
         const tab = document.createElement('span'); tab.className = 'q-ptab ' + side; tab.contentEditable = 'false'; tab.setAttribute('data-q-furniture', 'true');
         tab.dataset.qtab = String(i); tab.textContent = t.label; tab.style.setProperty('--tc', HL_HEX[t.colour] || '#9aa0ad'); tab.title = '';
         { const tn = at.textNode; const after = tn.splitText(Math.min(at.offset, tn.nodeValue.length));
           let node = tab;
-          if (side !== 't') { const a = document.createElement('span'); a.className = 'q-ptab-anchor ' + side; a.contentEditable = 'false'; a.setAttribute('data-q-furniture', 'true'); a.appendChild(tab); node = a; }
+          if (side !== 't' && side !== 'x') { const a = document.createElement('span'); a.className = 'q-ptab-anchor ' + side; a.contentEditable = 'false'; a.setAttribute('data-q-furniture', 'true'); a.appendChild(tab); node = a; }
           after.parentNode.insertBefore(node, after); }   // right before the paragraph's first word — works in one wrapper div too
       });
     }
@@ -5220,9 +5310,10 @@
       // the label, and Take it off if she wants it gone.
       const tab = e.target.closest('.q-ptab[data-qtab]'); if (!tab) return; e.preventDefault();
       const i = Number(tab.dataset.qtab); const t = (state.qTabs || [])[i]; if (!t) return;
-      showToolPop('<div class="pc-head"><span class="pc-dot" style="--dc:' + (HL_HEX[t.colour] || '#9aa0ad') + '"></span>' + escHtml(t.label) + '</div><div class="pc-line">Paragraph ' + Number(t.paragraph) + '</div><div class="pc-acts"><button type="button" class="q-btn quiet" id="ptab-off">Take it off</button></div>', { kind: 'note', anchor: tab });
-      toolPopEl.classList.add('dotpop');
-      const off = toolPopEl.querySelector('#ptab-off'); if (off) off.addEventListener('click', () => { t.done = true; toolPopEl.classList.remove('dotpop'); hideToolPop(); renderQTabs(); try { renderBoard(); } catch (_) {} persistQFurniture(); });
+      // Press a tab → recolour, relabel, move it, or take it off (Sarah, 18 Aug).
+      openTabEditor({ tab: t, anchor: tab,
+        onSave: ({ label, colour, side }) => { t.label = label; t.colour = HL_HEX[colour] ? colour : t.colour; if (!t.text) t.side = ['left', 'right', 'top'].includes(side) ? side : t.side; renderInlineDots(); try { renderBoard(); } catch (_) {} persistQFurniture(); },
+        onRemove: () => { t.done = true; renderInlineDots(); try { renderBoard(); } catch (_) {} persistQFurniture(); } });
     });
     function addQNotes(list) {
       state.qNotes = state.qNotes || [];
@@ -5548,7 +5639,8 @@
     }
     // press, then highlight: the next selection inside the page runs it
     docBody.addEventListener('mouseup', () => { if (!edArmed) return; const sel = docSelection(); if (!sel) return; const t = edArmed; edArmed = null; renderEditPanel(); setTimeout(() => edRunTool(t), 0); });
-    function edFindRanges(wrong) {
+    function edFindRanges(wrong0) {
+      const wrong = docNorm(wrong0); if (!wrong) return [];
       const out = []; const { text, map } = docTextMap();
       let from = 0;
       while (from < text.length) {
@@ -5836,14 +5928,16 @@
         const el = e.target.closest('.wb-sticky'); if (!el) return; const st = (state.wbStickies || [])[Number(el.dataset.si)]; if (!st) return;
         if (e.target.closest('.st-x')) { st.done = true; persist({ wbStickies: state.wbStickies }); renderStickies(); }
         else if (e.target.closest('.st-go')) { const r = sendTextToPage(st.text); if (r === 'ask') { try { workSay('Click the spot on your page, then press → again.'); } catch (_) {} } else if (r === 'sent') { st.done = true; persist({ wbStickies: state.wbStickies }); renderStickies(); } }
+        else if (!stickyDragged) openStickyEditor(st, el);   // press the note → edit the words, pick a colour (Sarah, 18 Aug)
       });
+      let stickyDragged = false;
       layer.addEventListener('pointerdown', (e) => {
         const el = e.target.closest('.wb-sticky'); if (!el || e.target.closest('button')) return;
         const st = (state.wbStickies || [])[Number(el.dataset.si)]; if (!st) return;
         const d = { id: e.pointerId, sx: e.clientX, sy: e.clientY, x0: Number(st.x) || 8, y0: Number(st.y) || 8 };
         try { el.setPointerCapture(e.pointerId); } catch (_) {}
         const move = (ev) => { if (ev.pointerId !== d.id) return; const nx = Math.max(0, Math.min(layer.clientWidth - el.offsetWidth, d.x0 + (ev.clientX - d.sx))); const ny = Math.max(0, d.y0 + (ev.clientY - d.sy)); el.style.left = nx + 'px'; el.style.top = ny + 'px'; st.x = nx; st.y = ny; };
-        const up = (ev) => { if (ev.pointerId !== d.id) return; el.removeEventListener('pointermove', move); el.removeEventListener('pointerup', up); el.removeEventListener('pointercancel', up); try { el.releasePointerCapture(d.id); } catch (_) {} if (Math.abs(ev.clientX - d.sx) + Math.abs(ev.clientY - d.sy) > 4) st.moved = true; persist({ wbStickies: state.wbStickies }); renderStickies(); };
+        const up = (ev) => { if (ev.pointerId !== d.id) return; el.removeEventListener('pointermove', move); el.removeEventListener('pointerup', up); el.removeEventListener('pointercancel', up); try { el.releasePointerCapture(d.id); } catch (_) {} const dragged = Math.abs(ev.clientX - d.sx) + Math.abs(ev.clientY - d.sy) > 4; stickyDragged = dragged; if (dragged) { st.moved = true; persist({ wbStickies: state.wbStickies }); renderStickies(); } };
         el.addEventListener('pointermove', move); el.addEventListener('pointerup', up); el.addEventListener('pointercancel', up);
       });
     })();
@@ -6980,12 +7074,15 @@
       coachHint.textContent = 'Taken off the page — your answer is still on the board.';
     });
 
-    coachInput.addEventListener('input', () => { if (coachInput.value.trim()) startedAsk(); });
+    // The box grows with what she writes (Enter sends, Shift+Enter = new line).
+    function fitCoachInput() { try { coachInput.style.height = 'auto'; coachInput.style.height = Math.min(168, Math.max(24, coachInput.scrollHeight)) + 'px'; } catch (_) {} }
+    coachInput.addEventListener('input', () => { fitCoachInput(); if (coachInput.value.trim()) startedAsk(); });
     coachInput.addEventListener('keydown', async (ev) => {
-      if (ev.key !== 'Enter') return;
+      if (ev.key !== 'Enter' || ev.shiftKey) return;
+      ev.preventDefault();
       const text = coachInput.value.trim();
       if (!text) return;
-      coachInput.value = '';
+      coachInput.value = ''; fitCoachInput();
       await submitCoachText(text);
     });
 
@@ -7156,7 +7253,7 @@
       if (!opts.silent) sayMe(text);   // her line joins the thread (and Q's last line is kept, not wiped); silent = an internal prompt (a pause / Continue), nothing to show as hers
       showChat({ thinking: true });
       try {
-        const d = await api('/writer/chat', { text, partWords: partWordCounts(), stepItems: (() => { try { const si = currentStepInfo(); const st = si ? stepStateOf(si.cid, si.step.id) : null; return st && Array.isArray(st.items) ? st.items.slice(0, 40) : []; } catch (_) { return []; } })(), history: state.chatLog.slice(-11, -1).map(m => ({ role: m.role, text: m.text })), docText: docPlainText().slice(0, 24000), criterionId: state.currentCriterionId || null, stepId: state.currentStep ? state.currentStep.stepId : null, ask: currentAskText() || '', yearGroup: state.yearGroup || '' }, { timeoutMs: 90000 });
+        const d = await api('/writer/chat', { text, partWords: partWordCounts(), stepItems: (() => { try { const si = currentStepInfo(); const st = si ? stepStateOf(si.cid, si.step.id) : null; return st && Array.isArray(st.items) ? st.items.slice(0, 40) : []; } catch (_) { return []; } })(), history: state.chatLog.slice(-11, -1).map(m => ({ role: m.role, text: m.text })), furniture: pageFurniture(), docText: docPlainText().slice(0, 24000), criterionId: state.currentCriterionId || null, stepId: state.currentStep ? state.currentStep.stepId : null, ask: currentAskText() || '', yearGroup: state.yearGroup || '' }, { timeoutMs: 90000 });
         tally('probe', state.currentCriterionId);
         const spans = (Array.isArray(d.highlights) && d.highlights.length ? d.highlights : []).concat(d.highlight ? [d.highlight] : []);
         pushSaid({ role: 'q', text: String(d.reply || '').trim(), highlight: spans.length ? spans : null });
@@ -7838,17 +7935,23 @@
       selectionRange = null;
     }
 
+    const inlineTabBtn = document.getElementById('inline-tab-btn');
+    let selectedTabText = '';
     docBody.addEventListener('mouseup', (e) => {
       setTimeout(() => {
         const sel = window.getSelection();
-        if (!sel || sel.isCollapsed) { inlineRefBtn.classList.add('hidden'); return; }
+        if (!sel || sel.isCollapsed) { inlineRefBtn.classList.add('hidden'); inlineTabBtn.classList.add('hidden'); return; }
         const text = sel.toString().trim();
+        const rect0 = sel.rangeCount ? sel.getRangeAt(0).getBoundingClientRect() : null;
+        // LABEL THIS — her own tab on any words she selects (3+ characters).
+        if (text.length >= 3 && rect0) { selectedTabText = text.replace(/\s+/g, ' ').slice(0, 120); inlineTabBtn.style.left = Math.min(rect0.left, window.innerWidth - 260) + 'px'; inlineTabBtn.style.top = Math.max(8, rect0.top - 34) + 'px'; inlineTabBtn.classList.remove('hidden'); }
+        else inlineTabBtn.classList.add('hidden');
         if (text.length < 20) { inlineRefBtn.classList.add('hidden'); return; }
         selectedParaText = text;
         selectionRange = sel.rangeCount ? sel.getRangeAt(0).cloneRange() : null;
-        // Position button just above the selection end
+        // Position button just above the selection end — to the right of Label this
         const rect = sel.getRangeAt(0).getBoundingClientRect();
-        inlineRefBtn.style.left = Math.min(rect.left, window.innerWidth - 160) + 'px';
+        inlineRefBtn.style.left = Math.min(rect.left + (inlineTabBtn.classList.contains('hidden') ? 0 : inlineTabBtn.offsetWidth + 6), window.innerWidth - 160) + 'px';
         inlineRefBtn.style.top  = Math.max(8, rect.top - 34) + 'px';
         inlineRefBtn.classList.remove('hidden');
         // Close the para popup if it was open
@@ -9079,7 +9182,7 @@
       const word = coachInput.value.trim(); if (!word) return;
       ev.stopImmediatePropagation(); ev.preventDefault();
       const { tool, it } = state.awaitingWord; state.awaitingWord = null;
-      coachInput.value = ''; coachInput.placeholder = 'Ask Q…'; coachInput.classList.add('hidden');
+      coachInput.value = ''; fitCoachInput(); coachInput.placeholder = 'Ask Q…'; coachInput.classList.add('hidden');
       runTool(tool, it, word);
     }, true);
 
@@ -9109,25 +9212,51 @@
     // Find / replace the student's own sentence on the page without touching
     // anything else. Walks the text nodes, tolerant of collapsed whitespace,
     // and applies the change with execCommand so Ctrl+Z undoes it.
+    // THE PAGE SEARCH — behind every highlight, cut, tab, jump and dot.
+    // 18 Aug (Sarah, live: "his highlighting is all off", "he tried to cut the
+    // old references"): this used to put a SPACE after EVERY text node, so any
+    // passage crossing an inline element — a link in a reference, a Word
+    // <span>, a <b> — could never be found; and it counted the tab labels on
+    // the page as page text. Now: a space only where a BLOCK ends (or at a
+    // <br>), furniture skipped, and the characters that differ between what
+    // the model types and what Word pasted (curly quotes, dashes, nbsp, soft
+    // hyphens) are folded on BOTH sides. `docChar` is the one folding rule.
+    const DOC_SKIP_SEL = '.grade-band, .q-margin-dots, .q-idot, .q-ptab, .q-ptab-anchor, [data-q-furniture]';
+    const DOC_BLOCK_TAGS = new Set(['DIV', 'P', 'LI', 'H1', 'H2', 'H3', 'H4', 'H5', 'H6', 'BLOCKQUOTE', 'TR', 'TD', 'TH', 'UL', 'OL', 'TABLE', 'SECTION', 'ARTICLE', 'PRE', 'HR']);
+    function docChar(c) {
+      if (c === '\u00AD' || c === '\u200B' || c === '\u200C' || c === '\u200D' || c === '\uFEFF') return '';   // soft hyphen, zero-widths: not there
+      if (/\s/.test(c) || c === '\u00A0') return ' ';
+      if (c === '\u2018' || c === '\u2019' || c === '\u201A' || c === '\u02BC') return "'";
+      if (c === '\u201C' || c === '\u201D' || c === '\u201E') return '"';
+      if (c === '\u2013' || c === '\u2014' || c === '\u2212' || c === '\u2010' || c === '\u2011') return '-';
+      if (c === '\u2026') return '...';
+      return c;
+    }
+    function docNorm(s) { let o = ''; for (const c of String(s == null ? '' : s)) o += docChar(c); return o.replace(/ {2,}/g, ' ').trim(); }
+    function docBlockOf(n) { let e = n.parentElement; while (e && e !== docBody) { if (DOC_BLOCK_TAGS.has(e.tagName)) return e; e = e.parentElement; } return docBody; }
     function docTextMap() {
-      const walker = document.createTreeWalker(docBody, NodeFilter.SHOW_TEXT, { acceptNode: (n) => n.parentElement && n.parentElement.closest('.grade-band, .q-margin-dots, .q-idot') ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_ACCEPT });
+      const walker = document.createTreeWalker(docBody, NodeFilter.SHOW_TEXT, { acceptNode: (n) => n.parentElement && n.parentElement.closest(DOC_SKIP_SEL) ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_ACCEPT });
       const chars = []; const map = [];
-      let lastSpace = true;
+      let lastSpace = true, prevBlock = null, prevNode = null;
       for (let n = walker.nextNode(); n; n = walker.nextNode()) {
+        const blk = docBlockOf(n);
+        // a boundary: a different block, or a <br> right before this text
+        let br = false; { let p = n; while (p && p !== blk && !p.previousSibling) p = p.parentNode; if (p && p !== blk && p.previousSibling && p.previousSibling.nodeType === 1 && p.previousSibling.tagName === 'BR') br = true; }
+        if (prevNode && (blk !== prevBlock || br) && !lastSpace) { chars.push(' '); map.push({ node: prevNode, offset: (prevNode.nodeValue || '').length }); lastSpace = true; }
         const t = n.nodeValue || '';
         for (let k = 0; k < t.length; k++) {
-          const ch = /\s/.test(t[k]) || t[k] === ' ' ? ' ' : t[k];
+          const ch = docChar(t[k]);
+          if (!ch) continue;
           if (ch === ' ' && lastSpace) continue;
-          chars.push(ch); map.push({ node: n, offset: k });
+          for (const c of ch) { chars.push(c); map.push({ node: n, offset: k }); }   // '...' for an ellipsis maps all three to the one char
           lastSpace = ch === ' ';
         }
-        // block boundary counts as a space
-        if (!lastSpace) { chars.push(' '); map.push({ node: n, offset: t.length }); lastSpace = true; }
+        prevBlock = blk; prevNode = n;
       }
       return { text: chars.join(''), map };
     }
     function findInDoc(sentence) {
-      const needle = String(sentence || '').replace(/\s+/g, ' ').trim();
+      const needle = docNorm(sentence);
       if (!needle) return null;
       const { text, map } = docTextMap();
       const at = text.indexOf(needle);

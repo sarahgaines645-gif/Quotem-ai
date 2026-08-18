@@ -82,16 +82,17 @@ const TOOL_DEFINITIONS = [
         type: 'function',
         function: {
             name: 'tab_paragraph',
-            description: 'Stick a coloured INDEX TAB on the top of a paragraph of the student\'s page — like the sticky tabs on a notepad — with a short label: "Q1 intro", "theory here", "cut?", "move up", "needs source". Use the paragraph numbers you were given ([P4] = paragraph 4). Tabs are for marking STRUCTURE (which paragraph is what, what to move, what to revisit); highlight_passage is for a passage inside the text. They can press a tab to take it off.',
+            description: 'Stick a coloured INDEX TAB on the student\'s page — like the sticky tabs on a notepad — with a short label: "Q1 intro", "theory here", "cut?", "move up", "needs source". TWO ways to place it: `paragraph` (the [P4] numbers you were given) hangs it in the MARGIN of that paragraph, colour on the outside; `text` (the exact words on a line — a sentence, a heading, a reference, anywhere in the document) stands it ON that line, colour on top. Tabs are for marking STRUCTURE and places to revisit; highlight_passage is for a passage inside the text. They can press a tab to recolour, relabel, move or take it off. If you are asked to change a tab, call this again for the same paragraph/text — it replaces the old one.',
             parameters: {
                 type: 'object',
                 properties: {
-                    paragraph: { type: 'integer', description: 'The paragraph number, 1-based, as in [P4].' },
+                    paragraph: { type: 'integer', description: 'The paragraph number, 1-based, as in [P4] — a margin tab on that paragraph. Give paragraph OR text.' },
+                    text: { type: 'string', description: 'The exact words (5-12) on the line where the tab should stand, copied from the page — for a tab inside a paragraph, on a heading or on a reference. Give paragraph OR text.' },
                     label: { type: 'string', description: 'The tab label, 1-4 words.' },
                     colour: { type: 'string', enum: ['pink', 'amber', 'blue', 'violet', 'green', 'grey'], description: 'Tab colour. Optional; default grey.' },
-                    side: { type: 'string', enum: ['right', 'left', 'top'], description: 'Where the tab hangs. Default right — off the right edge of the paragraph\'s first line, colour on the outside, like a notepad index tab. Use left or top only when it reads better there.' },
+                    side: { type: 'string', enum: ['right', 'left', 'top'], description: 'Paragraph tabs only: where it hangs. Default right — off the right edge of the paragraph\'s first line, colour on the outside, like a notepad index tab. Use left or top only when it reads better there. A text tab always stands on its line, colour on top.' },
                 },
-                required: ['paragraph', 'label'],
+                required: ['label'],
             },
         },
     },
@@ -1746,8 +1747,11 @@ async function executeTool(name, argsRaw, personId, personEmail, threadId) {
     }
     if (name === 'tab_paragraph') {
         const pn = Number(args.paragraph);
-        if (!Number.isInteger(pn) || pn < 1) return { error: 'Give the paragraph number (1-based).' };
-        return { ok: true, tabbed: true, paragraph: pn, label: String(args.label || '').trim().slice(0, 40) || 'note', colour: String(args.colour || 'grey'), side: ['right', 'left', 'top'].includes(String(args.side || '')) ? String(args.side) : 'right' };
+        const text = String(args.text || '').replace(/\s+/g, ' ').trim().slice(0, 160);
+        if (!text && (!Number.isInteger(pn) || pn < 1)) return { error: 'Give the paragraph number (1-based) or the exact words on the line.' };
+        const base = { ok: true, tabbed: true, label: String(args.label || '').trim().slice(0, 40) || 'note', colour: String(args.colour || 'grey') };
+        if (text) return { ...base, text, side: 'top' };   // stands ON the line, colour on top (Sarah, 18 Aug: 'if it's inside the colour goes on the top not the side')
+        return { ...base, paragraph: pn, side: ['right', 'left', 'top'].includes(String(args.side || '')) ? String(args.side) : 'right' };
     }
     if (name === 'stick_note') {
         const text = String(args.text || '').trim().slice(0, 160);
