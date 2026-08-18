@@ -20,10 +20,12 @@
 //    specification, June 2024 v1.5: unit 7HR02 criteria (pp. 39–42), assessment
 //    and grading (pp. 8–9); CIPD Advanced Qualifications & Diplomas (Level 7);
 //    CIPD qualifications regulatory information.
-//  CIPD-AUTHORED, third-party hosted (wording CIPD's, host unverified) — 7CO01
-//    Learner Assessment Brief v2022.1: the generic grade descriptors grid, the
-//    1–4 marks per learning outcome, the unit-result thresholds, the six
-//    marking criteria. The 7HR02-specific brief could not be decoded.
+//  CIPD-AUTHORED — the generic grade descriptors grid, the 1–4 marks per
+//    learning outcome, the unit-result thresholds, the six marking criteria:
+//    first taken from a 7CO01 Learner Assessment Brief v2022.1 (third-party
+//    hosted), then VERIFIED word for word against a CIPD-issued Learner
+//    Assessment Brief for 7HR03 (Assessment ID CIPD_7HR03_24_01) held
+//    locally (18 Aug 2026) — same grid, same table, same rules.
 const CIPD_L7_GRID = [
     { row: 'Focus',
       refer: 'Fails to address all the questions either sufficiently fully or directly.',
@@ -97,9 +99,9 @@ const CIPD_L7 = {
     promptBlock() {
         const rows = CIPD_L7_GRID.map(r => `- ${r.row}:\n    Refer/Fail (1): "${r.refer}"\n    Pass (2): "${r.pass}"\n    Merit (3): "${r.merit}"\n    Distinction (4): "${r.distinction}"`).join('\n');
         return `THE MARKING STANDARD — CIPD Level 7 Advanced Diploma. Mark against THIS, in its own words, as the CIPD assessor will.
-(Grade descriptor grid and mark arithmetic: CIPD-authored, taken from a CIPD Learner Assessment Brief. Unit criteria and grading rules: CIPD's published specification.)
+(Grade descriptor grid and mark arithmetic: CIPD-authored, from CIPD Learner Assessment Briefs. Unit criteria and grading rules: CIPD's published specification.)
 
-HOW THE MARK IS BUILT (verbatim from CIPD): "Assessors must provide a mark from 1 to 4 for each Learning Outcome in the unit." "To pass the unit assessment learners must achieve a 2 (Pass) or above for each of the learning outcomes. The overall mark achieved will dictate the Grade the learner receives for the Unit, provided NONE of the learning outcomes have been failed or referred." Unit result from the total of the learning-outcome marks: 0–7 Refer/Fail · 8–9 Pass · 10–13 Merit · 14–16 Distinction. Grades exist at UNIT level only.
+HOW THE MARK IS BUILT (verbatim from CIPD): "Assessors must provide a mark from 1 to 4 for each Learning Outcome in the unit. Assessors should use the generic grade descriptor grid as guidance so they can provide comprehensive feedback that is developmental for learners. Please be aware that not all of the generic grade descriptors will be present in every learning outcome for all the assignments, so assessors must use their discretion in making grading decisions." "To pass the unit assessment learners must achieve a 2 (Pass) or above for each of the learning outcomes. The overall mark achieved will dictate the Grade the learner receives for the Unit, provided NONE of the learning outcomes have been failed or referred." Unit result from the total of the learning-outcome marks: 0–7 Refer/Fail · 8–9 Pass · 10–13 Merit · 14–16 Distinction. Grades exist at UNIT level only.
 
 THE SIX CRITERIA an assessor weighs (verbatim: "it may be that not all these criteria are present in every question"): focus; depth and breadth of understanding; strategic application and professional advice; research and wider reading; persuasiveness and originality; presentation and language.
 
