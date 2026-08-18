@@ -749,7 +749,7 @@ const MARK_SCHEMA = {
                 toNext: { type: 'string', description: 'HOW TO GET THAT GRADE. The two or three concrete things that would lift THIS draft to nextLabel, each one a thing they can go and do today — name the part, the idea, the evidence, the comparison. Never "develop further", never "add more detail", never a description of what the grade means. If they are already at the top grade, what would keep it there.' },
                 loMarks: {
                     type: 'array',
-                    description: 'ONLY when the marking standard says marks are given per LEARNING OUTCOME (e.g. CIPD Level 7: 1-4 each): one entry per learning outcome in the brief, in order. Empty array otherwise.',
+                    description: 'When the marking standard says marks are given per LEARNING OUTCOME (e.g. CIPD Level 7: 1-4 each) this is REQUIRED and NEVER EMPTY: one entry per learning outcome in the brief, in order. Empty array ONLY when no per-outcome standard applies.',
                     items: { type: 'object', additionalProperties: false, required: ['label', 'mark', 'reason'], properties: {
                         label: { type: 'string', description: '"LO1", "LO2" …' },
                         mark: { type: 'integer', description: 'The mark on the standard\'s scale (CIPD L7: 1 Refer/Fail, 2 Pass, 3 Merit, 4 Distinction).' },
@@ -892,6 +892,16 @@ ${plans ? Object.values(plans).map(p => p && p.criterionId ? '[' + p.criterionId
     // follows the published table from the LO marks, whatever label the model
     // wrote. Logged when they differ.
     try {
+        // The model graded every question but skipped the per-outcome marks
+        // (Sarah's live mark, 18 Aug: loMarks [] → no LO row, no arithmetic).
+        // Derive them from the question grades, say so in each reason, log it.
+        if (scheme && scheme.perOutcomeMarks && typeof scheme.deriveLoMarks === 'function' && r && r.overall && !(Array.isArray(r.overall.loMarks) && r.overall.loMarks.length)) {
+            const derived = scheme.deriveLoMarks(Array.isArray(r.perCriterion) ? r.perCriterion : []);
+            if (derived.length) {
+                console.warn('[writer/mark] ' + scheme.id + ': model returned no loMarks — derived from the question grades: ' + derived.map(x => x.label + ' ' + x.mark).join(' · '));
+                r.overall.loMarks = derived;
+            }
+        }
         if (scheme && scheme.perOutcomeMarks && r && r.overall && Array.isArray(r.overall.loMarks) && r.overall.loMarks.length) {
             const ur = scheme.unitResult(r.overall.loMarks);
             if (ur) {
@@ -1090,7 +1100,7 @@ function normaliseMark(r, brief, essayForMark, plans, scheme) {
             ladder: (Array.isArray(r.overall.ladder) ? r.overall.ladder : []).map(x => ({ label: String((x && x.label) || '').trim(), needs: (Array.isArray(x && x.needs) ? x.needs : []).map(String).map(s => s.trim()).filter(Boolean).slice(0, 5) })).filter(x => x.label && x.needs.length).slice(0, 6),
             // The published standard's working, when one applies (18 Aug): a mark
             // per learning outcome, the total, the structural rule if broken.
-            loMarks: (Array.isArray(r.overall.loMarks) ? r.overall.loMarks : []).map(x => ({ label: String((x && x.label) || '').trim(), mark: Number(x && x.mark), reason: String((x && x.reason) || '').trim() })).filter(x => x.label && Number.isInteger(x.mark)).slice(0, 8),
+            loMarks: (Array.isArray(r.overall.loMarks) ? r.overall.loMarks : []).map(x => ({ label: String((x && x.label) || '').trim(), mark: Number(x && x.mark), reason: String((x && x.reason) || '').trim(), ...(x && x.derived ? { derived: true } : {}) })).filter(x => x.label && Number.isInteger(x.mark)).slice(0, 8),
             total: Number.isInteger(r.overall.total) ? r.overall.total : 0,
             structure: String(r.overall.structure || '').trim(),
             scheme: scheme ? { id: scheme.id, name: scheme.name, labels: scheme.labels } : null,

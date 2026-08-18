@@ -73,11 +73,55 @@ function cipdL7UnitResult(loMarks) {
     return { total, label: 'Distinction', why: 'total 14–16' };
 }
 
+// Which learning outcome a criterion belongs to, by CIPD's own numbering:
+// AC1.4 / 1.4 / "LO1" → LO1. Anything else (C1, C2 …) has no LO number.
+function cipdL7LoOf(criterionId) {
+    const s = String(criterionId || '');
+    const m = /(?:^|[^0-9])(\d+)\s*\.\s*\d+/.exec(s) || /LO\s*(\d+)/i.exec(s);
+    return m ? Number(m[1]) : null;
+}
+
+// THE MARK PER LEARNING OUTCOME WHEN THE MODEL LEFT IT OUT (18 Aug, live: the
+// marker graded every question — AC1.4 Merit, AC2.3 Merit, AC3.3 Pass, AC4.1
+// Merit — and returned loMarks: []. No LO row, no arithmetic, and the panel
+// looked as if it had not marked). Derived from the question grades, on the
+// same 1–4 scale, and SAID to be derived in the reason so it can be checked:
+//  - one question in the outcome → its grade is the outcome's mark;
+//  - several → the mean, a half rounding DOWN (a tie is not evidence for the
+//    higher mark; the real assessor uses discretion, code does not guess up);
+//  - a question not started → 1 (Refer) for that outcome, as it would be handed in;
+//  - criteria with no LO number (C1, C2 …) → one outcome each, in order.
+function cipdL7DeriveLoMarks(perCriterion, labels) {
+    const list = Array.isArray(perCriterion) ? perCriterion : [];
+    const idx = (label) => { const i = labels.findIndex(l => l.toLowerCase() === String(label || '').trim().toLowerCase()); return i >= 0 ? i + 1 : null; };
+    const groups = new Map();
+    let unnumbered = 0;
+    for (const p of list) {
+        if (!p || !p.criterionId) continue;
+        const missing = p.band === 'missing';
+        const mark = missing ? 1 : idx(p.label);
+        if (!mark) continue;   // no grade word on the scale — nothing to derive from
+        let lo = cipdL7LoOf(p.criterionId);
+        if (lo == null) lo = 1000 + (++unnumbered);
+        if (!groups.has(lo)) groups.set(lo, []);
+        groups.get(lo).push({ id: String(p.criterionId), mark, word: missing ? 'not started' : labels[mark - 1] });
+    }
+    return Array.from(groups.entries()).sort((a, b) => a[0] - b[0]).map(([lo, qs], i) => {
+        const mean = qs.reduce((a, q) => a + q.mark, 0) / qs.length;
+        const mark = Math.ceil(mean - 0.5);   // .5 rounds down
+        const label = lo >= 1000 ? 'LO' + (i + 1) : 'LO' + lo;
+        const parts = qs.map(q => q.id + ' ' + q.word).join(', ');
+        return { label, mark, reason: 'From the question grade' + (qs.length > 1 ? 's' : '') + ' (' + parts + ')' + (qs.length > 1 ? ' — the mean, a half rounding down' : '') + '; the marker gave no mark for this outcome itself.', derived: true };
+    });
+}
+
 const CIPD_L7 = {
     id: 'cipd-l7',
     name: 'CIPD Level 7 Advanced Diploma',
     labels: ['Refer', 'Pass', 'Merit', 'Distinction'],
     perOutcomeMarks: true,
+    loOf: cipdL7LoOf,
+    deriveLoMarks(perCriterion) { return cipdL7DeriveLoMarks(perCriterion, this.labels); },
     // Does this brief belong to the scheme? The brief's own words, the task text,
     // or her explicit choice in the settings.
     detect({ brief, gradeScheme, taskText }) {
@@ -111,7 +155,7 @@ ${rows}
 ALSO VERBATIM AND LOAD-BEARING: "As this is a Level 7 Diploma, it is important that you are able to demonstrate not only good knowledge and understanding of the material associated with each learning outcome, but also the ability to develop an original argument and justify it persuasively with reference to wider reading. Examples of approaches taken in a range of organisations are also an effective means by which to justify your arguments." And: "You must demonstrate within the submitted evidence (through headings and sub-headings) which learning outcomes and assessment criteria have been cited. We are unable to moderate your work if this is not included."
 
 HOW TO APPLY IT HERE:
-- Group the brief's criteria (AC1.1, AC1.2 … AC4.4) under their LEARNING OUTCOMES (LO1 = AC1.x, LO2 = AC2.x, …). Give EACH learning outcome present in the brief ONE mark, 1–4, from the grid — "loMarks": [{ label: "LO1", mark: 3, reason: "…" }] — the reason naming the grid rows that decided it (e.g. "depth and breadth: solid across 1.1–1.3 but 1.4 has no comparison; research: two sources, no wider reading").
+- Group the brief's criteria (AC1.1, AC1.2 … AC4.4) under their LEARNING OUTCOMES (LO1 = AC1.x, LO2 = AC2.x, …). Give EACH learning outcome present in the brief ONE mark, 1–4, from the grid — "loMarks": [{ label: "LO1", mark: 3, reason: "…" }] — the reason naming the grid rows that decided it (e.g. "depth and breadth: solid across 1.1–1.3 but 1.4 has no comparison; research: two sources, no wider reading"). "loMarks" is REQUIRED on this standard: one entry per learning outcome the brief has, never an empty array — an empty "loMarks" is a mark that has not been done. "total" is their sum.
 - The unit result follows the arithmetic above (one outcome at 1 = Refer, whatever the total); "label" overall must be that result and "total" the sum. Per criterion, "label" is what that part would earn on its own on the same scale.
 - Use the six criteria's names in your reasons; the ladder's rungs say which learning outcome(s) must rise, by how much, and what in the grid's words that takes.
 - If the draft has no headings that map to the ACs, say so in "structure" (verbatim rule above) — one plain sentence; empty string if the headings are there.`;
@@ -126,4 +170,4 @@ function detectMarkScheme(args) {
     return null;
 }
 
-module.exports = { SCHEMES, detectMarkScheme, CIPD_L7, cipdL7UnitResult };
+module.exports = { SCHEMES, detectMarkScheme, CIPD_L7, cipdL7UnitResult, cipdL7LoOf, cipdL7DeriveLoMarks };

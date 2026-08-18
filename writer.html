@@ -1554,6 +1554,20 @@
     .mk-tile .mk-lab { font-size: 10px; color: var(--text-muted); font-weight: 600; overflow-wrap: anywhere; }
     .mk-tile .mk-sub { font-size: 9px; color: var(--text-faint); }
     .mk-note { font-size: 11px; color: var(--text-muted); line-height: 1.45; margin-top: 6px; }
+    /* THE MARK, LOOKING IMPORTANT (Sarah, 18 Aug): a grade tile per question,
+       the overall big under them, then how many fixes to the next grade. */
+    .mk-gtiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(92px, 1fr)); gap: 6px; margin-bottom: 6px; }
+    .mk-gtiles .mk-tile:first-child { grid-column: auto; }
+    .mk-gtiles .mk-tile.mk-all, .mk-gtiles .mk-tile.mk-fix { grid-column: 1 / -1; }
+    .mk-gtile .mk-v { font-size: 17px; display: flex; align-items: center; gap: 6px; }
+    .mk-gdot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; flex: none; }
+    .mk-tile.mk-all { padding: 12px 14px; }
+    .mk-tile.mk-all .mk-v { font-size: 28px; }
+    .mk-tile.mk-all .mk-lab { font-size: 11px; }
+    .mk-tile.mk-fix { flex-direction: row; align-items: baseline; gap: 8px; padding: 9px 14px; }
+    .mk-tile.mk-fix .mk-v { font-size: 22px; }
+    .mk-tile.mk-fix .mk-lab { font-size: 11.5px; }
+    .mk-tile.mk-fix.done .mk-v { color: var(--text); }
     #mk-cut-all { margin-top: 4px; }
     .mk-empty { font-size: 12px; color: var(--text-muted); line-height: 1.5; }
     .mk-part { display: grid; grid-template-columns: auto minmax(0,1fr) auto; gap: 8px; align-items: center; font-size: 12px; padding: 4px 6px; border-radius: 8px; }
@@ -8302,7 +8316,7 @@
                 ${a.example ? `<div class="q-add-eg"><span class="q-add-eg-l">the shape of it — write your own version</span>${escHtml(a.example)}</div>` : ''}
               </div>`).join('')}</div>` : '';
         const rail = { top: '#28a745', mid: '#e6a817', low: '#e0245e', missing: '#9aa0ad' }[p.band] || '#e0245e';
-        return `<div class="mk-block q-qcard" style="--rail:${rail}">`
+        return `<div class="mk-block q-qcard" data-mk-qcard="${per.indexOf(p)}" style="--rail:${rail}">`
           + `<div class="mk-block-head"><span class="mk-ico">${started ? 'Q' + (cs.findIndex(c => c.id === p.criterionId) + 1) : '·'}</span>`
           + `<span class="mk-title">${escHtml(labelFor(p.criterionId))}</span>`
           + `<span class="mk-count">${escHtml(gradeWord(p))}</span></div>`
@@ -8324,16 +8338,39 @@
       const listBlock = (label, items, cls) => items.length
         ? `<div class="q-mk-block ${cls}"><span class="q-mk-l">${escHtml(label)}</span><ul>${items.map(x => `<li>${escHtml(x)}</li>`).join('')}</ul></div>` : '';
       const BAND_RAIL = { top: '#28a745', mid: '#e6a817', low: '#e0245e', missing: '#9aa0ad' };
-      return rows
-        + (strong.length ? mkBlock('What stays', '✓', '', `<ul class="q-mk-ul">${strong.map(x => `<li>${escHtml(x)}</li>`).join('')}</ul>`, strong.length) : '')
-        + (missing.length ? mkBlock('What is missing', '○', '', `<ul class="q-mk-ul">${missing.map(x => `<li>${escHtml(x)}</li>`).join('')}</ul>`, missing.length) : '')
-        + mkBlock('If you handed it in now', '★', '',
-            `<div class="q-band-all"><b>${escHtml(gradeWord(m.overall))}</b> <span>${escHtml(total ? done + ' of ' + total + ' questions answered' : 'overall')}${schemeNote ? ' · ' + escHtml(schemeNote) : ''}</span></div>`
+      // THE GRADE IS THE HEADLINE (Sarah, 18 Aug, live: "he marked, he just
+      // didn't put it on the css" — the mark was there, four blocks down under
+      // the reading and every question card, and her screen showed the top of
+      // the panel). A marked paper carries its grade at the top: the unit
+      // result and the LO marks first, the ladder up, then each question.
+      // Sarah, 18 Aug: "we need the mark up here looking important. marks on
+      // each question and then overall. then underneath how many fixes to get
+      // to the next level."
+      const qTiles = per.map((p, i) => {
+        const qi = cs.findIndex(c => c.id === p.criterionId);
+        const rail = BAND_RAIL[p.band] || '#e0245e';
+        return `<button type="button" class="mk-tile mk-gtile" data-mk-q="${i}"><span class="mk-v"><span class="mk-gdot" style="background:${rail}"></span>${escHtml(gradeWord(p))}</span><span class="mk-lab">${escHtml(qi >= 0 ? 'Q' + (qi + 1) : labelFor(p.criterionId))}</span></button>`;
+      }).join('');
+      const lo = (m.overall.loMarks || []).filter(x => x && x.label && Number.isInteger(x.mark));
+      const loTotal = lo.length ? (Number.isInteger(m.overall.total) && m.overall.total ? m.overall.total : lo.reduce((a, x) => a + x.mark, 0)) + ' of ' + (lo.length * 4) : '';
+      const schName = m.overall.scheme && m.overall.scheme.name ? m.overall.scheme.name : schemeNote;
+      const allSub = [loTotal, total ? done + ' of ' + total + ' questions answered' : '', schName].filter(Boolean).join(' · ');
+      const allTile = `<div class="mk-tile mk-all"><span class="mk-v">${escHtml(gradeWord(m.overall) || 'overall')}</span><span class="mk-lab">if you handed it in now</span>${allSub ? `<span class="mk-sub">${escHtml(allSub)}</span>` : ''}</div>`;
+      const rungsAll = (m.overall.ladder || []).filter(r => r && r.label && (r.needs || []).length);
+      const rung = rungsAll[0];
+      const fixTile = rung
+        ? `<button type="button" class="mk-tile mk-fix act" data-mk-ladder="1"><span class="mk-v">${rung.needs.length}</span><span class="mk-lab">${escHtml((rung.needs.length === 1 ? 'fix' : 'fixes') + ' to a ' + rung.label)}</span></button>`
+        : (nextL ? '' : (gradeWord(m.overall) && schemeLadder() ? `<div class="mk-tile mk-fix done"><span class="mk-v">✓</span><span class="mk-lab">the top grade — nothing above it</span></div>` : ''));
+      return mkBlock('The mark', '★', '',
+            `<div class="mk-gtiles">${qTiles}${allTile}${fixTile}</div>`
             + loMarksHtml(m)
             + (why ? `<div class="q-band-why">${escHtml(why)}</div>` : '')
             + (String(m.overall.structure || '').trim() ? `<div class="q-band-struct">${escHtml(m.overall.structure)}</div>` : ''))
         + ladderBlock(m)
-        + ((toNext && !(m.overall.ladder || []).length) ? mkBlock(nextL ? 'To get a ' + nextL : 'To take it higher', '↑', '', `<div class="q-band-next">${qMd(toNext)}</div>`) : '');
+        + ((toNext && !(m.overall.ladder || []).length) ? mkBlock(nextL ? 'To get a ' + nextL : 'To take it higher', '↑', '', `<div class="q-band-next">${qMd(toNext)}</div>`) : '')
+        + rows
+        + (strong.length ? mkBlock('What stays', '✓', '', `<ul class="q-mk-ul">${strong.map(x => `<li>${escHtml(x)}</li>`).join('')}</ul>`, strong.length) : '')
+        + (missing.length ? mkBlock('What is missing', '○', '', `<ul class="q-mk-ul">${missing.map(x => `<li>${escHtml(x)}</li>`).join('')}</ul>`, missing.length) : '');
     }
     // THE LADDER (Sarah, 18 Aug: "a whole system where it shows you what you
     // need to do to get from one mark to another"): you are here; each grade
@@ -8343,11 +8380,15 @@
     function loMarksHtml(m) {
       const lo = (m && m.overall && Array.isArray(m.overall.loMarks)) ? m.overall.loMarks.filter(x => x && x.label && Number.isInteger(x.mark)) : [];
       if (!lo.length) return '';
-      const total = Number.isInteger(m.overall.total) ? m.overall.total : lo.reduce((a, x) => a + x.mark, 0);
-      const max = lo.length * 4;
-      const sch = m.overall.scheme && m.overall.scheme.name ? m.overall.scheme.name : '';
-      return '<div class="q-lo">' + lo.map(x => '<span class="q-lo-i" title="' + escHtml(x.reason || '') + '"><b>' + escHtml(x.label) + '</b> ' + x.mark + '</span>').join('') + '<span class="q-lo-t">' + total + ' of ' + max + (sch ? ' · ' + escHtml(sch) : '') + '</span></div>'
-        + '<div class="q-lo-why">' + lo.filter(x => x.reason).map(x => '<div><b>' + escHtml(x.label) + '</b> ' + escHtml(x.reason) + '</div>').join('') + '</div>';
+      // The total and the scheme sit on the overall tile above — not again here.
+      // Marks the server DERIVED from the question grades (the model skipped the
+      // per-outcome field) say so once, in one muted line, not once per outcome.
+      const allDerived = lo.every(x => x.derived);
+      const why = allDerived
+        ? '<div>Outcome marks taken from the question grades — the marker did not mark each outcome itself.</div>'
+        : lo.filter(x => x.reason).map(x => '<div><b>' + escHtml(x.label) + '</b> ' + escHtml(x.reason) + '</div>').join('');
+      return '<div class="q-lo">' + lo.map(x => '<span class="q-lo-i" title="' + escHtml(x.reason || '') + '"><b>' + escHtml(x.label) + '</b> ' + x.mark + '</span>').join('') + '</div>'
+        + (why ? '<div class="q-lo-why">' + why + '</div>' : '');
     }
     function ladderBlock(m) {
       const rungs = (m && m.overall && Array.isArray(m.overall.ladder)) ? m.overall.ladder.filter(r => r && r.label && (r.needs || []).length) : [];
@@ -8636,7 +8677,8 @@
         + (done.length ? mkBlock('Fixed', '✓', '', done.map(x => row(x.it, x.i, { done: true })).join(''), done.length) : '');
       const empty = !bands && !list && !s.read ? '<div class="mk-empty">Nothing marked yet — press <b>Mark & fix →</b> when a question is written, or finish a step and Q marks that bit.</div>' : '';
       const foot = list ? '<div class="mk-foot">Press a sentence to go to it. A sentence moves to <b>Fixed</b> when you have rewritten it. Q stays on the coach card — ask him anything while this is open.</div>' : '';
-      markBody.innerHTML = stats + bands + cutList + list + empty + foot;
+      // The mark leads when there is one; the page's numbers otherwise (18 Aug).
+      markBody.innerHTML = (m && m.overall ? bands + stats : stats + bands) + cutList + list + empty + foot;
       // A tile with a number on it opens that list on the page.
       markBody.querySelectorAll('[data-mk-pass]').forEach(el => el.addEventListener('click', () => {
         const kind = el.dataset.mkPass;
@@ -8645,6 +8687,15 @@
           : (state.tidy[kind] || []);
         edProof = { kind, issues: from.filter(is => !is.done && !!findInDoc(is.wrong)), busy: false, note: '' };
         try { renderEditPanel(); edPaint(); openEditPanel(); } catch (_) {}
+      }));
+      // A grade tile → that question's card; the fixes tile → the ladder.
+      markBody.querySelectorAll('[data-mk-q]').forEach(el => el.addEventListener('click', () => {
+        const card = markBody.querySelector(`[data-mk-qcard="${el.dataset.mkQ}"]`);
+        if (card) card.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }));
+      markBody.querySelectorAll('[data-mk-ladder]').forEach(el => el.addEventListener('click', () => {
+        const lad = markBody.querySelector('.q-ladder');
+        if (lad && lad.closest('.mk-block')) lad.closest('.mk-block').scrollIntoView({ behavior: 'smooth', block: 'start' });
       }));
       // Her press, one line: cut it, or keep it and it stops being suggested.
       markBody.querySelectorAll('[data-mk-cut]').forEach(el => el.addEventListener('click', (e) => {
