@@ -2809,6 +2809,11 @@ router.post('/writer/brief', requirePerson, express.json({ limit: '8mb' }), writ
     const job = startWriterJob(personId, 'brief', async () => {
         const brief = await qWriter.analyseAndBrief(taskText);
         const criteria = brief.criteria || [];
+        // The brief read asks for the scenario as part of the brief — so the
+        // story has been LOOKED FOR, story or none. Without this flag a brief
+        // with no case study (CIPD 7HR02 questions, Sarah, 18 Aug) left the page
+        // on "Q is pulling the scenario out of the brief for you…" for good.
+        brief.scenarioChecked = true;
         writeTutor(personId, {
             brief,
             sourceName: name || 'document',

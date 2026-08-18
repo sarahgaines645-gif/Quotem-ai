@@ -1165,15 +1165,15 @@
       letter-spacing: 0.06em; color: var(--text-muted); margin-bottom: 2px;
     }
     .cov-item {
-      display: grid; grid-template-columns: 12px 1fr; gap: 6px; align-items: start;
+      display: grid; grid-template-columns: 12px 1fr auto; gap: 6px; align-items: start;   /* third column: the id, space RESERVED so a hover never reflows the row (Sarah, 18 Aug: 'the card and text jumps when you hover') */
       font-size: 11px; color: var(--text); line-height: 1.35; cursor: pointer;
     }
     .cov-item:hover .cov-text { color: var(--accent); }
     .cov-item .cov-dot { width: 9px; height: 9px; border-radius: 50%; margin-top: 3px; box-shadow: var(--neu-inset-sm); }
     .cov-item[data-cov="covered"] .cov-dot { background: #28a745; box-shadow: none; }
     .cov-item[data-cov="partial"] .cov-dot { background: #e6a817; box-shadow: none; }
-    .cov-item .cov-id { display: none; font-weight: 700; font-size: 9px; color: var(--text-faint); margin-left: 4px; }
-    .cov-item:hover .cov-id, .cov-item.show-id .cov-id { display: inline; }
+    .cov-item .cov-id { visibility: hidden; font-weight: 700; font-size: 9px; color: var(--text-faint); margin-left: 4px; margin-top: 1px; white-space: nowrap; }
+    .cov-item:hover .cov-id, .cov-item.show-id .cov-id { visibility: visible; }
     .cov-item.current .cov-text { font-weight: 600; }
     .mark-row {
       background: var(--bg); border-radius: 10px; box-shadow: var(--neu-raised-xs);
@@ -3853,7 +3853,7 @@
         const count = '';   // no numbers on the strip (Sarah, 17 Aug: "AI and working life 0% — I don't want everything written out like this")
         const title = c.id + ' — ' + String(c.text || '').replace(/\s+/g, ' ').trim();
         return `<div class="cov-item${cur}" data-cov="${cov}" data-id="${escHtml(c.id)}" title="${escHtml(title)}">
-          <span class="cov-dot"></span><span class="cov-text">${escHtml(criterionLabel(c))}<span class="cov-id">${escHtml(c.id)}</span>${count}</span></div>`;
+          <span class="cov-dot"></span><span class="cov-text">${escHtml(criterionLabel(c))}${count}</span><span class="cov-id">${escHtml(c.id)}</span></div>`;
       }).join('');
       strips.forEach(strip => {
         strip.innerHTML = html;
