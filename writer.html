@@ -6828,7 +6828,12 @@
         state.docSnapshot = docPlainText(); state.qCount = 0;
         appendBoardItem({ type: 'note', label: 'the task', text: found });
         renderCoverage();
-        setCoach({ msg: 'You\'ve got ' + draftWords + ' words down already. Mark & fix, or carry on and I\'ll follow.', section: '', hint: '', inputVisible: true, showNudge: false, actions: [{ label: 'Mark & fix →', primary: true, big: true, onClick: () => markAndFix() }] });
+        // ASSESS IT FIRST (Sarah, 18 Aug: "it should assess it and see what it
+        // fulfils as soon as it starts. Not everyone's going to be starting from
+        // Q1"). A page with an essay on it is read against the brief straight
+        // away — the mark, the ladder, where to go first — not offered a button.
+        setCoach({ msg: 'You\'ve brought ' + draftWords + ' words — reading them against the brief first, so we start from where you are, not from question 1.', section: '', hint: '', inputVisible: false, showNudge: false, actions: [] });
+        setTimeout(() => { try { markAndFix({ straight: true }); } catch (_) {} }, 400);
         coachInput.placeholder = 'Ask Q…';
         persist({ currentQuestion: '', openerDone: true, currentCriterionId: state.currentCriterionId, coverage: state.coverage, currentSection: state.currentCriterionId });
         return;
@@ -7702,6 +7707,24 @@
     });
 
     // Paste handler: if it's a file, load it; if it's text, fill the source
+    // A big paste INTO the page with a brief already read = an essay brought in
+    // (Sarah, 18 Aug: "not everyone's going to be starting from Q1"). Read it
+    // against the brief now — the mark, the ladder, where to go first.
+    docBody.addEventListener('paste', (e) => {
+      try {
+        if (!state.brief || markRunning || walkOn()) return;
+        const t0 = e.clipboardData ? String(e.clipboardData.getData('text') || '') : '';
+        const words = t0.split(/\s+/).filter(Boolean).length;
+        if (words < 120) return;
+        setTimeout(() => {
+          try {
+            if (markRunning || walkOn()) return;
+            setCoach({ msg: 'You\'ve pasted ' + words + ' words in — reading them against the brief first, so we start from where you are.', section: '', hint: '', inputVisible: false, showNudge: false, actions: [] });
+            markAndFix({ straight: true });
+          } catch (_) {}
+        }, 700);   // after the browser has put the text on the page and the autosave has it
+      } catch (_) {}
+    });
     window.addEventListener('paste', (e) => {
       const tag = (document.activeElement && document.activeElement.tagName) || '';
       const inDoc = !!(document.activeElement && document.activeElement === docBody);
@@ -8406,7 +8429,8 @@
       }
       return markItems.concat(extra);
     }
-    async function markAndFix() {
+    async function markAndFix(opts) {
+      opts = opts || {};
       if (markRunning) return;
       // A walk already on comes back to the sentence we were on (a tool, the
       // strip or a pop-up may have covered the card) — never a second mark.
@@ -8423,8 +8447,9 @@
         tidy = await runTidyPasses(text);
       } catch (_) {}
       state.tidy = tidy; persist({ tidy });
-      // Nothing in the way: straight on to the mark.
-      if (!tidy.cut.length && !tidy.quick.length) { markRunning = false; return doTheMark(); }
+      // Nothing in the way — or an automatic assessment (a draft brought in):
+      // straight on to the mark. The reading still fills the marking panel.
+      if ((!tidy.cut.length && !tidy.quick.length) || opts.straight) { markRunning = false; return doTheMark(); }
       const bits = [];
       if (tidy.cut.length) bits.push('**' + tidy.cut.length + '** ' + (tidy.cut.length === 1 ? 'line that is not part of the essay' : 'lines that are not part of the essay'));
       if (tidy.quick.length) bits.push('**' + tidy.quick.length + '** ' + (tidy.quick.length === 1 ? 'spelling or grammar slip' : 'spelling and grammar slips'));
