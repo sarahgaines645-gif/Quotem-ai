@@ -736,7 +736,7 @@ const MARK_SCHEMA = {
     required: ['overall', 'perCriterion', 'weakestCriterionId', 'critique'],
     properties: {
         overall: {
-            type: 'object', additionalProperties: false, required: ['band', 'label', 'summary', 'strong', 'missing', 'answeredCount', 'nextLabel', 'toNext'],
+            type: 'object', additionalProperties: false, required: ['band', 'label', 'summary', 'strong', 'missing', 'answeredCount', 'nextLabel', 'toNext', 'ladder'],
             properties: {
                 band: { type: 'string', enum: ['top', 'mid', 'low'] },
                 label: { type: 'string', description: 'The grade in the student\'s scheme, e.g. "Distinction", "Merit", "Grade 7", "2:1", "Pass", "Refer". If the scheme is "as the brief says", use the words the brief itself uses for its bands; if the brief names none, leave this empty.' },
@@ -746,6 +746,14 @@ const MARK_SCHEMA = {
                 answeredCount: { type: 'integer', description: 'How many of the criteria the draft genuinely attempts (has real content for), out of the total.' },
                 nextLabel: { type: 'string', description: 'The NEXT GRADE UP in their scheme — the one word: e.g. "Merit" when they are at Pass, "Distinction" when they are at Merit, "Grade 7" when they are at Grade 6. Empty ONLY if they are already at the top grade or the scheme names no grades.' },
                 toNext: { type: 'string', description: 'HOW TO GET THAT GRADE. The two or three concrete things that would lift THIS draft to nextLabel, each one a thing they can go and do today — name the part, the idea, the evidence, the comparison. Never "develop further", never "add more detail", never a description of what the grade means. If they are already at the top grade, what would keep it there.' },
+                ladder: {
+                    type: 'array',
+                    description: 'THE LADDER (Sarah, 18 Aug: "a whole system where it shows you what you need to do to get from one mark to another"). EVERY grade ABOVE the one you have given, in order, up to the top of the scheme — one rung each. For each rung, 2-4 concrete things that would lift THIS draft to THAT grade, on top of the rungs below it: name the part (AC / question), the idea to name, the evidence to find, the comparison to make, the sentence to write. Things they can go and do today. Never "develop further". Uses the scheme\'s own grade words. Empty ONLY if the brief names no grades or they are already at the top.',
+                    items: { type: 'object', additionalProperties: false, required: ['label', 'needs'], properties: {
+                        label: { type: 'string', description: 'The grade word for this rung, e.g. "Merit", "Distinction", "Grade 7", "2:1".' },
+                        needs: { type: 'array', items: { type: 'string' }, description: 'What THIS draft still needs for this rung — one concrete thing per line, 8-25 words, naming the part.' },
+                    } },
+                },
             },
         },
         perCriterion: {
@@ -830,6 +838,7 @@ ${LEADING_QUESTION_RULE}
 - THE MARK IS PER QUESTION FIRST. Every criterion gets its own grade in their scheme ("label") — that is the mark they act on. A criterion with nothing written for it is band "missing": it is NOT graded, it is "not started", and its "missingForTop" says what it needs to become an answer.
 - Overall band = what this draft would get if it were handed in as it is (unanswered questions included — that is the truth of a submission), and "answeredCount" says how many criteria are genuinely attempted, so the student can see the overall grade is dragged by what is not written yet rather than by the quality of what is.
 - SAY THE GRADE IN THEIR WORDS, NOT IN BANDS. "label" per part and overall is the grade the scheme actually uses — Pass / Merit / Distinction, Grade 7, 2:1. A student marked on Pass/Merit/Distinction must never be told "lower band"; they are told "Pass" and what stops it being a Merit.
+- AND SAY THE WHOLE LADDER. "ladder" is EVERY grade above the one you have given, in order to the top of the scheme, and for each rung the concrete things this draft still needs for it (cumulative — a Distinction rung assumes the Merit rung is done). The student reads it as: I am here; to get X I do these; to get Y, these as well. Never a description of what a grade means — always what THIS draft must add, and in which part.
 - AND SAY HOW TO CLIMB. "nextLabel" is the grade immediately above the one you have given; "toNext" is the two or three concrete things that would get THIS draft there — the idea to name, the evidence to find, the part to answer properly, the comparison to make. A student must never be told the grade without being told the way up.
 - "voicedBrickIds" per criterion: the bricks of the model answer this draft GENUINELY voices (point made in their words with its reason / example). This is the honest tally the student's visible score is rebuilt from — a listed item is not a voiced brick; a claim without its reason is not a voiced brick.
 - EXPECTATIONS per part (below, where a plan exists): report per criterion which expected terms the draft COVERS ("termsUsed" — the idea is on the page doing work; it does not matter whether she used that word, her own wording or a plain-English explanation counts just as much; a bare label with no idea behind it does not) and which requirements it satisfies ("requirementsMet"); in the critique, "needs" = the requirement kinds a sentence is missing.
@@ -1039,6 +1048,8 @@ function normaliseMark(r, brief, essayForMark, plans) {
             // grade"). A grade with no way up is not marking, it is scoring.
             nextLabel: String(r.overall.nextLabel || ''),
             toNext: String(r.overall.toNext || ''),
+            // Every grade above, in order, and what each takes (18 Aug).
+            ladder: (Array.isArray(r.overall.ladder) ? r.overall.ladder : []).map(x => ({ label: String((x && x.label) || '').trim(), needs: (Array.isArray(x && x.needs) ? x.needs : []).map(String).map(s => s.trim()).filter(Boolean).slice(0, 5) })).filter(x => x.label && x.needs.length).slice(0, 6),
         },
         perCriterion: per,
         weakestCriterionId: weakest,

@@ -1119,6 +1119,16 @@
     .q-bandlist .bd.missing, .mk-block .bd.missing { background-color: transparent; box-shadow: inset 0 0 0 2px var(--text-faint); }
     .q-bandlist .q-band-w.missing, .mk-block .q-band-w.missing { color: var(--text-faint); }
     /* A QUESTION'S CARD: grade, what she has, then the moves that teach. */
+    /* the ladder: you are here, then each grade above with what it takes */
+    .q-ladder { display: flex; flex-direction: column; gap: 0; margin-top: 2px; }
+    .q-rung { display: grid; grid-template-columns: 14px 1fr; gap: 8px; position: relative; padding: 4px 0 8px; }
+    .q-rung::before { content: ''; position: absolute; left: 6px; top: 16px; bottom: -4px; width: 2px; background: rgba(0,0,0,0.08); }
+    .q-rung:last-child::before { display: none; }
+    .q-rung-dot { width: 12px; height: 12px; border-radius: 50%; margin-top: 4px; box-shadow: var(--neu-inset-sm); background: var(--bg); position: relative; z-index: 1; }
+    .q-rung.here .q-rung-dot { background: var(--accent); box-shadow: none; }
+    .q-rung-body b { font-size: 12.5px; font-weight: 700; color: var(--text); }
+    .q-rung-note { font-size: 10px; color: var(--text-muted); margin-left: 7px; }
+    .q-rung .q-mk-ul { margin-top: 3px; }
     .q-mk-ul { margin: 0; padding-left: 16px; }
     .q-mk-ul li { font-size: 12px; line-height: 1.5; color: var(--text); margin: 4px 0; overflow-wrap: anywhere; }
     .q-qcard .mk-ico { font-size: 11px; font-weight: 700; }
@@ -4129,12 +4139,16 @@
     // Every part gets its plan (word board, dots) — one call per missing part,
     // in order, cached server-side. A part whose plan fails is skipped (the
     // mark still runs); nothing is lost.
-    async function ensurePlans(onTick) {
+    async function ensurePlans(onTick, { until } = {}) {
       const cs = (state.brief && state.brief.criteria) || [];
+      let skipped = false;   // after "skip", a board still landing in the background says nothing on the card
       for (let i = 0; i < cs.length; i++) {
         const c = cs[i]; if (planHasWords(c.id)) continue;
-        try { await getPlan(c.id, { onTick: (line) => onTick && onTick('Setting out the word board for part ' + (i + 1) + ' of ' + cs.length + '…') }); }
-        catch (e) { appendBoardItem({ type: 'note', label: 'note', text: 'No word board for part ' + (i + 1) + ' yet (' + shortCause(e) + ').', quiet: true }); }
+        // `until` (a promise) = she pressed "skip": stop waiting for the rest.
+        const p = getPlan(c.id, { onTick: (line) => { if (!skipped && onTick) onTick('Setting out the word board for part ' + (i + 1) + ' of ' + cs.length + '…'); } }).then(() => 'ok', (e) => ({ err: e }));
+        const r = until ? await Promise.race([p, until.then(() => 'skip')]) : await p;
+        if (r === 'skip') { skipped = true; break; }
+        if (r && r.err) appendBoardItem({ type: 'note', label: 'note', text: 'No word board for part ' + (i + 1) + ' yet (' + shortCause(r.err) + ').', quiet: true });
       }
       renderBoard();
     }
@@ -8282,7 +8296,21 @@
         + mkBlock('If you handed it in now', '★', '',
             `<div class="q-band-all"><b>${escHtml(gradeWord(m.overall))}</b> <span>${escHtml(total ? done + ' of ' + total + ' questions answered' : 'overall')}${schemeNote ? ' · ' + escHtml(schemeNote) : ''}</span></div>`
             + (why ? `<div class="q-band-why">${escHtml(why)}</div>` : ''))
-        + (toNext ? mkBlock(nextL ? 'To get a ' + nextL : 'To take it higher', '↑', '', `<div class="q-band-next">${qMd(toNext)}</div>`) : '');
+        + ladderBlock(m)
+        + ((toNext && !(m.overall.ladder || []).length) ? mkBlock(nextL ? 'To get a ' + nextL : 'To take it higher', '↑', '', `<div class="q-band-next">${qMd(toNext)}</div>`) : '');
+    }
+    // THE LADDER (Sarah, 18 Aug: "a whole system where it shows you what you
+    // need to do to get from one mark to another"): you are here; each grade
+    // above, in order, with what THIS draft still needs for it.
+    function ladderBlock(m) {
+      const rungs = (m && m.overall && Array.isArray(m.overall.ladder)) ? m.overall.ladder.filter(r => r && r.label && (r.needs || []).length) : [];
+      if (!rungs.length) return '';
+      const here = gradeWord(m.overall);
+      const html = '<div class="q-ladder">'
+        + '<div class="q-rung here"><span class="q-rung-dot"></span><div class="q-rung-body"><b>' + escHtml(here) + '</b><span class="q-rung-note">you are here</span></div></div>'
+        + rungs.map(r => '<div class="q-rung"><span class="q-rung-dot"></span><div class="q-rung-body"><b>' + escHtml(r.label) + '</b><ul class="q-mk-ul">' + (r.needs || []).map(n => '<li>' + escHtml(n) + '</li>').join('') + '</ul></div></div>').join('')
+        + '</div>';
+      return mkBlock('The ladder', '↑', '', html);
     }
     function bandsHtml(m) {
       if (!m || !m.overall) return '';
@@ -8431,7 +8459,13 @@
       setCoach({ msg: 'Marking it like the marker…', section: 'MARK & FIX', thinking: true, inputVisible: false, step: false });
       btnFinish.disabled = true;
       try {
-        await ensurePlans((line) => setCoach({ msg: line, section: 'MARK & FIX', thinking: true, inputVisible: false, step: false }));
+        // A fresh assignment has no word boards yet: the marker uses them for
+        // what each part expects, so they are set out first — one model call
+        // per part. Say so, count it, and let her skip (Sarah, 18 Aug: "it
+        // doesn't seem to be marking any more" — it was setting out four boards).
+        { let skip; const until = new Promise(r => { skip = r; });
+          const cs = (state.brief && state.brief.criteria) || []; const missingBoards = cs.filter(c => !planHasWords(c.id)).length;
+          await ensurePlans((line) => setCoach({ msg: line, hint: missingBoards ? 'The marker uses each part\'s word board — about a minute a part. Skip and it marks with what it has.' : '', section: 'MARK & FIX', thinking: true, inputVisible: false, step: false, actions: missingBoards ? [{ label: 'Skip the boards — mark it now', onClick: () => skip() }] : [] }), { until }); }
         await api('/writer/mark', { docText: text, gradeScheme: state.gradeScheme }, { timeoutMs: 40000 });
         const job = await waitForJob('mark', { onTick: (secs) => setCoach({ msg: 'Marking it like the marker… ' + secs + 's', section: 'MARK & FIX', thinking: true, inputVisible: false, step: false }) });
         const m = job.result;
@@ -8450,10 +8484,12 @@
           const why = String(m.overall.summary || '').trim();
           const up = String(m.overall.toNext || '').trim();
           const nl = String(m.overall.nextLabel || '').trim();
+          const rungs = (m.overall.ladder || []).filter(r => r && r.label && (r.needs || []).length);
           pushSaid({ role: 'q', text: [
             '**' + gradeWord(m.overall) + '** as it stands.',
             why,
-            up ? (nl ? '**To get a ' + nl + ':**\n\n' + up : '**To take it higher:**\n\n' + up) : '',
+            rungs.length ? rungs.map(r => '**To get a ' + r.label + ':**\n' + (r.needs || []).map(n => '- ' + n).join('\n')).join('\n\n') + '\n\nThe ladder is on the marking panel too.'
+              : (up ? (nl ? '**To get a ' + nl + ':**\n\n' + up : '**To take it higher:**\n\n' + up) : ''),
           ].filter(Boolean).join('\n\n') });
           renderThread();
         }
