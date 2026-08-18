@@ -1154,11 +1154,14 @@
     .q-add-n { font-size: 10px; font-weight: 700; color: var(--accent); }
     .q-add-gap { font-size: 12px; line-height: 1.5; color: var(--text-muted); margin-bottom: 5px; overflow-wrap: anywhere; }
     /* THE IDEA and DO THIS are two equal things (Sarah, 18 Aug: "these are
-       both important … they need to both stand out separately together"):
-       two sibling cards, the same label, the same size, the same depth. */
-    .q-add-parts { display: grid; grid-template-columns: 1fr; gap: 7px; margin-top: 7px; }
-    .q-add-part { padding: 9px 11px; border-radius: 11px; background: var(--bg); box-shadow: var(--neu-raised-xs); min-width: 0; }
-    .q-add-part .q-add-pl { display: block; font-size: 9px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--accent); margin-bottom: 4px; }
+       both important … they need to both stand out separately together" —
+       then, on cards: "messy … use something on the heading and a divider
+       instead, dont stack loads of cards up"). Flat: a small heading on each,
+       a hairline between them, no boxes. */
+    .q-add-parts { margin-top: 6px; }
+    .q-add-part { min-width: 0; }
+    .q-add-part + .q-add-part { margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--border-subtle, rgba(0,0,0,0.09)); }
+    .q-add-part .q-add-pl { display: block; font-size: 9px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--accent); margin-bottom: 3px; }
     .q-add-con { font-size: 12.5px; line-height: 1.55; color: var(--text); overflow-wrap: anywhere; }
     .q-add-do { font-size: 12.5px; line-height: 1.5; color: var(--text); overflow-wrap: anywhere; }
     .q-add-do b { font-weight: 700; }
