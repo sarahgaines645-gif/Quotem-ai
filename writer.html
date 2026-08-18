@@ -8512,9 +8512,10 @@
         // what each part expects, so they are set out first — one model call
         // per part. Say so, count it, and let her skip (Sarah, 18 Aug: "it
         // doesn't seem to be marking any more" — it was setting out four boards).
-        { let skip; const until = new Promise(r => { skip = r; });
-          const cs = (state.brief && state.brief.criteria) || []; const missingBoards = cs.filter(c => !planHasWords(c.id)).length;
-          await ensurePlans((line) => setCoach({ msg: line, hint: missingBoards ? 'The marker uses each part\'s word board — about a minute a part. Skip and it marks with what it has.' : '', section: 'MARK & FIX', thinking: true, inputVisible: false, step: false, actions: missingBoards ? [{ label: 'Skip the boards — mark it now', onClick: () => skip() }] : [] }), { until }); }
+        // (Sarah, 18 Aug, seeing the wait card: "what's this for?") The mark
+        // does not wait for the boards. It runs now with what exists; the boards
+        // still build in the background for the next mark — nothing on the card.
+        try { ensurePlans(null); } catch (_) {}
         await api('/writer/mark', { docText: text, gradeScheme: state.gradeScheme }, { timeoutMs: 40000 });
         const job = await waitForJob('mark', { maxMs: 420000, onTick: (secs) => setCoach({ msg: 'Marking it like the marker… ' + secs + 's', section: 'MARK & FIX', thinking: true, inputVisible: false, step: false }) });   // the mark may take minutes on a long essay (server cap 5 min + fallback)
         const m = job.result;
