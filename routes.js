@@ -2701,6 +2701,10 @@ const TUTOR_KEYS = [
     // so the board came back empty every refresh. `wbWork` is her own writing
     // on the board, keyed by part — it must never be lost.
     'wbDoc', 'wbWork', 'wbStickies',
+    // Q's furniture on her PAGE — his highlights + notes and his paragraph tabs.
+    // They lived in page state only, so every refresh wiped them (Q's own bug
+    // report, 18 Aug: "tabs disappear on page refresh" — highlights did too).
+    'qNotes', 'qTabs',
     // what Q's reading of the page found (cuts, weak lines, spelling, grammar) —
     // the marking panel's counts come from this, so it must survive a refresh.
     'tidy',

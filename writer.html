@@ -5155,10 +5155,22 @@
       let el = hit.start.node; while (el && el.parentNode !== docBody && el.parentNode) el = el.parentNode;
       return { block: el && el.nodeType === 1 ? el : null, textNode: hit.start.node, offset: hit.start.offset };
     }
+    // Q's furniture on the page survives a refresh (Q's bug report, 18 Aug:
+    // "tabs disappear on page refresh" — highlights did too). Saved with the
+    // notebook (TUTOR_KEYS qNotes/qTabs), restored on load, painted after the doc.
+    function persistQFurniture() { try { persist({ qNotes: (state.qNotes || []).slice(-200), qTabs: (state.qTabs || []).slice(-100) }); } catch (_) {} }
     function addQTabs(list) {
       state.qTabs = state.qTabs || [];
-      for (const t of list) { const pn = Number(t.paragraph); if (!Number.isInteger(pn) || pn < 1) continue; state.qTabs.push({ paragraph: pn, label: String(t.label || 'note').slice(0, 40), colour: HL_HEX[t.colour] ? t.colour : 'grey', side: ['right', 'left', 'top'].includes(t.side) ? t.side : 'right' }); }
+      for (const t of list) {
+        const pn = Number(t.paragraph); if (!Number.isInteger(pn) || pn < 1) continue;
+        // ONE live tab per paragraph: "put it on the other side" MOVES the tab —
+        // it used to add a second one (Q's bug report, 18 Aug: "moving a tab
+        // creates a duplicate"). The page's chips and jumps assume one per P#.
+        for (const old of state.qTabs) if (old && !old.done && Number(old.paragraph) === pn) old.done = true;
+        state.qTabs.push({ paragraph: pn, label: String(t.label || 'note').slice(0, 40), colour: HL_HEX[t.colour] ? t.colour : 'grey', side: ['right', 'left', 'top'].includes(t.side) ? t.side : 'right' });
+      }
       renderInlineDots(); try { renderBoard(); } catch (_) {}
+      persistQFurniture();
     }
     function tabForParagraph(pn) { return (state.qTabs || []).find(t => t && !t.done && Number(t.paragraph) === Number(pn)) || null; }
     const CALLOUT_HEX = { ok: '#28a745', warn: '#e6a817', bad: 'var(--accent)', info: '#3b82c4', tip: '#7c5cbf' };
@@ -5187,7 +5199,13 @@
     function renderQTabs() {
       docBody.querySelectorAll('.q-ptab, .q-ptab-anchor').forEach(n => n.remove());
       (state.qTabs || []).forEach((t, i) => {
-        if (!t || t.done) return; const at = paragraphStartNode(t.paragraph); if (!at) return;
+        if (!t || t.done) return; const at = paragraphStartNode(t.paragraph);
+        // No paragraph with that number on the page → the tab cannot hang anywhere.
+        // It used to vanish without a word (Q's report: "first tab_paragraph call
+        // fails silently"). Say so once, on the board, and let the tab wait — if
+        // the paragraph appears (she writes it) the tab lands on the next render.
+        if (!at) { if (!t.missed) { t.missed = true; try { appendBoardItem({ type: 'note', label: 'note', text: 'Q\'s tab "' + t.label + '" has nowhere to hang yet — there is no paragraph ' + Number(t.paragraph) + ' on the page (' + docParagraphTexts().length + ' at the moment).' }); } catch (_) {} } return; }
+        t.missed = false;
         const side = t.side === 'left' ? 'l' : (t.side === 'top' ? 't' : 'r');
         const tab = document.createElement('span'); tab.className = 'q-ptab ' + side; tab.contentEditable = 'false'; tab.setAttribute('data-q-furniture', 'true');
         tab.dataset.qtab = String(i); tab.textContent = t.label; tab.style.setProperty('--tc', HL_HEX[t.colour] || '#9aa0ad'); tab.title = '';
@@ -5204,12 +5222,12 @@
       const i = Number(tab.dataset.qtab); const t = (state.qTabs || [])[i]; if (!t) return;
       showToolPop('<div class="pc-head"><span class="pc-dot" style="--dc:' + (HL_HEX[t.colour] || '#9aa0ad') + '"></span>' + escHtml(t.label) + '</div><div class="pc-line">Paragraph ' + Number(t.paragraph) + '</div><div class="pc-acts"><button type="button" class="q-btn quiet" id="ptab-off">Take it off</button></div>', { kind: 'note', anchor: tab });
       toolPopEl.classList.add('dotpop');
-      const off = toolPopEl.querySelector('#ptab-off'); if (off) off.addEventListener('click', () => { t.done = true; toolPopEl.classList.remove('dotpop'); hideToolPop(); renderQTabs(); try { renderBoard(); } catch (_) {} });
+      const off = toolPopEl.querySelector('#ptab-off'); if (off) off.addEventListener('click', () => { t.done = true; toolPopEl.classList.remove('dotpop'); hideToolPop(); renderQTabs(); try { renderBoard(); } catch (_) {} persistQFurniture(); });
     });
     function addQNotes(list) {
       state.qNotes = state.qNotes || [];
       for (const p of list) { const text = String(p.text || '').replace(/\s+/g, ' ').trim(); if (!text) continue; if (state.qNotes.some(n => n && !n.done && n.text === text)) continue; state.qNotes.push({ text, note: String(p.note || ''), kind: String(p.kind || 'note'), colour: String(p.colour || '') }); }
-      paintQNotes();
+      paintQNotes(); persistQFurniture();
       try { const first = list[0] && list[0].text; if (first) { const hit = findInDoc(first); if (hit) { const r = document.createRange(); r.setStart(hit.start.node, hit.start.offset); r.collapse(true); const b = r.getBoundingClientRect(); if (b && (b.top < 80 || b.bottom > window.innerHeight - 120)) window.scrollBy({ top: b.top - Math.round(window.innerHeight * 0.4), behavior: 'smooth' }); } } } catch (_) {}
       renderInlineDots();
     }
@@ -5220,8 +5238,8 @@
         toolPopEl.classList.add('dotpop');
         const go = toolPopEl.querySelector('#qn-go'); if (go) go.addEventListener('click', () => { toolPopEl.classList.remove('dotpop'); hideToolPop(); jumpToSentence(n.text); });
         // A CUT note: her press removes the passage from her page (Q never does it himself).
-        const cut = toolPopEl.querySelector('#qn-cut'); if (cut) cut.addEventListener('click', () => { n.done = true; toolPopEl.classList.remove('dotpop'); hideToolPop(); try { qSayPaint(null); } catch (_) {} const ok = cutFromDoc(n.text); renderInlineDots(); paintQNotes(); if (!ok) { try { jumpToSentence(n.text); } catch (_) {} } });
-        const off = toolPopEl.querySelector('#qn-off'); if (off) off.addEventListener('click', () => { n.done = true; toolPopEl.classList.remove('dotpop'); hideToolPop(); renderInlineDots(); paintQNotes(); });
+        const cut = toolPopEl.querySelector('#qn-cut'); if (cut) cut.addEventListener('click', () => { n.done = true; toolPopEl.classList.remove('dotpop'); hideToolPop(); try { qSayPaint(null); } catch (_) {} const ok = cutFromDoc(n.text); renderInlineDots(); paintQNotes(); if (!ok) { try { jumpToSentence(n.text); } catch (_) {} } persistQFurniture(); });
+        const off = toolPopEl.querySelector('#qn-off'); if (off) off.addEventListener('click', () => { n.done = true; toolPopEl.classList.remove('dotpop'); hideToolPop(); renderInlineDots(); paintQNotes(); persistQFurniture(); });
         return;
       }
       if (dot.dataset.mk) {
@@ -9928,6 +9946,10 @@
         state.wbWork = t.wbWork && typeof t.wbWork === 'object' ? t.wbWork : {};
         state.wbStickies = Array.isArray(t.wbStickies) ? t.wbStickies : [];
         try { renderStickies(); } catch (_) {}
+        // Q's highlights + notes and his tabs come back onto the page with her.
+        state.qNotes = Array.isArray(t.qNotes) ? t.qNotes : [];
+        state.qTabs = Array.isArray(t.qTabs) ? t.qTabs : [];
+        setTimeout(() => { try { paintQNotes(); renderInlineDots(); } catch (_) {} }, 0);
         // Q's reading of the page (the marking counts) comes back with her.
         state.tidy = t.tidy && typeof t.tidy === 'object' ? t.tidy : null;
         try { workKeyShown = null; syncWorkArea(); } catch (_) {}
