@@ -1554,9 +1554,24 @@ function writerCoachContext({ t, cid, plan, stepId, docText, stored, ask, partWo
     // Paragraph numbers, so he can say "paragraph 4, sentence 2" (Q's own ask,
     // 18 Aug). Numbered on his copy only — nothing changes on her page.
     if (page) {
-        const paras = page.split(/\n{2,}|\r?\n/).map(x => x.trim()).filter(Boolean);
-        const numbered = paras.map((x, i) => '[P' + (i + 1) + '] ' + x).join(nl2);
-        L.push('What is on their page (' + page.split(/\s+/).filter(Boolean).length + ' words, ' + paras.length + ' paragraphs, numbered [P1]…; refer to them by number):' + nl2 + (numbered.length > 9000 ? '…' + numbered.slice(-9000) : numbered));
+        // Numbering that means what a person means (Sarah, 18 Aug: "its
+        // referencing so would that class as a paragraph?"): P# = essay
+        // paragraphs only; a heading is named as a heading; after the
+        // References heading each entry is R#. The page numbers the same way.
+        const blocks = page.split(/\n{2,}|\r?\n/).map(x => x.trim()).filter(Boolean);
+        let inRefs = false, pn = 0, rn = 0; const outL = [];
+        for (const b of blocks) {
+            if (!inRefs && /^(harvard )?(references|reference list|bibliography)\s*:?$/i.test(b)) { inRefs = true; outL.push('[References]'); continue; }
+            if (inRefs) {
+                if (!/\(\d{4}[a-z]?\)|(19|20)\d{2}|available at|https?:|doi/i.test(b)) { outL.push('[heading — inside the references] ' + b); continue; }
+                rn++; outL.push('[R' + rn + '] ' + b); continue;
+            }
+            const words = b.split(/\s+/).length;
+            if (words <= 10 && !/[.!?]$/.test(b)) { outL.push('[heading] ' + b); continue; }
+            pn++; outL.push('[P' + pn + '] ' + b);
+        }
+        const numbered = outL.join(nl2);
+        L.push('What is on their page (' + page.split(/\s+/).filter(Boolean).length + ' words; ' + pn + ' essay paragraph' + (pn === 1 ? '' : 's') + ' numbered [P1]…' + (rn ? ', ' + rn + ' references numbered [R1]…' : '') + '; headings are marked; refer to paragraphs by P number and references by R number):' + nl2 + (numbered.length > 9000 ? '…' + numbered.slice(-9000) : numbered));
     }
     else L.push('Their page is empty so far.');
     L.push('Reply to their next message as their tutor.');
@@ -1600,19 +1615,41 @@ router.post('/writer/chat', requirePerson, express.json({ limit: '1mb' }), write
             // Which brain: 'q' = the general-chat Q (V4 Pro, default); 'qb2' = the
             // model QB2 talks with in Quoteapp (GLM-5.2 — q-chat's thread model).
             // Sarah, 17 Aug: "QB2 on the case… may be the best one for this" / "or QB2".
-            const brain = String(b.brain || (t.settings && t.settings.coachBrain) || 'qb2');   // default = QB2's model (Sarah, 17 Aug: 'a different model')
+            const brain = String(b.brain || (t.settings && t.settings.coachBrain) || 'q');   // default = the general-chat model (V4 Pro): GLM kept talking instead of calling tools (Sarah, 18 Aug, tests #2 and #5). 'qb2' = GLM-5.2.
             const qOpts = { surface: 'writer-coach', person: req.person, useTools: true };   // HIS tools too — emails, the lot (Sarah, 17 Aug: 'he has access to my emails. it makes sense')
             if (brain === 'qb2' && Q_CONFIG_THREAD_MODEL) qOpts.model = Q_CONFIG_THREAD_MODEL;
             const q = await qChat(messages, qOpts);
             try { const tc = (Array.isArray(q && q.toolCalls) ? q.toolCalls : []).map(c => c.name + (c.result && c.result.error ? '(ERR)' : '')); if (tc.length) console.log('[writer/chat] Q tools: ' + tc.join(', ')); } catch (_) {}
             if (q && q.reply && !q.error) {
-                const m = String(q.reply).match(/```display[ \t]*\r?\n([\s\S]*?)```/);
-                let display = null, reply = String(q.reply);
+                let display = null, reply = String(q.reply).replace(/^\s*(Response|Reply|Answer)\s*:?\s*(?=[A-Z\[\*#-])/, '');   // a stray 'Response' label some models prefix
+                const m = reply.match(/```display[ \t]*\r?\n([\s\S]*?)```/);
                 if (m) {
                     reply = reply.replace(m[0], '').trim();
                     const src = m[1].trim();
                     const tm = src.match(/^#{1,3}[ \t]+(.+)$/m);
                     display = { title: tm ? tm[1].trim() : 'Whiteboard', src };
+                }
+                // A whiteboard fence he left in his PROSE (diagram / build / flow) still
+                // belongs on the whiteboard, not as code in the chat (Sarah, 18 Aug:
+                // "11, 12 nothing happened" — they were sitting in the chat as code).
+                const stray = [];
+                reply = reply.replace(/```(diagram|flow|build|buildup)[ \t]*\r?\n[\s\S]*?```/g, (blk) => { stray.push(blk); return ''; }).replace(/\n{3,}/g, String.fromCharCode(10) + String.fromCharCode(10)).trim();
+                if (stray.length) {
+                    const extra = stray.join(String.fromCharCode(10) + String.fromCharCode(10));
+                    display = display ? { title: display.title, src: display.src + String.fromCharCode(10) + String.fromCharCode(10) + extra } : { title: 'Whiteboard', src: extra };
+                    if (!reply) reply = 'On the whiteboard.';
+                }
+                // HONESTY GUARD: if he says he placed a note / highlight / tab / sticky and
+                // no such tool call happened this turn, say so — she must never be told
+                // something is on her page when it is not (Sarah, 18 Aug).
+                {
+                    const called = new Set((Array.isArray(q.toolCalls) ? q.toolCalls : []).map(c => c && c.name));
+                    const claims = [
+                        [/\b(stuck|sticky note|sticky)\b/i, 'stick_note', 'that sticky note did not actually get placed'], 
+                        [/\b(highlighted|highlights? (are|is) on|painted)\b/i, 'highlight_passage', 'those highlights did not actually get placed'], 
+                        [/\b(tabbed|tabs? (are|is) on)\b/i, 'tab_paragraph', 'those tabs did not actually get placed'],
+                    ];
+                    for (const [rx, tool, msg] of claims) if (rx.test(reply) && !called.has(tool)) { reply += String.fromCharCode(10) + String.fromCharCode(10) + '(' + msg + ' — I described it instead of doing it. Ask me again and I will do it properly.)'; break; }
                 }
                 // His tap-to-answer [OPTIONS] block → buttons on the card (same
                 // convention as the general chat; parser mirrors chat.html).
@@ -1628,7 +1665,7 @@ router.post('/writer/chat', requirePerson, express.json({ limit: '1mb' }), write
                 const tabs = (Array.isArray(q.toolCalls) ? q.toolCalls : []).filter(c => c && c.name === 'tab_paragraph' && c.result && c.result.tabbed).map(c => ({ paragraph: c.result.paragraph, label: c.result.label, colour: c.result.colour, side: c.result.side || 'right' }));
                 const stickies = (Array.isArray(q.toolCalls) ? q.toolCalls : []).filter(c => c && c.name === 'stick_note' && c.result && c.result.stuck).map(c => ({ text: c.result.text, colour: c.result.colour }));
                 out = { reply, display, options, paints, tabs, stickies, board: null, next: '', highlights: [], answersStep: false, via: 'q' };
-                if (qpid) { try { appendMessage(qpid, 'user', text, QSURF); appendMessage(qpid, 'assistant', String(q.reply), QSURF); } catch (_) {} }
+                if (qpid) { try { appendMessage(qpid, 'user', text, QSURF); appendMessage(qpid, 'assistant', String(q.reply), QSURF); } catch (_) {} }   // a '[page] …' turn is the page speaking for her (a pause / Continue) — kept, so he remembers what she wrote
             }
         } catch (e) { console.warn('[writer/chat] Q unavailable, falling back: ' + e.message); }
         if (out) return ukJson(res, { ok: true, ...out });

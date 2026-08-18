@@ -1709,6 +1709,9 @@
     /* Narrow table → a real table that scrolls rather than squashing. */
     .wb-tscroll { overflow-x: auto; margin: 10px 0; }
     .wb-table2 { border-collapse: collapse; width: 100%; font-size: 12.5px; }
+    .wb-table2 { table-layout: fixed; width: 100%; }   /* side-by-side: two even columns, text wraps (Sarah, 18 Aug: "column should be smarter") */
+    .wb-table2 th:first-child, .wb-table2 td:first-child { width: 42%; }
+    .wb-table2 td { vertical-align: top; }
     .wb-table2 th { text-align: left; padding: 6px 9px; border-bottom: 2px solid var(--accent); font-weight: 800; color: var(--text); overflow-wrap: anywhere; }
     .wb-table2 td { padding: 6px 9px; border-bottom: 1px solid rgba(0,0,0,0.07); vertical-align: top; color: var(--text); overflow-wrap: anywhere; }
     /* Tappable box — neumorphic, pressed when ticked. */
@@ -1858,8 +1861,15 @@
     .tb-tabs .tb-tabs-row { display: flex; flex-wrap: wrap; gap: 6px; }
     /* Which way the tab hangs (Sarah, 18 Aug: usually off the right edge, colour
        on the outside "so it is laying the right way"). */
-    .doc-body .q-ptab.r { float: right; margin: 0 -4px 4px 10px; border-top: none; border-right: 4px solid var(--tc, #9aa0ad); border-radius: 8px 4px 4px 8px; padding: 4px 9px 3px 9px; }
-    .doc-body .q-ptab.l { float: left; margin: 0 10px 4px -4px; border-top: none; border-left: 4px solid var(--tc, #9aa0ad); border-radius: 4px 8px 8px 4px; }
+    /* Side tabs hang IN THE MARGIN, past the text (Sarah, 18 Aug: "it should be
+       the other side of the margin"): a zero-size float anchors the line, the
+       tab is absolute off it — right edge 16px left of the text for a left tab
+       (past the red margin line at 56px), left edge 16px right of the text for
+       a right tab — so it sticks out like a notepad tab and takes no space. */
+    .doc-body .q-ptab-anchor { float: left; width: 0; height: 0; position: relative; overflow: visible; }
+    .doc-body .q-ptab-anchor.r { float: right; }
+    .doc-body .q-ptab.l { position: absolute; right: 16px; top: 4px; margin: 0; white-space: nowrap; border-top: none; border-left: 4px solid var(--tc, #9aa0ad); border-radius: 4px 8px 8px 4px; }
+    .doc-body .q-ptab.r { position: absolute; left: 16px; top: 4px; margin: 0; white-space: nowrap; border-top: none; border-right: 4px solid var(--tc, #9aa0ad); border-radius: 8px 4px 4px 8px; padding: 4px 9px 3px 9px; }
     .ed-issue .ed-v.weak { color: #1e88e5; }
     .ed-issue .ed-steer { font-size: 11px; color: var(--text); margin-top: 2px; }
     .ed-issue .ed-steer b { font-weight: 700; }
@@ -2655,7 +2665,7 @@
     // coach is the student's own — grade bands are stripped.
     function docPlainText() {
       const clone = docBody.cloneNode(true);
-      clone.querySelectorAll('.grade-band, .q-margin-dots, .q-idot, .q-ptab').forEach(n => n.remove());
+      clone.querySelectorAll('.grade-band, .q-margin-dots, .q-idot, .q-ptab, .q-ptab-anchor').forEach(n => n.remove());
       // innerText keeps paragraph breaks; a detached clone has no layout, so
       // put line breaks in by hand for block elements.
       clone.querySelectorAll('div, p, br, li, h1, h2, h3').forEach(n => {
@@ -2735,13 +2745,28 @@
     });
     // Continue: exactly what a pause would have done, when SHE says so.
     let continueBusy = false;
+    // ONE VOICE (Sarah, 18 Aug — Q, correctly: "That message isn't from me… two
+    // models responding in the same thread"). The pause watcher and Continue →
+    // used to fire the OLD probe engine, which posted into the same thread as
+    // Q. Now they go to Q himself: what she just wrote, react as her tutor.
+    async function qReactToWriting({ fromButton } = {}) {
+      const text = docPlainText();
+      const delta = (state.docSnapshot && text.startsWith(state.docSnapshot)) ? text.slice(state.docSnapshot.length) : text;
+      const fresh = delta.trim();
+      if (!fresh && !fromButton) return;
+      state.docSnapshot = text; state.lastProbeAt = Date.now();
+      const prompt = fresh
+        ? '[page] I just wrote this on my page' + (fromButton ? ' and pressed Continue' : ' and paused') + ' — react as my tutor in one or two short lines (what it does, what it lacks; a question back only if it really helps; no praise for its own sake):' + String.fromCharCode(10) + String.fromCharCode(10) + '"' + fresh.slice(-1500) + '"'
+        : '[page] I pressed Continue without writing anything new — what should I do next? One or two lines.';
+      await chatWithQ(prompt, { silent: true });
+    }
     async function continueNow() {
       if (continueBusy || !state.brief) return;
       continueBusy = true; coachGo.classList.add('busy'); docGo.classList.add('busy');
       try {
         clearTimeout(probeTimer);
         if (state.editing) { await checkCurrentSentence({ fromPause: true }); }
-        else { await askNextQuestion({ trigger: 'pause', fromButton: true }); }
+        else { await qReactToWriting({ fromButton: true }); }
       } finally { continueBusy = false; coachGo.classList.remove('busy'); docGo.classList.remove('busy'); }
     }
     coachGo.addEventListener('click', continueNow);
@@ -4860,10 +4885,35 @@
     // NEVER GUESS WHERE TEXT GOES ON HER PAGE (Sarah, 17 Aug). Returns
     // 'sent' | 'ask' | 'empty' — the caller shows the ask, because only it
     // knows where its own ask line lives. Only ever HER words, never Q's.
+    // UNDO for anything the app writes onto her page (Sarah, 18 Aug: "I just sent
+    // the tick list to my page and all the essay disappeared… an undo that's
+    // needed and another place that it's saved"). A snapshot before every
+    // programmatic write; the last one also in localStorage so a refresh keeps it.
+    state.docUndo = state.docUndo || [];
+    function snapshotDoc(why) {
+      try {
+        const html = docBody.innerHTML; if (!html || !html.trim()) return;
+        state.docUndo.push({ html, why: why || '', at: Date.now() }); if (state.docUndo.length > 12) state.docUndo.shift();
+        try { localStorage.setItem('q-writer-undo', JSON.stringify({ html, why: why || '', at: Date.now() })); } catch (_) {}
+      } catch (_) {}
+    }
+    function undoDoc() {
+      let snap = state.docUndo.pop();
+      if (!snap) { try { snap = JSON.parse(localStorage.getItem('q-writer-undo') || 'null'); } catch (_) {} }
+      if (!snap || !snap.html) return false;
+      docBody.innerHTML = snap.html;
+      wordEl.textContent = countWords() + ' words'; scheduleAutosave();
+      try { renderInlineDots(); paintQNotes(); refreshExpectations(); } catch (_) {}
+      return true;
+    }
     function sendTextToPage(text) {
       const t = String(text || '').trim(); if (!t) return 'empty';
       if (!restoreDocCaret()) return 'ask';
+      snapshotDoc('before send to page');
       const sel = window.getSelection();
+      // NEVER replace a selection: a send goes in at a point, after whatever
+      // was selected — insertText on a range would swap her text for ours.
+      if (!sel.isCollapsed) { const rr = sel.getRangeAt(0).cloneRange(); rr.collapse(false); sel.removeAllRanges(); sel.addRange(rr); }
       const r0 = sel.getRangeAt(0);
       const pre = document.createRange(); pre.setStart(docBody, 0); pre.setEnd(r0.startContainer, r0.startOffset);
       const before = pre.toString();
@@ -5047,7 +5097,20 @@
     // Paragraph N = the Nth non-empty text block of the page, split the SAME way
     // Q's copy is numbered ([P1]…): by line breaks in the plain text. The tab
     // goes in front of that paragraph's first words, whatever element holds them.
-    function docParagraphTexts() { return docPlainText().split(/\n{2,}|\r?\n/).map(x => x.trim()).filter(Boolean); }
+    // The SAME numbering Q's copy uses (routes.js writerCoachContext): P# = essay
+    // paragraphs only — headings and everything after the References heading
+    // are not paragraphs (Sarah, 18 Aug). Returns the P-numbered texts in order.
+    function docParagraphTexts() {
+      const blocks = docPlainText().split(/\n{2,}|\r?\n/).map(x => x.trim()).filter(Boolean);
+      const out = []; let inRefs = false;
+      for (const b of blocks) {
+        if (!inRefs && /^(harvard )?(references|reference list|bibliography)\s*:?$/i.test(b)) { inRefs = true; continue; }
+        if (inRefs) continue;
+        if (b.split(/\s+/).length <= 10 && !/[.!?]$/.test(b)) continue;
+        out.push(b);
+      }
+      return out;
+    }
     function paragraphStartNode(pn) {
       const paras = docParagraphTexts(); const t = paras[pn - 1]; if (!t) return null;
       const head = t.slice(0, Math.min(48, t.length));
@@ -5062,9 +5125,10 @@
       renderInlineDots(); try { renderBoard(); } catch (_) {}
     }
     function tabForParagraph(pn) { return (state.qTabs || []).find(t => t && !t.done && Number(t.paragraph) === Number(pn)) || null; }
-    function miniTabHtml(pn, tab) {
+    const CALLOUT_HEX = { ok: '#28a745', warn: '#e6a817', bad: 'var(--accent)', info: '#3b82c4', tip: '#7c5cbf' };
+    function miniTabHtml(pn, tab, hintColour) {
       const t = tab || tabForParagraph(pn);
-      const col = t ? (HL_HEX[t.colour] || '#9aa0ad') : '#9aa0ad';
+      const col = t ? (HL_HEX[t.colour] || '#9aa0ad') : (hintColour || '#9aa0ad');
       return '<button type="button" class="q-mtab" data-pn="' + Number(pn) + '" style="--tc:' + col + '" title="Go to paragraph ' + Number(pn) + '"><span class="pn">P' + Number(pn) + '</span>' + (t ? escHtml(t.label) : '') + '</button>';
     }
     function jumpToParagraph(pn) {
@@ -5080,18 +5144,32 @@
     }
     // [P3] / P3 in Q's messages → the mini tab chip.
     function decorateParaRefs(html) {
-      return String(html || '').replace(/\[P(\d{1,3})\]|(?<![\w-])P(\d{1,3})(?![\w-])/g, (m, a, b) => miniTabHtml(Number(a || b)));
+      // "[P2] 🟢 …" — no tab yet, but Q coloured it: the chip takes the emoji's
+      // colour and the emoji goes (Sarah, 18 Aug: "do these have the right colours on").
+      return String(html || '').replace(/\[P(\d{1,3})\]\s*(🟢|✅|🟡|⚠️|🔴|❌|ℹ️|💡)?|(?<![\w-])P(\d{1,3})(?![\w-])/g, (m, a, e, b) => miniTabHtml(Number(a || b), null, e ? CALLOUT_HEX[WB_CALLOUT[e]] : null));
     }
     function renderQTabs() {
-      docBody.querySelectorAll('.q-ptab').forEach(n => n.remove());
+      docBody.querySelectorAll('.q-ptab, .q-ptab-anchor').forEach(n => n.remove());
       (state.qTabs || []).forEach((t, i) => {
         if (!t || t.done) return; const at = paragraphStartNode(t.paragraph); if (!at) return;
-        const tab = document.createElement('span'); tab.className = 'q-ptab ' + (t.side === 'left' ? 'l' : (t.side === 'top' ? 't' : 'r')); tab.contentEditable = 'false'; tab.setAttribute('data-q-furniture', 'true');
-        tab.dataset.qtab = String(i); tab.textContent = t.label; tab.style.setProperty('--tc', HL_HEX[t.colour] || '#9aa0ad'); tab.title = 'Press to take this tab off';
-        { const tn = at.textNode; const after = tn.splitText(Math.min(at.offset, tn.nodeValue.length)); after.parentNode.insertBefore(tab, after); }   // inline, right before the paragraph's first word — works in one wrapper div too
+        const side = t.side === 'left' ? 'l' : (t.side === 'top' ? 't' : 'r');
+        const tab = document.createElement('span'); tab.className = 'q-ptab ' + side; tab.contentEditable = 'false'; tab.setAttribute('data-q-furniture', 'true');
+        tab.dataset.qtab = String(i); tab.textContent = t.label; tab.style.setProperty('--tc', HL_HEX[t.colour] || '#9aa0ad'); tab.title = '';
+        { const tn = at.textNode; const after = tn.splitText(Math.min(at.offset, tn.nodeValue.length));
+          let node = tab;
+          if (side !== 't') { const a = document.createElement('span'); a.className = 'q-ptab-anchor ' + side; a.contentEditable = 'false'; a.setAttribute('data-q-furniture', 'true'); a.appendChild(tab); node = a; }
+          after.parentNode.insertBefore(node, after); }   // right before the paragraph's first word — works in one wrapper div too
       });
     }
-    document.addEventListener('click', (e) => { const tab = e.target.closest('.q-ptab[data-qtab]'); if (!tab) return; e.preventDefault(); const t = (state.qTabs || [])[Number(tab.dataset.qtab)]; if (t) t.done = true; renderQTabs(); try { renderBoard(); } catch (_) {} });
+    document.addEventListener('click', (e) => {
+      // A press on a tab does NOT bin it (Sarah, 18 Aug): it opens the little pop —
+      // the label, and Take it off if she wants it gone.
+      const tab = e.target.closest('.q-ptab[data-qtab]'); if (!tab) return; e.preventDefault();
+      const i = Number(tab.dataset.qtab); const t = (state.qTabs || [])[i]; if (!t) return;
+      showToolPop('<div class="pc-head"><span class="pc-dot" style="--dc:' + (HL_HEX[t.colour] || '#9aa0ad') + '"></span>' + escHtml(t.label) + '</div><div class="pc-line">Paragraph ' + Number(t.paragraph) + '</div><div class="pc-acts"><button type="button" class="q-btn quiet" id="ptab-off">Take it off</button></div>', { kind: 'note', anchor: tab });
+      toolPopEl.classList.add('dotpop');
+      const off = toolPopEl.querySelector('#ptab-off'); if (off) off.addEventListener('click', () => { t.done = true; toolPopEl.classList.remove('dotpop'); hideToolPop(); renderQTabs(); try { renderBoard(); } catch (_) {} });
+    });
     function addQNotes(list) {
       state.qNotes = state.qNotes || [];
       for (const p of list) { const text = String(p.text || '').replace(/\s+/g, ' ').trim(); if (!text) continue; if (state.qNotes.some(n => n && !n.done && n.text === text)) continue; state.qNotes.push({ text, note: String(p.note || ''), kind: String(p.kind || 'note'), colour: String(p.colour || '') }); }
@@ -5493,6 +5571,7 @@
     function cutFromDoc(span) {
       const hit = findInDoc(span + ' ') || findInDoc(span);
       if (!hit) return false;
+      snapshotDoc('before cut');
       const range = document.createRange();
       range.setStart(hit.start.node, hit.start.offset);
       range.setEnd(hit.end.node, hit.end.offset + 1);
@@ -5689,6 +5768,11 @@
       const live = (state.wbStickies || []).map((s, i) => ({ s, i })).filter(x => x.s && !x.s.done);
       layer.classList.toggle('hidden', !live.length);
       layer.innerHTML = live.map(({ s, i }) => '<div class="wb-sticky" data-si="' + i + '" style="left:' + (Number(s.x) || 8) + 'px;top:' + (Number(s.y) || 8) + 'px;--sc:' + (STICKY_HEX[s.colour] || '#e6c84a') + '"><button type="button" class="st-go" title="Send to my page">→</button><button type="button" class="st-x" title="Bin it">×</button>' + escHtml(s.text) + '</div>').join('');
+      // PACK the ones she has not moved herself: three columns, each new card
+      // under the last in its column, by measured height — no overlaps
+      // (Sarah, 18 Aug: two stickies stacked on top of each other).
+      { const cols = [8, 8, 8]; const W = 162; let k = 0;
+        layer.querySelectorAll('.wb-sticky').forEach(el => { const st = (state.wbStickies || [])[Number(el.dataset.si)]; if (!st || st.moved) return; const c = k % 3; const y = cols[c]; el.style.left = (8 + c * W) + 'px'; el.style.top = y + 'px'; st.x = 8 + c * W; st.y = y; cols[c] = y + el.offsetHeight + 8; k++; }); }
       let maxB = 0; layer.querySelectorAll('.wb-sticky').forEach(el => { maxB = Math.max(maxB, el.offsetTop + el.offsetHeight); }); layer.style.minHeight = Math.max(96, maxB + 10) + 'px';
     }
     // Drag a sticky (pointer events); its place is remembered.
@@ -5705,7 +5789,7 @@
         const d = { id: e.pointerId, sx: e.clientX, sy: e.clientY, x0: Number(st.x) || 8, y0: Number(st.y) || 8 };
         try { el.setPointerCapture(e.pointerId); } catch (_) {}
         const move = (ev) => { if (ev.pointerId !== d.id) return; const nx = Math.max(0, Math.min(layer.clientWidth - el.offsetWidth, d.x0 + (ev.clientX - d.sx))); const ny = Math.max(0, d.y0 + (ev.clientY - d.sy)); el.style.left = nx + 'px'; el.style.top = ny + 'px'; st.x = nx; st.y = ny; };
-        const up = (ev) => { if (ev.pointerId !== d.id) return; el.removeEventListener('pointermove', move); el.removeEventListener('pointerup', up); el.removeEventListener('pointercancel', up); try { el.releasePointerCapture(d.id); } catch (_) {} persist({ wbStickies: state.wbStickies }); renderStickies(); };
+        const up = (ev) => { if (ev.pointerId !== d.id) return; el.removeEventListener('pointermove', move); el.removeEventListener('pointerup', up); el.removeEventListener('pointercancel', up); try { el.releasePointerCapture(d.id); } catch (_) {} if (Math.abs(ev.clientX - d.sx) + Math.abs(ev.clientY - d.sy) > 4) st.moved = true; persist({ wbStickies: state.wbStickies }); renderStickies(); };
         el.addEventListener('pointermove', move); el.addEventListener('pointerup', up); el.addEventListener('pointercancel', up);
       });
     })();
@@ -5940,7 +6024,7 @@
           send.textContent = 'Click where it goes →';
           return;
         }
-        const ask = document.getElementById('wb-ask'); if (ask) ask.classList.add('hidden');
+        const ask = document.getElementById('wb-ask'); if (ask) { ask.innerHTML = 'On your page. <button type="button" class="q-btn quiet" id="wb-undo">↶ Undo</button>'; ask.classList.remove('hidden'); const u = document.getElementById('wb-undo'); if (u) u.addEventListener('click', () => { if (undoDoc()) { ask.textContent = 'Put back.'; setTimeout(() => ask.classList.add('hidden'), 1400); } }); setTimeout(() => { if (ask.querySelector('#wb-undo')) ask.classList.add('hidden'); }, 20000); }
         send.textContent = '✓ On your page'; setTimeout(() => { send.textContent = 'Send to my page →'; }, 1600);
       });
       // ("+ Room to work" — three blank lines to click into — is gone. Her
@@ -6072,7 +6156,9 @@
         btn.textContent = 'Click where it goes →';
         return;
       }
+      snapshotDoc('before put this on my page');
       const sel = window.getSelection();
+      if (!sel.isCollapsed) { const rr = sel.getRangeAt(0).cloneRange(); rr.collapse(false); sel.removeAllRanges(); sel.addRange(rr); }
       const r0 = sel.getRangeAt(0);
       const pre = document.createRange(); pre.setStart(docBody, 0); pre.setEnd(r0.startContainer, r0.startOffset);
       const before = pre.toString();
@@ -6082,7 +6168,8 @@
       if (!ok) { const r = sel.getRangeAt(0); r.insertNode(document.createTextNode(out)); r.collapse(false); }
       wordEl.textContent = countWords() + ' words'; scheduleAutosave();
       try { refreshExpectations(); } catch (_) {}
-      workSay('');
+      wbWorkSay.innerHTML = 'On your page. <button type="button" class="q-btn quiet" id="wk-undo">↶ Undo</button>'; wbWorkSay.classList.remove('hidden');
+      { const u = document.getElementById('wk-undo'); if (u) u.addEventListener('click', () => { if (undoDoc()) workSay('Put back.'); }); }
       btn.textContent = '✓ On your page';
       setTimeout(() => { btn.textContent = 'Put this on my page →'; }, 1600);
     });
@@ -6989,11 +7076,12 @@
       const out = {}; try { for (const c of ((state.brief && state.brief.criteria) || [])) out[c.id] = String(partText(c.id) || '').split(/\s+/).filter(Boolean).length; } catch (_) {}
       return out;
     }
-    async function chatWithQ(text) {
+    async function chatWithQ(text, opts) {
+      opts = opts || {};
       renderTaps([]);
       state.chatMode = true;
       qSayPaint(null);
-      sayMe(text);   // her line joins the thread (and Q's last line is kept, not wiped)
+      if (!opts.silent) sayMe(text);   // her line joins the thread (and Q's last line is kept, not wiped); silent = an internal prompt (a pause / Continue), nothing to show as hers
       showChat({ thinking: true });
       try {
         const d = await api('/writer/chat', { text, partWords: partWordCounts(), stepItems: (() => { try { const si = currentStepInfo(); const st = si ? stepStateOf(si.cid, si.step.id) : null; return st && Array.isArray(st.items) ? st.items.slice(0, 40) : []; } catch (_) { return []; } })(), history: state.chatLog.slice(-11, -1).map(m => ({ role: m.role, text: m.text })), docText: docPlainText().slice(0, 24000), criterionId: state.currentCriterionId || null, stepId: state.currentStep ? state.currentStep.stepId : null, ask: currentAskText() || '', yearGroup: state.yearGroup || '' }, { timeoutMs: 90000 });
@@ -7899,7 +7987,7 @@
       if (!finished && idle < pauseMs * 2) return rearm();         // mid-sentence — give them a little longer
       const sinceLast = Date.now() - state.lastProbeAt;
       if (sinceLast < PROBE_MIN_GAP_MS) return rearm(PROBE_MIN_GAP_MS - sinceLast);
-      askNextQuestion({ trigger: 'pause' });
+      qReactToWriting({});
     }
 
     // ── MARK & FIX (Sarah, 15 Aug: "when you mark it, it should be going
@@ -9855,7 +9943,7 @@
     loadProjects().then(restoreSession, restoreSession);
     // Test hooks (no data, no secrets): lets the harness exercise the page-side
     // helpers without a paid call. Harmless in production.
-    window.__qwriterTest = { paintQNotes, addQNotes, addQTabs, addStickies, renderStickies, presentStep, renderBoard, renderWhiteboard, startedAsk, showToolPop, findInDoc, replaceInDoc, appendReference, docPlainText, splitCheck: (t) => endsSentence(t), runEditPass, checkCurrentSentence, showEditItem, state: () => state, currentEditText, partParagraphs, setBrief, storyPointsHtml, renderInlineDots, termsForBoard, setCoach, bandListHtml, showEditItem, openEditPanel, renderEditPanel, edState: () => edProof, edSetProof: (p2) => { edProof = p2; renderEditPanel(); edPaint(); }, sayMe, renderThread, syncWorkArea, showPanel, revealPanel, runTidyPasses, applyTidyItem, mergeWalk, refreshSourceDigests, sourceDigestsHtml, markAndFix, walkItemsFromMark, renderMarkPanel, markStats, gradeWord, notesSections, notesCount, notesCopyText, renderNotesPanel, openNotesPanel, bibSorted, bibCopyText, renderBibPanel, openBibPanel, removeReference, removeReferenceFromDoc, sendTextToPage, jumpToSentence };
+    window.__qwriterTest = { paintQNotes, addQNotes, addQTabs, addStickies, renderStickies, snapshotDoc, undoDoc, presentStep, renderBoard, renderWhiteboard, startedAsk, showToolPop, findInDoc, replaceInDoc, appendReference, docPlainText, splitCheck: (t) => endsSentence(t), runEditPass, checkCurrentSentence, showEditItem, state: () => state, currentEditText, partParagraphs, setBrief, storyPointsHtml, renderInlineDots, termsForBoard, setCoach, bandListHtml, showEditItem, openEditPanel, renderEditPanel, edState: () => edProof, edSetProof: (p2) => { edProof = p2; renderEditPanel(); edPaint(); }, sayMe, renderThread, syncWorkArea, showPanel, revealPanel, runTidyPasses, applyTidyItem, mergeWalk, refreshSourceDigests, sourceDigestsHtml, markAndFix, walkItemsFromMark, renderMarkPanel, markStats, gradeWord, notesSections, notesCount, notesCopyText, renderNotesPanel, openNotesPanel, bibSorted, bibCopyText, renderBibPanel, openBibPanel, removeReference, removeReferenceFromDoc, sendTextToPage, jumpToSentence };
 
 
     // (The old per-card drag code lived here — every panel now goes through makePanel above.)
