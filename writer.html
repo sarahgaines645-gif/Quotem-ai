@@ -28,7 +28,7 @@
          every other Q page lifts its cards — the house soft shadow, the same
          one revise / chat / finance use (Sarah, 17 Aug: "see how we do it on
          other pages"). One variable, so it stays the same everywhere. */
-      --float-shadow: 10px 10px 28px #ababab, -8px -8px 20px #ffffff;
+      --float-shadow: 0 0 0 1px rgba(0,0,0,0.06), 12px 12px 30px #ababab, -8px -8px 22px #ffffff;   /* the house float + a hairline edge so a panel over a card does not blur into it (Sarah, 17 Aug) */
     }
     /* ── COLOUR SITS ON A CARD — Sarah, 17 Aug 2026 ──────────────────────────
        "make sure all colours that are not text sit on a white card so the
@@ -341,12 +341,12 @@
     .qpanel.front { z-index: 120; }
     .panel-head {
       display: flex; align-items: center; gap: 8px;
-      padding: 9px 12px 7px; flex-shrink: 0;
+      padding: 14px 18px 10px 18px; flex-shrink: 0;   /* the title sits IN the card, on the same left edge as the text (Sarah, 17 Aug) */
       cursor: grab; user-select: none; -webkit-user-select: none; touch-action: none;
     }
     .panel-head:active { cursor: grabbing; }
     .panel-title {
-      font-size: 10px; font-weight: 700; text-transform: uppercase;
+      font-size: 15px; font-weight: 700; text-transform: uppercase;   /* every panel title reads as a heading (Sarah, 17 Aug: "too small for the card") */
       letter-spacing: 0.07em; color: var(--accent); flex: 1; min-width: 0;
       overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
     }
@@ -360,7 +360,7 @@
     .panel-body {
       flex: 1 1 auto; min-height: 0; overflow-y: auto; overflow-x: hidden;
       overflow-wrap: anywhere; word-break: break-word;
-      padding: 0 12px 12px; scrollbar-width: thin;
+      padding: 0 18px 16px; scrollbar-width: thin;   /* same left edge as the panel title (Sarah, 17 Aug: "the title isnt aligned with the text") */
     }
     .panel-foot { flex-shrink: 0; padding: 4px 12px 12px; }
     .panel-grip {
@@ -377,7 +377,9 @@
     .qpanel.min { height: auto !important; min-height: 0; width: auto !important; min-width: 0; max-width: 260px; border-radius: 20px; }
     .qpanel.min .panel-body, .qpanel.min .panel-grip, .qpanel.min .panel-foot { display: none; }
     .qpanel.min .panel-head { padding: 8px 14px; cursor: pointer; }
-    .qpanel.min .panel-title { color: var(--accent); }   /* a minimised panel is still a title — not greyed out (Sarah, 17 Aug) */
+    .qpanel.min .panel-title { color: var(--accent); }
+    /* The whiteboard's title reads as a heading, no glyph (Sarah, 17 Aug: "this needs to be bigger and loose the icon"). */
+    #wb-panel .panel-title, #wb-title { font-size: 15px; letter-spacing: 0.06em; }   /* a minimised panel is still a title — not greyed out (Sarah, 17 Aug) */
 
     /* ── The coach card ─────────────────────────────────────────────────── */
     .coach-card { width: 236px; }
@@ -424,7 +426,7 @@
     .q-popcard .pc-do { color: var(--accent); font-weight: 700; margin-top: 8px; line-height: 1.45; }
     .q-popcard .pc-ideas { margin: 6px 0 0 14px; padding: 0; }
     .q-popcard .pc-ideas li { margin-bottom: 3px; color: var(--text); }
-    .q-popcard .pc-ideas-l { font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-muted); margin-top: 8px; }
+    .q-popcard .pc-ideas-l { font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--accent); margin-top: 8px; }
     .q-popcard .pc-list { margin: 0 0 4px 14px; padding: 0; }
     .q-popcard .pc-list li { margin-bottom: 2px; }
     .q-popcard.term { width: 230px; pointer-events: none; z-index: 270; }
@@ -490,10 +492,23 @@
        text on the card, its own paragraph — then one quiet hint. */
     .coach-card .q-role { font-size: 12px; color: var(--text); line-height: 1.45; margin-bottom: 8px; padding: 7px 9px; border-radius: 10px; box-shadow: var(--neu-raised-xs); }
     .coach-card .q-role:empty { display: none; }
-    .coach-card .q-role .q-role-l { display: block; font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-muted); margin-bottom: 2px; }
+    .coach-card .q-role .q-role-l { display: block; font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--accent); margin-bottom: 2px; }
     .coach-card .q-where.has-role { cursor: pointer; text-decoration: underline dotted; text-underline-offset: 3px; }
     .coach-card .q-supply { font-size: 12px; color: var(--text); line-height: 1.45; margin-bottom: 8px; padding: 6px 8px; border-left: 2px solid var(--accent); }
     .coach-card .q-supply:empty { display: none; }
+    /* THE CHAT IS NOT A BUTTON BAR (Sarah, 17 Aug: "he can give you buttons but
+       we dont need all those buttons in the chat"). The fixed nudge row
+       (I'm stuck / I don't understand / Auto cite) is gone from the card —
+       she asks Q in words. Quiet secondary actions (Skip this…) too. What
+       shows: one primary step button when a step is live, and Q's OWN taps
+       under his reply, the way the general chat does it. */
+    .coach-card #coach-nudge { display: none !important; }
+    .coach-card #coach-actions .q-btn.quiet { display: none; }
+    .coach-card .q-taps { display: flex; flex-wrap: wrap; gap: 8px; margin: 6px 0 4px; }
+    .coach-card .q-taps:empty { display: none; }
+    .coach-card .q-tap { font-family: inherit; font-size: 13px; font-weight: 600; color: var(--text); background: var(--bg); border: none; cursor: pointer; padding: 9px 14px; border-radius: 12px; box-shadow: var(--neu-raised-sm); text-align: left; max-width: 100%; overflow-wrap: anywhere; }
+    .coach-card .q-tap:hover { color: var(--accent); }
+    .coach-card .q-tap:active { box-shadow: var(--neu-inset-xs); color: var(--accent); }
     .coach-card .q-supply .q-supply-l { display: block; font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--accent); margin-bottom: 2px; }
     .coach-card .q-msg.ask { font-size: 14px; font-weight: 500; line-height: 1.4; }
     .coach-card .q-section {
@@ -556,8 +571,12 @@
        from the chat to the marking explains itself. */
     .coach-card .q-chat-sec { font-size: 8.5px; font-weight: 700; letter-spacing: 0.07em; text-transform: uppercase; color: var(--accent); margin-left: 6px; }
     .coach-card .q-chat-m { display: block; min-width: 0; }
-    .coach-card .q-chat-who { display: block; font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-muted); margin-bottom: 2px; }
-    .coach-card .q-chat-m.q .q-chat-who::before { content: '● '; color: var(--accent); }
+    .coach-card .q-chat-who { display: block; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-muted); margin-bottom: 2px; }
+    /* Q is the tutor — his name reads like one, not a footnote (Sarah, 17 Aug:
+       "Qs title is too small he look irrelivent. hes the tutor"). */
+    .coach-card .q-chat-m.q .q-chat-who { font-size: 15px; letter-spacing: 0.02em; color: var(--accent); margin-bottom: 4px; }
+    .coach-card .q-chat-m.q .q-chat-who::before { content: ''; }
+    .coach-card .q-chat-m.q .q-chat-who .q-chat-sec { font-size: 8.5px; letter-spacing: 0.07em; vertical-align: middle; }
     .coach-card .q-chat-t { font-size: 13px; line-height: 1.5; color: var(--text); overflow-wrap: anywhere; }
     .coach-card .q-chat-t p { margin: 0 0 6px; }
     .coach-card .q-chat-t p:last-child { margin-bottom: 0; }
@@ -938,7 +957,7 @@
        brief sits behind "Show the brief" (the student never has to read it) ── */
     .brief-board { width: 300px; }
     .brief-board .panel-body { font-size: 12px; color: var(--text); line-height: 1.5; }
-    .bb-line { font-size: 13px; font-weight: 600; color: var(--text); line-height: 1.4; margin-bottom: 8px; }
+    .bb-line { font-size: 10.5px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent); line-height: 1.4; margin-bottom: 8px; }
     .bb-fold { margin-top: 10px; }
     .bb-fold > summary {
       list-style: none; cursor: pointer; font-size: 11px; color: var(--text-muted);
@@ -996,9 +1015,7 @@
     .tb-text p:last-child { margin-bottom: 0; }
     .tb-qtext { font-weight: 500; }
     .tb-item.tb-fresh {
-      background: linear-gradient(135deg,
-        color-mix(in srgb, var(--accent) 16%, var(--bg)),
-        color-mix(in srgb, var(--accent) 4%, var(--bg)));
+      background: color-mix(in srgb, var(--accent) 9%, var(--bg));   /* a flat, light pink on the raised card — the fade looked wrong on a big card (Sarah, 17 Aug) */
       box-shadow: var(--neu-raised-sm);
       border-radius: 12px; padding: 11px 13px; margin: 0 -2px;
     }
@@ -1100,7 +1117,7 @@
     .q-qcard .mk-title { color: var(--text); font-size: 11px; letter-spacing: 0.02em; text-transform: none; font-weight: 700; }
     .q-qcard .mk-count { text-transform: uppercase; letter-spacing: 0.06em; }
     .q-got { margin: 5px 0 8px; }
-    .q-got .q-got-l { display: block; font-size: 9px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-muted); margin-bottom: 3px; }
+    .q-got .q-got-l { display: block; font-size: 9px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--accent); margin-bottom: 3px; }
     .q-got ul { margin: 0; padding-left: 16px; }
     .q-got li { font-size: 12px; line-height: 1.45; color: var(--text); margin: 3px 0; overflow-wrap: anywhere; }
     .q-add { margin: 6px 0 4px; }
@@ -1247,6 +1264,10 @@
     .tb-agenda::before { content: 'Questions'; }   /* Sarah, 17 Aug: "change that name to Questions" */
     .tb-worksheet::before { content: 'Worksheet'; }
     .tb-current::before { content: 'Q & you'; }
+    /* Q & YOU was the board's transcript of question / answer / Q's line. The
+       coach card is the conversation now, so this was a second copy of it
+       (Sarah, 17 Aug: "dont know what this is"). Hidden, not deleted. */
+    .tb-current { display: none !important; }
     .tb-current:empty::before, .tb-worksheet:empty::before { content: none; }
     .tb-agenda { margin: 0 0 20px; padding: 12px 14px; border-radius: 12px; box-shadow: var(--neu-raised-xs); }
     .tb-role { font-size: 12px; font-weight: 600; color: var(--text); line-height: 1.45; margin-bottom: 6px; }
@@ -1274,20 +1295,18 @@
        neumorphic. it's not a frame"). Gentler than .gw's 26%→8% because this
        is a big surface with text on it, not a 28px icon well. */
     .tb-now.fresh {
-      background: linear-gradient(135deg,
-        color-mix(in srgb, var(--accent) 16%, var(--bg)),
-        color-mix(in srgb, var(--accent) 4%, var(--bg)));
+      background: color-mix(in srgb, var(--accent) 9%, var(--bg));   /* a flat, light pink on the raised card — the fade looked wrong on a big card (Sarah, 17 Aug) */
       box-shadow: var(--neu-raised-sm);
       border-radius: 12px; padding: 11px 13px; margin: 0 -2px 2px;
     }
     .coach-card .q-msg:empty { display: none; }
-    .tb-track { display: flex; align-items: center; gap: 8px; margin-top: 8px; }
-    .st-beads { display: inline-flex; gap: 5px; align-items: center; }
+    .tb-track { display: flex; align-items: center; gap: 8px; margin-top: 8px; flex-wrap: wrap; }
+    .st-beads { display: inline-flex; gap: 5px; align-items: center; flex-wrap: wrap; row-gap: 6px; min-width: 0; }
     .st-bead { width: 10px; height: 10px; padding: 0; border: none; border-radius: 50%; box-shadow: var(--neu-inset-sm); display: inline-block; background: var(--bg); cursor: pointer; }
     .st-bead:hover { box-shadow: var(--neu-raised-xs); }
     .st-bead.done { background: #28a745; box-shadow: none; }
     .st-bead.cur { background: var(--accent); box-shadow: none; transform: scale(1.35); }
-    .tb-count { font-size: 10px; color: var(--text-faint); font-weight: 600; letter-spacing: 0.04em; }
+    .tb-count { font-size: 10px; color: var(--text-faint); font-weight: 600; letter-spacing: 0.04em; white-space: nowrap; flex-shrink: 0; }   /* never letter-by-letter (Sarah, 17 Aug: "broken text") */
     /* The case study, in plain words, on the brief board */
     /* ── THE FACT CARD (Sarah, 17 Aug) ───────────────────────────────────────
        "this should read like a fact sheet you'd get for a character on a game.
@@ -1306,9 +1325,25 @@
     .fc-rule { height: 1px; background: rgba(0,0,0,0.07); margin: 11px 0; }
     /* Stat tiles — the value IS the tile (her card rule: bold value, small
        muted label, no placeholder furniture). */
-    /* THE FACT SHEET — the shape Q's own chat gives her: a heading, an
-       Overview table of label/value rows, then the document's real sections
-       with their points. Rows are separated by hairlines, never sunken. */
+    /* THE FACT SHEET AS CARDS (Sarah, 17 Aug: the table + bullet version "was
+       basically a word doc"). Same content, her card language: the Overview is
+       a grid of stat tiles (small label, bold value — the superhero-card
+       stats), and each of the document's own sections is a railed block like
+       her job page — icon well, small title, its points with a dot in the
+       block's colour. The colour separates; it never fills. */
+    .fs-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 7px; }
+    .fs-tile { min-width: 0; padding: 8px 10px 9px; border-radius: 11px; box-shadow: var(--neu-raised-xs); background: var(--bg); }
+    .fs-tile span { display: block; font-size: 8.5px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-muted); margin-bottom: 3px; overflow-wrap: anywhere; }
+    .fs-tile b { display: block; font-size: 12.5px; font-weight: 700; color: var(--text); line-height: 1.35; overflow-wrap: anywhere; }
+    .fs-tile b b { display: inline; font-size: inherit; }
+    .fs-pts { margin: 0; padding: 0; list-style: none; }
+    .fs-pts li { position: relative; padding-left: 13px; font-size: 12px; line-height: 1.5; color: var(--text); margin: 3px 0; overflow-wrap: anywhere; }
+    .fs-pts li::before { content: ''; position: absolute; left: 0; top: 7px; width: 5px; height: 5px; border-radius: 50%; background: var(--rail, var(--text-faint)); }
+    .fs-pts li b { font-weight: 700; }
+    .fs-two { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 0 10px; }
+    .bb-src .mk-block { margin: 0 0 10px; }
+    .bb-src .mk-block + .fc-rule, .bb-src .fs-two + .fc-rule { margin-top: 2px; }
+    .bb-src .fc-stats { margin-top: 8px; }
     .fs-h {
       font-size: 12.5px; font-weight: 700; color: var(--accent);
       margin: 10px 0 6px; letter-spacing: -0.01em;
@@ -1433,7 +1468,7 @@
     .wb-panel { width: min(760px, calc(100vw - 32px)); }
     /* MARKING panel */
     .mk-panel { width: 340px; }
-    .mk-body { padding: 10px 12px 12px; overflow: auto; }
+    .mk-body { padding: 10px 18px 14px; overflow: auto; }
     /* THE MARKING PANEL reads like a mark sheet, not a paragraph (Sarah,
        17 Aug: "the marking css needs to be formatted better so you can see
        exactly what you have otherwise its a wall of text"). Sections are
@@ -1461,7 +1496,7 @@
     }
     .mk-title {
       font-size: 9.5px; font-weight: 700; letter-spacing: 0.09em; text-transform: uppercase;
-      color: var(--text-muted);
+      color: var(--accent);   /* titles are pink, never grey (Sarah, 17 Aug) */
     }
     .mk-count { font-size: 9.5px; font-weight: 700; color: var(--text-muted); margin-left: auto; }
     /* The grade is the one word that keeps its own colour. */
@@ -1518,9 +1553,35 @@
     .mk-foot { font-size: 11px; color: var(--text-muted); margin-top: 8px; line-height: 1.45; }
     .wb-body { padding: 14px 18px 16px; overflow: auto; }
     .wb-ask { font-size: 20px; font-weight: 700; line-height: 1.3; color: var(--text); overflow-wrap: anywhere; }
-    .wb-ask .wb-step { display: block; font-size: 10px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--text-faint); margin-bottom: 4px; }
+    .wb-ask .wb-step { display: block; font-size: 10.5px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--accent); margin-bottom: 4px; }   /* titles are pink, never grey (Sarah, 17 Aug) */
     .wb-ask:has(> .wb-step:only-child) { margin-bottom: 8px; }
-    .wb-say { font-size: 14px; color: var(--text-muted); line-height: 1.5; margin: 8px 0 12px; overflow-wrap: anywhere; }
+    /* THE LADDER on the whiteboard (Sarah, 17 Aug: "the questions need to be
+       put on the board and the user and q will work on them together. like
+       QB2 does. he displays stuff and then we work through it"). Every
+       question for this part, in order: done = tick, muted; the one we are
+       on = bold with the accent dot; the rest = a hollow dot. Press one to go
+       there. Plain lines on the raised board — nothing sunken. */
+    .wb-ladder { margin: 4px 0 12px; }
+    .wb-lad-row { display: grid; grid-template-columns: 14px minmax(0, 1fr); gap: 8px; align-items: start; width: 100%; text-align: left; padding: 4px 4px; margin: 0; border: none; background: transparent; border-radius: 8px; cursor: pointer; font-family: inherit; font-size: 12.5px; line-height: 1.45; color: var(--text-muted); overflow-wrap: anywhere; }
+    .wb-lad-row:hover { box-shadow: var(--neu-raised-xs); }
+    .wb-lad-row .ld { width: 9px; height: 9px; margin-top: 5px; border-radius: 50%; box-shadow: inset 0 0 0 2px var(--text-faint); background: transparent; }
+    .wb-lad-row.done { color: var(--text-muted); }
+    .wb-lad-row.done .ld { background: #28a745; box-shadow: none; }
+    /* DONE / GOOD is a TICK — a small accent ✓ where the dot was. No green fill,
+       no halo (Sarah, 17 Aug: the fill was "luminous green", the halo "a fuzz",
+       "can we put something else"). One rule for every 'done' dot on the page. */
+    .st-bead.done, .wb-lad-row.done .ld, .cov-item[data-cov="covered"] .cov-dot, .grade-band[data-grade="green"] .gb-dot,
+    .mark-row[data-band="top"] .mk-dot, .mk-part.top .bd, .q-bands .bd.top, .q-bandlist .bd.top, .mk-block .bd.top {
+      background: transparent; background-color: transparent; box-shadow: none; transform: none;
+      display: inline-grid; place-items: center; overflow: visible;
+    }
+    .st-bead.done::before, .wb-lad-row.done .ld::before, .cov-item[data-cov="covered"] .cov-dot::before, .grade-band[data-grade="green"] .gb-dot::before,
+    .mark-row[data-band="top"] .mk-dot::before, .mk-part.top .bd::before, .q-bands .bd.top::before, .q-bandlist .bd.top::before, .mk-block .bd.top::before {
+      content: '✓'; color: var(--accent); font-size: 11px; font-weight: 700; line-height: 1;
+    }
+    .wb-lad-row.cur { color: var(--text); font-weight: 700; font-size: 14px; }
+    .wb-lad-row.cur .ld { background: var(--accent); box-shadow: none; transform: scale(1.25); }
+    .wb-say { font-size: 14px; color: var(--text); line-height: 1.5; margin: 8px 0 12px; overflow-wrap: anywhere; }
     .wb-say b { color: var(--text); font-weight: 700; }
     .wb-hint { font-size: 12px; color: var(--text-faint); margin-top: 10px; }
     .wb-tiles { display: flex; flex-wrap: wrap; gap: 10px; }
@@ -1585,14 +1646,45 @@
     .wb-p { font-size: 13px; line-height: 1.55; color: var(--text); margin: 3px 0; overflow-wrap: anywhere; }
     .wb-sp { height: 8px; }
     .wb-hr { border: none; border-top: 1px solid rgba(0,0,0,0.08); margin: 14px 0; }
+    /* STICKY NOTES on the board (Q's ask, 18 Aug): a layer above the display;
+       small raised cards with a coloured top edge, dragged where she likes. */
+    .wb-stickies { position: relative; min-height: 96px; margin: 0 18px 4px; border-bottom: 1px dashed rgba(0,0,0,0.08); }
+    .wb-stickies.hidden { display: none; }
+    .wb-sticky { position: absolute; width: 150px; padding: 8px 10px 8px; border-radius: 10px; background: var(--bg); box-shadow: var(--neu-raised-sm); border-top: 4px solid var(--sc, #e6c84a); font-size: 12px; line-height: 1.4; color: var(--text); cursor: grab; user-select: none; -webkit-user-select: none; touch-action: none; overflow-wrap: anywhere; }
+    .wb-sticky:active { cursor: grabbing; }
+    .wb-sticky .st-x, .wb-sticky .st-go { position: absolute; top: 3px; border: none; background: transparent; color: var(--text-faint); font-size: 12px; line-height: 1; cursor: pointer; padding: 2px 4px; }
+    .wb-sticky .st-x { right: 4px; } .wb-sticky .st-go { right: 22px; }
+    .wb-sticky .st-x:hover, .wb-sticky .st-go:hover { color: var(--accent); }
+    /* BUILD-UP fence: the pieces of a paragraph revealed one at a time. */
+    .wb-build { margin: 8px 0 12px; }
+    .wb-build-step { display: none; padding: 7px 10px; margin: 4px 0; border-radius: 10px; box-shadow: var(--neu-raised-xs); font-size: 13px; line-height: 1.5; color: var(--text); overflow-wrap: anywhere; animation: wbIn 0.35s ease-out; }
+    .wb-build-step.on { display: block; }
+    .wb-build-step.on.cur { box-shadow: var(--neu-raised-sm); }
+    .wb-build-acts { display: flex; gap: 8px; margin-top: 8px; }
+    @keyframes wbIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+    /* diagram fence: raised boxes joined by accent arrows */
+    .wb-dg { display: flex; flex-direction: column; gap: 10px; margin: 8px 0 14px; }
+    .wb-dg-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+    .wb-dg-gap { height: 4px; }
+    .wb-dg-n { padding: 8px 12px; border-radius: 12px; box-shadow: var(--neu-raised-xs); background: var(--bg); font-size: 12.5px; font-weight: 600; color: var(--text); overflow-wrap: anywhere; max-width: 100%; border-left: 3px solid transparent; }
+    .wb-dg-n.ok { border-left-color: #28a745; } .wb-dg-n.warn { border-left-color: #e6a817; } .wb-dg-n.bad { border-left-color: var(--accent); } .wb-dg-n.info { border-left-color: #3b82c4; } .wb-dg-n.tip { border-left-color: #7c5cbf; }
+    .wb-dg-a { color: var(--accent); font-weight: 700; font-size: 16px; line-height: 1; }
+    .wb-code { font-family: ui-monospace, Consolas, monospace; font-size: 12px; line-height: 1.5; padding: 10px 12px; border-radius: 12px; box-shadow: var(--neu-raised-xs); background: var(--bg); overflow-x: auto; margin: 6px 0 10px; white-space: pre-wrap; }
     .wb-h { color: var(--accent); font-weight: 800; margin: 14px 0 5px; overflow-wrap: anywhere; }
-    .wb-h1 { font-size: 17px; border-bottom: 2px solid rgba(233,30,99,0.25); padding-bottom: 4px; }
+    .wb-h1 { font-size: 17px; }   /* no faded rule under it (Sarah, 17 Aug: "what is this faded line?") */
     .wb-h2 { font-size: 15px; }
     .wb-h3 { font-size: 13.5px; }
     .wb-h4 { font-size: 12px; letter-spacing: 0.04em; text-transform: uppercase; }
     .wb-h5 { font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; }
     .wb-ul, .wb-ol { margin: 6px 0; padding-left: 20px; }
     .wb-ul li, .wb-ol li { font-size: 13px; line-height: 1.5; color: var(--text); margin: 3px 0; overflow-wrap: anywhere; }
+    /* A list item that starts with one of Q's colour emojis: the emoji becomes a
+       small coloured dot as the marker — no number or bullet fighting it
+       (Sarah, 18 Aug: "this still looks messy"). */
+    .wb-ul li.wb-c, .wb-ol li.wb-c { list-style: none; position: relative; padding-left: 4px; }
+    .wb-ul li.wb-c::before, .wb-ol li.wb-c::before { content: ''; position: absolute; left: -16px; top: 8px; width: 9px; height: 9px; border-radius: 50%; background: var(--lc, #9aa0ad); }
+    .wb-c.ok { --lc: #28a745; } .wb-c.warn { --lc: #e6a817; } .wb-c.bad { --lc: var(--accent); } .wb-c.info { --lc: #3b82c4; } .wb-c.tip { --lc: #7c5cbf; }
+    .wb-ol li.wb-c .wb-n { font-size: 10px; font-weight: 700; color: var(--text-faint); margin-right: 6px; }
     .wb-q { margin: 8px 0; padding: 4px 0 4px 11px; border-left: 3px solid var(--accent); font-style: italic; color: var(--text); font-size: 13px; line-height: 1.5; }
     .wb-p code, .wb-ul code, .wb-tw code, .wb-table2 code { font-family: 'Lora', Georgia, serif; font-weight: 600; padding: 1px 5px; border-radius: 5px; box-shadow: var(--neu-raised-xs); }
     /* Callout cards — the emoji sets the edge colour, the card stays var(--bg). */
@@ -1660,10 +1752,10 @@
     .wb-edit:focus { box-shadow: var(--neu-raised-sm); }
     /* HER WORK AREA — the one thing on this panel she types into, so it is the
        one thing that is INSET. Q's board above stays raised and untouched. */
-    .wb-work { flex-shrink: 0; padding: 10px 12px 4px; border-top: 1px solid var(--border-subtle, rgba(0,0,0,0.07)); }
+    .wb-work { flex-shrink: 0; padding: 12px 14px 16px; border-top: 1px solid var(--border-subtle, rgba(0,0,0,0.07)); }   /* room around the buttons (Sarah, 17 Aug: "this bit needs more padding") */
     .wb-work.off .wb-work-in, .wb-work.off .wb-work-acts, .wb-work.off .wb-work-say { display: none; }
     .wb-work-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; }
-    .wb-work-l { font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-muted); }
+    .wb-work-l { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.07em; color: var(--accent); }   /* titles are pink, never grey (Sarah, 17 Aug) */
     .wb-work-tog {
       background: none; border: none; cursor: pointer; padding: 0 4px;
       font-family: 'Space Grotesk', sans-serif; font-size: 13px; color: var(--text-muted);
@@ -1676,7 +1768,7 @@
       box-sizing: border-box;
     }
     .wb-work-in::placeholder { color: var(--text-faint); }
-    .wb-work-acts { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+    .wb-work-acts { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
     .wb-work-say { margin-top: 8px; font-size: 11.5px; line-height: 1.45; color: var(--text); }
     .wb-work-say.hidden { display: none; }
     /* A report on the display: one raised row per point, the thing it is about
@@ -1745,6 +1837,29 @@
     ::highlight(q-weak) { background: rgba(30,136,229,0.14); }
     /* Q's finger on the page while he talks (Sarah, 17 Aug: "can Q highlight what he wants when he's talking to you?") */
     ::highlight(q-say) { background: rgba(233,30,99,0.16); text-decoration: underline; text-decoration-color: var(--accent); text-decoration-thickness: 2px; text-underline-offset: 3px; }
+    /* Q's SIX highlighters (Sarah, 18 Aug: "how many different colour highlighters
+       does Q have for the page?"). One CSS Highlight per colour. */
+    ::highlight(q-hl-pink)   { background: rgba(233,30,99,0.18); }
+    ::highlight(q-hl-amber)  { background: rgba(230,168,23,0.28); }
+    ::highlight(q-hl-blue)   { background: rgba(59,130,196,0.22); }
+    ::highlight(q-hl-violet) { background: rgba(124,92,191,0.22); }
+    ::highlight(q-hl-green)  { background: rgba(40,167,69,0.20); }
+    ::highlight(q-hl-grey)   { background: rgba(0,0,0,0.09); }
+    /* Sticky index TABS on the top of a paragraph, like a notepad's. */
+    .doc-body .q-ptab { display: inline-block; font-family: 'Space Grotesk', sans-serif; font-size: 9.5px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; line-height: 1; padding: 4px 8px 3px; margin: 0 8px 4px 0; border-radius: 7px 7px 3px 3px; background: var(--bg); color: var(--text); box-shadow: var(--neu-raised-xs); border-top: 3px solid var(--tc, #9aa0ad); vertical-align: top; cursor: pointer; user-select: none; -webkit-user-select: none; }
+    .doc-body .q-ptab:hover { color: var(--accent); }
+    /* MINI TABS — the same tab as a chip, in the chat and on the teaching board;
+       press one and it takes you to the paragraph (Sarah, 18 Aug). */
+    .q-mtab { display: inline-flex; align-items: center; gap: 5px; font-family: 'Space Grotesk', sans-serif; font-size: 9.5px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; line-height: 1; padding: 3px 7px 3px 6px; margin: 0 2px; border: none; border-radius: 6px 3px 3px 6px; background: var(--bg); color: var(--text); box-shadow: var(--neu-raised-xs); border-right: 3px solid var(--tc, #9aa0ad); vertical-align: middle; cursor: pointer; white-space: nowrap; }
+    .q-mtab:hover { color: var(--accent); }
+    .q-mtab .pn { color: var(--text-faint); font-weight: 700; }
+    .tb-tabs { margin: 0 0 20px; padding: 12px 14px; border-radius: 12px; box-shadow: var(--neu-raised-sm); }
+    .tb-tabs .ex-title { display: block; font-size: 9px; font-weight: 700; letter-spacing: 0.09em; text-transform: uppercase; color: var(--accent); margin-bottom: 8px; }
+    .tb-tabs .tb-tabs-row { display: flex; flex-wrap: wrap; gap: 6px; }
+    /* Which way the tab hangs (Sarah, 18 Aug: usually off the right edge, colour
+       on the outside "so it is laying the right way"). */
+    .doc-body .q-ptab.r { float: right; margin: 0 -4px 4px 10px; border-top: none; border-right: 4px solid var(--tc, #9aa0ad); border-radius: 8px 4px 4px 8px; padding: 4px 9px 3px 9px; }
+    .doc-body .q-ptab.l { float: left; margin: 0 10px 4px -4px; border-top: none; border-left: 4px solid var(--tc, #9aa0ad); border-radius: 4px 8px 8px 4px; }
     .ed-issue .ed-v.weak { color: #1e88e5; }
     .ed-issue .ed-steer { font-size: 11px; color: var(--text); margin-top: 2px; }
     .ed-issue .ed-steer b { font-weight: 700; }
@@ -1909,7 +2024,7 @@
     .sc-pc .pc-row.cur .pc-l { color: var(--accent); }
     .sc-side { font-size: 11px; color: var(--text-muted); margin-top: 4px; }
     .sc-side b { color: var(--text); }
-    .coach-card .q-step { font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-muted); margin-bottom: 3px; }
+    .coach-card .q-step { font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--accent); margin-bottom: 3px; }
     .coach-card .q-step:empty { display: none; }
     .coach-card .q-step .q-step-kind { color: var(--accent); }
 
@@ -1954,6 +2069,59 @@
     .q-tip.show { opacity: 1; transform: translateY(0); }
     .q-tip.above { transform: translateY(-4px); }
     .q-tip.above.show { transform: translateY(0); }
+    /* ── The Notes panel and the Bibliography panel (17 Aug 2026) ──────────
+       Two surfaces over what already existed: state.wbNotes (her notes, per
+       part) and state.references (the Harvard entry + the sentence each one
+       backs). Everything a panel already gets — the float shadow, the pink
+       title, the grip — comes from .qpanel; only what is inside them is here.
+       INSET is for the field she TYPES INTO and nothing else: every entry,
+       list and heading below is raised or plain, because she reads those. */
+    .notes-panel { width: 420px; }
+    .bib-panel { width: 460px; }
+    .nt-sec { margin: 0 0 16px; padding: 12px 14px; border-radius: 12px; box-shadow: var(--neu-raised-sm); }
+    .nt-sec:last-child { margin-bottom: 0; }
+    .nt-sec-t { display: block; font-size: 9px; font-weight: 700; letter-spacing: 0.09em; text-transform: uppercase; color: var(--accent); margin-bottom: 8px; }
+    .nt-sec-t .nt-part { font-weight: 500; letter-spacing: 0.02em; text-transform: none; margin-left: 6px; color: var(--text-muted); }
+    .nt-row { margin-bottom: 12px; }
+    .nt-row:last-child { margin-bottom: 0; }
+    .nt-in {
+      width: 100%; box-sizing: border-box; resize: none; overflow: hidden; display: block;
+      font-family: 'Space Grotesk', sans-serif; font-size: 13px; line-height: 1.55;
+      color: var(--text); background: var(--bg); border: none; outline: none;
+      border-radius: 12px; box-shadow: var(--neu-raised-xs); padding: 10px 12px;
+    }
+    /* Her notes are TILES she reads — raised, like the whiteboard's. Only the
+       empty box she types a NEW note into is sunken (the indent rule). */
+    .nt-in.nt-add { font-size: 12px; box-shadow: var(--neu-inset-sm); }
+    .nt-acts { display: flex; gap: 6px; margin-top: 6px; flex-wrap: wrap; }
+    .nt-acts .q-btn { font-size: 10px; padding: 3px 9px; }
+    .nt-say { font-size: 10px; color: var(--text-muted); margin-top: 5px; line-height: 1.4; overflow-wrap: anywhere; }
+    .nt-say:empty { display: none; }
+    .nt-empty, .bib-empty { font-size: 12px; color: var(--text-faint); font-style: italic; line-height: 1.5; overflow-wrap: anywhere; }
+    .nt-count { font-size: 10px; color: var(--text-faint); }
+    #notes-foot, #bib-foot { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+    .bib-ref { margin: 0 0 14px; padding: 12px 14px; border-radius: 12px; box-shadow: var(--neu-raised-sm); }
+    .bib-ref:last-child { margin-bottom: 0; }
+    .bib-h { font-family: 'Lora', Georgia, serif; font-size: 13px; font-weight: 700; line-height: 1.5; color: var(--text); overflow-wrap: anywhere; }
+    .bib-cite { font-size: 11px; font-weight: 700; color: var(--text-muted); margin-top: 4px; overflow-wrap: anywhere; }
+    .bib-tag { font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--accent); margin-left: 6px; }
+    .bib-pt { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 2px 8px; align-items: baseline; margin-top: 6px; padding: 3px 6px; border-radius: 8px; cursor: pointer; }
+    .bib-pt:hover { box-shadow: var(--neu-raised-xs); }
+    .bib-pt:not([data-jump]) { cursor: default; }
+    .bib-pt:not([data-jump]):hover { box-shadow: none; }
+    .bib-acts { display: flex; gap: 6px; margin-top: 8px; flex-wrap: wrap; }
+    .bib-acts .q-btn { font-size: 10px; padding: 3px 9px; }
+    .bib-in {
+      width: 100%; box-sizing: border-box; resize: none; display: block;
+      font-family: 'Space Grotesk', sans-serif; font-size: 12px; line-height: 1.5;
+      color: var(--text); background: var(--bg); border: none; outline: none;
+      border-radius: 10px; box-shadow: var(--neu-inset-sm); padding: 10px 12px;
+    }
+    .bib-add { width: 100%; }
+    .bib-add-acts { display: flex; gap: 6px; margin-top: 6px; flex-wrap: wrap; }
+    .bib-add-out { margin-top: 8px; padding: 10px 12px; border-radius: 10px; box-shadow: var(--neu-raised-xs); }
+    .bib-add-out.hidden { display: none; }
+    .bib-warn { font-size: 10px; color: var(--accent); margin-top: 6px; line-height: 1.4; overflow-wrap: anywhere; }
   </style>
 </head>
 <body>
@@ -2044,10 +2212,10 @@
       <div class="setup-field" style="flex:2">
         <div class="setup-label">Q speaks…</div>
         <div class="mode-seg" id="mode-seg" role="radiogroup" aria-label="When Q speaks">
-          <button type="button" data-mode="pause" title="Q reads what you wrote when you stop at the end of a sentence for the seconds set on the left">when I pause</button>
+          <button type="button" data-mode="pause" title="Q comes back when you stop">when I pause</button>
           <button type="button" data-mode="button" title="Q waits. Nothing happens while you think — press Continue when you want him to read what you wrote">only when I press Continue</button>
         </div>
-        <div style="font-size:11px; color:var(--text-faint); line-height:1.4; margin-top:5px" id="mode-note">He never types on your page.</div>
+        <div style="font-size:11px; color:var(--text-faint); line-height:1.4; margin-top:5px" id="mode-note">Q comes back when you stop.</div>
       </div>
     </div>
     <div style="display:flex; justify-content:flex-end; gap:10px; align-items:center">
@@ -2065,11 +2233,13 @@
         <span id="meta-saved" title="Everything on this page is saved to your account as you type">Not yet saved</span>
         <span class="meta-spacer"></span>
         <button type="button" class="meta-btn" id="doc-mic" title="Talk straight onto the page — your words land where the cursor is, so a terminology button drops into the sentence you are saying. Tap again to stop."><svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-1px"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg> Talk</button>
-        <button type="button" class="meta-btn hidden" id="doc-go" title="Q reads what you have written since he last looked — press when you are ready, not before">● Continue →</button>
+        <button type="button" class="meta-btn hidden" id="doc-go" title="Press when you want Q to look">● Continue →</button>
         <button type="button" class="meta-btn" id="btn-download" title="Download what is on the page as a Word file">↓ Download</button>
         <button type="button" class="meta-btn primary" id="btn-finish" title="Q marks it like the marker, then walks it with you sentence by sentence — highlight, what's missing, the fix, tools, Check it">Mark &amp; fix →</button>
         <button type="button" class="meta-btn" id="btn-edit-strip" title="Editing — the improvement tools (highlight, then press) and the whole-page passes: Spelling, Grammar, Trim, What's weak" aria-expanded="false">✎ Editing</button>
         <button type="button" class="meta-btn" id="btn-marks" title="The marking, kept up to date — the bands, the sentences still to fix, the ones you've done. Open it any time; Q stays free to talk.">✓ Marks</button>
+        <button type="button" class="meta-btn" id="btn-notes" title="Everything you have noted, part by part — write in it, or send a line across to your page.">▤ Notes</button>
+        <button type="button" class="meta-btn" id="btn-bib" title="Every source on your list, in Harvard — what each one backs up, and how strongly.">❝ Bibliography</button>
       </div>
       <div class="source-slot" id="source-slot">
         <button type="button" class="source-add" id="source-add-btn"
@@ -2124,7 +2294,7 @@
 
       <div class="doc-body" id="doc-body"
         contenteditable="true"
-        data-placeholder="Q asks, you write. He's read it — you don't have to."
+        data-placeholder="Start writing here…"
         spellcheck="true"
         autocomplete="off"></div>
     </div>
@@ -2159,10 +2329,11 @@
       <div class="q-section" id="coach-section"></div>
       <div class="q-step" id="coach-step"></div>
       <div class="q-supply" id="coach-supply"></div>
-      <div class="q-msg" id="coach-msg">Drop your task in above and I'll read it. I ask, you write — in your own words. You never have to read the brief.</div>
+      <div class="q-msg" id="coach-msg">Hello — ready when you are.</div>
       <div class="q-integrity hidden" id="coach-integrity"></div>
       <div class="q-hint" id="coach-hint"></div>
       <div class="q-actions hidden" id="coach-actions"></div>
+      <div class="q-taps" id="coach-taps"></div>
       <div class="q-quiet-row" id="coach-quiet"></div>
       <div class="q-nudge-btns hidden" id="coach-nudge">
         <button class="q-btn" id="btn-start-me" title="A smaller, easier question toward the same point">I'm stuck</button>
@@ -2175,7 +2346,7 @@
       <div class="coach-input-row">
         <input class="coach-input" id="coach-input" type="text"
           placeholder="Ask Q…" autocomplete="off" />
-        <button type="button" class="q-go hidden" id="coach-go" title="Q reads what you have written since he last looked and comes back — one line, then the next thing">Continue →</button>
+        <button type="button" class="q-go hidden" id="coach-go" title="Press when you want Q to look">Continue →</button>
         <button type="button" class="q-mic" id="coach-wb" title="The whiteboard — the list, sorting, numbers or lesson we are on, big enough to teach on" aria-label="Open the whiteboard" style="font-size:13px">▦</button>
         <button type="button" class="q-mic" id="coach-ed" title="Editing — spelling and grammar passes over the page, and the improvement tools: highlight, then press" aria-label="Open the editing panel" style="font-size:13px">✎</button>
         <button type="button" class="q-mic" id="coach-mic" title="Tap and talk — your words type themselves into the box. Tap again to stop, then press Enter."><svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg></button>
@@ -2207,7 +2378,7 @@
   <!-- The Video panel — an explainer opens here, on its own raised movable card (same panel manager) -->
   <div class="qpanel ed-panel hidden" id="edit-panel" data-panel="edit">
     <div class="panel-head" id="edit-panel-head">
-      <span class="panel-title">✎ Editing</span>
+      <span class="panel-title">Editing</span>
       <button type="button" class="panel-min" id="edit-panel-tog" title="Minimise" aria-label="Minimise the editing panel">−</button>
     </div>
     <div class="panel-body ed-body" id="edit-body"></div>
@@ -2216,7 +2387,7 @@
   <!-- MARKING — Sarah, 17 Aug: "the marking needs to be a continuous thing that you can open and it stays updated" -->
   <div class="qpanel mk-panel hidden" id="mark-panel" data-panel="mark">
     <div class="panel-head" id="mark-panel-head">
-      <span class="panel-title" id="mark-title">✓ Marking</span>
+      <span class="panel-title" id="mark-title">Marking</span>
       <button type="button" class="panel-min" id="mark-panel-tog" title="Minimise" aria-label="Minimise the marking panel">−</button>
     </div>
     <div class="panel-body mk-body" id="mark-body"></div>
@@ -2224,9 +2395,10 @@
   </div>
   <div class="qpanel wb-panel hidden" id="wb-panel" data-panel="wb">
     <div class="panel-head" id="wb-panel-head">
-      <span class="panel-title" id="wb-title">▦ Whiteboard</span>
+      <span class="panel-title" id="wb-title">Whiteboard</span>
       <button type="button" class="panel-min" id="wb-panel-tog" title="Minimise" aria-label="Minimise the whiteboard">−</button>
     </div>
+    <div class="wb-stickies hidden" id="wb-stickies"></div>
     <div class="panel-body wb-body" id="wb-body"></div>
     <!-- HER SPACE ON THE BOARD (Sarah, 17 Aug: "that's not what I meant when I
          said I wanted to be able to work on the whiteboard" — clicking Q's
@@ -2252,7 +2424,7 @@
   </div>
   <div class="qpanel video-panel hidden" id="video-panel" data-panel="video">
     <div class="panel-head" id="video-panel-head">
-      <span class="panel-title" id="video-panel-badge">▶ Video</span>
+      <span class="panel-title" id="video-panel-badge">Video</span>
       <button type="button" class="panel-min" id="video-panel-tog" title="Minimise" aria-label="Minimise the video">−</button>
     </div>
     <div class="panel-body" id="video-panel-body">
@@ -2260,6 +2432,42 @@
       <div class="vp-channel" id="vp-channel"></div>
       <div class="vp-frame"><iframe id="vp-frame" title="Explainer video" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen referrerpolicy="strict-origin-when-cross-origin"></iframe></div>
       <div class="vp-actions"><a id="vp-open" href="#" target="_blank" rel="noopener">open on YouTube</a><a href="#" id="vp-close">Close</a></div>
+    </div>
+    <div class="panel-grip" title="Drag to resize"></div>
+  </div>
+
+  <!-- Her notes, every part, in one place — the whiteboard strip only ever
+       shows the part she is on, and only while it is in step mode. -->
+  <div class="qpanel notes-panel hidden" id="notes-panel" data-panel="notes">
+    <div class="panel-head" id="notes-panel-head">
+      <span class="panel-title" id="notes-title">Notes</span>
+      <button type="button" class="panel-min" id="notes-panel-tog" title="Minimise" aria-label="Minimise your notes">−</button>
+    </div>
+    <div class="panel-body" id="notes-body"></div>
+    <div class="panel-foot" id="notes-foot">
+      <button type="button" class="q-btn quiet" id="notes-copy">Copy all</button>
+      <span class="nt-count" id="notes-count"></span>
+    </div>
+    <div class="panel-grip" title="Drag to resize"></div>
+  </div>
+
+  <!-- The whole reference list, alphabetical, with the sentence each source
+       sits behind — and the only place one can be taken back off. -->
+  <div class="qpanel bib-panel hidden" id="bib-panel" data-panel="bib">
+    <div class="panel-head" id="bib-panel-head">
+      <span class="panel-title" id="bib-title">Bibliography</span>
+      <button type="button" class="panel-min" id="bib-panel-tog" title="Minimise" aria-label="Minimise your bibliography">−</button>
+    </div>
+    <div class="panel-body" id="bib-body"></div>
+    <div class="panel-foot" id="bib-foot">
+      <div class="bib-add">
+        <textarea class="bib-in" id="bib-add-in" rows="2" placeholder="A book, a link, an author and title — any details you have"></textarea>
+        <div class="bib-add-acts">
+          <button type="button" class="q-btn" id="bib-add-go">Format it →</button>
+          <button type="button" class="q-btn quiet" id="bib-copy">Copy all</button>
+        </div>
+        <div class="bib-add-out hidden" id="bib-add-out"></div>
+      </div>
     </div>
     <div class="panel-grip" title="Drag to resize"></div>
   </div>
@@ -2447,7 +2655,7 @@
     // coach is the student's own — grade bands are stripped.
     function docPlainText() {
       const clone = docBody.cloneNode(true);
-      clone.querySelectorAll('.grade-band, .q-margin-dots, .q-idot').forEach(n => n.remove());
+      clone.querySelectorAll('.grade-band, .q-margin-dots, .q-idot, .q-ptab').forEach(n => n.remove());
       // innerText keeps paragraph breaks; a detached clone has no layout, so
       // put line breaks in by hand for block elements.
       clone.querySelectorAll('div, p, br, li, h1, h2, h3').forEach(n => {
@@ -2515,7 +2723,7 @@
       coachGo.classList.toggle('hidden', !btn);
       docGo.classList.toggle('hidden', !btn);
       pauseInput.disabled = btn;
-      modeNote.textContent = btn ? 'Q waits while you think. Press Continue and he reads what you wrote. He never types on your page.' : 'Q reads what you write and comes back when you stop. He never types on your page.';
+      modeNote.textContent = btn ? 'Press Continue when you want Q to look.' : 'Q comes back when you stop.';
       if (btn) clearTimeout(probeTimer);
     }
     modeSeg.addEventListener('click', e => {
@@ -2663,6 +2871,7 @@
           grip.removeEventListener('pointermove', move); grip.removeEventListener('pointerup', up); grip.removeEventListener('pointercancel', up);
           try { grip.releasePointerCapture(d.id); } catch (_) {}
           const l = getL(p); l.w = parseFloat(el.style.width); l.h = parseFloat(el.style.height); saveLayout();
+          el.style.maxHeight = l.h + 'px'; el.style.height = '';   // her size is the ceiling; content decides below it
           clampPanel(p);
         };
         grip.addEventListener('pointermove', move); grip.addEventListener('pointerup', up); grip.addEventListener('pointercancel', up);
@@ -2724,7 +2933,10 @@
         return;
       }
       if (l.w) el.style.width = l.w + 'px';
-      if (l.h) el.style.height = l.h + 'px';
+      // A saved height is a CEILING, not a fixed size — the panel shrinks to its
+      // content under it, so hiding a section never leaves a hole (Sarah, 17 Aug:
+      // "empty space at the bottom").
+      if (l.h) { el.style.height = ''; el.style.maxHeight = Math.min(l.h, window.innerHeight - 16) + 'px'; }
       el.classList.toggle('min', !!l.min);
       if (p.minBtn) p.minBtn.textContent = l.min ? '+' : '−';
       if (l.left != null && l.top != null) placePanel(p, l.left, l.top);
@@ -2740,7 +2952,7 @@
         restackQueued = false;
         if (!isDocked()) return;
         let y = PANEL_M;
-        ['coach', 'video', 'teach', 'brief'].forEach(k => {
+        ['coach', 'video', 'teach', 'brief', 'notes', 'bib'].forEach(k => {
           const p = panels[k]; if (!p || p.el.classList.contains('hidden')) return;
           p.el.style.bottom = y + 'px';
           y += p.el.offsetHeight + 6;
@@ -2812,6 +3024,14 @@
     const videoPanel = makePanel(document.getElementById('video-panel'), 'video', {
       minW: 260, minH: 200,
       defaults: () => ({ w: 420, left: Math.max(PANEL_M, window.innerWidth - 420 - 16), top: 12 }),
+    });
+    const notesPanel = makePanel(document.getElementById('notes-panel'), 'notes', {
+      minW: 280, minH: 200,
+      defaults: () => ({ w: 420, left: Math.max(PANEL_M, Math.round((window.innerWidth - 420) / 2)), top: 64 }),
+    });
+    const bibPanel = makePanel(document.getElementById('bib-panel'), 'bib', {
+      minW: 300, minH: 220,
+      defaults: () => ({ w: 460, left: Math.max(PANEL_M, Math.round((window.innerWidth - 460) / 2)), top: 80 }),
     });
     // ── The Video panel: ONE explainer, on its own raised movable card ──────
     // openVideo puts the embed (privacy-enhanced host, rel=0) in the panel;
@@ -2923,7 +3143,7 @@
         const hint = m.hint ? `<div class="q-chat-h">${qMd(m.hint)}</div>` : '';
         const hl = m.highlight ? ' <span class="q-chat-hl">● on the page</span>' : '';
         const sec = m.section ? `<span class="q-chat-sec">${escHtml(m.section)}</span>` : '';
-        return `<div class="q-chat-m ${m.role === 'q' ? 'q' : 'me'}"><span class="q-chat-who">${m.role === 'q' ? 'Q' : 'you'}${sec}${hl}</span><div class="q-chat-t">${qMd(m.text)}</div>${hint}</div>`;
+        return `<div class="q-chat-m ${m.role === 'q' ? 'q' : 'me'}"><span class="q-chat-who">${m.role === 'q' ? 'Q' : 'you'}${sec}${hl}</span><div class="q-chat-t">${m.role === 'q' ? decorateParaRefs(qMd(m.text)) : qMd(m.text)}</div>${hint}</div>`;
       }).join('');
     }
     function renderThread() {
@@ -2948,19 +3168,36 @@
     }
     function sayMe(text) { flushLive(); pushSaid({ role: 'me', text: String(text || '') }); renderThread(); }
     function setCoach({ msg, section, hint, actions, inputVisible, thinking, showNudge, where, move, moveHtml, step, role, supply, ack }) {
-      if (!thinking && isBoardAsk(msg)) msg = '';   // the question is on the board — once
+      // The QUESTION lives on the boards — the whiteboard's ladder (bold, the
+      // rung we are on) and the teaching board. The card does not read it out
+      // a third time (Sarah, 17 Aug 23:10: "3 of the same question. I
+      // understand having on the whiteboard and the teaching board"). What
+      // the card carries is Q's own line and the hint on how to answer.
+      if (!thinking && isBoardAsk(msg)) msg = '';
       flushLive();                                  // what he said last is kept, not erased
       renderThread();
       coachMsg.classList.toggle('thinking', !!thinking);
-      if (thinking) coachMsg.textContent = msg || ''; else coachMsg.innerHTML = msg ? qMd(msg) : '';
+      if (thinking) coachMsg.textContent = msg || ''; else coachMsg.innerHTML = msg ? decorateParaRefs(qMd(msg)) : '';
       coachMsg.classList.toggle('ask', !thinking && !!msg && !!(state.brief));
       coachSection.textContent = section || '';
       if (role) { lastRoleText = role; coachRole.innerHTML = '<span class="q-role-l">This part</span>' + escHtml(role); }
       else coachRole.innerHTML = '';
-      coachSupply.innerHTML = supply ? '<span class="q-supply-l">Q says</span>' + escHtml(supply) : '';
+      // SAY AND SHOW (Sarah, 17 Aug: "he needs to be a chat and have all the
+      // big stuff [on the whiteboard]… loads of walls of text"). Q's supply — the
+      // fact, the context, the teaching — is INFORMATION: it goes on the
+      // whiteboard as "Q says" and the whiteboard comes forward. The card keeps
+      // only what he says TO her (the ask).
+      coachSupply.innerHTML = '';
+      if (supply && String(supply).trim()) {
+        const si = currentStepInfo();
+        state.wbSay = { text: String(supply).trim(), cid: state.currentCriterionId || '', stepId: si && si.step ? si.step.id : '' };
+        try { showPanel('wb'); revealPanel('wb'); renderWhiteboard(); } catch (_) {}
+      }
       // The step line: "Step 2 of 5 · NUMBERS" while a scaffold step is live.
       const st = step === false ? null : (step || currentStepInfo());
-      coachStepEl.innerHTML = st ? 'Step ' + st.n + ' of ' + st.N + ' · <span class="q-step-kind">' + escHtml(STEP_KIND_LABEL[st.kind] || st.kind) + '</span>' : '';
+      // No step line on the card (Sarah, 17 Aug: "step 1 of 3 and below? why is
+      // this staying there?") — where we are is on the whiteboard's ladder.
+      coachStepEl.innerHTML = '';
       coachHint.innerHTML = hint ? qMd(hint) : '';
       if (!thinking && state.pendingDotLine) { coachHint.innerHTML = qMd((hint ? hint + ' ' : '') + state.pendingDotLine); state.pendingDotLine = null; }
       // The part is named ONCE, at the top of the teaching board (Sarah, 17 Aug:
@@ -3006,9 +3243,13 @@
       // to setCoach (a step, a mark, a tool) moves this into the thread above.
       // moveHtml is a rendered block (the band list) and lives on the marking
       // panel, so it is not archived as text.
-      const saidNow = [moveHtml ? '' : (move || ack || ''), supply || '', msg || '']
+      const saidNow = [moveHtml ? '' : (move || ack || ''), msg || '']   // supply lives on the whiteboard, not in the thread
         .map(s => String(s || '').trim()).filter(Boolean).join('\n\n');
       state.liveSay = thinking || !saidNow ? null : { text: saidNow, hint: hint || '', section: section || '' };
+      // A re-render (restore, a plan landing, a resize) says the same thing
+      // again: it must not sit in the thread AND live ("Welcome back." twice).
+      const lastQ = state.chatLog[state.chatLog.length - 1];
+      if (saidNow && lastQ && lastQ.role === 'q' && String(lastQ.text || '').trim() === saidNow) { state.chatLog.pop(); renderThread(); }
       // A conversation reads to the newest line, not back to the top.
       const body = document.getElementById('coach-body');
       body.scrollTop = state.chatLog.length ? body.scrollHeight : 0;
@@ -3271,6 +3512,12 @@
       state.brickCounts = {}; state.essayReady = false; state.sources = []; state.editItems = null; state.editIndex = 0; state.editDone = false;
       state.plans = {}; state.stepState = {}; state.currentStep = null; state.calls = {}; state.openerDone = false; state.match = null; state.termsFit = {}; state.reqMet = {}; state.references = []; state.inlineDots = {};
       state.partMarks = {}; state.partMarkDone = {}; state.editing = false; state.partFixThen = null; state.stepMarks = {}; state.editStepKey = null;
+      // A NEW ASSIGNMENT DOES NOT INHERIT THE LAST ONE'S NOTES. references was
+      // already cleared here; wbNotes / wbDoc / wbWork were not, so until a
+      // refresh the previous assignment's notes stayed on screen.
+      state.wbNotes = {}; state.wbDoc = null; state.wbEditing = false; state.wbWork = {}; state.wbStickies = [];
+      hidePanel('notes'); hidePanel('bib');
+      try { renderWhiteboard(); } catch (_) {}
       // The task slot too — otherwise a pasted brief or a link is ignored
       // (the paste path checks !sourceState.name) and the old chip stays.
       sourceState.name = null; sourceState.text = null; sourceState.imageDataUrl = null; sourceState.sourceUrl = null;
@@ -3337,52 +3584,60 @@
       if (!list.length) return '';
       return list.map(s => {
         const d = s.digest;
-        if (!d && s.isBrief) return `<div class="bb-src" data-src="__brief"><div class="bb-src-head">📖 The story the questions are about</div><div class="bb-src-wait">Q is pulling the scenario out of the brief for you… <button type="button" class="q-btn bb-src-retry" data-src="__brief">Read it now</button></div></div>`;
-        if (!d) return `<div class="bb-src" data-src="${esc(s.name)}"><div class="bb-src-head">📎 ${esc(s.name)}</div><div class="bb-src-wait">Q is reading this for you — the plain version lands here in a moment. <button type="button" class="q-btn bb-src-retry" data-src="${esc(s.name)}">Read it now</button></div></div>`;
+        if (!d && s.isBrief) return `<div class="bb-src" data-src="__brief"><div class="bb-src-head">The story the questions are about</div><div class="bb-src-wait">Q is pulling the scenario out of the brief for you… <button type="button" class="q-btn bb-src-retry" data-src="__brief">Read it now</button></div></div>`;
+        if (!d) return `<div class="bb-src" data-src="${esc(s.name)}"><div class="bb-src-head">${esc(s.name)}</div><div class="bb-src-wait">Q is reading this for you — the plain version lands here in a moment. <button type="button" class="q-btn bb-src-retry" data-src="${esc(s.name)}">Read it now</button></div></div>`;
         // THE FACT CARD. Title, the name big, what it is, the numbers as tiles,
         // pros and cons side by side, who's in it — all points. The paragraph
         // folds away and the original is one press (Sarah, 17 Aug).
         // Digests made before `name`/`kind`/`strengths` existed simply don't
         // show those rows — nothing is re-read, nothing costs a call.
+        // The "Re-read for the card" button stays until the card has its
+        // Overview and sections too — a card read before 17 Aug 19:51 has
+        // neither, and she had no way to get them short of a new upload.
+        // (Sarah, 17 Aug: "does it need a new upload to do that?" — no.)
         const bold = x => esc(x).replace(/((?:£|\$|€)\s?\d[\d,.]*[kKmM]?|\b\d[\d,.]*%|\b\d[\d,.]*\b)/g, '<b>$1</b>');
         const nm = String(d.name || '').trim();
         const kind = String(d.kind || '').trim();
         const head = nm
-          ? `<span class="fc-lab">${s.isBrief ? '📖 Case study' : '📎 Case study'}</span>
+          ? `<span class="fc-lab">Case study</span>
              <div class="fc-name">${esc(nm)}</div>
              ${kind ? `<div class="fc-kind">${esc(kind)}</div>` : (d.whatItIs ? `<div class="fc-kind">${esc(d.whatItIs)}</div>` : '')}`
-          : `<span class="fc-lab">${s.isBrief ? '📖 Case study' : '📎 Case study'}</span>
+          : `<span class="fc-lab">Case study</span>
              <div class="fc-kind" style="font-size:13px;color:var(--text);font-weight:600">${esc(d.whatItIs || s.name)}</div>`;
         // THE FACT SHEET (Sarah, 17 Aug: "I asked Q in my chat to format the
         // brief and this is what he did. thats what Id expect the fact sheet to
         // look like"). The Overview table first — what this place IS, row by
         // row — then the document's own sections with their points.
-        const facts = (d.facts || []).length
-          ? `<div class="fs-h">Overview</div><table class="fs-table"><tbody>${d.facts.map(f => `<tr><th>${esc(f.label)}</th><td>${bold(f.value)}</td></tr>`).join('')}</tbody></table>` : '';
-        const sections = (d.sections || []).length
-          ? d.sections.map(x => `<div class="fs-sec"><div class="fs-h">${x.icon ? esc(x.icon) + ' ' : ''}${esc(x.heading)}</div><ul class="fs-list">${x.bullets.map(b => `<li>${bold(b)}</li>`).join('')}</ul></div>`).join('') : '';
+        // …and it is CARDS, not a document (Sarah, 17 Aug: the table + bullet
+        // version "was basically a word doc"). The Overview is a grid of stat
+        // tiles; every section of the document is a railed block (mkBlock —
+        // the same shape as the marking panel and her job page) with its own
+        // colour, its emoji in the icon well, and its points as dotted lines.
+        const RAILS = ['#28a745', '#e6a817', '#7c5cbf', '#1aa39a', '#3b82c4', '#e0245e'];
+        const pts = xs => `<ul class="fs-pts">${xs.map(b => `<li>${bold(b)}</li>`).join('')}</ul>`;
         const stats = (d.numbers || []).length
           ? `<div class="fc-stats">${d.numbers.map(n => `<span class="fc-stat"><b>${esc(n.value)}</b><span>${esc(n.label)}</span></span>`).join('')}</div>` : '';
-        const pros = (d.strengths || []).length
-          ? `<div class="fc-col fc-pro"><span class="fc-col-h">Pros</span><ul>${d.strengths.map(x => `<li>${bold(x)}</li>`).join('')}</ul></div>` : '';
-        const cons = (d.problems || []).length
-          ? `<div class="fc-col fc-con"><span class="fc-col-h">Cons</span><ul>${d.problems.map(x => `<li>${bold(x)}</li>`).join('')}</ul></div>` : '';
-        const proscons = (pros || cons) ? `<div class="fc-pc">${pros}${cons}</div>` : '';
+        const facts = ((d.facts || []).length || stats)
+          ? mkBlock('Overview', '▦', '#3b82c4',
+              ((d.facts || []).length ? `<div class="fs-grid">${d.facts.map(f => `<div class="fs-tile"><span>${esc(f.label)}</span><b>${bold(f.value)}</b></div>`).join('')}</div>` : '') + stats)
+          : '';
+        const sections = (d.sections || []).length
+          ? d.sections.map((x, i) => mkBlock(String(x.heading || ''), String(x.icon || '•'), RAILS[i % RAILS.length], pts(x.bullets || []), (x.bullets || []).length)).join('') : '';
+        const pros = (d.strengths || []).length ? mkBlock('Pros', '✓', '#28a745', pts(d.strengths), d.strengths.length) : '';
+        const cons = (d.problems || []).length ? mkBlock('Cons', '✕', '#e0245e', pts(d.problems), d.problems.length) : '';
+        const proscons = (pros || cons) ? `<div class="fs-two">${pros}${cons}</div>` : '';
         const people = (d.people || []).length
-          ? `<div class="bb-src-sec"><span class="bb-src-lab">Who</span><ul>${d.people.map(p => `<li><b>${esc(p.who)}</b> — ${esc(p.what)}</li>`).join('')}</ul></div>` : '';
+          ? mkBlock('Who', '👤', '#7c5cbf', `<ul class="fs-pts">${d.people.map(p => `<li><b>${esc(p.who)}</b> — ${esc(p.what)}</li>`).join('')}</ul>`, d.people.length) : '';
         const story = String(d.theStory || '').trim()
           ? `<details class="fc-more"><summary>The whole story</summary>${storyPointsHtml(d.theStory)}${d.useIt ? `<div class="bb-src-use">${esc(d.useIt)}</div>` : ''}</details>` : '';
         return `<div class="bb-src" data-src="${esc(s.name)}">
           ${head}
-          ${facts ? '<div class="fc-rule"></div>' + facts : ''}
-          ${sections ? '<div class="fc-rule"></div>' + sections : ''}
-          ${stats ? '<div class="fc-rule"></div>' + stats : ''}
-          ${proscons ? '<div class="fc-rule"></div>' + proscons : ''}
-          ${people ? '<div class="fc-rule"></div>' + people : ''}
+          ${(facts || sections || proscons || people) ? '<div class="fc-rule"></div>' : ''}
+          ${facts}${sections}${proscons}${people}
           <div class="fc-rule"></div>
           <div class="fc-acts">
             <button type="button" class="q-btn fc-open" data-src="${esc(s.isBrief ? '__brief' : s.name)}">Open the original</button>
-            ${(nm && (d.strengths || []).length) ? '' : `<button type="button" class="q-btn quiet bb-src-retry" data-src="${esc(s.isBrief ? '__brief' : s.name)}" title="Q reads the document again and fills in the card — this makes one call">Re-read for the card</button>`}
+            ${(nm && (d.strengths || []).length && ((d.facts || []).length || (d.sections || []).length)) ? '' : `<button type="button" class="q-btn quiet bb-src-retry" data-src="${esc(s.isBrief ? '__brief' : s.name)}">Re-read for the card</button>`}
             ${story ? '' : (d.useIt ? `<span class="bb-src-use">${esc(d.useIt)}</span>` : '')}
           </div>
           ${story}
@@ -3476,7 +3731,9 @@
       const criteria = Array.isArray(data.criteria) ? data.criteria : [];
       const n = criteria.length;
 
-      const line = 'This is asking you for ' + n + ' thing' + (n === 1 ? '' : 's') + ' — I\'ll take you through each.';
+      // The board says what the brief IS, not what Q will do (Sarah, 17 Aug:
+      // "stop with the weird messages all over the page").
+      const line = n ? (n === 1 ? 'One question' : n + ' questions') : '';
 
       const gb = data.gradeBands || {};
       const gradeHtml = (gb.top || gb.mid || gb.low) ? `<div class="brief-grades">
@@ -3491,7 +3748,7 @@
       const listHtml = criteria.map((c, i) => `<li><span class="cid" title="${esc(c.id)}">${i + 1}.</span><span class="ba-label">${esc(criterionLabel(c))}${c.wordBudget ? ' <span style="font-weight:500;color:var(--text-muted)">· ~' + esc(String(c.wordBudget)) + ' words</span>' : ''}</span><span class="ba-text">${esc(c.text)}</span></li>`).join('');
       const foldOpen = !!(panelLayout.brief && panelLayout.brief.fold);
 
-      body.innerHTML = `<div class="bb-line">${esc(line)}</div>
+      body.innerHTML = `${line ? `<div class="bb-line">${esc(line)}</div>` : ''}
         <div class="coverage-strip" id="coverage-strip"></div>
         <div id="bb-sources">${sourceDigestsHtml()}</div>
         <details class="bb-fold" id="bb-fold"${foldOpen ? ' open' : ''}><summary>Show the brief</summary>
@@ -3642,7 +3899,7 @@
       // of this"). The Q1-Q4 row already says which part she is on, and the
       // part's name is on the brief board.
       const whereHtml = '';
-      const agendaHtml = scaffoldAgendaHtml() + coverHtml(state.currentCriterionId) + expectHtml(state.currentCriterionId) + sourcesBoardHtml();   // QUESTIONS first, then TO COVER (Sarah, 17 Aug)
+      const agendaHtml = scaffoldAgendaHtml() + coverHtml(state.currentCriterionId) + expectHtml(state.currentCriterionId) + sourcesBoardHtml() + tabsBoardHtml();   // QUESTIONS first, then TO COVER (Sarah, 17 Aug)
       const earlierHtml = earlier.length
         ? `<details class="tb-earlier" id="tb-earlier"${state.boardEarlierOpen ? ' open' : ''}><summary>Earlier (${earlier.length})</summary><div class="tb-items">${earlier.map((it) => boardItemHtml(it, items.indexOf(it), true)).join('')}</div></details>`
         : '';
@@ -3659,12 +3916,7 @@
           btn.textContent = open ? 'more' : 'less';
         });
       });
-      teachBody.querySelectorAll('.sb-point[data-jump]').forEach(el => el.addEventListener('click', () => {
-        const hit = findInDoc(el.dataset.jump); if (!hit) return;
-        const r = document.createRange(); r.setStart(hit.start.node, hit.start.offset); r.setEnd(hit.end.node, hit.end.offset + 1);
-        const sel = window.getSelection(); sel.removeAllRanges(); sel.addRange(r); docBody.focus();
-        const b = r.getBoundingClientRect(); if (b && (b.top < 80 || b.bottom > window.innerHeight - 120)) window.scrollBy({ top: b.top - Math.round(window.innerHeight * 0.4), behavior: 'smooth' });
-      }));
+      teachBody.querySelectorAll('.sb-point[data-jump]').forEach(el => el.addEventListener('click', () => { jumpToSentence(el.dataset.jump); }));
       teachBody.querySelectorAll('.tb-item.tb-click').forEach(el => {
         const it = items[Number(el.dataset.idx)];
         if (it && it.action) el.addEventListener('click', () => it.action());
@@ -3753,9 +4005,9 @@
         } catch (e) {
           if (e.code === 'essay_pending') {
             // The answer in Q's head is still being written — wait for it.
-            if (onTick) onTick('Q is writing the answer in his head first…');
-            try { await waitForJob('essay', { everyMs: 3000, maxMs: 300000, onTick: (secs) => onTick && onTick('Q is writing the answer in his head first… ' + secs + 's') }); }
-            catch (e2) { throw Object.assign(new Error('the answer in Q\'s head did not finish: ' + shortCause(e2)), { retryable: true }); }
+            if (onTick) onTick('Getting ready…');
+            try { await waitForJob('essay', { everyMs: 3000, maxMs: 300000, onTick: (secs) => onTick && onTick('Getting ready… ' + secs + 's') }); }
+            catch (e2) { throw Object.assign(new Error('getting ready did not finish: ' + shortCause(e2)), { retryable: true }); }
             continue;
           }
           if (e.code === 'plan_busy') { await new Promise(r => setTimeout(r, 2500)); continue; }
@@ -3763,7 +4015,7 @@
         }
         let plan = d.result;
         if (d.status === 'running' || (!plan && d.status !== 'done')) {
-          const job = await waitForJob('plan', { everyMs: 2000, maxMs: 180000, onTick: (secs) => onTick && onTick('Setting out the plan for this part… ' + secs + 's') });
+          const job = await waitForJob('plan', { everyMs: 2000, maxMs: 300000, onTick: (secs) => onTick && onTick('Setting out the plan for this part… ' + secs + 's') });
           plan = job.result;
         }
         if (!plan || !Array.isArray(plan.steps) || !plan.steps.length) throw Object.assign(new Error('the plan came back empty'), { retryable: true });
@@ -3819,8 +4071,8 @@
       } catch (e) {
         partStarting = false;
         setCoach({
-          msg: 'I could not set out the plan for this part: ' + shortCause(e), section: 'HICCUP',
-          hint: 'Nothing is lost — retry, or carry on with a question instead.',
+          msg: 'The plan for this part didn\'t come through (' + shortCause(e).replace(/[.?]+$/, '') + '). Try again?', section: '',
+          hint: '',
           actions: [
             { label: '↻ Try again', primary: true, onClick: () => startPart(cid, { moveFrom: prev }) },
             { label: 'Ask me a question instead', onClick: () => askNextQuestion({ trigger: 'focus', focusCriterionId: cid, forceProbe: true }) },
@@ -3877,7 +4129,7 @@
       // for the sentence and puts THAT on the paper.
       if (step.kind === 'list') {
         const n = st.items.length;
-        setCoach({ ...common, msg: step.prompt, hint: 'This goes on the board, not the paper — type one here, Enter, next one. Done when finished.' + (n ? ' ' + n + ' so far.' : ''), actions: stepActions(cid, step, st) });
+        setCoach({ ...common, msg: step.prompt, hint: '', actions: stepActions(cid, step, st) });
         coachInput.placeholder = step.itemHint ? step.itemHint : 'One item, then Enter…';
       } else if (step.kind === 'numbers') {
         const cell = nextNumbersCell(step, st);
@@ -3900,13 +4152,17 @@
         // supply (Q's one fact) is its own block above the ask.
         const supply = step.supply && !st.answers.length && !st.followUp ? step.supply : '';
         const w = whereInfo(cid);
-        const onPaper = 'This goes ON THE PAPER' + (w ? ' under Question ' + w.n : '') + ' — say it here, Enter, and I put it there in your words.';
-        setCoach({ ...common, supply, msg: st.followUp || st.applyAsk || step.prompt, hint: (step.kind === 'argue' || step.kind === 'switch' ? 'A reason and an example. ' : step.kind === 'recommend' ? 'Which wins and why. ' : '') + onPaper, actions: stepActions(cid, step, st) });
+        const onPaper = '';   // no method-talk under the ask (Sarah, 17 Aug: "stop with the weird messages all over the page")
+        setCoach({ ...common, supply, msg: st.followUp || st.applyAsk || step.prompt, hint: (step.kind === 'argue' || step.kind === 'switch' ? 'A reason and an example. ' : step.kind === 'recommend' ? 'Which wins and why. ' : ''), actions: stepActions(cid, step, st) });
         coachInput.placeholder = step.kind === 'argue' || step.kind === 'switch' ? 'Argue it here…' : 'Your answer…';
       }
       persistSteps();
     }
     function stepActions(cid, step, st) {
+      // The card is a chat, not a step form: no Next / Skip / Got it buttons
+      // on it (Sarah, 17 Aug). She moves on in words ("next", "done"), with
+      // one of Q's taps, or by pressing a rung on the whiteboard's ladder.
+      return [];
       const acts = [];
       if (step.kind === 'teach') return [{ label: 'Got it →', primary: true, big: true, onClick: () => completeStep(cid, step.id, { ack: '' }) }, { label: 'Skip this', quiet: true, onClick: () => skipStep(cid, step.id) }];
       const filledEnough = step.kind === 'list' ? st.items.length >= 1
@@ -4018,7 +4274,7 @@
         // own words belong on the page. This is why the document "isn't
         // forming into sentences".
         renderBoard(); persistSteps();
-        setCoach({ msg: step.prompt, hint: st.items.length + ' on the list · Enter adds one · Done when finished.', inputVisible: true, showNudge: true, actions: stepActions(cid, step, st) });
+        setCoach({ msg: step.prompt, hint: '', inputVisible: true, showNudge: true, actions: stepActions(cid, step, st) });
         coachInput.placeholder = step.itemHint || 'Another one, then Enter…';
         return true;
       }
@@ -4069,7 +4325,7 @@
         st.supplied = true; st.followUp = step.thenAsk || step.prompt; state.currentQuestion = st.followUp;
         state.coachHistory.push({ question: step.prompt, answer: text.trim(), criterionId: cid, stepId: step.id, meta: true });
         persist({ coachHistory: state.coachHistory }); persistSteps(); freshAsk(st.followUp);
-        setCoach({ supply: step.supply, msg: st.followUp, hint: 'Your sentence goes on the page — nothing I said does.', inputVisible: true, showNudge: true, actions: stepActions(cid, step, st) });
+        setCoach({ supply: step.supply, msg: st.followUp, hint: '', inputVisible: true, showNudge: true, actions: stepActions(cid, step, st) });
         coachInput.placeholder = 'Your sentence…';
         return true;
       }
@@ -4107,7 +4363,7 @@
         st.followUps += 1; st.followUp = d.followUp;
         state.currentQuestion = d.followUp; freshAsk(d.followUp);
         // A supplied fact is Q's statement on the card (never on the page), then the sentence request.
-        setCoach({ ack: d.ack || '', supply: d.supply || '', msg: d.followUp, hint: d.supply ? 'Your sentence goes on the page — nothing I said does.' : 'Add that here, then Enter.', inputVisible: true, showNudge: true, actions: stepActions(cid, step, st) });
+        setCoach({ ack: d.ack || '', supply: d.supply || '', msg: d.followUp, hint: d.supply ? '' : 'Add that here, then Enter.', inputVisible: true, showNudge: true, actions: stepActions(cid, step, st) });
         coachInput.focus(); persistSteps();
       } catch (e) {
         // A failed check never strands them: their words are on the page — move on.
@@ -4401,7 +4657,7 @@
     // ── EXPECTATIONS on the board: the minimal ask, the expected terms as
     // BUTTONS (press → the word goes into your sentence at the caret; light
     // green when it is on the page, solid green when Q's check said it fits),
-    // "Still to use: …", and the requirement DOTS with their key.
+    // "Still to cover: …", and the requirement DOTS with their key.
     // The paragraphs that belong to a part: the coach-box ones (tagged
     // data-step) PLUS whatever was typed or dictated straight onto the page
     // under that part's "Question n" heading, up to the next heading. Before
@@ -4450,7 +4706,42 @@
       return out.sort((a, b) => (a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING) ? -1 : 1);
     }
     function partText(cid) { const ps = partParagraphs(cid); return (ps.length ? ps.map(p => p.textContent).join(' ') : docPlainText()).toLowerCase(); }
-    function termSeen(cid, term, text) { return (text != null ? text : partText(cid)).includes(String(term).toLowerCase()); }
+    // ── termSeen — A HINT ONLY, and never a verdict. Green comes from Q
+    // (state.termsFit); this drives nothing but the pressed-in ".seen" look in
+    // the gap between her typing a word and Q next reading the page. It used to
+    // be a raw substring test, which is worse than "exact words" — it is exact
+    // characters: "skill" was found inside deskilling and upskilling, and
+    // "motivate" was not found in motivation. So: WORD BOUNDARIES, and simple
+    // endings folded (-s -es -ing -ed -ion -ation) both ways. No synonym list
+    // here, ever — meaning is Q's judgement, never the client's (plan §7).
+    const TERM_SUFFIXES = ['ation', 'ion', 'ing', 'ed', 'es', 's'];
+    function wordStems(w) {
+      w = String(w == null ? '' : w).toLowerCase();
+      const out = [w];
+      for (const suf of TERM_SUFFIXES) if (w.length > suf.length + 2 && w.slice(-suf.length) === suf) out.push(w.slice(0, -suf.length));
+      if (w.length > 4 && w.slice(-3) === 'ies') out.push(w.slice(0, -3) + 'y'); // case studies → case study, theories → theory
+      for (const s of out.slice()) if (s.length > 3 && s.slice(-1) === 'e') out.push(s.slice(0, -1));
+      return out;
+    }
+    // motivate ↔ motivation, deskill ↔ deskilling, case ↔ cases. Nothing clever.
+    function sameWord(a, b) { if (a === b) return true; const A = wordStems(a), B = wordStems(b); return A.some(x => B.indexOf(x) >= 0); }
+    // Words, boundaries kept: apostrophes dissolve ("company's" → companys →
+    // company), hyphens split ("neo-Taylorism" → neo | taylorism).
+    function termWords(s) { return String(s == null ? '' : s).toLowerCase().replace(/['‘’]/g, '').split(/[^a-z0-9]+/).filter(Boolean); }
+    let termSeenCache = { text: null, words: [] };
+    function termSeen(cid, term, text) {
+      const src = text != null ? text : partText(cid);
+      if (termSeenCache.text !== src) termSeenCache = { text: src, words: termWords(src) };
+      const words = termSeenCache.words;
+      const t = termWords(term);
+      if (!t.length) return false;
+      for (let i = 0; i + t.length <= words.length; i++) {
+        let ok = true;
+        for (let j = 0; j < t.length; j++) if (!sameWord(t[j], words[i + j])) { ok = false; break; }
+        if (ok) return true;
+      }
+      return false;
+    }
     // The word buttons + dots for a part (shared by the board card and the
     // compact mirror on the coach card during Mark & fix).
     // THE WORD BOARD IS PER QUESTION. Sarah, 16 Aug — after pressing every
@@ -4508,18 +4799,21 @@
       return `<div class="tb-cover" data-cid="${escHtml(cid)}"><span class="ex-title">To cover<span class="ex-part">${escHtml(n + ' of ' + reqs.length + ' in')}</span></span>${rows ? `<div class="cv-rows">${rows}</div>` : ''}</div>`;
     }
     // THE WORD BOARD card for a part: the one-line ask, the words as BUTTONS
-    // (nothing else — meanings live on the hover card), "Still to use", the
+    // (nothing else — meanings live on the hover card), "Still to cover", the
     // dots + their key. Rendered on the teaching board for the current part.
     function expectHtml(cid) {
       const plan = planFor(cid); if (!plan || (!plan.minimalAsk && !(plan.expectedTerms || []).length && !(plan.requirements || []).length)) return '';
       const text = partText(cid); const fits = new Set((state.termsFit[cid] || []).map(x => x.toLowerCase()));
       const terms = termButtonsHtml(cid);
-      // "Still to use" counts the words ON THE BOARD, not the whole part —
+      // "Still to cover" counts the words ON THE BOARD, not the whole part —
       // a to-do list of words she hasn't been asked for yet is just more text.
-      const left = termsForBoard(cid).filter(t => !fits.has(t.toLowerCase()) && !termSeen(cid, t, text));
+      // And it follows GREEN only (Sarah's spec, 17 Aug): a word Q says she has
+      // covered — in her own wording, a synonym, an explanation — must never
+      // come back at her as a debt. termSeen has no say here.
+      const left = termsForBoard(cid).filter(t => !fits.has(t.toLowerCase()));
       const w = whereInfo(cid);
       if (!terms) return '';
-      return `<div class="tb-expect" data-cid="${escHtml(cid)}"><span class="ex-title">Word board</span>${terms ? `<div class="ex-terms">${terms}</div>` : ''}${left.length ? `<div class="ex-left"><b>Still to use:</b> ${left.map(escHtml).join(', ')}</div>` : (terms ? '<div class="ex-left"><b>Every expected word is in.</b></div>' : '')}</div>`;
+      return `<div class="tb-expect" data-cid="${escHtml(cid)}"><span class="ex-title">Word board</span>${terms ? `<div class="ex-terms">${terms}</div>` : ''}${left.length ? `<div class="ex-left"><b>Still to cover:</b> ${left.map(escHtml).join(', ')}</div>` : (terms ? '<div class="ex-left"><b>Everything\'s covered.</b></div>' : '')}</div>`;
     }
     // The compact mirror on the coach card (Mark & fix): buttons + dots only.
     function coachWordsHtml(cid) {
@@ -4551,6 +4845,36 @@
       }
       return false;
     }
+    // Jump to a sentence on her page and select it. ONE implementation, used
+    // by the board's SOURCES rows and by the Bibliography panel. false = she
+    // has since rewritten that sentence, so there is nothing to go to.
+    function jumpToSentence(text) {
+      const hit = findInDoc(text); if (!hit) return false;
+      const r = document.createRange(); r.setStart(hit.start.node, hit.start.offset); r.setEnd(hit.end.node, hit.end.offset + 1);
+      const sel = window.getSelection(); sel.removeAllRanges(); sel.addRange(r); docBody.focus();
+      const b = r.getBoundingClientRect();
+      if (b && (b.top < 80 || b.bottom > window.innerHeight - 120)) window.scrollBy({ top: b.top - Math.round(window.innerHeight * 0.4), behavior: 'smooth' });
+      return true;
+    }
+    // ONE send-to-page, used by the whiteboard's Send and by the Notes panel.
+    // NEVER GUESS WHERE TEXT GOES ON HER PAGE (Sarah, 17 Aug). Returns
+    // 'sent' | 'ask' | 'empty' — the caller shows the ask, because only it
+    // knows where its own ask line lives. Only ever HER words, never Q's.
+    function sendTextToPage(text) {
+      const t = String(text || '').trim(); if (!t) return 'empty';
+      if (!restoreDocCaret()) return 'ask';
+      const sel = window.getSelection();
+      const r0 = sel.getRangeAt(0);
+      const pre = document.createRange(); pre.setStart(docBody, 0); pre.setEnd(r0.startContainer, r0.startOffset);
+      const before = pre.toString();
+      const needsSpace = before.length > 0 && !/\s$/.test(before);
+      const ins = (needsSpace ? ' ' : '') + t + ' ';
+      const ok = document.execCommand('insertText', false, ins);
+      if (!ok) { const r = sel.getRangeAt(0); r.insertNode(document.createTextNode(ins)); r.collapse(false); }
+      wordEl.textContent = countWords() + ' words'; scheduleAutosave();
+      try { refreshExpectations(); } catch (_) {}
+      return 'sent';
+    }
     // Press a term → it goes into the sentence at the caret (execCommand keeps
     // Ctrl+Z); no caret in the page → onto the end of this part's last paragraph.
     function insertTermAtCaret(term) {
@@ -4579,9 +4903,11 @@
       const text = partText(cid); const fits = new Set((state.termsFit[cid] || []).map(x => x.toLowerCase()));
       const left = [];
       const boxes = [teachBody.querySelector('.tb-expect'), document.getElementById('coach-words')].filter(Boolean);
-      for (const box of boxes) box.querySelectorAll('.q-term').forEach(b => { const t = b.dataset.term; const isFit = fits.has(t.toLowerCase()); const seen = termSeen(cid, t, text); b.classList.toggle('fits', isFit); b.classList.toggle('seen', !isFit && seen); if (box === boxes[0] && !isFit && !seen) left.push(t); });
+      // ".seen" stays a typing hint; the list is GREEN only — a covered word is
+      // never listed back at her as something still owed.
+      for (const box of boxes) box.querySelectorAll('.q-term').forEach(b => { const t = b.dataset.term; const isFit = fits.has(t.toLowerCase()); const seen = termSeen(cid, t, text); b.classList.toggle('fits', isFit); b.classList.toggle('seen', !isFit && seen); if (box === boxes[0] && !isFit) left.push(t); });
       const box = boxes[0];
-      const leftEl = box && box.querySelector('.ex-left'); if (leftEl && !leftEl.querySelector('.q-dots')) leftEl.innerHTML = left.length ? '<b>Still to use:</b> ' + left.map(escHtml).join(', ') : '<b>Every expected word is in.</b>';
+      const leftEl = box && box.querySelector('.ex-left'); if (leftEl && !leftEl.querySelector('.q-dots')) leftEl.innerHTML = left.length ? '<b>Still to cover:</b> ' + left.map(escHtml).join(', ') : '<b>Everything\'s covered.</b>';
       renderMarginDots();
     }
     // The dots beside the part's paragraphs on the page (first paragraph of each part).
@@ -4646,6 +4972,7 @@
     // after its last character. A sentence that was rewritten away loses its
     // dot (the next placement puts it back). Met kinds never draw.
     function renderInlineDots() {
+      try { renderQTabs(); } catch (_) {}
       docBody.querySelectorAll('.q-idot').forEach(n => n.remove());
       docBody.normalize();
       // The marks on a finished bit: one filled dot after each sentence that
@@ -4664,6 +4991,18 @@
           after.parentNode.insertBefore(dot, after);
         });
       }
+      // Q's notes on the page (highlight_passage): a dot after each passage.
+      (state.qNotes || []).forEach((n, i) => {
+        if (!n || n.done) return;
+        const hit = findInDoc(n.text); if (!hit) return;
+        const dot = document.createElement('span');
+        dot.className = 'q-idot q-qn'; dot.contentEditable = 'false'; dot.setAttribute('data-q-furniture', 'true');
+        dot.dataset.qn = String(i); dot.dataset.sentence = n.text; dot.dataset.why = n.note || '';
+        dot.style.setProperty('--dc', HL_HEX[noteColour(n)] || 'var(--accent)'); dot.title = n.note || '';
+        const node = hit.end.node, off = Math.min(hit.end.offset + 1, node.nodeValue.length);
+        const after = node.splitText(off);
+        after.parentNode.insertBefore(dot, after);
+      });
       for (const [cid, list] of Object.entries(state.inlineDots || {})) {
         const met = new Set(state.reqMet[cid] || []);
         for (const p of (list || [])) {
@@ -4688,7 +5027,89 @@
     }
     const DOT_ACTION_LABEL = { cite: 'Auto cite', facts: 'Facts in the case', references: 'References', cases: 'Case studies', strategies: 'Strategies', terminology: 'Terminology', weak: 'What\'s weak', synonyms: 'Synonyms', dictionary: 'Dictionary' };
     // Click a dot → the popup: what's missing right there + ONE action.
+    const QN_LABEL = { cut: 'Cut this', source: 'The source', split: 'Split it', weak: 'Weak', good: 'Good — keep it', note: 'Q says' };
+    const QN_COLOUR = { cut: 'pink', source: 'amber', split: 'blue', weak: 'violet', good: 'green', note: 'grey' };
+    const HL_HEX = { pink: 'var(--accent)', amber: '#e6a817', blue: '#3b82c4', violet: '#7c5cbf', green: '#28a745', grey: '#9aa0ad' };
+    function noteColour(n) { return HL_HEX[n.colour] ? n.colour : (QN_COLOUR[n.kind] || 'grey'); }
+    // Repaint ALL of Q's live notes, one CSS Highlight per colour.
+    function paintQNotes() {
+      try {
+        if (!(window.CSS && CSS.highlights && window.Highlight)) return;
+        const by = {}; for (const n of (state.qNotes || [])) { if (!n || n.done) continue; (by[noteColour(n)] = by[noteColour(n)] || []).push(n.text); }
+        for (const c of Object.keys(HL_HEX)) {
+          const rs = []; for (const t of (by[c] || [])) rs.push(...edFindRanges(String(t).replace(/\s+/g, ' ').trim()));
+          if (rs.length) CSS.highlights.set('q-hl-' + c, new Highlight(...rs)); else CSS.highlights.delete('q-hl-' + c);
+        }
+        CSS.highlights.delete('q-say');
+      } catch (_) {}
+    }
+    // Q's TABS: sticky index tabs on the top of a paragraph.
+    // Paragraph N = the Nth non-empty text block of the page, split the SAME way
+    // Q's copy is numbered ([P1]…): by line breaks in the plain text. The tab
+    // goes in front of that paragraph's first words, whatever element holds them.
+    function docParagraphTexts() { return docPlainText().split(/\n{2,}|\r?\n/).map(x => x.trim()).filter(Boolean); }
+    function paragraphStartNode(pn) {
+      const paras = docParagraphTexts(); const t = paras[pn - 1]; if (!t) return null;
+      const head = t.slice(0, Math.min(48, t.length));
+      const hit = findInDoc(head) || findInDoc(t.split(/\s+/).slice(0, 5).join(' '));
+      if (!hit) return null;
+      let el = hit.start.node; while (el && el.parentNode !== docBody && el.parentNode) el = el.parentNode;
+      return { block: el && el.nodeType === 1 ? el : null, textNode: hit.start.node, offset: hit.start.offset };
+    }
+    function addQTabs(list) {
+      state.qTabs = state.qTabs || [];
+      for (const t of list) { const pn = Number(t.paragraph); if (!Number.isInteger(pn) || pn < 1) continue; state.qTabs.push({ paragraph: pn, label: String(t.label || 'note').slice(0, 40), colour: HL_HEX[t.colour] ? t.colour : 'grey', side: ['right', 'left', 'top'].includes(t.side) ? t.side : 'right' }); }
+      renderInlineDots(); try { renderBoard(); } catch (_) {}
+    }
+    function tabForParagraph(pn) { return (state.qTabs || []).find(t => t && !t.done && Number(t.paragraph) === Number(pn)) || null; }
+    function miniTabHtml(pn, tab) {
+      const t = tab || tabForParagraph(pn);
+      const col = t ? (HL_HEX[t.colour] || '#9aa0ad') : '#9aa0ad';
+      return '<button type="button" class="q-mtab" data-pn="' + Number(pn) + '" style="--tc:' + col + '" title="Go to paragraph ' + Number(pn) + '"><span class="pn">P' + Number(pn) + '</span>' + (t ? escHtml(t.label) : '') + '</button>';
+    }
+    function jumpToParagraph(pn) {
+      const paras = docParagraphTexts(); const t = paras[pn - 1]; if (!t) return false;
+      return jumpToSentence(t.slice(0, Math.min(60, t.length))) || jumpToSentence(t.split(/\s+/).slice(0, 5).join(' '));
+    }
+    document.addEventListener('click', (e) => { const b = e.target.closest('.q-mtab[data-pn]'); if (!b) return; e.preventDefault(); jumpToParagraph(Number(b.dataset.pn)); });
+    // The TABS card on the teaching board: one chip per live tab.
+    function tabsBoardHtml() {
+      const live = (state.qTabs || []).filter(t => t && !t.done).slice().sort((a, b) => Number(a.paragraph) - Number(b.paragraph));
+      if (!live.length) return '';
+      return '<div class="tb-tabs"><span class="ex-title">Tabs</span><div class="tb-tabs-row">' + live.map(t => miniTabHtml(t.paragraph, t)).join('') + '</div></div>';
+    }
+    // [P3] / P3 in Q's messages → the mini tab chip.
+    function decorateParaRefs(html) {
+      return String(html || '').replace(/\[P(\d{1,3})\]|(?<![\w-])P(\d{1,3})(?![\w-])/g, (m, a, b) => miniTabHtml(Number(a || b)));
+    }
+    function renderQTabs() {
+      docBody.querySelectorAll('.q-ptab').forEach(n => n.remove());
+      (state.qTabs || []).forEach((t, i) => {
+        if (!t || t.done) return; const at = paragraphStartNode(t.paragraph); if (!at) return;
+        const tab = document.createElement('span'); tab.className = 'q-ptab ' + (t.side === 'left' ? 'l' : (t.side === 'top' ? 't' : 'r')); tab.contentEditable = 'false'; tab.setAttribute('data-q-furniture', 'true');
+        tab.dataset.qtab = String(i); tab.textContent = t.label; tab.style.setProperty('--tc', HL_HEX[t.colour] || '#9aa0ad'); tab.title = 'Press to take this tab off';
+        { const tn = at.textNode; const after = tn.splitText(Math.min(at.offset, tn.nodeValue.length)); after.parentNode.insertBefore(tab, after); }   // inline, right before the paragraph's first word — works in one wrapper div too
+      });
+    }
+    document.addEventListener('click', (e) => { const tab = e.target.closest('.q-ptab[data-qtab]'); if (!tab) return; e.preventDefault(); const t = (state.qTabs || [])[Number(tab.dataset.qtab)]; if (t) t.done = true; renderQTabs(); try { renderBoard(); } catch (_) {} });
+    function addQNotes(list) {
+      state.qNotes = state.qNotes || [];
+      for (const p of list) { const text = String(p.text || '').replace(/\s+/g, ' ').trim(); if (!text) continue; if (state.qNotes.some(n => n && !n.done && n.text === text)) continue; state.qNotes.push({ text, note: String(p.note || ''), kind: String(p.kind || 'note'), colour: String(p.colour || '') }); }
+      paintQNotes();
+      try { const first = list[0] && list[0].text; if (first) { const hit = findInDoc(first); if (hit) { const r = document.createRange(); r.setStart(hit.start.node, hit.start.offset); r.collapse(true); const b = r.getBoundingClientRect(); if (b && (b.top < 80 || b.bottom > window.innerHeight - 120)) window.scrollBy({ top: b.top - Math.round(window.innerHeight * 0.4), behavior: 'smooth' }); } } } catch (_) {}
+      renderInlineDots();
+    }
     function openDotPopup(dot) {
+      if (dot.dataset.qn != null) {
+        const n = (state.qNotes || [])[Number(dot.dataset.qn)]; if (!n) return;
+        showToolPop('<div class="pc-head"><span class="pc-dot" style="--dc:' + (HL_HEX[noteColour(n)] || 'var(--accent)') + '"></span>' + escHtml(QN_LABEL[n.kind] || 'Q says') + '</div><div class="pc-line">' + decorateParaRefs(escHtml(n.note || '')) + '</div><div class="pc-acts">' + (n.kind === 'cut' ? '<button type="button" class="q-btn primary" id="qn-cut">Cut it →</button><button type="button" class="q-btn quiet" id="qn-off">Leave it</button>' : '<button type="button" class="q-btn primary" id="qn-go">Go to it →</button><button type="button" class="q-btn quiet" id="qn-off">Take it off</button>') + '</div>', { kind: 'note', anchor: dot });
+        toolPopEl.classList.add('dotpop');
+        const go = toolPopEl.querySelector('#qn-go'); if (go) go.addEventListener('click', () => { toolPopEl.classList.remove('dotpop'); hideToolPop(); jumpToSentence(n.text); });
+        // A CUT note: her press removes the passage from her page (Q never does it himself).
+        const cut = toolPopEl.querySelector('#qn-cut'); if (cut) cut.addEventListener('click', () => { n.done = true; toolPopEl.classList.remove('dotpop'); hideToolPop(); try { qSayPaint(null); } catch (_) {} const ok = cutFromDoc(n.text); renderInlineDots(); paintQNotes(); if (!ok) { try { jumpToSentence(n.text); } catch (_) {} } });
+        const off = toolPopEl.querySelector('#qn-off'); if (off) off.addEventListener('click', () => { n.done = true; toolPopEl.classList.remove('dotpop'); hideToolPop(); renderInlineDots(); paintQNotes(); });
+        return;
+      }
       if (dot.dataset.mk) {
         const key = dot.dataset.mk, i = Number(dot.dataset.mki) || 0;
         const mk = state.stepMarks && state.stepMarks[key]; const it = mk && mk.critique[i];
@@ -4930,7 +5351,7 @@
     // that question. Nothing is lost either way — a step's answers live in
     // stepState and its writing is on the page, so revisiting is just looking.
     document.addEventListener('click', (e) => {
-      const bead = e.target.closest('.st-bead[data-step-i]');
+      const bead = e.target.closest('.st-bead[data-step-i], .wb-lad-row[data-step-i]');
       if (bead) {
         e.preventDefault();
         const cid = bead.dataset.stepCid; const i = Number(bead.dataset.stepI);
@@ -5179,7 +5600,7 @@
       const note = f.note ? `<div class="wb-empty">${escHtml(f.note)}</div>` : '';
       const nudge = f.nudge && !todo ? `<div class="wb-say"><b>Use it</b> — ${escHtml(f.nudge)}</div>` : '';
       const go = (wbFindDot || f.sentence) && f.items.length ? `<button type="button" class="q-btn primary" id="wb-find-go">Go to the sentence →</button>` : '';
-      return head + facts + todo + note + nudge + `<div class="wb-hint">${go} <a href="#" id="wb-find-back">← back to the step</a></div>`;
+      return head + facts + todo + note + nudge + `<div class="wb-hint">${go} <a href="#" id="wb-find-back">← back</a></div>`;
     }
     // ══ THE WHITEBOARD IS A DISPLAY, LIKE QB2's ═══════════════════════════
     // Sarah, 17 Aug: "This is QB2's display. I expect it to act the same way as
@@ -5213,6 +5634,81 @@
     }
     // True if the line holds a live (non-code) [ ] / [x] token.
     function hasCbToken(text) { return splitCheckboxParts(text).some(p => p.type === 'box'); }
+    // Boxes and arrows. Each line is a chain: 'A -> B -> C' (or →), 'A <-> B'
+    // (or ↔) for two-way, 'A' alone for one box, a blank line for a gap. A box
+    // may start with a callout emoji (🟢 🟡 🔴 ℹ️ 💡) to take that colour.
+    function wbDiagramHtml(lines) {
+      const rows = [];
+      for (const raw of lines) {
+        const ln = String(raw || '').trim();
+        if (!ln) { rows.push('<div class="wb-dg-gap"></div>'); continue; }
+        const parts = ln.split(/\s*(<->|↔|->|→|=>|<-|←)\s*/);
+        let html = '';
+        for (let k = 0; k < parts.length; k++) {
+          const t = parts[k];
+          if (k % 2 === 1) { html += '<span class="wb-dg-a">' + (t === '<->' || t === '↔' ? '↔' : (t === '<-' || t === '←' ? '←' : '→')) + '</span>'; continue; }
+          if (!t) continue;
+          const key = Object.keys(WB_CALLOUT).find(x => t.startsWith(x));
+          const body = key ? t.slice(key.length).trim() : t;
+          html += '<span class="wb-dg-n' + (key ? ' ' + WB_CALLOUT[key] : '') + '">' + escHtml(body) + '</span>';
+        }
+        rows.push('<div class="wb-dg-row">' + html + '</div>');
+      }
+      return '<div class="wb-dg">' + rows.join('') + '</div>';
+    }
+    // Build-up: each non-empty line is a piece; the first shows, the rest wait
+    // for 'Next piece →' (or 'Show all'). Q's ask, 18 Aug: "show a paragraph
+    // being assembled piece by piece so they watch the structure come together".
+    function wbBuildHtml(lines) {
+      const steps = lines.map(x => String(x || '').trim()).filter(Boolean);
+      if (!steps.length) return '';
+      return '<div class="wb-build" data-n="' + steps.length + '">' + steps.map((t, i) => '<div class="wb-build-step' + (i === 0 ? ' on cur' : '') + '" data-i="' + i + '">' + wbInline(t, 0, false) + '</div>').join('')
+        + '<div class="wb-build-acts"><button type="button" class="q-btn primary wb-build-next">Next piece →</button><button type="button" class="q-btn quiet wb-build-all">Show all</button></div></div>';
+    }
+    document.addEventListener('click', (e) => {
+      const nx = e.target.closest('.wb-build-next'); const all = e.target.closest('.wb-build-all');
+      if (!nx && !all) return; e.preventDefault();
+      const box = (nx || all).closest('.wb-build'); if (!box) return;
+      const steps = Array.from(box.querySelectorAll('.wb-build-step'));
+      steps.forEach(s => s.classList.remove('cur'));
+      if (all) { steps.forEach(s => s.classList.add('on')); }
+      else { const next = steps.find(s => !s.classList.contains('on')); if (next) { next.classList.add('on', 'cur'); } }
+      if (steps.every(s => s.classList.contains('on'))) { const acts = box.querySelector('.wb-build-acts'); if (acts) acts.remove(); }
+    });
+    // STICKY NOTES: state.wbStickies = [{ text, colour, x, y }], persisted.
+    const STICKY_HEX = { pink: 'var(--accent)', amber: '#e6a817', blue: '#3b82c4', violet: '#7c5cbf', green: '#28a745', grey: '#9aa0ad', yellow: '#e6c84a' };
+    function addStickies(list) {
+      state.wbStickies = state.wbStickies || [];
+      let k = state.wbStickies.filter(x => x && !x.done).length;
+      for (const st of list) { const text = String(st.text || '').trim(); if (!text) continue; state.wbStickies.push({ text: text.slice(0, 160), colour: STICKY_HEX[st.colour] ? st.colour : 'yellow', x: 8 + (k % 3) * 162, y: 8 + Math.floor(k / 3) * 74 }); k++; }
+      persist({ wbStickies: state.wbStickies });
+      showPanel('wb'); revealPanel('wb'); renderStickies();
+    }
+    function renderStickies() {
+      const layer = document.getElementById('wb-stickies'); if (!layer) return;
+      const live = (state.wbStickies || []).map((s, i) => ({ s, i })).filter(x => x.s && !x.s.done);
+      layer.classList.toggle('hidden', !live.length);
+      layer.innerHTML = live.map(({ s, i }) => '<div class="wb-sticky" data-si="' + i + '" style="left:' + (Number(s.x) || 8) + 'px;top:' + (Number(s.y) || 8) + 'px;--sc:' + (STICKY_HEX[s.colour] || '#e6c84a') + '"><button type="button" class="st-go" title="Send to my page">→</button><button type="button" class="st-x" title="Bin it">×</button>' + escHtml(s.text) + '</div>').join('');
+      let maxB = 0; layer.querySelectorAll('.wb-sticky').forEach(el => { maxB = Math.max(maxB, el.offsetTop + el.offsetHeight); }); layer.style.minHeight = Math.max(96, maxB + 10) + 'px';
+    }
+    // Drag a sticky (pointer events); its place is remembered.
+    (function wireStickies() {
+      const layer = document.getElementById('wb-stickies'); if (!layer) return;
+      layer.addEventListener('click', (e) => {
+        const el = e.target.closest('.wb-sticky'); if (!el) return; const st = (state.wbStickies || [])[Number(el.dataset.si)]; if (!st) return;
+        if (e.target.closest('.st-x')) { st.done = true; persist({ wbStickies: state.wbStickies }); renderStickies(); }
+        else if (e.target.closest('.st-go')) { const r = sendTextToPage(st.text); if (r === 'ask') { try { workSay('Click the spot on your page, then press → again.'); } catch (_) {} } else if (r === 'sent') { st.done = true; persist({ wbStickies: state.wbStickies }); renderStickies(); } }
+      });
+      layer.addEventListener('pointerdown', (e) => {
+        const el = e.target.closest('.wb-sticky'); if (!el || e.target.closest('button')) return;
+        const st = (state.wbStickies || [])[Number(el.dataset.si)]; if (!st) return;
+        const d = { id: e.pointerId, sx: e.clientX, sy: e.clientY, x0: Number(st.x) || 8, y0: Number(st.y) || 8 };
+        try { el.setPointerCapture(e.pointerId); } catch (_) {}
+        const move = (ev) => { if (ev.pointerId !== d.id) return; const nx = Math.max(0, Math.min(layer.clientWidth - el.offsetWidth, d.x0 + (ev.clientX - d.sx))); const ny = Math.max(0, d.y0 + (ev.clientY - d.sy)); el.style.left = nx + 'px'; el.style.top = ny + 'px'; st.x = nx; st.y = ny; };
+        const up = (ev) => { if (ev.pointerId !== d.id) return; el.removeEventListener('pointermove', move); el.removeEventListener('pointerup', up); el.removeEventListener('pointercancel', up); try { el.releasePointerCapture(d.id); } catch (_) {} persist({ wbStickies: state.wbStickies }); renderStickies(); };
+        el.addEventListener('pointermove', move); el.addEventListener('pointerup', up); el.addEventListener('pointercancel', up);
+      });
+    })();
     function fencedLineFlags(lines) {
       let inFence = false;
       return lines.map(ln => { if (/^\s*(```|~~~)/.test(ln)) { inFence = !inFence; return true; } return inFence; });
@@ -5259,6 +5755,18 @@
       const flush = () => { if (bullets) { out.push('<ul class="wb-ul">' + bullets.join('') + '</ul>'); bullets = null; } if (ol) { out.push('<ol class="wb-ol">' + ol.join('') + '</ol>'); ol = null; } };
       for (let i = 0; i < lines.length; i++) {
         const line = lines[i]; const at = starts[i]; const live = !fenced[i];
+        // A FENCED BLOCK. ```diagram = boxes and arrows (Q's ask, 18 Aug: "labour
+        // market segmentation is a diagram, not a bullet list"); anything else = code.
+        const fenceOpen = line.match(/^\s*(```|~~~)\s*([a-zA-Z0-9_-]*)\s*$/);
+        if (fenceOpen) {
+          flush();
+          const lang = (fenceOpen[2] || '').toLowerCase(); const inner = []; let j = i + 1;
+          while (j < lines.length && !/^\s*(```|~~~)\s*$/.test(lines[j])) { inner.push(lines[j]); j++; }
+          if (lang === 'diagram' || lang === 'flow') out.push(wbDiagramHtml(inner));
+          else if (lang === 'build' || lang === 'buildup') out.push(wbBuildHtml(inner));
+          else out.push('<pre class="wb-code">' + escHtml(inner.join(String.fromCharCode(10))) + '</pre>');
+          i = j; continue;
+        }
         const isRow = /^\s*\|.*\|\s*$/.test(line);
         const sepNext = i + 1 < lines.length && /^\s*\|?[\s:|-]+\|[\s:|-]*$/.test(lines[i + 1]) && lines[i + 1].includes('-');
         if (isRow && sepNext) {
@@ -5308,8 +5816,10 @@
         // No title= here: a tooltip card on every line sits ON TOP of the words
         // she is reading (Sarah, 17 Aug — a "Click to edit" card over Q's text).
         const editable = (pre) => hasCbToken(line) ? '' : ' data-ln="' + i + '" data-pre="' + escHtml(pre) + '"';
-        if (b) { if (ol) flush(); (bullets = bullets || []).push('<li' + editable(line.slice(0, line.length - b[1].length)) + '>' + wbInline(b[1], at + line.length - b[1].length, live) + '</li>'); continue; }
-        if (n) { if (bullets) flush(); (ol = ol || []).push('<li' + editable(line.slice(0, line.length - n[1].length)) + '>' + wbInline(n[1], at + line.length - n[1].length, live) + '</li>'); continue; }
+        if (b) { if (ol) flush(); { const ck = Object.keys(WB_CALLOUT).find(k => b[1].startsWith(k)); const body = ck ? b[1].slice(ck.length).trim() : b[1]; const off = line.length - b[1].length + (ck ? b[1].length - body.length : 0);
+          (bullets = bullets || []).push('<li' + (ck ? ' class="wb-c ' + WB_CALLOUT[ck] + '"' : '') + editable(line.slice(0, off)) + '>' + wbInline(body, at + off, live) + '</li>'); } continue; }
+        if (n) { if (bullets) flush(); { const ck = Object.keys(WB_CALLOUT).find(k => n[1].startsWith(k)); const body = ck ? n[1].slice(ck.length).trim() : n[1]; const off = line.length - n[1].length + (ck ? n[1].length - body.length : 0); const num = (line.match(/^\s*(\d+)\./) || [])[1];
+          (ol = ol || []).push('<li' + (ck ? ' class="wb-c ' + WB_CALLOUT[ck] + '"' : '') + editable(line.slice(0, off)) + '>' + (ck && num ? '<span class="wb-n">' + escHtml(num) + '</span>' : '') + wbInline(body, at + off, live) + '</li>'); } continue; }
         flush();
         if (h) { const lvl = h[1].length; out.push('<div class="wb-h wb-h' + lvl + '"' + editable(line.slice(0, line.length - h[2].length)) + '>' + wbInline(h[2], at + line.length - h[2].length, live) + '</div>'); continue; }
         if (q) { out.push('<blockquote class="wb-q"' + editable(line.slice(0, line.length - q[1].length)) + '>' + wbInline(q[1], at + line.length - q[1].length, live) + '</blockquote>'); continue; }
@@ -5326,7 +5836,7 @@
         out.push('<div class="wb-p"' + editable('') + '>' + wbInline(line, at, live) + '</div>');
       }
       flush();
-      return out.join('');
+      return decorateParaRefs(out.join(''));   // [P4] anywhere on the display = a chip to that paragraph
     }
 
     // A REPORT ON THE WHITEBOARD — Q's display channel, the way QB2 sends a
@@ -5424,21 +5934,12 @@
         // ask — putting it at the top of her essay is worse than waiting
         // (Sarah, 17 Aug: "if there wasn't a point that we working from it
         // should have said where should I place this").
-        if (!restoreDocCaret()) {
+        if (sendTextToPage(text) === 'ask') {
           const ask = document.getElementById('wb-ask');
           if (ask) { ask.textContent = 'Where should this go? Click the spot on your page, then press Send again.'; ask.classList.remove('hidden'); }
           send.textContent = 'Click where it goes →';
           return;
         }
-        const sel = window.getSelection();
-        const r0 = sel.getRangeAt(0);
-        const pre = document.createRange(); pre.setStart(docBody, 0); pre.setEnd(r0.startContainer, r0.startOffset);
-        const before = pre.toString();
-        const needsSpace = before.length > 0 && !/\s$/.test(before);
-        const ok = document.execCommand('insertText', false, (needsSpace ? ' ' : '') + text + ' ');
-        if (!ok) { const r = sel.getRangeAt(0); r.insertNode(document.createTextNode((needsSpace ? ' ' : '') + text + ' ')); r.collapse(false); }
-        wordEl.textContent = countWords() + ' words'; scheduleAutosave();
-        try { refreshExpectations(); } catch (_) {}
         const ask = document.getElementById('wb-ask'); if (ask) ask.classList.add('hidden');
         send.textContent = '✓ On your page'; setTimeout(() => { send.textContent = 'Send to my page →'; }, 1600);
       });
@@ -5602,29 +6103,47 @@
       wbWorkIn.value = ''; state.wbWork[workKeyShown || workKey()] = '';
       persist({ wbWork: state.wbWork }); workSay('');
     });
+    // THE LADDER — the part's questions on the display, the one we are on live.
+    function wbLadderHtml(cid, curStepId) {
+      const plan = planFor(cid); if (!plan || !(plan.steps || []).length) return '';
+      const ss = ssFor(cid);
+      return '<div class="wb-ladder">' + plan.steps.map((st, i) => {
+        const done = !!(ss.steps[st.id] && ss.steps[st.id].filled);
+        const cur = st.id === curStepId;
+        const cls = cur ? ' cur' : (done ? ' done' : '');
+        return '<button type="button" class="wb-lad-row' + cls + '" data-step-i="' + i + '" data-step-cid="' + escHtml(cid) + '"><span class="ld"></span><span>' + escHtml(String(st.prompt || '')) + '</span></button>';
+      }).join('') + '</div>';
+    }
+    // "Q says" on the whiteboard — his supply for the part / step we are on.
+    function wbSayHtml(cid, stepId) {
+      const w = state.wbSay; if (!w || !w.text) return '';
+      if (w.cid && cid && w.cid !== cid) return '';
+      if (w.stepId && stepId && w.stepId !== stepId) return '';
+      return '<div class="wb-say"><b>Q says</b> — ' + escHtml(w.text) + '</div>';
+    }
     function renderWhiteboard() {
       if (!wbOpen()) return;
       syncWorkArea();
-      if (state.wbDoc) {
-        wbTitle.textContent = '▦ ' + (state.wbDoc.title || 'Whiteboard');
-        wbBody.innerHTML = wbDocHtml(state.wbDoc);
-        wireWbDoc(state.wbDoc);
-        return;
-      }
+      try { renderStickies(); } catch (_) {}
+      // The FIND / LESSON / REPORT are transient overlays and render FIRST.
+      // The display (wbDoc) is persisted and restored on every load, so if it
+      // came first it would swallow them: Find facts opened the panel, the call
+      // ran, and the facts were never drawn (Sarah, 17 Aug: "it just opens the
+      // white board. it doesnt find the facts"). '← back' returns to the display.
       if (state.wbLesson) {
-        wbTitle.textContent = '▦ Whiteboard · ' + (state.wbLesson.term || 'a quick lesson');
+        wbTitle.textContent = 'Whiteboard · ' + (state.wbLesson.term || 'a quick lesson');
         wbBody.innerHTML = wbLessonHtml(state.wbLesson);
         return;
       }
       if (state.wbReport) {
-        wbTitle.textContent = '▦ Whiteboard · ' + (state.wbReport.title || 'Q has read your page');
+        wbTitle.textContent = 'Whiteboard · ' + (state.wbReport.title || 'Q has read your page');
         wbBody.innerHTML = wbReportHtml(state.wbReport);
         const back = document.getElementById('wb-rep-back');
         if (back) back.addEventListener('click', (e) => { e.preventDefault(); state.wbReport = null; renderWhiteboard(); });
         return;
       }
       if (state.wbFind) {
-        wbTitle.textContent = '▦ Whiteboard · from the case';
+        wbTitle.textContent = 'Whiteboard · from the case';
         wbBody.innerHTML = wbFindHtml(state.wbFind);
         const back = document.getElementById('wb-find-back'); if (back) back.addEventListener('click', (e) => { e.preventDefault(); state.wbFind = null; renderWhiteboard(); });
         const go = document.getElementById('wb-find-go'); if (go) go.addEventListener('click', () => {
@@ -5634,16 +6153,23 @@
         });
         return;
       }
+      if (state.wbDoc) {
+        { const w0 = whereInfo(state.currentCriterionId); wbTitle.textContent = 'Whiteboard' + (w0 ? ' · Q' + w0.n : ''); }   // the display carries its own heading — not the panel title too (Sarah, 17 Aug: "this has come up twice")
+        wbBody.innerHTML = wbDocHtml(state.wbDoc);
+        wireWbDoc(state.wbDoc);
+        const sayD = wbSayHtml(state.currentCriterionId, null); if (sayD) wbBody.insertAdjacentHTML('afterbegin', sayD);
+        return;
+      }
       const info = currentStepInfo();
-      if (!info) { wbBody.innerHTML = '<div class="wb-empty">Nothing on the board yet — the next list, sorting, numbers or lesson lands here.</div>'; return; }
+      if (!info) { wbBody.innerHTML = wbSayHtml(state.currentCriterionId, null) || '<div class="wb-empty">Nothing on the board yet — the next list, sorting, numbers or lesson lands here.</div>'; return; }
       const { step, cid, n, N } = info; const st = stepStateOf(cid, step.id);
       const w = whereInfo(cid);
-      wbTitle.textContent = '▦ Whiteboard' + (w ? ' · Q' + w.n : '');
+      wbTitle.textContent = 'Whiteboard' + (w ? ' · Q' + w.n : '');
       // Sarah, 17 Aug: the question lives on the teaching board, once; Q's
       // line lives on the coach card. The whiteboard is the surface he
       // teaches on — a kicker saying where we are, then the work.
       const head = `<div class="wb-ask"><span class="wb-step">${w ? escHtml('Question ' + w.n + ' · ') : ''}step ${n} of ${N} · ${escHtml(STEP_KIND_LABEL[step.kind] || step.kind)}</span>${step.kind === 'teach' ? escHtml(step.term ? 'A word to learn' : 'A lesson') : ''}</div>`;
-      const say = '';
+      const say = wbLadderHtml(cid, step.id) + wbSayHtml(cid, step.id);
       let body = '';
       if (step.kind === 'list') {
         const tagStep = (planFor(cid).steps || []).find(x => x.kind === 'tag' && x.itemsFrom === step.id);
@@ -5668,7 +6194,7 @@
       } else {
         // A writing step: the ask, Q's line and the words for THIS bit, big.
         const terms = termButtonsHtml(cid);
-        body = terms ? `<div class="wb-words">${terms}</div><div class="wb-hint">Press a word to drop it into your sentence on the page.</div>` : '<div class="wb-hint">Write it on the page — I read as you go.</div>';
+        body = terms ? `<div class="wb-words">${terms}</div><div class="wb-hint">Press a word to drop it into your sentence on the page.</div>` : '';
       }
       // Sarah, 17 Aug: "I need to be able to use the whiteboard too so it's
       // interactive." Her notes strip on every board (type, Enter; × takes one
@@ -5705,10 +6231,126 @@
         const v = inp.value.trim(); if (!v) return;
         (state.wbNotes[cid] = state.wbNotes[cid] || []).push(v); persist({ wbNotes: state.wbNotes });
         try { startedAsk(); } catch (_) {}
-        renderWhiteboard(); const again = document.getElementById('wb-note-input'); if (again) again.focus();
+        renderWhiteboard(); try { renderNotesPanel(); } catch (_) {}
+        const again = document.getElementById('wb-note-input'); if (again) again.focus();
       });
-      wbBody.querySelectorAll('[data-note-rm]').forEach(b => b.addEventListener('click', () => { (state.wbNotes[cid] || []).splice(Number(b.dataset.noteRm), 1); persist({ wbNotes: state.wbNotes }); renderWhiteboard(); }));
+      wbBody.querySelectorAll('[data-note-rm]').forEach(b => b.addEventListener('click', () => { (state.wbNotes[cid] || []).splice(Number(b.dataset.noteRm), 1); persist({ wbNotes: state.wbNotes }); renderWhiteboard(); try { renderNotesPanel(); } catch (_) {} }));
     }
+    // ── THE NOTES PANEL: every note, every part, in one place ─────────────
+    // The whiteboard strip above shows the notes for the part she is ON, and
+    // only while the board is in step mode — press "+ Notes" while a display
+    // is up and the note saved but nothing on screen showed it (17 Aug). This
+    // panel always has them: same state.wbNotes, one store, two views, no copy.
+    function notesSections(brief, wbNotes) {
+      const cs = (brief && brief.criteria) || [];
+      const out = [];
+      cs.forEach((c, i) => {
+        const list = (wbNotes && wbNotes[c.id]) || [];
+        if (list.length) out.push({ cid: c.id, n: i + 1, label: criterionLabel(c), notes: list });
+      });
+      Object.keys(wbNotes || {}).forEach(k => {
+        if (k === '' || cs.some(c => c.id === k) || !((wbNotes[k] || []).length)) return;
+        out.push({ cid: k, n: 0, label: 'Earlier notes', notes: wbNotes[k] });
+      });
+      const loose = (wbNotes && wbNotes['']) || [];
+      if (loose.length) out.push({ cid: '', n: 0, label: 'Not tied to a part', notes: loose });
+      return out;
+    }
+    function notesCount(wbNotes) { return Object.values(wbNotes || {}).reduce((a, v) => a + ((v || []).length), 0); }
+    function notesCopyText(brief, wbNotes) {
+      return notesSections(brief, wbNotes)
+        .map(s => (s.n ? 'Q' + s.n + ' · ' : '') + s.label + '\n' + s.notes.map(t => '- ' + t).join('\n'))
+        .join('\n\n');
+    }
+    let ntSaveT = null;
+    function ntFlush() { clearTimeout(ntSaveT); ntSaveT = null; persist({ wbNotes: state.wbNotes }); }
+    function ntGrow(el) { el.style.height = 'auto'; el.style.height = (el.scrollHeight + 2) + 'px'; }
+    function renderNotesPanel() {
+      const body = document.getElementById('notes-body');
+      if (!body || !notesPanel || notesPanel.el.classList.contains('hidden')) return;
+      state.wbNotes = state.wbNotes || {};
+      const secs = notesSections(state.brief, state.wbNotes);
+      body.innerHTML = secs.length ? secs.map(s =>
+        '<div class="nt-sec"><span class="nt-sec-t">' + (s.n ? 'Q' + s.n : 'Notes') + '<span class="nt-part">' + escHtml(s.label) + '</span></span>'
+        + s.notes.map((t, i) =>
+          '<div class="nt-row"><textarea class="nt-in" rows="1" spellcheck="true" data-cid="' + escHtml(s.cid) + '" data-i="' + i + '"></textarea>'
+          + '<div class="nt-acts"><button type="button" class="q-btn quiet" data-nt-page="1" title="Put this line on your page, where your cursor is">→ My page</button>'
+          + '<button type="button" class="q-btn quiet" data-nt-rm="1">Take it off</button></div><div class="nt-say"></div></div>').join('')
+        + '<div class="nt-row"><input class="nt-in nt-add" data-nt-add="' + escHtml(s.cid) + '" placeholder="Another note here, then Enter" autocomplete="off"></div></div>'
+      ).join('')
+      : '<div class="nt-empty">Nothing noted yet. Press “+ Notes” on a card, or write on the whiteboard, and it lands here.</div>';
+      // HER NOTE IS TEXT, NOT MARKUP — it goes in as .value, never innerHTML.
+      body.querySelectorAll('textarea.nt-in[data-i]').forEach(ta => {
+        const sec = secs.find(x => x.cid === ta.dataset.cid);
+        ta.value = sec ? String(sec.notes[Number(ta.dataset.i)] || '') : '';
+        ntGrow(ta);
+      });
+      const cEl = document.getElementById('notes-count');
+      if (cEl) { const n = notesCount(state.wbNotes); cEl.textContent = n ? (n + (n === 1 ? ' note' : ' notes')) : ''; }
+      wireNotesPanel();
+    }
+    let ntRmArmed = null;
+    function wireNotesPanel() {
+      const body = document.getElementById('notes-body'); if (!body) return;
+      body.querySelectorAll('textarea.nt-in[data-i]').forEach(ta => {
+        const cid = ta.dataset.cid, i = Number(ta.dataset.i);
+        // Debounced: the notebook post carries the whole page, so a save on
+        // every keystroke would push megabytes.
+        ta.addEventListener('input', () => {
+          ntGrow(ta);
+          const list = state.wbNotes[cid]; if (!list) return;
+          list[i] = ta.value;
+          clearTimeout(ntSaveT); ntSaveT = setTimeout(ntFlush, 600);
+        });
+        ta.addEventListener('blur', () => { if (ntSaveT) ntFlush(); });
+      });
+      body.querySelectorAll('[data-nt-page]').forEach(b => b.addEventListener('click', () => {
+        const row = b.closest('.nt-row'); if (!row) return;
+        const ta = row.querySelector('textarea.nt-in'); const say = row.querySelector('.nt-say');
+        if (!ta) return;
+        const r = sendTextToPage(ta.value);
+        if (r === 'empty') { if (say) say.textContent = 'Write something in it first.'; return; }
+        if (r === 'ask') {
+          b.textContent = 'Click where it goes →';
+          if (say) say.textContent = 'Click the spot on your page, then press it again.';
+          return;
+        }
+        if (say) say.textContent = '';
+        b.textContent = '✓ On your page';
+        setTimeout(() => { b.textContent = '→ My page'; }, 1600);
+      }));
+      body.querySelectorAll('[data-nt-rm]').forEach(b => b.addEventListener('click', () => {
+        const row = b.closest('.nt-row'); const ta = row && row.querySelector('textarea.nt-in'); if (!ta) return;
+        if (ntRmArmed !== b) {                     // her writing never goes on one press
+          if (ntRmArmed) ntRmArmed.textContent = 'Take it off';
+          ntRmArmed = b; b.textContent = 'Take it off?';
+          setTimeout(() => { if (ntRmArmed === b) { ntRmArmed = null; b.textContent = 'Take it off'; } }, 4000);
+          return;
+        }
+        ntRmArmed = null;
+        const cid = ta.dataset.cid, i = Number(ta.dataset.i);
+        (state.wbNotes[cid] || []).splice(i, 1);
+        if (state.wbNotes[cid] && !state.wbNotes[cid].length) delete state.wbNotes[cid];
+        ntFlush(); renderNotesPanel();
+        try { renderWhiteboard(); } catch (_) {}
+      }));
+      body.querySelectorAll('[data-nt-add]').forEach(inp => inp.addEventListener('keydown', (e) => {
+        if (e.key !== 'Enter') return; e.preventDefault();
+        const v = inp.value.trim(); if (!v) return;
+        const cid = inp.dataset.ntAdd;
+        (state.wbNotes[cid] = state.wbNotes[cid] || []).push(v);
+        ntFlush(); renderNotesPanel();
+        try { renderWhiteboard(); } catch (_) {}
+        const again = Array.from(document.querySelectorAll('#notes-body [data-nt-add]')).find(x => x.dataset.ntAdd === cid);
+        if (again) again.focus();
+      }));
+    }
+    const notesCopyBtn = document.getElementById('notes-copy');
+    if (notesCopyBtn) notesCopyBtn.addEventListener('click', async () => {
+      const t = notesCopyText(state.brief, state.wbNotes);
+      if (!t) return;
+      try { await navigator.clipboard.writeText(t); notesCopyBtn.textContent = 'Copied'; setTimeout(() => { notesCopyBtn.textContent = 'Copy all'; }, 1400); } catch (_) {}
+    });
     // ── Moving a tile between Q's groups (her sort beats his) ─────────────
     function wireWbMoves(cid, step) {
       const tagStep = step.kind === 'tag' ? step : (planFor(cid).steps || []).find(x => x.kind === 'tag' && x.itemsFrom === step.id);
@@ -5937,7 +6579,7 @@
         state.docSnapshot = docPlainText(); state.qCount = 0;
         appendBoardItem({ type: 'note', label: 'the task', text: found });
         renderCoverage();
-        setCoach({ msg: 'You\'ve already got ' + draftWords + ' words on the page — I\'ve read them. Press Mark & fix and I go through it question by question, or carry on writing and I follow.', section: 'YOUR DRAFT', hint: '', inputVisible: true, showNudge: false, actions: [{ label: 'Mark & fix →', primary: true, big: true, onClick: () => markAndFix() }] });
+        setCoach({ msg: 'You\'ve got ' + draftWords + ' words down already. Mark & fix, or carry on and I\'ll follow.', section: '', hint: '', inputVisible: true, showNudge: false, actions: [{ label: 'Mark & fix →', primary: true, big: true, onClick: () => markAndFix() }] });
         coachInput.placeholder = 'Ask Q…';
         persist({ currentQuestion: '', openerDone: true, currentCriterionId: state.currentCriterionId, coverage: state.coverage, currentSection: state.currentCriterionId });
         return;
@@ -5955,7 +6597,7 @@
       setCoach({
         msg: opener,
         section: 'FIRST QUESTION',
-        hint: 'Answer here, or just start writing on the page — I read as you go.',
+        hint: '',
         inputVisible: true,
         showNudge: true,
       });
@@ -6085,11 +6727,12 @@
         if (d.essayReady) state.essayReady = true;
         applyCoverage(d.coverage);
         applyMatch(d.match);
-        // THE LOOP: the words she used properly go green; the ones she pressed
-        // in and left there come off it, and he says why in one line.
+        // THE LOOP: the ideas she has COVERED go green — her own wording counts
+        // as much as the word itself; the ones she pressed in and left there
+        // with nothing behind them come off it, and he says why in one line.
         applyExpectations(d);
         const misused = Array.isArray(d.termsMisused) ? d.termsMisused : [];
-        if (Array.isArray(d.termsUsed) && d.termsUsed.length) appendBoardItem({ type: 'note', label: 'used', text: 'Used properly: ' + d.termsUsed.join(', ') + '.', quiet: true, criterionId: state.currentCriterionId });
+        if (Array.isArray(d.termsUsed) && d.termsUsed.length) appendBoardItem({ type: 'note', label: 'covered', text: 'Covered: ' + d.termsUsed.join(', ') + '.', quiet: true, criterionId: state.currentCriterionId });
 
         // WHERE WE ARE: when Q moves to a new criterion, say so in one line.
         const moved = moveLine(prevCriterionId, state.currentCriterionId);
@@ -6222,7 +6865,16 @@
       const kind = info ? info.step.kind : null;
       // A list item / a number / a pro or con IS the answer — that step has a
       // slot waiting and anything typed fills it.
-      if (kind === 'list' || kind === 'numbers' || kind === 'proscons') return 'answer';
+      // …unless she is plainly TALKING to him — a greeting or an aside is not a
+      // list item (Sarah, 17 Aug: "hi" landed as item 1 of her list — "dont
+      // know what this is").
+      if (words <= 6 && /^(hi|hiya|hello|hey|yo|morning|evening|afternoon|thanks|thank you|ta|cheers|lol|haha|ok then|hang on|wait|hold on|one sec|brb|sorry|oops|hmm|erm|um)/i.test(t)) return 'chat';
+      // At a LIST step the coach box is still Q's — list items go in on the
+      // whiteboard's own input. Otherwise a whole message to Q gets eaten as
+      // item 3 of a list (Sarah, 18 Aug: "why does Q seem clueless" — her
+      // sentence never reached him). Numbers and pros/cons keep the box, they
+      // have no other way in.
+      if (kind === 'numbers' || kind === 'proscons') return 'answer';
       // Short commands still DRIVE the step rather than starting a conversation
       // about themselves — "yes", "done", "next", "skip" typed at a live step.
       if (info && words <= 3 && CLEAR_SHORT_RE.test(t)) return 'answer';
@@ -6287,7 +6939,7 @@
       state.chatMode = false; qSayPaint(null);
       if (walkOn()) { coachCard.classList.add('wide'); showEditItem(); return; }
       const info = currentStepInfo();
-      if (info) presentStep(info.cid, info.idx, { restore: true }); else setCoach({ msg: '', hint: 'Keep writing — I read as you go.', inputVisible: true, showNudge: true });
+      if (info) presentStep(info.cid, info.idx, { restore: true }); else setCoach({ msg: '', hint: '', inputVisible: true, showNudge: true });
       coachInput.placeholder = state.currentStep ? 'Type your answer…' : 'Ask Q…';
     }
     // Sarah, 17 Aug: "this isn't a flowing conversation… then it always says
@@ -6324,13 +6976,27 @@
         const b = rs[0].getBoundingClientRect(); if (b && (b.top < 80 || b.bottom > window.innerHeight - 120)) window.scrollBy({ top: b.top - Math.round(window.innerHeight * 0.4), behavior: 'smooth' });
       } catch (_) {}
     }
+    const coachTaps = document.getElementById('coach-taps');
+    function renderTaps(opts) {
+      coachTaps.innerHTML = '';
+      (opts || []).slice(0, 4).forEach(o => {
+        const b = document.createElement('button'); b.type = 'button'; b.className = 'q-tap'; b.textContent = String(o);
+        b.addEventListener('click', () => { coachTaps.innerHTML = ''; submitCoachText(String(o)); });
+        coachTaps.appendChild(b);
+      });
+    }
+    function partWordCounts() {
+      const out = {}; try { for (const c of ((state.brief && state.brief.criteria) || [])) out[c.id] = String(partText(c.id) || '').split(/\s+/).filter(Boolean).length; } catch (_) {}
+      return out;
+    }
     async function chatWithQ(text) {
+      renderTaps([]);
       state.chatMode = true;
       qSayPaint(null);
       sayMe(text);   // her line joins the thread (and Q's last line is kept, not wiped)
       showChat({ thinking: true });
       try {
-        const d = await api('/writer/chat', { text, history: state.chatLog.slice(-11, -1).map(m => ({ role: m.role, text: m.text })), docText: docPlainText().slice(0, 24000), criterionId: state.currentCriterionId || null, stepId: state.currentStep ? state.currentStep.stepId : null, ask: currentAskText() || '', yearGroup: state.yearGroup || '' }, { timeoutMs: 90000 });
+        const d = await api('/writer/chat', { text, partWords: partWordCounts(), stepItems: (() => { try { const si = currentStepInfo(); const st = si ? stepStateOf(si.cid, si.step.id) : null; return st && Array.isArray(st.items) ? st.items.slice(0, 40) : []; } catch (_) { return []; } })(), history: state.chatLog.slice(-11, -1).map(m => ({ role: m.role, text: m.text })), docText: docPlainText().slice(0, 24000), criterionId: state.currentCriterionId || null, stepId: state.currentStep ? state.currentStep.stepId : null, ask: currentAskText() || '', yearGroup: state.yearGroup || '' }, { timeoutMs: 90000 });
         tally('probe', state.currentCriterionId);
         const spans = (Array.isArray(d.highlights) && d.highlights.length ? d.highlights : []).concat(d.highlight ? [d.highlight] : []);
         pushSaid({ role: 'q', text: String(d.reply || '').trim(), highlight: spans.length ? spans : null });
@@ -6343,6 +7009,15 @@
           try { const handled = await handleStepInput(text); if (handled) { coachInput.focus(); return; } } catch (_) {}
           state.chatMode = true;
         }
+        // His notes ON THE PAGE (highlight_passage): paint the passages and put a
+        // dot after each — press it for the note. Q's own tool, 18 Aug.
+        if (Array.isArray(d.paints) && d.paints.length) addQNotes(d.paints);
+        if (Array.isArray(d.tabs) && d.tabs.length) addQTabs(d.tabs);
+        if (Array.isArray(d.stickies) && d.stickies.length) addStickies(d.stickies);
+        // His taps — one press sends that answer; only the newest reply's show.
+        renderTaps(Array.isArray(d.options) ? d.options : []);
+        // Q laid something out (his ```display block) → the whiteboard, like QB2's.
+        if (d.display && d.display.src) { try { showOnWhiteboard(d.display.title || 'Whiteboard', d.display.src); } catch (_) {} }
         if (d.board && Array.isArray(d.board.items) && d.board.items.length) {
           state.wbReport = null; state.wbLesson = null;   // a fresh find replaces what's on the display
           state.wbFind = { title: d.board.title || 'From the case', forLabel: '', sentence: '', items: d.board.items, todo: d.board.todo || [], nudge: '', busy: false, note: '' };
@@ -6546,7 +7221,7 @@
           state.sources = [];
           resetSession({ keepDoc: true });
           renderSourceSlot();
-          setCoach({ msg: 'Drop your task in above and I\'ll read it.', inputVisible: true });
+          setCoach({ msg: 'Gone. Ready when you are.', inputVisible: true });
         });
         list.appendChild(chip);
         // Supporting documents — case studies, module notes, data. Q reads
@@ -7462,14 +8137,19 @@
       const bits = [];
       if (tidy.cut.length) bits.push('**' + tidy.cut.length + '** ' + (tidy.cut.length === 1 ? 'line that is not part of the essay' : 'lines that are not part of the essay'));
       if (tidy.quick.length) bits.push('**' + tidy.quick.length + '** ' + (tidy.quick.length === 1 ? 'spelling or grammar slip' : 'spelling and grammar slips'));
-      const sample = tidy.cut.slice(0, 3).map(is => '- ' + (is.why || 'not part of the essay') + ' — "' + String(is.wrong).replace(/\s+/g, ' ').slice(0, 60) + (String(is.wrong).length > 60 ? '…' : '') + '"').join('\n');
-      // I SUGGEST, YOU DECIDE. Nothing is removed for her, and no button here
-      // removes several things at once — the list is in the marking panel with
-      // a button per line, and she can mark it now regardless.
+      // SAY AND SHOW (Sarah, 17 Aug: "all this should be coming up in the white
+      // board… he needs to be a chat"). The LIST goes on the display; Q says one
+      // line. Nothing is removed for her — the marking panel has a button per line.
+      const cutLines = tidy.cut.map(is => '- **' + String(is.wrong).replace(/\s+/g, ' ').slice(0, 90) + (String(is.wrong).length > 90 ? '…' : '') + '** — ' + (is.why || 'not part of the essay'));
+      const slipLines = tidy.quick.slice(0, 12).map(is => '- ' + String(is.wrong || '').slice(0, 40) + ' → **' + String(is.right || '').slice(0, 40) + '**');
+      const wbSrc = '## Before the mark' + (cutLines.length ? '\n\n### ' + tidy.cut.length + (tidy.cut.length === 1 ? ' line' : ' lines') + ' not part of the essay\n' + cutLines.join('\n') : '')
+        + (tidy.quick.length ? '\n\n### ' + tidy.quick.length + ' spelling and grammar' + (tidy.quick.length > 12 ? ' (first 12)' : '') + '\n' + slipLines.join('\n') : '')
+        + '\n\nEach one has a button in the marking panel.';
+      try { showOnWhiteboard('Before the mark', wbSrc); } catch (_) {}
       setCoach({
-        msg: 'I would take ' + bits.join(' and ') + ' out before this is marked.' + (sample ? '\n\n' + sample : ''),
-        hint: 'They are listed in the marking panel with a button each — nothing comes off your page unless you press it.',
-        section: 'BEFORE THE MARK', inputVisible: false, step: false, showNudge: false,
+        msg: bits.join(' and ').replace(/\*\*/g, '') + ' I would take out first — on the whiteboard. Mark it now, or fix those first?',
+        hint: '',
+        section: '', inputVisible: false, step: false, showNudge: false,
         actions: [
           { label: 'Show me the list →', primary: true, big: true, onClick: () => { try { openMarkPanel(); } catch (_) {} } },
           { label: 'Mark it now', onClick: () => doTheMark() },
@@ -7641,6 +8321,18 @@
       showPanel('mark'); revealPanel('mark'); renderMarkPanel();
     }
     document.getElementById('btn-marks').addEventListener('click', () => openMarkPanel({ toggle: true }));
+    function openNotesPanel({ toggle } = {}) {
+      const isOpen = !notesPanel.el.classList.contains('hidden');
+      if (toggle && isOpen) { hidePanel('notes'); return; }
+      showPanel('notes'); revealPanel('notes'); renderNotesPanel();
+    }
+    function openBibPanel({ toggle } = {}) {
+      const isOpen = !bibPanel.el.classList.contains('hidden');
+      if (toggle && isOpen) { hidePanel('bib'); return; }
+      showPanel('bib'); revealPanel('bib'); renderBibPanel();
+    }
+    document.getElementById('btn-notes').addEventListener('click', () => openNotesPanel({ toggle: true }));
+    document.getElementById('btn-bib').addEventListener('click', () => openBibPanel({ toggle: true }));
     let mkSweepT = null;
     docBody.addEventListener('input', () => { if (!markPanel.el.classList.contains('hidden')) { clearTimeout(mkSweepT); mkSweepT = setTimeout(() => { try { renderMarkPanel(); } catch (_) {} }, 500); } });
     function endFixPass({ nothing } = {}) {
@@ -8143,6 +8835,10 @@
       (state.wbNotes[cid] = state.wbNotes[cid] || []).push(text);
       persist({ wbNotes: state.wbNotes });
       try { renderWhiteboard(); } catch (_) {}
+      // The whiteboard only draws the notes strip in step mode, so a press
+      // while a display was up saved the note and showed her nothing (17 Aug).
+      // If nothing else on screen will show it, the Notes panel does.
+      try { if (document.getElementById('wb-note-input')) renderNotesPanel(); else openNotesPanel(); } catch (_) {}
       b.textContent = '✓ In your notes'; b.disabled = true;
     });
     window.__qwriterTools = { showToolPop, hideToolPop, toolHelpHtml, runTool: (t, it, w) => runTool(t, it, w) };
@@ -8362,7 +9058,7 @@
       const pt = String(point || '').replace(/\s+/g, ' ').trim();
       if (pt && !r.points.some(p => p.text === pt)) r.points.push({ text: pt, criterionId: criterionId || state.currentCriterionId || '', strength: '', why: '', at: Date.now() });
       persist({ references: state.references });
-      renderRefsList(); renderBoard();
+      renderRefsList(); renderBoard(); try { renderBibPanel(); } catch (_) {}
       return r;
     }
     function noteStrength(c, point, strengthLine) {
@@ -8371,7 +9067,7 @@
       const p = (r.points || []).find(x => x.text === pt); if (!p) return;
       const m = String(strengthLine || '').match(/^\s*(strong|fair|weak)\s*[—\-–:]?\s*(.*)$/i);
       p.strength = m ? m[1].toLowerCase() : ''; p.why = m ? m[2].trim() : String(strengthLine || '').trim();
-      persist({ references: state.references }); renderBoard();
+      persist({ references: state.references }); renderBoard(); try { renderBibPanel(); } catch (_) {}
     }
     const STRENGTH_WORD = { strong: 'strong', fair: 'fair', weak: 'weak' };
     function sourcesBoardHtml() {
@@ -8389,6 +9085,115 @@
       const list = state.references || [];
       refsYours.innerHTML = list.length ? '<span class="ry-title">Your references (' + list.length + ')</span>' + list.map(r => '<div class="ry-item">' + escHtml(r.reference) + (r.fromUpload ? '<span class="ry-tag">your upload</span>' : '') + '</div>').join('') : '';
     }
+    // ── THE BIBLIOGRAPHY PANEL: every source, what it backs, how strongly ──
+    // The board's SOURCES card is context for the part she is on. This is the
+    // whole list, alphabetical the way a Harvard reference list is, with the
+    // sentence each source sits behind — and the only place one can be taken
+    // back off, page and list together.
+    function bibSorted(refs) {
+      return (refs || []).filter(r => r && (r.reference || r.inText))
+        .slice()
+        .sort((a, b) => String(a.reference || a.inText).toLowerCase()
+          .localeCompare(String(b.reference || b.inText).toLowerCase(), 'en'));
+    }
+    function bibCopyText(refs) { return bibSorted(refs).map(r => r.reference).filter(Boolean).join('\n'); }
+    function renderBibPanel() {
+      const body = document.getElementById('bib-body');
+      if (!body || !bibPanel || bibPanel.el.classList.contains('hidden')) return;
+      const list = bibSorted(state.references);
+      body.innerHTML = list.length ? list.map(r => {
+        const pts = (r.points || []);
+        const ptHtml = pts.length
+          ? pts.map(p => '<div class="bib-pt" data-jump="' + escHtml(p.text) + '" title="Go to that sentence on your page">'
+              + '<span class="sb-str ' + escHtml(p.strength || 'none') + '">' + escHtml(STRENGTH_WORD[p.strength] || '…') + '</span>'
+              + '<span class="sb-pt">' + escHtml(p.text) + '</span>'
+              + (p.why ? '<span class="sb-why">' + escHtml(p.why) + '</span>' : '') + '</div>').join('')
+          : '<div class="bib-pt"><span class="sb-str">—</span><span class="sb-pt sb-none">on your list, not yet behind a sentence</span></div>';
+        return '<div class="bib-ref"><div class="bib-h">' + escHtml(r.reference || r.inText || '') + '</div>'
+          + ((r.inText || r.fromUpload) ? '<div class="bib-cite">' + escHtml(r.inText || '') + (r.fromUpload ? '<span class="bib-tag">your upload</span>' : '') + '</div>' : '')
+          + ptHtml
+          + '<div class="bib-acts"><button type="button" class="q-btn quiet" data-bib-rm="' + escHtml(r.key || '') + '" title="Take it off your list and off the References at the foot of your page">Take it off</button></div></div>';
+      }).join('')
+      : '<div class="bib-empty">No sources yet. Put the cursor at the end of a sentence and press Auto cite, or add one below.</div>';
+      wireBibPanel();
+    }
+    let bibRmArmed = null;
+    function wireBibPanel() {
+      const body = document.getElementById('bib-body'); if (!body) return;
+      body.querySelectorAll('.bib-pt[data-jump]').forEach(el => el.addEventListener('click', () => { jumpToSentence(el.dataset.jump); }));
+      body.querySelectorAll('[data-bib-rm]').forEach(b => b.addEventListener('click', () => {
+        if (bibRmArmed !== b) {                    // a source never comes off on one press
+          if (bibRmArmed) bibRmArmed.textContent = 'Take it off';
+          bibRmArmed = b; b.textContent = 'Take it off?';
+          setTimeout(() => { if (bibRmArmed === b) { bibRmArmed = null; b.textContent = 'Take it off'; } }, 4000);
+          return;
+        }
+        bibRmArmed = null; removeReference(b.dataset.bibRm);
+      }));
+    }
+    // Taking a source OFF the list takes it off her page too — the two must
+    // never disagree, or she hands in a bibliography with a source she removed.
+    // `root` is only there so the harness can drive it without a browser.
+    function removeReferenceFromDoc(formatted, root) {
+      const host = root || docBody;
+      const want = String(formatted || '').trim(); if (!want || !host) return false;
+      const line = Array.from(host.querySelectorAll('div, p')).find(el => (el.textContent || '').trim() === want);
+      if (!line) return false;
+      line.remove();
+      // A References heading with nothing under it is furniture — take that off too.
+      const head = Array.from(host.querySelectorAll('div, p, h2, h3')).find(el => /^references:?$/i.test((el.textContent || '').trim()));
+      if (head && (!head.nextElementSibling || !((head.nextElementSibling.textContent || '').trim()))) head.remove();
+      try { wordEl.textContent = countWords() + ' words'; scheduleAutosave(); } catch (_) {}
+      return true;
+    }
+    function removeReference(key) {
+      const i = (state.references || []).findIndex(r => r.key === key); if (i < 0) return;
+      const r = state.references[i];
+      state.references.splice(i, 1);
+      removeReferenceFromDoc(r.reference);
+      persist({ references: state.references });
+      try { renderRefsList(); } catch (_) {}
+      try { renderBoard(); } catch (_) {}
+      renderBibPanel();
+    }
+    // Adding goes through the SAME formatter and the same appendRefToDoc the
+    // References drawer uses — one formatter, never a second one.
+    const bibAddIn = document.getElementById('bib-add-in');
+    const bibAddOut = document.getElementById('bib-add-out');
+    const bibAddGo = document.getElementById('bib-add-go');
+    let bibFormatted = '';
+    if (bibAddGo) bibAddGo.addEventListener('click', async () => {
+      const src = (bibAddIn.value || '').trim(); if (!src) return;
+      bibAddGo.disabled = true; bibAddGo.textContent = 'Formatting…';
+      bibAddOut.classList.add('hidden');
+      try {
+        const d = await post('/writer/harvard', { sourceDescription: src });
+        if (!d || !d.ok) throw new Error((d && d.error) || 'no');
+        bibFormatted = d.formatted || '';
+        const warns = (d.warnings || []);
+        bibAddOut.innerHTML = '<div class="bib-h">' + escHtml(bibFormatted) + '</div>'
+          + (warns.length ? '<div class="bib-warn">Check: ' + escHtml(warns.join(' · ')) + '</div>' : '')
+          + '<div class="bib-add-acts"><button type="button" class="q-btn" id="bib-add-use">Add it to my list</button></div>';
+        bibAddOut.classList.remove('hidden');
+        const use = document.getElementById('bib-add-use');
+        if (use) use.addEventListener('click', () => {
+          if (!bibFormatted) return;
+          appendRefToDoc(bibFormatted);
+          bibAddIn.value = ''; bibFormatted = '';
+          bibAddOut.classList.add('hidden'); bibAddOut.innerHTML = '';
+          renderBibPanel();
+        });
+      } catch (e) {
+        bibFormatted = '';
+        bibAddOut.innerHTML = '<div class="bib-warn">Could not format that — check the details and try again.</div>';
+        bibAddOut.classList.remove('hidden');
+      } finally { bibAddGo.disabled = false; bibAddGo.textContent = 'Format it →'; }
+    });
+    const bibCopyBtn = document.getElementById('bib-copy');
+    if (bibCopyBtn) bibCopyBtn.addEventListener('click', async () => {
+      const t = bibCopyText(state.references); if (!t) return;
+      try { await navigator.clipboard.writeText(t); bibCopyBtn.textContent = 'Copied'; setTimeout(() => { bibCopyBtn.textContent = 'Copy all'; }, 1400); } catch (_) {}
+    });
     let citeBusy = false;
     async function runAutoCite({ sentence, criterionId, anchor, dot, hint } = {}) {
       if (citeBusy) return;
@@ -8977,10 +9782,16 @@
         state.wbNotes = t.wbNotes && typeof t.wbNotes === 'object' ? t.wbNotes : {};
         // Her work area comes back with her — it is her writing, not Q's.
         state.wbWork = t.wbWork && typeof t.wbWork === 'object' ? t.wbWork : {};
+        state.wbStickies = Array.isArray(t.wbStickies) ? t.wbStickies : [];
+        try { renderStickies(); } catch (_) {}
         // Q's reading of the page (the marking counts) comes back with her.
         state.tidy = t.tidy && typeof t.tidy === 'object' ? t.tidy : null;
         try { workKeyShown = null; syncWorkArea(); } catch (_) {}
-        state.chatLog = Array.isArray(t.chatLog) ? t.chatLog.filter(m => m && (m.role === 'q' || m.role === 'me') && m.text).slice(-40) : [];
+        // Old robot lines from before the card was a chat — the step's ask read
+        // out (it lives on the boards now) and bare "Welcome back." — do not
+        // come back into the thread (Sarah, 17 Aug).
+        const oldAsks = new Set(); for (const pl of Object.values(t.plans || {})) for (const st of ((pl && pl.steps) || [])) oldAsks.add(String(st.prompt || '').trim());
+        state.chatLog = Array.isArray(t.chatLog) ? t.chatLog.filter(m => m && (m.role === 'q' || m.role === 'me') && m.text).filter(m => { if (m.role !== 'q') return true; const norm = String(m.text).replace(/^Welcome back\.\s*/, '').trim(); return norm && !oldAsks.has(norm); }).slice(-40) : [];
         state.docSnapshot = t.probeSnapshot && docPlainText().endsWith(t.probeSnapshot) ? docPlainText() : docPlainText();
         boardFromSteps();
         renderBoard();
@@ -9023,7 +9834,7 @@
         }
         if (state.currentQuestion) {
           if (state.currentQuestion !== lastBoardQ) { state.qCount += 1; appendBoardItem({ type: 'question', label: 'Q' + state.qCount, text: state.currentQuestion }); }
-          setCoach({ msg: 'Welcome back — your question is on the board.', section: 'WHERE WE WERE', hint: 'Answer here, or keep writing — I read as you go.', inputVisible: true, showNudge: true });
+          setCoach({ msg: 'Welcome back.', section: '', hint: '', inputVisible: true, showNudge: true });
         } else {
           setCoach({ msg: 'Welcome back — the brief is on the board. Keep writing, or ask for the next question.', actions: [{ label: 'Next question →', primary: true, onClick: () => askNextQuestion({ trigger: 'answer' }) }], inputVisible: true, showNudge: true });
         }
@@ -9044,7 +9855,7 @@
     loadProjects().then(restoreSession, restoreSession);
     // Test hooks (no data, no secrets): lets the harness exercise the page-side
     // helpers without a paid call. Harmless in production.
-    window.__qwriterTest = { presentStep, renderBoard, renderWhiteboard, startedAsk, showToolPop, findInDoc, replaceInDoc, appendReference, docPlainText, splitCheck: (t) => endsSentence(t), runEditPass, checkCurrentSentence, showEditItem, state: () => state, currentEditText, partParagraphs, setBrief, storyPointsHtml, renderInlineDots, termsForBoard, setCoach, bandListHtml, showEditItem, openEditPanel, renderEditPanel, edState: () => edProof, edSetProof: (p2) => { edProof = p2; renderEditPanel(); edPaint(); }, sayMe, renderThread, syncWorkArea, showPanel, revealPanel, runTidyPasses, applyTidyItem, mergeWalk, refreshSourceDigests, sourceDigestsHtml, markAndFix, walkItemsFromMark, renderMarkPanel, markStats, gradeWord };
+    window.__qwriterTest = { paintQNotes, addQNotes, addQTabs, addStickies, renderStickies, presentStep, renderBoard, renderWhiteboard, startedAsk, showToolPop, findInDoc, replaceInDoc, appendReference, docPlainText, splitCheck: (t) => endsSentence(t), runEditPass, checkCurrentSentence, showEditItem, state: () => state, currentEditText, partParagraphs, setBrief, storyPointsHtml, renderInlineDots, termsForBoard, setCoach, bandListHtml, showEditItem, openEditPanel, renderEditPanel, edState: () => edProof, edSetProof: (p2) => { edProof = p2; renderEditPanel(); edPaint(); }, sayMe, renderThread, syncWorkArea, showPanel, revealPanel, runTidyPasses, applyTidyItem, mergeWalk, refreshSourceDigests, sourceDigestsHtml, markAndFix, walkItemsFromMark, renderMarkPanel, markStats, gradeWord, notesSections, notesCount, notesCopyText, renderNotesPanel, openNotesPanel, bibSorted, bibCopyText, renderBibPanel, openBibPanel, removeReference, removeReferenceFromDoc, sendTextToPage, jumpToSentence };
 
 
     // (The old per-card drag code lived here — every panel now goes through makePanel above.)

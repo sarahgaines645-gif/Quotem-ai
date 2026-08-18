@@ -1519,6 +1519,49 @@ router.post('/writer/mark', requirePerson, express.json({ limit: '2mb' }), write
 
 // POST /writer/chat — a real conversation with Q (17 Aug): { text, history[], docText, criterionId, stepId, ask }.
 // Full context server-side (brief, plan, model essay for his own understanding, the stored case text, sources).
+// The student's context for Q-as-coach: the brief, the part, the question we
+// are on, the page, the case, the sources, the expected words. Compact — Q
+// reads it, he does not recite it.
+function writerCoachContext({ t, cid, plan, stepId, docText, stored, ask, partWords, stepItems }) {
+    const nl2 = String.fromCharCode(10);
+    const L = [];
+    const brief = t.brief || {};
+    const crit = Array.isArray(brief.criteria) ? brief.criteria : [];
+    const cur = crit.find(c => c.id === cid) || null;
+    L.push('CONTEXT FOR THIS TUTORING CONVERSATION (read, do not recite):');
+    if (brief.title) L.push('Assignment: ' + brief.title);
+    if (brief.whatItWants) L.push('What it wants: ' + brief.whatItWants);
+    if (brief.wordCount) L.push('Word count: ' + brief.wordCount);
+    if (t.gradeScheme) L.push('Grade scheme: ' + t.gradeScheme);
+    if (crit.length) L.push('The questions (parts):' + nl2 + crit.map((c, i) => '  Q' + (i + 1) + (c.id === cid ? ' (WE ARE ON THIS ONE)' : '') + ': ' + String(c.text || c.label || '').slice(0, 400)).join(nl2));
+    const sc = brief.scenario;
+    if (sc && (sc.name || sc.theStory)) {
+        L.push('The case study: ' + [sc.name, sc.kind].filter(Boolean).join(' — ') + (sc.theStory ? nl2 + '  ' + String(sc.theStory).slice(0, 1200) : ''));
+        if (Array.isArray(sc.facts) && sc.facts.length) L.push('  Facts: ' + sc.facts.map(f => f.label + ': ' + f.value).join(' · ').slice(0, 1200));
+        if (Array.isArray(sc.sections) && sc.sections.length) L.push(sc.sections.map(x => '  ' + x.heading + ': ' + (x.bullets || []).join('; ')).join(nl2).slice(0, 2400));
+    }
+    if (Array.isArray(t.sources) && t.sources.length) L.push('Supporting documents: ' + t.sources.map(s => s.name + (s.digest && s.digest.whatItIs ? ' — ' + s.digest.whatItIs : '')).join(' | ').slice(0, 800));
+    if (plan && Array.isArray(plan.steps) && plan.steps.length) {
+        const st = stepId ? plan.steps.find(s => s.id === stepId) : null;
+        L.push('The ladder of questions for this part:' + nl2 + plan.steps.map((s, i) => '  ' + (i + 1) + '. ' + (st && s.id === st.id ? '[NOW] ' : '') + String(s.prompt || '').slice(0, 220)).join(nl2));
+        if (Array.isArray(plan.terms) && plan.terms.length) L.push('Words / ideas the marker expects in this part: ' + plan.terms.join(', '));
+        if (Array.isArray(plan.requirements) && plan.requirements.length) L.push('Must be in this part: ' + plan.requirements.map(q => q.label || q.kind || '').filter(Boolean).join(', '));
+    }
+    if (ask) L.push('The question on the card right now: ' + ask);
+    if (Array.isArray(stepItems) && stepItems.length) L.push('Their list so far on the whiteboard for the question we are on: ' + stepItems.map(String).join(' · ').slice(0, 1500));
+    if (partWords && typeof partWords === 'object' && Object.keys(partWords).length) L.push('Words written per question so far: ' + crit.map((c, i) => 'Q' + (i + 1) + ' ' + (Number(partWords[c.id]) || 0) + (c.wordBudget ? '/' + c.wordBudget : '')).join(' · '));
+    const page = String(docText || '').trim();
+    // Paragraph numbers, so he can say "paragraph 4, sentence 2" (Q's own ask,
+    // 18 Aug). Numbered on his copy only — nothing changes on her page.
+    if (page) {
+        const paras = page.split(/\n{2,}|\r?\n/).map(x => x.trim()).filter(Boolean);
+        const numbered = paras.map((x, i) => '[P' + (i + 1) + '] ' + x).join(nl2);
+        L.push('What is on their page (' + page.split(/\s+/).filter(Boolean).length + ' words, ' + paras.length + ' paragraphs, numbered [P1]…; refer to them by number):' + nl2 + (numbered.length > 9000 ? '…' + numbered.slice(-9000) : numbered));
+    }
+    else L.push('Their page is empty so far.');
+    L.push('Reply to their next message as their tutor.');
+    return L.join(nl2 + nl2);
+}
 router.post('/writer/chat', requirePerson, express.json({ limit: '1mb' }), writerTooLarge('That is too much text for one message (over 1 MB).'), async (req, res) => {
     const personId = writerScope(req);
     const t = readTutor(personId);
@@ -1529,6 +1572,66 @@ router.post('/writer/chat', requirePerson, express.json({ limit: '1mb' }), write
     try {
         const cid = String(b.criterionId || t.currentCriterionId || '').replace(/\s+/g, '');
         const stored = readStoredDocText(personId);
+        // THE COACH IS Q (Sarah, 17 Aug: "I need an ai like the Q I have on the
+        // general chat. I trust him"). Same persona, same model, a real
+        // conversation — the writer's context goes in as the first message.
+        // A ```display block in his reply is lifted out for the whiteboard.
+        // The old structured chatAnswer stays as the fallback if Q is down.
+        const plan = (t.plans && t.plans[cid]) || null;
+        const ctx = writerCoachContext({ t, cid, plan, stepId: b.stepId ? String(b.stepId) : null, docText: String(b.docText || ''), stored, ask: b.ask ? String(b.ask) : '', partWords: b.partWords && typeof b.partWords === 'object' ? b.partWords : null, stepItems: Array.isArray(b.stepItems) ? b.stepItems : [] });
+        // HIS MEMORY, not the page's. The same store the general chat uses
+        // (one per person, tagged by surface): the coach's own turns are the
+        // history, his other conversations come as the read-only digest /chat
+        // gives him, and every turn here is written back — so what she says to
+        // him in general he knows here, and vice versa (Sarah, 17 Aug).
+        const QSURF = 'writer-coach';
+        const qpid = req.person && req.person.id;
+        const allMem = qpid ? loadMemory(qpid) : [];
+        const memHist = allMem.filter(m => (m.surface || 'chat') === QSURF).slice(-50).map(m => ({ role: m.role, content: String(m.content || '').slice(0, 2500) }));
+        const pageHist = (Array.isArray(b.history) ? b.history.slice(-10) : []).map(m => ({ role: m.role === 'me' ? 'user' : 'assistant', content: String(m.text || '').slice(0, 2000) })).filter(m => m.content);
+        const hist = memHist.length ? memHist : pageHist;
+        const others = {};
+        for (const m of allMem) { const sf = m.surface || 'chat'; if (sf === QSURF) continue; (others[sf] = others[sf] || []).push(m); }
+        const digest = Object.entries(others).map(([sf, ms]) => '[' + sf.toUpperCase() + ' PAGE]' + String.fromCharCode(10) + ms.slice(-5).map(m => '  ' + (m.role === 'user' ? (req.person && req.person.name) || 'They' : 'Q') + ': ' + String(m.content || '').slice(0, 300).replace(/\s+/g, ' ')).join(String.fromCharCode(10))).join(String.fromCharCode(10) + String.fromCharCode(10));
+        const ctxFull = ctx + (digest ? String.fromCharCode(10) + String.fromCharCode(10) + '--- YOUR OTHER CONVERSATIONS WITH THEM (read-only reference — you may mention them if relevant) ---' + String.fromCharCode(10) + digest + String.fromCharCode(10) + '--- END REFERENCE ---' : '');
+        const messages = [{ role: 'user', content: ctxFull }, { role: 'assistant', content: 'Got it — I have the context. Go on.' }].concat(hist, [{ role: 'user', content: text }]);
+        let out = null;
+        try {
+            // Which brain: 'q' = the general-chat Q (V4 Pro, default); 'qb2' = the
+            // model QB2 talks with in Quoteapp (GLM-5.2 — q-chat's thread model).
+            // Sarah, 17 Aug: "QB2 on the case… may be the best one for this" / "or QB2".
+            const brain = String(b.brain || (t.settings && t.settings.coachBrain) || 'qb2');   // default = QB2's model (Sarah, 17 Aug: 'a different model')
+            const qOpts = { surface: 'writer-coach', person: req.person, useTools: true };   // HIS tools too — emails, the lot (Sarah, 17 Aug: 'he has access to my emails. it makes sense')
+            if (brain === 'qb2' && Q_CONFIG_THREAD_MODEL) qOpts.model = Q_CONFIG_THREAD_MODEL;
+            const q = await qChat(messages, qOpts);
+            try { const tc = (Array.isArray(q && q.toolCalls) ? q.toolCalls : []).map(c => c.name + (c.result && c.result.error ? '(ERR)' : '')); if (tc.length) console.log('[writer/chat] Q tools: ' + tc.join(', ')); } catch (_) {}
+            if (q && q.reply && !q.error) {
+                const m = String(q.reply).match(/```display[ \t]*\r?\n([\s\S]*?)```/);
+                let display = null, reply = String(q.reply);
+                if (m) {
+                    reply = reply.replace(m[0], '').trim();
+                    const src = m[1].trim();
+                    const tm = src.match(/^#{1,3}[ \t]+(.+)$/m);
+                    display = { title: tm ? tm[1].trim() : 'Whiteboard', src };
+                }
+                // His tap-to-answer [OPTIONS] block → buttons on the card (same
+                // convention as the general chat; parser mirrors chat.html).
+                let options = [];
+                { const up = reply.toUpperCase(); const o = up.lastIndexOf('[OPTIONS]');
+                  if (o !== -1) { const after = reply.slice(o + 9); if (/^[^\S\n]*(\r?\n|$)/.test(after)) {
+                    const cr = after.toUpperCase().indexOf('[/OPTIONS]'); const raw = cr === -1 ? after : after.slice(0, cr);
+                    options = raw.split(String.fromCharCode(10)).map(l => l.replace(/^\s*[-*]\s*/, '').trim()).filter(Boolean).slice(0, 4);
+                    if (options.length) { const before = reply.slice(0, o).trim(); const trailing = cr === -1 ? '' : after.slice(cr + 10).trim(); reply = (before + (trailing ? String.fromCharCode(10) + String.fromCharCode(10) + trailing : '')).trim(); }
+                  } } }
+                // His highlight_passage calls reach the page as they are — it paints them.
+                const paints = (Array.isArray(q.toolCalls) ? q.toolCalls : []).filter(c => c && (c.name === 'highlight_passage' || (c.tool === 'highlight_passage')) && c.result && c.result.painted).map(c => ({ text: c.result.text, note: c.result.note, kind: c.result.kind, colour: c.result.colour || '' }));
+                const tabs = (Array.isArray(q.toolCalls) ? q.toolCalls : []).filter(c => c && c.name === 'tab_paragraph' && c.result && c.result.tabbed).map(c => ({ paragraph: c.result.paragraph, label: c.result.label, colour: c.result.colour, side: c.result.side || 'right' }));
+                const stickies = (Array.isArray(q.toolCalls) ? q.toolCalls : []).filter(c => c && c.name === 'stick_note' && c.result && c.result.stuck).map(c => ({ text: c.result.text, colour: c.result.colour }));
+                out = { reply, display, options, paints, tabs, stickies, board: null, next: '', highlights: [], answersStep: false, via: 'q' };
+                if (qpid) { try { appendMessage(qpid, 'user', text, QSURF); appendMessage(qpid, 'assistant', String(q.reply), QSURF); } catch (_) {} }
+            }
+        } catch (e) { console.warn('[writer/chat] Q unavailable, falling back: ' + e.message); }
+        if (out) return ukJson(res, { ok: true, ...out });
         const r = await qWriter.chatAnswer({
             brief: t.brief, essay: t.modelEssay || null,
             plan: (t.plans && t.plans[cid]) || null, stepId: b.stepId ? String(b.stepId) : null,
@@ -2523,7 +2626,7 @@ const TUTOR_KEYS = [
     // (17 Aug). The page already restored `wbDoc`; it was never in this list,
     // so the board came back empty every refresh. `wbWork` is her own writing
     // on the board, keyed by part — it must never be lost.
-    'wbDoc', 'wbWork',
+    'wbDoc', 'wbWork', 'wbStickies',
     // what Q's reading of the page found (cuts, weak lines, spelling, grammar) —
     // the marking panel's counts come from this, so it must survive a refresh.
     'tidy',
@@ -4881,6 +4984,7 @@ router.post('/email-writer/adjust-tone', express.json({ limit: '64kb' }), async 
 // pasted email. Q reads it as a friend who's good with the small print,
 // finds the angle the user missed, gives the plan + odds.
 const { chat: qChat } = require('./plugins/q-chat');
+const Q_CONFIG_THREAD_MODEL = (() => { try { return require('./config').Q_CONFIG.threadModel || null; } catch (_) { return null; } })();
 router.post('/email-writer/advice', express.json({ limit: '256kb' }), async (req, res) => {
     const text = req.body?.text;
     if (!text || typeof text !== 'string' || !text.trim()) {

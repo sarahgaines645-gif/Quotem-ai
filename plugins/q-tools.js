@@ -44,6 +44,72 @@ const qTravel = require('./q-travel');
 // ─────────────────────────────────────────────────────────────
 
 const TOOL_DEFINITIONS = [
+    // ── WRITER COACH tools (Q as the student's tutor on /writer; Sarah, 18 Aug:
+    //    "can you give Q these tools" — the three Q himself asked for). ────────
+    {
+        type: 'function',
+        function: {
+            name: 'check_reference',
+            description: 'Check whether a citation the student used is REAL and what it is actually about. Looks the work up on OpenAlex and CrossRef by DOI, title, or author + year, and returns what was found: the real title, authors, year, venue and the abstract or summary. Use it whenever a citation looks doubtful, whenever the student asks if a source is right, and before you accept that a source backs a claim. Then YOU judge, from the abstract, whether it supports what the student says (e.g. "this is about fibre optics, not Taylorism"). Never call a source real or relevant without checking.',
+            parameters: {
+                type: 'object',
+                properties: {
+                    query: { type: 'string', description: 'The citation as the student wrote it, or the DOI, or the title, or author + year — whatever you have.' },
+                    claim: { type: 'string', description: 'What the student says this source shows (one sentence). Optional, but it makes your judgement of fit possible.' },
+                },
+                required: ['query'],
+            },
+        },
+    },
+    {
+        type: 'function',
+        function: {
+            name: 'highlight_passage',
+            description: 'Highlight a passage ON THE STUDENT\'S PAGE and attach a short note to it, exactly where it matters — "cut this", "wrong source — this paper is about X", "split into two sentences", "good — keep". The page paints the passage and puts a dot after it; the note shows when they press the dot. The passage must be VERBATIM text from their page (copy it exactly, 4-40 words). Use it instead of quoting chunks back at them. You may call it several times in one turn.',
+            parameters: {
+                type: 'object',
+                properties: {
+                    text: { type: 'string', description: 'The exact passage from their page, verbatim.' },
+                    note: { type: 'string', description: 'Your note for that passage, one or two short sentences, in plain words, telling them what to do.' },
+                    kind: { type: 'string', enum: ['cut', 'source', 'split', 'weak', 'good', 'note'], description: 'What kind of note: cut it / wrong or missing source / split it / weak claim / good keep it / other.' },
+                    colour: { type: 'string', enum: ['pink', 'amber', 'blue', 'violet', 'green', 'grey'], description: 'Highlighter colour. Optional — each kind has its own (cut pink, source amber, split blue, weak violet, good green, note grey). Set it when you want a colour scheme of your own for this session (say what the colours mean once).' },
+                },
+                required: ['text', 'note'],
+            },
+        },
+    },
+    {
+        type: 'function',
+        function: {
+            name: 'tab_paragraph',
+            description: 'Stick a coloured INDEX TAB on the top of a paragraph of the student\'s page — like the sticky tabs on a notepad — with a short label: "Q1 intro", "theory here", "cut?", "move up", "needs source". Use the paragraph numbers you were given ([P4] = paragraph 4). Tabs are for marking STRUCTURE (which paragraph is what, what to move, what to revisit); highlight_passage is for a passage inside the text. They can press a tab to take it off.',
+            parameters: {
+                type: 'object',
+                properties: {
+                    paragraph: { type: 'integer', description: 'The paragraph number, 1-based, as in [P4].' },
+                    label: { type: 'string', description: 'The tab label, 1-4 words.' },
+                    colour: { type: 'string', enum: ['pink', 'amber', 'blue', 'violet', 'green', 'grey'], description: 'Tab colour. Optional; default grey.' },
+                    side: { type: 'string', enum: ['right', 'left', 'top'], description: 'Where the tab hangs. Default right — off the right edge of the paragraph\'s first line, colour on the outside, like a notepad index tab. Use left or top only when it reads better there.' },
+                },
+                required: ['paragraph', 'label'],
+            },
+        },
+    },
+    {
+        type: 'function',
+        function: {
+            name: 'stick_note',
+            description: 'Drop a STICKY NOTE on the whiteboard — a small coloured card with a quick thought, disposable, separate from the display: "come back to turnover", "ask her which sector", "needs a figure". They can drag it around, send it to their page, or bin it. Not for information that belongs on the display; for the passing note you would stick on the edge of the board.',
+            parameters: {
+                type: 'object',
+                properties: {
+                    text: { type: 'string', description: 'The note, 1-20 words.' },
+                    colour: { type: 'string', enum: ['pink', 'amber', 'blue', 'violet', 'green', 'grey', 'yellow'], description: 'Optional; default yellow.' },
+                },
+                required: ['text'],
+            },
+        },
+    },
     {
         type: 'function',
         function: {
@@ -1670,6 +1736,40 @@ async function executeTool(name, argsRaw, personId, personEmail, threadId) {
     // the model omits it (it doesn't always know the raw thread id). An explicit
     // id from the model still wins (e.g. cross-case reads).
     if (threadId && !args.threadId) args.threadId = threadId;
+    // ── writer coach tools ─────────────────────────────────────────────
+    if (name === 'highlight_passage') {
+        // Nothing to do server-side: the PAGE paints it. The call itself is the
+        // result — the client reads it out of toolCalls and paints + dots it.
+        const text = String(args.text || '').replace(/\s+/g, ' ').trim();
+        if (!text) return { error: 'No passage given.' };
+        return { ok: true, painted: true, text: text.slice(0, 600), note: String(args.note || '').trim().slice(0, 400), kind: String(args.kind || 'note'), colour: String(args.colour || '') };
+    }
+    if (name === 'tab_paragraph') {
+        const pn = Number(args.paragraph);
+        if (!Number.isInteger(pn) || pn < 1) return { error: 'Give the paragraph number (1-based).' };
+        return { ok: true, tabbed: true, paragraph: pn, label: String(args.label || '').trim().slice(0, 40) || 'note', colour: String(args.colour || 'grey'), side: ['right', 'left', 'top'].includes(String(args.side || '')) ? String(args.side) : 'right' };
+    }
+    if (name === 'stick_note') {
+        const text = String(args.text || '').trim().slice(0, 160);
+        if (!text) return { error: 'The sticky needs some text.' };
+        return { ok: true, stuck: true, text, colour: String(args.colour || 'yellow') };
+    }
+    if (name === 'check_reference') {
+        try {
+            const cite = require('./q-cite');
+            const q = String(args.query || '').trim();
+            if (!q) return { error: 'No citation given.' };
+            const doi = (q.match(/10\.\d{4,9}\/[^\s"'<>]+/) || [])[0];
+            let works = [];
+            if (doi) {
+                try { const w = await cite.deps.fetchJson('https://api.openalex.org/works/https://doi.org/' + encodeURIComponent(doi)); const m = cite.fromOpenAlex(w); if (m) works = [m]; } catch (_) {}
+            }
+            if (!works.length) { try { works = await cite.searchOpenAlex(q, 3); } catch (_) {} }
+            if (!works.length) { try { works = await cite.searchCrossref(q, 3); } catch (_) {} }
+            if (!works.length) return { found: false, query: q, verdict: 'Nothing with that title / author / DOI on OpenAlex or CrossRef. Either it is mis-cited (check spelling, year, authors) or it does not exist.' };
+            return { found: true, query: q, claim: String(args.claim || ''), candidates: works.slice(0, 3).map(w => ({ title: w.title, authors: (w.authors || []).map(a => (a.family || '') + (a.given ? ', ' + String(a.given).slice(0, 1) + '.' : '')).slice(0, 4).join('; '), year: w.year, venue: w.journal || w.publisher || '', doi: w.doi || null, url: w.url || null, about: String(w.snippet || '').slice(0, 900) || '(no abstract available — judge from the title and venue)', citedBy: w.citedBy || 0 })), note: 'Judge fit yourself from "about" against the student\'s claim. If none of these is what they cited, say so plainly.' };
+        } catch (e) { return { error: 'Reference lookup failed: ' + String(e && e.message || e).slice(0, 160) }; }
+    }
 
     switch (name) {
         case 'web_search':       return await webSearch(args);
@@ -2455,6 +2555,7 @@ function recallTutor(personId) {
 //
 // Default = remember + recall (cheap, useful for memory). Everything else is
 // gated behind explicit triggers in the user's message.
+const WRITER_TOOLS = new Set(['check_reference', 'highlight_passage', 'tab_paragraph', 'stick_note']);
 const ALWAYS_ON = new Set([
     // Memory is core to every chat surface — Q should silently save and
     // recall facts without ceremony.
@@ -2745,6 +2846,8 @@ function selectActiveTools(userMessage, options = {}) {
                 && options.surface === 'thread') return false;
             return true;
         }
+        // Writer coach: Q's tutoring tools are always in his hand there.
+        if (options.surface === 'writer-coach' && WRITER_TOOLS.has(name)) return true;
         // Doc-editor page: all doc-editor tools always on
         if (options.docEditor && DOC_EDITOR_TOOLS.has(name)) return true;
         // APS / case mode: research + evidence tools always on (the prompt
