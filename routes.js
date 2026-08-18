@@ -1491,7 +1491,7 @@ router.post('/writer/mark', requirePerson, express.json({ limit: '2mb' }), write
     const gradeScheme = String(req.body?.gradeScheme || t.gradeScheme || '');
     const personId = writerScope(req);
     const job = startWriterJob(personId, 'mark', async () => {
-        const r = await qWriter.markLikeMarker({ brief: t.brief, essay: t.modelEssay || null, docText, gradeScheme, plans: t.plans || null });
+        const r = await qWriter.markLikeMarker({ brief: t.brief, essay: t.modelEssay || null, docText, gradeScheme, plans: t.plans || null, taskText: String(t.task || '') });
         // The marker's honest read of terms used / requirements met, per part.
         for (const p of r.perCriterion) noteExpectations(personId, p.criterionId, p.termsUsed, p.requirementsMet, { replace: true });
         let coverage = { ...(t.coverage || {}) };

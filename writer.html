@@ -1119,6 +1119,15 @@
     .q-bandlist .bd.missing, .mk-block .bd.missing { background-color: transparent; box-shadow: inset 0 0 0 2px var(--text-faint); }
     .q-bandlist .q-band-w.missing, .mk-block .q-band-w.missing { color: var(--text-faint); }
     /* A QUESTION'S CARD: grade, what she has, then the moves that teach. */
+    /* the standard's working: LO marks + total; the evidence line on a part */
+    .q-lo { display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: baseline; margin: 4px 0 2px; font-size: 12px; color: var(--text); }
+    .q-lo .q-lo-i b { font-weight: 700; margin-right: 2px; }
+    .q-lo .q-lo-t { color: var(--text-muted); font-size: 11px; margin-left: auto; }
+    .q-lo-why { font-size: 11px; line-height: 1.45; color: var(--text-muted); margin: 2px 0 6px; }
+    .q-lo-why b { color: var(--text); font-weight: 700; margin-right: 4px; }
+    .q-band-struct { font-size: 11.5px; line-height: 1.45; color: var(--text); margin: 4px 0 2px; padding-left: 9px; border-left: 3px solid #e6a817; }
+    .q-evid { font-size: 11px; line-height: 1.45; color: var(--text-muted); margin: 0 0 6px; font-style: italic; overflow-wrap: anywhere; }
+    .q-evid .q-evid-l { font-style: normal; font-size: 9px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-muted); margin-right: 6px; }
     /* the ladder: you are here, then each grade above with what it takes */
     .q-ladder { display: flex; flex-direction: column; gap: 0; margin-top: 2px; }
     .q-rung { display: grid; grid-template-columns: 14px 1fr; gap: 8px; position: relative; padding: 4px 0 8px; }
@@ -2221,6 +2230,7 @@
         <div class="setup-label">Grade scheme</div>
         <select class="setup-select" id="setup-grade-scheme">
           <option value="as the brief says">As the brief says</option>
+          <option value="CIPD Level 7 (Refer / Pass / Merit / Distinction, marks 1-4 per learning outcome)">CIPD Level 7</option>
           <option value="Pass / Merit / Distinction (Level 7 / professional)">Pass/Merit/Dist (L7)</option>
           <option value="Pass / Refer">Pass / Refer</option>
           <option value="GCSE (9-1)">GCSE 9–1</option>
@@ -8296,6 +8306,7 @@
           + `<div class="mk-block-head"><span class="mk-ico">${started ? 'Q' + (cs.findIndex(c => c.id === p.criterionId) + 1) : '·'}</span>`
           + `<span class="mk-title">${escHtml(labelFor(p.criterionId))}</span>`
           + `<span class="mk-count">${escHtml(gradeWord(p))}</span></div>`
+          + (String(p.evidence || '').trim() && started ? `<div class="q-evid"><span class="q-evid-l">Marked on</span>“${escHtml(String(p.evidence).replace(/^["“]+|["”]+$/g, '').slice(0, 220))}”</div>` : '')   // the marker's working: the phrase of THEIRS it graded on (Sarah, 18 Aug — so its method can be checked)
           + gotHtml
           + nextHtml
           + (!nextHtml && gap ? `<div class="q-band-gap">${escHtml(started ? gap : 'Not written yet — ' + gap.charAt(0).toLowerCase() + gap.slice(1))}</div>` : '')
@@ -8318,13 +8329,26 @@
         + (missing.length ? mkBlock('What is missing', '○', '', `<ul class="q-mk-ul">${missing.map(x => `<li>${escHtml(x)}</li>`).join('')}</ul>`, missing.length) : '')
         + mkBlock('If you handed it in now', '★', '',
             `<div class="q-band-all"><b>${escHtml(gradeWord(m.overall))}</b> <span>${escHtml(total ? done + ' of ' + total + ' questions answered' : 'overall')}${schemeNote ? ' · ' + escHtml(schemeNote) : ''}</span></div>`
-            + (why ? `<div class="q-band-why">${escHtml(why)}</div>` : ''))
+            + loMarksHtml(m)
+            + (why ? `<div class="q-band-why">${escHtml(why)}</div>` : '')
+            + (String(m.overall.structure || '').trim() ? `<div class="q-band-struct">${escHtml(m.overall.structure)}</div>` : ''))
         + ladderBlock(m)
         + ((toNext && !(m.overall.ladder || []).length) ? mkBlock(nextL ? 'To get a ' + nextL : 'To take it higher', '↑', '', `<div class="q-band-next">${qMd(toNext)}</div>`) : '');
     }
     // THE LADDER (Sarah, 18 Aug: "a whole system where it shows you what you
     // need to do to get from one mark to another"): you are here; each grade
     // above, in order, with what THIS draft still needs for it.
+    // The published standard's working (CIPD L7: a mark 1-4 per learning outcome,
+    // the total, the unit result) — shown so the method can be checked.
+    function loMarksHtml(m) {
+      const lo = (m && m.overall && Array.isArray(m.overall.loMarks)) ? m.overall.loMarks.filter(x => x && x.label && Number.isInteger(x.mark)) : [];
+      if (!lo.length) return '';
+      const total = Number.isInteger(m.overall.total) ? m.overall.total : lo.reduce((a, x) => a + x.mark, 0);
+      const max = lo.length * 4;
+      const sch = m.overall.scheme && m.overall.scheme.name ? m.overall.scheme.name : '';
+      return '<div class="q-lo">' + lo.map(x => '<span class="q-lo-i" title="' + escHtml(x.reason || '') + '"><b>' + escHtml(x.label) + '</b> ' + x.mark + '</span>').join('') + '<span class="q-lo-t">' + total + ' of ' + max + (sch ? ' · ' + escHtml(sch) : '') + '</span></div>'
+        + '<div class="q-lo-why">' + lo.filter(x => x.reason).map(x => '<div><b>' + escHtml(x.label) + '</b> ' + escHtml(x.reason) + '</div>').join('') + '</div>';
+    }
     function ladderBlock(m) {
       const rungs = (m && m.overall && Array.isArray(m.overall.ladder)) ? m.overall.ladder.filter(r => r && r.label && (r.needs || []).length) : [];
       if (!rungs.length) return '';

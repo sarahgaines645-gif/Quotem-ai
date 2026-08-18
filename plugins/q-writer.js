@@ -33,6 +33,7 @@
 const { Q_CONFIG } = require('../config');
 const { cleanModelOutput } = require('./cjk-filter');
 const { accurateJSON, SONNET } = require('./q-claude');
+const { detectMarkScheme } = require('./mark-schemes');   // the awarding body's own standard, verbatim (18 Aug)
 const { timedFetch } = require('./timed-fetch');
 const { logUsage } = require('../cost-tracker');
 const { polishUK } = require('./polish-uk');
@@ -736,7 +737,7 @@ const MARK_SCHEMA = {
     required: ['overall', 'perCriterion', 'weakestCriterionId', 'critique'],
     properties: {
         overall: {
-            type: 'object', additionalProperties: false, required: ['band', 'label', 'summary', 'strong', 'missing', 'answeredCount', 'nextLabel', 'toNext', 'ladder'],
+            type: 'object', additionalProperties: false, required: ['band', 'label', 'summary', 'strong', 'missing', 'answeredCount', 'nextLabel', 'toNext', 'ladder', 'loMarks', 'total', 'structure'],
             properties: {
                 band: { type: 'string', enum: ['top', 'mid', 'low'] },
                 label: { type: 'string', description: 'The grade in the student\'s scheme, e.g. "Distinction", "Merit", "Grade 7", "2:1", "Pass", "Refer". If the scheme is "as the brief says", use the words the brief itself uses for its bands; if the brief names none, leave this empty.' },
@@ -746,6 +747,17 @@ const MARK_SCHEMA = {
                 answeredCount: { type: 'integer', description: 'How many of the criteria the draft genuinely attempts (has real content for), out of the total.' },
                 nextLabel: { type: 'string', description: 'The NEXT GRADE UP in their scheme — the one word: e.g. "Merit" when they are at Pass, "Distinction" when they are at Merit, "Grade 7" when they are at Grade 6. Empty ONLY if they are already at the top grade or the scheme names no grades.' },
                 toNext: { type: 'string', description: 'HOW TO GET THAT GRADE. The two or three concrete things that would lift THIS draft to nextLabel, each one a thing they can go and do today — name the part, the idea, the evidence, the comparison. Never "develop further", never "add more detail", never a description of what the grade means. If they are already at the top grade, what would keep it there.' },
+                loMarks: {
+                    type: 'array',
+                    description: 'ONLY when the marking standard says marks are given per LEARNING OUTCOME (e.g. CIPD Level 7: 1-4 each): one entry per learning outcome in the brief, in order. Empty array otherwise.',
+                    items: { type: 'object', additionalProperties: false, required: ['label', 'mark', 'reason'], properties: {
+                        label: { type: 'string', description: '"LO1", "LO2" …' },
+                        mark: { type: 'integer', description: 'The mark on the standard\'s scale (CIPD L7: 1 Refer/Fail, 2 Pass, 3 Merit, 4 Distinction).' },
+                        reason: { type: 'string', description: 'One or two sentences naming which criteria of the standard decided it, in the standard\'s own words, and what in THEIR draft.' },
+                    } },
+                },
+                total: { type: 'integer', description: 'The sum of loMarks (0 when loMarks is empty).' },
+                structure: { type: 'string', description: 'ONE plain sentence if the standard requires something structural the draft lacks (e.g. CIPD: headings that map to the learning outcomes / assessment criteria). Empty string otherwise.' },
                 ladder: {
                     type: 'array',
                     description: 'THE LADDER (Sarah, 18 Aug: "a whole system where it shows you what you need to do to get from one mark to another"). EVERY grade ABOVE the one you have given, in order, up to the top of the scheme — one rung each. For each rung, 2-4 concrete things that would lift THIS draft to THAT grade, on top of the rungs below it: name the part (AC / question), the idea to name, the evidence to find, the comparison to make, the sentence to write. Things they can go and do today. Never "develop further". Uses the scheme\'s own grade words. Empty ONLY if the brief names no grades or they are already at the top.',
@@ -820,10 +832,16 @@ function schemeLine(gradeScheme) {
     if (!g || /as the brief says/i.test(g)) return 'Grade scheme: the one the brief itself states (its own band / grade words). If the brief names none, give bands only and leave "label" empty — never invent a grade label from another scheme.';
     return `Grade scheme: ${g}.`;
 }
-async function markLikeMarker({ brief, essay, docText, gradeScheme, plans }) {
+async function markLikeMarker({ brief, essay, docText, gradeScheme, plans, taskText }) {
     if (!brief || !Array.isArray(brief.criteria) || !brief.criteria.length) throw new Error('No brief yet — upload the task first.');
     if (!String(docText || '').trim()) throw new Error('There is nothing on the page to mark yet.');
-    const system = withMission(`You are the examiner for this assignment (the final marking pass — the one place plain marker language is allowed, still phrased plainly to the student). Mark the student's draft strictly against the brief and its criteria, the way the real marker will. ${schemeLine(gradeScheme)}
+    // THE PUBLISHED STANDARD (18 Aug): when the brief belongs to a scheme we hold
+    // verbatim (CIPD Level 7 for now — plugins/mark-schemes.js), the marker marks
+    // against the awarding body's own grid and arithmetic, not a generic sense
+    // of "Merit". The arithmetic is then re-done in code below: code is truth.
+    const scheme = detectMarkScheme({ brief, gradeScheme, taskText });
+    const system = withMission(`You are the examiner for this assignment (the final marking pass — the one place plain marker language is allowed, still phrased plainly to the student). Mark the student's draft strictly against the brief and its criteria, the way the real marker will. ${scheme ? 'Grade scheme: ' + scheme.name + ' — ' + scheme.labels.join(' / ') + ' (the standard below governs).' : schemeLine(gradeScheme)}
+${scheme ? '\n' + scheme.promptBlock() + '\n' : ''}
 
 Rules:
 - Every criterion gets a band: top / mid / low / missing (missing = the document does not address it at all).
@@ -870,7 +888,23 @@ ${plans ? Object.values(plans).map(p => p && p.criterionId ? '[' + p.criterionId
     // the taught gaps and the ladder, is one long answer (Sarah, 18 Aug, live:
     // "The marking timed out after 120s" on a real assignment). Five minutes.
     const r = await callAccurate(system, user, { maxTokens: 20000, schema: MARK_SCHEMA, effort: 'medium', timeoutMs: 300_000 });
-    return normaliseMark(r, brief, essay, plans);
+    // CODE IS TRUTH for the arithmetic: on a per-outcome scheme the unit result
+    // follows the published table from the LO marks, whatever label the model
+    // wrote. Logged when they differ.
+    try {
+        if (scheme && scheme.perOutcomeMarks && r && r.overall && Array.isArray(r.overall.loMarks) && r.overall.loMarks.length) {
+            const ur = scheme.unitResult(r.overall.loMarks);
+            if (ur) {
+                if (String(r.overall.label || '').trim().toLowerCase() !== ur.label.toLowerCase()) console.warn('[writer/mark] ' + scheme.id + ': model said "' + r.overall.label + '", the table says "' + ur.label + '" (' + ur.why + ', total ' + ur.total + ') — using the table');
+                r.overall.label = ur.label; r.overall.total = ur.total;
+                const above = scheme.labels.slice(scheme.labels.indexOf(ur.label) + 1);
+                r.overall.nextLabel = above[0] || '';
+                if (Array.isArray(r.overall.ladder)) r.overall.ladder = r.overall.ladder.filter(x => x && above.includes(String(x.label || '').trim()));
+                r.overall.band = ur.label === 'Distinction' ? 'top' : ur.label === 'Refer' ? 'low' : 'mid';
+            }
+        }
+    } catch (e) { console.warn('[writer/mark] scheme arithmetic: ' + e.message); }
+    return normaliseMark(r, brief, essay, plans, scheme);
 }
 
 // ── MARK ONE QUESTION, AS SHE FINISHES IT ─────────────────────────────────
@@ -992,7 +1026,7 @@ ${bricks.length ? '\nWHAT A TOP ANSWER CONTAINS (your model answer — never quo
     };
 }
 
-function normaliseMark(r, brief, essayForMark, plans) {
+function normaliseMark(r, brief, essayForMark, plans, scheme) {
     if (!r || typeof r !== 'object' || !r.overall) throw new Error('The marking came back empty — try again.');
     const ids = brief.criteria.map(c => c.id);
     const seen = new Set();
@@ -1054,6 +1088,12 @@ function normaliseMark(r, brief, essayForMark, plans) {
             toNext: String(r.overall.toNext || ''),
             // Every grade above, in order, and what each takes (18 Aug).
             ladder: (Array.isArray(r.overall.ladder) ? r.overall.ladder : []).map(x => ({ label: String((x && x.label) || '').trim(), needs: (Array.isArray(x && x.needs) ? x.needs : []).map(String).map(s => s.trim()).filter(Boolean).slice(0, 5) })).filter(x => x.label && x.needs.length).slice(0, 6),
+            // The published standard's working, when one applies (18 Aug): a mark
+            // per learning outcome, the total, the structural rule if broken.
+            loMarks: (Array.isArray(r.overall.loMarks) ? r.overall.loMarks : []).map(x => ({ label: String((x && x.label) || '').trim(), mark: Number(x && x.mark), reason: String((x && x.reason) || '').trim() })).filter(x => x.label && Number.isInteger(x.mark)).slice(0, 8),
+            total: Number.isInteger(r.overall.total) ? r.overall.total : 0,
+            structure: String(r.overall.structure || '').trim(),
+            scheme: scheme ? { id: scheme.id, name: scheme.name, labels: scheme.labels } : null,
         },
         perCriterion: per,
         weakestCriterionId: weakest,
