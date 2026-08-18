@@ -1645,9 +1645,13 @@ router.post('/writer/chat', requirePerson, express.json({ limit: '1mb' }), write
                 {
                     const called = new Set((Array.isArray(q.toolCalls) ? q.toolCalls : []).map(c => c && c.name));
                     const claims = [
-                        [/\b(stuck|sticky note|sticky)\b/i, 'stick_note', 'that sticky note did not actually get placed'], 
-                        [/\b(highlighted|highlights? (are|is) on|painted)\b/i, 'highlight_passage', 'those highlights did not actually get placed'], 
-                        [/\b(tabbed|tabs? (are|is) on)\b/i, 'tab_paragraph', 'those tabs did not actually get placed'],
+                        // A CLAIM of having done it — never a mention. "sticky notes are
+                        // whiteboard-only" / "want me to highlight it?" used to trip this
+                        // and he was told off for describing when he was being honest
+                        // (Sarah's screenshot, 18 Aug pm).
+                        [/\b(I(?:'ve| have)?(?: just)? stuck|stuck (?:a|the|one|it|that|another)|sticky(?: note)?s? (?:is|are) (?:on|up|placed|there|done|stuck)|(?:placed|added|put up|dropped) (?:a|the|another|two|three) stick(?:y|ies))\b/i, 'stick_note', 'that sticky note did not actually get placed'], 
+                        [/\b(I(?:'ve| have)?(?: just)? (?:highlighted|painted)|highlighted (?:it|that|the|your|them|those|two|three|\d)|highlights? (?:are|is) (?:on|there|placed|done|painted)|(?:placed|added|put) (?:a|the|another|two|three) highlights?)\b/i, 'highlight_passage', 'those highlights did not actually get placed'], 
+                        [/\b(I(?:'ve| have)?(?: just)? tabbed|tabbed (?:it|that|the|your|them|those|P\d|paragraph)|tabs? (?:are|is) (?:on|there|placed|done|in))\b/i, 'tab_paragraph', 'those tabs did not actually get placed'],
                     ];
                     for (const [rx, tool, msg] of claims) if (rx.test(reply) && !called.has(tool)) { reply += String.fromCharCode(10) + String.fromCharCode(10) + '(' + msg + ' — I described it instead of doing it. Ask me again and I will do it properly.)'; break; }
                 }

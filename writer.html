@@ -375,7 +375,7 @@
     .qpanel:hover .panel-grip { opacity: 1; }
     /* Minimised: just the header, as a pill; click it to restore. */
     .qpanel.min { height: auto !important; min-height: 0; width: auto !important; min-width: 0; max-width: 260px; border-radius: 20px; }
-    .qpanel.min .panel-body, .qpanel.min .panel-grip, .qpanel.min .panel-foot { display: none; }
+    .qpanel.min .panel-body, .qpanel.min .panel-grip, .qpanel.min .panel-foot, .qpanel.min .wb-stickies, .qpanel.min .wb-work { display: none; }   /* stickies + her work area live outside .panel-body — a minimised board is its head only (Sarah, 18 Aug: 'the whiteboard won't close when there are sticky notes on it') */
     .qpanel.min .panel-head { padding: 8px 14px; cursor: pointer; }
     .qpanel.min .panel-title { color: var(--accent); }
     /* The whiteboard's title reads as a heading, no glyph (Sarah, 17 Aug: "this needs to be bigger and loose the icon"). */
@@ -3204,7 +3204,7 @@
       coachMsg.classList.toggle('thinking', !!thinking);
       if (thinking) coachMsg.textContent = msg || ''; else coachMsg.innerHTML = msg ? decorateParaRefs(qMd(msg)) : '';
       coachMsg.classList.toggle('ask', !thinking && !!msg && !!(state.brief));
-      coachSection.textContent = section || '';
+      coachSection.textContent = (msg || thinking) ? (section || '') : '';   // no lone label over an empty block (the small 'Q' above the box, 18 Aug)
       if (role) { lastRoleText = role; coachRole.innerHTML = '<span class="q-role-l">This part</span>' + escHtml(role); }
       else coachRole.innerHTML = '';
       // SAY AND SHOW (Sarah, 17 Aug: "he needs to be a chat and have all the
@@ -6782,6 +6782,24 @@
         return;
       }
       if (state.probeInFlight) return;
+      // ONE VOICE (18 Aug, third night). The pause and Continue went to Q on
+      // the second night; the other ways in — Back to the questions after a
+      // mark, Next question →, a part on the strip with no plan, Try again,
+      // an answer typed with no live step — still reached the old probe (the
+      // Claude robot), whose ack + hint then sat in the thread as if Q had
+      // said it (Sarah, on refresh: "I assume that's still from the other Q").
+      // Now they are all a turn with Q; he has the brief, the ladder and the
+      // page in his context. The probe code below is unreachable from here.
+      {
+        state.probeInFlight = true;
+        try {
+          const fc = opts.focusCriterionId ? ((state.brief && state.brief.criteria) || []).find(c => c.id === opts.focusCriterionId) : null;
+          const lead = opts.ack ? String(opts.ack).trim() + ' ' : '';
+          const prompt = '[page] ' + (fc ? 'I want to work on ' + fc.id + (fc.text ? ' — ' + String(fc.text).replace(/\s+/g, ' ').trim() : '') + '. Where do I start?' : trigger === 'stuck' ? 'I\'m stuck. Ask me something smaller toward the same point.' : lead + 'What should I do next?') + ' One or two lines.';
+          await chatWithQ(prompt, { silent: true });
+        } finally { state.probeInFlight = false; }
+        return;
+      }
       state.probeInFlight = true;
       if (trigger === 'pause') state.lastProbeAt = Date.now();   // only pause-probes start the floor — the opener never blocks the first written answer
       const docText = docPlainText();
@@ -9879,7 +9897,11 @@
         // out (it lives on the boards now) and bare "Welcome back." — do not
         // come back into the thread (Sarah, 17 Aug).
         const oldAsks = new Set(); for (const pl of Object.values(t.plans || {})) for (const st of ((pl && pl.steps) || [])) oldAsks.add(String(st.prompt || '').trim());
-        state.chatLog = Array.isArray(t.chatLog) ? t.chatLog.filter(m => m && (m.role === 'q' || m.role === 'me') && m.text).filter(m => { if (m.role !== 'q') return true; const norm = String(m.text).replace(/^Welcome back\.\s*/, '').trim(); return norm && !oldAsks.has(norm); }).slice(-40) : [];
+        // A `q` line carrying a `hint`/`section` key was said by the CARD (setCoach —
+        // the old probe's ack + hint, a step ask, a mark line), not by Q in the chat
+        // (those come through pushSaid with `highlight`). They do not come back
+        // (Sarah, 18 Aug, on refresh: "I assume that's still from the other Q" — it was).
+        state.chatLog = Array.isArray(t.chatLog) ? t.chatLog.filter(m => m && (m.role === 'q' || m.role === 'me') && m.text).filter(m => { if (m.role !== 'q') return true; if ('hint' in m || 'section' in m) return false; const norm = String(m.text).replace(/^Welcome back\.\s*/, '').trim(); return norm && !oldAsks.has(norm); }).slice(-40) : [];
         state.docSnapshot = t.probeSnapshot && docPlainText().endsWith(t.probeSnapshot) ? docPlainText() : docPlainText();
         boardFromSteps();
         renderBoard();
