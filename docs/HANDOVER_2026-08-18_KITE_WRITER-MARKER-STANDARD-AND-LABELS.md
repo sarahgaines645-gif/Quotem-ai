@@ -1,0 +1,66 @@
+# HANDOVER — 18 Aug 2026 (evening) — KITE — the writer: the marker marks to CIPD's standard; labels anywhere; the coach on any brain; the log that prices it
+
+*Read `CLAUDE.md` (the operating contract) first. Then `docs/HANDOVER_2026-08-18_WRITER-Q-IS-THE-COACH.md` §0 ("how to be me") — it still holds, every line. Then this. Every claim below is in a commit (`87950fe`…`23e03d4`, all pushed and live) or in Sarah's words.*
+
+---
+
+## 0. THE ONE OPEN DEFECT — start here
+
+**Sarah, last thing: "he marked, he just didn't put it on the css."** The mark job on live returned (Q said the grade in the chat / the walk moved) but the **marking panel showed only the reading** (words · to cut · weak lines · spelling · Q would cut) — no question cards, no "If you handed it in now", no ladder, no LO marks.
+
+I have NOT diagnosed it (context ran out). What I know:
+- Panel render: `renderMarkPanel()` (writer.html ~8583) shows the mark only if `state.lastMark && state.lastMark.overall`; `bandListHtml(m)` builds the cards + `loMarksHtml` + `ladderBlock`. After the job lands, `doTheMark()` sets `state.lastMark = job.result` then `setTimeout(openMarkPanel, 0)`.
+- So either `state.lastMark.overall` was missing (the mark came back through the **fallback `callQ`** — DeepSeek with the schema in the prompt — with a different shape; `normaliseMark` is tolerant but check `overall`), or the panel rendered before the mark and did not re-render, or `bandListHtml` threw inside (a `try` swallows?). **First move:** on live, `GET /writer/tutor` (signed in) → look at `tutor.lastMark` — is `overall` there, does it have `loMarks`/`ladder`/`scheme`? Then read the live log (`railway logs <deployment> -n 3000` — the CLI is linked; the app logs `[q-claude] … → 200 in Ns`, `[writer/mark] done|failed`, `[q-claude] falling back: …`, and `[writer/mark] cipd-l7: model said "X", the table says "Y"`).
+- Also possible: my deploys. **A push restarts live and kills any mark in flight** (jobs live in memory). I pushed three times while she was marking earlier tonight; her first "nothing new happened" was that. RULE from now: **do not push while she is marking** — ask, or wait for "landed".
+- Headless harness for the panel exists in the pattern below (`mark-test.js`): canned `/writer/proofread`, `/writer/mark`, `/writer/job/mark` → the panel rendered LO row, ladder, evidence, structure line. So the RENDER path works with a well-formed result — the suspect is the result's shape on live.
+
+## 1. WHAT SHIPPED TONIGHT (all live, `23e03d4`)
+
+**The marker (her north star tonight — "I'm not sure I'm trusting its method"):**
+- `plugins/mark-schemes.js` (NEW, one job): the CIPD Level 7 standard **verbatim** — the six-criteria generic grade descriptor grid (Refer 1 / Pass 2 / Merit 3 / Distinction 4), a mark 1–4 per Learning Outcome, unit result 0–7 Refer · 8–9 Pass · 10–13 Merit · 14–16 Distinction, one LO at 1 = Refer, AC-mapped headings or it cannot be moderated, "not all descriptors present in every LO — assessor discretion". Sources stated in the file: cipd.org spec (verified) + Learner Assessment Briefs (7CO01 third-party hosted, then **verified word-for-word against the CIPD-issued 7HR03 brief in her Downloads**). `detect()`: a `7HR/7CO/7OS/7LD\d\d` code anywhere in brief/task text/criterion ids = CIPD; or "CIPD" + Level 7; or the grade-scheme setting "CIPD Level 7". (First version used `\bCIPD\b` and missed `CIPD_7HR02_22_01` — fixed `ee9873a`.)
+- `markLikeMarker` (q-writer.js): the standard block goes into the system prompt when a scheme applies; MARK_SCHEMA `overall` gained `ladder` (every grade above, what each takes), `loMarks [{label, mark, reason}]`, `total`, `structure`; **code is truth for the arithmetic** — unit result recomputed from LO marks by the table, model's label overridden (logged), ladder trimmed to what is above. `normaliseMark(r, brief, essay, plans, scheme)` keeps them + `overall.scheme`. Mark call timeout **300s** (was the generic 120s — "The marking timed out after 120s"); `claudeJSON/accurateJSON/callQ` take `timeoutMs`; page waits 7 min for the job.
+- Panel: `loMarksHtml` ("LO1 3 · LO2 2 · … — 10 of 16 · CIPD Level 7" + each LO's reason), `ladderBlock` (you are here → each grade up), `q-band-struct` (headings warning), **"Marked on: '…'"** (the evidence phrase) under every question card. Q's chat line after a mark says the ladder.
+- Flow: an essay already on the page when the brief lands (120+ words), or 120+ words pasted after the brief → **assessed automatically** (`markAndFix({ straight: true })`), no button ("not everyone's starting from Q1"). Mark & fix no longer waits for the per-part word boards — `ensurePlans(null)` runs in the background ("what's this for?" — the wait card is gone).
+- Settings: grade scheme option "CIPD Level 7".
+
+**The page (Q's own bug report + her asks):**
+- `docTextMap` (the search behind every highlight/cut/tab/jump/dot) put a space after EVERY text node → any passage crossing an `<a>` (every pasted reference), a Word `<span>`, a `<b>` was unfindable ("his highlighting is all off", "he tried to cut the old references"). Now: space only at block ends/`<br>`, furniture (`.q-ptab`, `[data-q-furniture]`) skipped, `docChar` folds curly quotes/dashes/nbsp/soft hyphens on both sides (`docNorm`).
+- Tabs: `tab_paragraph` takes `text` (words on a line) as well as `paragraph`; a text tab **stands on its line, colour on top** (`.q-ptab.x`); margin tabs keep the colour on the side ("if it's inside the colour goes on the top not the side"). One live tab per place — the same call again moves/recolours. **Label this**: select words → button → label + colour → her own tab (`by:'me'`). Press a tab → editor (label, six colours, side for margin tabs, Take it off). Press a sticky → editor (words, seven colours, send to page, bin). `qNotes`/`qTabs` are TUTOR_KEYS now — survive refresh. A tab whose paragraph/words are not on the page is SAID on the teaching board once, not swallowed.
+- Q sees his furniture: `pageFurniture()` → `/writer/chat` `furniture` → `writerCoachContext` block "ALREADY PLACED".
+- Chat: `colourChat()` — a bullet/line starting 🟢🟡🔴ℹ️💡 → the whiteboard's coloured dot; prompt tells him he may format in the chat. Coach input is a growing textarea (Enter sends, Shift+Enter newline).
+- One voice, finished: every way into the old probe (`askNextQuestion` — Next question, Back to the questions, strip click with no plan, Try again) is a `[page]` turn with Q. On load, `chatLog` entries carrying `hint`/`section` (setCoach-origin robot lines) are dropped. No lone "Q" label over an empty block. Whiteboard minimises with stickies (`.qpanel.min .wb-stickies, .wb-work { display:none }`). Honesty guard regexes are claim-shaped ("sticky notes are whiteboard-only" no longer trips it).
+- Brief board: hover no longer reflows (id in a reserved grid column). Brief job sets `scenarioChecked` so a brief with no case study never sits on "pulling the scenario…".
+
+**Q on any brain + the log (her comparison test):**
+- Settings → "Q's brain on this page": **Q / QB2 / Claude** (`settings.coachBrain`; server reads it per turn). `claudeThreadChat` takes `model` + `skill`; the coach on Claude uses `claude-sonnet-4-6` (`QUOTEM_COACH_CLAUDE_MODEL` overrides), skill `writer-coach-claude`, voice = the writer-coach surface prompt + `Q_COACH_CLAUDE_NOTE` (not the APS voice). Not yet run by her.
+- Every `/writer/chat` turn → `[writer/chat] turn brain= model= in= out= £ ms tools=` in the log + a row in `q-tutor-<scope>-coachlog.json`; `GET /writer/coachlog?since=ISO` → rows + totals per brain; the settings panel shows "So far on this assignment: Q £x (n turns) · Claude £y". Cost-log skill for the coach's V4/GLM turns = `writer-coach`. `chat()`/`claudeThreadChat` return `model`.
+
+## 2. THE TEST SET (real essays, real marks) — where things are
+
+- Sarah: "there are test results. I got distinctions in all of them" — the CIPD Level 7 units. Files (personal data inside — READ, never commit, never quote names into the repo):
+  - `Downloads/7HR02 Assignment - QUESTIONS.docx` (4 questions = AC 1.4, 2.3, 3.3, 4.1 — one per LO) + `7HR02 Assignment - ANSWERS.docx` (4,726 words) + `L7_Assignment_-__Submission_ (2).docx` (CIPD submission form, assessor section BLANK).
+  - `Downloads/7HR03_Strategic_reward_management -FV (1).docx` — the CIPD-issued Learner Assessment Brief WITH the answers, the marking grid, the descriptor grid (this is what verified the standard); assessor boxes blank.
+  - `Downloads/june-2026---7co01-…docx`, `7co01---november-2026-…docx`, 7CO01 transcripts (Desktop) — a third unit.
+  - The actual assessor marks were NOT found on disk (searched Downloads, OneDrive, Documents, Desktop). Sarah says all Distinctions. Ask her for the grade sheet/email if it exists; otherwise the test is: the marker must land 14–16 on these for reasons a CIPD assessor would give.
+- Her law files (OneDrive/Documents "Intro law…", "Notes for tort…") are Access to HE Level 3, **ungraded** — no marks, not a test set.
+
+## 3. HOW TO WORK HERE (learned tonight — on top of the previous handover's list)
+
+- **Do not push while she is marking.** Push = Railway restart = any in-flight job dies. Ask "landed?" first.
+- `railway` CLI is linked (project industrious-contentment / Quotem-ai). `railway deployment list`; `railway logs <id> -n 3000` (a bare `-n 6000` errors "Invalid input"). The app logs very little: `[q-claude]`, `[writer/<kind>] done|failed`, `[writer/chat] turn …`, `[writer/chat] Q tools: …`.
+- Heredocs eat backslashes — every time. Write patch scripts with the Write tool as `.py`, run them. Files are CRLF (writer.html, routes.js) or MIXED (q-chat.js): match either ending (the `patch()` helper in the scratchpad tried both). `routes.js` has another chat's uncommitted `/dance` hunk (line ~428) + `assets/study-fx.js`, `cost-tracker.js`, `revise.html`, `server/index.js` — commit routes.js BY HUNK (`stage-routes.py`: filtered `git diff` → `git apply --cached --recount`), never `git add routes.js`.
+- Puppeteer lives in `../Quoteapp/server/node_modules/puppeteer`. Harness pattern: intercept `http://qtest.local/writer` → serve `writer.html`; `GET /writer/tutor` → her real local state (`.local-data/q-memory/q-tutor-sarah.json`, mutate as needed); canned `/writer/chat`, `/writer/proofread`, `/writer/mark`, `/writer/job/mark`; drive `window.__qwriterTest` (`addQTabs, addQNotes, addStickies, markAndFix, findInDoc, docPlainText, state(), showPanel, revealPanel …`); check DOM + `CSS.highlights`; screenshot; LOOK at it. Scratchpad gets swept — recreate.
+- Local: `node scripts/local.js` → :8090 (her account exists locally; log to a scratchpad file; restart = kill the :8090 pid via `Get-NetTCPConnection`).
+- The Plugin/vault rules in CLAUDE.md are Quoteapp's; quotem-ai plugins are edited directly (as every chat before did) — but `mark-schemes.js` is deliberately one-job and data-only: add a scheme = add an entry.
+
+## 4. OPEN, IN ORDER
+
+1. **The mark result not on the panel** (§0). Diagnose from `tutor.lastMark` + the live log; fix; verify with `mark-test.js`; then she re-marks the 7HR02 essay and we compare LO marks to "all Distinctions".
+2. Q on the **Claude brain** run + the coach log comparison (she wanted: same assignment with Q, then with Claude, price both). Not started.
+3. Ticked items land as plain lines (bullets stripped) — by design; ask if she wants bullets.
+4. Q's feature list from his report, not done: per-line tabs are done; still open — link tabs to notes/references, stickies on the page (Q says whiteboard-only; the → sends one), bigger whiteboard default, streaming replies.
+5. Property/other Quoteapp files modified in the working tree are NOT this chat's — leave them.
+
+## 5. SARAH, TONIGHT
+
+She ran a real CIPD essay through the writer while I shipped: every message a defect or a spec, one line, often a screenshot — "the tabs aren't going where he thinks", "his highlighting is all off", "what's this for?", "it should assess it as soon as it starts, not everyone's starting from Q1", "should we send off an agent to research how a paper should be marked?" (she did — a cheaper agent, verbatim CIPD strings, honest about what it could not verify — and it was right to). She wants the marker to be trustworthy the way a marker is: reasons, in the standard's own words, checkable against a real mark. Say what is wrong, fix it at the root, show a picture, one question when it is hers. Never tell her to stop.
