@@ -141,7 +141,7 @@ function withHouseStyle(systemPrompt) {
     return sys.startsWith(UK_LINE) ? sys : UK_LINE + '\n\n' + sys;
 }
 
-async function callQ(systemPrompt, userPrompt, { maxTokens = 4096, schema = null } = {}) {
+async function callQ(systemPrompt, userPrompt, { maxTokens = 4096, schema = null, timeoutMs } = {}) {
     systemPrompt = withHouseStyle(systemPrompt);
     // callQ is the fallback for every schema'd call above. Without the schema
     // it answered in prose, JSON.parse threw, and a Claude 429 became a 502.
@@ -167,7 +167,7 @@ async function callQ(systemPrompt, userPrompt, { maxTokens = 4096, schema = null
                 { role: 'user', content: userPrompt },
             ],
         }),
-    }, { label: 'writer' });
+    }, { label: 'writer', ...(timeoutMs ? { timeoutMs } : {}) });
     if (!response.ok) {
         const errText = await response.text();
         logUsage({ skill: 'writer', provider: 'together', model: Q_CONFIG.model, started, success: false, error: `HTTP ${response.status}` });
@@ -865,7 +865,11 @@ ${plans ? Object.values(plans).map(p => p && p.criterionId ? '[' + p.criterionId
     // So: real headroom, and a critique capped at ten sentences (she works
     // through them one at a time regardless — a longer list is unreadable AND
     // the thing that overflows).
-    const r = await callAccurate(system, user, { maxTokens: 20000, schema: MARK_SCHEMA, effort: 'medium' });
+    // The mark is a background job the page polls — it may take longer than the
+    // 120s cap every small call has. A whole essay against every criterion, with
+    // the taught gaps and the ladder, is one long answer (Sarah, 18 Aug, live:
+    // "The marking timed out after 120s" on a real assignment). Five minutes.
+    const r = await callAccurate(system, user, { maxTokens: 20000, schema: MARK_SCHEMA, effort: 'medium', timeoutMs: 300_000 });
     return normaliseMark(r, brief, essay, plans);
 }
 

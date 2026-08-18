@@ -8492,7 +8492,7 @@
           const cs = (state.brief && state.brief.criteria) || []; const missingBoards = cs.filter(c => !planHasWords(c.id)).length;
           await ensurePlans((line) => setCoach({ msg: line, hint: missingBoards ? 'The marker uses each part\'s word board — about a minute a part. Skip and it marks with what it has.' : '', section: 'MARK & FIX', thinking: true, inputVisible: false, step: false, actions: missingBoards ? [{ label: 'Skip the boards — mark it now', onClick: () => skip() }] : [] }), { until }); }
         await api('/writer/mark', { docText: text, gradeScheme: state.gradeScheme }, { timeoutMs: 40000 });
-        const job = await waitForJob('mark', { onTick: (secs) => setCoach({ msg: 'Marking it like the marker… ' + secs + 's', section: 'MARK & FIX', thinking: true, inputVisible: false, step: false }) });
+        const job = await waitForJob('mark', { maxMs: 420000, onTick: (secs) => setCoach({ msg: 'Marking it like the marker… ' + secs + 's', section: 'MARK & FIX', thinking: true, inputVisible: false, step: false }) });   // the mark may take minutes on a long essay (server cap 5 min + fallback)
         const m = job.result;
         state.lastMark = m;
         setTimeout(() => { try { openMarkPanel(); } catch (_) {} }, 0);   // the mark lands → the panel opens and stays

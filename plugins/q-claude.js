@@ -31,7 +31,7 @@ function hasClaude() {
 // window (see docs/HANDOVER_2026-05-17 — slow writer calls 502 at the edge).
 // Small structured calls should pass effort:'medium' or use SONNET.
 // `skill` names the caller in the cost log (writer / revision / …).
-async function claudeJSON(systemPrompt, userPrompt, { maxTokens = 4096, model = MODEL, effort = null, schema = null, skill = 'claude' } = {}) {
+async function claudeJSON(systemPrompt, userPrompt, { maxTokens = 4096, model = MODEL, effort = null, schema = null, skill = 'claude', timeoutMs = 120_000 } = {}) {
     const key = process.env.ANTHROPIC_API_KEY;
     if (!key) throw new Error('ANTHROPIC_API_KEY not set');
 
@@ -62,7 +62,7 @@ async function claudeJSON(systemPrompt, userPrompt, { maxTokens = 4096, model = 
             system: [{ type: 'text', text: systemPrompt, cache_control: { type: 'ephemeral' } }],
             messages: [{ role: 'user', content: userPrompt }],
         }),
-    }, { label: skill, timeoutMs: 120_000 });
+    }, { label: skill, timeoutMs });   // 120s by default; a background JOB (the mark) passes more — a whole essay marked against every criterion is one long answer (Sarah, 18 Aug: 'timed out after 120s')
     console.log(`[q-claude] ${model}${effort ? ' effort=' + effort : ''} → ${res.status} in ${((Date.now() - started) / 1000).toFixed(1)}s`);
     if (!res.ok) {
         const errText = await res.text();
@@ -89,10 +89,10 @@ async function claudeJSON(systemPrompt, userPrompt, { maxTokens = 4096, model = 
 }
 
 // Claude first; if anything goes wrong and a fallback was given, use it.
-async function accurateJSON(systemPrompt, userPrompt, { maxTokens = 4096, model = MODEL, effort = null, schema = null, fallback = null, skill = 'claude' } = {}) {
+async function accurateJSON(systemPrompt, userPrompt, { maxTokens = 4096, model = MODEL, effort = null, schema = null, fallback = null, skill = 'claude', timeoutMs } = {}) {
     if (hasClaude()) {
         try {
-            return await claudeJSON(systemPrompt, userPrompt, { maxTokens, model, effort, schema, skill });
+            return await claudeJSON(systemPrompt, userPrompt, { maxTokens, model, effort, schema, skill, ...(timeoutMs ? { timeoutMs } : {}) });
         } catch (e) {
             console.warn('[q-claude] falling back: ' + e.message);
             if (!fallback) throw e;
@@ -103,7 +103,7 @@ async function accurateJSON(systemPrompt, userPrompt, { maxTokens = 4096, model 
             // The schema goes with it: without it the fallback answers in
             // prose, JSON.parse throws, and every Claude 429/5xx became a 502.
             try {
-                return await fallback(systemPrompt, userPrompt, { maxTokens, schema });
+                return await fallback(systemPrompt, userPrompt, { maxTokens, schema, ...(timeoutMs ? { timeoutMs } : {}) });
             } catch (e2) {
                 e2.primaryCause = e.message;
                 throw e2;
@@ -112,7 +112,7 @@ async function accurateJSON(systemPrompt, userPrompt, { maxTokens = 4096, model 
     } else if (!fallback) {
         throw new Error('ANTHROPIC_API_KEY not set and no fallback given');
     }
-    return await fallback(systemPrompt, userPrompt, { maxTokens, schema });
+    return await fallback(systemPrompt, userPrompt, { maxTokens, schema, ...(timeoutMs ? { timeoutMs } : {}) });
 }
 
 module.exports = { hasClaude, claudeJSON, accurateJSON, MODEL, SONNET };
