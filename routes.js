@@ -49,7 +49,7 @@ const { requirePerson, tryAttachPerson, setSessionCookie, clearSessionCookie } =
 const { listPeople, addPerson, signupPerson, isApproved, approvePerson, isAdmin, getPerson, getPersonByEmail, removePerson, verifyLogin, changePassword, updateName, rotatePassword, createResetToken, consumeResetToken, createVerificationToken, consumeVerificationToken, isEmailVerified } = require('./people');
 const { sendMail, isConfigured: mailerConfigured } = require('./mailer');
 const { resolveToken: resolveGeneratedDoc, resolveTokenAcrossUsers } = require('./plugins/doc-creator');
-const { summarise: summariseCosts, getLogPath: costLogPath, logUsage } = require('./cost-tracker');
+const { summarise: summariseCosts, getLogPath: costLogPath, logUsage, computeCost } = require('./cost-tracker');
 const { timedFetch } = require('./plugins/timed-fetch');
 const qPush = require('./plugins/q-push');
 
@@ -1615,11 +1615,26 @@ router.post('/writer/chat', requirePerson, express.json({ limit: '1mb' }), write
             // Which brain: 'q' = the general-chat Q (V4 Pro, default); 'qb2' = the
             // model QB2 talks with in Quoteapp (GLM-5.2 — q-chat's thread model).
             // Sarah, 17 Aug: "QB2 on the case… may be the best one for this" / "or QB2".
-            const brain = String(b.brain || (t.settings && t.settings.coachBrain) || 'q');   // default = the general-chat model (V4 Pro): GLM kept talking instead of calling tools (Sarah, 18 Aug, tests #2 and #5). 'qb2' = GLM-5.2.
+            const brain = String(b.brain || (t.settings && t.settings.coachBrain) || 'q');   // default = the general-chat model (V4 Pro): GLM kept talking instead of calling tools (Sarah, 18 Aug, tests #2 and #5). 'qb2' = GLM-5.2. 'claude' = Q's persona + memory + tools on a Claude brain (18 Aug pm, her comparison).
             const qOpts = { surface: 'writer-coach', person: req.person, useTools: true };   // HIS tools too — emails, the lot (Sarah, 17 Aug: 'he has access to my emails. it makes sense')
             if (brain === 'qb2' && Q_CONFIG_THREAD_MODEL) qOpts.model = Q_CONFIG_THREAD_MODEL;
+            if (brain === 'claude') qOpts.brain = 'claude';
+            const turnStart = Date.now();
             const q = await qChat(messages, qOpts);
-            try { const tc = (Array.isArray(q && q.toolCalls) ? q.toolCalls : []).map(c => c.name + (c.result && c.result.error ? '(ERR)' : '')); if (tc.length) console.log('[writer/chat] Q tools: ' + tc.join(', ')); } catch (_) {}
+            const toolNames = (Array.isArray(q && q.toolCalls) ? q.toolCalls : []).map(c => c.name + (c.result && c.result.error ? '(ERR)' : ''));
+            try { if (toolNames.length) console.log('[writer/chat] Q tools: ' + toolNames.join(', ')); } catch (_) {}
+            // THE LOG (Sarah, 18 Aug: "if we make a log … we can check the price at
+            // the same time"): every coach turn — brain, model, tokens, £, tools,
+            // time — one line in the server log and one row in her coach log
+            // (GET /writer/coachlog). Priced from cost-tracker's verified table.
+            let turnCost = null;
+            try {
+                const model = String((q && q.model) || '');
+                const c = model ? computeCost({ model, tokensIn: q.tokensIn || 0, tokensOut: q.tokensOut || 0 }) : { gbp: 0, usd: 0, priced: false };
+                turnCost = { ts: new Date().toISOString(), brain, model, tokensIn: q.tokensIn || 0, tokensOut: q.tokensOut || 0, gbp: +(c.gbp || 0).toFixed(6), priced: !!c.priced, tools: toolNames, ms: Date.now() - turnStart, ok: !!(q && q.reply && !q.error), chars: String((q && q.reply) || '').length };
+                console.log('[writer/chat] turn brain=' + brain + ' model=' + (model || '?') + ' in=' + turnCost.tokensIn + ' out=' + turnCost.tokensOut + ' £' + turnCost.gbp.toFixed(4) + (c.priced ? '' : ' (unpriced)') + ' ' + turnCost.ms + 'ms' + (toolNames.length ? ' tools=' + toolNames.join(',') : ''));
+                appendCoachLog(personId, turnCost);
+            } catch (e) { console.warn('[writer/chat] coach log: ' + e.message); }
             if (q && q.reply && !q.error) {
                 let display = null, reply = String(q.reply).replace(/^\s*(Response|Reply|Answer)\s*:?\s*(?=[A-Z\[\*#-])/, '');   // a stray 'Response' label some models prefix
                 const m = reply.match(/```display[ \t]*\r?\n([\s\S]*?)```/);
@@ -1668,7 +1683,7 @@ router.post('/writer/chat', requirePerson, express.json({ limit: '1mb' }), write
                 const paints = (Array.isArray(q.toolCalls) ? q.toolCalls : []).filter(c => c && (c.name === 'highlight_passage' || (c.tool === 'highlight_passage')) && c.result && c.result.painted).map(c => ({ text: c.result.text, note: c.result.note, kind: c.result.kind, colour: c.result.colour || '' }));
                 const tabs = (Array.isArray(q.toolCalls) ? q.toolCalls : []).filter(c => c && c.name === 'tab_paragraph' && c.result && c.result.tabbed).map(c => ({ paragraph: c.result.paragraph, label: c.result.label, colour: c.result.colour, side: c.result.side || 'right' }));
                 const stickies = (Array.isArray(q.toolCalls) ? q.toolCalls : []).filter(c => c && c.name === 'stick_note' && c.result && c.result.stuck).map(c => ({ text: c.result.text, colour: c.result.colour }));
-                out = { reply, display, options, paints, tabs, stickies, board: null, next: '', highlights: [], answersStep: false, via: 'q' };
+                out = { reply, display, options, paints, tabs, stickies, board: null, next: '', highlights: [], answersStep: false, via: 'q', brain, cost: turnCost };
                 if (qpid) { try { appendMessage(qpid, 'user', text, QSURF); appendMessage(qpid, 'assistant', String(q.reply), QSURF); } catch (_) {} }   // a '[page] …' turn is the page speaking for her (a pause / Continue) — kept, so he remembers what she wrote
             }
         } catch (e) { console.warn('[writer/chat] Q unavailable, falling back: ' + e.message); }
@@ -1684,6 +1699,24 @@ router.post('/writer/chat', requirePerson, express.json({ limit: '1mb' }), write
     } catch (e) {
         writerFail(res, e, '[writer/chat]', 'chat');
     }
+});
+
+// The coach log: one row per /writer/chat turn (brain, model, tokens, £, tools).
+// Lives beside the tutor notebook; capped. GET /writer/coachlog?since=ISO
+// returns the rows and the totals per brain — how Q vs Claude compare on the
+// same assignment (Sarah, 18 Aug).
+function coachLogPath(personId) { return String(getTutorPath(personId)).replace(/\.json$/i, '') + '-coachlog.json'; }
+function readCoachLog(personId) { try { const p = coachLogPath(personId); return fs.existsSync(p) ? (JSON.parse(fs.readFileSync(p, 'utf8')) || []) : []; } catch (_) { return []; } }
+function appendCoachLog(personId, row) { const rows = readCoachLog(personId); rows.push(row); fs.writeFileSync(coachLogPath(personId), JSON.stringify(rows.slice(-2000))); }
+router.get('/writer/coachlog', requirePerson, (req, res) => {
+    try {
+        const since = req.query.since ? String(req.query.since) : '';
+        const rows = readCoachLog(writerScope(req)).filter(r => !since || r.ts >= since);
+        const byBrain = {};
+        for (const r of rows) { const k = r.brain || 'q'; const g = byBrain[k] = byBrain[k] || { turns: 0, tokensIn: 0, tokensOut: 0, gbp: 0, unpriced: 0, models: {} }; g.turns++; g.tokensIn += r.tokensIn || 0; g.tokensOut += r.tokensOut || 0; g.gbp += r.gbp || 0; if (r.priced === false) g.unpriced++; g.models[r.model || '?'] = (g.models[r.model || '?'] || 0) + 1; }
+        for (const g of Object.values(byBrain)) g.gbp = +g.gbp.toFixed(4);
+        res.json({ ok: true, since: since || null, turns: rows.length, byBrain, rows });
+    } catch (e) { res.status(500).json({ ok: false, error: 'Could not read the coach log: ' + String(e.message || '').slice(0, 160) }); }
 });
 
 // POST /writer/probe — ONE probing question toward the ideal answer, from the

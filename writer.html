@@ -2228,6 +2228,17 @@
         <div style="font-size:11px; color:var(--text-faint); line-height:1.4; margin-top:5px" id="mode-note">Q comes back when you stop.</div>
       </div>
     </div>
+    <div class="setup-row" style="align-items:center">
+      <div class="setup-field" style="flex:2">
+        <div class="setup-label">Q's brain on this page</div>
+        <div class="mode-seg" id="brain-seg" role="radiogroup" aria-label="Which brain the coach runs on">
+          <button type="button" data-brain="q" title="The general-chat model">Q</button>
+          <button type="button" data-brain="qb2" title="The model QB2 talks with">QB2</button>
+          <button type="button" data-brain="claude" title="Q's persona, memory and tools on a Claude brain">Claude</button>
+        </div>
+        <div style="font-size:11px; color:var(--text-faint); line-height:1.4; margin-top:5px" id="brain-cost"></div>
+      </div>
+    </div>
     <div style="display:flex; justify-content:flex-end; gap:10px; align-items:center">
       <span id="setup-voice-status" style="font-size:11px; color:var(--text-faint);"></span>
       <button type="button" class="setup-start" id="setup-start">Start writing →</button>
@@ -2601,7 +2612,7 @@
       docSnapshot: '',        // doc text at time Q last asked a question
       qWordsWritten: 0,       // words Q has inserted into the doc this session
       gradeScheme: 'as the brief says',   // Sarah, 17 Aug: "he's still marking in GCSE" — the code default was GCSE 9-1; the brief decides now
-      settings: { pauseMs: 7000, coachMode: 'pause' },   // coachMode: 'pause' | 'button' (Sarah, 16 Aug: "a toggle… when I stop to think he starts to ask the question in a different way and I'm still thinking")
+      settings: { pauseMs: 7000, coachMode: 'pause', coachBrain: 'q' },   // coachMode: 'pause' | 'button' (Sarah, 16 Aug: "a toggle… when I stop to think he starts to ask the question in a different way and I'm still thinking"); coachBrain: 'q' | 'qb2' | 'claude' (18 Aug — the same Q, a different brain, for her comparison)
       brickCounts: {},        // { criterionId: { voiced, total } } — counts only, never the essay
       essayReady: false,
       sources: [],            // [{name, chars}] supporting documents (text lives server-side)
@@ -2743,6 +2754,30 @@
       persist({ settings: state.settings });
       if (!coachModeIsButton()) maybeLiveProbe();
     });
+    // WHICH BRAIN (18 Aug): the same Q — persona, memory, tools — on a different
+    // brain, so she can run the same assignment on each and compare. The server
+    // reads settings.coachBrain per turn; the running cost per brain sits under it.
+    const brainSeg = document.getElementById('brain-seg');
+    const brainCost = document.getElementById('brain-cost');
+    const BRAINS = ['q', 'qb2', 'claude'];
+    function applyCoachBrain() {
+      const cur = BRAINS.includes(state.settings.coachBrain) ? state.settings.coachBrain : 'q';
+      brainSeg.querySelectorAll('button').forEach(b => b.classList.toggle('on', b.dataset.brain === cur));
+    }
+    async function refreshBrainCost() {
+      try {
+        const d = await api('/writer/coachlog', undefined, { method: 'GET', timeoutMs: 15000 });
+        const parts = Object.entries(d.byBrain || {}).map(([k, g]) => (k === 'q' ? 'Q' : k === 'qb2' ? 'QB2' : k === 'claude' ? 'Claude' : k) + ' £' + Number(g.gbp || 0).toFixed(2) + ' (' + g.turns + (g.turns === 1 ? ' turn' : ' turns') + (g.unpriced ? ', ' + g.unpriced + ' unpriced' : '') + ')');
+        brainCost.textContent = parts.length ? 'So far on this assignment: ' + parts.join(' · ') : '';
+      } catch (_) { brainCost.textContent = ''; }
+    }
+    brainSeg.addEventListener('click', e => {
+      const b = e.target.closest('button[data-brain]'); if (!b) return;
+      state.settings.coachBrain = BRAINS.includes(b.dataset.brain) ? b.dataset.brain : 'q';
+      applyCoachBrain();
+      persist({ settings: state.settings });
+    });
+    window.__qwriterBrain = { applyCoachBrain, refreshBrainCost };
     // Continue: exactly what a pause would have done, when SHE says so.
     let continueBusy = false;
     // ONE VOICE (Sarah, 18 Aug — Q, correctly: "That message isn't from me… two
@@ -2810,6 +2845,7 @@
 
     setupCog.addEventListener('click', () => {
       setupStrip.classList.toggle('hidden');
+      if (!setupStrip.classList.contains('hidden')) { try { window.__qwriterBrain.refreshBrainCost(); } catch (_) {} }   // the running cost per brain, fresh each time the settings open
     });
 
     // ── Floating panels behave like windows ────────────────────────────────
@@ -9778,6 +9814,8 @@
       if (t && t.settings && t.settings.pauseMs) { state.settings.pauseMs = t.settings.pauseMs; pauseInput.value = String(Math.round(t.settings.pauseMs / 1000)); }
       if (t && t.settings && t.settings.coachMode) state.settings.coachMode = t.settings.coachMode === 'button' ? 'button' : 'pause';
       applyCoachMode();
+      if (t && t.settings && t.settings.coachBrain) state.settings.coachBrain = String(t.settings.coachBrain);
+      applyCoachBrain();
       if (t && t.gradeScheme) { state.gradeScheme = t.gradeScheme; gradeSchemeSelect.value = t.gradeScheme; }
       // A saved "GCSE (9-1)" was the CODE DEFAULT for weeks — every session
       // got it without anyone choosing it. Sarah, 17 Aug, twice: "he's still

@@ -642,6 +642,10 @@ Speak plainly, name real dates and parties, and always end with the next concret
 // governing voice on this surface and those two cross-surface lines don't apply
 // in a thread, so Sarah's APS prompt speaks instead of the chat-restraint
 // smothering it. The fighter words are hers (APS); this just clears the way.
+// The writer coach on a Claude brain: his voice is the writer-coach surface
+// prompt above — this only lifts the two lines that do not apply.
+const Q_COACH_CLAUDE_NOTE = `--- NOTE FOR THIS TURN ---
+Never name any engine, model or provider to the student — you are Q. Ignore any "default reply is 1-3 sentences" limit above: the writer-coach section governs how long you speak. NEVER mention tool names or function names to the student; if a capability is not available, work from what you have and say nothing about the gap.`;
 const Q_THREAD_CLAUDE_VOICE = `--- THIS SURFACE RUNS ON THE APS INSTRUCTIONS ABOVE ---
 The APS section above is your FULL operating voice on a case Thread — on the user's side, driven, "I've handled it" not "I could", thinking several moves ahead. Follow it exactly as written; that is who you are here.
 Two earlier lines were written for other surfaces and do NOT apply in a case thread: ignore "You run on DeepSeek V4 Pro" (never name any engine or provider to the user), and ignore the casual "default reply is 1-3 sentences" limit (a case needs the room APS describes). Use APS's warm, on-their-side, driven register — not the restrained, measured general-chat tone.
@@ -796,9 +800,13 @@ function capToolResult(result) {
 // Together/OpenAI one chat() uses). Reuses Q's existing tools, translated to
 // Anthropic's schema, and runs the same tool loop. Returns the standard chat()
 // result shape, or null to fall back to the Together (V4-Flash) path.
-async function claudeThreadChat({ system, messages, tools, person, maxTokens, startTime, documents, threadId }) {
+async function claudeThreadChat({ system, messages, tools, person, maxTokens, startTime, documents, threadId, model, skill }) {
     const key = process.env.ANTHROPIC_API_KEY;
     if (!key) return null;
+    // Which Claude, and what the cost log calls it. Defaults are what this
+    // function always did (Sonnet 4.6, 'claude-thread'); the writer coach on a
+    // Claude brain passes its own (18 Aug — Sarah's Q-vs-Claude comparison).
+    const claudeModel = model || 'claude-sonnet-4-6';
 
     // Q's tools (OpenAI function shape) → Anthropic tool schema.
     const anthropicTools = (tools || [])
@@ -877,7 +885,7 @@ async function claudeThreadChat({ system, messages, tools, person, maxTokens, st
     let tokensIn = 0, tokensOut = 0, reply = '';
 
     // Cost-log label: the Check button (surface 'check-this') vs a case thread.
-    const claudeSkill = 'claude-thread';
+    const claudeSkill = skill || 'claude-thread';
     for (let i = 0; i < MAX_TOOL_ITERATIONS; i++) {
         let res;
         const iterStarted = Date.now();
@@ -890,7 +898,7 @@ async function claudeThreadChat({ system, messages, tools, person, maxTokens, st
                     'content-type': 'application/json',
                 },
                 body: JSON.stringify({
-                    model: 'claude-sonnet-4-6',
+                    model: claudeModel,
                     max_tokens: maxTokens || 4096,
                     // Prompt caching (Claude path only). The persona + APS + thread
                     // system prompt — and the tool defs, which render before system —
@@ -905,18 +913,18 @@ async function claudeThreadChat({ system, messages, tools, person, maxTokens, st
             }, { label: 'case chat', timeoutMs: 120_000 });
         } catch (e) {
             console.warn('[q-chat] Claude network error: ' + e.message);
-            logUsage({ skill: claudeSkill, provider: 'anthropic', model: 'claude-sonnet-4-6', started: iterStarted, user: person?.id, success: false, error: e.message });
+            logUsage({ skill: claudeSkill, provider: 'anthropic', model: claudeModel, started: iterStarted, user: person?.id, success: false, error: e.message });
             return null;
         }
         if (!res.ok) {
             console.warn('[q-chat] Claude HTTP ' + res.status + ': ' + (await res.text()).slice(0, 300));
-            logUsage({ skill: claudeSkill, provider: 'anthropic', model: 'claude-sonnet-4-6', started: iterStarted, user: person?.id, success: false, error: `HTTP ${res.status}` });
+            logUsage({ skill: claudeSkill, provider: 'anthropic', model: claudeModel, started: iterStarted, user: person?.id, success: false, error: `HTTP ${res.status}` });
             return null;
         }
         const data = await res.json();
         // Log EVERY iteration — this loop is where the £11-in-30-minutes bleed
         // came from (20 Jul); cache reads/writes are priced separately.
-        logUsage({ skill: claudeSkill, provider: 'anthropic', model: 'claude-sonnet-4-6', data, started: iterStarted, user: person?.id });
+        logUsage({ skill: claudeSkill, provider: 'anthropic', model: claudeModel, data, started: iterStarted, user: person?.id });
         tokensIn += data.usage?.input_tokens || 0;
         tokensOut += data.usage?.output_tokens || 0;
         // Confirm prompt caching is actually hitting: read should be >0 from the
@@ -966,7 +974,7 @@ async function claudeThreadChat({ system, messages, tools, person, maxTokens, st
                 method: 'POST',
                 headers: { 'x-api-key': key, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
                 body: JSON.stringify({
-                    model: 'claude-sonnet-4-6',
+                    model: claudeModel,
                     max_tokens: maxTokens || 4096,
                     system: [{ type: 'text', text: system, cache_control: { type: 'ephemeral' } }],
                     messages: convo,
@@ -974,7 +982,7 @@ async function claudeThreadChat({ system, messages, tools, person, maxTokens, st
             }, { label: 'case chat', timeoutMs: 120_000 });
             if (finalRes.ok) {
                 const fd = await finalRes.json();
-                logUsage({ skill: claudeSkill, provider: 'anthropic', model: 'claude-sonnet-4-6', data: fd, started: finalStarted, user: person?.id });
+                logUsage({ skill: claudeSkill, provider: 'anthropic', model: claudeModel, data: fd, started: finalStarted, user: person?.id });
                 tokensIn += fd.usage?.input_tokens || 0;
                 tokensOut += fd.usage?.output_tokens || 0;
                 reply = (Array.isArray(fd.content) ? fd.content : [])
@@ -998,6 +1006,7 @@ async function claudeThreadChat({ system, messages, tools, person, maxTokens, st
         tokensIn,
         tokensOut,
         toolCalls,
+        model: claudeModel,
     };
 }
 
@@ -1040,6 +1049,7 @@ async function chat(messages, options = {}) {
     // to think AND answer, or it comes back empty (finish=length) — the same
     // trap the thread comment above describes.
     const isWriterCoach = options.surface === 'writer-coach';
+    const costSkill = isWriterCoach ? 'writer-coach' : 'chat';   // the coach's turns are their own line in the cost log (Sarah, 18 Aug: 'check the price at the same time')
     // Case/thread (advocate) turns: GLM is a reasoning model, so on a BIG case
     // (60k+ token context) it spends its whole output budget THINKING and gets cut
     // off (finish=length) BEFORE writing any reply — returns empty content, the
@@ -1154,23 +1164,34 @@ async function chat(messages, options = {}) {
     // STAYS on Claude — it's a one-shot legal review, no loop/cost concern.
     const claudeForThread = options.surface === 'thread' && process.env.QUOTEM_CLAUDE_THREADS === '1';
     const claudeForCheck  = options.surface === 'check-this' && process.env.QUOTEM_CLAUDE_CHECK !== '0';
-    if ((claudeForThread || claudeForCheck) && process.env.ANTHROPIC_API_KEY) {
+    // The writer COACH on a Claude brain (Sarah, 18 Aug: "we will then switch to
+    // Claude and do the same"): Q's persona, his writer-coach surface prompt,
+    // his tools and his memory (the route owns memory) — only the brain differs.
+    // Chosen per turn by the route (options.brain === 'claude'), never by env.
+    const claudeForCoach = isWriterCoach && options.brain === 'claude';
+    if (claudeForCoach && !process.env.ANTHROPIC_API_KEY) console.warn('[q-chat] writer coach asked for Claude but ANTHROPIC_API_KEY is not set — using the usual brain');
+    if ((claudeForThread || claudeForCheck || claudeForCoach) && process.env.ANTHROPIC_API_KEY) {
         const lastUser = [...messages].reverse().find(m => m && m.role === 'user');
         const msgText = (lastUser && typeof lastUser.content === 'string') ? lastUser.content : '';
+        // The coach keeps HIS voice (the writer-coach surface prompt), not the
+        // APS case voice; the two lines that matter from that block still hold.
+        const claudeCoachModel = process.env.QUOTEM_COACH_CLAUDE_MODEL || 'claude-sonnet-4-6';
         const claudeResult = await claudeThreadChat({
-            system: systemContent + '\n\n---\n\n' + Q_THREAD_CLAUDE_VOICE,
+            system: systemContent + '\n\n---\n\n' + (claudeForCoach ? Q_COACH_CLAUDE_NOTE : Q_THREAD_CLAUDE_VOICE),
             messages: outboundMessages,
-            tools: selectActiveTools(msgText, { docEditor: false, advocate: true, surface: options.surface, firstTurn: options.firstTurn, recentText: recentTriggerText(messages) }),
+            tools: selectActiveTools(msgText, { docEditor: false, advocate: !claudeForCoach, surface: options.surface, firstTurn: options.firstTurn, recentText: recentTriggerText(messages) }),
             person: options.person,
             maxTokens,
             startTime,
             documents: Array.isArray(options.documents) ? options.documents : [],
             threadId: options.threadId,
+            ...(claudeForCoach ? { model: claudeCoachModel, skill: 'writer-coach-claude' } : {}),
         });
         if (claudeResult) {
-            console.log('[q-chat] thread → Claude sonnet-4-6 (APS voice)');
+            console.log(claudeForCoach ? '[q-chat] writer coach → Claude ' + claudeCoachModel : '[q-chat] thread → Claude sonnet-4-6 (APS voice)');
             return claudeResult;
         }
+        if (claudeForCoach) console.warn('[q-chat] writer coach → Claude unavailable, falling back to the usual brain');
         console.warn('[q-chat] thread → Claude unavailable, falling back to V4-Flash');
     }
 
@@ -1462,7 +1483,7 @@ async function chat(messages, options = {}) {
             if (!draftReply) {
                 const durationMs = Date.now() - startTime;
                 logCall({
-                    skill: 'chat',
+                    skill: costSkill,
                     provider: 'together',
                     model,
                     user: options.person?.id || null,
@@ -1502,7 +1523,7 @@ async function chat(messages, options = {}) {
 
         const durationMs = Date.now() - startTime;
         logCall({
-            skill: 'chat',
+            skill: costSkill,
             provider: 'together',
             model,
             user: options.person?.id || null,
@@ -1517,6 +1538,7 @@ async function chat(messages, options = {}) {
             tokensIn: totalTokensIn,
             tokensOut: totalTokensOut,
             toolCalls,
+            model,
             ...(verifierMeta && { verifier: verifierMeta }),
         };
     } catch (err) {
