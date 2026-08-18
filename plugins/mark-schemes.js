@@ -83,9 +83,13 @@ const CIPD_L7 = {
         if (/cipd/i.test(g)) return true;
         const hay = [brief && brief.title, brief && brief.whatItWants, brief && brief.youreProducing, taskText].filter(Boolean).join(' \n ').slice(0, 20000);
         const ids = (brief && Array.isArray(brief.criteria) ? brief.criteria : []).map(c => String(c && c.id || '')).join(' ');
-        const cipd = /\bCIPD\b/i.test(hay);
-        const l7 = /\bLevel\s*7\b|\b7(HR|CO|OS|LD)\d{2}\b|Advanced Diploma/i.test(hay) || /\b7(HR|CO|OS|LD)\d{2}\b/i.test(ids);
-        return cipd && l7;
+        // A CIPD Level 7 unit code (7HR02, 7CO01, 7OS…, 7LD…) is CIPD by definition.
+        // "CIPD" itself is matched anywhere — the assessment IDs read CIPD_7HR02_22_01,
+        // where a word boundary never fires (missed on Sarah's live mark, 18 Aug).
+        const code = /\b7(HR|CO|OS|LD)\d{2}\b/i.test(hay) || /\b7(HR|CO|OS|LD)\d{2}\b/i.test(ids);
+        const cipd = /CIPD/i.test(hay);
+        const l7 = /Level\s*7|Advanced Diploma/i.test(hay);
+        return code || (cipd && l7);
     },
     unitResult: cipdL7UnitResult,
     // The block the marker reads. Verbatim strings; the verification status is
