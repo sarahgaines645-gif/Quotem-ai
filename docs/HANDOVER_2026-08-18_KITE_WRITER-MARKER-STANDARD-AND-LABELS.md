@@ -40,6 +40,8 @@ I have NOT diagnosed it (context ran out). What I know:
 
 ## 2. THE TEST SET (real essays, real marks) — where things are
 
+**THE TEST SET IS ASSEMBLED (Sarah's ask, end of night):** `OneDrive/Desktop/Quotem-private-data/writer-test-set/` — OUTSIDE git, real names inside, never commit. `1-law-intro-to-law-making/` (her Access to HE essay + draft + SAQ sheet + `QUESTIONS….md` + `MARKS AND FEEDBACK - for Claude.md`) and `2-cipd-7hr02/` (questions, essay, submission form, the 7HR03 CIPD brief with the grid, + `MARKS AND FEEDBACK - for Claude.md` — real result Distinction vs the marker's Merit 3·3·2·3 with its reasons, and the comparison to have). Start there.
+
 - Sarah: "there are test results. I got distinctions in all of them" — the CIPD Level 7 units. Files (personal data inside — READ, never commit, never quote names into the repo):
   - `Downloads/7HR02 Assignment - QUESTIONS.docx` (4 questions = AC 1.4, 2.3, 3.3, 4.1 — one per LO) + `7HR02 Assignment - ANSWERS.docx` (4,726 words) + `L7_Assignment_-__Submission_ (2).docx` (CIPD submission form, assessor section BLANK).
   - `Downloads/7HR03_Strategic_reward_management -FV (1).docx` — the CIPD-issued Learner Assessment Brief WITH the answers, the marking grid, the descriptor grid (this is what verified the standard); assessor boxes blank.
