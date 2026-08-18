@@ -1153,7 +1153,13 @@
     .q-add-h { display: flex; align-items: baseline; gap: 7px; font-size: 13px; font-weight: 700; color: var(--text); margin-bottom: 5px; }
     .q-add-n { font-size: 10px; font-weight: 700; color: var(--accent); }
     .q-add-gap { font-size: 12px; line-height: 1.5; color: var(--text-muted); margin-bottom: 5px; overflow-wrap: anywhere; }
-    .q-add-con { font-size: 12.5px; line-height: 1.55; color: var(--text); margin-bottom: 6px; overflow-wrap: anywhere; }
+    /* THE IDEA and DO THIS are two equal things (Sarah, 18 Aug: "these are
+       both important … they need to both stand out separately together"):
+       two sibling cards, the same label, the same size, the same depth. */
+    .q-add-parts { display: grid; grid-template-columns: 1fr; gap: 7px; margin-top: 7px; }
+    .q-add-part { padding: 9px 11px; border-radius: 11px; background: var(--bg); box-shadow: var(--neu-raised-xs); min-width: 0; }
+    .q-add-part .q-add-pl { display: block; font-size: 9px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--accent); margin-bottom: 4px; }
+    .q-add-con { font-size: 12.5px; line-height: 1.55; color: var(--text); overflow-wrap: anywhere; }
     .q-add-do { font-size: 12.5px; line-height: 1.5; color: var(--text); overflow-wrap: anywhere; }
     .q-add-do b { font-weight: 700; }
     .q-add-eg { margin-top: 7px; font-size: 12px; line-height: 1.5; color: var(--text-muted); font-family: 'Lora', Georgia, serif; overflow-wrap: anywhere; }
@@ -8311,9 +8317,10 @@
               <div class="q-add-item">
                 <div class="q-add-h"><span class="q-add-n">${i + 1}</span>${escHtml(a.title)}</div>
                 ${a.gap ? `<div class="q-add-gap">${escHtml(a.gap)}</div>` : ''}
-                ${a.concept ? `<div class="q-add-con">${escHtml(a.concept)}</div>` : ''}
-                ${a.prompt ? `<div class="q-add-do"><b>Do this —</b> ${escHtml(a.prompt)}</div>` : ''}
-                ${a.example ? `<div class="q-add-eg"><span class="q-add-eg-l">the shape of it — write your own version</span>${escHtml(a.example)}</div>` : ''}
+                <div class="q-add-parts">
+                ${a.concept ? `<div class="q-add-part idea"><span class="q-add-pl">The idea</span><div class="q-add-con">${escHtml(a.concept)}</div></div>` : ''}
+                ${a.prompt || a.example ? `<div class="q-add-part do"><span class="q-add-pl">Do this</span>${a.prompt ? `<div class="q-add-do">${escHtml(a.prompt)}</div>` : ''}${a.example ? `<div class="q-add-eg"><span class="q-add-eg-l">the shape of it — write your own version</span>${escHtml(a.example)}</div>` : ''}</div>` : ''}
+                </div>
               </div>`).join('')}</div>` : '';
         const rail = { top: '#28a745', mid: '#e6a817', low: '#e0245e', missing: '#9aa0ad' }[p.band] || '#e0245e';
         return `<div class="mk-block q-qcard" data-mk-qcard="${per.indexOf(p)}" style="--rail:${rail}">`
