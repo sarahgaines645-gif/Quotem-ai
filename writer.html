@@ -7396,12 +7396,22 @@
     // A sticky → the page: at the caret if she has one; else a line of its own
     // at the END of her page (a note is harmless there and Undo is one press)
     // — never a silent nothing (Sarah, 19 Aug: "the sticky notes dont transfer").
+    // A NOTE LANDS AS A NOTE (Sarah, 19 Aug: "make the sticky note go on to the
+    // page like they are supposed to and stay where we put them the post it
+    // notes"). It used to go through sendTextToPage, which inserts AT THE CARET
+    // - so a note sent while the caret sat mid-sentence was spliced into her
+    // writing: "First [Test - can this land on the doc?] line of my essay."
+    // A sticky is a block, like a table or a figure: it goes on its own line
+    // AFTER the block the caret is in, never inside a sentence. No caret at all
+    // - she has been working on the board - and it goes on the end, as before.
     function sendStickyToPage(text) {
       const t = String(text || '').trim(); if (!t) return 'empty';
-      const r = sendTextToPage(t);
-      if (r !== 'ask') return r;
+      const d = document.createElement('div'); d.className = 'q-note-line'; d.textContent = t;
+      const r = sendBlockToPage(d);
+      if (r === 'sent') return 'sent';
       snapshotDoc('before sticky to page');
-      const d = document.createElement('div'); d.textContent = t; docBody.appendChild(d);
+      const end = document.createElement('div'); end.className = 'q-note-line'; end.textContent = t;
+      docBody.appendChild(end);
       wordEl.textContent = countWords() + ' words'; scheduleAutosave();
       try { refreshExpectations(); } catch (_) {}
       return 'end';

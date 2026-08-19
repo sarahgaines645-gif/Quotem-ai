@@ -242,6 +242,12 @@ async function callAccurate(systemPrompt, userPrompt, opts = {}) {
 // through callFast. Same house style, same schema, same shape back.
 async function callFast(systemPrompt, userPrompt, opts = {}) {
     const { effort, ...rest } = opts || {};      // effort is a Claude idea; Q has no use for it
+    // Q is slower per token than Claude, and callQ defaults to a 120s cap set
+    // for small calls. The model essay (14,000 tokens) hit it the first time it
+    // ran on V4 - '[writer/essay] failed after 120.0s' on her local, 19 Aug - so
+    // a big call gets a big window. These are background jobs; nothing waits at
+    // an edge for them.
+    if (!rest.timeoutMs) rest.timeoutMs = (rest.maxTokens || 0) >= 6000 ? 300000 : 120000;
     return callQ(systemPrompt, userPrompt, rest);   // callQ applies withHouseStyle itself - wrapping here would say it twice
 }
 
