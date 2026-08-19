@@ -166,7 +166,9 @@ async function figureParagraph(block) {
         // crisp on paper, then fit the page.
         const density = Math.max(72, Math.min(600, Math.round(72 * 1400 / w)));
         const png = await sharp(Buffer.from(svg, 'utf8'), { density }).png().toBuffer();
-        let width = FIGURE_MAX_W, height = Math.round(FIGURE_MAX_W * h / w);
+        // Fit the text width, but never blow a small figure up — a three-box fan
+        // drawn at 420px stays 420px on paper, not a page-wide poster.
+        let width = Math.min(FIGURE_MAX_W, Math.round(w)), height = Math.round(Math.min(FIGURE_MAX_W, Math.round(w)) * h / w);
         if (height > FIGURE_MAX_H) { width = Math.round(width * (FIGURE_MAX_H / height)); height = FIGURE_MAX_H; }
         return new Paragraph({
             alignment: AlignmentType.CENTER,
