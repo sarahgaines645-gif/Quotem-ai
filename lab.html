@@ -1,0 +1,443 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>The lab</title>
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root { --bg:#0a0c12; --text:#f2f2f6; --muted:rgba(242,242,246,.6); --accent:#ff2d95; --cyan:#00f0ff; }
+    * { box-sizing:border-box; margin:0; padding:0; }
+    html,body { height:100%; background:var(--bg); color:var(--text); font-family:'Space Grotesk',system-ui,sans-serif; overflow:hidden; }
+    #stage { position:fixed; inset:0; }
+    #stage canvas { display:block; width:100%; height:100%; touch-action:none; }
+    header { position:fixed; top:0; left:0; right:0; padding:16px 20px; z-index:10; display:flex;
+             align-items:baseline; gap:14px; pointer-events:none;
+             background:linear-gradient(180deg, rgba(10,12,18,.85), rgba(10,12,18,0)); }
+    header .brand { font-size:22px; font-weight:700; color:#fff; text-shadow:0 0 6px #fff,0 0 18px var(--cyan),0 0 40px var(--cyan); }
+    header .sub { font-size:11px; font-weight:700; letter-spacing:.18em; text-transform:uppercase; color:var(--cyan); }
+    .bar { position:fixed; left:50%; bottom:16px; transform:translateX(-50%); z-index:10; display:flex; gap:8px;
+           flex-wrap:wrap; justify-content:center; max-width:min(860px,calc(100vw - 20px));
+           background:rgba(14,16,24,.94); border:1px solid rgba(255,255,255,.1); border-radius:18px; padding:12px 14px;
+           box-shadow:0 24px 60px -18px #000; }
+    .b { border:none; cursor:pointer; font:inherit; font-size:12.5px; font-weight:600; padding:9px 15px;
+         border-radius:14px; background:#161a26; color:var(--text); box-shadow:0 0 0 1px rgba(255,255,255,.12); }
+    .b:hover { box-shadow:0 0 0 1px rgba(0,240,255,.6); }
+    .b.hero { background:#101a22; box-shadow:0 0 0 1px rgba(0,240,255,.7), 0 0 18px rgba(0,240,255,.25); }
+    .b.on { box-shadow:0 0 0 1px var(--cyan), 0 0 16px rgba(0,240,255,.35); }
+    select.b { max-width:170px; }
+    .note { width:100%; text-align:center; font-size:11px; color:var(--muted); margin-top:2px; line-height:1.5; }
+    #boot { position:fixed; inset:0; z-index:20; display:flex; align-items:center; justify-content:center;
+            flex-direction:column; gap:14px; background:var(--bg); text-align:center; padding:24px; }
+    #boot.gone { display:none; }
+    #boot .big { font-size:20px; font-weight:700; }
+    #boot .small { font-size:13px; color:var(--muted); max-width:460px; line-height:1.6; }
+    .spin { width:34px; height:34px; border-radius:50%; border:3px solid rgba(255,255,255,.15); border-top-color:var(--cyan); animation:sp .9s linear infinite; }
+    @keyframes sp { to { transform:rotate(360deg); } }
+    #dbg { position:fixed; left:12px; top:56px; z-index:11; margin:0; padding:10px 12px; background:rgba(0,0,0,.7);
+           border:1px solid rgba(0,240,255,.3); border-radius:10px; font:11px/1.5 ui-monospace,Consolas,monospace;
+           color:#9ff; white-space:pre; pointer-events:none; }
+  </style>
+</head>
+<body>
+  <div id="stage"></div>
+  <header>
+    <span class="brand">Q<span style="color:var(--accent)">.</span></span>
+    <span class="sub">The lab · she picks it up and pours</span>
+  </header>
+  <pre id="dbg">loading…</pre>
+
+  <div class="bar">
+    <button class="b hero" id="b-play">▶ Do it</button>
+    <button class="b" id="b-loop">🔁 Loop: off</button>
+    <select class="b" id="sel-liquid"></select>
+    <button class="b" id="b-coat">🥼 Lab coat: on</button>
+    <button class="b" id="b-slow">🐢 Speed: normal</button>
+    <button class="b" id="b-turn">↻ Turn her</button>
+    <div class="note" id="note">Drag to look around, wheel to move closer.</div>
+  </div>
+
+  <div id="boot">
+    <div class="spin"></div>
+    <div class="big">Loading the lab…</div>
+    <div class="small">A properly rigged character, a bench, and an action written on her bones.</div>
+  </div>
+
+  <script type="importmap">
+  { "imports": { "three": "/assets/vendor/three.module.min.js" } }
+  </script>
+  <script type="module">
+  import * as THREE from 'three';
+  import { GLTFLoader } from '/assets/vendor/GLTFLoader.js';
+  import { planLab, T as TIMES } from '/assets/lab-action.js';
+  import { LIQUIDS } from '/assets/unicorn-actions.js';
+  import { reachHand } from '/assets/ik.js';
+  import { grip, wristFor } from '/assets/grip.js';
+
+  const $ = (id) => document.getElementById(id);
+  window.addEventListener('error', (e) => { $('dbg').textContent = 'ERROR: ' + e.message; });
+
+  /* ═════════ THE ROOM ═════════ */
+  /* ?fast=1 — a cheap mode for headless screenshots.
+     Software WebGL renders this scene at about 2 frames a second because of the
+     shadow map and the transmission (real glass) materials. That is fine for a
+     person on a GPU and hopeless for an automated shot: readings come back from
+     frames half a second stale. Fast mode drops both and it runs normally. */
+  const FAST = new URLSearchParams(location.search).get('fast') === '1';
+  const renderer = new THREE.WebGLRenderer({ antialias: !FAST });
+  renderer.setPixelRatio(Math.min(2, devicePixelRatio || 1));
+  renderer.outputColorSpace = THREE.SRGBColorSpace;
+  renderer.shadowMap.enabled = !FAST;
+  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  $('stage').appendChild(renderer.domElement);
+
+  const scene = new THREE.Scene();
+  scene.background = new THREE.Color(0x0a0c12);
+  scene.fog = new THREE.Fog(0x0a0c12, 9, 26);
+  const camera = new THREE.PerspectiveCamera(38, 1, 0.1, 100);
+
+  scene.add(new THREE.HemisphereLight(0xdfeaff, 0x202430, 0.85));
+  const key = new THREE.DirectionalLight(0xffffff, 1.5);
+  key.position.set(3.5, 7, 4.5); key.castShadow = true;
+  key.shadow.mapSize.set(1024, 1024);
+  key.shadow.camera.left = -5; key.shadow.camera.right = 5;
+  key.shadow.camera.top = 5; key.shadow.camera.bottom = -5;
+  scene.add(key);
+  const rim = new THREE.DirectionalLight(0x8fd6ff, 0.5);
+  rim.position.set(-4, 3, -5); scene.add(rim);
+  const face = new THREE.DirectionalLight(0xffffff, 1.1);
+  face.position.set(0.5, 2.2, 6); scene.add(face);
+
+  const floor = new THREE.Mesh(
+    new THREE.CircleGeometry(14, 64).rotateX(-Math.PI / 2),
+    new THREE.MeshStandardMaterial({ color: 0x171b26, roughness: 0.9, metalness: 0 }));
+  floor.receiveShadow = true; scene.add(floor);
+
+  /* ═════════ THE BENCH AND THE GLASSWARE ═════════
+     Everything is built from primitives so every measurement is a number. */
+  const BENCH_H = 0.92, BENCH_TOP = BENCH_H + 0.035;
+  const bench = new THREE.Group(); scene.add(bench);
+  {
+    const top = new THREE.Mesh(new THREE.BoxGeometry(1.9, 0.07, 0.62),
+      new THREE.MeshStandardMaterial({ color: 0x2b3040, roughness: 0.55, metalness: 0.1 }));
+    top.position.set(0, BENCH_H, 0); top.castShadow = true; top.receiveShadow = true; bench.add(top);
+    const body = new THREE.Mesh(new THREE.BoxGeometry(1.8, BENCH_H - 0.07, 0.56),
+      new THREE.MeshStandardMaterial({ color: 0x1c2130, roughness: 0.8 }));
+    body.position.set(0, (BENCH_H - 0.07) / 2, 0); body.castShadow = true; bench.add(body);
+  }
+
+  const GLASS = new THREE.MeshPhysicalMaterial({
+    color: 0xcfe9ff, transparent: true, opacity: 0.6, roughness: 0.05,
+    metalness: 0, transmission: FAST ? 0 : 0.35, thickness: 0.02, side: THREE.DoubleSide,   // 0.9 made the glass a ghost
+  });
+  const LIP = new THREE.MeshStandardMaterial({ color: 0xeaf6ff, roughness: 0.25, metalness: 0.1 });
+
+  /* the test tube: base at the group's origin, standing up +Y */
+  const TUBE_H = 0.20, TUBE_R = 0.016;
+  const tube = new THREE.Group();
+  {
+    const g = new THREE.Mesh(new THREE.CylinderGeometry(TUBE_R, TUBE_R, TUBE_H, 24, 1, true), GLASS);
+    g.position.y = TUBE_H / 2; tube.add(g);
+    const base = new THREE.Mesh(new THREE.SphereGeometry(TUBE_R, 20, 12, 0, Math.PI * 2, Math.PI / 2, Math.PI / 2), GLASS);
+    tube.add(base);
+    const lip = new THREE.Mesh(new THREE.TorusGeometry(TUBE_R, 0.0035, 8, 24).rotateX(Math.PI / 2), LIP);
+    lip.position.y = TUBE_H; tube.add(lip);
+  }
+  const water = new THREE.Mesh(
+    new THREE.CylinderGeometry(TUBE_R * 0.88, TUBE_R * 0.88, 1, 20),
+    new THREE.MeshPhysicalMaterial({ color: 0x6fd6ff, transparent: true, opacity: 0.85, roughness: 0.15, transmission: 0.4 }));
+  water.scale.y = 0.0001; water.visible = false;
+  tube.add(water);
+  /* HOME POSITIONS — on the bench, INSIDE HER REACH (measured: shoulder to wrist
+     is 0.46m; these are 0.34–0.40m from the shoulder that reaches for them).
+     The tube is on her right (-X) for the right hand; the jug on her left. */
+  const TUBE_HOME = new THREE.Vector3(-0.14, BENCH_TOP, -0.24);
+  const JUG_HOME = new THREE.Vector3(0.24, BENCH_TOP, -0.24);
+  tube.position.copy(TUBE_HOME);
+  scene.add(tube);
+
+  /* the jug she pours from: base at origin, lip at (−JUG_R, JUG_H, 0) */
+  const JUG_H = 0.15, JUG_R = 0.05;
+  const jug = new THREE.Group();
+  {
+    const body = new THREE.Mesh(new THREE.CylinderGeometry(JUG_R, JUG_R * 0.88, JUG_H, 24, 1, true), GLASS);
+    body.position.y = JUG_H / 2; jug.add(body);
+    const bottom = new THREE.Mesh(new THREE.CircleGeometry(JUG_R * 0.88, 24).rotateX(-Math.PI / 2), GLASS);
+    jug.add(bottom);
+    const lip = new THREE.Mesh(new THREE.TorusGeometry(JUG_R, 0.004, 8, 24).rotateX(Math.PI / 2), LIP);
+    lip.position.y = JUG_H; jug.add(lip);
+    const inside = new THREE.Mesh(new THREE.CylinderGeometry(JUG_R * 0.9, JUG_R * 0.8, JUG_H * 0.6, 20),
+      new THREE.MeshPhysicalMaterial({ color: 0x6fd6ff, transparent: true, opacity: 0.8, roughness: 0.15 }));
+    inside.position.y = JUG_H * 0.3; jug.add(inside);
+    jug.userData.inside = inside;
+  }
+  jug.position.copy(JUG_HOME);
+  scene.add(jug);
+
+  /* the stream, shown only while pouring */
+  const stream = new THREE.Mesh(new THREE.CylinderGeometry(0.004, 0.003, 1, 10),
+    new THREE.MeshBasicMaterial({ color: 0x9fe6ff, transparent: true, opacity: 0.8 }));
+  stream.visible = false; scene.add(stream);
+
+  /* ═════════ HER ═════════ */
+  const loader = new GLTFLoader();
+  let rig = null, mesh = null, bones = {}, restQ = {}, H = 1.7;
+  let coatParts = [];
+
+  /* THE LAB COAT (optional, off by default — primitives read as paint on her).
+     Built along the bones themselves: a bone's CHILD sits at a known position in
+     that bone's own local space, so child.position IS the limb's direction and
+     length, in the right units, whatever the rig. */
+  function sleeveAlong(bone, child, rTop, rBot, mat, shrink) {
+    if (!bone || !child) return null;
+    const v = child.position.clone();
+    const len = v.length();
+    if (len < 1e-6) return null;
+    const m = new THREE.Mesh(new THREE.CylinderGeometry(rTop * len, rBot * len, len * (shrink || 0.94), 18, 1, true), mat);
+    m.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), v.clone().normalize());
+    m.position.copy(v).multiplyScalar(0.5);
+    m.castShadow = true;
+    bone.add(m);
+    coatParts.push(m);
+    return m;
+  }
+  function makeCoat() {
+    if (!rig || !bones.Spine1) return;
+    const white = new THREE.MeshStandardMaterial({ color: 0xf7f9fc, roughness: 0.68, metalness: 0 });
+    const trim = new THREE.MeshStandardMaterial({ color: 0xe6ecf5, roughness: 0.7 });
+    sleeveAlong(bones.Spine1, bones.Spine2, 0.95, 1.05, white, 1.15);
+    sleeveAlong(bones.Spine, bones.Spine1, 1.05, 0.95, white, 1.15);
+    sleeveAlong(bones.Hips, bones.Spine, 1.30, 1.20, white, 1.15);
+    ['Left', 'Right'].forEach((side) => {
+      sleeveAlong(bones[side + 'Arm'], bones[side + 'ForeArm'], 0.135, 0.115, white, 0.95);
+      sleeveAlong(bones[side + 'ForeArm'], bones[side + 'Hand'], 0.115, 0.095, white, 0.80);
+    });
+    if (bones.Neck && bones.Head) {
+      const nl = bones.Head.position.length();
+      const collar = new THREE.Mesh(new THREE.TorusGeometry(nl * 0.62, nl * 0.16, 10, 24), trim);
+      collar.rotation.x = Math.PI / 2;
+      collar.position.y = nl * 0.1;
+      bones.Neck.add(collar); coatParts.push(collar);
+    }
+  }
+  function removeCoat() { coatParts.forEach((p) => p.parent && p.parent.remove(p)); coatParts = []; }
+
+  const _e = new THREE.Euler(), _q = new THREE.Quaternion();
+  function applyPose(pose) {
+    for (const k in bones) {
+      const p = pose[k];
+      if (!p) { bones[k].quaternion.copy(restQ[k]); continue; }
+      _e.set(p[0], p[1], p[2], 'XYZ');
+      _q.setFromEuler(_e);
+      bones[k].quaternion.copy(restQ[k]).multiply(_q);
+    }
+  }
+
+  loader.load('/assets/models/michelle.glb', (gltf) => {
+    rig = gltf.scene;
+    rig.traverse((o) => { if (o.isMesh || o.isSkinnedMesh) { o.castShadow = true; o.frustumCulled = false; if (o.isSkinnedMesh && !mesh) mesh = o; } });
+    const box = new THREE.Box3().setFromObject(rig), size = new THREE.Vector3();
+    box.getSize(size);
+    H = size.y || 1.7;
+    rig.position.y -= box.min.y;
+    rig.position.z = -0.50;                 // close enough to work at the bench
+    rig.rotation.y = 0;                     // she already faces +Z, where the camera is
+    scene.add(rig);
+
+    mesh.skeleton.bones.forEach((b) => {
+      const k = b.name.replace(/^mixamorig:?/, '');
+      bones[k] = b; restQ[k] = b.quaternion.clone();
+    });
+    window.__lab = { THREE, scene, camera, rig, mesh, bones, coatParts, tube, jug, bench, BENCH_H, TUBE_HOME, JUG_HOME,
+      /* SEEK / FREEZE — a screenshot lands on an exact moment, not a wall-clock guess */
+      freeze(target) { playing = true; frozenT = target; return target; },
+      thaw() { frozenT = null; tStart = performance.now() / 1000; return true; },
+      seek(target) { frozenT = null; playing = true; tStart = (performance.now() / 1000) - (target / speed); return target; },
+      view(a, d, h) { camA = a; camDist = d; camH = h; return [a, d, h]; },
+      snap() {
+        const V = THREE.Vector3;
+        const wp = (o) => { o.updateWorldMatrix(true, false); return new V().setFromMatrixPosition(o.matrixWorld).toArray().map(n => +n.toFixed(3)); };
+        const sz = (o) => { const b = new THREE.Box3().setFromObject(o), s = new V(); b.getSize(s); return s.toArray().map(n => +n.toFixed(3)); };
+        return {
+          t: lastT, phase: lastPlan && lastPlan.phase, held: lastPlan && lastPlan.held,
+          rightWrist: wp(bones.RightHand), leftWrist: wp(bones.LeftHand),
+          rightErr: lastIK.right, leftErr: lastIK.left,
+          tube: wp(tube), tubeSize: sz(tube), jug: wp(jug), jugSize: sz(jug), jugTilt: +jug.rotation.z.toFixed(3),
+          head: wp(bones.Head), tubeParent: tube.parent && (tube.parent.name || tube.parent.type),
+          coatParts: coatParts.length, streamOn: stream.visible, waterOn: water.visible, waterH: +water.scale.y.toFixed(3),
+          frames, loopErr,
+        };
+      },
+    };
+    $('boot').classList.add('gone');
+    $('dbg').textContent = 'Michelle — ' + mesh.skeleton.bones.length + ' bones\npress ▶ Do it';
+  }, undefined, (e) => {
+    $('boot').innerHTML = '<div class="big">Could not load her</div><div class="small">' + e + '</div>';
+  });
+
+  /* ═════════ THE ACTION ═════════
+     planLab(t) says where the PROPS are and what each HAND must do to be
+     holding them. Here we: pose the body, solve each arm to its wrist target,
+     turn and close each hand, and put the props exactly where the plan says.
+     Props are NEVER parented to a bone (see grip.js for the 2.6mm tube). */
+  let playing = false, tStart = 0, loop = false, speed = 1, liquid = 'water';
+  let frozenT = null, lastT = 0, lastPlan = null;
+  const lastIK = { right: 0, left: 0 };
+
+  Object.keys(LIQUIDS).forEach((name) => {
+    const o = document.createElement('option');
+    o.value = name; o.textContent = name;
+    $('sel-liquid').appendChild(o);
+  });
+  $('sel-liquid').value = 'water';
+  $('sel-liquid').addEventListener('change', () => {
+    liquid = $('sel-liquid').value;
+    const c = LIQUIDS[liquid].colour;
+    water.material.color.setHex(c);
+    jug.userData.inside.material.color.setHex(c);
+    stream.material.color.setHex(c);
+  });
+
+  const _sR = new THREE.Vector3(), _sL = new THREE.Vector3();
+  function shoulders() {
+    bones.RightArm.updateWorldMatrix(true, false); _sR.setFromMatrixPosition(bones.RightArm.matrixWorld);
+    bones.LeftArm.updateWorldMatrix(true, false); _sL.setFromMatrixPosition(bones.LeftArm.matrixWorld);
+    return { shoulderR: _sR.clone(), shoulderL: _sL.clone() };
+  }
+
+  function runAction(t) {
+    const ctx = Object.assign({ THREE, tubeHome: TUBE_HOME, jugHome: JUG_HOME, TUBE_H, TUBE_R, JUG_H, JUG_R }, shoulders());
+    // the body first (it moves the shoulders), then plan again off the real shoulders
+    applyPose(planLab(t, ctx).pose);
+    Object.assign(ctx, shoulders());
+    const plan = planLab(t, ctx);
+    lastPlan = plan;
+
+    /* ARMS: the wrist target comes FROM the prop and the hand's orientation, so
+       when the fingers close the prop is already in the palm. The elbows break
+       outward and down — which is how arms work. */
+    [['Right', plan.right, -1], ['Left', plan.left, 1]].forEach(([side, h, out]) => {
+      const sh = side === 'Right' ? ctx.shoulderR : ctx.shoulderL;
+      const onProp = wristFor(bones, side, h.grip, h.fingers, h.thumb, h.along, h.off);
+      const target = h.wristRest.clone().lerp(onProp, h.attach);
+      const pole = sh.clone().add(new THREE.Vector3(out * 0.45, -0.5, 0.12));
+      reachHand(bones, side, target, pole);
+      grip(bones, restQ, side, h.fingers, h.thumb, h.curl);
+      bones[side + 'Hand'].updateWorldMatrix(true, false);
+      lastIK[side.toLowerCase()] = +new THREE.Vector3().setFromMatrixPosition(bones[side + 'Hand'].matrixWorld).distanceTo(target).toFixed(3);
+    });
+
+    /* PROPS go exactly where the plan says */
+    tube.position.copy(plan.tube.pos);
+    jug.position.copy(plan.jug.pos);
+    jug.rotation.set(0, 0, plan.jug.tilt);
+
+    // the liquid climbs the tube as it fills; the jug empties
+    const fill = plan.fill;
+    water.visible = fill > 0.01;
+    const hgt = fill * TUBE_H * 0.8;
+    water.scale.y = Math.max(0.0001, hgt);
+    water.position.y = hgt / 2 + 0.004;
+    const inside = jug.userData.inside;
+    inside.scale.y = Math.max(0.05, 1 - fill * 0.8);
+    inside.position.y = JUG_H * 0.3 * inside.scale.y;
+
+    // the stream: from the jug's lip into the mouth of the tube
+    stream.visible = plan.pouring;
+    if (plan.pouring) {
+      const from = plan.jug.lip, to = plan.tube.mouth.clone();
+      to.y -= 0.01;
+      const dir = to.clone().sub(from);
+      stream.position.copy(from).add(to).multiplyScalar(0.5);
+      stream.scale.set(1, Math.max(0.01, dir.length()), 1);
+      stream.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir.clone().normalize());
+    }
+    return plan;
+  }
+
+  let camA = 0.42, camDist = 1.7, camH = 1.5;
+  {
+    const el = renderer.domElement;
+    let drag = false, lx = 0, ly = 0;
+    el.addEventListener('pointerdown', (e) => { drag = true; lx = e.clientX; ly = e.clientY; el.setPointerCapture(e.pointerId); });
+    el.addEventListener('pointerup', (e) => { drag = false; try { el.releasePointerCapture(e.pointerId); } catch (x) {} });
+    el.addEventListener('pointermove', (e) => {
+      if (!drag) return;
+      camA -= (e.clientX - lx) * 0.006;
+      camH = Math.max(0.4, Math.min(3.4, camH - (e.clientY - ly) * 0.008));
+      lx = e.clientX; ly = e.clientY;
+    });
+    el.addEventListener('wheel', (e) => { e.preventDefault(); camDist = Math.max(1.0, Math.min(9, camDist + Math.sign(e.deltaY) * 0.28)); }, { passive: false });
+  }
+  function resize() {
+    renderer.setSize(innerWidth, innerHeight, false);
+    camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix();
+  }
+  addEventListener('resize', resize); resize();
+
+  /* CATCH WHAT THE LOOP THROWS — an exception inside the animation loop kills
+     it silently and the page LOOKS alive on a frozen frame. */
+  let loopErr = null, frames = 0, tick = 0;
+  renderer.setAnimationLoop(() => {
+    frames++;
+    window.__frames = frames;
+    try { loopBody(); }
+    catch (err) {
+      if (!loopErr) { loopErr = (err && err.stack) || String(err); window.__loopErr = loopErr; $('dbg').textContent = 'LOOP ERROR: ' + loopErr.slice(0, 400); }
+    }
+  });
+
+  function loopBody() {
+    const now = performance.now();
+    if (rig) {
+      // idle = the plan at t=0: arms at rest, props at home. Never a T-pose.
+      let t = 0;
+      if (playing) t = frozenT != null ? frozenT : ((now / 1000) - tStart) * speed;
+      lastT = +t.toFixed(2);
+      window.__state = { playing, t: lastT, frozen: frozenT };
+      const plan = runAction(t);
+
+      if (playing && frozenT == null && t >= plan.duration) {
+        if (loop) { tStart = now / 1000; }
+        else { playing = false; $('b-play').textContent = '▶ Do it again'; }
+      }
+      if (tick++ % 10 === 0) {
+        $('dbg').textContent = (playing ? 'action t=' + t.toFixed(2) + 's of ' + plan.duration + ' — ' + plan.phase : 'ready')
+          + '\nholding: ' + plan.held + '   fill: ' + (plan.fill * 100).toFixed(0) + '%'
+          + '\nliquid: ' + liquid + '\nhand error R ' + lastIK.right + 'm · L ' + lastIK.left + 'm';
+      }
+    }
+    camera.position.set(Math.sin(camA) * camDist, camH, Math.cos(camA) * camDist + 0.05);
+    camera.lookAt(0.0, BENCH_H + 0.30, -0.30);
+    renderer.render(scene, camera);
+  }
+
+  $('b-play').addEventListener('click', () => {
+    frozenT = null;
+    tStart = performance.now() / 1000;
+    playing = true;
+    $('b-play').textContent = '↻ Restart';
+  });
+  $('b-loop').addEventListener('click', (e) => {
+    loop = !loop;
+    e.target.classList.toggle('on', loop);
+    e.target.textContent = loop ? '🔁 Loop: on' : '🔁 Loop: off';
+  });
+  $('b-coat').textContent = '🥼 Lab coat: off';
+  $('b-coat').addEventListener('click', (e) => {
+    if (coatParts.length) { removeCoat(); e.target.textContent = '🥼 Lab coat: off'; }
+    else { makeCoat(); e.target.textContent = '🥼 Lab coat: on'; }
+  });
+  $('b-turn').addEventListener('click', () => {
+    if (!rig) return;
+    rig.rotation.y += Math.PI / 2;
+    $('note').textContent = 'facing ' + Math.round(rig.rotation.y * 180 / Math.PI) % 360 + '°';
+  });
+  $('b-slow').addEventListener('click', (e) => {
+    speed = speed === 1 ? 0.4 : 1;
+    e.target.textContent = speed === 1 ? '🐢 Speed: normal' : '🐢 Speed: slow';
+  });
+  </script>
+</body>
+</html>

@@ -370,6 +370,10 @@ const PUBLIC_PATHS = new Set([
     '/manifest.webmanifest',
     '/sw.js',                // service worker must be public — browser fetches it pre-auth
     '/trace-widget.js', '/looking-glass-widget.js',
+    '/unicorn', '/unicorn3d', '/rig', '/dance', '/disco', '/lab', '/studio',   // the dancing-unicorn test benches. No user data, no
+                                // AI calls, no writes — just a page that plays a model.
+                                // Public so Sarah can open them without a session and
+                                // send the link to a child who has no account.
     '/tags',                 // public NFC tag landing page — recipients aren't signed-in users
     '/welcome',              // public sign-in / sign-up landing (hosts the auth overlay)
     '/login', '/signup', '/logout',

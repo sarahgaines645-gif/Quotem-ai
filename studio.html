@@ -1,0 +1,517 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>The studio</title>
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root { --bg:#0b0d13; --text:#f2f2f6; --muted:rgba(242,242,246,.62); --accent:#ff2d95; --cyan:#00f0ff; --ok:#6cf07a; }
+    * { box-sizing:border-box; margin:0; padding:0; }
+    html,body { height:100%; background:var(--bg); color:var(--text); font-family:'Space Grotesk',system-ui,sans-serif; overflow:hidden; }
+    #stage { position:fixed; inset:0; }
+    #stage canvas { display:block; width:100%; height:100%; touch-action:none; cursor:grab; }
+    #stage canvas.dragging { cursor:grabbing; }
+    header { position:fixed; top:0; left:0; right:0; padding:14px 18px; z-index:10; display:flex; gap:14px;
+             align-items:baseline; pointer-events:none; background:linear-gradient(180deg,rgba(11,13,19,.9),rgba(11,13,19,0)); }
+    header .brand { font-size:20px; font-weight:700; text-shadow:0 0 6px #fff,0 0 18px var(--cyan); }
+    header .sub { font-size:10.5px; font-weight:700; letter-spacing:.18em; text-transform:uppercase; color:var(--cyan); }
+
+    .panel { position:fixed; z-index:12; background:rgba(15,18,26,.95); border:1px solid rgba(255,255,255,.12);
+             border-radius:14px; padding:12px 13px; font-size:11.5px; color:var(--muted); }
+    #left { left:12px; top:52px; width:212px; }
+    #right { right:12px; top:52px; width:236px; max-height:calc(100vh - 190px); overflow:auto; }
+    .panel h3 { font-size:11px; font-weight:700; color:var(--text); letter-spacing:.08em; text-transform:uppercase; margin-bottom:8px; }
+    .b { border:none; cursor:pointer; font:inherit; font-size:11.5px; font-weight:600; padding:7px 11px;
+         border-radius:11px; background:#181d29; color:var(--text); box-shadow:0 0 0 1px rgba(255,255,255,.12); }
+    .b:hover { box-shadow:0 0 0 1px var(--cyan); }
+    .b.on { box-shadow:0 0 0 1px var(--cyan), 0 0 14px rgba(0,240,255,.3); }
+    .b.wide { width:100%; margin-bottom:6px; }
+    .b.hero { background:#131f28; box-shadow:0 0 0 1px rgba(0,240,255,.7); }
+    .row { display:flex; gap:6px; margin-bottom:6px; }
+    .row .b { flex:1; }
+    .key { display:flex; justify-content:space-between; align-items:center; padding:5px 7px; border-radius:8px;
+           background:#131824; margin-bottom:4px; font-size:11px; }
+    .key b { color:var(--cyan); }
+    .key .x { cursor:pointer; color:#ff6b8a; font-weight:700; padding:0 4px; }
+    #bar { position:fixed; left:50%; bottom:14px; transform:translateX(-50%); z-index:12; width:min(760px,calc(100vw - 24px));
+           background:rgba(15,18,26,.96); border:1px solid rgba(255,255,255,.12); border-radius:16px; padding:11px 14px; }
+    #scrub { width:100%; accent-color:var(--accent); }
+    .note { font-size:10.5px; color:var(--muted); margin-top:6px; line-height:1.5; }
+    #dbg { position:fixed; left:12px; bottom:14px; z-index:12; font:10.5px/1.5 ui-monospace,Consolas,monospace;
+           color:#9ff; background:rgba(0,0,0,.6); padding:7px 9px; border-radius:9px; pointer-events:none; }
+  </style>
+</head>
+<body>
+  <div id="stage"></div>
+  <header>
+    <span class="brand">Q<span style="color:var(--accent)">.</span></span>
+    <span class="sub">The studio · move her yourself</span>
+  </header>
+
+  <div class="panel" id="left">
+    <h3>Grab and move</h3>
+    <div class="row">
+      <button class="b" id="h-right">Right hand</button>
+      <button class="b" id="h-left">Left hand</button>
+    </div>
+    <div class="row">
+      <button class="b" id="h-tube">Test tube</button>
+      <button class="b" id="h-jug">Beaker</button>
+    </div>
+    <div class="note">Drag a hand's disc and the arm follows. <b>Drop a hand on the tube or the beaker and she takes hold of it.</b></div>
+    <h3 style="margin-top:12px">View</h3>
+    <div class="row">
+      <button class="b" id="v-front">Front</button>
+      <button class="b" id="v-side">Side</button>
+      <button class="b" id="v-top">Top</button>
+    </div>
+    <div class="note">Right-drag or two-finger drag orbits. Wheel zooms.</div>
+  </div>
+
+  <div class="panel" id="right">
+    <h3>Keyframes</h3>
+    <button class="b wide hero" id="k-add">+ Key at this time</button>
+    <div id="k-list"></div>
+    <button class="b wide" id="k-export">Copy the animation</button>
+    <div class="note">Pose her, add a key, move the time on, pose again. Play blends between them. Copy gives me the numbers to bake in.</div>
+  </div>
+
+  <div id="bar">
+    <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px">
+      <button class="b" id="p-play">▶ Play</button>
+      <span id="t-label" style="min-width:96px;font-variant-numeric:tabular-nums">0.00s / 6.00s</span>
+      <button class="b" id="p-grip">✋ Hold the tube</button>
+      <button class="b" id="p-gripj">✋ Hold the beaker</button>
+      <button class="b" id="p-reset">Reset pose</button>
+    </div>
+    <input type="range" id="scrub" min="0" max="6" step="0.01" value="0">
+  </div>
+  <pre id="dbg">loading…</pre>
+
+  <script type="importmap">
+  { "imports": { "three": "/assets/vendor/three.module.min.js" } }
+  </script>
+  <script type="module">
+  import * as THREE from 'three';
+  import { GLTFLoader } from '/assets/vendor/GLTFLoader.js';
+  import { reachHand } from '/assets/ik.js';
+  import { grip, wristFor } from '/assets/grip.js';
+
+  const $ = (id) => document.getElementById(id);
+  window.addEventListener('error', (e) => { $('dbg').textContent = 'ERROR: ' + e.message; });
+  const FAST = new URLSearchParams(location.search).get('fast') === '1';
+
+  /* ═════════ SCENE ═════════ */
+  const renderer = new THREE.WebGLRenderer({ antialias: !FAST });
+  renderer.setPixelRatio(Math.min(2, devicePixelRatio || 1));
+  renderer.outputColorSpace = THREE.SRGBColorSpace;
+  $('stage').appendChild(renderer.domElement);
+
+  const scene = new THREE.Scene();
+  scene.background = new THREE.Color(0x0b0d13);
+  const camera = new THREE.PerspectiveCamera(38, 1, 0.05, 100);
+
+  scene.add(new THREE.HemisphereLight(0xdfeaff, 0x1a1e28, 1.0));
+  const key = new THREE.DirectionalLight(0xffffff, 1.4); key.position.set(2.5, 5, 4); scene.add(key);
+  const fill = new THREE.DirectionalLight(0xbcd8ff, 0.7); fill.position.set(-3, 2, 3); scene.add(fill);
+
+  const grid = new THREE.GridHelper(6, 24, 0x2b3550, 0x1a2033);
+  grid.material.transparent = true; grid.material.opacity = 0.5; scene.add(grid);
+
+  const BENCH_H = 0.92, BENCH_TOP = BENCH_H + 0.03;
+  {
+    const top = new THREE.Mesh(new THREE.BoxGeometry(1.6, 0.06, 0.55),
+      new THREE.MeshStandardMaterial({ color: 0x2b3040, roughness: 0.6 }));
+    top.position.set(0, BENCH_H, 0); scene.add(top);
+    const legs = new THREE.Mesh(new THREE.BoxGeometry(1.5, BENCH_H - 0.06, 0.5),
+      new THREE.MeshStandardMaterial({ color: 0x1b2030, roughness: 0.85 }));
+    legs.position.set(0, (BENCH_H - 0.06) / 2, 0); scene.add(legs);
+  }
+
+  /* ═════════ PROPS — base at the group origin, standing up +Y ═════════ */
+  const glass = new THREE.MeshStandardMaterial({ color: 0xcfe9ff, transparent: true, opacity: 0.55, roughness: 0.08 });
+  const lipMat = new THREE.MeshStandardMaterial({ color: 0xeaf6ff, roughness: 0.25 });
+  const TUBE_H = 0.20, TUBE_R = 0.016;
+  const tube = new THREE.Group();
+  {
+    const g = new THREE.Mesh(new THREE.CylinderGeometry(TUBE_R, TUBE_R, TUBE_H, 20, 1, true), glass);
+    g.position.y = TUBE_H / 2; tube.add(g);
+    tube.add(new THREE.Mesh(new THREE.SphereGeometry(TUBE_R, 16, 10, 0, Math.PI * 2, Math.PI / 2, Math.PI / 2), glass));
+    const rim = new THREE.Mesh(new THREE.TorusGeometry(TUBE_R, 0.0035, 8, 20).rotateX(Math.PI / 2), lipMat);
+    rim.position.y = TUBE_H; tube.add(rim);
+  }
+  tube.position.set(-0.14, BENCH_TOP, -0.10);
+  scene.add(tube);
+
+  const JUG_H = 0.15, JUG_R = 0.05;
+  const jug = new THREE.Group();
+  {
+    const b = new THREE.Mesh(new THREE.CylinderGeometry(JUG_R, JUG_R * 0.88, JUG_H, 20, 1, true), glass);
+    b.position.y = JUG_H / 2; jug.add(b);
+    jug.add(new THREE.Mesh(new THREE.CircleGeometry(JUG_R * 0.88, 20).rotateX(-Math.PI / 2), glass));
+    const rim = new THREE.Mesh(new THREE.TorusGeometry(JUG_R, 0.004, 8, 20).rotateX(Math.PI / 2), lipMat);
+    rim.position.y = JUG_H; jug.add(rim);
+  }
+  jug.position.set(0.24, BENCH_TOP, -0.10);
+  scene.add(jug);
+
+  /* where the fist closes on each prop, as a height up the prop */
+  const PROP = {
+    tube: { obj: tube, h: TUBE_H, gripUp: 0.40, along: 0.045, off: 0.032, hand: 'right', handleUp: TUBE_H * 0.6 },
+    jug:  { obj: jug,  h: JUG_H,  gripUp: 0.45, along: 0.02,  off: JUG_R + 0.022, hand: 'left', handleUp: JUG_H * 0.55 },
+  };
+  /* fingers/thumb directions for a fist round an upright prop in front of the
+     body: fingers across the body and a little back, thumb up, knuckles out */
+  const HOLD_DIR = {
+    right: { f: new THREE.Vector3(1, 0.05, -0.35).normalize(), t: new THREE.Vector3(0.2, 1, 0.15).normalize() },
+    left:  { f: new THREE.Vector3(-1, 0.05, -0.35).normalize(), t: new THREE.Vector3(-0.2, 1, 0.15).normalize() },
+  };
+
+  /* ═════════ HANDLES — the things you actually grab ═════════
+     A handle is a coloured disc you can drag in the view. Dragging a hand's
+     handle moves an IK TARGET and the arm solves to it; dragging a prop's
+     handle moves the prop. Drop a hand ON a prop and she takes hold of it.
+     Handles are depthTest:false so they can never hide inside her wrist. */
+  const HANDLES = {};
+  function makeHandle(name, colour, pos) {
+    const m = new THREE.Mesh(new THREE.SphereGeometry(0.05, 20, 16),
+      new THREE.MeshBasicMaterial({ color: colour, depthTest: false, transparent: true, opacity: 0.95 }));
+    const ring = new THREE.Mesh(new THREE.TorusGeometry(0.072, 0.008, 8, 28),
+      new THREE.MeshBasicMaterial({ color: 0xffffff, depthTest: false, transparent: true, opacity: 0.85 }));
+    ring.userData.handle = name;
+    m.add(ring);
+    m.position.copy(pos);
+    m.userData.handle = name;
+    m.renderOrder = 999; ring.renderOrder = 999;
+    m.onBeforeRender = () => { ring.lookAt(camera.position); };
+    scene.add(m);
+    HANDLES[name] = m;
+    return m;
+  }
+  const propHandlePos = (name) => PROP[name].obj.position.clone().add(new THREE.Vector3(0, PROP[name].handleUp, 0));
+
+  /* ═════════ HER ═════════ */
+  let rig = null, mesh = null;
+  const bones = {}, restQ = {};
+  let ready = false;
+  const holding = { tube: false, jug: false };
+
+  new GLTFLoader().load('/assets/models/michelle.glb', (gltf) => {
+    rig = gltf.scene;
+    rig.traverse((o) => { if (o.isSkinnedMesh && !mesh) mesh = o; if (o.isMesh || o.isSkinnedMesh) o.frustumCulled = false; });
+    const box = new THREE.Box3().setFromObject(rig);
+    rig.position.y -= box.min.y;
+    rig.position.z = -0.44;
+    scene.add(rig);
+    mesh.skeleton.bones.forEach((b) => {
+      const k = b.name.replace(/^mixamorig:?/, '');
+      bones[k] = b; restQ[k] = b.quaternion.clone();
+    });
+
+    /* Hands start READY — in front of her, above the bench, where you can see
+       them — not out in a T-pose. The solver puts the arms there on frame one. */
+    const sh = (side) => { const b = bones[side + 'Arm']; b.updateWorldMatrix(true, false); return new THREE.Vector3().setFromMatrixPosition(b.matrixWorld); };
+    makeHandle('right', 0xff2d95, sh('Right').add(new THREE.Vector3(0.02, -0.10, 0.32)));
+    makeHandle('left', 0x00f0ff, sh('Left').add(new THREE.Vector3(-0.02, -0.10, 0.32)));
+    makeHandle('tube', 0xffd93d, propHandlePos('tube'));
+    makeHandle('jug', 0x6cf07a, propHandlePos('jug'));
+
+    ready = true;
+    $('dbg').textContent = 'Michelle · ' + mesh.skeleton.bones.length + ' bones · drag a disc';
+    window.__studio = { THREE, scene, camera, rig, bones, HANDLES, tube, jug, keys, api, holding };
+  }, undefined, (e) => { $('dbg').textContent = 'load failed: ' + e; });
+
+  /* ═════════ POSING ═════════
+     Each frame: for a hand that is HOLDING a prop, the prop's position is the
+     truth — the wrist target is derived from it (grip.js) so the prop sits in
+     the palm, and the hand is turned and closed round it. A free hand just goes
+     to its disc, fingers relaxed, pointing where the forearm points. */
+  const _v = new THREE.Vector3(), _w = new THREE.Vector3();
+  function applyIK() {
+    if (!ready) return;
+    [['Right', 'right', 'tube', -1], ['Left', 'left', 'jug', 1]].forEach(([side, hname, pname, out]) => {
+      const h = HANDLES[hname];
+      if (!h) return;
+      const shoulder = new THREE.Vector3();
+      bones[side + 'Arm'].updateWorldMatrix(true, false);
+      shoulder.setFromMatrixPosition(bones[side + 'Arm'].matrixWorld);
+      // elbows break OUTWARD and down — the right elbow to her right (-X)
+      const pole = shoulder.clone().add(new THREE.Vector3(out * 0.45, -0.5, 0.12));
+      const P = PROP[pname];
+      if (holding[pname]) {
+        // the hand's disc IS the fist: the prop hangs from it
+        const gripPoint = h.position.clone();
+        const d = HOLD_DIR[hname];
+        const wrist = wristFor(bones, side, gripPoint, d.f, d.t, P.along, P.off);
+        reachHand(bones, side, wrist, pole);
+        grip(bones, restQ, side, d.f, d.t, 1);
+        P.obj.position.copy(gripPoint).sub(new THREE.Vector3(0, P.h * P.gripUp, 0));
+        HANDLES[pname].position.copy(propHandlePos(pname));
+      } else {
+        reachHand(bones, side, h.position, pole);
+        // relaxed: fingers continue the line of the forearm, thumb up
+        bones[side + 'ForeArm'].updateWorldMatrix(true, false);
+        _v.setFromMatrixPosition(bones[side + 'ForeArm'].matrixWorld);
+        bones[side + 'Hand'].updateWorldMatrix(true, false);
+        _w.setFromMatrixPosition(bones[side + 'Hand'].matrixWorld).sub(_v);
+        if (_w.lengthSq() > 1e-8) grip(bones, restQ, side, _w, new THREE.Vector3(0, 1, 0), 0.2);
+      }
+    });
+  }
+
+  /* ═════════ KEYFRAMES ═════════
+     A key is just where everything is at a moment in time. Play blends between
+     consecutive keys — which is all an animation is. Because a key stores the
+     HAND TARGETS rather than joint angles, the same keys work on any character
+     whose arms are a different length: the solver re-solves for their skeleton. */
+  const keys = [];
+  const DURATION = () => Math.max(1, keys.length ? Math.max(...keys.map((k) => k.t)) + 0.5 : 6);
+
+  function snapshot(t) {
+    return {
+      t: +t.toFixed(2),
+      right: HANDLES.right.position.toArray(),
+      left: HANDLES.left.position.toArray(),
+      tube: tube.position.toArray(),
+      jug: jug.position.toArray(),
+      grip: holding.tube, gripJ: holding.jug,
+    };
+  }
+  function drawKeys() {
+    const box = $('k-list');
+    box.innerHTML = '';
+    keys.sort((a, b) => a.t - b.t).forEach((k, i) => {
+      const d = document.createElement('div');
+      d.className = 'key';
+      d.innerHTML = '<span>key ' + (i + 1) + ' · <b>' + k.t.toFixed(2) + 's</b>' + (k.grip ? ' · tube' : '') + (k.gripJ ? ' · beaker' : '') + '</span>';
+      const x = document.createElement('span');
+      x.className = 'x'; x.textContent = '×';
+      x.addEventListener('click', () => { keys.splice(keys.indexOf(k), 1); drawKeys(); });
+      d.appendChild(x);
+      box.appendChild(d);
+      d.addEventListener('click', (ev) => { if (ev.target !== x) { setTime(k.t); applyKeysAt(k.t); } });
+    });
+    $('scrub').max = DURATION();
+  }
+  function applyKeysAt(t) {
+    if (keys.length === 0) return;
+    const sorted = keys.slice().sort((a, b) => a.t - b.t);
+    let a = sorted[0], b = sorted[sorted.length - 1];
+    for (let i = 0; i < sorted.length - 1; i++) {
+      if (t >= sorted[i].t && t <= sorted[i + 1].t) { a = sorted[i]; b = sorted[i + 1]; break; }
+    }
+    if (t <= sorted[0].t) { a = b = sorted[0]; }
+    if (t >= sorted[sorted.length - 1].t) { a = b = sorted[sorted.length - 1]; }
+    const span = (b.t - a.t) || 1;
+    let u = (t - a.t) / span;
+    u = u < 0 ? 0 : u > 1 ? 1 : u;
+    u = u * u * (3 - 2 * u);                          // ease in and out, so it does not snap
+    const mix = (p, q) => [p[0] + (q[0] - p[0]) * u, p[1] + (q[1] - p[1]) * u, p[2] + (q[2] - p[2]) * u];
+    HANDLES.right.position.fromArray(mix(a.right, b.right));
+    HANDLES.left.position.fromArray(mix(a.left, b.left));
+    setHold('tube', u < 0.5 ? !!a.grip : !!b.grip);
+    setHold('jug', u < 0.5 ? !!a.gripJ : !!b.gripJ);
+    if (!holding.tube) { tube.position.fromArray(mix(a.tube, b.tube)); HANDLES.tube.position.copy(propHandlePos('tube')); }
+    if (!holding.jug) { jug.position.fromArray(mix(a.jug, b.jug)); HANDLES.jug.position.copy(propHandlePos('jug')); }
+  }
+
+  let time = 0, playing = false;
+  function setTime(t) {
+    time = t;
+    $('scrub').value = t;
+    $('t-label').textContent = t.toFixed(2) + 's / ' + DURATION().toFixed(2) + 's';
+  }
+
+  /* TAKE HOLD / LET GO. Taking hold moves the hand's disc to the prop's grip
+     point, so the arm goes to the prop — never the prop to the arm. Letting go
+     leaves the prop where it is. */
+  function setHold(pname, on) {
+    on = !!on;
+    if (holding[pname] === on) return;
+    holding[pname] = on;
+    const P = PROP[pname];
+    if (on) HANDLES[P.hand].position.copy(P.obj.position).add(new THREE.Vector3(0, P.h * P.gripUp, 0));
+    /* while held, the prop's own disc hides — the HAND's disc is the one you
+       move and the prop comes with it; it reappears where the prop is let go */
+    HANDLES[pname].visible = !on;
+    if (!on) HANDLES[pname].position.copy(propHandlePos(pname));
+    const btn = $(pname === 'tube' ? 'p-grip' : 'p-gripj');
+    btn.classList.toggle('on', on);
+    btn.textContent = on ? (pname === 'tube' ? '✋ Holding the tube' : '✋ Holding the beaker') : (pname === 'tube' ? '✋ Hold the tube' : '✋ Hold the beaker');
+  }
+
+  /* ═════════ DRAGGING ═════════
+     Raycast to find a handle, then move it on a plane facing the camera. That
+     keeps the drag matching the mouse whichever way the view is turned. */
+  const ray = new THREE.Raycaster(), ndc = new THREE.Vector2();
+  const dragPlane = new THREE.Plane();
+  let dragging = null, orbiting = false, lastX = 0, lastY = 0;
+  let camA = 0.35, camDist = 2.0, camH = 1.35;
+
+  const el = renderer.domElement;
+  function toNDC(ev) {
+    const r = el.getBoundingClientRect();
+    ndc.x = ((ev.clientX - r.left) / r.width) * 2 - 1;
+    ndc.y = -((ev.clientY - r.top) / r.height) * 2 + 1;
+  }
+  function pick(ev) {
+    toNDC(ev);
+    ray.setFromCamera(ndc, camera);
+    const hits = ray.intersectObjects(Object.values(HANDLES).filter((h) => h.visible), false);
+    return hits.length ? hits[0].object : null;
+  }
+  /* the prop whose disc is under the pointer, other than the one being dragged */
+  function propUnder(ev, except) {
+    toNDC(ev);
+    ray.setFromCamera(ndc, camera);
+    const cands = ['tube', 'jug'].map((n) => HANDLES[n]).filter((h) => h && h.visible && h !== except);
+    const hits = ray.intersectObjects(cands, false);
+    return hits.length ? hits[0].object.userData.handle : null;
+  }
+  el.addEventListener('pointerdown', (ev) => {
+    el.setPointerCapture(ev.pointerId);
+    lastX = ev.clientX; lastY = ev.clientY;
+    const h = ev.button === 0 ? pick(ev) : null;
+    if (h) {
+      dragging = h;
+      el.classList.add('dragging');
+      camera.getWorldDirection(_v);
+      dragPlane.setFromNormalAndCoplanarPoint(_v, h.position);
+      selectHandle(h.userData.handle);
+      // (a hand that is holding something carries it — letting go is the button)
+    } else { orbiting = true; }
+  });
+  el.addEventListener('pointerup', (ev) => {
+    if (dragging) {
+      const n = dragging.userData.handle;
+      if (n === 'right' || n === 'left') {
+        /* DROP A HAND ON A PROP = TAKE HOLD. Judged on screen, which is what you
+           can see — depth is the one thing a mouse cannot tell you. */
+        const over = propUnder(ev, dragging);
+        if (over && PROP[over].hand === n) { setHold(over, true); $('dbg').textContent = 'holding the ' + (over === 'jug' ? 'beaker' : 'tube'); }
+      }
+    }
+    dragging = null; orbiting = false;
+    el.classList.remove('dragging');
+    try { el.releasePointerCapture(ev.pointerId); } catch (e) {}
+  });
+  el.addEventListener('pointermove', (ev) => {
+    if (dragging) {
+      toNDC(ev);
+      ray.setFromCamera(ndc, camera);
+      const p = new THREE.Vector3();
+      if (ray.ray.intersectPlane(dragPlane, p)) {
+        dragging.position.copy(p);
+        const n = dragging.userData.handle;
+        if (n === 'tube') tube.position.copy(p).sub(new THREE.Vector3(0, PROP.tube.handleUp, 0));
+        if (n === 'jug') jug.position.copy(p).sub(new THREE.Vector3(0, PROP.jug.handleUp, 0));
+        // a free hand over a prop it could take: light the prop's button so she knows
+        if ((n === 'right' && !holding.tube) || (n === 'left' && !holding.jug)) {
+          const over = propUnder(ev, dragging);
+          ['tube', 'jug'].forEach((pn) => $('h-' + pn).classList.toggle('on', over === pn && PROP[pn].hand === n));
+        }
+      }
+    } else if (orbiting) {
+      camA -= (ev.clientX - lastX) * 0.006;
+      camH = Math.max(0.3, Math.min(3, camH - (ev.clientY - lastY) * 0.006));
+      lastX = ev.clientX; lastY = ev.clientY;
+    }
+  });
+  el.addEventListener('wheel', (ev) => { ev.preventDefault(); camDist = Math.max(0.7, Math.min(6, camDist + Math.sign(ev.deltaY) * 0.14)); }, { passive: false });
+  el.addEventListener('contextmenu', (ev) => ev.preventDefault());
+
+  function selectHandle(name) {
+    ['right', 'left', 'tube', 'jug'].forEach((n) => {
+      const b = $('h-' + n);
+      if (b) b.classList.toggle('on', n === name);
+    });
+    $('dbg').textContent = 'holding: ' + name;
+  }
+  ['right', 'left', 'tube', 'jug'].forEach((n) => {
+    const b = $('h-' + n);
+    if (b) b.addEventListener('click', () => { selectHandle(n); });
+  });
+
+  /* ═════════ UI ═════════ */
+  $('k-add').addEventListener('click', () => {
+    const existing = keys.find((k) => Math.abs(k.t - time) < 0.02);
+    if (existing) Object.assign(existing, snapshot(time));
+    else keys.push(snapshot(time));
+    drawKeys();
+  });
+  $('k-export').addEventListener('click', () => {
+    const out = JSON.stringify(keys.slice().sort((a, b) => a.t - b.t)
+      .map((k) => ({ t: k.t, right: k.right.map(n => +n.toFixed(3)), left: k.left.map(n => +n.toFixed(3)),
+                     tube: k.tube.map(n => +n.toFixed(3)), jug: k.jug.map(n => +n.toFixed(3)), grip: k.grip, gripJ: k.gripJ })));
+    navigator.clipboard.writeText(out).then(
+      () => { $('k-export').textContent = 'Copied — paste it to me'; },
+      () => { $('dbg').textContent = out.slice(0, 400); });
+  });
+  $('p-play').addEventListener('click', (e) => {
+    playing = !playing;
+    e.target.textContent = playing ? '⏸ Pause' : '▶ Play';
+    if (playing && time >= DURATION() - 0.01) setTime(0);
+  });
+  $('p-grip').addEventListener('click', () => setHold('tube', !holding.tube));
+  $('p-gripj').addEventListener('click', () => setHold('jug', !holding.jug));
+  $('p-reset').addEventListener('click', () => {
+    if (!ready) return;
+    setHold('tube', false); setHold('jug', false);
+    for (const k in bones) bones[k].quaternion.copy(restQ[k]);
+    const sh = (side) => { const b = bones[side + 'Arm']; b.updateWorldMatrix(true, false); return new THREE.Vector3().setFromMatrixPosition(b.matrixWorld); };
+    HANDLES.right.position.copy(sh('Right').add(new THREE.Vector3(0.02, -0.10, 0.32)));
+    HANDLES.left.position.copy(sh('Left').add(new THREE.Vector3(-0.02, -0.10, 0.32)));
+  });
+  $('scrub').addEventListener('input', () => { setTime(parseFloat($('scrub').value)); applyKeysAt(time); });
+  $('v-front').addEventListener('click', () => { camA = 0; camH = 1.35; camDist = 2.0; });
+  $('v-side').addEventListener('click', () => { camA = Math.PI / 2; camH = 1.25; camDist = 2.0; });
+  $('v-top').addEventListener('click', () => { camA = 0.01; camH = 2.6; camDist = 1.4; });
+
+  function resize() {
+    renderer.setSize(innerWidth, innerHeight, false);
+    camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix();
+  }
+  addEventListener('resize', resize); resize();
+
+  let last = performance.now();
+  renderer.setAnimationLoop(() => {
+    const now = performance.now(), dt = (now - last) / 1000; last = now;
+    if (playing) {
+      let t = time + dt;
+      if (t > DURATION()) t = 0;
+      setTime(t);
+      applyKeysAt(t);
+    }
+    applyIK();
+    camera.position.set(Math.sin(camA) * camDist, camH, Math.cos(camA) * camDist);
+    camera.lookAt(0, BENCH_H + 0.22, -0.18);
+    renderer.render(scene, camera);
+  });
+
+  const api = {
+    seek(t) { setTime(t); applyKeysAt(t); return t; },
+    setHandle(name, x, y, z) {
+      HANDLES[name].position.set(x, y, z);
+      if (name === 'tube' && !holding.tube) tube.position.set(x, y - PROP.tube.handleUp, z);
+      if (name === 'jug' && !holding.jug) jug.position.set(x, y - PROP.jug.handleUp, z);
+      return true;
+    },
+    grip(v) { setHold('tube', v); return holding.tube; },
+    gripJ(v) { setHold('jug', v); return holding.jug; },
+    view(a, d, h) { camA = a; camDist = d; camH = h; return [a, d, h]; },
+    addKey(t) { setTime(t); keys.push(snapshot(t)); drawKeys(); return keys.length; },
+    report() {
+      const wp = (o) => { o.updateWorldMatrix(true, false); return new THREE.Vector3().setFromMatrixPosition(o.matrixWorld).toArray().map(n => +n.toFixed(3)); };
+      const sz = (o) => { const b = new THREE.Box3().setFromObject(o), s = new THREE.Vector3(); b.getSize(s); return s.toArray().map(n => +n.toFixed(3)); };
+      return { ready, keys: keys.length, time: +time.toFixed(2), holding: Object.assign({}, holding),
+        rightHand: wp(bones.RightHand), leftHand: wp(bones.LeftHand),
+        rightTarget: HANDLES.right.position.toArray().map(n => +n.toFixed(3)),
+        leftTarget: HANDLES.left.position.toArray().map(n => +n.toFixed(3)),
+        tube: wp(tube), tubeSize: sz(tube), jug: wp(jug), jugSize: sz(jug) };
+    },
+  };
+  </script>
+</body>
+</html>

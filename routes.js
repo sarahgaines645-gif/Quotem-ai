@@ -428,6 +428,39 @@ router.get('/rig', (req, res) => {
     res.sendFile(path.join(__dirname, 'rig.html'));
 });
 
+// The control test. A character and a dance authored by the same artist on the
+// same skeleton, played straight. Nothing generated, nothing retargeted. It
+// exists to answer one question honestly: is the page wrong, or was the asset?
+router.get('/dance', (req, res) => {
+    res.sendFile(path.join(__dirname, 'dance.html'));
+});
+// The disco. The dancing unicorn is a GENERATED CLIP, not a rig — shot against
+// green and keyed in the browser, so she composites into the scene with the
+// disco ball and the beams. She dances alone, then the others jump in on the
+// beat. No bones anywhere.
+router.get('/disco', (req, res) => {
+    res.sendFile(path.join(__dirname, 'disco.html'));
+});
+
+// The lab. A properly rigged character (three.js Michelle, MIT) in a lab coat
+// built from primitives PARENTED TO HER BONES, picking up a test tube and
+// pouring water into it. The action is a function of TIME written against bone
+// NAMES (assets/unicorn-actions.js), so it drives any Mixamo-spec character and
+// can be fired whenever a lesson needs it — which is the one thing a generated
+// video cannot do.
+router.get('/lab', (req, res) => {
+    res.sendFile(path.join(__dirname, 'lab.html'));
+});
+
+// The studio. Drag her hands where you want them and the arm solves to it;
+// place the props; set keyframes; scrub. The point is CONTROL — posing a
+// character by typing joint angles is guessing, and this is the tool that
+// replaces it. Export gives the keys as numbers to bake into an action.
+router.get('/studio', (req, res) => {
+    res.sendFile(path.join(__dirname, 'studio.html'));
+});
+
+
 // Q's personal finance page.
 router.get('/finance', (req, res) => {
     res.sendFile(path.join(__dirname, 'finance.html'));
