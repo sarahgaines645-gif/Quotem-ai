@@ -383,6 +383,12 @@
 
     /* ── The coach card ─────────────────────────────────────────────────── */
     .coach-card { width: 236px; }
+    /* A CHAT SCROLLS, IT DOES NOT GROW (Sarah, 19 Aug: "the chat gets bigger
+       instead of the writing moving up"). The card's default ceiling was the
+       whole screen, so it grew to the bottom before it ever scrolled. This is
+       the default; her own resize (the corner grip) sets an inline ceiling
+       and wins. */
+    .coach-card:not([style*="max-height"]) { max-height: min(62vh, 640px); }
     .coach-card.wide { width: 320px; }
     .coach-card .q-logo {
       font-weight: 700; font-size: 18px; color: var(--text); line-height: 1; flex-shrink: 0;
@@ -1731,7 +1737,7 @@
     .wb-hr { border: none; border-top: 1px solid rgba(0,0,0,0.08); margin: 14px 0; }
     /* STICKY NOTES on the board (Q's ask, 18 Aug): a layer above the display;
        small raised cards with a coloured top edge, dragged where she likes. */
-    .wb-stickies { position: relative; min-height: 96px; margin: 0 18px 4px; border-bottom: 1px dashed rgba(0,0,0,0.08); }
+    .wb-stickies { position: relative; min-height: 80px; margin: 0 18px 0; }   /* one board — no line between the stickies and the rest (Sarah, 19 Aug) */
     .wb-stickies.hidden { display: none; }
     .wb-sticky { position: absolute; width: 150px; padding: 8px 10px 8px; border-radius: 10px; background: var(--bg); box-shadow: var(--neu-raised-sm); border-top: 4px solid var(--sc, #e6c84a); font-size: 12px; line-height: 1.4; color: var(--text); cursor: grab; user-select: none; -webkit-user-select: none; touch-action: none; overflow-wrap: anywhere; }
     .wb-sticky:active { cursor: grabbing; }
@@ -3317,7 +3323,13 @@
       if (!coachThread) return;
       const had = state.chatLog.length;
       coachThread.innerHTML = had ? `<div class="q-chat">${threadHtml()}</div>` : '';
-      const box = coachThread.querySelector('.q-chat'); if (box) box.scrollTop = box.scrollHeight;
+      // The scrolling element is the card BODY (the thread has no overflow of its
+      // own) — the newest line comes into view, the older ones move up.
+      coachScrollToNewest();
+    }
+    function coachScrollToNewest() {
+      const body = document.getElementById('coach-body'); if (!body) return;
+      requestAnimationFrame(() => { try { body.scrollTop = body.scrollHeight; } catch (_) {} });
     }
     function pushSaid(entry) {
       const last = state.chatLog[state.chatLog.length - 1];
@@ -3335,6 +3347,7 @@
     }
     function sayMe(text) { flushLive(); pushSaid({ role: 'me', text: String(text || '') }); renderThread(); }
     function setCoach({ msg, section, hint, actions, inputVisible, thinking, showNudge, where, move, moveHtml, step, role, supply, ack }) {
+      coachScrollToNewest();   // rAF — runs after the DOM below is updated: the newest line is in view
       // The QUESTION lives on the boards — the whiteboard's ladder (bold, the
       // rung we are on) and the teaching board. The card does not read it out
       // a third time (Sarah, 17 Aug 23:10: "3 of the same question. I
@@ -5331,7 +5344,7 @@
       toolPopEl.querySelectorAll('.pc-sw').forEach(b => b.addEventListener('click', () => { colour = b.dataset.sw; toolPopEl.querySelectorAll('.pc-sw').forEach(x => x.classList.toggle('on', x === b)); }));
       const ta = toolPopEl.querySelector('#ps-text'); setTimeout(() => { try { ta.focus(); } catch (_) {} }, 30);
       toolPopEl.querySelector('#ps-save').addEventListener('click', () => { st.text = String(ta.value || '').trim().slice(0, 160) || st.text; st.colour = STICKY_HEX[colour] ? colour : st.colour; hideToolPop(); persist({ wbStickies: state.wbStickies }); renderStickies(); });
-      toolPopEl.querySelector('#ps-go').addEventListener('click', () => { hideToolPop(); const r = sendTextToPage(String(ta.value || st.text)); if (r === 'ask') { try { workSay('Click the spot on your page, then press → again.'); } catch (_) {} } else if (r === 'sent') { st.done = true; persist({ wbStickies: state.wbStickies }); renderStickies(); } });
+      toolPopEl.querySelector('#ps-go').addEventListener('click', () => { hideToolPop(); const r = sendStickyToPage(String(ta.value || st.text)); if (r === 'sent' || r === 'end') { st.done = true; persist({ wbStickies: state.wbStickies }); renderStickies(); try { wbWorkSay.innerHTML = (r === 'end' ? 'On the end of your page. ' : 'On your page. ') + '<button type="button" class="q-btn quiet" id="wk-undo">↶ Undo</button>'; wbWorkSay.classList.remove('hidden'); const u = document.getElementById('wk-undo'); if (u) u.addEventListener('click', () => { if (undoDoc()) workSay('Put back.'); }); } catch (_) {} } });
       toolPopEl.querySelector('#ps-bin').addEventListener('click', () => { st.done = true; hideToolPop(); persist({ wbStickies: state.wbStickies }); renderStickies(); });
     }
     document.getElementById('inline-tab-btn').addEventListener('click', () => {
@@ -7537,7 +7550,7 @@
           addQTabs([{ paragraph: pn, label: 'how a bill passes', colour: 'blue', side: 'right' }]);
           tourTag(state.qTabs, at);
         } },
-      { say: 'Stickies live on the whiteboard — drag one, bin it, or → sends it to your page.',
+      { say: 'Stickies live on the whiteboard — drag one, bin it with ×, or → sends it to your page. Press the note itself to change its words or its colour.',
         run: () => {
           state.wbStickies = state.wbStickies || []; const at = state.wbStickies.length;
           addStickies([{ text: 'Come back to this — check what the Lords can actually block', colour: 'yellow' }]);
