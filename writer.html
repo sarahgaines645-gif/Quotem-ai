@@ -986,7 +986,9 @@
     .brief-board { width: 300px; }
     .brief-board .panel-body { font-size: 12px; color: var(--text); line-height: 1.5; }
     .bb-line { font-size: 10.5px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent); line-height: 1.4; margin-bottom: 8px; }
-    .bb-fold { margin-top: 10px; }
+    .bb-fold { margin-top: 8px; }
+    .brief-board .mk-block { margin-bottom: 10px; }
+    .brief-board .coverage-strip { margin: 0; }
     .bb-fold > summary {
       list-style: none; cursor: pointer; font-size: 11px; color: var(--text-muted);
       text-decoration: underline; text-underline-offset: 2px; user-select: none;
@@ -4123,20 +4125,26 @@
       const listHtml = criteria.map((c, i) => `<li><span class="cid" title="${esc(c.id)}">${i + 1}.</span><span class="ba-label">${esc(criterionLabel(c))}${c.wordBudget ? ' <span style="font-weight:500;color:var(--text-muted)">· ~' + esc(String(c.wordBudget)) + ' words</span>' : ''}</span><span class="ba-text">${esc(c.text)}</span></li>`).join('');
       const foldOpen = !!(panelLayout.brief && panelLayout.brief.fold);
 
-      body.innerHTML = `${line ? `<div class="bb-line">${esc(line)}</div>` : ''}
-        <div class="coverage-strip" id="coverage-strip"></div>
-        <div id="bb-sources">${sourceDigestsHtml()}</div>
-        <details class="bb-fold" id="bb-fold"${foldOpen ? ' open' : ''}><summary>Show the brief</summary>
-          <div class="bb-formal">
-            <div class="brief-doctype">${esc(docType)}</div>
-            ${producing ? `<div class="brief-producing-label">You're producing</div><div class="brief-producing-text">${esc(producing)}</div>` : ''}
-            ${data.whatItWants && data.whatItWants !== producing ? `<div class="brief-producing-label">What it wants</div><div class="brief-producing-text">${esc(data.whatItWants)}</div>` : ''}
-            <div class="brief-asks-label">The ${n} thing${n === 1 ? '' : 's'}, as the brief puts ${n === 1 ? 'it' : 'them'}</div>
-            <ol class="brief-asks-list">${listHtml}</ol>
-            ${gradeHtml}
-            ${metaBits.length ? `<div class="brief-meta-line">${metaBits.join(' · ')}</div>` : ''}
-          </div>
-        </details>`;
+      // THE BRIEF BOARD IS CARDS, like every other panel (Sarah, 19 Aug: "the
+      // breif has no css. it should match all the other cards"). Same mkBlock
+      // the marking panel uses - raised, a rail, an icon well, a small pink
+      // title - so the two panels read as one thing.
+      body.innerHTML =
+        mkBlock(n === 1 ? 'The question' : 'The questions', '\u2630', '',
+          `<div class="coverage-strip" id="coverage-strip"></div>`, n || '')
+        + `<div id="bb-sources">${sourceDigestsHtml()}</div>`
+        + mkBlock('The brief itself', '\u25A4', '',
+          `<div class="brief-doctype">${esc(docType)}</div>
+          <details class="bb-fold" id="bb-fold"${foldOpen ? ' open' : ''}><summary>Show the brief</summary>
+            <div class="bb-formal">
+              ${producing ? `<div class="brief-producing-label">You're producing</div><div class="brief-producing-text">${esc(producing)}</div>` : ''}
+              ${data.whatItWants && data.whatItWants !== producing ? `<div class="brief-producing-label">What it wants</div><div class="brief-producing-text">${esc(data.whatItWants)}</div>` : ''}
+              <div class="brief-asks-label">The ${n} thing${n === 1 ? '' : 's'}, as the brief puts ${n === 1 ? 'it' : 'them'}</div>
+              <ol class="brief-asks-list">${listHtml}</ol>
+              ${gradeHtml}
+              ${metaBits.length ? `<div class="brief-meta-line">${metaBits.join(' \u00b7 ')}</div>` : ''}
+            </div>
+          </details>`);
       const fold = document.getElementById('bb-fold');
       fold.addEventListener('toggle', () => {
         const l = getL(briefPanel); l.fold = fold.open; saveLayout();

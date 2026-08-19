@@ -232,6 +232,19 @@ async function callAccurate(systemPrompt, userPrompt, opts = {}) {
     return accurateJSON(withHouseStyle(systemPrompt), userPrompt, { effort: 'medium', ...opts, model: SONNET, fallback: callQ, skill: 'writer' });
 }
 
+// THE MARKER IS THE ONLY THING ON CLAUDE (Sarah, 19 Aug: "I have both Qs
+// talking to me now. you just run the marker through claud and then leave the
+// rest to v4"). Two engines were both speaking as Q on the same card - the
+// coach on V4 and every writer pass on Claude - so she was held in two
+// conversations at once. callAccurate stays for the mark (and the mark alone);
+// everything else - the plan, the brief, the essay, the probe, the tools, the
+// proofread, the trim, the digests, the assemble - goes to Q's own engine
+// through callFast. Same house style, same schema, same shape back.
+async function callFast(systemPrompt, userPrompt, opts = {}) {
+    const { effort, ...rest } = opts || {};      // effort is a Claude idea; Q has no use for it
+    return callQ(systemPrompt, userPrompt, rest);   // callQ applies withHouseStyle itself - wrapping here would say it twice
+}
+
 async function analyseTask(taskText) {
     const system = `You analyse assignment briefs and writing tasks to extract structure for a writing coach.
 
@@ -248,7 +261,7 @@ Return ONLY valid JSON with these fields:
 - subject (string): the subject area (e.g. "Strategic HRM", "English Literature", "Business Studies")
 - keyConcepts (array of strings): 3-6 specific concepts/themes from THIS brief the student must address
 - gradeBands (object with keys "top", "mid", "low"): one concrete sentence per band — what distinguishes a top answer from a mid answer for THIS specific task`;
-    return await callAccurate(system, `TASK INPUT:\n${taskText}`, { maxTokens: 800 });
+    return await callFast(system, `TASK INPUT:\n${taskText}`, { maxTokens: 800 });
 }
 
 async function nextQuestion(analysis, history) {
@@ -448,7 +461,7 @@ ${PLAIN_QUESTION_RULE}
 ${LEADING_QUESTION_RULE}
 
 If you can see ANY assignment content, extract what you can. Never ask for more information — fill what you can and leave the rest empty. Word count and deadline are null if the brief does not state them.`);
-    const brief = await callAccurate(system, `ASSIGNMENT BRIEF (full text):\n${taskText}`, { maxTokens: 8000, schema: BRIEF_SCHEMA, effort: 'medium' });
+    const brief = await callFast(system, `ASSIGNMENT BRIEF (full text):\n${taskText}`, { maxTokens: 8000, schema: BRIEF_SCHEMA, effort: 'medium' });
     return normaliseBrief(brief);
 }
 
@@ -695,7 +708,7 @@ ${boundDoc(docText) || '(blank page)'}
 
 Ask the next question.`;
 
-    const r = await callAccurate(system, user, { maxTokens: 1500, schema: PROBE_SCHEMA, effort: 'low' });
+    const r = await callFast(system, user, { maxTokens: 1500, schema: PROBE_SCHEMA, effort: 'low' });
     return normaliseProbe(r, brief, essay, plan);
 }
 
@@ -1212,7 +1225,7 @@ Rules:
 THE BRIEF
 ${briefForPrompt(brief)}`;
     const user = `TITLE: ${title || brief.title}\n\nTHEIR DRAFT (verbatim):\n${boundDoc(docText, 40000) || '(blank)'}\n\nCOACH-BOX ANSWERS (their words):\n${historyBlock(history, 30)}\n\nAssemble it.`;
-    const r = await callAccurate(system, user, { maxTokens: 12000, schema: ASSEMBLE_SCHEMA, effort: 'low' });
+    const r = await callFast(system, user, { maxTokens: 12000, schema: ASSEMBLE_SCHEMA, effort: 'low' });
     if (!r || !String(r.document || '').trim()) throw new Error('The assembly came back empty — try again.');
     const doc = String(r.document);
     return { document: doc, wordCount: Number(r.wordCount) || doc.trim().split(/\s+/).filter(Boolean).length, changes: Array.isArray(r.changes) ? r.changes.map(String).slice(0, 6) : [] };
@@ -1257,7 +1270,7 @@ async function extractScenario({ taskText, brief }) {
 ${brief ? '\nTHE QUESTIONS (already extracted):\n' + (brief.criteria || []).map(c => '- ' + c.text).join('\n') : ''}`);
     const user = `THE DOCUMENT:\n\n${body.slice(0, 60000)}\n\nTell the scenario for someone who will not read this.`;
     const schema = { type: 'object', additionalProperties: false, required: ['scenario'], properties: { scenario: BRIEF_SCHEMA.properties.scenario } };
-    const r = await callAccurate(system, user, { maxTokens: 1800, schema, effort: 'low' });
+    const r = await callFast(system, user, { maxTokens: 1800, schema, effort: 'low' });
     // null means "the document has no scenario" — that is the model's call
     // (scenario: null), not what an empty object or a blank story means. Those
     // are a failed read and must retry, not sit as "no scenario" for ever.
@@ -1286,7 +1299,7 @@ async function digestSource({ name, text, brief }) {
     const system = withMission(`You are Q, reading a supporting document FOR the student so they never have to. They will answer questions about it as if they had read it — from your digest alone. So: plain everyday British English, short, concrete, nothing left out that a question could hinge on, nothing added that is not in the document. Figures copied exactly. Names as written. No marker language, no advice on what to write.
 ${brief ? '\nTHE ASSIGNMENT THIS DOCUMENT SUPPORTS (so you know what matters in it):\n' + briefForPrompt(brief).slice(0, 3000) : ''}`);
     const user = `DOCUMENT: ${name || 'supporting document'}\n\n${body.slice(0, 60000)}\n\nDigest it for someone who will not read it.`;
-    const r = await callAccurate(system, user, { maxTokens: 1800, schema: SOURCE_DIGEST_SCHEMA, effort: 'low' });
+    const r = await callFast(system, user, { maxTokens: 1800, schema: SOURCE_DIGEST_SCHEMA, effort: 'low' });
     // An empty {} used to become an all-blank digest, stored as if it were
     // done. Throw instead so the route's retry path (and the page's retry) fire.
     if (!r || !(String(r.theStory || '').trim() || String(r.whatItIs || '').trim())) throw new Error('Q could not read that document — try again.');
@@ -1379,7 +1392,7 @@ Rules:
 THE BRIEF
 ${briefForPrompt(brief)}`);
     const user = `SUPPORTING DOCUMENTS UPLOADED BY THE STUDENT:\n${sourcesForPrompt(sources)}\n\nWrite the model answer.`;
-    const r = await callAccurate(system, user, { maxTokens: 14000, schema: ESSAY_SCHEMA, effort: 'medium' });
+    const r = await callFast(system, user, { maxTokens: 14000, schema: ESSAY_SCHEMA, effort: 'medium' });
     const essay = normaliseEssay(r, brief);
     // A criterion the model skipped (or gave empty paragraphs) used to vanish
     // here — and planPart then said "not written yet" for ever, because the
@@ -1390,7 +1403,7 @@ ${briefForPrompt(brief)}`);
     if (missing.length) {
         const ids = missing.map(c => c.id);
         const topUp = `${user}\n\nThe model answer above is already written for every part EXCEPT these — write ONLY these parts, with these exact criterionIds, at least one paragraph each: ${ids.join(', ')}.`;
-        const r2 = await callAccurate(system, topUp, { maxTokens: 6000, schema: ESSAY_SCHEMA, effort: 'medium' });
+        const r2 = await callFast(system, topUp, { maxTokens: 6000, schema: ESSAY_SCHEMA, effort: 'medium' });
         const extra = normaliseEssay(r2, { ...brief, criteria: missing });
         const byId = new Map(essay.perCriterion.concat(extra.perCriterion).map(p => [p.criterionId, p]));
         essay.perCriterion = brief.criteria.map(c => byId.get(c.id)).filter(Boolean);
@@ -1561,7 +1574,7 @@ THE BRIEF
 ${briefForPrompt(brief)}
 ${essay ? '\n' + essayForPrompt(essay).slice(0, 12000) : ''}`);
     const user = `UPLOADED SOURCES (name: first lines):\n${srcMeta}\n\nTHE STUDENT'S SENTENCES (numbered):\n${sentences.map((s, i) => `${i + 1}. ${s}`).join('\n')}\n\nWhich sentences should change, and why?`;
-    const r = await callAccurate(system, user, { maxTokens: 6000, schema: EDIT_SCHEMA, effort: 'medium' });
+    const r = await callFast(system, user, { maxTokens: 6000, schema: EDIT_SCHEMA, effort: 'medium' });
     const brickIds = new Set(allBrickIds(essay).map(b => b.brickId));
     const items = (r && Array.isArray(r.items) ? r.items : []).map(it => ({
         sentence: String(it.sentence || '').trim(),
@@ -1641,7 +1654,7 @@ ${targetForPrompt(brief, essay, brickId)}`);
     const wantLine = tool === 'facts' && WANT[String(want || '')] ? `\nTHEY WANT: ${WANT[want]}. Give those first; other useful facts after.` : '';
     const focusLine = focus ? `\nWHAT THE MARKER EXPECTS AT THIS POINT (the plan's own requirement — name THIS, not a different one): ${String(focus).slice(0, 300)}` : '';
     const user = `THE HIGHLIGHTED SENTENCE: "${String(sentence).slice(0, 600)}"${word ? `\nTHE WORD THEY PICKED: "${String(word).slice(0, 60)}"` : ''}${wantLine}${focusLine}\n${srcBlock}\n\nGive the ${tool} help.`;
-    const r = await callAccurate(system, user, { maxTokens: tool === 'facts' ? 1800 : 1200, schema: TOOL_SCHEMA, effort: 'low' });
+    const r = await callFast(system, user, { maxTokens: tool === 'facts' ? 1800 : 1200, schema: TOOL_SCHEMA, effort: 'low' });
     if (!r || typeof r !== 'object' || !String(r.headline || '').trim()) throw new Error('The tool came back empty — try again.');
     return {
         tool,
@@ -1729,7 +1742,7 @@ Return every instance you find (up to 60), each as the exact span from the text 
 ${body.slice(0, 60000)}
 
 List the ${kind} slips.`;
-    const r = await callAccurate(system, user, { maxTokens: 6000, schema: PROOF_SCHEMA, effort: 'low' });
+    const r = await callFast(system, user, { maxTokens: 6000, schema: PROOF_SCHEMA, effort: 'low' });
     const seen = new Set();
     const issues = (Array.isArray(r && r.issues) ? r.issues : []).map(x => ({ wrong: String(x.wrong || '').trim(), right: String(x.right || '').trim(), why: capWords(x.why, 14) }))
         // real, findable, and a change
@@ -1745,7 +1758,7 @@ Two verdicts, and you must use the right one:
 - TIGHTEN: the point IS needed but takes too long to make — three sentences where one would do, the same thing said twice in a row, a fact buried in wind-up. right = the same point in fewer words, KEEPING the student's own words, figures and examples; drop only the padding. At most half the length. Never a new idea, never a new fact, never your own argument.
 Rules: spans are whole sentences, verbatim, character for character (curly quotes, spelling mistakes and all). Do not mark spelling, grammar or style. Do not mark a sentence just because it is long — only if the essay would lose nothing (cut) or nothing but wind-up (tighten). If the writing is tight, return an empty list. Never rewrite the whole thing; at most 25 spans, the ones that cost the most words first.${ctx ? `\n\nWHAT THE ESSAY IS FOR (judge "needed" against this):\n${ctx.slice(0, 2500)}` : ''}`);
     const user = `THE TEXT:\n${body.slice(0, 60000)}\n\nMark what the essay does not need (cut) and what takes too long (tighten).`;
-    const r = await callAccurate(system, user, { maxTokens: 6000, schema: TRIM_SCHEMA, effort: 'medium' });
+    const r = await callFast(system, user, { maxTokens: 6000, schema: TRIM_SCHEMA, effort: 'medium' });
     const seen = new Set();
     const issues = (Array.isArray(r && r.issues) ? r.issues : []).map(x => {
         const verdict = x.verdict === 'cut' ? 'cut' : 'tighten';
@@ -1784,7 +1797,7 @@ async function weakPass(body, context) {
 For each weak sentence give WHY in plain words and a STEER — what they should do to make it strong. Never write the sentence for them; never quote a model answer; never a new fact they did not have. If the writing is strong, return an empty list. At most 25, weakest first.
 Do not mark spelling, grammar, length or style — only weakness of the point.${ctx ? `\n\nWHAT THE ESSAY IS FOR (judge against this):\n${ctx.slice(0, 2500)}` : ''}`);
     const user = `THE TEXT:\n${body.slice(0, 60000)}\n\nMark the weak sentences: why, and what would make each strong.`;
-    const r = await callAccurate(system, user, { maxTokens: 6000, schema: WEAK_SCHEMA, effort: 'medium' });
+    const r = await callFast(system, user, { maxTokens: 6000, schema: WEAK_SCHEMA, effort: 'medium' });
     const seen = new Set();
     const issues = (Array.isArray(r && r.issues) ? r.issues : []).map(x => ({ wrong: String(x.wrong || '').trim(), verdict: 'weak', right: '', why: capWords(x.why, 16), steer: capWords(x.steer, 22) }))
         .filter(x => x.wrong && x.wrong.split(/\s+/).length >= 3 && body.includes(x.wrong) && x.steer && !seen.has(x.wrong) && seen.add(x.wrong))
@@ -1812,7 +1825,7 @@ Rules: judge the IDEA — is the brick's point now made in their own words (the 
 ${targetForPrompt(brief, essay, brickId)}
 ${expectationsForPrompt(plan)}`);
     const user = `THEIR SENTENCE NOW: "${String(sentence).slice(0, 800)}"\n\nHow close is it?`;
-    const r = await callAccurate(system, user, { maxTokens: 400, schema: CHECK_SCHEMA, effort: 'low' });
+    const r = await callFast(system, user, { maxTokens: 400, schema: CHECK_SCHEMA, effort: 'low' });
     const closeness = ['match', 'closer', 'missing'].includes(r && r.closeness) ? r.closeness : 'closer';
     const kinds = new Set((plan && plan.requirements || []).map(x => x.kind));
     return {
@@ -1978,7 +1991,18 @@ Make the plan.`;
     // every time — the fallback then returned broken JSON and the plan job
     // failed after two minutes, so the board had nothing to draw (Sarah,
     // 17 Aug 22:20: "all the infos gone"). Same reason the essay runs at 14000.
-    const r = await callAccurate(system, user, { maxTokens: 16000, schema: PLAN_SCHEMA, effort: 'medium' });
+    // A PLAN THAT COMES BACK EMPTY IS RETRIED (Sarah, 19 Aug, live: "the word
+    // boards not on here like it should be" - and the log showed why: two plans
+    // in a row came back schema-shaped but junk, steps: [], one of them with
+    // "role": ": Let me redo properly." in it, in 27s and 13s. The model wobbled;
+    // it did not run out of room. Without a plan there is no word board, no
+    // requirement dots and no steps, so one bad answer took the whole question's
+    // furniture away. One retry at higher effort, then the honest error.)
+    let r = await callFast(system, user, { maxTokens: 16000, schema: PLAN_SCHEMA, effort: 'medium' });
+    if (!r || !Array.isArray(r.steps) || !r.steps.length) {
+        console.warn('[writer/plan] ' + criterionId + ': empty on the first pass - one retry at high effort');
+        r = await callFast(system, user, { maxTokens: 16000, schema: PLAN_SCHEMA, effort: 'high' });
+    }
     return normalisePlan(r, criterionId, bricks);
 }
 
@@ -2289,7 +2313,7 @@ ${hist || '(this is the first message)'}
 STUDENT: ${q.slice(0, 1200)}
 
 Answer as Q.`;
-    const r = await callAccurate(system, user, { maxTokens: 1600, schema: CHAT_SCHEMA, effort: 'medium' });
+    const r = await callFast(system, user, { maxTokens: 1600, schema: CHAT_SCHEMA, effort: 'medium' });
     const reply = String((r && r.reply) || '').trim();
     if (!reply) throw new Error('Q went quiet — try again.');
     let board = null;
@@ -2334,7 +2358,7 @@ ${list.map((c, i) => `${i + 1}. ${c.title || ''} — ${(c.authors || []).map(a =
    says: "${String(c.snippet).slice(0, 260)}"` : ''}`).join('\n')}
 
 Judge each.`;
-    const r = await callAccurate(system, user, { maxTokens: 2000, schema: CITE_JUDGE_SCHEMA, effort: 'low' });
+    const r = await callFast(system, user, { maxTokens: 2000, schema: CITE_JUDGE_SCHEMA, effort: 'low' });
     const out = [];
     for (const j of (r && Array.isArray(r.judged) ? r.judged : [])) {
         const i = Number(j.i) - 1; if (!(i >= 0 && i < list.length)) continue;
@@ -2377,7 +2401,7 @@ ${LEADING_QUESTION_RULE}
 THE BRIEF (for context)
 ${briefForPrompt(brief).slice(0, 2500)}`);
     const user = `THE STUDENT'S LIST:\n${list.map((x, i) => `${i + 1}. ${x}`).join('\n')}\n\nSort it.`;
-    const r = await callAccurate(system, user, { maxTokens: 1400, schema: TAG_SCHEMA, effort: 'low' });
+    const r = await callFast(system, user, { maxTokens: 1400, schema: TAG_SCHEMA, effort: 'low' });
     const names = new Set(step.tags.map(t => t.name));
     const byItem = new Map(); const noteOf = new Map();
     for (const t of (r && Array.isArray(r.tagged) ? r.tagged : [])) {
@@ -2427,7 +2451,7 @@ THEIR ANSWER NOW:
 ${String(answer).slice(0, 2500)}
 
 Which bricks are voiced, is the step filled, and what is the one thing to ask if not?`;
-    const r = await callAccurate(system, user, { maxTokens: 700, schema: STEP_CHECK_SCHEMA, effort: 'low' });
+    const r = await callFast(system, user, { maxTokens: 700, schema: STEP_CHECK_SCHEMA, effort: 'low' });
     const allowed = new Set(step.targetBrickIds || []);
     const filled = !!(r && r.filled);
     const supply = r && r.supply && !filled ? capSentences(r.supply, 2, 45) || null : null;
@@ -2483,7 +2507,7 @@ THE BRIEF (for context)
 ${briefForPrompt(brief).slice(0, 4000)}
 ${bricks.length ? 'THE BRICKS THE ASK IS FISHING FOR (Q\'s eyes only — teach the concept, never these words):\n' + bricks.map(b => `(${b.brickId}) ${b.gist}\n    ${String(b.text || '').slice(0, 500)}`).join('\n') : ''}`);
     const user = `THE ASK THEY DID NOT UNDERSTAND: "${ask.slice(0, 500)}"\n\nTeach the concept it needs, then re-put the ask as an apply question.`;
-    const r = await callAccurate(system, user, { maxTokens: 900, schema: TEACH_SCHEMA, effort: 'low' });
+    const r = await callFast(system, user, { maxTokens: 900, schema: TEACH_SCHEMA, effort: 'low' });
     if (!r || !String(r.lesson || '').trim()) throw new Error('The lesson came back empty — try again.');
     return {
         term: String(r.term || '').trim(),
@@ -2533,7 +2557,7 @@ THE BRIEF (for context)
 ${briefForPrompt(brief).slice(0, 3000)}
 ${bricks.length ? 'THE MODEL ANSWER FOR THIS PART (Q\'s eyes only — never quote it):\n' + bricks.map(b => '(' + b.brickId + ') ' + b.gist).join('\n') : ''}`);
     const user = `THE STUDENT'S SENTENCES FOR THIS PART (numbered):\n${list.map((x, i) => (i + 1) + '. ' + x).join('\n')}\n\nSTILL NEEDED IN THIS PART:\n${reqs.length ? reqs.map(r => '- ' + r.kind + ' (' + r.label + ')').join('\n') : kinds.map(k => '- ' + k + ' (' + (REQ_LABELS[k] || k) + ')').join('\n')}\n\nWhere does each one belong?`;
-    const r = await callAccurate(system, user, { maxTokens: 700, schema: PLACE_SCHEMA, effort: 'low' });
+    const r = await callFast(system, user, { maxTokens: 700, schema: PLACE_SCHEMA, effort: 'low' });
     const seen = new Set();
     const placements = (r && Array.isArray(r.placements) ? r.placements : []).map(p => ({
         sentenceIndex: Math.max(0, Math.min(list.length - 1, (Number.isFinite(Number(p.sentenceIndex)) ? Number(p.sentenceIndex) : 1) - 1)),   // numbered from 1 in the prompt
@@ -2563,7 +2587,7 @@ async function relabelCriteria({ brief }) {
     if (!brief || !Array.isArray(brief.criteria) || !brief.criteria.length) throw new Error('No brief yet.');
     const system = withHouseStyle(`You give each assessment criterion a plain-words nickname (4 words or fewer) that a student who has never read the brief understands at a glance — the THING it is about, in everyday words: "Pay and perks", "What attracts people", "Fixed or pick-your-own", "How to measure it". Never the AC code, never the brief's verbs (evaluate, discuss, analyse, assess), never jargon.`);
     const user = `CRITERIA:\n${brief.criteria.map(c => `- [${c.id}] ${c.text}`).join('\n')}\n\nGive every one a nickname.`;
-    const r = await callAccurate(system, user, { maxTokens: 600, schema: LABELS_SCHEMA, effort: 'low' });
+    const r = await callFast(system, user, { maxTokens: 600, schema: LABELS_SCHEMA, effort: 'low' });
     // An empty label would become "this part" and overwrite a good one — drop it.
     const byId = new Map((r && Array.isArray(r.labels) ? r.labels : []).filter(x => x && String(x.label || '').trim()).map(x => [String(x.id || '').replace(/\s+/g, ''), plainLabel(x.label, '')]));
     return brief.criteria.map(c => ({ id: c.id, label: byId.get(c.id) || c.label || plainLabel('', c.text) }));
@@ -2615,7 +2639,7 @@ Return ONLY valid JSON:
 - markedSections (array of 2-6 objects): the sections the student needs to write, in order. Each: { name (string), description (string — 1 sentence of what goes in it), suggestFirstQ (string — the natural leading question a real tutor would ask first to get them writing this section) }
 - teachersBrief (string): what an examiner is looking for in a top answer — the secret sauce, in plain language`;
 
-    return await callAccurate(
+    return await callFast(
         system,
         `TASK ANALYSIS:\n${JSON.stringify(analysis, null, 2)}\n\nBuild the tutor's brief.`,
         { maxTokens: 1200 }
@@ -2829,7 +2853,7 @@ Return ONLY valid JSON:
 - type (string): "book", "article", "website", "newspaper", "chapter", or "other"
 - warnings (array of strings): any fields you had to leave as [?] or [n.d.] etc — so the user knows what to verify`;
 
-    return await callAccurate(system, `SOURCE TO FORMAT:\n${sourceDescription}`, { maxTokens: 500 });
+    return await callFast(system, `SOURCE TO FORMAT:\n${sourceDescription}`, { maxTokens: 500 });
 }
 
 async function suggestReferences(docText, subject, keyConcepts) {
@@ -2851,7 +2875,7 @@ Return ONLY valid JSON:
     const docSnippet = (docText || '').slice(0, 1200);
     const conceptList = (keyConcepts || []).join(', ');
 
-    return await callAccurate(
+    return await callFast(
         system,
         `SUBJECT: ${subject || 'unknown'}\nKEY CONCEPTS: ${conceptList || 'unknown'}\n\nDOCUMENT SO FAR:\n${docSnippet || '(blank)'}`,
         { maxTokens: 1200 }
@@ -2880,7 +2904,7 @@ Return ONLY valid JSON:
     uncertain (boolean)
   }`;
 
-    return await callAccurate(
+    return await callFast(
         system,
         `HIGHLIGHTED TEXT:\n"${paragraphText.slice(0, 600)}"\n\nSUBJECT: ${subject || 'unknown'}\nKEY CONCEPTS: ${(keyConcepts || []).join(', ')}`,
         { maxTokens: 900 }
@@ -2901,7 +2925,7 @@ Return ONLY valid JSON:
 - explanation (string): 2-3 sentences. Plain English, age-appropriate. No jargon. If a simple analogy helps, use one.
 - searchTerms (array of 3 strings): good search phrases the student could type into YouTube or a search engine to find videos that explain this. Make them specific enough to return useful results (e.g. "GCSE English Romeo and Juliet themes", "what is a simile explained simply", "Year 9 history WW1 causes").`;
 
-    return await callAccurate(
+    return await callFast(
         system,
         `CONCEPT / THING THEY DON'T UNDERSTAND: "${concept}"\nSUBJECT: ${subject || 'unknown'}`,
         { maxTokens: 350 }
@@ -2928,7 +2952,7 @@ Return ONLY valid JSON:
 - reason (string): 2 sentences — what's good and specifically what's holding it back
 - nextGradeHint (string): the single most impactful thing they could add or change to reach the next grade — concrete and specific, not vague`;
 
-    return await callAccurate(
+    return await callFast(
         system,
         `SECTION: ${sectionName}\nTASK: ${analysis?.task || 'unknown'}\n\nSTUDENT'S WRITING:\n${sectionText.slice(0, 1500)}`,
         { maxTokens: 500 }
@@ -2967,7 +2991,7 @@ Return ONLY valid JSON:
     craftLesson (string): 2-3 sentences teaching the CRAFT behind this — why it works, what it does to the reader
   }`;
 
-    return await callAccurate(
+    return await callFast(
         system,
         `SECTION NAME: ${sectionName}\nCURRENT GRADE: ${currentGrade}\nTARGET: ${targetGrade}\n\nSTUDENT'S WRITING:\n${sectionText.slice(0, 1000)}`,
         { maxTokens: 900 }
