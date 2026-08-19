@@ -7472,6 +7472,7 @@
       try { renderStickies(); if (!wbOpen()) wbBody.innerHTML = ''; } catch (_) {}   // a shut board does not keep the demo display behind it
       state.settings.tourSeen = true;
       try { persist({ settings: state.settings }); } catch (_) {}
+      try { const pill = document.getElementById('btn-tour'); if (pill) pill.style.display = ''; } catch (_) {}
       coachTaps.innerHTML = '';
       if (wasOn) tourSay('That\'s the tools. Your paragraph\'s gone. Ask me anything, or drop your task in.');
     }
@@ -7483,6 +7484,9 @@
       if (docPlainText().trim()) return;
       if ((state.chatLog || []).length) return;
       tourTaps([{ label: 'Show me around →', onClick: () => startTour() }]);
+      // The tap is the offer — the quiet pill would be the same words twice on a
+      // fresh project. It comes back once the tour has run.
+      const pill = document.getElementById('btn-tour'); if (pill) pill.style.display = 'none';
     }
     document.getElementById('btn-tour').addEventListener('click', () => startTour());
     function partWordCounts() {
