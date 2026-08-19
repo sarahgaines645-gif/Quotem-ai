@@ -1953,6 +1953,12 @@
     /* MINI TABS — the same tab as a chip, in the chat and on the teaching board;
        press one and it takes you to the paragraph (Sarah, 18 Aug). */
     .q-mtab { display: inline-flex; align-items: center; gap: 5px; font-family: 'Space Grotesk', sans-serif; font-size: 9.5px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; line-height: 1; padding: 3px 7px 3px 6px; margin: 0 2px; border: none; border-radius: 6px 3px 3px 6px; background: var(--bg); color: var(--text); box-shadow: var(--neu-raised-xs); border-right: 3px solid var(--tc, #9aa0ad); vertical-align: middle; cursor: pointer; white-space: nowrap; }
+    /* One label on many places: ◀ LABEL 2/7 ▶ — the arrows step through them. */
+    .q-mtab.q-mtab-grp { padding: 0; gap: 0; cursor: default; }
+    .q-mtab.q-mtab-grp button { font: inherit; letter-spacing: inherit; text-transform: inherit; color: inherit; background: none; border: none; cursor: pointer; padding: 3px 5px; line-height: 1; }
+    .q-mtab.q-mtab-grp .arr { color: var(--tc, #9aa0ad); font-size: 8px; padding: 3px 5px; }
+    .q-mtab.q-mtab-grp .arr:hover { color: var(--text); }
+    .q-mtab.q-mtab-grp .lab { padding: 3px 2px; }
     .q-mtab:hover { color: var(--accent); }
     .q-mtab .pn { color: var(--text-faint); font-weight: 700; }
     .tb-tabs { margin: 0 0 20px; padding: 12px 14px; border-radius: 12px; box-shadow: var(--neu-raised-sm); }
@@ -5421,16 +5427,51 @@
       return jumpToSentence(t.slice(0, Math.min(60, t.length))) || jumpToSentence(t.split(/\s+/).slice(0, 5).join(' '));
     }
     document.addEventListener('click', (e) => { const b = e.target.closest('.q-mtab[data-pn]'); if (!b) return; e.preventDefault(); jumpToParagraph(Number(b.dataset.pn)); });
-    // The TABS card on the teaching board: one chip per live tab.
+    // The TABS card on the teaching board: one chip per live tab — and ONE chip
+    // per LABEL when the same label sits on several places ("spelling" on every
+    // mistake): ◀ SPELLING 2/7 ▶ steps through them (Sarah, 19 Aug: "we will
+    // need to split the tag in to 2 and have them as arrows that will move
+    // forward and back wards through it").
+    const tabGroupAt = {};
+    function tabLabelKey(t) { return String((t && t.label) || '').trim().toLowerCase(); }
+    function jumpToTab(t) { if (!t) return false; return t.text ? jumpToSentence(t.text) : jumpToParagraph(Number(t.paragraph)); }
     function tabsBoardHtml() {
       const all = (state.qTabs || []);
       const live = all.map((t, i) => ({ t, i })).filter(x => x.t && !x.t.done).sort((a, b) => (a.t.text ? 1 : 0) - (b.t.text ? 1 : 0) || Number(a.t.paragraph || 0) - Number(b.t.paragraph || 0));
       if (!live.length) return '';
-      return '<div class="tb-tabs"><span class="ex-title">Tabs</span><div class="tb-tabs-row">' + live.map(({ t, i }) => t.text
-        ? '<button type="button" class="q-mtab" data-tt="' + i + '" style="--tc:' + (HL_HEX[t.colour] || '#9aa0ad') + '" title="' + escHtml(String(t.text).slice(0, 80)) + '"><span class="pn">¶</span>' + escHtml(t.label) + '</button>'
-        : miniTabHtml(t.paragraph, t)).join('') + '</div></div>';
+      const groups = new Map();
+      for (const x of live) { const k = tabLabelKey(x.t); if (!groups.has(k)) groups.set(k, []); groups.get(k).push(x); }
+      const chips = [];
+      for (const [k, xs] of groups) {
+        if (xs.length === 1) {
+          const { t, i } = xs[0];
+          chips.push(t.text
+            ? '<button type="button" class="q-mtab" data-tt="' + i + '" style="--tc:' + (HL_HEX[t.colour] || '#9aa0ad') + '" title="' + escHtml(String(t.text).slice(0, 80)) + '"><span class="pn">¶</span>' + escHtml(t.label) + '</button>'
+            : miniTabHtml(t.paragraph, t));
+          continue;
+        }
+        const at = Math.min(tabGroupAt[k] || 0, xs.length - 1); tabGroupAt[k] = at;
+        const cur = xs[at].t;
+        chips.push('<span class="q-mtab q-mtab-grp" data-grp="' + escHtml(k) + '" style="--tc:' + (HL_HEX[cur.colour] || '#9aa0ad') + '" title="' + escHtml(xs.length + ' places — ◀ ▶ step through them') + '">'
+          + '<button type="button" class="arr" data-step="-1" aria-label="Previous">◀</button>'
+          + '<button type="button" class="lab" data-go="1">' + escHtml(xs[0].t.label) + ' <span class="pn">' + (at + 1) + '/' + xs.length + '</span></button>'
+          + '<button type="button" class="arr" data-step="1" aria-label="Next">▶</button></span>');
+      }
+      return '<div class="tb-tabs"><span class="ex-title">Tabs</span><div class="tb-tabs-row">' + chips.join('') + '</div></div>';
     }
     document.addEventListener('click', (e) => { const b = e.target.closest('.q-mtab[data-tt]'); if (!b) return; e.preventDefault(); const t = (state.qTabs || [])[Number(b.dataset.tt)]; if (t && t.text) jumpToSentence(t.text); });
+    document.addEventListener('click', (e) => {
+      const g = e.target.closest('.q-mtab-grp'); if (!g) return; e.preventDefault();
+      const k = g.dataset.grp; const xs = (state.qTabs || []).map((t, i) => ({ t, i })).filter(x => x.t && !x.t.done && tabLabelKey(x.t) === k);
+      if (!xs.length) return;
+      const step = e.target.closest('.arr') ? Number(e.target.closest('.arr').dataset.step) : 0;
+      let at = Math.min(tabGroupAt[k] || 0, xs.length - 1);
+      if (step) at = (at + step + xs.length) % xs.length;
+      tabGroupAt[k] = at;
+      jumpToTab(xs[at].t);
+      const lab = g.querySelector('.lab .pn'); if (lab) lab.textContent = (at + 1) + '/' + xs.length;
+      const cur = xs[at].t; g.style.setProperty('--tc', HL_HEX[cur.colour] || '#9aa0ad');
+    });
     // [P3] / P3 in Q's messages → the mini tab chip.
     function decorateParaRefs(html) {
       // "[P2] 🟢 …" — no tab yet, but Q coloured it: the chip takes the emoji's
@@ -7783,7 +7824,7 @@
     const TOUR_LIST = ['**Before you write this up**', '', '- [ ] Name both Houses', '- [ ] Say what Royal Assent is', '- [ ] Give one real Act as an example', '', '| Stage | What happens |', '| --- | --- |',
       '| First reading | The bill is introduced, no debate |', '| Committee | Gone through line by line |', '| Royal Assent | The monarch signs — it is an Act |'].join(String.fromCharCode(10));
     const TOUR_DIAGRAM = ['```diagram', 'Idea → Commons → Lords', '```'].join(String.fromCharCode(10));
-    const tour = { on: false, i: 0, prevWbDoc: null, wbWasHidden: true, edWasHidden: true };
+    const tour = { on: false, i: 0, prevWbDoc: null, wbWasHidden: true, edWasHidden: true, boardWasHidden: true };
 
     // The tour's taps look like Q's own taps (the .q-tap buttons above) — same
     // markup, same class. They run a function here instead of asking the model.
@@ -7831,6 +7872,8 @@
           addQTabs([{ paragraph: pn, label: 'how a bill passes', colour: 'blue', side: 'right' }]);
           tourTag(state.qTabs, at);
         } },
+      { say: 'Every label gets a chip on the teaching board — and wherever I mention it. Press the chip and you are straight back at that spot. The same label on several places becomes ◀ ▶, so you can step through them.',
+        run: () => { showPanel('teach'); revealPanel('teach'); try { renderBoard(); } catch (_) {} setTimeout(() => tourPulse(document.querySelector('.tb-tabs')), 150); } },
       { say: 'Stickies live on the whiteboard — drag one, bin it with ×, or → sends it to your page. Press the note itself to change its words or its colour.',
         run: () => {
           state.wbStickies = state.wbStickies || []; const at = state.wbStickies.length;
@@ -7838,7 +7881,7 @@
           tourTag(state.wbStickies, at);
           showPanel('wb'); revealPanel('wb');
         } },
-      { say: 'When I work something out it goes on the whiteboard — tick the lines you want and Send to my page puts them on. A table goes on as a table.',
+      { say: 'When I work something out it goes on the whiteboard — tick the lines you want and Send to my page puts them on. A table goes on as a table, a list as a list.',
         run: () => showOnWhiteboard('How a bill becomes law', TOUR_LIST) },
       { say: 'Boxes and arrows when a list won\'t do.',
         run: () => showOnWhiteboard('How a bill becomes law', TOUR_DIAGRAM) },
@@ -7854,6 +7897,7 @@
       tour.prevWbDoc = state.wbDoc || null;
       tour.wbWasHidden = !!(panels.wb && panels.wb.el.classList.contains('hidden'));
       tour.edWasHidden = !!(panels.edit && panels.edit.el.classList.contains('hidden'));
+      tour.boardWasHidden = !!(panels.teach && panels.teach.el.classList.contains('hidden'));
       tourStep();
     }
     function tourStep() {
@@ -7881,6 +7925,7 @@
       try { paintQNotes(); renderInlineDots(); renderBoard(); } catch (_) {}
       try { if (tour.edWasHidden) { hidePanel('edit'); const eb = document.getElementById('btn-edit-strip'); if (eb) eb.setAttribute('aria-expanded', 'false'); } else { showPanel('edit'); renderEditPanel(); } } catch (_) {}
       try { if (tour.wbWasHidden) hidePanel('wb'); else { showPanel('wb'); renderWhiteboard(); } } catch (_) {}
+      try { if (tour.boardWasHidden) hidePanel('teach'); } catch (_) {}
       try { renderStickies(); if (!wbOpen()) wbBody.innerHTML = ''; } catch (_) {}   // a shut board does not keep the demo display behind it
       state.settings.tourSeen = true;
       try { persist({ settings: state.settings }); } catch (_) {}
