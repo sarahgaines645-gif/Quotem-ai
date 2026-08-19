@@ -1672,7 +1672,18 @@ router.post('/writer/chat', requirePerson, express.json({ limit: '1mb' }), write
         // history, his other conversations come as the read-only digest /chat
         // gives him, and every turn here is written back — so what she says to
         // him in general he knows here, and vice versa (Sarah, 17 Aug).
-        const QSURF = 'writer-coach';
+        // ONE THREAD PER ASSIGNMENT (Sarah, 19 Aug: "he thinks we are working on a
+        // different course"). QSURF was the same string for every project, so
+        // loadMemory's last 50 turns for this person came from whichever
+        // assignments she happened to use last - her CIPD reward turns were
+        // Q's history while she sat on the Law paper. Worse, memHist WINS over
+        // the page's own history below, so the real conversation for the
+        // assignment in front of her was the thing being thrown away.
+        // The surface now carries the writer project (writerScope: 'main' or
+        // 'sarah--proj-<id>'). Turns from her other assignments still reach him
+        // through the read-only digest built below - he can mention them, he is
+        // just no longer confused about which course he is teaching.
+        const QSURF = 'writer-coach:' + writerScope(req);
         const qpid = req.person && req.person.id;
         const allMem = qpid ? loadMemory(qpid) : [];
         const memHist = allMem.filter(m => (m.surface || 'chat') === QSURF).slice(-50).map(m => ({ role: m.role, content: String(m.content || '').slice(0, 2500) }));
@@ -1680,7 +1691,7 @@ router.post('/writer/chat', requirePerson, express.json({ limit: '1mb' }), write
         const hist = memHist.length ? memHist : pageHist;
         const others = {};
         for (const m of allMem) { const sf = m.surface || 'chat'; if (sf === QSURF) continue; (others[sf] = others[sf] || []).push(m); }
-        const digest = Object.entries(others).map(([sf, ms]) => '[' + sf.toUpperCase() + ' PAGE]' + String.fromCharCode(10) + ms.slice(-5).map(m => '  ' + (m.role === 'user' ? (req.person && req.person.name) || 'They' : 'Q') + ': ' + String(m.content || '').slice(0, 300).replace(/\s+/g, ' ')).join(String.fromCharCode(10))).join(String.fromCharCode(10) + String.fromCharCode(10));
+        const digest = Object.entries(others).map(([sf, ms]) => '[' + (/^writer-coach:/.test(sf) ? 'ANOTHER ASSIGNMENT' : sf.toUpperCase() + ' PAGE') + ']' + String.fromCharCode(10) + ms.slice(-5).map(m => '  ' + (m.role === 'user' ? (req.person && req.person.name) || 'They' : 'Q') + ': ' + String(m.content || '').slice(0, 300).replace(/\s+/g, ' ')).join(String.fromCharCode(10))).join(String.fromCharCode(10) + String.fromCharCode(10));
         const ctxFull = ctx + (digest ? String.fromCharCode(10) + String.fromCharCode(10) + '--- YOUR OTHER CONVERSATIONS WITH THEM (read-only reference — you may mention them if relevant) ---' + String.fromCharCode(10) + digest + String.fromCharCode(10) + '--- END REFERENCE ---' : '');
         const messages = [{ role: 'user', content: ctxFull }, { role: 'assistant', content: 'Got it — I have the context. Go on.' }].concat(hist, [{ role: 'user', content: text }]);
         let out = null;
