@@ -867,8 +867,17 @@ THE BRIEF
 ${briefForPrompt(brief)}
 ${essay ? '\n' + essayForPrompt(essay).slice(0, 14000) : ''}
 ${plans ? Object.values(plans).map(p => p && p.criterionId ? '[' + p.criterionId + '] ' + expectationsForPrompt(p) : '').filter(Boolean).join('\n') : ''}`);
-    const sentences = splitSentences(docText).map(x => x.trim()).filter(x => x.length > 2).slice(0, 400);
-    const user = `STUDENT'S DRAFT (numbered sentences, in order):\n${sentences.map((x, i) => `${i + 1}. ${x}`).join('\n')}\n\nMark it, then the critique.`;
+    // The reference list is NOT sentences. splitSentences collapses newlines and
+    // cuts at every '.', so 'UK Parliament (n.d.) How does a bill become a law?
+    // Available at: https://www.parliament.uk/...' reached the marker as four
+    // numbered fragments and it said 'reference list is broken across several
+    // lines' about a perfectly good reference (the demo mark, 19 Aug). The body
+    // is numbered sentences; the references go after it, one entry per line.
+    const { body: draftBody, refs: draftRefs } = splitDraftRefs(docText);
+    const sentences = splitSentences(draftBody).map(x => x.trim()).filter(x => x.length > 2).slice(0, 400);
+    const user = `STUDENT'S DRAFT (numbered sentences, in order):\n${sentences.map((x, i) => `${i + 1}. ${x}`).join('\n')}`
+        + (draftRefs.length ? `\n\nREFERENCE LIST (one entry per line — judge it as a list, not as sentences; a single entry that runs long is still one entry):\n${draftRefs.map(x => '- ' + x).join('\n')}` : '')
+        + `\n\nMark it, then the critique.`;
     // Sarah, 16 Aug, live: "it keeps saying marking failed" — GET
     // /writer/job/mark 502, over and over, on a long dictated draft.
     //
@@ -1463,11 +1472,23 @@ const EDIT_SCHEMA = {
 function splitSentences(text) {
     return String(text || '').replace(/\s+/g, ' ').match(/[^.!?]+[.!?]+["'”’)\]]*|[^.!?]+$/g) || [];
 }
+// The page's text in two: the BODY (sentences) and the REFERENCE LIST (one
+// entry per non-empty line after a line that is just 'References'). A reference
+// is never a sentence: it holds 'n.d.', a URL full of dots and a title that may
+// end in '?'. No heading -> everything is body, refs = [].
+function splitDraftRefs(text) {
+    const lines = String(text || '').split(/\r?\n/);
+    let at = -1;
+    for (let i = lines.length - 1; i >= 0; i--) { if (/^\s*(references|reference list|bibliography)\s*:?\s*$/i.test(lines[i])) { at = i; break; } }
+    if (at < 0) return { body: String(text || ''), refs: [] };
+    const refs = lines.slice(at + 1).map(x => x.trim()).filter(Boolean);
+    return { body: lines.slice(0, at).join('\n'), refs };
+}
 
 async function editPass({ brief, essay, docText, sources, voiceSignature }) {
     if (!brief) throw new Error('No brief yet — upload the task first.');
     if (!String(docText || '').trim()) throw new Error('There is nothing on the page to edit yet.');
-    const sentences = splitSentences(docText).map(s => s.trim()).filter(s => s.length > 12).slice(0, 120);
+    const sentences = splitSentences(splitDraftRefs(docText).body).map(s => s.trim()).filter(s => s.length > 12).slice(0, 120);
     const srcMeta = (Array.isArray(sources) ? sources : []).map(s => `- ${s.name}: ${String(s.text || '').slice(0, 400).replace(/\s+/g, ' ')}…`).join('\n') || '(none uploaded)';
     const system = withMission(`You are Q, doing the EDITING stage on the student's finished draft. Coaching is over; now you steer sentence by sentence toward the model answer.
 
