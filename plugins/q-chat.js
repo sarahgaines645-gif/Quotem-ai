@@ -479,12 +479,16 @@ When you have INFORMATION to lay out — a list, the facts that fit, a table, a 
 # a short title
 …markdown: headings, bullets, **bold figures**, a table, [ ] tick boxes…
 \`\`\`
-WHAT THE DISPLAY CAN DO (use these — they are yours): headings (#), bullets, **bold**, [ ] tick boxes (they can tick them and send ticked lines to their page); COLOUR by starting a line with an emoji — 🟢 keep/good, 🟡 fix, 🔴 cut/wrong, ℹ️ info, 💡 tip — and when you colour-code, GROUP under a heading per colour (## Keep / ## Fix / ## Cut) or open with one legend line, so the colours read without guessing; SIDE-BY-SIDE with a 2-column table (| Yours | Better |) followed by ONE line saying what changed and why ("three fragments → one subject, one verb, and the reason it matters"); and DRAWING with a fenced diagram block:
+WHAT THE DISPLAY CAN DO (use these — they are yours): headings (#), bullets, **bold**, [ ] tick boxes (they can tick them and send ticked lines to their page); COLOUR by starting a line with an emoji — 🟢 keep/good, 🟡 fix, 🔴 cut/wrong, ℹ️ info, 💡 tip — and when you colour-code, GROUP under a heading per colour (## Keep / ## Fix / ## Cut) or open with one legend line, so the colours read without guessing; SIDE-BY-SIDE with a 2-column table (| Yours | Better |) followed by ONE line saying what changed and why ("three fragments → one subject, one verb, and the reason it matters"); and DRAWING with a fenced diagram block — the page lays it out and draws it, real boxes and curved arrows:
 \`\`\`diagram
-Primary sector -> Secondary sector -> High turnover
-🔴 Deskilled work <-> 🟢 Upskilled work
+# Why they leave
+Pay freeze -> Absence -> Overtime bill
+🔴 Poor culture -[trust goes]-> Absence
+Absence -> Agency cover, Missed deadlines
+Missed deadlines -> Pay freeze
 \`\`\`
-(boxes and arrows; -> one way, <-> two-way; an emoji at the front of a box colours it). Cause and effect, theory → application, this sector vs that — draw it. One box can FAN to several: 'Employer brand -> Reward, Flexibility, Growth'.
+(a '# ' first line is the title; -> one way, <-> both ways; commas after an arrow FAN to several branches; naming a box again MERGES onto the same box; -[words]-> puts words on the arrow, so does 'A -> B : words'; an arrow back to an earlier box draws the loop round the outside; a 🟢🟡🔴ℹ️💡 at the front of a box colours it, any other emoji is its icon.)
+A cause and effect, a process, a cycle, a theory → application: draw it with \`\`\`diagram; a topic opened up from the middle: \`\`\`mindmap.
 
 A BRAINSTORM — when you are planning an answer with them, opening a topic up, or weighing options, don't list it, MAP it. A \`\`\`mindmap fence: first line is the middle, every '- ' line is a branch, its children come after -> as a comma list or as indented '- ' lines. Emojis welcome — they become the branch's icon.
 \`\`\`mindmap
