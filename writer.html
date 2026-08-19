@@ -6487,6 +6487,9 @@
     //                                 as one arc round the outside
     //   # Title               a first '# ' line = the figure's title
     //   A | B | C             a row of boxes with no arrows (a legend, options)
+    //   ## THE PROBLEM       a SECTION — its own band, stacked down the figure
+    //   THE PROBLEM / Step one:   the same thing written bare: an ALL CAPS
+    //                         line, or a line ending in a colon, is a heading
     // A callout emoji at the front of a box (🟢 🟡 🔴 ℹ️ 💡) colours it; any
     // other leading emoji is its icon (the mind map's mmSplitIcon does both).
     // Blank lines are ignored. Past 40 boxes it draws the first 40 and says how
@@ -6523,54 +6526,92 @@
       out.push({ text: buf });
       return out;
     }
+    // A SECTION HEADING — never a box (Sarah's screenshot, 19 Aug 2026: Q wrote
+    // THE PROBLEM / THE CONTRAST / THE FIX on lines of their own and the figure
+    // drew all three as floating boxes with no arrows on them). Three spellings,
+    // all of them a heading: '## Anything' (two hashes or more), a bare ALL CAPS
+    // line, and a bare line that ends with a colon. Returns the heading's words,
+    // or '' when the line is an ordinary box.
+    function flHeading(ln) {
+      const t = String(ln == null ? '' : ln).trim();
+      if (!t || t.indexOf('|') >= 0) return '';
+      const col = t.match(/^(.+?)\s*:+$/);
+      if (col && col[1].trim()) return col[1].trim();      // 'Step one:'
+      if (t.length < 2) return '';
+      if (/\p{Ll}/u.test(t)) return '';                    // one lower-case letter and it is a box
+      if (!/\p{Lu}/u.test(t)) return '';                   // and it has to have letters in it at all
+      return t;
+    }
     // Tolerant on purpose — a fence that says nothing drawable returns null and
     // the old pill renderer takes it, so a diagram is never a blank space.
     function wbFlowParse(lines) {
       const raw = Array.isArray(lines) ? lines : String(lines == null ? '' : lines).split('\n');
-      const nodes = []; const byKey = {}; const edges = []; const eKey = {}; const rows = []; const missed = {};
-      let title = ''; let more = 0;
+      const nodes = []; const edges = []; const rows = []; const sections = []; const missed = {};
+      let title = ''; let more = 0; let cur = null;
       const keyOf = s => String(s || '').toLowerCase().replace(/\s+/g, ' ').replace(/[.,;:!?]+$/, '').trim();
+      // A section is a BAND of its own, and node identity is PER SECTION: two
+      // bands may both say 'Low turnover' and that is two boxes, one in each
+      // band — not one box merged across them. Inside a band, naming a box
+      // again still merges, exactly as before.
+      const openSection = (label) => {
+        cur = { label: String(label || ''), nodes: [], edges: [], rows: [], byKey: {}, eKey: {} };
+        sections.push(cur); return cur;
+      };
+      const sec = () => (cur || openSection(''));           // lines before any heading = one untitled band
       const addNode = (label) => {
+        const s = sec();
         const sp = mmSplitIcon(String(label == null ? '' : label).replace(/^[-*•+]\s+/, '').trim());
         if (!sp.text) { if (sp.icon) sp.text = sp.icon; else return null; }
         const k = keyOf(sp.text);
         if (!k) return null;
-        if (Object.prototype.hasOwnProperty.call(byKey, k)) {
-          const had = byKey[k];
+        if (Object.prototype.hasOwnProperty.call(s.byKey, k)) {
+          const had = s.byKey[k];
           if (!had.icon && sp.icon) had.icon = sp.icon;      // a second mention may carry the icon
           if (!had.tone && sp.tone) had.tone = sp.tone;      // …or the colour
           return had;
         }
-        if (nodes.length >= FL_MAX_NODES) { if (!missed[k]) { missed[k] = 1; more += 1; } return null; }   // count the BOXES left out, not the mentions
+        if (nodes.length >= FL_MAX_NODES) {                  // the cap is on the WHOLE figure, bands and all
+          const mk = (sections.length - 1) + '\u0000' + k;
+          if (!missed[mk]) { missed[mk] = 1; more += 1; }    // count the BOXES left out, not the mentions
+          return null;
+        }
         const n = { key: k, text: sp.text, icon: sp.icon, tone: sp.tone, i: nodes.length };
-        nodes.push(n); byKey[k] = n; return n;
+        nodes.push(n); s.nodes.push(n); s.byKey[k] = n; return n;
       };
       const addEdge = (a, b, lab, both) => {
         if (!a || !b || a === b) return;
-        const id = a.key + '' + b.key;
-        if (Object.prototype.hasOwnProperty.call(eKey, id)) {
-          const had = eKey[id];
+        const s = sec();
+        const id = a.key + '' + b.key;
+        if (Object.prototype.hasOwnProperty.call(s.eKey, id)) {
+          const had = s.eKey[id];
           if (lab && !had.label) had.label = lab;
           if (both) had.both = true;
           return;
         }
         const e = { from: a, to: b, label: lab || '', both: !!both };
-        edges.push(e); eKey[id] = e;
+        edges.push(e); s.edges.push(e); s.eKey[id] = e;
       };
       for (let li = 0; li < raw.length; li++) {
         let ln = String(raw[li] == null ? '' : raw[li]).replace(/\t/g, ' ').trim();
         if (!ln) continue;
-        const h = ln.match(/^#{1,6}\s*(.*)$/);
-        if (h) { if (!title) title = h[1].trim(); continue; }
+        const h = ln.match(/^(#{1,6})\s*(.*)$/);
+        if (h) {
+          const body = h[2].trim();
+          if (h[1].length > 1) { if (body) openSection(body); }   // '## …' opens a band
+          else if (!title) title = body;                          // '# …' is still the figure's title
+          continue;
+        }
         ln = ln.replace(/^[-*•+]\s+/, '').trim();
         if (!ln) continue;
         const toks = flTokens(ln);
         const hasArrow = toks.some(t => t.arrow);
         if (!hasArrow) {
+          const head = flHeading(ln);
+          if (head) { openSection(head); continue; }          // a bare heading opens a band, it is never drawn
           // 'A | B | C' — boxes that sit together with nothing between them.
           // One name on its own is simply one box.
           const made = ln.split('|').map(x => x.trim()).filter(Boolean).map(addNode).filter(Boolean);
-          if (made.length > 1) rows.push(made.map(n => n.key));
+          if (made.length > 1) { const r = made.map(n => n.key); rows.push(r); sec().rows.push(r); }
           continue;
         }
         // '… : because' at the end of the line labels the line's arrows.
@@ -6599,7 +6640,9 @@
         }
       }
       if (!nodes.length) return null;
-      return { title: title, nodes: nodes, edges: edges, rows: rows, more: more };
+      // A heading with nothing under it is dropped — never an empty band.
+      const kept = sections.filter(s => s.nodes.length);
+      return { title: title, nodes: nodes, edges: edges, rows: rows, more: more, sections: kept };
     }
     // A box sized round its words: wrapped to ~22 characters a line, three
     // lines at the most, then measured so the text never leaves the box.
@@ -6635,9 +6678,14 @@
     // three relaxation passes for y so a fan spreads round its source.
     function flLayout(g, fam) {
       const nodes = g.nodes, edges = g.edges, N = nodes.length;
+      // Numbered by IDENTITY, not by n.i — a band is laid out on its own and
+      // its boxes are numbered inside the band.
+      const ix = new Map(); nodes.forEach((n, i) => ix.set(n, i));
+      const IX = (n) => { const v = ix.get(n); return v == null ? -1 : v; };
       const box = nodes.map(n => flNode(n, fam));
       const outE = nodes.map(() => []);
-      edges.forEach((e, i) => { outE[e.from.i].push(i); });
+      const inBand = edges.map(e => (IX(e.from) >= 0 && IX(e.to) >= 0));
+      edges.forEach((e, i) => { if (inBand[i]) outE[IX(e.from)].push(i); });
       const mark = nodes.map(() => 0);                        // 0 unseen · 1 on the stack · 2 done
       const backs = {};
       for (let s = 0; s < N; s++) {
@@ -6647,14 +6695,14 @@
           const top = stack[stack.length - 1];
           if (top.k >= outE[top.v].length) { mark[top.v] = 2; stack.pop(); continue; }
           const ei = outE[top.v][top.k]; top.k += 1;
-          const w = edges[ei].to.i;
+          const w = IX(edges[ei].to);
           if (mark[w] === 1) { backs[ei] = true; continue; }  // an arrow back upstream
           if (mark[w] === 0) { mark[w] = 1; stack.push({ v: w, k: 0 }); }
         }
       }
-      const fwd = []; edges.forEach((e, i) => { if (!backs[i]) fwd.push(i); });
+      const fwd = []; edges.forEach((e, i) => { if (!backs[i] && inBand[i]) fwd.push(i); });
       const indeg = nodes.map(() => 0); const adj = nodes.map(() => []);
-      fwd.forEach(i => { const e = edges[i]; adj[e.from.i].push(e.to.i); indeg[e.to.i] += 1; });
+      fwd.forEach(i => { const e = edges[i]; adj[IX(e.from)].push(IX(e.to)); indeg[IX(e.to)] += 1; });
       const layer = nodes.map(() => 0);
       const q = []; for (let i = 0; i < N; i++) if (!indeg[i]) q.push(i);
       for (let qi = 0; qi < q.length; qi++) {
@@ -6663,7 +6711,7 @@
       }
       // A pipe row with no arrows on it stands together in one layer.
       const touched = nodes.map(() => false);
-      edges.forEach(e => { touched[e.from.i] = true; touched[e.to.i] = true; });
+      edges.forEach((e, i) => { if (!inBand[i]) return; touched[IX(e.from)] = true; touched[IX(e.to)] = true; });
       (g.rows || []).forEach(r => {
         const ids = r.map(k => { for (let i = 0; i < N; i++) if (nodes[i].key === k) return i; return -1; }).filter(i => i >= 0);
         if (!ids.length || ids.some(i => touched[i])) return;
@@ -6674,7 +6722,7 @@
       const layers = []; for (let i = 0; i < LN; i++) layers.push([]);
       for (let i = 0; i < N; i++) layers[layer[i]].push(i);
       const preds = nodes.map(() => []), succs = nodes.map(() => []);
-      fwd.forEach(i => { const e = edges[i]; preds[e.to.i].push(e.from.i); succs[e.from.i].push(e.to.i); });
+      fwd.forEach(i => { const e = edges[i]; preds[IX(e.to)].push(IX(e.from)); succs[IX(e.from)].push(IX(e.to)); });
       const pos = nodes.map(() => 0);
       const setPos = () => layers.forEach(ly => ly.forEach((v, k) => { pos[v] = k; }));
       setPos();
@@ -6695,9 +6743,9 @@
       // across it — a labelled arrow must never have to sit on a box.
       const GAPX = 84, GAPY = 22, FL_LSZ = 10.5;
       const gap = []; for (let i = 0; i < LN; i++) gap.push(GAPX);
-      edges.forEach(e => {
-        if (!e.label) return;
-        const lf = layer[e.from.i], lt = layer[e.to.i];
+      edges.forEach((e, i) => {
+        if (!e.label || !inBand[i]) return;
+        const lf = layer[IX(e.from)], lt = layer[IX(e.to)];
         if (lt !== lf + 1) return;                            // a hop or a loop carries its label on its arc
         const need = mmTextW(e.label, FL_LSZ, 500, fam) + 44;
         if (need > gap[lf]) gap[lf] = need;
@@ -6726,9 +6774,35 @@
         for (let i = 1; i < LN; i++) place(layers[i], layers[i].map(v => (preds[v].length ? mean(preds[v], u => box[u].y) : box[v].y)));
         for (let i = LN - 2; i >= 0; i--) place(layers[i], layers[i].map(v => (succs[v].length ? mean(succs[v], u => box[u].y) : box[v].y)));
       }
-      return { box: box, layers: layers, layer: layer, preds: preds, succs: succs, backs: backs, LN: LN };
+      return { box: box, layers: layers, layer: layer, preds: preds, succs: succs, backs: backs, LN: LN, ix: ix };
     }
     let flUid = 0;
+    const FL_BANDGAP = 34;                                    // clear air between two bands
+    const FL_SECSZ = 12;                                      // a band's name: small bold words, never a box
+    // Where the middle of a curve really is, and how long it is — sampled, so
+    // a label sits at the midpoint BY LENGTH and the line can be broken
+    // exactly where its words go.
+    function flMid(P) {
+      const at = t => {
+        const u = 1 - t;
+        return { x: u * u * u * P[0].x + 3 * u * u * t * P[1].x + 3 * u * t * t * P[2].x + t * t * t * P[3].x,
+                 y: u * u * u * P[0].y + 3 * u * u * t * P[1].y + 3 * u * t * t * P[2].y + t * t * t * P[3].y };
+      };
+      const pts = []; for (let i = 0; i <= 24; i++) pts.push(at(i / 24));
+      const acc = [0]; let len = 0;
+      for (let i = 1; i < pts.length; i++) { len += Math.hypot(pts[i].x - pts[i - 1].x, pts[i].y - pts[i - 1].y); acc.push(len); }
+      let mid = pts[pts.length - 1];
+      for (let i = 1; i < acc.length; i++) if (acc[i] >= len / 2) {
+        const f = (len / 2 - acc[i - 1]) / ((acc[i] - acc[i - 1]) || 1);
+        mid = { x: pts[i - 1].x + (pts[i].x - pts[i - 1].x) * f, y: pts[i - 1].y + (pts[i].y - pts[i - 1].y) * f };
+        break;
+      }
+      return { len: len, mid: mid };
+    }
+    // A SECTION IS A BAND. Each one is laid out on its own by the same
+    // flLayout, then slid down under the band above it. Every band shares one
+    // left edge, and its name is written above it as plain bold words — no
+    // box, no fill, no rule. One svg, one viewBox, all the bands in it.
     function wbFlowSvg(g, opt) {
       if (!g || !g.nodes || !g.nodes.length) return '';
       const ink = !!(opt && opt.ink);                          // ink = the DOCUMENT figure, not the screen
@@ -6738,132 +6812,147 @@
       const textCol = ink ? '#222222' : rd('--text', '#1a1a1a');
       const paper = ink ? '#ffffff' : (rd('--bg', '#f3f3f3') || '#f3f3f3');
       const muted = ink ? '#555555' : rd('--text-muted', 'rgba(0,0,0,0.55)');
-      const L = flLayout(g, fam);
-      const nodes = g.nodes, edges = g.edges, box = L.box, layers = L.layers;
-      // Colour like the mind map: a source takes a rail, a branch off a fan
-      // takes its own rail, everything else inherits; a callout emoji wins.
-      const colour = nodes.map(() => ''); let rail = 0;
-      const nextRail = () => MM_RAILS[(rail++) % MM_RAILS.length];
-      (layers[0] || []).forEach(v => { colour[v] = (nodes[v].tone && MM_TONE[nodes[v].tone]) || nextRail(); });
-      for (let i = 1; i < L.LN; i++) layers[i].forEach(v => {
-        if (nodes[v].tone && MM_TONE[nodes[v].tone]) { colour[v] = MM_TONE[nodes[v].tone]; return; }
-        const p = L.preds[v].length ? L.preds[v][0] : -1;
-        if (p < 0) { colour[v] = nextRail(); return; }
-        colour[v] = (L.succs[p].length > 1) ? nextRail() : (colour[p] || nextRail());
-      });
-      let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-      const grow = (x, y) => { if (x < minX) minX = x; if (x > maxX) maxX = x; if (y < minY) minY = y; if (y > maxY) maxY = y; };
-      nodes.forEach((n, i) => { grow(box[i].x - box[i].w / 2, box[i].y - box[i].h / 2); grow(box[i].x + box[i].w / 2, box[i].y + box[i].h / 2); });
+      const secs = (g.sections && g.sections.length)
+        ? g.sections
+        : [{ label: '', nodes: g.nodes, edges: g.edges, rows: g.rows || [] }];
       const uid = 'fl' + (++flUid);
-      const cols = []; edges.forEach((e, i) => { const c = colour[e.to.i] || muted; if (cols.indexOf(c) < 0) cols.push(c); });
+      const cols = []; let rail = 0;
+      const nextRail = () => MM_RAILS[(rail++) % MM_RAILS.length];
+      // Lay every band out and colour it FIRST. The rails carry on across the
+      // bands, so two bands never come out in the same colours; a callout
+      // emoji on a box still wins, as it always did.
+      const bands = secs.map(sec => {
+        const L = flLayout(sec, fam);
+        const nodes = sec.nodes, layers = L.layers;
+        const colour = nodes.map(() => '');
+        (layers[0] || []).forEach(v => { colour[v] = (nodes[v].tone && MM_TONE[nodes[v].tone]) || nextRail(); });
+        for (let i = 1; i < L.LN; i++) layers[i].forEach(v => {
+          if (nodes[v].tone && MM_TONE[nodes[v].tone]) { colour[v] = MM_TONE[nodes[v].tone]; return; }
+          const p = L.preds[v].length ? L.preds[v][0] : -1;
+          if (p < 0) { colour[v] = nextRail(); return; }
+          colour[v] = (L.succs[p].length > 1) ? nextRail() : (colour[p] || nextRail());
+        });
+        sec.edges.forEach(e => { const c = colour[L.ix.get(e.to)] || muted; if (cols.indexOf(c) < 0) cols.push(c); });
+        return { sec: sec, L: L, colour: colour };
+      });
       if (!cols.length) cols.push(muted);
       const defs = '<defs>' + cols.map((c, i) =>
         '<marker id="' + uid + '-e' + i + '" markerWidth="9" markerHeight="8" refX="8.5" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M0,0 L8.5,4 L0,8 Z" fill="' + c + '"/></marker>'
         + '<marker id="' + uid + '-s' + i + '" markerWidth="9" markerHeight="8" refX="0.5" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M8.5,0 L0,4 L8.5,8 Z" fill="' + c + '"/></marker>').join('') + '</defs>';
-      // The arrows. A forward arrow is a flat cubic from box edge to box edge;
-      // one that runs BACK is lifted clear over the top of everything it
-      // passes, so a cycle reads as a loop instead of a tangle.
-      const labels = []; let backN = 0, hopN = 0;
-      const spanY = (lo, hi, up) => {                          // how far the boxes in between reach
-        let m = up ? Infinity : -Infinity;
-        for (let i = lo; i <= hi && i < layers.length; i++) layers[i].forEach(v => {
-          const t = up ? box[v].y - box[v].h / 2 : box[v].y + box[v].h / 2;
-          if (up ? t < m : t > m) m = t;
-        });
-        return isFinite(m) ? m : 0;
-      };
-      const edgeOfLayer = (li, right) => {                     // the band between two layers is the only strip nothing stands in
-        let m = right ? -Infinity : Infinity;
-        (layers[li] || []).forEach(v => { const t = right ? box[v].x + box[v].w / 2 : box[v].x - box[v].w / 2; if (right ? t > m : t < m) m = t; });
-        return isFinite(m) ? m : 0;
-      };
-      const clearAbove = (v) => {                              // is the column straight above this box empty?
-        const n = box[v], li = L.layer[v];
-        return !(layers[li] || []).some(u => u !== v && box[u].y + box[u].h / 2 < n.y - n.h / 2
-          && box[u].x - box[u].w / 2 < n.x + 12 && n.x - 12 < box[u].x + box[u].w / 2);
-      };
-      // Where the middle of a curve really is, and how long it is — sampled, so
-      // a label sits at the midpoint BY LENGTH and the line can be broken
-      // exactly where its words go.
-      const flMid = (P) => {
-        const at = t => {
-          const u = 1 - t;
-          return { x: u * u * u * P[0].x + 3 * u * u * t * P[1].x + 3 * u * t * t * P[2].x + t * t * t * P[3].x,
-                   y: u * u * u * P[0].y + 3 * u * u * t * P[1].y + 3 * u * t * t * P[2].y + t * t * t * P[3].y };
-        };
-        const pts = []; for (let i = 0; i <= 24; i++) pts.push(at(i / 24));
-        const acc = [0]; let len = 0;
-        for (let i = 1; i < pts.length; i++) { len += Math.hypot(pts[i].x - pts[i - 1].x, pts[i].y - pts[i - 1].y); acc.push(len); }
-        let mid = pts[pts.length - 1];
-        for (let i = 1; i < acc.length; i++) if (acc[i] >= len / 2) {
-          const f = (len / 2 - acc[i - 1]) / ((acc[i] - acc[i - 1]) || 1);
-          mid = { x: pts[i - 1].x + (pts[i].x - pts[i - 1].x) * f, y: pts[i - 1].y + (pts[i].y - pts[i - 1].y) * f };
-          break;
-        }
-        return { len: len, mid: mid };
-      };
       const LSZ = 10.5;
-      const wires = edges.map((e, ei) => {
-        const a = box[e.from.i], b = box[e.to.i];
-        const c = colour[e.to.i] || muted;
-        const ci = Math.max(0, cols.indexOf(c));
-        const lf = L.layer[e.from.i], lt = L.layer[e.to.i];
-        let P;
-        if (L.backs[ei] || b.x <= a.x) {
-          // A LOOP — lifted clear over the top of everything it passes.
-          const apex = Math.min(spanY(Math.min(lf, lt), Math.max(lf, lt), true), a.y - a.h / 2, b.y - b.h / 2) - 30 - (backN++ % 3) * 16;
-          // Straight up out of the top when the column above is empty; out to
-          // the side, into the empty band between two layers, when it is not.
-          const upA = clearAbove(e.from.i), upB = clearAbove(e.to.i);
-          const p0 = upA ? { x: a.x, y: a.y - a.h / 2 } : { x: a.x + a.w / 2, y: a.y };
-          const c1 = { x: upA ? a.x : edgeOfLayer(lf, true) + 46, y: apex };
-          const p1 = upB ? { x: b.x, y: b.y - b.h / 2 - 5 } : { x: b.x - b.w / 2 - 6, y: b.y };
-          const c2 = { x: upB ? b.x : edgeOfLayer(lt, false) - 46, y: apex };
-          P = [p0, c1, c2, p1];
-          grow(Math.min(p0.x, p1.x, c1.x, c2.x), apex); grow(Math.max(p0.x, p1.x, c1.x, c2.x), apex);
-        } else if (lt - lf > 1) {
-          // A HOP over one or more layers — bowed UNDER them, so it never runs
-          // straight through the box standing in the way.
-          const base = Math.max(spanY(lf, lt, false), a.y + a.h / 2, b.y + b.h / 2) + 26 + (hopN++ % 3) * 16;
-          const p0 = { x: a.x + a.w / 2, y: a.y }, p1 = { x: b.x - b.w / 2 - 6, y: b.y };
-          P = [p0, { x: p0.x + 46, y: base }, { x: p1.x - 46, y: base }, p1];
-          grow(p0.x, base); grow(p1.x, base);
-        } else {
-          const dx = b.x - a.x, dy = b.y - a.y;
-          const p0 = mmEdgePt(a, dx, dy, 2), p1 = mmEdgePt(b, -dx, -dy, 6);
-          const k = Math.max(18, (p1.x - p0.x) * 0.45);
-          P = [p0, { x: p0.x + k, y: p0.y }, { x: p1.x - k, y: p1.y }, p1];
+      // ONE band drawn, in whatever coordinates its boxes are standing in.
+      // Every line of it is affine in those coordinates, so the way to place a
+      // band is: draw it, read its extent, slide its boxes, draw it again.
+      const drawBand = (bd) => {
+        const L = bd.L, nodes = bd.sec.nodes, edges = bd.sec.edges, box = L.box, layers = L.layers, colour = bd.colour;
+        const IX = (n) => { const v = L.ix.get(n); return v == null ? 0 : v; };
+        let bMinX = Infinity, bMinY = Infinity, bMaxX = -Infinity, bMaxY = -Infinity;
+        const grow = (x, y) => { if (x < bMinX) bMinX = x; if (x > bMaxX) bMaxX = x; if (y < bMinY) bMinY = y; if (y > bMaxY) bMaxY = y; };
+        nodes.forEach((n, i) => { grow(box[i].x - box[i].w / 2, box[i].y - box[i].h / 2); grow(box[i].x + box[i].w / 2, box[i].y + box[i].h / 2); });
+        // The arrows. A forward arrow is a flat cubic from box edge to box edge;
+        // one that runs BACK is lifted clear over the top of everything it
+        // passes, so a cycle reads as a loop instead of a tangle.
+        const labels = []; let backN = 0, hopN = 0;
+        const spanY = (lo, hi, up) => {                          // how far the boxes in between reach
+          let m = up ? Infinity : -Infinity;
+          for (let i = lo; i <= hi && i < layers.length; i++) layers[i].forEach(v => {
+            const t = up ? box[v].y - box[v].h / 2 : box[v].y + box[v].h / 2;
+            if (up ? t < m : t > m) m = t;
+          });
+          return isFinite(m) ? m : 0;
+        };
+        const edgeOfLayer = (li, right) => {                     // the band between two layers is the only strip nothing stands in
+          let m = right ? -Infinity : Infinity;
+          (layers[li] || []).forEach(v => { const t = right ? box[v].x + box[v].w / 2 : box[v].x - box[v].w / 2; if (right ? t > m : t < m) m = t; });
+          return isFinite(m) ? m : 0;
+        };
+        const clearAbove = (v) => {                              // is the column straight above this box empty?
+          const n = box[v], li = L.layer[v];
+          return !(layers[li] || []).some(u => u !== v && box[u].y + box[u].h / 2 < n.y - n.h / 2
+            && box[u].x - box[u].w / 2 < n.x + 12 && n.x - 12 < box[u].x + box[u].w / 2);
+        };
+        const wires = edges.map((e, ei) => {
+          const fi = IX(e.from), ti = IX(e.to);
+          const a = box[fi], b = box[ti];
+          const c = colour[ti] || muted;
+          const ci = Math.max(0, cols.indexOf(c));
+          const lf = L.layer[fi], lt = L.layer[ti];
+          let P;
+          if (L.backs[ei] || b.x <= a.x) {
+            // A LOOP — lifted clear over the top of everything it passes.
+            const apex = Math.min(spanY(Math.min(lf, lt), Math.max(lf, lt), true), a.y - a.h / 2, b.y - b.h / 2) - 30 - (backN++ % 3) * 16;
+            // Straight up out of the top when the column above is empty; out to
+            // the side, into the empty band between two layers, when it is not.
+            const upA = clearAbove(fi), upB = clearAbove(ti);
+            const p0 = upA ? { x: a.x, y: a.y - a.h / 2 } : { x: a.x + a.w / 2, y: a.y };
+            const c1 = { x: upA ? a.x : edgeOfLayer(lf, true) + 46, y: apex };
+            const p1 = upB ? { x: b.x, y: b.y - b.h / 2 - 5 } : { x: b.x - b.w / 2 - 6, y: b.y };
+            const c2 = { x: upB ? b.x : edgeOfLayer(lt, false) - 46, y: apex };
+            P = [p0, c1, c2, p1];
+            grow(Math.min(p0.x, p1.x, c1.x, c2.x), apex); grow(Math.max(p0.x, p1.x, c1.x, c2.x), apex);
+          } else if (lt - lf > 1) {
+            // A HOP over one or more layers — bowed UNDER them, so it never runs
+            // straight through the box standing in the way.
+            const base = Math.max(spanY(lf, lt, false), a.y + a.h / 2, b.y + b.h / 2) + 26 + (hopN++ % 3) * 16;
+            const p0 = { x: a.x + a.w / 2, y: a.y }, p1 = { x: b.x - b.w / 2 - 6, y: b.y };
+            P = [p0, { x: p0.x + 46, y: base }, { x: p1.x - 46, y: base }, p1];
+            grow(p0.x, base); grow(p1.x, base);
+          } else {
+            const dx = b.x - a.x, dy = b.y - a.y;
+            const p0 = mmEdgePt(a, dx, dy, 2), p1 = mmEdgePt(b, -dx, -dy, 6);
+            const k = Math.max(18, (p1.x - p0.x) * 0.45);
+            P = [p0, { x: p0.x + k, y: p0.y }, { x: p1.x - k, y: p1.y }, p1];
+          }
+          const d = 'M' + mmR(P[0].x) + ',' + mmR(P[0].y) + ' C' + mmR(P[1].x) + ',' + mmR(P[1].y) + ' ' + mmR(P[2].x) + ',' + mmR(P[2].y) + ' ' + mmR(P[3].x) + ',' + mmR(P[3].y);
+          let dash = '';
+          if (e.label) {
+            const s = flMid(P);
+            const hole = mmTextW(e.label, LSZ, 500, fam) + 13;
+            if (s.len > hole + 18) dash = ' stroke-dasharray="' + mmR((s.len - hole) / 2) + ' ' + mmR(hole) + '"';
+            labels.push({ x: s.mid.x, y: s.mid.y, text: e.label, w: hole });
+          }
+          return '<path d="' + d + '" fill="none" stroke="' + c + '" stroke-width="1.5" stroke-linecap="butt" opacity="' + (ink ? 0.85 : 0.92) + '"' + dash
+            + ' marker-end="url(#' + uid + '-e' + ci + ')"' + (e.both ? ' marker-start="url(#' + uid + '-s' + ci + ')"' : '') + '/>';
+        }).join('');
+        // The label sits IN the arrow — the line is broken exactly where its
+        // words go. Nothing is painted over, so the figure never has to know
+        // whether the paper behind it is her cream page or a white Word page.
+        const chips = labels.map(t => {
+          grow(t.x - t.w / 2, t.y - LSZ); grow(t.x + t.w / 2, t.y + LSZ);
+          return '<text class="fl-lab" x="' + mmR(t.x) + '" y="' + mmR(t.y + LSZ * 0.36) + '" text-anchor="middle" fill="' + textCol + '" font-family="' + fam + '" font-size="' + LSZ + '" font-weight="500">' + escHtml(t.text) + '</text>';
+        }).join('');
+        const boxes = nodes.map((n, i) => {
+          const bx = box[i], c = colour[i] || muted;
+          const x = bx.x - bx.w / 2, y = bx.y - bx.h / 2;
+          const tx = x + bx.padX + bx.iconW;
+          const top = bx.y - (bx.lines.length * bx.lh) / 2 + bx.lh * 0.78;
+          const words = bx.lines.map((l, k) => '<text class="fl-t" x="' + mmR(tx) + '" y="' + mmR(top + k * bx.lh) + '" fill="' + textCol + '" font-family="' + fam + '" font-size="' + bx.size + '" font-weight="' + bx.weight + '">' + escHtml(l) + '</text>').join('');
+          const ic = bx.icon ? '<text class="fl-t" x="' + mmR(x + bx.padX) + '" y="' + mmR(bx.y + bx.size * 0.36) + '" font-size="' + (bx.size + 3) + '" font-family="' + fam + '">' + escHtml(bx.icon) + '</text>' : '';
+          return '<g><title>' + escHtml((bx.icon ? bx.icon + ' ' : '') + bx.text) + '</title>'
+            + '<rect class="fl-n" x="' + mmR(x) + '" y="' + mmR(y) + '" width="' + mmR(bx.w) + '" height="' + mmR(bx.h) + '" rx="11" fill="' + (ink ? 'none' : paper) + '" stroke="' + c + '" stroke-width="1.5"/>'
+            + (ink ? '' : '<rect class="fl-tint" x="' + mmR(x) + '" y="' + mmR(y) + '" width="' + mmR(bx.w) + '" height="' + mmR(bx.h) + '" rx="11" fill="' + c + '" opacity="0.07"/>')
+            + ic + words + '</g>';
+        }).join('');
+        return { minX: bMinX, minY: bMinY, maxX: bMaxX, maxY: bMaxY, wires: wires, boxes: boxes, chips: chips };
+      };
+      let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+      const grow = (x, y) => { if (x < minX) minX = x; if (x > maxX) maxX = x; if (y < minY) minY = y; if (y > maxY) maxY = y; };
+      let yCur = 0; const allWires = [], allBoxes = [], allChips = [], allSecs = [];
+      bands.forEach(bd => {
+        const labH = bd.sec.label ? 25 : 0;
+        const a = drawBand(bd);                               // where it falls on its own…
+        const dx = -a.minX, dy = (yCur + labH) - a.minY;       // …left edge to 0, top under the band above
+        bd.L.box.forEach(b => { b.x += dx; b.y += dy; });
+        const d = drawBand(bd);
+        if (bd.sec.label) {
+          const ly = d.minY - 9;
+          allSecs.push('<text class="fl-sec" x="' + mmR(d.minX) + '" y="' + mmR(ly) + '" fill="' + textCol + '" font-family="' + fam + '" font-size="' + FL_SECSZ + '" font-weight="700">' + escHtml(bd.sec.label) + '</text>');
+          grow(d.minX, ly - FL_SECSZ); grow(d.minX + mmTextW(bd.sec.label, FL_SECSZ, 700, fam), ly + 3);
         }
-        const d = 'M' + mmR(P[0].x) + ',' + mmR(P[0].y) + ' C' + mmR(P[1].x) + ',' + mmR(P[1].y) + ' ' + mmR(P[2].x) + ',' + mmR(P[2].y) + ' ' + mmR(P[3].x) + ',' + mmR(P[3].y);
-        let dash = '';
-        if (e.label) {
-          const s = flMid(P);
-          const hole = mmTextW(e.label, LSZ, 500, fam) + 13;
-          if (s.len > hole + 18) dash = ' stroke-dasharray="' + mmR((s.len - hole) / 2) + ' ' + mmR(hole) + '"';
-          labels.push({ x: s.mid.x, y: s.mid.y, text: e.label, w: hole });
-        }
-        return '<path d="' + d + '" fill="none" stroke="' + c + '" stroke-width="1.5" stroke-linecap="butt" opacity="' + (ink ? 0.85 : 0.92) + '"' + dash
-          + ' marker-end="url(#' + uid + '-e' + ci + ')"' + (e.both ? ' marker-start="url(#' + uid + '-s' + ci + ')"' : '') + '/>';
-      }).join('');
-      // The label sits IN the arrow — the line is broken exactly where its
-      // words go. Nothing is painted over, so the figure never has to know
-      // whether the paper behind it is her cream page or a white Word page.
-      const chips = labels.map(t => {
-        grow(t.x - t.w / 2, t.y - LSZ); grow(t.x + t.w / 2, t.y + LSZ);
-        return '<text class="fl-lab" x="' + mmR(t.x) + '" y="' + mmR(t.y + LSZ * 0.36) + '" text-anchor="middle" fill="' + textCol + '" font-family="' + fam + '" font-size="' + LSZ + '" font-weight="500">' + escHtml(t.text) + '</text>';
-      }).join('');
-      const boxes = nodes.map((n, i) => {
-        const bx = box[i], c = colour[i] || muted;
-        const x = bx.x - bx.w / 2, y = bx.y - bx.h / 2;
-        const tx = x + bx.padX + bx.iconW;
-        const top = bx.y - (bx.lines.length * bx.lh) / 2 + bx.lh * 0.78;
-        const words = bx.lines.map((l, k) => '<text class="fl-t" x="' + mmR(tx) + '" y="' + mmR(top + k * bx.lh) + '" fill="' + textCol + '" font-family="' + fam + '" font-size="' + bx.size + '" font-weight="' + bx.weight + '">' + escHtml(l) + '</text>').join('');
-        const ic = bx.icon ? '<text class="fl-t" x="' + mmR(x + bx.padX) + '" y="' + mmR(bx.y + bx.size * 0.36) + '" font-size="' + (bx.size + 3) + '" font-family="' + fam + '">' + escHtml(bx.icon) + '</text>' : '';
-        return '<g><title>' + escHtml((bx.icon ? bx.icon + ' ' : '') + bx.text) + '</title>'
-          + '<rect class="fl-n" x="' + mmR(x) + '" y="' + mmR(y) + '" width="' + mmR(bx.w) + '" height="' + mmR(bx.h) + '" rx="11" fill="' + (ink ? 'none' : paper) + '" stroke="' + c + '" stroke-width="1.5"/>'
-          + (ink ? '' : '<rect class="fl-tint" x="' + mmR(x) + '" y="' + mmR(y) + '" width="' + mmR(bx.w) + '" height="' + mmR(bx.h) + '" rx="11" fill="' + c + '" opacity="0.07"/>')
-          + ic + words + '</g>';
-      }).join('');
+        grow(d.minX, d.minY); grow(d.maxX, d.maxY);
+        allWires.push(d.wires); allBoxes.push(d.boxes); allChips.push(d.chips);
+        yCur = d.maxY + FL_BANDGAP;
+      });
       let head = '', foot = '';
       if (g.title) { minY -= 26; head = '<text class="fl-title" x="' + mmR(minX) + '" y="' + mmR(minY + 13) + '" fill="' + textCol + '" font-family="' + fam + '" font-size="13" font-weight="700">' + escHtml(g.title) + '</text>'; }
       if (g.more > 0) { maxY += 22; foot = '<text class="fl-more" x="' + mmR(minX) + '" y="' + mmR(maxY - 5) + '" fill="' + muted + '" font-family="' + fam + '" font-size="11" font-style="italic">…and ' + g.more + ' more</text>'; }
@@ -6873,7 +6962,7 @@
         + ' preserveAspectRatio="xMidYMid meet" width="100%" role="img"'
         + ' aria-label="Diagram: ' + escHtml(g.title || (g.nodes[0] && g.nodes[0].text) || 'boxes and arrows') + '"'
         + ' style="width:100%;height:auto;max-height:' + (ink ? 460 : 540) + 'px;display:block">'
-        + defs + wires + boxes + chips + head + foot + '</svg>';
+        + defs + allWires.join('') + allBoxes.join('') + allChips.join('') + allSecs.join('') + head + foot + '</svg>';
     }
     // The fence on the whiteboard. Drawn when there is anything to draw; the
     // old pill rows stay as the fallback so a fence never renders as nothing.
