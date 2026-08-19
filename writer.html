@@ -513,6 +513,14 @@
     .coach-card .q-tap { font-family: inherit; font-size: 13px; font-weight: 600; color: var(--text); background: var(--bg); border: none; cursor: pointer; padding: 9px 14px; border-radius: 12px; box-shadow: var(--neu-raised-sm); text-align: left; max-width: 100%; overflow-wrap: anywhere; }
     .coach-card .q-tap:hover { color: var(--accent); }
     .coach-card .q-tap:active { box-shadow: var(--neu-inset-xs); color: var(--accent); }
+    /* SHOW ME AROUND (19 Aug): the quiet control that starts the tour, and
+       the ring the tour points at a real button with. The ring is an outline
+       so the button keeps its own neumorphic depth — no fill, no restyle. */
+    .coach-card .q-tour-row { display: flex; justify-content: flex-end; margin: 0 0 6px; }
+    .q-pulse { outline: 2px solid transparent; outline-offset: 3px; animation: q-pulse 1s ease-in-out 2; }
+    @keyframes q-pulse { 0%, 100% { outline-color: transparent; } 50% { outline-color: var(--accent); } }
+    @media (prefers-reduced-motion: reduce) { .q-pulse { animation: none; outline-color: var(--accent); } }
+
     .coach-card .q-supply .q-supply-l { display: block; font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--accent); margin-bottom: 2px; }
     .coach-card .q-msg.ask { font-size: 14px; font-weight: 500; line-height: 1.4; }
     .coach-card .q-section {
@@ -2409,6 +2417,7 @@
       <button type="button" class="panel-min" id="coach-min" title="Minimise" aria-label="Minimise the coach card">−</button>
     </div>
     <div class="panel-body" id="coach-body">
+      <div class="q-tour-row"><button type="button" class="q-btn quiet" id="btn-tour" title="Q walks you round the tools on this page — a paragraph to play with, a highlight, a tab, a sticky, the whiteboard. Nothing is kept.">Show me around</button></div>
       <div class="q-where" id="coach-where"></div>
       <div class="q-score" id="coach-score"></div>
       <!-- THE CONVERSATION. Everything Q has said and everything she has said,
@@ -7347,6 +7356,135 @@
         coachTaps.appendChild(b);
       });
     }
+    // ══ SHOW ME AROUND — the scripted tour (19 Aug) ══
+    // Sarah, 19 Aug: "im trying to create a demo so Q can walk people through
+    // how to use the page when they start. not the whole thing but the tools
+    // … I want it to be better though." Q used to improvise the walk in chat:
+    // a model call per press, a different tour every time, and nothing to take
+    // the mess off afterwards. This is the same walk WRITTEN DOWN — eight steps,
+    // the same every time, no model call. Each step says ONE line as Q and does
+    // the real thing with the real function (addQNotes, addQTabs, addStickies,
+    // showOnWhiteboard, openEditPanel), so what she sees IS the tool. The end
+    // — and Stop the tour, at any step — takes every piece of it back off.
+    const TOUR_DEMO = 'A bill starts life as an idea that someone wants written into law. It is debated in the Commons and then in the Lords, and either House can send it back with changes. Once both Houses agree on the same wording it goes to the monarch for Royal Assent. From that moment it is an Act, and it applies to everybody.';
+    const TOUR_GOOD = 'Once both Houses agree on the same wording it goes to the monarch for Royal Assent.';
+    const TOUR_LIST = ['**Before you write this up**', '', '- [ ] Name both Houses', '- [ ] Say what Royal Assent is', '- [ ] Give one real Act as an example', '', '| Stage | What happens |', '| --- | --- |',
+      '| First reading | The bill is introduced, no debate |', '| Committee | Gone through line by line |', '| Royal Assent | The monarch signs — it is an Act |'].join(String.fromCharCode(10));
+    const TOUR_DIAGRAM = ['```diagram', 'Idea → Commons → Lords', '```'].join(String.fromCharCode(10));
+    const tour = { on: false, i: 0, prevWbDoc: null, wbWasHidden: true, edWasHidden: true };
+
+    // The tour's taps look like Q's own taps (the .q-tap buttons above) — same
+    // markup, same class. They run a function here instead of asking the model.
+    function tourTaps(list) {
+      coachTaps.innerHTML = '';
+      (list || []).forEach(o => {
+        const b = document.createElement('button'); b.type = 'button'; b.className = 'q-tap'; b.textContent = o.label;
+        b.addEventListener('click', o.onClick); coachTaps.appendChild(b);
+      });
+    }
+    function tourSay(text) { setCoach({ msg: text, section: '', hint: '', inputVisible: true, showNudge: false, step: false }); }
+    // Point at a REAL button for two seconds: an accent ring, nothing else.
+    function tourPulse(el) {
+      document.querySelectorAll('.q-pulse').forEach(x => x.classList.remove('q-pulse'));   // one thing ringed at a time
+      if (!el) return;
+      void el.offsetWidth; el.classList.add('q-pulse');
+      try { el.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); } catch (_) {}
+      setTimeout(() => { try { el.classList.remove('q-pulse'); } catch (_) {} }, 2100);
+    }
+    // Everything the tour made carries a qTour flag, so taking it off is the
+    // same 'done' the little pops use for Take it off / Bin it.
+    function tourTag(arr, from) { for (let i = from; i < arr.length; i++) if (arr[i]) arr[i].qTour = true; }
+
+    const TOUR_STEPS = [
+      { say: 'This is your page. I\'ll drop a paragraph here to play with — it comes off when we\'re done.',
+        run: () => {
+          if (docBody.querySelector('[data-q-demo="1"]')) return;
+          snapshotDoc('before the tour\'s demo paragraph');
+          const p = document.createElement('div');
+          p.setAttribute('data-q-demo', '1'); p.textContent = TOUR_DEMO;
+          docBody.appendChild(p);
+          wordEl.textContent = countWords() + ' words';
+        } },
+      { say: 'I can highlight your writing and leave a note — press the dot after it.',
+        run: () => {
+          state.qNotes = state.qNotes || []; const at = state.qNotes.length;
+          addQNotes([{ text: TOUR_GOOD, note: 'Good — keep it. It says exactly what happens and when.', kind: 'good' }]);
+          tourTag(state.qNotes, at);
+        } },
+      { say: 'A tab marks a paragraph so we can both jump to it. Press it.',
+        run: () => {
+          const pn = docParagraphTexts().findIndex(t => t.indexOf('A bill starts life') === 0) + 1;
+          if (pn < 1) return;
+          state.qTabs = state.qTabs || []; const at = state.qTabs.length;
+          addQTabs([{ paragraph: pn, label: 'how a bill passes', colour: 'blue', side: 'right' }]);
+          tourTag(state.qTabs, at);
+        } },
+      { say: 'Stickies live on the whiteboard — drag one, bin it, or → sends it to your page.',
+        run: () => {
+          state.wbStickies = state.wbStickies || []; const at = state.wbStickies.length;
+          addStickies([{ text: 'Come back to this — check what the Lords can actually block', colour: 'yellow' }]);
+          tourTag(state.wbStickies, at);
+          showPanel('wb'); revealPanel('wb');
+        } },
+      { say: 'When I work something out it goes on the whiteboard — tick the lines you want and Send to my page puts them on. A table goes on as a table.',
+        run: () => showOnWhiteboard('How a bill becomes law', TOUR_LIST) },
+      { say: 'Boxes and arrows when a list won\'t do.',
+        run: () => showOnWhiteboard('How a bill becomes law', TOUR_DIAGRAM) },
+      { say: 'Put the cursor at the end of a sentence and press Auto cite — real papers and websites only, and the reference list writes itself.',
+        run: () => { hidePanel('wb'); openEditPanel(); tourPulse(document.querySelector('#edit-body [data-ed-tool="cite"]')); } },   // the board goes away first, or she is pointed at a button she cannot see
+      { say: 'When you\'ve written something, Mark & fix reads the whole page and marks it the way your marker will — a grade per question, and what gets you the next one.',
+        run: () => { hidePanel('edit'); const eb = document.getElementById('btn-edit-strip'); if (eb) eb.setAttribute('aria-expanded', 'false'); tourPulse(document.getElementById('btn-finish')); } },
+    ];
+
+    function startTour() {
+      if (tour.on) return;
+      tour.on = true; tour.i = 0;
+      tour.prevWbDoc = state.wbDoc || null;
+      tour.wbWasHidden = !!(panels.wb && panels.wb.el.classList.contains('hidden'));
+      tour.edWasHidden = !!(panels.edit && panels.edit.el.classList.contains('hidden'));
+      tourStep();
+    }
+    function tourStep() {
+      if (!tour.on) return;
+      const step = TOUR_STEPS[tour.i];
+      if (!step) { stopTour(); return; }
+      tour.i += 1;
+      tourSay(step.say);
+      try { step.run(); } catch (_) {}   // a step that cannot run does not strand her mid-tour
+      tourTaps([{ label: 'Next →', onClick: () => tourStep() }, { label: 'Stop the tour', onClick: () => stopTour() }]);
+    }
+    // The end of the tour and Stop the tour are the SAME clean-up: her page and
+    // her board go back exactly as they were.
+    function stopTour() {
+      const wasOn = tour.on;
+      tour.on = false; tour.i = 0;
+      try { docBody.querySelectorAll('[data-q-demo="1"]').forEach(n => n.remove()); docBody.normalize(); wordEl.textContent = countWords() + ' words'; } catch (_) {}
+      (state.qNotes || []).forEach(n => { if (n && n.qTour) n.done = true; });
+      (state.qTabs || []).forEach(t => { if (t && t.qTour) t.done = true; });
+      (state.wbStickies || []).forEach(s => { if (s && s.qTour) s.done = true; });
+      state.wbDoc = tour.prevWbDoc || null;
+      try { persistQFurniture(); } catch (_) {}
+      try { persist({ wbStickies: state.wbStickies, wbDoc: state.wbDoc }); } catch (_) {}
+      try { document.querySelectorAll('.q-pulse').forEach(el => el.classList.remove('q-pulse')); } catch (_) {}
+      try { paintQNotes(); renderInlineDots(); renderBoard(); } catch (_) {}
+      try { if (tour.edWasHidden) { hidePanel('edit'); const eb = document.getElementById('btn-edit-strip'); if (eb) eb.setAttribute('aria-expanded', 'false'); } else { showPanel('edit'); renderEditPanel(); } } catch (_) {}
+      try { if (tour.wbWasHidden) hidePanel('wb'); else { showPanel('wb'); renderWhiteboard(); } } catch (_) {}
+      try { renderStickies(); if (!wbOpen()) wbBody.innerHTML = ''; } catch (_) {}   // a shut board does not keep the demo display behind it
+      state.settings.tourSeen = true;
+      try { persist({ settings: state.settings }); } catch (_) {}
+      coachTaps.innerHTML = '';
+      if (wasOn) tourSay('That\'s the tools. Your paragraph\'s gone. Ask me anything, or drop your task in.');
+    }
+    // Nothing written yet and she has never been round: Q offers the walk as
+    // his first tap. Once it has run (or been stopped) the offer does not
+    // come back — the control in his header is always there instead.
+    function maybeOfferTour() {
+      if (state.settings.tourSeen || tour.on) return;
+      if (docPlainText().trim()) return;
+      if ((state.chatLog || []).length) return;
+      tourTaps([{ label: 'Show me around →', onClick: () => startTour() }]);
+    }
+    document.getElementById('btn-tour').addEventListener('click', () => startTour());
     function partWordCounts() {
       const out = {}; try { for (const c of ((state.brief && state.brief.criteria) || [])) out[c.id] = String(partText(c.id) || '').split(/\s+/).filter(Boolean).length; } catch (_) {}
       return out;
@@ -10190,6 +10328,7 @@
       if (t && t.settings && t.settings.coachMode) state.settings.coachMode = t.settings.coachMode === 'button' ? 'button' : 'pause';
       applyCoachMode();
       if (t && t.settings && t.settings.coachBrain) state.settings.coachBrain = String(t.settings.coachBrain);
+      if (t && t.settings && t.settings.tourSeen) state.settings.tourSeen = true;   // been round the tools once — Q does not offer again
       applyCoachBrain();
       if (t && t.gradeScheme) { state.gradeScheme = t.gradeScheme; gradeSchemeSelect.value = t.gradeScheme; }
       // A saved "GCSE (9-1)" was the CODE DEFAULT for weeks — every session
@@ -10379,10 +10518,10 @@
       }
     }
     applyCoachMode();
-    loadProjects().then(restoreSession, restoreSession);
+    loadProjects().then(restoreSession, restoreSession).then(() => { try { maybeOfferTour(); } catch (_) {} }, () => {});
     // Test hooks (no data, no secrets): lets the harness exercise the page-side
     // helpers without a paid call. Harmless in production.
-    window.__qwriterTest = { paintQNotes, addQNotes, addQTabs, addStickies, renderStickies, snapshotDoc, undoDoc, presentStep, renderBoard, renderWhiteboard, startedAsk, showToolPop, findInDoc, replaceInDoc, appendReference, docPlainText, splitCheck: (t) => endsSentence(t), runEditPass, checkCurrentSentence, showEditItem, state: () => state, currentEditText, partParagraphs, setBrief, storyPointsHtml, renderInlineDots, termsForBoard, setCoach, bandListHtml, showEditItem, openEditPanel, renderEditPanel, edState: () => edProof, edSetProof: (p2) => { edProof = p2; renderEditPanel(); edPaint(); }, sayMe, renderThread, syncWorkArea, showPanel, revealPanel, runTidyPasses, applyTidyItem, mergeWalk, refreshSourceDigests, sourceDigestsHtml, markAndFix, walkItemsFromMark, renderMarkPanel, markStats, gradeWord, notesSections, notesCount, notesCopyText, renderNotesPanel, openNotesPanel, bibSorted, bibCopyText, renderBibPanel, openBibPanel, removeReference, removeReferenceFromDoc, sendTextToPage, jumpToSentence, runAutoCite, appendReference, noteReference, wbTablesFromSrc, tableElementFrom, sendBlockToPage, wbSendText };
+    window.__qwriterTest = { startTour, tourStep, stopTour, maybeOfferTour, paintQNotes, addQNotes, addQTabs, addStickies, renderStickies, snapshotDoc, undoDoc, presentStep, renderBoard, renderWhiteboard, startedAsk, showToolPop, findInDoc, replaceInDoc, appendReference, docPlainText, splitCheck: (t) => endsSentence(t), runEditPass, checkCurrentSentence, showEditItem, state: () => state, currentEditText, partParagraphs, setBrief, storyPointsHtml, renderInlineDots, termsForBoard, setCoach, bandListHtml, showEditItem, openEditPanel, renderEditPanel, edState: () => edProof, edSetProof: (p2) => { edProof = p2; renderEditPanel(); edPaint(); }, sayMe, renderThread, syncWorkArea, showPanel, revealPanel, runTidyPasses, applyTidyItem, mergeWalk, refreshSourceDigests, sourceDigestsHtml, markAndFix, walkItemsFromMark, renderMarkPanel, markStats, gradeWord, notesSections, notesCount, notesCopyText, renderNotesPanel, openNotesPanel, bibSorted, bibCopyText, renderBibPanel, openBibPanel, removeReference, removeReferenceFromDoc, sendTextToPage, jumpToSentence, runAutoCite, appendReference, noteReference, wbTablesFromSrc, tableElementFrom, sendBlockToPage, wbSendText };
 
 
     // (The old per-card drag code lived here — every panel now goes through makePanel above.)
