@@ -366,6 +366,7 @@ const BRIEF_SCHEMA = {
         // hand, the problems it sets up. null ONLY when the document genuinely
         // contains no scenario, case, company, text or situation.
         scenario: {
+            description: 'The CASE the questions are ABOUT — an organisation, a person, a legal case, a text, a situation the document sets up for the student to write about. It is NEVER the student, the student\'s own draft, essay, notes, word count, or feedback on their writing — a document that only has questions/criteria plus notes about the student\'s work has NO scenario: return null. "strengths" and "problems" are the case\'s own pros and cons (what the company has going for it / against it), never what is good or bad about the student\'s draft.',
             anyOf: [{ type: 'null' }, {
                 type: 'object', additionalProperties: false,
                 required: ['name', 'kind', 'whatItIs', 'theStory', 'facts', 'sections', 'people', 'numbers', 'strengths', 'problems', 'useIt'],
@@ -1036,16 +1037,54 @@ ${bricks.length ? '\nWHAT A TOP ANSWER CONTAINS (your model answer — never quo
     };
 }
 
+// WHICH CRITERION DID THE MODEL MEAN? (Sarah, 19 Aug, live: a whole essay
+// marked — answeredCount 6, a real summary, "what stays" — and every question
+// card said "not started". The brief's ids were C1…C6 (made up, because the
+// brief has no codes) and the model wrote its own; the exact-match filter threw
+// all six away and filled in "missing" placeholders.) A graded question is
+// never discarded for its spelling: exact → letters-and-digits only → the
+// ordinal ("1", "Q1", "question 1", "part 1") → the criterion's label → and,
+// when the model returned one per criterion, its position.
+function critIdResolver(brief) {
+    const cs = Array.isArray(brief && brief.criteria) ? brief.criteria : [];
+    const ids = cs.map(c => c.id);
+    const squash = s => String(s || '').toLowerCase().replace(/[^a-z0-9]+/g, '');
+    const byId = new Map(ids.map(id => [id, id]));
+    const bySquash = new Map(ids.map(id => [squash(id), id]));
+    const byLabel = new Map(cs.filter(c => c.label).map(c => [squash(c.label), c.id]));
+    return (raw, index, total) => {
+        const s = String(raw || '').trim();
+        if (!s) return (total === ids.length && Number.isInteger(index)) ? ids[index] || '' : '';
+        const tight = s.replace(/\s+/g, '');
+        if (byId.has(tight)) return tight;
+        const sq = squash(s);
+        if (bySquash.has(sq)) return bySquash.get(sq);
+        const ord = /^(?:q|question|part|criterion|crit|c|ac|lo|section|sec|no\.?|#)?\s*(\d{1,2})\s*[.):]?$/i.exec(s);
+        if (ord && ids[Number(ord[1]) - 1]) return ids[Number(ord[1]) - 1];
+        if (byLabel.has(sq)) return byLabel.get(sq);
+        for (const [lab, id] of byLabel) if (lab && (sq.includes(lab) || lab.includes(sq)) && Math.min(lab.length, sq.length) >= 6) return id;
+        // the brief's own ids inside a longer string ("AC1.4 — Evaluate …")
+        for (const id of ids) if (id.length >= 2 && sq.includes(squash(id)) && squash(id).length >= 2) return id;
+        if (total === ids.length && Number.isInteger(index) && ids[index]) return ids[index];
+        return '';
+    };
+}
+
 function normaliseMark(r, brief, essayForMark, plans, scheme) {
     if (!r || typeof r !== 'object' || !r.overall) throw new Error('The marking came back empty — try again.');
     const ids = brief.criteria.map(c => c.id);
     const seen = new Set();
     const brickIdsAll = new Set(allBrickIds(essayForMark).map(b => b.brickId));
-    const per = (Array.isArray(r.perCriterion) ? r.perCriterion : []).map(p => ({
-        criterionId: String(p.criterionId || '').replace(/\s+/g, ''),
+    const resolve = critIdResolver(brief);
+    const rawPer = Array.isArray(r.perCriterion) ? r.perCriterion : [];
+    const rawIds = rawPer.map(p => String((p && p.criterionId) || ''));
+    const unmatched = rawIds.filter(x => !ids.includes(x.replace(/\s+/g, '')));
+    if (unmatched.length) console.warn('[writer/mark] criterion ids from the model did not match the brief (' + ids.join(',') + '): ' + JSON.stringify(unmatched) + ' — resolved by spelling / ordinal / label / position');
+    const per = rawPer.map((p, i) => ({
+        criterionId: resolve(p && p.criterionId, i, rawPer.length),
         band: ['top', 'mid', 'low', 'missing'].includes(p.band) ? p.band : 'low',
-        label: String(p.label || ''),
-        voicedBrickIds: (Array.isArray(p.voicedBrickIds) ? p.voicedBrickIds : []).map(x => String(x).replace(/\s+/g, '')).filter(x => brickIdsAll.has(x) && x.split('-')[0] === String(p.criterionId || '').replace(/\s+/g, '')),
+        label: (() => { const t = String(p.label || '').trim(); return /^(top|mid|middle|low|lower|upper|high|higher|band|top band|mid band|middle band|lower band|low band|missing|not started|n\/?a|none|-|—)$/i.test(t) ? '' : t; })(),
+        voicedBrickIds: (Array.isArray(p.voicedBrickIds) ? p.voicedBrickIds : []).map(x => String(x).replace(/\s+/g, '')).filter(x => brickIdsAll.has(x) && x.split('-')[0] === resolve(p && p.criterionId, i, rawPer.length)),
         // Canonical spelling (termCanon) — the route adds and removes these by
         // exact string, so the mark must spell them the way the plan does.
         termsUsed: (Array.isArray(p.termsUsed) ? p.termsUsed : []).map(x => termCanon(plans && plans[String(p.criterionId || '').replace(/\s+/g, '')], x)).filter(Boolean),
@@ -1064,8 +1103,9 @@ function normaliseMark(r, brief, essayForMark, plans, scheme) {
     })).filter(p => ids.includes(p.criterionId) && !seen.has(p.criterionId) && seen.add(p.criterionId));
     for (const id of ids) if (!seen.has(id)) per.push({ criterionId: id, band: 'missing', evidence: '', missingForTop: 'Nothing in the document addresses this criterion yet.', nextQuestion: '', voicedBrickIds: [], termsUsed: [], requirementsMet: [] });
     const order = { missing: 0, low: 1, mid: 2, top: 3 };
-    const weakest = ids.includes(String(r.weakestCriterionId || '').replace(/\s+/g, ''))
-        ? String(r.weakestCriterionId).replace(/\s+/g, '')
+    const weakestRaw = resolve(r.weakestCriterionId);
+    const weakest = ids.includes(weakestRaw)
+        ? weakestRaw
         : per.slice().sort((a, b) => order[a.band] - order[b.band])[0].criterionId;
     // The critique: verbatim sentences only, real bricks only, weakest part first.
     const bandOf = Object.fromEntries(per.map(p => [p.criterionId, order[p.band]]));
@@ -1078,15 +1118,24 @@ function normaliseMark(r, brief, essayForMark, plans, scheme) {
         targetBrickId: it.targetBrickId && brickIds.has(String(it.targetBrickId).replace(/\s+/g, '')) ? String(it.targetBrickId).replace(/\s+/g, '') : null,
         suggestedTools: (Array.isArray(it.suggestedTools) ? it.suggestedTools : []).map(String).filter(t => EDIT_TOOLS.includes(t)).slice(0, 3),
         needs: (Array.isArray(it.needs) ? it.needs : []).map(String).filter(k => REQ_KINDS.includes(k)),
-        criterionId: ids.includes(String(it.criterionId || '').replace(/\s+/g, '')) ? String(it.criterionId).replace(/\s+/g, '') : (it.targetBrickId ? String(it.targetBrickId).split('-')[0] : ''),
+        criterionId: ids.includes(resolve(it.criterionId)) ? resolve(it.criterionId) : (it.targetBrickId ? String(it.targetBrickId).split('-')[0] : ''),
     })).filter(it => it.sentence && (it.missing || it.fix))
       .sort((a, b) => ((bandOf[a.criterionId] ?? 9) - (bandOf[b.criterionId] ?? 9)) || (a.i - b.i))
       .map(({ i, ...rest }) => rest)
       .slice(0, MAX_CRITIQUE);   // the schema asks for ten; this is what makes it ten
+    // "Mid" / "Top" / "Lower band" are BANDS, not grades (Sarah, 19 Aug, live:
+    // the panel said "Mid — if you handed it in now" and "To get a Top"). When
+    // the model writes a band word where the grade goes, the label is empty and
+    // the page says the band in its own words; the same for nextLabel.
+    const BANDISH = /^(top|mid|middle|low|lower|upper|high|higher|band|top band|mid band|middle band|lower band|low band|upper band|higher band|n\/?a|none|-|—)$/i;
+    const gradeOrEmpty = s => { const t = String(s || '').trim(); return BANDISH.test(t) ? '' : t; };
+    // A "toNext" that is a fragment of punctuation, or that talks about the
+    // schema ("this field name is wrong"), is not advice — drop it.
+    const toNextClean = (() => { const t = String(r.overall.toNext || '').trim(); if (!t) return ''; if (!/[a-z]{3,}/i.test(t) || /^[^a-z0-9]/i.test(t) || /field name|schema|json|this field/i.test(t)) return ''; return t; })();
     return {
         overall: {
             band: ['top', 'mid', 'low'].includes(r.overall.band) ? r.overall.band : 'low',
-            label: String(r.overall.label || ''),
+            label: gradeOrEmpty(r.overall.label),
             summary: String(r.overall.summary || ''),
             strong: (Array.isArray(r.overall.strong) ? r.overall.strong : []).map(String).filter(Boolean).slice(0, 4),
             missing: (Array.isArray(r.overall.missing) ? r.overall.missing : []).map(String).filter(Boolean).slice(0, 6),
@@ -1094,8 +1143,8 @@ function normaliseMark(r, brief, essayForMark, plans, scheme) {
             // The grade above, and how to get it (Sarah, 17 Aug: "it doesn't
             // actually say why or what's weak or how you can get to the next
             // grade"). A grade with no way up is not marking, it is scoring.
-            nextLabel: String(r.overall.nextLabel || ''),
-            toNext: String(r.overall.toNext || ''),
+            nextLabel: gradeOrEmpty(r.overall.nextLabel),
+            toNext: toNextClean,
             // Every grade above, in order, and what each takes (18 Aug).
             ladder: (Array.isArray(r.overall.ladder) ? r.overall.ladder : []).map(x => ({ label: String((x && x.label) || '').trim(), needs: (Array.isArray(x && x.needs) ? x.needs : []).map(String).map(s => s.trim()).filter(Boolean).slice(0, 5) })).filter(x => x.label && x.needs.length).slice(0, 6),
             // The published standard's working, when one applies (18 Aug): a mark
@@ -1182,7 +1231,7 @@ const SOURCE_DIGEST_SCHEMA = {
 async function extractScenario({ taskText, brief }) {
     const body = String(taskText || '').trim();
     if (!body) return null;
-    const system = withMission(`You are Q, reading an assignment document FOR the student so they never have to. Find the SCENARIO the questions are about — the case study, the company, the situation, the text — and tell it plainly. Everyday British English, short, concrete. Figures copied exactly. Names as written. If the document has no scenario at all (it is questions and criteria only), return scenario: null.
+    const system = withMission(`You are Q, reading an assignment document FOR the student so they never have to. Find the SCENARIO the questions are about — the case study, the company, the situation, the text — and tell it plainly. Everyday British English, short, concrete. Figures copied exactly. Names as written. If the document has no scenario at all (it is questions and criteria only), return scenario: null. The scenario is NEVER the student or the student's own draft, essay, notes, word count or feedback on their writing — if the only "situation" in the document is notes about the student's work, there is no scenario: null. "strengths" / "problems" are the case's own pros and cons, never what is good or bad about the student's draft.
 ${brief ? '\nTHE QUESTIONS (already extracted):\n' + (brief.criteria || []).map(c => '- ' + c.text).join('\n') : ''}`);
     const user = `THE DOCUMENT:\n\n${body.slice(0, 60000)}\n\nTell the scenario for someone who will not read this.`;
     const schema = { type: 'object', additionalProperties: false, required: ['scenario'], properties: { scenario: BRIEF_SCHEMA.properties.scenario } };
@@ -2005,7 +2054,13 @@ function oneLineAsk(text, maxWords = 12) {
 }
 
 function normalisePlan(r, criterionId, bricks) {
-    if (!r || typeof r !== 'object' || !Array.isArray(r.steps) || !r.steps.length) throw new Error('The plan came back empty — try again.');
+    if (!r || typeof r !== 'object' || !Array.isArray(r.steps) || !r.steps.length) {
+        // Seven in a row on live (19 Aug) with nothing in the log to say what
+        // the model actually sent. Now it says.
+        let raw = ''; try { raw = JSON.stringify(r).slice(0, 600); } catch (_) { raw = String(r); }
+        console.warn('[writer/plan] ' + criterionId + ': empty plan — keys=' + (r && typeof r === 'object' ? Object.keys(r).join(',') : typeof r) + ' bricks=' + (bricks || []).length + ' raw=' + raw);
+        throw new Error('The plan came back empty — try again.');
+    }
     const brickIds = new Set((bricks || []).map(b => b.brickId));
     const seen = new Set();
     const steps = r.steps.map((s, i) => {
@@ -2907,6 +2962,7 @@ module.exports = {
     ukPolishResponse, ukText, UK_LINE, PLAIN_QUESTION_RULE, withHouseStyle, plainLabel, capWords, capSentences, parseWeight, termCanon,
     TUTOR_MISSION, WHY_THE_GAME, GAME_RULE, COACH_VOICE, MISSION_BLOCK, withMission, BRICK_LOOP_RULE, TO_THE_POINT, MAX_CRITIQUE,
     toolHelp, checkSentence, matchScore, EDIT_TOOLS, TOOL_SCHEMA, CHECK_SCHEMA, proofread, PROOF_KINDS, chatAnswer, CHAT_SCHEMA, judgeCiteCandidates,
+    normaliseMark, critIdResolver,   // exported for the harnesses (19 Aug)
     planPart, normalisePlan, planForPrompt, tagItems, checkStep, brickById, bricksOfCriterion,
     PLAN_SCHEMA, TAG_SCHEMA, STEP_CHECK_SCHEMA, STEP_KINDS, TAG_COLOURS,
     teachFor, relabelCriteria, labelLooksGenerated, TEACH_SCHEMA, LABELS_SCHEMA,
