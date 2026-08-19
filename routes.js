@@ -2343,7 +2343,16 @@ router.post('/writer/download', requirePerson, express.json({ limit: '2mb' }), w
     const title = String(req.body?.title || '').trim() || 'My assignment';
     const content = String(req.body?.content || '');
     if (!content.trim()) return res.status(400).json({ error: 'There is nothing to download yet — the page is blank.', code: 'empty' });
+    // `blocks` (optional) is the page as Word objects — headings, runs, lists,
+    // tables, diagrams, mind maps (writer.html docBlocksForExport). With them the
+    // page reaches Word formatted; without them it is the old text path exactly.
+    const blocks = Array.isArray(req.body?.blocks) ? req.body.blocks : null;
     try {
+        if (blocks && blocks.length) {
+            const { createWriterDocx } = require('./plugins/writer-docx');
+            const out = await createWriterDocx({ title, blocks }, req.person.email);
+            return res.json({ ok: true, url: '/download/' + out.token, filename: out.filename, sizeBytes: out.sizeBytes });
+        }
         const { createDocx } = require('./plugins/doc-creator');
         const out = await createDocx({ title, content }, req.person.email);
         res.json({ ok: true, url: '/download/' + out.token, filename: out.filename, sizeBytes: out.sizeBytes });

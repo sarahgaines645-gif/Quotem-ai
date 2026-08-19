@@ -2812,6 +2812,173 @@
       });
       return (clone.textContent || '').replace(/ /g, ' ').replace(/\n{3,}/g, '\n\n').trim();
     }
+    // ── The page as BLOCKS, for the Word download ──────────────────────────
+    // docPlainText() flattens everything to a line of characters; a student
+    // hands in Word, and her page has question headings, bold, lists, tables,
+    // ruled diagrams and mind maps on it. This reads the SAME document (a
+    // clone, furniture stripped) as a list of blocks the server turns into
+    // real Word objects. Nothing is invented here — every block is something
+    // already on the paper.
+    function docBlocksForExport() {
+      const clone = docBody.cloneNode(true);
+      clone.querySelectorAll('.grade-band, .q-margin-dots, .q-idot, .q-ptab, .q-ptab-anchor, [data-q-furniture]').forEach(n => n.remove());
+      const blocks = [];
+      const tidy = s => String(s == null ? '' : s).replace(/\u00a0/g, ' ').replace(/[ \t\r\n]+/g, ' ');
+      const flat = el => tidy(el ? (el.textContent || '') : '').trim();
+      const TONES = ['ok', 'warn', 'bad', 'info', 'tip'];
+      const BLOCKY = /^(DIV|P|TABLE|UL|OL|H[1-6]|BLOCKQUOTE|SECTION|ARTICLE|PRE|HR|LI|TR|TD|TH)$/;
+
+      // Inline runs of ONE block. A <br> ends the line: it comes back as a
+      // separate paragraph so a blank line never vanishes and two paragraphs
+      // never merge.
+      function runsOf(el) {
+        const out = []; let cur = [];
+        const push = (text, st) => {
+          if (!text) return;
+          const last = cur[cur.length - 1];
+          if (last && !!last.bold === !!st.b && !!last.italic === !!st.i && !!last.underline === !!st.u) { last.text += text; return; }
+          const r = { text: text };
+          if (st.b) r.bold = true;
+          if (st.i) r.italic = true;
+          if (st.u) r.underline = true;
+          cur.push(r);
+        };
+        (function walk(n, st) {
+          Array.from(n.childNodes).forEach(k => {
+            if (k.nodeType === 3) { push(tidy(k.nodeValue), st); return; }
+            if (k.nodeType !== 1) return;
+            const tag = k.tagName;
+            if (tag === 'BR') { out.push(cur); cur = []; return; }
+            let sty = null; try { sty = k.style; } catch (_) {}
+            const fw = (sty && sty.fontWeight) || '';
+            const st2 = {
+              b: st.b || tag === 'B' || tag === 'STRONG' || tag === 'TH' || fw === 'bold' || fw === 'bolder' || /^(6|7|8|9)00$/.test(fw),
+              i: st.i || tag === 'I' || tag === 'EM' || (sty && sty.fontStyle === 'italic'),
+              u: st.u || tag === 'U' || (sty && /underline/.test(sty.textDecoration || '')),
+            };
+            walk(k, st2);
+          });
+        })(el, { b: false, i: false, u: false });
+        out.push(cur);
+        // Trim the run text at the paragraph edges; drop a wholly empty tail
+        // so one <div><br></div> is one blank line, not two.
+        const paras = out.map(p => {
+          const q = p.slice();
+          if (q.length) { q[0] = Object.assign({}, q[0], { text: q[0].text.replace(/^ +/, '') }); q[q.length - 1] = Object.assign({}, q[q.length - 1], { text: q[q.length - 1].text.replace(/ +$/, '') }); }
+          return q.filter(r => r.text !== '');
+        });
+        while (paras.length > 1 && !paras[paras.length - 1].length) paras.pop();
+        return paras;
+      }
+
+      function tableBlock(tb) {
+        let header = []; const rows = [];
+        Array.from(tb.querySelectorAll('tr')).forEach(tr => {
+          const cells = Array.from(tr.children).filter(c => c.tagName === 'TD' || c.tagName === 'TH');
+          if (!cells.length) return;
+          const texts = cells.map(flat);
+          if (!header.length && !rows.length && cells.every(c => c.tagName === 'TH')) header = texts;
+          else rows.push(texts);
+        });
+        if (header.length || rows.length) blocks.push({ kind: 'table', header: header, rows: rows });
+      }
+
+      function listBlock(el) {
+        const items = Array.from(el.children).filter(c => c.tagName === 'LI').map(li => {
+          const ps = runsOf(li);
+          const runs = [];
+          ps.forEach((p, i) => { if (i && runs.length) runs.push({ text: ' ' }); p.forEach(r => runs.push(r)); });
+          return runs;
+        }).filter(r => r.some(x => x.text.trim()));
+        if (items.length) blocks.push({ kind: 'list', ordered: el.tagName === 'OL', items: items });
+      }
+
+      function boxOf(el) {
+        const o = { box: flat(el) };
+        const t = TONES.find(x => el.classList.contains(x));
+        if (t) o.tone = t;
+        return o;
+      }
+      function diagramBlock(dg) {
+        const rows = [];
+        Array.from(dg.querySelectorAll('.q-dg-row')).forEach(r => {
+          const cells = [];
+          Array.from(r.children).forEach(ch => {
+            if (ch.classList.contains('q-dg-a')) { cells.push({ arrow: flat(ch) || '\u2192' }); return; }
+            if (ch.classList.contains('q-dg-fan')) {
+              const fan = Array.from(ch.querySelectorAll('.q-dg-n')).map(boxOf).filter(b => b.box);
+              if (fan.length) cells.push({ fan: fan });
+              return;
+            }
+            if (ch.classList.contains('q-dg-n')) { const b = boxOf(ch); if (b.box) cells.push(b); return; }
+            const t = flat(ch); if (t) cells.push({ box: t });
+          });
+          if (cells.length) rows.push(cells);
+        });
+        if (rows.length) blocks.push({ kind: 'diagram', rows: rows });
+      }
+
+      // The mind map goes over as its own SVG — with the namespace and a real
+      // width/height off the viewBox, so the server can rasterise it. Its look
+      // is in attributes (stroke/fill/font-family), not page CSS, so nothing
+      // else has to travel with it.
+      function svgBlock(svg) {
+        try {
+          const c = svg.cloneNode(true);
+          const vb = (c.getAttribute('viewBox') || '').trim().split(/[\s,]+/).map(Number);
+          let w = 0, h = 0;
+          if (vb.length === 4 && isFinite(vb[2]) && isFinite(vb[3])) { w = Math.round(vb[2]); h = Math.round(vb[3]); }
+          if (!w || !h) { w = 900; h = 560; }
+          c.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
+          c.setAttribute('width', String(w));
+          c.setAttribute('height', String(h));
+          c.removeAttribute('style');
+          const out = c.outerHTML;
+          if (out) blocks.push({ kind: 'figure', svg: out });
+        } catch (_) { /* a figure that will not serialise is simply left out */ }
+      }
+
+      function figureBlock(fig) {
+        const svg = fig.querySelector('svg.q-mm') || fig.querySelector('svg');
+        if (svg) { svgBlock(svg); return; }
+        const dg = fig.querySelector('.q-dg');
+        if (dg) { diagramBlock(dg); return; }
+        const t = flat(fig); if (t) blocks.push({ kind: 'para', runs: [{ text: t }] });
+      }
+
+      function emit(node) {
+        if (node.nodeType === 3) {
+          const t = tidy(node.nodeValue).trim();
+          if (t) blocks.push({ kind: 'para', runs: [{ text: t }] });
+          return;
+        }
+        if (node.nodeType !== 1) return;
+        const el = node, tag = el.tagName;
+        if (el.classList && el.classList.contains('q-figure')) { figureBlock(el); return; }
+        if (tag === 'TABLE') { tableBlock(el); return; }
+        if (tag === 'UL' || tag === 'OL') { listBlock(el); return; }
+        if (tag === 'HR' || tag === 'SCRIPT' || tag === 'STYLE') return;
+        if (tag === 'BR') { blocks.push({ kind: 'para', runs: [] }); return; }
+        if (/^H[1-6]$/.test(tag)) { const t = flat(el); if (t) blocks.push({ kind: 'heading', level: 2, text: t }); return; }
+        if ((el.classList && el.classList.contains('q-part-head')) || isRefsHeading(el)) {
+          const t = flat(el); if (t) blocks.push({ kind: 'heading', level: 2, text: t });
+          return;
+        }
+        // A wrapper holding blocks of its own: go in, do not flatten it.
+        if (Array.from(el.children).some(c => BLOCKY.test(c.tagName) || (c.classList && c.classList.contains('q-figure')))) {
+          Array.from(el.childNodes).forEach(emit);
+          return;
+        }
+        runsOf(el).forEach(runs => blocks.push({ kind: 'para', runs: runs }));
+      }
+
+      Array.from(clone.childNodes).forEach(emit);
+      // Never lead or trail on blank paragraphs.
+      const blank = b => b.kind === 'para' && !b.runs.some(r => r.text.trim());
+      while (blocks.length && blank(blocks[0])) blocks.shift();
+      while (blocks.length && blank(blocks[blocks.length - 1])) blocks.pop();
+      return blocks;
+    }
     function countWords() {
       const t = docPlainText();
       return t ? t.split(/\s+/).length : 0;
@@ -9505,22 +9672,26 @@
         msg: 'Download what is on the page (' + text.trim().split(/\s+/).length + ' words):',
         section: 'DOWNLOAD',
         actions: [
-          { label: '↓ Word (.docx)', primary: true, onClick: () => downloadDocx(title, text) },
+          { label: '↓ Word (.docx)', primary: true, onClick: () => downloadDocx(title, text, docBlocksForExport()) },
           { label: '↓ Plain text (.txt)', onClick: () => downloadText(title, text) },
           ...(state.brief ? [{ label: '📄 Assemble first (their words, Q\'s structure)', onClick: assembleAndOffer }] : []),
         ],
         inputVisible: true,
       });
     }
-    async function downloadDocx(title, content) {
+    // `blocks` is the page as Word objects (offerDownload only). The Assemble
+    // path downloads a DIFFERENT string, so it sends content and nothing else.
+    async function downloadDocx(title, content, blocks) {
       setCoach({ msg: 'Building the Word file…', thinking: true, inputVisible: false });
       try {
-        const d = await api('/writer/download', { title, content }, { timeoutMs: 40000 });
+        const payload = { title, content };
+        if (Array.isArray(blocks) && blocks.length) payload.blocks = blocks;
+        const d = await api('/writer/download', payload, { timeoutMs: 40000 });
         const a = document.createElement('a'); a.href = d.url; a.download = d.filename || 'assignment.docx'; a.rel = 'noopener';
         document.body.appendChild(a); a.click(); a.remove();
         setCoach({ msg: 'Downloading ' + (d.filename || 'your file') + '. If nothing happened, tap here:', actions: [{ label: '↓ ' + (d.filename || 'download'), primary: true, onClick: () => window.open(d.url, '_blank') }], inputVisible: true });
       } catch (e) {
-        setCoach({ msg: 'Couldn\'t build the Word file: ' + shortCause(e), actions: [{ label: '↓ Download as text instead', primary: true, onClick: () => downloadText(title, content) }, { label: '↻ Try Word again', onClick: () => downloadDocx(title, content) }], inputVisible: true });
+        setCoach({ msg: 'Couldn\'t build the Word file: ' + shortCause(e), actions: [{ label: '↓ Download as text instead', primary: true, onClick: () => downloadText(title, content) }, { label: '↻ Try Word again', onClick: () => downloadDocx(title, content, blocks) }], inputVisible: true });
       }
     }
     function downloadText(title, content) {
@@ -11021,7 +11192,7 @@
     }, () => {});
     // Test hooks (no data, no secrets): lets the harness exercise the page-side
     // helpers without a paid call. Harmless in production.
-    window.__qwriterTest = { startTour, tourStep, stopTour, maybeOfferTour, paintQNotes, addQNotes, addQTabs, addStickies, renderStickies, snapshotDoc, undoDoc, presentStep, renderBoard, renderWhiteboard, startedAsk, showToolPop, findInDoc, replaceInDoc, appendReference, docPlainText, splitCheck: (t) => endsSentence(t), runEditPass, checkCurrentSentence, showEditItem, state: () => state, currentEditText, partParagraphs, setBrief, storyPointsHtml, renderInlineDots, termsForBoard, setCoach, bandListHtml, showEditItem, openEditPanel, renderEditPanel, edState: () => edProof, edSetProof: (p2) => { edProof = p2; renderEditPanel(); edPaint(); }, sayMe, renderThread, syncWorkArea, showPanel, revealPanel, runTidyPasses, applyTidyItem, mergeWalk, refreshSourceDigests, sourceDigestsHtml, markAndFix, walkItemsFromMark, renderMarkPanel, markStats, gradeWord, notesSections, notesCount, notesCopyText, renderNotesPanel, openNotesPanel, bibSorted, bibCopyText, renderBibPanel, openBibPanel, removeReference, removeReferenceFromDoc, sendTextToPage, jumpToSentence, runAutoCite, appendReference, noteReference, wbTablesFromSrc, tableElementFrom, sendBlockToPage, wbSendText, wbBlocksFromSrc, sendBlocksToPage, sendStickyToPage, blockElement, wbMindmapParse, wbMindmapSvg, wbMindmapHtml, docMindmapElement, wbDiagramHtml };
+    window.__qwriterTest = { startTour, tourStep, stopTour, maybeOfferTour, paintQNotes, addQNotes, addQTabs, addStickies, renderStickies, snapshotDoc, undoDoc, presentStep, renderBoard, renderWhiteboard, startedAsk, showToolPop, findInDoc, replaceInDoc, appendReference, docPlainText, docBlocksForExport, splitCheck: (t) => endsSentence(t), runEditPass, checkCurrentSentence, showEditItem, state: () => state, currentEditText, partParagraphs, setBrief, storyPointsHtml, renderInlineDots, termsForBoard, setCoach, bandListHtml, showEditItem, openEditPanel, renderEditPanel, edState: () => edProof, edSetProof: (p2) => { edProof = p2; renderEditPanel(); edPaint(); }, sayMe, renderThread, syncWorkArea, showPanel, revealPanel, runTidyPasses, applyTidyItem, mergeWalk, refreshSourceDigests, sourceDigestsHtml, markAndFix, walkItemsFromMark, renderMarkPanel, markStats, gradeWord, notesSections, notesCount, notesCopyText, renderNotesPanel, openNotesPanel, bibSorted, bibCopyText, renderBibPanel, openBibPanel, removeReference, removeReferenceFromDoc, sendTextToPage, jumpToSentence, runAutoCite, appendReference, noteReference, wbTablesFromSrc, tableElementFrom, sendBlockToPage, wbSendText, wbBlocksFromSrc, sendBlocksToPage, sendStickyToPage, blockElement, wbMindmapParse, wbMindmapSvg, wbMindmapHtml, docMindmapElement, wbDiagramHtml };
 
 
     // (The old per-card drag code lived here — every panel now goes through makePanel above.)
