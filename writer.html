@@ -437,6 +437,8 @@
     .q-popcard .pc-list li { margin-bottom: 2px; }
     .q-popcard.term { width: 230px; pointer-events: none; z-index: 270; }
     .q-popcard.cite { width: 300px; }
+    .q-popcard .pc-check { display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--text); margin: 6px 0 2px; cursor: pointer; }
+    .q-popcard .pc-check input { accent-color: var(--accent); margin: 0; }
     .q-popcard .cite-opt { display: block; width: 100%; text-align: left; margin-bottom: 6px; padding: 7px 9px; }
     .q-popcard .cite-opt .co-title { display: block; font-weight: 600; font-size: 11px; line-height: 1.35; color: var(--text); }
     .q-popcard .cite-opt .co-meta { display: block; font-size: 10px; color: var(--text-muted); margin-top: 2px; line-height: 1.35; }
@@ -2594,6 +2596,11 @@
     <div class="panel-grip" title="Drag to resize"></div>
   </div>
 
+  <!-- Highlight — her own highlight on any selection, no label (Sarah, 19 Aug) -->
+  <button class="inline-ref-btn hidden" id="inline-hl-btn" type="button">
+    <svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21h18"/><path d="M9 17l10-10-4-4L5 13z"/></svg>
+    Highlight
+  </button>
   <!-- Label this — appears on any selection: her own tab, anywhere in the doc (Sarah, 18 Aug) -->
   <button class="inline-ref-btn hidden" id="inline-tab-btn" type="button">
     <svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>
@@ -5236,17 +5243,37 @@
     }
     const DOT_ACTION_LABEL = { cite: 'Auto cite', facts: 'Facts in the case', references: 'References', cases: 'Case studies', strategies: 'Strategies', terminology: 'Terminology', weak: 'What\'s weak', synonyms: 'Synonyms', dictionary: 'Dictionary' };
     // Click a dot → the popup: what's missing right there + ONE action.
-    const QN_LABEL = { cut: 'Cut this', source: 'The source', split: 'Split it', weak: 'Weak', good: 'Good — keep it', note: 'Q says' };
+    const QN_LABEL = { cut: 'Cut this', source: 'The source', split: 'Split it', weak: 'Weak', good: 'Good — keep it', note: 'Q says', label: 'Your label', mine: 'Your highlight' };
     const QN_COLOUR = { cut: 'pink', source: 'amber', split: 'blue', weak: 'violet', good: 'green', note: 'grey' };
     const HL_HEX = { pink: 'var(--accent)', amber: '#e6a817', blue: '#3b82c4', violet: '#7c5cbf', green: '#28a745', grey: '#9aa0ad' };
     function noteColour(n) { return HL_HEX[n.colour] ? n.colour : (QN_COLOUR[n.kind] || 'grey'); }
     // Repaint ALL of Q's live notes, one CSS Highlight per colour.
+    // A highlight range from the first word to the last paints EVERYTHING in
+    // between — including a tab she put on the passage (Sarah, 19 Aug: "the
+    // highlight shouldnt be highlighting the lable"). Split it into one range
+    // per text node and leave the furniture out.
+    function splitRangeAroundFurniture(r) {
+      const out = [];
+      try {
+        const root = r.commonAncestorContainer.nodeType === 3 ? r.commonAncestorContainer.parentNode : r.commonAncestorContainer;
+        const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+        for (let n = walker.nextNode(); n; n = walker.nextNode()) {
+          if (!r.intersectsNode(n)) continue;
+          if (n.parentElement && n.parentElement.closest(DOC_SKIP_SEL)) continue;
+          const s = (n === r.startContainer) ? r.startOffset : 0;
+          const e = (n === r.endContainer) ? r.endOffset : n.nodeValue.length;
+          if (e <= s) continue;
+          const sub = document.createRange(); sub.setStart(n, s); sub.setEnd(n, e); out.push(sub);
+        }
+      } catch (_) { return [r]; }
+      return out.length ? out : [r];
+    }
     function paintQNotes() {
       try {
         if (!(window.CSS && CSS.highlights && window.Highlight)) return;
         const by = {}; for (const n of (state.qNotes || [])) { if (!n || n.done) continue; (by[noteColour(n)] = by[noteColour(n)] || []).push(n.text); }
         for (const c of Object.keys(HL_HEX)) {
-          const rs = []; for (const t of (by[c] || [])) rs.push(...edFindRanges(String(t).replace(/\s+/g, ' ').trim()));
+          const rs = []; for (const t of (by[c] || [])) for (const r of edFindRanges(String(t).replace(/\s+/g, ' ').trim())) rs.push(...splitRangeAroundFurniture(r));
           if (rs.length) CSS.highlights.set('q-hl-' + c, new Highlight(...rs)); else CSS.highlights.delete('q-hl-' + c);
         }
         CSS.highlights.delete('q-say');
@@ -5316,13 +5343,22 @@
     // in the doc and choose colours'). One small card: the label, the colours,
     // the side (margin tabs only), Take it off. Used for Q's tabs, hers, and stickies.
     function swatchRowHtml(hexMap, current) { return '<div class="pc-sw-row">' + Object.keys(hexMap).map(k => '<button type="button" class="pc-sw' + (k === current ? ' on' : '') + '" data-sw="' + k + '" style="--sc:' + hexMap[k] + '" title="' + k + '" aria-label="' + k + '"></button>').join('') + '</div>'; }
-    function openTabEditor({ tab, anchor, isNew, text, onSave, onRemove }) {
-      const cur = tab || { label: '', colour: 'pink', side: 'top', text: text || '' };
+    // The live highlight (Q's or hers) that covers these words, if any — the
+    // label takes its colour (Sarah, 19 Aug: "the lable should be the same colour
+    // as the highlighter").
+    function noteOnText(text) {
+      const t = String(text || '').replace(/\s+/g, ' ').trim().toLowerCase(); if (!t) return null;
+      return (state.qNotes || []).find(n => n && !n.done && n.text && (n.text.toLowerCase().includes(t) || t.includes(n.text.toLowerCase()))) || null;
+    }
+    function openTabEditor({ tab, anchor, isNew, text, onSave, onRemove, offerHighlight }) {
+      const onText = isNew && text ? noteOnText(text) : null;
+      const cur = tab || { label: '', colour: onText ? noteColour(onText) : 'pink', side: 'top', text: text || '' };
       const isText = !!(cur.text || text);
       const html = '<div class="pc-head">' + (isNew ? 'Label this' : 'This tab') + '</div>'
         + (isText ? '<div class="pc-line" style="color:var(--text-muted)">on “' + escHtml(String(cur.text || text || '').slice(0, 60)) + (String(cur.text || text || '').length > 60 ? '…' : '') + '”</div>' : '<div class="pc-line" style="color:var(--text-muted)">Paragraph ' + Number(cur.paragraph) + '</div>')
         + '<div class="pc-lab">Label</div><input class="pc-in" id="pt-label" type="text" maxlength="40" value="' + escHtml(cur.label || '') + '" placeholder="1-4 words" />'
         + '<div class="pc-lab">Colour</div>' + swatchRowHtml(HL_HEX, cur.colour || 'pink')
+        + (offerHighlight && !onText ? '<label class="pc-check"><input type="checkbox" id="pt-hl"> Highlight the words too, same colour</label>' : '')
         + (isText ? '' : '<div class="pc-lab">Hangs</div><div class="pc-seg" id="pt-side">' + ['left', 'right', 'top'].map(s => '<button type="button" data-side="' + s + '"' + (s === (cur.side || 'right') ? ' class="on"' : '') + '>' + s + '</button>').join('') + '</div>')
         + '<div class="pc-acts"><button type="button" class="q-btn primary" id="pt-save">' + (isNew ? 'Put it on' : 'Save') + '</button>' + (isNew ? '' : '<button type="button" class="q-btn quiet" id="pt-off">Take it off</button>') + '</div>';
       showToolPop(html, { kind: 'tab', anchor });
@@ -5331,7 +5367,7 @@
       toolPopEl.querySelectorAll('.pc-sw').forEach(b => b.addEventListener('click', () => { colour = b.dataset.sw; toolPopEl.querySelectorAll('.pc-sw').forEach(x => x.classList.toggle('on', x === b)); }));
       toolPopEl.querySelectorAll('#pt-side button').forEach(b => b.addEventListener('click', () => { side = b.dataset.side; toolPopEl.querySelectorAll('#pt-side button').forEach(x => x.classList.toggle('on', x === b)); }));
       const inp = toolPopEl.querySelector('#pt-label'); if (inp) { setTimeout(() => { try { inp.focus(); inp.select(); } catch (_) {} }, 30); inp.addEventListener('keydown', ev => { if (ev.key === 'Enter') { ev.preventDefault(); toolPopEl.querySelector('#pt-save').click(); } }); }
-      toolPopEl.querySelector('#pt-save').addEventListener('click', () => { const label = String(inp ? inp.value : '').trim().slice(0, 40) || 'note'; toolPopEl.classList.remove('dotpop'); hideToolPop(); onSave({ label, colour, side }); });
+      toolPopEl.querySelector('#pt-save').addEventListener('click', () => { const hlToo = !!(toolPopEl.querySelector('#pt-hl') && toolPopEl.querySelector('#pt-hl').checked); const label = String(inp ? inp.value : '').trim().slice(0, 40) || 'note'; toolPopEl.classList.remove('dotpop'); hideToolPop(); if (hlToo && text) addQNotes([{ text, note: label, kind: 'label', colour }]); onSave({ label, colour, side }); });
       const off = toolPopEl.querySelector('#pt-off'); if (off && onRemove) off.addEventListener('click', () => { toolPopEl.classList.remove('dotpop'); hideToolPop(); onRemove(); });
     }
     function openStickyEditor(st, anchor) {
@@ -5350,7 +5386,20 @@
     document.getElementById('inline-tab-btn').addEventListener('click', () => {
       const text = selectedTabText; if (!text) return;
       const btn = document.getElementById('inline-tab-btn'); btn.classList.add('hidden');
-      openTabEditor({ isNew: true, text, anchor: btn, onSave: ({ label, colour }) => addQTabs([{ text, label, colour, by: 'me' }]) });
+      openTabEditor({ isNew: true, text, anchor: btn, offerHighlight: true, onSave: ({ label, colour }) => addQTabs([{ text, label, colour, by: 'me' }]) });
+    });
+    // HIGHLIGHT — her own, no label, any colour (Sarah, 19 Aug: "you should be
+    // able to put that in seperatly"). Same swatches as the labels and Q's notes.
+    document.getElementById('inline-hl-btn').addEventListener('click', () => {
+      const text = selectedTabText; if (!text) return;
+      const btn = document.getElementById('inline-hl-btn'); btn.classList.add('hidden'); document.getElementById('inline-tab-btn').classList.add('hidden');
+      const html = '<div class="pc-head">Highlight</div><div class="pc-line" style="color:var(--text-muted)">“' + escHtml(text.slice(0, 60)) + (text.length > 60 ? '…' : '') + '”</div>'
+        + '<div class="pc-lab">Colour</div>' + swatchRowHtml(HL_HEX, 'green')
+        + '<div class="pc-acts"><button type="button" class="q-btn primary" id="ph-save">Put it on</button></div>';
+      showToolPop(html, { kind: 'highlight', anchor: btn }); toolPopEl.classList.add('dotpop');
+      let colour = 'green';
+      toolPopEl.querySelectorAll('.pc-sw').forEach(b => b.addEventListener('click', () => { colour = b.dataset.sw; toolPopEl.querySelectorAll('.pc-sw').forEach(x => x.classList.toggle('on', x === b)); }));
+      toolPopEl.querySelector('#ph-save').addEventListener('click', () => { toolPopEl.classList.remove('dotpop'); hideToolPop(); addQNotes([{ text, note: '', kind: 'mine', colour }]); });
     });
     function tabForParagraph(pn) { return (state.qTabs || []).find(t => t && !t.done && Number(t.paragraph) === Number(pn)) || null; }
     const CALLOUT_HEX = { ok: '#28a745', warn: '#e6a817', bad: 'var(--accent)', info: '#3b82c4', tip: '#7c5cbf' };
@@ -5398,6 +5447,10 @@
           if (side !== 't' && side !== 'x') { const a = document.createElement('span'); a.className = 'q-ptab-anchor ' + side; a.contentEditable = 'false'; a.setAttribute('data-q-furniture', 'true'); a.appendChild(tab); node = a; }
           after.parentNode.insertBefore(node, after); }   // right before the paragraph's first word — works in one wrapper div too
       });
+      // A tab put INTO a highlighted passage splits its text node; the live
+      // highlight range then spans the tab and paints its word. Repaint from
+      // the text, around the furniture (Sarah, 19 Aug).
+      try { paintQNotes(); } catch (_) {}
     }
     document.addEventListener('click', (e) => {
       // A press on a tab does NOT bin it (Sarah, 18 Aug): it opens the little pop —
@@ -6298,13 +6351,15 @@
           flushPara(); flushList();
           const lang = (fence[2] || '').toLowerCase(); const inner = []; let j = i + 1;
           while (j < lines.length && !/^\s*(```|~~~)\s*$/.test(lines[j])) { inner.push(lines[j]); j++; }
-          if (!anyTicked && (lang === 'diagram' || lang === 'flow')) blocks.push({ kind: 'diagram', lines: inner.filter(x => x.trim()) });
+          // Ticks choose LINES; a table or a diagram on the same display still
+          // goes (Sarah, 19 Aug: "it only takes the ticks").
+          if (lang === 'diagram' || lang === 'flow') blocks.push({ kind: 'diagram', lines: inner.filter(x => x.trim()) });
           else if (!anyTicked && (lang === 'build' || lang === 'buildup' || !lang)) inner.map(clean).filter(Boolean).forEach(t => blocks.push({ kind: 'text', text: t }));
           i = j; continue;
         }
         const isRow = /^\s*\|.*\|\s*$/.test(line);
         const sepNext = i + 1 < lines.length && /^\s*\|?[\s:|-]+\|[\s:|-]*$/.test(lines[i + 1]) && lines[i + 1].includes('-');
-        if (isRow && sepNext && !anyTicked) {
+        if (isRow && sepNext) {
           flushPara(); flushList();
           const cells = l => l.trim().replace(/^\||\|$/g, '').split('|').map(c => clean(c));
           const header = cells(line); const rows = []; let j = i + 2;
@@ -8337,18 +8392,24 @@
     docBody.addEventListener('mouseup', (e) => {
       setTimeout(() => {
         const sel = window.getSelection();
-        if (!sel || sel.isCollapsed) { inlineRefBtn.classList.add('hidden'); inlineTabBtn.classList.add('hidden'); return; }
+        if (!sel || sel.isCollapsed) { inlineRefBtn.classList.add('hidden'); inlineTabBtn.classList.add('hidden'); document.getElementById('inline-hl-btn').classList.add('hidden'); return; }
         const text = sel.toString().trim();
         const rect0 = sel.rangeCount ? sel.getRangeAt(0).getBoundingClientRect() : null;
         // LABEL THIS — her own tab on any words she selects (3+ characters).
-        if (text.length >= 3 && rect0) { selectedTabText = text.replace(/\s+/g, ' ').slice(0, 120); inlineTabBtn.style.left = Math.min(rect0.left, window.innerWidth - 260) + 'px'; inlineTabBtn.style.top = Math.max(8, rect0.top - 34) + 'px'; inlineTabBtn.classList.remove('hidden'); }
-        else inlineTabBtn.classList.add('hidden');
+        const hlBtn = document.getElementById('inline-hl-btn');
+        if (text.length >= 3 && rect0) {
+          selectedTabText = text.replace(/\s+/g, ' ').slice(0, 120);
+          const left0 = Math.min(rect0.left, window.innerWidth - 340), top0 = Math.max(8, rect0.top - 34);
+          hlBtn.style.left = left0 + 'px'; hlBtn.style.top = top0 + 'px'; hlBtn.classList.remove('hidden');
+          inlineTabBtn.style.left = (left0 + hlBtn.offsetWidth + 6) + 'px'; inlineTabBtn.style.top = top0 + 'px'; inlineTabBtn.classList.remove('hidden');
+        }
+        else { inlineTabBtn.classList.add('hidden'); hlBtn.classList.add('hidden'); }
         if (text.length < 20) { inlineRefBtn.classList.add('hidden'); return; }
         selectedParaText = text;
         selectionRange = sel.rangeCount ? sel.getRangeAt(0).cloneRange() : null;
         // Position button just above the selection end — to the right of Label this
         const rect = sel.getRangeAt(0).getBoundingClientRect();
-        inlineRefBtn.style.left = Math.min(rect.left + (inlineTabBtn.classList.contains('hidden') ? 0 : inlineTabBtn.offsetWidth + 6), window.innerWidth - 160) + 'px';
+        inlineRefBtn.style.left = Math.min((inlineTabBtn.classList.contains('hidden') ? rect.left : parseFloat(inlineTabBtn.style.left) + inlineTabBtn.offsetWidth + 6), window.innerWidth - 160) + 'px';
         inlineRefBtn.style.top  = Math.max(8, rect.top - 34) + 'px';
         inlineRefBtn.classList.remove('hidden');
         // Close the para popup if it was open
