@@ -517,6 +517,151 @@ async function searchCrossref(query, max) {
     }
 }
 
+// ── THE CITE GUARD (Sarah, 19 Aug: "my sister said Q's making docs up that
+// don't exist") ───────────────────────────────────────────────────────────
+// Q's chat is model text: when he names "Guest (1998)" from his own head
+// nothing had checked it. These two functions find every citation-shaped
+// mention in a reply — Surname (Year), Surname and Surname (Year), Surname et
+// al. (Year), (Surname, Year), Surname, A. (Year), a DOI — and look each one
+// up on OpenAlex (CrossRef behind it): found = a record with that surname
+// among the authors and that year (±1 for online-first vs print). Nothing is
+// rewritten; the route says plainly which ones it could not find.
+const MENTION_STOP = new Set(['act', 'bill', 'parliament', 'section', 'chapter', 'figure', 'table', 'question', 'part', 'unit', 'cipd', 'level', 'in', 'the', 'see', 'and', 'since', 'by', 'from', 'of', 'at', 'on', 'for', 'with', 'to', 'as', 'or', 'but', 'if', 'so', 'no', 'yes', 'january', 'february', 'march', 'april', 'may', 'june', 'july', 'august', 'september', 'october', 'november', 'december', 'spring', 'summer', 'autumn', 'winter', 'q1', 'q2', 'q3', 'q4', 'lo1', 'lo2', 'lo3', 'lo4', 'ac', 'lo', 'p1', 'p2', 'p3', 'p4', 'p5', 'p6', 'p7', 'p8', 'p9', 'r1', 'r2', 'r3', 'r4', 'r5', 'references', 'bibliography', 'word', 'words', 'brief', 'essay', 'draft', 'deadline', 'submission', 'assessment', 'assignment', 'regulations', 'regulation', 'directive', 'convention', 'treaty', 'case', 'v', 'vs', 'r', 'ltd', 'plc', 'uk', 'gov', 'ons', 'nhs', 'bbc', 'acas', 'tuc', 'who', 'eu', 'un']);
+const SURNAME = "[A-Z][A-Za-z'’\\-]{1,30}";
+const MENTION_RXS = [
+    // Guest (1998) · Guest and Conway (2002) · Rousseau et al. (1995) · Guest, D. E. (1998)
+    new RegExp('\\b(' + SURNAME + ')(?:,\\s*(?:[A-Z]\\.\\s*){1,3})?(?:\\s+(?:and|&)\\s+(' + SURNAME + ')|\\s+et al\\.?)?\\s*\\(\\s*((?:19|20)\\d{2})[a-z]?\\s*\\)', 'g'),
+    // (Guest, 1998) · (Guest and Conway, 2002) · (Rousseau et al., 1995) · (Guest, 1998; Conway, 2002)
+    new RegExp('[(;]\\s*(' + SURNAME + ')(?:\\s+(?:and|&)\\s+(' + SURNAME + ')|\\s+et al\\.?)?\\s*,\\s*((?:19|20)\\d{2})[a-z]?\\s*(?=[);,])', 'g'),
+];
+const DOI_RX = /\b10\.\d{4,9}\/[^\s"']+/g;
+function findMentions(text) {
+    const s = String(text || '');
+    const out = new Map();
+    for (const rx of MENTION_RXS) {
+        rx.lastIndex = 0; let m;
+        while ((m = rx.exec(s))) {
+            const a = m[1], b = m[2] || '', year = m[3];
+            if (MENTION_STOP.has(a.toLowerCase()) || (b && MENTION_STOP.has(b.toLowerCase()))) continue;
+            const key = (a + (b ? ' and ' + b : '') + ' ' + year).toLowerCase();
+            if (!out.has(key)) out.set(key, { mention: m[0].replace(/^[(;]\s*/, '').trim(), surname: a, second: b, year, at: m.index, doi: null });
+        }
+    }
+    DOI_RX.lastIndex = 0; let d;
+    while ((d = DOI_RX.exec(s))) { let doi = d[0].replace(/[.,;:]+$/, ''); while (/[)\]]$/.test(doi) && (doi.split(/[)\]]/).length > doi.split(/[(\[]/).length)) doi = doi.slice(0, -1); const key = 'doi:' + doi.toLowerCase(); if (!out.has(key)) out.set(key, { mention: doi, surname: '', second: '', year: '', at: d.index, doi }); }
+    return Array.from(out.values());
+}
+const fold = s => String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z]/g, '');
+function contextWords(text, at, n) {
+    // The mention's OWN sentence: from the previous sentence end to the next.
+    // A window of characters picked up the neighbouring mentions' words and
+    // called Conway and Briner (2005) "not on this topic" for a sentence about
+    // the psychological contract.
+    const s = String(text || '');
+    let lo = at; while (lo > 0 && !/[.!?\n]/.test(s[lo - 1])) lo--;
+    let hi = at; while (hi < s.length && !/[.!?\n]/.test(s[hi])) hi++;
+    const sent = s.slice(lo, hi).replace(/\b[A-Z][A-Za-z'’\-]+(?:\s+(?:and|&)\s+[A-Z][A-Za-z'’\-]+|\s+et al\.?)?\s*\(\s*(?:19|20)\d{2}[a-z]?\s*\)/g, ' ').replace(/\((?:[^()]*?,\s*(?:19|20)\d{2}[a-z]?)\)/g, ' ');
+    const words = keywords(sent, n);
+    return words.length ? words : keywords(s.slice(Math.max(0, at - 160), Math.min(s.length, at + 160)), n);
+}
+// The indexes are asked the way an index can answer: AUTHOR NAME + YEAR RANGE
+// as filters (OpenAlex raw_author_name.search + publication dates; CrossRef
+// query.author + from/until-pub-date), the sentence's topic words as the free
+// search. "Guest 1998" as free text matches nothing — author names are not in
+// the full-text index (that is how the first version called Guest (1998) and
+// Rousseau (1995) invented — 19 Aug).
+async function openAlexByAuthorYear(surname, year, kw, max) {
+    const mailto = process.env.OPENALEX_MAILTO ? '&mailto=' + encodeURIComponent(process.env.OPENALEX_MAILTO) : '';
+    const y = Number(year);
+    const filter = 'is_retracted:false,raw_author_name.search:' + encodeURIComponent(surname) + ',from_publication_date:' + (y - 1) + '-01-01,to_publication_date:' + (y + 1) + '-12-31';
+    const url = OPENALEX + '?filter=' + filter + (kw ? '&search=' + encodeURIComponent(kw) : '') + '&per-page=' + Math.min(25, max) + '&select=id,display_name,publication_year,authorships,primary_location,doi,type,cited_by_count,biblio,is_retracted,abstract_inverted_index' + mailto;
+    const started = Date.now();
+    try {
+        const d = await deps.fetchJson(url);
+        logUsage({ skill: 'cite', provider: 'openalex', model: 'works.author-year', started, kind: 'lookup', tokensIn: 0, tokensOut: 0 });
+        return (d && Array.isArray(d.results) ? d.results : []).map(fromOpenAlex).filter(Boolean);
+    } catch (e) {
+        logUsage({ skill: 'cite', provider: 'openalex', model: 'works.author-year', started, kind: 'lookup', success: false, error: String(e && e.message || e).slice(0, 80), tokensIn: 0, tokensOut: 0 });
+        return [];
+    }
+}
+async function crossrefByAuthorYear(surname, year, kw, max) {
+    const mailto = process.env.OPENALEX_MAILTO ? '&mailto=' + encodeURIComponent(process.env.OPENALEX_MAILTO) : '';
+    const y = Number(year);
+    const url = CROSSREF + '?query.author=' + encodeURIComponent(surname) + (kw ? '&query.bibliographic=' + encodeURIComponent(kw) : '') + '&filter=from-pub-date:' + (y - 1) + ',until-pub-date:' + (y + 1) + '&rows=' + Math.min(20, max) + '&select=DOI,title,author,issued,container-title,publisher,type,volume,issue,page,URL,is-referenced-by-count' + mailto;
+    const started = Date.now();
+    try {
+        const d = await deps.fetchJson(url);
+        logUsage({ skill: 'cite', provider: 'crossref', model: 'works.author-year', started, kind: 'lookup', tokensIn: 0, tokensOut: 0 });
+        return (d && d.message && Array.isArray(d.message.items) ? d.message.items : []).map(fromCrossref).filter(Boolean);
+    } catch (e) {
+        logUsage({ skill: 'cite', provider: 'crossref', model: 'works.author-year', started, kind: 'lookup', success: false, error: String(e && e.message || e).slice(0, 80), tokensIn: 0, tokensOut: 0 });
+        return [];
+    }
+}
+async function verifyMention(m, text) {
+    const t0 = Date.now();
+    try {
+        if (m.doi) {
+            try { const w = await deps.fetchJson('https://api.openalex.org/works/https://doi.org/' + encodeURIComponent(m.doi)); const r = fromOpenAlex(w); if (r) return { ...m, found: true, strength: 'strong', title: r.title, year: r.year, authors: r.authors.map(a => a.family), ms: Date.now() - t0 }; } catch (_) {}
+            try { const ws = await searchCrossref(m.doi, 1); const r = ws[0]; if (r && String(r.doi || '').toLowerCase() === m.doi.toLowerCase()) return { ...m, found: true, strength: 'strong', title: r.title, year: r.year, authors: r.authors.map(a => a.family), ms: Date.now() - t0 }; } catch (_) {}
+            return { ...m, found: false, ms: Date.now() - t0 };
+        }
+        const y = Number(m.year);
+        const okRec = r => r && (r.authors || []).some(a => fold(a.family) === fold(m.surname)) && Math.abs(Number(r.year) - y) <= 1
+            && (!m.second || (r.authors || []).some(a => fold(a.family) === fold(m.second)));
+        // A hit that shares a topic word with the sentence is the work he meant;
+        // one that only matches surname + year is SOME paper by SOME Wang in 2021
+        // — reported as weak, not found, so a common surname cannot launder an
+        // invented title.
+        const kwList = contextWords(text, m.at, 6).filter(k => fold(k) !== fold(m.surname) && k.length > 3);
+        const kw = kwList.join(' ');
+        const onTopic = r => { const hay = fold((r.title || '') + ' ' + (r.snippet || '') + ' ' + (r.journal || '')); return !kwList.length || kwList.some(k => hay.includes(fold(k))); };
+        const pack = (hit, strength) => ({ ...m, found: true, strength, title: hit.title, year: hit.year, authors: hit.authors.map(a => a.family), ms: Date.now() - t0 });
+        let weak = null;
+        // OpenAlex: author + year, topic words; then author + year alone.
+        for (const q of [kw, '']) {
+            const ws = await openAlexByAuthorYear(m.surname, m.year, q, 12);
+            const strong = ws.find(r => okRec(r) && onTopic(r)); if (strong) return pack(strong, 'strong');
+            if (!weak) weak = ws.find(okRec) || null;
+            if (!q) break;
+        }
+        // CrossRef the same way.
+        for (const q of [kw, '']) {
+            const cs = await crossrefByAuthorYear(m.surname, m.year, q, 12);
+            const strong = cs.find(r => okRec(r) && onTopic(r)); if (strong) return pack(strong, 'strong');
+            if (!weak) weak = cs.find(okRec) || null;
+            if (!q) break;
+        }
+        if (weak) return pack(weak, 'weak');
+        return { ...m, found: false, ms: Date.now() - t0 };
+    } catch (e) { return { ...m, found: null, error: String(e && e.message || e).slice(0, 80), ms: Date.now() - t0 }; }
+}
+/**
+ * verifyMentions(text, { exemptText, max, timeoutMs }) → { checked: [...], unverified: [...], exempt: [...] }
+ * exemptText: the student's own words (their page, their message, their uploads,
+ * the brief) — a source THEY brought is theirs to discuss, not his to have invented.
+ */
+async function verifyMentions(text, { exemptText = '', max = 6, timeoutMs = 9000 } = {}) {
+    const all = findMentions(text);
+    const ex = String(exemptText || '');
+    const exFold = fold(ex);
+    const isExempt = m => {
+        if (!ex) return false;
+        if (m.doi) return ex.toLowerCase().includes(m.doi.toLowerCase());
+        // surname and year within 120 characters of each other in her own text
+        const rx = new RegExp(m.surname.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&') + '[\\s\\S]{0,120}?' + m.year + '|' + m.year + '[\\s\\S]{0,120}?' + m.surname.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&'), 'i');
+        return rx.test(ex) || (exFold.includes(fold(m.surname)) && ex.includes(m.year) && fold(m.surname).length >= 6);
+    };
+    const exempt = all.filter(isExempt);
+    const todo = all.filter(m => !isExempt(m)).slice(0, max);
+    if (!todo.length) return { checked: [], unverified: [], exempt, skipped: Math.max(0, all.length - exempt.length - todo.length) };
+    const timer = new Promise(res => setTimeout(() => res('timeout'), timeoutMs));
+    const results = await Promise.race([Promise.all(todo.map(m => verifyMention(m, text))), timer]);
+    if (results === 'timeout') return { checked: [], unverified: [], exempt, timedOut: true, skipped: todo.length };
+    return { checked: results, unverified: results.filter(r => r.found === false), weak: results.filter(r => r.found === true && r.strength === 'weak'), exempt, skipped: Math.max(0, all.length - exempt.length - todo.length) };
+}
+
 /**
  * findSources — uploads first, then the indexes. Never invents.
  */
@@ -573,5 +718,6 @@ async function findSources({ claimSentence, subject, level, uploadedSources, max
 module.exports = {
     findSources, harvardInText, harvardReference, keywords, buildQuery, splitDisplayName, initials,
     metaFromText, matchUpload, fromOpenAlex, fromCrossref, searchOpenAlex, searchCrossref,
+    findMentions, verifyMentions,
     SOURCE_META_SCHEMA, SOURCE_META_PROMPT, deps, _cache: cache,
 };

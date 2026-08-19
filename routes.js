@@ -1686,6 +1686,30 @@ router.post('/writer/chat', requirePerson, express.json({ limit: '1mb' }), write
                     ];
                     for (const [rx, tool, msg] of claims) if (rx.test(reply) && !called.has(tool)) { reply += String.fromCharCode(10) + String.fromCharCode(10) + '(' + msg + ' — I described it instead of doing it. Ask me again and I will do it properly.)'; break; }
                 }
+                // THE CITE GUARD (Sarah, 19 Aug: "my sister said Q's making docs up
+                // that don't exist"). Every citation-shaped mention in his reply or
+                // on his whiteboard — Guest (1998), (Rousseau et al., 1995), a DOI —
+                // that she did not bring herself (her page, her message, her uploads,
+                // the brief) is looked up on OpenAlex / CrossRef. One he named that
+                // is not there is SAID to be not there, in his reply, every time.
+                // Mentions he got from check_reference this turn count as checked.
+                try {
+                    const toolText = (Array.isArray(q.toolCalls) ? q.toolCalls : []).filter(c => c && c.name === 'check_reference' && c.result).map(c => JSON.stringify(c.result)).join(String.fromCharCode(10));
+                    const exemptText = [text, String(b.docText || ''), stored && stored.text ? stored.text : '', ...((t.sources || []).map(s => (s && (s.text || '')) || '')), toolText].join(String.fromCharCode(10));
+                    const toCheck = reply + (display && display.src ? String.fromCharCode(10) + display.src : '');
+                    if (qCite.findMentions(toCheck).length) {
+                        const v = await qCite.verifyMentions(toCheck, { exemptText, max: 6, timeoutMs: 9000 });
+                        console.log('[writer/chat] cite guard: checked ' + v.checked.length + ' exempt ' + v.exempt.length + (v.timedOut ? ' TIMED OUT' : '') + (v.skipped ? ' skipped ' + v.skipped : '') + (v.unverified.length ? ' — NOT FOUND: ' + v.unverified.map(u => u.mention).join(' | ') : '') + (v.checked.filter(c => c.found).length ? ' — found: ' + v.checked.filter(c => c.found).map(c => c.mention + ' → ' + (c.title || '').slice(0, 50)).join(' | ') : ''));
+                        const NL = String.fromCharCode(10);
+                        if (v.unverified.length) {
+                            const list = v.unverified.map(u => '**' + u.mention + '**').join(', ');
+                            reply += NL + NL + '⚠️ I could not find ' + list + ' on OpenAlex or CrossRef. Do not put ' + (v.unverified.length === 1 ? 'it' : 'them') + ' on your page until ' + (v.unverified.length === 1 ? 'it has' : 'they have') + ' been checked — press Auto cite on the sentence instead and pick a real one.';
+                        }
+                        if (v.weak && v.weak.length) {
+                            reply += NL + NL + '⚠️ ' + v.weak.map(w => '**' + w.mention + '**').join(', ') + ' — there is work by that name and year, but not on this topic that I can see. Check the actual title before you use it.';
+                        }
+                    }
+                } catch (e) { console.warn('[writer/chat] cite guard: ' + e.message); }
                 // His tap-to-answer [OPTIONS] block → buttons on the card (same
                 // convention as the general chat; parser mirrors chat.html).
                 let options = [];
