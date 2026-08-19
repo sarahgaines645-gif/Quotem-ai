@@ -2559,7 +2559,13 @@ function recallTutor(personId) {
 //
 // Default = remember + recall (cheap, useful for memory). Everything else is
 // gated behind explicit triggers in the user's message.
-const WRITER_TOOLS = new Set(['check_reference', 'highlight_passage', 'tab_paragraph', 'stick_note']);
+// calculator + current_datetime are in the writer kit for the same hard reason
+// they are in the advocate's (below): a science / maths / finance essay is full
+// of numbers and a model cannot do arithmetic reliably. On the writer it was
+// trigger-gated on the STUDENT's words ("calculate", digits + operator) — but
+// it is Q who needs to compute when he teaches the working (Sarah, 19 Aug:
+// "he will need tables and maths tools too for those subjects").
+const WRITER_TOOLS = new Set(['check_reference', 'highlight_passage', 'tab_paragraph', 'stick_note', 'calculator', 'current_datetime']);
 const ALWAYS_ON = new Set([
     // Memory is core to every chat surface — Q should silently save and
     // recall facts without ceremony.

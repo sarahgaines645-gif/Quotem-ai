@@ -1266,6 +1266,12 @@
     .edit-item .ed-sug { font-size: 11px; color: var(--text-muted); line-height: 1.4; }
     .edit-item .ed-sug b { color: var(--text); }
     .edit-item .ed-row { display: flex; gap: 5px; flex-wrap: wrap; }
+    /* A TABLE ON THE PAGE (Sarah, 19 Aug: "he should be able to use those
+       tools like diagram and tables on the page… tables and maths tools").
+       Plain ruled table in the document's own type — a document, not a screen. */
+    .doc-body table.q-table { border-collapse: collapse; margin: 10px 0; width: auto; max-width: 100%; font-size: 0.92em; line-height: 1.4; }
+    .doc-body table.q-table th, .doc-body table.q-table td { border: 1px solid rgba(0,0,0,0.18); padding: 4px 9px; text-align: left; vertical-align: top; }
+    .doc-body table.q-table th { font-weight: 700; }
     .doc-body .student-line { margin: 0; font-style: normal; font-weight: 400; color: var(--text); border-left: 2px solid rgba(233,30,99,0.22); padding-left: 8px; margin-left: -10px; }
 
 
@@ -6191,12 +6197,51 @@
     // otherwise the whole thing — minus Q's headings and furniture, because
     // her page is her essay, not his board. Never a rewritten sentence: this
     // only moves across what is already written on the board.
+    // The markdown tables in a display → [{ header: [..], rows: [[..]] }].
+    function wbTablesFromSrc(src) {
+      const lines = String(src || '').split('\n'); const out = [];
+      for (let i = 0; i < lines.length; i++) {
+        const isRow = /^\s*\|.*\|\s*$/.test(lines[i]);
+        const sepNext = i + 1 < lines.length && /^\s*\|?[\s:|-]+\|[\s:|-]*$/.test(lines[i + 1]) && lines[i + 1].includes('-');
+        if (!(isRow && sepNext)) continue;
+        const cells = l => l.trim().replace(/^\||\|$/g, '').split('|').map(c => c.replace(/\*\*/g, '').replace(/\[[ xX]\]\s*/g, '').trim());
+        const header = cells(lines[i]); const rows = []; let j = i + 2;
+        while (j < lines.length && /^\s*\|.*\|\s*$/.test(lines[j])) { rows.push(cells(lines[j])); j++; }
+        out.push({ header, rows }); i = j - 1;
+      }
+      return out;
+    }
+    function tableElementFrom(t) {
+      const tb = document.createElement('table'); tb.className = 'q-table';
+      const thead = document.createElement('thead'); const trh = document.createElement('tr');
+      t.header.forEach(h => { const th = document.createElement('th'); th.textContent = h; trh.appendChild(th); }); thead.appendChild(trh); tb.appendChild(thead);
+      const tbody = document.createElement('tbody');
+      t.rows.forEach(r => { const tr = document.createElement('tr'); t.header.forEach((_, ci) => { const td = document.createElement('td'); td.textContent = r[ci] || ''; tr.appendChild(td); }); tbody.appendChild(tr); });
+      tb.appendChild(tbody); return tb;
+    }
+    // A BLOCK onto the page (a table, later a figure): after the block the
+    // caret is in; never inside a sentence, never replacing a selection.
+    function sendBlockToPage(el) {
+      if (!el) return 'empty';
+      if (!restoreDocCaret()) return 'ask';
+      snapshotDoc('before send to page');
+      const sel = window.getSelection(); const r = sel.getRangeAt(0);
+      let n = r.startContainer;
+      let block = (n.nodeType === 1 && n !== docBody && DOC_BLOCK_TAGS.has(n.tagName)) ? n : docBlockOf(n);
+      while (block && block !== docBody && block.closest && block.closest('table') && block.tagName !== 'TABLE') block = block.closest('table');
+      if (!block || block === docBody) docBody.appendChild(el); else block.insertAdjacentElement('afterend', el);
+      const gap = document.createElement('div'); gap.innerHTML = '<br>'; el.insertAdjacentElement('afterend', gap);
+      try { const nr = document.createRange(); nr.setStart(gap, 0); nr.collapse(true); sel.removeAllRanges(); sel.addRange(nr); } catch (_) {}
+      wordEl.textContent = countWords() + ' words'; scheduleAutosave();
+      try { refreshExpectations(); } catch (_) {}
+      return 'sent';
+    }
     function wbSendText(src) {
       const lines = String(src || '').split('\n');
       const ticked = lines.filter(l => /\[[xX]\]/.test(l));
       const use = ticked.length ? ticked : lines;
       return use
-        .filter(l => !/^\s*(#{1,5})\s+/.test(l) && !/^\s*(-{3,}|\*{3,}|_{3,})\s*$/.test(l) && !/^\s*\|?[\s:|-]+\|[\s:|-]*$/.test(l))
+        .filter(l => !/^\s*(#{1,5})\s+/.test(l) && !/^\s*(-{3,}|\*{3,}|_{3,})\s*$/.test(l) && !/^\s*\|?[\s:|-]+\|[\s:|-]*$/.test(l) && !(ticked.length === 0 && /^\s*\|.*\|\s*$/.test(l)))   // table rows go as a TABLE (sendBlockToPage), never flattened with their pipes
         .map(l => l.replace(/\[[ xX]\]/g, '').replace(/^\s*[-*]\s+/, '').replace(/^\s*\d+\.\s+/, '').replace(/\s+/g, ' ').trim())
         .filter(Boolean).join(' ');
     }
@@ -6212,12 +6257,17 @@
       const send = document.getElementById('wb-send');
       if (send) send.addEventListener('click', () => {
         const text = wbSendText(state.wbDoc.src);
-        if (!text) { send.textContent = 'Nothing to send'; setTimeout(() => { send.textContent = 'Send to my page →'; }, 1400); return; }
+        const ticked = /\[[xX]\]/.test(String(state.wbDoc.src || ''));
+        const tables = ticked ? [] : wbTablesFromSrc(state.wbDoc.src);
+        if (!text && !tables.length) { send.textContent = 'Nothing to send'; setTimeout(() => { send.textContent = 'Send to my page →'; }, 1400); return; }
         // NEVER GUESS WHERE IT GOES. If we do not know where she was working,
         // ask — putting it at the top of her essay is worse than waiting
         // (Sarah, 17 Aug: "if there wasn't a point that we working from it
         // should have said where should I place this").
-        if (sendTextToPage(text) === 'ask') {
+        // A table goes on as a TABLE (Sarah, 19 Aug) — the text around it first, then each table as a block.
+        let res = text ? sendTextToPage(text) : 'sent';
+        if (res !== 'ask') for (const t of tables) { res = sendBlockToPage(tableElementFrom(t)); if (res === 'ask') break; }
+        if (res === 'ask') {
           const ask = document.getElementById('wb-ask');
           if (ask) { ask.textContent = 'Where should this go? Click the spot on your page, then press Send again.'; ask.classList.remove('hidden'); }
           send.textContent = 'Click where it goes →';
@@ -10332,7 +10382,7 @@
     loadProjects().then(restoreSession, restoreSession);
     // Test hooks (no data, no secrets): lets the harness exercise the page-side
     // helpers without a paid call. Harmless in production.
-    window.__qwriterTest = { paintQNotes, addQNotes, addQTabs, addStickies, renderStickies, snapshotDoc, undoDoc, presentStep, renderBoard, renderWhiteboard, startedAsk, showToolPop, findInDoc, replaceInDoc, appendReference, docPlainText, splitCheck: (t) => endsSentence(t), runEditPass, checkCurrentSentence, showEditItem, state: () => state, currentEditText, partParagraphs, setBrief, storyPointsHtml, renderInlineDots, termsForBoard, setCoach, bandListHtml, showEditItem, openEditPanel, renderEditPanel, edState: () => edProof, edSetProof: (p2) => { edProof = p2; renderEditPanel(); edPaint(); }, sayMe, renderThread, syncWorkArea, showPanel, revealPanel, runTidyPasses, applyTidyItem, mergeWalk, refreshSourceDigests, sourceDigestsHtml, markAndFix, walkItemsFromMark, renderMarkPanel, markStats, gradeWord, notesSections, notesCount, notesCopyText, renderNotesPanel, openNotesPanel, bibSorted, bibCopyText, renderBibPanel, openBibPanel, removeReference, removeReferenceFromDoc, sendTextToPage, jumpToSentence, runAutoCite, appendReference, noteReference };
+    window.__qwriterTest = { paintQNotes, addQNotes, addQTabs, addStickies, renderStickies, snapshotDoc, undoDoc, presentStep, renderBoard, renderWhiteboard, startedAsk, showToolPop, findInDoc, replaceInDoc, appendReference, docPlainText, splitCheck: (t) => endsSentence(t), runEditPass, checkCurrentSentence, showEditItem, state: () => state, currentEditText, partParagraphs, setBrief, storyPointsHtml, renderInlineDots, termsForBoard, setCoach, bandListHtml, showEditItem, openEditPanel, renderEditPanel, edState: () => edProof, edSetProof: (p2) => { edProof = p2; renderEditPanel(); edPaint(); }, sayMe, renderThread, syncWorkArea, showPanel, revealPanel, runTidyPasses, applyTidyItem, mergeWalk, refreshSourceDigests, sourceDigestsHtml, markAndFix, walkItemsFromMark, renderMarkPanel, markStats, gradeWord, notesSections, notesCount, notesCopyText, renderNotesPanel, openNotesPanel, bibSorted, bibCopyText, renderBibPanel, openBibPanel, removeReference, removeReferenceFromDoc, sendTextToPage, jumpToSentence, runAutoCite, appendReference, noteReference, wbTablesFromSrc, tableElementFrom, sendBlockToPage, wbSendText };
 
 
     // (The old per-card drag code lived here — every panel now goes through makePanel above.)
