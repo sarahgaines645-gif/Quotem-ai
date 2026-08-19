@@ -1279,7 +1279,22 @@
        Plain ruled table in the document's own type — a document, not a screen. */
     .doc-body table.q-table { border-collapse: collapse; margin: 10px 0; width: auto; max-width: 100%; font-size: 0.92em; line-height: 1.4; }
     .doc-body table.q-table th, .doc-body table.q-table td { border: 1px solid rgba(0,0,0,0.18); padding: 4px 9px; text-align: left; vertical-align: top; }
-    .doc-body table.q-table th { font-weight: 700; }
+    .doc-body table.q-table th { font-weight: 700; background: rgba(0,0,0,0.04); }
+    .doc-body table.q-table tr:nth-child(even) td { background: rgba(0,0,0,0.015); }
+    /* LISTS ON THE PAGE keep their bullets (Sarah, 19 Aug: "the lists should
+       also be formatted when they hit the page"). */
+    .doc-body ul.q-list, .doc-body ol.q-list { margin: 6px 0 8px; padding-left: 1.6em; }
+    .doc-body ul.q-list li, .doc-body ol.q-list li { margin: 2px 0; }
+    /* A DIAGRAM ON THE PAGE — a figure in the document's own type: ruled boxes,
+       arrows in ink, nothing neumorphic. Not editable inside; select + delete
+       removes it whole; Undo brings it back. */
+    .doc-body .q-figure { margin: 10px 0; user-select: all; }
+    .doc-body .q-figure .q-dg { display: flex; flex-direction: column; gap: 8px; }
+    .doc-body .q-figure .q-dg-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+    .doc-body .q-figure .q-dg-n { border: 1px solid rgba(0,0,0,0.35); border-radius: 4px; padding: 4px 10px; font-size: 0.92em; line-height: 1.35; max-width: 100%; overflow-wrap: anywhere; background: transparent; }
+    .doc-body .q-figure .q-dg-n.ok { border-color: #28a745; } .doc-body .q-figure .q-dg-n.warn { border-color: #e6a817; } .doc-body .q-figure .q-dg-n.bad { border-color: #e0245e; } .doc-body .q-figure .q-dg-n.info { border-color: #3b82c4; } .doc-body .q-figure .q-dg-n.tip { border-color: #7c5cbf; }
+    .doc-body .q-figure .q-dg-a { font-size: 1.1em; line-height: 1; }
+    .doc-body .q-figure .q-dg-cap { font-size: 0.85em; color: #666; margin-top: 4px; font-style: italic; }
     .doc-body .student-line { margin: 0; font-style: normal; font-weight: 400; color: var(--text); border-left: 2px solid rgba(233,30,99,0.22); padding-left: 8px; margin-left: -10px; }
 
 
@@ -5680,6 +5695,11 @@
     function edRunTool(tool) {
       const sel = docSelection();
       if (!sel && tool === 'weak') { edRunPass('weak'); return; }   // Sarah, 17 Aug: "the what's weak should cover the whole page not highlighted"
+      // AUTO CITE WORKS FROM THE CURSOR (Sarah, 19 Aug: "auto cite should work
+      // by putting the cursor at the end of the sentence not highlighting it").
+      // runAutoCite reads the sentence at the caret itself and says what to do
+      // if there is none — no "now highlight the words" gate in front of it.
+      if (!sel && tool === 'cite') { runAutoCite({ criterionId: state.currentCriterionId || firstPartId() }); return; }
       // In a Mark & fix walk the tools work on the pink sentence Q is on — no highlight needed.
       if (!sel && walkOn() && state.editItems[state.editIndex]) { useTool(tool, state.editItems[state.editIndex]); return; }
       if (!sel) {
@@ -5993,7 +6013,7 @@
       layer.addEventListener('click', (e) => {
         const el = e.target.closest('.wb-sticky'); if (!el) return; const st = (state.wbStickies || [])[Number(el.dataset.si)]; if (!st) return;
         if (e.target.closest('.st-x')) { st.done = true; persist({ wbStickies: state.wbStickies }); renderStickies(); }
-        else if (e.target.closest('.st-go')) { const r = sendTextToPage(st.text); if (r === 'ask') { try { workSay('Click the spot on your page, then press → again.'); } catch (_) {} } else if (r === 'sent') { st.done = true; persist({ wbStickies: state.wbStickies }); renderStickies(); } }
+        else if (e.target.closest('.st-go')) { const r = sendStickyToPage(st.text); if (r === 'sent' || r === 'end') { st.done = true; persist({ wbStickies: state.wbStickies }); renderStickies(); try { wbWorkSay.innerHTML = (r === 'end' ? 'On the end of your page. ' : 'On your page. ') + '<button type="button" class="q-btn quiet" id="wk-undo">↶ Undo</button>'; wbWorkSay.classList.remove('hidden'); const u = document.getElementById('wk-undo'); if (u) u.addEventListener('click', () => { if (undoDoc()) workSay('Put back.'); }); } catch (_) {} } }
         else if (!stickyDragged) openStickyEditor(st, el);   // press the note → edit the words, pick a colour (Sarah, 18 Aug)
       });
       let stickyDragged = false;
@@ -6245,6 +6265,107 @@
       try { refreshExpectations(); } catch (_) {}
       return 'sent';
     }
+    // ══ WHITEBOARD → PAGE, FORMATTED (Sarah, 19 Aug: "the sticky notes dont
+    // transfer to the page and neither are the lists and the lists should also
+    // be formatted when they hit the page" — and the diagram landed as its own
+    // fence text). A display is read as BLOCKS: prose, lists (bullets kept,
+    // ticked lines only when any are ticked), tables, diagrams. Prose alone
+    // still goes in at the caret as words; anything else goes in as blocks.
+    function wbBlocksFromSrc(src) {
+      const lines = String(src || '').split('\n');
+      const anyTicked = lines.some(l => /\[[xX]\]/.test(l));
+      const blocks = []; let list = null, para = [];
+      const flushPara = () => { if (para.length) { blocks.push({ kind: 'text', text: para.join(' ').replace(/\s+/g, ' ').trim() }); para = []; } };
+      const flushList = () => { if (list && list.items.length) blocks.push(list); list = null; };
+      const clean = s => s.replace(/\[[ xX]\]\s*/g, '').replace(/\*\*(.+?)\*\*/g, '$1').replace(/`([^`]+)`/g, '$1').trim();
+      for (let i = 0; i < lines.length; i++) {
+        const line = lines[i];
+        const fence = line.match(/^\s*(```|~~~)\s*([a-zA-Z0-9_-]*)\s*$/);
+        if (fence) {
+          flushPara(); flushList();
+          const lang = (fence[2] || '').toLowerCase(); const inner = []; let j = i + 1;
+          while (j < lines.length && !/^\s*(```|~~~)\s*$/.test(lines[j])) { inner.push(lines[j]); j++; }
+          if (!anyTicked && (lang === 'diagram' || lang === 'flow')) blocks.push({ kind: 'diagram', lines: inner.filter(x => x.trim()) });
+          else if (!anyTicked && (lang === 'build' || lang === 'buildup' || !lang)) inner.map(clean).filter(Boolean).forEach(t => blocks.push({ kind: 'text', text: t }));
+          i = j; continue;
+        }
+        const isRow = /^\s*\|.*\|\s*$/.test(line);
+        const sepNext = i + 1 < lines.length && /^\s*\|?[\s:|-]+\|[\s:|-]*$/.test(lines[i + 1]) && lines[i + 1].includes('-');
+        if (isRow && sepNext && !anyTicked) {
+          flushPara(); flushList();
+          const cells = l => l.trim().replace(/^\||\|$/g, '').split('|').map(c => clean(c));
+          const header = cells(line); const rows = []; let j = i + 2;
+          while (j < lines.length && /^\s*\|.*\|\s*$/.test(lines[j])) { rows.push(cells(lines[j])); j++; }
+          blocks.push({ kind: 'table', header, rows }); i = j - 1; continue;
+        }
+        if (isRow) continue;                                        // a stray table row in ticked mode
+        if (/^\s*(#{1,5})\s+/.test(line) || /^\s*(-{3,}|\*{3,}|_{3,})\s*$/.test(line)) { flushPara(); flushList(); continue; }
+        const li = line.match(/^\s*(?:([-*•])|(\d+)[.)])\s+(.*)$/);
+        if (li) {
+          flushPara();
+          const ordered = !!li[2];
+          if (anyTicked && !/\[[xX]\]/.test(line)) continue;     // only the ticked lines
+          if (!list || list.ordered !== ordered) { flushList(); list = { kind: 'list', ordered, items: [] }; }
+          const t = clean(li[3]); if (t) list.items.push(t);
+          continue;
+        }
+        if (!line.trim()) { flushPara(); flushList(); continue; }
+        if (anyTicked) { if (/\[[xX]\]/.test(line)) { if (!list) list = { kind: 'list', ordered: false, items: [] }; const t = clean(line); if (t) list.items.push(t); } continue; }
+        flushList(); para.push(clean(line));
+      }
+      flushPara(); flushList();
+      return blocks;
+    }
+    function docDiagramElement(lines) {
+      const fig = document.createElement('div'); fig.className = 'q-figure'; fig.setAttribute('contenteditable', 'false');
+      const dg = document.createElement('div'); dg.className = 'q-dg';
+      for (const raw of lines) {
+        const ln = String(raw || '').trim(); if (!ln) continue;
+        const row = document.createElement('div'); row.className = 'q-dg-row';
+        const parts = ln.split(/\s*(<->|↔|->|→|=>|<-|←)\s*/);
+        parts.forEach((t, k) => {
+          if (k % 2 === 1) { const a = document.createElement('span'); a.className = 'q-dg-a'; a.textContent = (t === '<->' || t === '↔') ? '↔' : ((t === '<-' || t === '←') ? '←' : '→'); row.appendChild(a); return; }
+          if (!t) return;
+          const key = Object.keys(WB_CALLOUT).find(x => t.startsWith(x));
+          const n = document.createElement('span'); n.className = 'q-dg-n' + (key ? ' ' + WB_CALLOUT[key] : ''); n.textContent = key ? t.slice(key.length).trim() : t; row.appendChild(n);
+        });
+        dg.appendChild(row);
+      }
+      fig.appendChild(dg); return fig;
+    }
+    function listElementFrom(b) {
+      const el = document.createElement(b.ordered ? 'ol' : 'ul'); el.className = 'q-list';
+      b.items.forEach(t => { const li = document.createElement('li'); li.textContent = t; el.appendChild(li); }); return el;
+    }
+    function blockElement(b) {
+      if (b.kind === 'table') return tableElementFrom(b);
+      if (b.kind === 'diagram') return docDiagramElement(b.lines);
+      if (b.kind === 'list') return listElementFrom(b);
+      const d = document.createElement('div'); d.textContent = b.text; return d;
+    }
+    // Send a display's blocks. Prose only → at the caret as words (as before);
+    // otherwise each block after the block the caret is in. Returns 'sent' |
+    // 'ask' | 'empty'.
+    function sendBlocksToPage(blocks) {
+      if (!blocks.length) return 'empty';
+      if (blocks.every(b => b.kind === 'text')) return sendTextToPage(blocks.map(b => b.text).join(' '));
+      let res = 'sent';
+      for (const b of blocks) { res = sendBlockToPage(blockElement(b)); if (res !== 'sent') break; }
+      return res;
+    }
+    // A sticky → the page: at the caret if she has one; else a line of its own
+    // at the END of her page (a note is harmless there and Undo is one press)
+    // — never a silent nothing (Sarah, 19 Aug: "the sticky notes dont transfer").
+    function sendStickyToPage(text) {
+      const t = String(text || '').trim(); if (!t) return 'empty';
+      const r = sendTextToPage(t);
+      if (r !== 'ask') return r;
+      snapshotDoc('before sticky to page');
+      const d = document.createElement('div'); d.textContent = t; docBody.appendChild(d);
+      wordEl.textContent = countWords() + ' words'; scheduleAutosave();
+      try { refreshExpectations(); } catch (_) {}
+      return 'end';
+    }
     function wbSendText(src) {
       const lines = String(src || '').split('\n');
       const ticked = lines.filter(l => /\[[xX]\]/.test(l));
@@ -6265,17 +6386,14 @@
       }
       const send = document.getElementById('wb-send');
       if (send) send.addEventListener('click', () => {
-        const text = wbSendText(state.wbDoc.src);
-        const ticked = /\[[xX]\]/.test(String(state.wbDoc.src || ''));
-        const tables = ticked ? [] : wbTablesFromSrc(state.wbDoc.src);
-        if (!text && !tables.length) { send.textContent = 'Nothing to send'; setTimeout(() => { send.textContent = 'Send to my page →'; }, 1400); return; }
+        const blocks = wbBlocksFromSrc(state.wbDoc.src);
+        if (!blocks.length) { send.textContent = 'Nothing to send'; setTimeout(() => { send.textContent = 'Send to my page →'; }, 1400); return; }
         // NEVER GUESS WHERE IT GOES. If we do not know where she was working,
         // ask — putting it at the top of her essay is worse than waiting
         // (Sarah, 17 Aug: "if there wasn't a point that we working from it
         // should have said where should I place this").
-        // A table goes on as a TABLE (Sarah, 19 Aug) — the text around it first, then each table as a block.
-        let res = text ? sendTextToPage(text) : 'sent';
-        if (res !== 'ask') for (const t of tables) { res = sendBlockToPage(tableElementFrom(t)); if (res === 'ask') break; }
+        // Lists keep their bullets, a table goes on as a table, a diagram as a figure (Sarah, 19 Aug).
+        const res = sendBlocksToPage(blocks);
         if (res === 'ask') {
           const ask = document.getElementById('wb-ask');
           if (ask) { ask.textContent = 'Where should this go? Click the spot on your page, then press Send again.'; ask.classList.remove('hidden'); }
@@ -10525,7 +10643,7 @@
     loadProjects().then(restoreSession, restoreSession).then(() => { try { maybeOfferTour(); } catch (_) {} }, () => {});
     // Test hooks (no data, no secrets): lets the harness exercise the page-side
     // helpers without a paid call. Harmless in production.
-    window.__qwriterTest = { startTour, tourStep, stopTour, maybeOfferTour, paintQNotes, addQNotes, addQTabs, addStickies, renderStickies, snapshotDoc, undoDoc, presentStep, renderBoard, renderWhiteboard, startedAsk, showToolPop, findInDoc, replaceInDoc, appendReference, docPlainText, splitCheck: (t) => endsSentence(t), runEditPass, checkCurrentSentence, showEditItem, state: () => state, currentEditText, partParagraphs, setBrief, storyPointsHtml, renderInlineDots, termsForBoard, setCoach, bandListHtml, showEditItem, openEditPanel, renderEditPanel, edState: () => edProof, edSetProof: (p2) => { edProof = p2; renderEditPanel(); edPaint(); }, sayMe, renderThread, syncWorkArea, showPanel, revealPanel, runTidyPasses, applyTidyItem, mergeWalk, refreshSourceDigests, sourceDigestsHtml, markAndFix, walkItemsFromMark, renderMarkPanel, markStats, gradeWord, notesSections, notesCount, notesCopyText, renderNotesPanel, openNotesPanel, bibSorted, bibCopyText, renderBibPanel, openBibPanel, removeReference, removeReferenceFromDoc, sendTextToPage, jumpToSentence, runAutoCite, appendReference, noteReference, wbTablesFromSrc, tableElementFrom, sendBlockToPage, wbSendText };
+    window.__qwriterTest = { startTour, tourStep, stopTour, maybeOfferTour, paintQNotes, addQNotes, addQTabs, addStickies, renderStickies, snapshotDoc, undoDoc, presentStep, renderBoard, renderWhiteboard, startedAsk, showToolPop, findInDoc, replaceInDoc, appendReference, docPlainText, splitCheck: (t) => endsSentence(t), runEditPass, checkCurrentSentence, showEditItem, state: () => state, currentEditText, partParagraphs, setBrief, storyPointsHtml, renderInlineDots, termsForBoard, setCoach, bandListHtml, showEditItem, openEditPanel, renderEditPanel, edState: () => edProof, edSetProof: (p2) => { edProof = p2; renderEditPanel(); edPaint(); }, sayMe, renderThread, syncWorkArea, showPanel, revealPanel, runTidyPasses, applyTidyItem, mergeWalk, refreshSourceDigests, sourceDigestsHtml, markAndFix, walkItemsFromMark, renderMarkPanel, markStats, gradeWord, notesSections, notesCount, notesCopyText, renderNotesPanel, openNotesPanel, bibSorted, bibCopyText, renderBibPanel, openBibPanel, removeReference, removeReferenceFromDoc, sendTextToPage, jumpToSentence, runAutoCite, appendReference, noteReference, wbTablesFromSrc, tableElementFrom, sendBlockToPage, wbSendText, wbBlocksFromSrc, sendBlocksToPage, sendStickyToPage, blockElement };
 
 
     // (The old per-card drag code lived here — every panel now goes through makePanel above.)
