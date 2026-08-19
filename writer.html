@@ -9917,9 +9917,25 @@
     async function markAndFix(opts) {
       opts = opts || {};
       if (markRunning) return;
-      // A walk already on comes back to the sentence we were on (a tool, the
-      // strip or a pop-up may have covered the card) — never a second mark.
-      if (walkOn() && state.editIndex < state.editItems.length) { coachCard.classList.add('wide'); showEditItem(); return; }
+      // A walk already on used to come back to the sentence we were on and
+      // NEVER mark again — a guard against paying twice by accident. But once
+      // she has worked through the fixes there was then no way to be marked at
+      // all: the button just took her to the first sentence (Sarah, 19 Aug:
+      // "it wont let me mark it again ... it takes me to the first sentence to
+      // fix"). A second mark costs money, so it is her call, asked once.
+      if (walkOn() && state.editIndex < state.editItems.length) {
+        coachCard.classList.add('wide');
+        const left = state.editItems.length - state.editIndex;
+        setCoach({
+          msg: 'You are partway through the fixes — ' + left + (left === 1 ? ' left' : ' left') + '. Carry on, or mark the whole thing again?',
+          section: 'MARK & FIX', inputVisible: false, step: false, showNudge: false,
+          actions: [
+            { label: 'Carry on fixing →', primary: true, onClick: () => { coachCard.classList.add('wide'); showEditItem(); } },
+            { label: 'Mark it again', onClick: () => { state.editing = false; state.editDone = true; state.editItems = []; state.editIndex = 0; persist({ editItems: [], editIndex: 0 }); doTheMark(); } },
+          ],
+        });
+        return;
+      }
       if (!state.brief) { setCoach({ msg: 'Drop your task in first — I mark against the brief.', inputVisible: true }); return; }
       const text = docPlainText();
       if (!text.trim()) { setCoach({ msg: 'There is nothing on the page yet — answer a step or write on the page first.', inputVisible: true, showNudge: !!state.currentStep }); return; }
