@@ -1,0 +1,259 @@
+{
+ "builtAt": "2026-08-19T17:55:59.190Z",
+ "brief": {
+  "scenario": null,
+  "title": "Introduction to the Writer — How a Law is Made",
+  "subject": "Law (UK Legal System)",
+  "docType": "essay",
+  "whatItWants": "OK so you need to walk through, in about 300 words, how a Bill becomes an Act of Parliament — before it reaches Parliament, as it goes through both Houses, and how it finally becomes law.",
+  "youreProducing": "A short 300-word essay answering three questions in order, covering pre-legislative steps, the parliamentary stages, and Royal Assent/commencement, ideally with one real recent Act as an example.",
+  "wordCount": "300 words",
+  "deadline": null,
+  "criteria": [
+   {
+    "id": "C1",
+    "label": "Before the Bill",
+    "text": "Explain what happens before a Bill reaches Parliament, including Green and White Papers and the purpose of consultation.",
+    "weight": null,
+    "wordBudget": 100
+   },
+   {
+    "id": "C2",
+    "label": "Through Parliament",
+    "text": "Describe the stages a Bill goes through in the Commons and Lords (first reading, second reading, committee stage, report stage, third reading) and what happens when the Houses disagree.",
+    "weight": null,
+    "wordBudget": 100
+   },
+   {
+    "id": "C3",
+    "label": "Becoming law",
+    "text": "Explain Royal Assent and commencement, and when an Act actually starts to apply.",
+    "weight": null,
+    "wordBudget": 100
+   }
+  ],
+  "gradeBands": {
+   "top": "Names every stage in the correct order, explains in plain words why each stage exists, and gives one real recent Act as an example throughout.",
+   "mid": "Lists most of the stages correctly but doesn't explain why they matter or skips the example.",
+   "low": "Misses stages, muddles the order, or doesn't explain Green/White Papers, Royal Assent or commencement."
+  },
+  "idealAnswerSkeleton": [
+   {
+    "criterionId": "C1",
+    "keyPoints": [
+     "A Green Paper is a government document floating ideas for a policy change, inviting comment.",
+     "A White Paper follows, setting out firmer, more decided proposals before a Bill is drafted.",
+     "Consultation lets affected groups, experts and the public respond before the law is written.",
+     "This stage matters because it shapes the Bill and can prevent bad law before it starts.",
+     "Example: a recent Act that began life as a Green/White Paper (e.g. Online Safety Act 2023)."
+    ]
+   },
+   {
+    "criterionId": "C2",
+    "keyPoints": [
+     "First reading: the Bill's title is formally introduced, no debate.",
+     "Second reading: the main debate and vote on the Bill's principles.",
+     "Committee stage: detailed line-by-line examination and amendments.",
+     "Report stage: further amendments considered by the whole House.",
+     "Third reading: final vote on the Bill as amended.",
+     "The Bill then repeats these stages in the other House; if the Houses disagree, the Bill goes back and forth ('ping pong') until agreement or the Parliament Acts are used."
+    ]
+   },
+   {
+    "criterionId": "C3",
+    "keyPoints": [
+     "Royal Assent: the Monarch formally approves the Bill, making it an Act — now essentially a formality.",
+     "An Act does not always take effect immediately on Royal Assent.",
+     "Commencement: the Act specifies a start date, or gives a minister power to bring it into force by commencement order.",
+     "Different parts of an Act can come into force at different times.",
+     "Example: naming when a specific recent Act actually commenced versus when it received Royal Assent."
+    ]
+   }
+  ],
+  "opener": "Think of a new rule your workplace or school wanted to bring in — did they ask people what they thought before deciding on it? What's that first step called when the government does the same thing?",
+  "prerequisites": [
+   "Pick one real, recent UK Act of Parliament to use as your example throughout the essay.",
+   "Have a rough timeline of that Act's journey (when it was proposed, when it got Royal Assent, when it came into force) to hand."
+  ]
+ },
+ "lastMark": {
+  "overall": {
+   "band": "mid",
+   "label": "",
+   "summary": "You've got the parliamentary journey almost word-perfect, but the two ends of the story — why the government consults before drafting, and a real date showing when a law actually starts — aren't nailed down yet.",
+   "strong": [
+    "Green Paper and White Paper correctly defined in sentence 1",
+    "Full run of Commons/Lords stages named in the right order",
+    "Ping-pong process for disagreement between the Houses explained clearly",
+    "Commencement explained as sometimes later than Royal Assent, staged by part"
+   ],
+   "missing": [
+    "No sentence says why consultation matters (stopping bad law before it's written)",
+    "The Fisheries Act 2020 example isn't linked to any specific stage or date",
+    "No real commencement date given to show the gap between Assent and force",
+    "Parliament Acts not mentioned as the fallback when ping-pong fails"
+   ],
+   "answeredCount": 3,
+   "nextLabel": "",
+   "toNext": "Add one sentence saying what consultation is actually for (stopping bad law before it's drafted), and swap the vague Fisheries Act mention for one with an actual date — when it got Royal Assent versus when it came into force.",
+   "ladder": [
+    {
+     "label": "Top band",
+     "needs": [
+      "Say, in your own words, why the government bothers consulting before writing a Bill — what going wrong does it prevent?",
+      "Name a real Act and tie it to the Green/White Paper stage specifically, not just tack it on at the end.",
+      "Give the actual date the Fisheries Act 2020 got Royal Assent and the date it (or a part of it) actually started applying."
+     ]
+    }
+   ],
+   "loMarks": [],
+   "total": 0,
+   "structure": "",
+   "scheme": null
+  },
+  "perCriterion": [
+   {
+    "criterionId": "C1",
+    "band": "mid",
+    "label": "",
+    "voicedBrickIds": [],
+    "termsUsed": [],
+    "requirementsMet": [],
+    "evidence": "This consultation stage lets charities, businesses and ordinary people say what they think before anything is written down as a Bill.",
+    "got": [
+     "named Green Paper and White Paper correctly",
+     "explained who gets to have a say before a Bill is drafted"
+    ],
+    "addNext": [
+     {
+      "title": "Say why consultation matters",
+      "gap": "You've said who gets consulted, but not what the consultation is actually trying to prevent.",
+      "concept": "Consultation exists so mistakes get caught while the idea is still just words on a page, not law. If a group affected by a change — say, small shops — points out a problem in the White Paper stage, it can be fixed before the Bill is even drafted, which is far cheaper than amending an Act later.",
+      "prompt": "Add one sentence after sentence 2 saying what bad outcome consultation is trying to avoid.",
+      "example": "By consulting supermarkets before drafting new packaging rules, the government avoided writing a law that businesses couldn't actually follow."
+     },
+     {
+      "title": "Tie your example to this stage",
+      "gap": "You mention the Fisheries Act 2020 at the end, but not in connection with its Green or White Paper.",
+      "concept": "Most Acts start life as a policy paper years before the Bill is even written — the Online Safety Act 2023, for instance, grew out of an earlier White Paper on internet regulation.",
+      "prompt": "In one sentence here, name whether the Fisheries Act (or another recent Act you choose) started as a Green or White Paper, and roughly when.",
+      "example": "The Renters' Reform Bill followed a 2022 White Paper setting out the government's plans for private tenants."
+     }
+    ],
+    "missingForTop": "Consultation's purpose (preventing bad law before it's drafted) isn't explained, and the example given later isn't linked to this stage at all.",
+    "nextQuestion": "When the government asks people's opinions before even writing a Bill, what bad outcome do you think it's trying to head off?"
+   },
+   {
+    "criterionId": "C2",
+    "band": "top",
+    "label": "",
+    "voicedBrickIds": [],
+    "termsUsed": [],
+    "requirementsMet": [],
+    "evidence": "If the Lords change it, it goes back to the Commons, and this can go back and forth, which is called ping-pong, until both Houses agree on the same words.",
+    "got": [
+     "listed first reading through third reading in the correct order",
+     "explained what happens at each stage in plain terms",
+     "explained ping-pong when the Houses disagree",
+     "noted the Bill repeats the whole process in the second House"
+    ],
+    "addNext": [
+     {
+      "title": "Mention the fallback to ping-pong",
+      "gap": "You explain ping-pong, but not what happens if the Houses simply can't agree.",
+      "concept": "Ping-pong usually ends with agreement, but very occasionally it doesn't — and there's a rule called the Parliament Acts that lets the Commons push a Bill through without the Lords' consent after enough delay. It's rare, but it shows the Commons has the final say.",
+      "prompt": "Add a short clause noting that in rare cases the Commons can use the Parliament Acts to bypass a stuck Lords.",
+      "example": "The Hunting Act 2004 became law this way, after the Lords repeatedly blocked it."
+     }
+    ],
+    "missingForTop": "",
+    "nextQuestion": ""
+   },
+   {
+    "criterionId": "C3",
+    "band": "mid",
+    "label": "",
+    "voicedBrickIds": [],
+    "termsUsed": [],
+    "requirementsMet": [],
+    "evidence": "That does not always mean it applies straight away: many Acts have a commencement section, and parts of the Act may start on different dates set by the minister.",
+    "got": [
+     "explained Royal Assent turns a Bill into an Act",
+     "explained commencement can be later than Assent",
+     "noted different parts of an Act can start at different times"
+    ],
+    "addNext": [
+     {
+      "title": "Give a real date",
+      "gap": "You explain that commencement can be delayed, but you don't show an actual gap between Assent and force for any real Act.",
+      "concept": "Some Acts state a start date in the text itself; others leave it to a minister to sign a 'commencement order' bringing sections into force later, sometimes years apart. The Fisheries Act 2020, for example, received Royal Assent on 23 November 2020, but its provisions were brought into force in stages afterwards.",
+      "prompt": "Replace sentence 10 with one that names the Fisheries Act's Royal Assent date and the date one part of it actually came into force.",
+      "example": "The Environment Act 2021 got Royal Assent in November 2021, but several of its duties only came into force through commencement orders issued years later."
+     }
+    ],
+    "missingForTop": "No concrete date is given to show the real-world gap between Royal Assent and an Act actually applying.",
+    "nextQuestion": "Look up when the Fisheries Act 2020 got Royal Assent — did fishing rules start that same day, or later?"
+   }
+  ],
+  "weakestCriterionId": "C1",
+  "critique": [
+   {
+    "sentence": "This consultation stage lets charities, businesses and ordinary people say what they think before anything is written down as a Bill.",
+    "missing": "You say who's consulted, not why it matters.",
+    "fix": "add one sentence saying consultation can stop a bad law before it's even drafted",
+    "targetBrickId": null,
+    "suggestedTools": [
+     "strategies",
+     "terminology"
+    ],
+    "needs": [
+     "other"
+    ],
+    "criterionId": "C1"
+   },
+   {
+    "sentence": "The Fisheries Act 2020 is a recent example of an Act that went through all of these stages.",
+    "missing": "The example is there but has no date or detail attached.",
+    "fix": "look up the Fisheries Act 2020's Royal Assent date and its actual commencement date",
+    "targetBrickId": null,
+    "suggestedTools": [
+     "cases",
+     "references"
+    ],
+    "needs": [
+     "example",
+     "citation"
+    ],
+    "criterionId": "C1"
+   },
+   {
+    "sentence": "That does not always mean it applies straight away: many Acts have a commencement section, and parts of the Act may start on different dates set by the minister.",
+    "missing": "No real Act's dates are used to show this gap.",
+    "fix": "add the Fisheries Act's Assent and commencement dates here instead of only at the end",
+    "targetBrickId": null,
+    "suggestedTools": [
+     "cases",
+     "references"
+    ],
+    "needs": [
+     "example"
+    ],
+    "criterionId": "C3"
+   },
+   {
+    "sentence": "If the Lords change it, it goes back to the Commons, and this can go back and forth, which is called ping-pong, until both Houses agree on the same words.",
+    "missing": "No mention of what happens if they never agree.",
+    "fix": "add a clause on the Parliament Acts as the rare fallback",
+    "targetBrickId": null,
+    "suggestedTools": [
+     "terminology"
+    ],
+    "needs": [
+     "other"
+    ],
+    "criterionId": "C2"
+   }
+  ],
+  "markedAt": 1787162159190
+ }
+}
