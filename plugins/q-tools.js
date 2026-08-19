@@ -114,6 +114,35 @@ const TOOL_DEFINITIONS = [
     {
         type: 'function',
         function: {
+            name: 'board_note',
+            description: 'Put a short note on the TEACHING BOARD — the worksheet beside the student\'s page that holds what they must remember for the question they are on. Not the whiteboard (that is the display and stick_note): the board is what they keep. Use it when something is worth keeping past this reply — a rule they keep breaking, a definition the marker wants, the one thing left to do on this question. One line, plain, in their words. Never repeat what is already on the board, on the whiteboard, or in your reply.',
+            parameters: {
+                type: 'object',
+                properties: {
+                    text: { type: 'string', description: 'The note itself — one short line, at most about 200 characters.' },
+                    label: { type: 'string', description: 'A short tag for it, 1-3 words: \'note\', \'watch out\', \'remember\', \'to do\'.' },
+                    kind: { type: 'string', enum: ['note', 'question', 'todo'], description: 'What it is: a note to keep, a question for them to think about, or something still to do. Default note.' },
+                },
+                required: ['text'],
+            },
+        },
+    },
+    {
+        type: 'function',
+        function: {
+            name: 'board_clear',
+            description: 'Take YOUR OWN notes back off the teaching board when they are done with or no longer true — the board holds what matters now, not everything you have ever said. Only your board notes come off: their questions, their answers and the worksheet are never touched. Pass a label to take off only the notes carrying that tag; pass nothing to take off all of yours.',
+            parameters: {
+                type: 'object',
+                properties: {
+                    label: { type: 'string', description: 'Optional — only take off your notes carrying this tag (e.g. \'to do\'). Leave it out to take off all of your notes.' },
+                },
+            },
+        },
+    },
+    {
+        type: 'function',
+        function: {
             name: 'send_email',
             description: 'Send an email from the user\'s OWN connected email account (Gmail or SMTP). ONLY call this when the user has clearly told you to SEND an email — never to draft or preview. It goes out from their real address; it cannot be unsent. If you previously saved a draft with save_email_draft, pass that draft_id here so the draft is removed from the outbox automatically after sending.',
             parameters: {
@@ -1758,6 +1787,19 @@ async function executeTool(name, argsRaw, personId, personEmail, threadId) {
         if (!text) return { error: 'The sticky needs some text.' };
         return { ok: true, stuck: true, text, colour: String(args.colour || 'yellow') };
     }
+    // Q'S OWN NOTES ON THE TEACHING BOARD (Sarah, 19 Aug: 'he should be the one
+    // controling it'). Nothing to do server-side — the PAGE puts it on the board
+    // and persists it; the call itself is the result, exactly like stick_note.
+    if (name === 'board_note') {
+        const text = String(args.text || '').replace(/\s+/g, ' ').trim().slice(0, 200);
+        if (!text) return { error: 'The board note needs some text.' };
+        const kind = ['note', 'question', 'todo'].includes(String(args.kind || '')) ? String(args.kind) : 'note';
+        const label = String(args.label || '').replace(/\s+/g, ' ').trim().slice(0, 24) || (kind === 'todo' ? 'to do' : kind === 'question' ? 'think about' : 'note');
+        return { ok: true, onBoard: true, text, label, kind };
+    }
+    if (name === 'board_clear') {
+        return { ok: true, cleared: true, label: String(args.label || '').replace(/\s+/g, ' ').trim().slice(0, 24) };
+    }
     if (name === 'check_reference') {
         try {
             const cite = require('./q-cite');
@@ -2565,7 +2607,7 @@ function recallTutor(personId) {
 // trigger-gated on the STUDENT's words ("calculate", digits + operator) — but
 // it is Q who needs to compute when he teaches the working (Sarah, 19 Aug:
 // "he will need tables and maths tools too for those subjects").
-const WRITER_TOOLS = new Set(['check_reference', 'highlight_passage', 'tab_paragraph', 'stick_note', 'calculator', 'current_datetime']);
+const WRITER_TOOLS = new Set(['check_reference', 'highlight_passage', 'tab_paragraph', 'stick_note', 'board_note', 'board_clear', 'calculator', 'current_datetime']);
 const ALWAYS_ON = new Set([
     // Memory is core to every chat surface — Q should silently save and
     // recall facts without ceremony.

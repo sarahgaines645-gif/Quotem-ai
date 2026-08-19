@@ -1579,7 +1579,7 @@ router.post('/writer/mark', requirePerson, express.json({ limit: '2mb' }), write
 // The student's context for Q-as-coach: the brief, the part, the question we
 // are on, the page, the case, the sources, the expected words. Compact — Q
 // reads it, he does not recite it.
-function writerCoachContext({ t, cid, plan, stepId, docText, stored, ask, partWords, stepItems, furniture }) {
+function writerCoachContext({ t, cid, plan, stepId, docText, stored, ask, partWords, stepItems, furniture, board }) {
     const nl2 = String.fromCharCode(10);
     const L = [];
     const brief = t.brief || {};
@@ -1647,6 +1647,11 @@ function writerCoachContext({ t, cid, plan, stepId, docText, stored, ask, partWo
             L.push(FL.join(nl2));
         }
     } catch (_) {}
+    // THE TEACHING BOARD (Sarah, 19 Aug: "why cant Q see the teaching board?
+    // he should know whats on it he should be the one controling it"). The page
+    // builds it in boardForQ() and sends it; capped again here because it rides
+    // every paid turn.
+    if (board) L.push('THE TEACHING BOARD BESIDE THEIR PAGE (they are looking at this; it is yours to keep \u2014 board_note puts a line on it, board_clear takes YOUR notes back off):' + nl2 + String(board).slice(0, 1200));
     L.push('Reply to their next message as their tutor.');
     return L.join(nl2 + nl2);
 }
@@ -1666,7 +1671,7 @@ router.post('/writer/chat', requirePerson, express.json({ limit: '1mb' }), write
         // A ```display block in his reply is lifted out for the whiteboard.
         // The old structured chatAnswer stays as the fallback if Q is down.
         const plan = (t.plans && t.plans[cid]) || null;
-        const ctx = writerCoachContext({ t, cid, plan, stepId: b.stepId ? String(b.stepId) : null, docText: String(b.docText || ''), stored, ask: b.ask ? String(b.ask) : '', partWords: b.partWords && typeof b.partWords === 'object' ? b.partWords : null, stepItems: Array.isArray(b.stepItems) ? b.stepItems : [], furniture: b.furniture && typeof b.furniture === 'object' ? b.furniture : null });
+        const ctx = writerCoachContext({ t, cid, plan, stepId: b.stepId ? String(b.stepId) : null, docText: String(b.docText || ''), stored, ask: b.ask ? String(b.ask) : '', partWords: b.partWords && typeof b.partWords === 'object' ? b.partWords : null, stepItems: Array.isArray(b.stepItems) ? b.stepItems : [], furniture: b.furniture && typeof b.furniture === 'object' ? b.furniture : null, board: b.board ? String(b.board).slice(0, 4000) : '' });
         // HIS MEMORY, not the page's. The same store the general chat uses
         // (one per person, tagged by surface): the coach's own turns are the
         // history, his other conversations come as the read-only digest /chat
@@ -1792,7 +1797,10 @@ router.post('/writer/chat', requirePerson, express.json({ limit: '1mb' }), write
                 const paints = (Array.isArray(q.toolCalls) ? q.toolCalls : []).filter(c => c && (c.name === 'highlight_passage' || (c.tool === 'highlight_passage')) && c.result && c.result.painted).map(c => ({ text: c.result.text, note: c.result.note, kind: c.result.kind, colour: c.result.colour || '' }));
                 const tabs = (Array.isArray(q.toolCalls) ? q.toolCalls : []).filter(c => c && c.name === 'tab_paragraph' && c.result && c.result.tabbed).map(c => ({ paragraph: c.result.paragraph || null, text: c.result.text || '', label: c.result.label, colour: c.result.colour, side: c.result.side || 'right' }));
                 const stickies = (Array.isArray(q.toolCalls) ? q.toolCalls : []).filter(c => c && c.name === 'stick_note' && c.result && c.result.stuck).map(c => ({ text: c.result.text, colour: c.result.colour }));
-                out = { reply, display, options, paints, tabs, stickies, board: null, next: '', highlights: [], answersStep: false, via: 'q', brain, cost: turnCost };
+                // His notes ON THE TEACHING BOARD, and his own clutter coming back off it.
+                const boardNotes = (Array.isArray(q.toolCalls) ? q.toolCalls : []).filter(c => c && c.name === 'board_note' && c.result && c.result.onBoard).map(c => ({ text: c.result.text, label: c.result.label, kind: c.result.kind }));
+                const boardClears = (Array.isArray(q.toolCalls) ? q.toolCalls : []).filter(c => c && c.name === 'board_clear' && c.result && c.result.cleared).map(c => ({ label: c.result.label || '' }));
+                out = { reply, display, options, paints, tabs, stickies, boardNotes, boardClears, board: null, next: '', highlights: [], answersStep: false, via: 'q', brain, cost: turnCost };
                 if (qpid) { try { appendMessage(qpid, 'user', text, QSURF); appendMessage(qpid, 'assistant', String(q.reply), QSURF); } catch (_) {} }   // a '[page] …' turn is the page speaking for her (a pause / Continue) — kept, so he remembers what she wrote
             }
         } catch (e) { console.warn('[writer/chat] Q unavailable, falling back: ' + e.message); }
@@ -2823,6 +2831,9 @@ const TUTOR_KEYS = [
     // They lived in page state only, so every refresh wiped them (Q's own bug
     // report, 18 Aug: "tabs disappear on page refresh" — highlights did too).
     'qNotes', 'qTabs',
+    // Q's own notes on the TEACHING board (19 Aug) — boardItems itself is rebuilt
+    // from the history on restore, so his notes had nowhere to come back from.
+    'qBoardNotes',
     // what Q's reading of the page found (cuts, weak lines, spelling, grammar) —
     // the marking panel's counts come from this, so it must survive a refresh.
     'tidy',

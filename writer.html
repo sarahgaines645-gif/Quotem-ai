@@ -1074,7 +1074,11 @@
     .tb-link .ico { color: var(--accent); }
     .teach-board .coverage-strip { margin-top: 12px; padding-top: 8px; border-top: 1px solid rgba(0,0,0,0.06); flex-direction: row; flex-wrap: wrap; gap: 3px 6px; }
     .teach-board .cov-item { grid-template-columns: 9px 1fr; gap: 4px; font-size: 10px; padding: 1px 6px 1px 4px; border-radius: 8px; }
-    .teach-board .cov-item.current { box-shadow: var(--neu-inset-sm); }
+    /* NO INDENTS (CLAUDE.md, and Sarah five times over two nights). The current
+       part used to be marked by SINKING it. It is bold, with its dot, like
+       every other 'this is the one' on the page. */
+    .teach-board .cov-item.current { box-shadow: none; }
+    .teach-board .cov-item.current .cov-text { font-weight: 700; }
     .teach-board .cov-item .cov-dot { width: 7px; height: 7px; margin-top: 3px; }
     .teach-board .coverage-label { width: 100%; }
 
@@ -1973,6 +1977,29 @@
     .tb-tabs { margin: 0 0 20px; padding: 12px 14px; border-radius: 12px; box-shadow: var(--neu-raised-sm); }
     .tb-tabs .ex-title { display: block; font-size: 9px; font-weight: 700; letter-spacing: 0.09em; text-transform: uppercase; color: var(--accent); margin-bottom: 8px; }
     .tb-tabs .tb-tabs-row { display: flex; flex-wrap: wrap; gap: 6px; }
+    /* THE QUESTION, when there is no plan for it yet (Sarah, 19 Aug: "theres
+       still nothing on the teaching board"). In a Mark & fix walk there is no
+       plan, so the agenda, the word board and the dots all render nothing and
+       the board was an empty shell. Same raised card as its neighbours. */
+    .tb-part-card { position: relative; margin: 0 0 20px; padding: 12px 14px; border-radius: 12px; box-shadow: var(--neu-raised-sm); }
+    .tb-part-card .ex-title { display: block; font-size: 9px; font-weight: 700; letter-spacing: 0.09em; text-transform: uppercase; color: var(--accent); margin-bottom: 6px; }
+    .tb-part-card .ex-part { font-weight: 500; letter-spacing: 0.02em; text-transform: none; color: var(--text-muted); margin-left: 6px; }
+    .tb-part-card .pc-name { font-size: 14px; font-weight: 700; color: var(--text); line-height: 1.35; overflow-wrap: anywhere; }
+    .tb-part-card .pc-ask { font-size: 12px; color: var(--text); line-height: 1.5; margin-top: 5px; overflow-wrap: anywhere; }
+    .tb-quiet { font-size: 11px; color: var(--text-muted); line-height: 1.5; margin: 0 0 20px; padding: 0 2px; }
+    /* Q'S OWN NOTES on the board (Sarah, 19 Aug: "he should be the one controling
+       it"). A raised card like every other one; the accent is the dot on the tag,
+       never a fill. His notes read as his without shouting. */
+    .tb-qnotes { position: relative; margin: 0 0 20px; padding: 12px 14px; border-radius: 12px; box-shadow: var(--neu-raised-sm); }
+    .tb-qnotes .ex-title { display: block; font-size: 9px; font-weight: 700; letter-spacing: 0.09em; text-transform: uppercase; color: var(--accent); margin-bottom: 8px; }
+    .tb-qnotes .ex-part { font-weight: 500; letter-spacing: 0.02em; text-transform: none; color: var(--text-muted); margin-left: 6px; }
+    .qn-row { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 2px 8px; align-items: baseline; margin-bottom: 9px; }
+    .qn-row:last-child { margin-bottom: 0; }
+    .qn-label { font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-muted); white-space: nowrap; }
+    .qn-label::before { content: '● '; color: var(--accent); }
+    .qn-row[data-qkind="todo"] .qn-label::before { content: '○ '; }
+    .qn-row[data-qkind="question"] .qn-label::before { content: '? '; }
+    .qn-text { font-size: 12px; color: var(--text); line-height: 1.5; overflow-wrap: anywhere; }
     /* Which way the tab hangs (Sarah, 18 Aug: usually off the right edge, colour
        on the outside "so it is laying the right way"). */
     /* Side tabs hang IN THE MARGIN, past the text (Sarah, 18 Aug: "it should be
@@ -4266,6 +4293,100 @@
       }
       return `<div class="tb-item tb-n${click}" data-idx="${idx}"><span class="tb-label">${escHtml(it.label || 'note')}</span><div class="tb-text tb-ntext${clampCls}">${paragraphsHtml(it.text)}</div>${more}</div>`;
     }
+    // ── THE QUESTION CARD ─────────────────────────────────────────────────
+    // What she is on, in her brief's own words. Rendered only when there is no
+    // plan for the part, because with a plan the agenda card already says it.
+    // Nothing here asks her anything (no input on the card = no questions on
+    // the card), and nothing here fires a paid call.
+    function partCardHtml(cid) {
+      const w = whereInfo(cid); if (!w) return '';
+      const ask = String(w.text || '').replace(/\s+/g, ' ').trim();
+      return `<div class="tb-part-card" data-cid="${escHtml(w.id)}"><span class="ex-title">The question<span class="ex-part">${escHtml(w.n + ' of ' + w.N)}</span></span>`
+        + `<div class="pc-name">${escHtml(w.label)}</div>`
+        + (ask ? `<div class="pc-ask">${escHtml(ask)}</div>` : '')
+        + `<div class="coverage-strip"></div></div>`;
+    }
+    // ── Q'S OWN CARD ON THE BOARD ─────────────────────────────────────────
+    // Sarah, 19 Aug: "he should be the one controling it". His notes live in the
+    // SAME state.boardItems every other board item lives in — marked fromQ — and
+    // are drawn as their own card, because .tb-current is hidden and the Earlier
+    // fold is for the walk, not for what he wants kept in front of her.
+    function qBoardItems() { return (state.boardItems || []).filter(it => it && it.fromQ); }
+    function qBoardHtml() {
+      const list = qBoardItems(); if (!list.length) return '';
+      const rows = list.map(it => `<div class="qn-row" data-qkind="${escHtml(it.qKind || 'note')}"><span class="qn-label">${escHtml(it.label || 'note')}</span><span class="qn-text">${escHtml(it.text)}</span></div>`).join('');
+      return `<div class="tb-qnotes" id="tb-qnotes"><span class="ex-title">Keep this<span class="ex-part">${escHtml(list.length + (list.length === 1 ? ' note from Q' : ' notes from Q'))}</span></span>${rows}</div>`;
+    }
+    // Only ever HIS notes come off — never her questions, never a step's items.
+    function persistQBoard() { try { persist({ qBoardNotes: qBoardItems().slice(-20).map(it => ({ text: it.text, label: it.label, kind: it.qKind || 'note', criterionId: it.criterionId || '' })) }); } catch (_) {} }
+    function addQBoardNotes(list) {
+      let n = 0;
+      for (const b of (Array.isArray(list) ? list : [])) {
+        const text = String((b && b.text) || '').replace(/\s+/g, ' ').trim().slice(0, 200);
+        if (!text) continue;
+        const kind = ['note', 'question', 'todo'].includes(String((b && b.kind) || '')) ? String(b.kind) : 'note';
+        const label = String((b && b.label) || '').replace(/\s+/g, ' ').trim().slice(0, 24) || (kind === 'todo' ? 'to do' : kind === 'question' ? 'think about' : 'note');
+        if (qBoardItems().some(it => it.text === text)) continue;   // he does not say the same thing twice
+        const it = appendBoardItem({ type: 'note', label, text });
+        if (it) { it.fromQ = true; it.qKind = kind; n++; }
+      }
+      if (n) { persistQBoard(); renderBoard(); }
+      return n;
+    }
+    function clearQBoardNotes(label) {
+      const want = String(label || '').replace(/\s+/g, ' ').trim().toLowerCase();
+      const before = (state.boardItems || []).length;
+      state.boardItems = (state.boardItems || []).filter(it => !(it && it.fromQ && (!want || String(it.label || '').trim().toLowerCase() === want)));
+      const n = before - state.boardItems.length;
+      if (n) { persistQBoard(); renderBoard(); }
+      return n;
+    }
+    // ── WHAT IS ON THE BOARD, FOR Q ───────────────────────────────────────
+    // Sarah, 19 Aug: "why cant Q see the teaching board? he should know whats on
+    // it". One plain block that goes up with every /writer/chat turn — so it is
+    // paid for per token, and it is capped hard: the ask, the part, the word
+    // board, the dots, the coverage, then the items with the MIDDLE elided and
+    // the newest kept.
+    const BOARD_FOR_Q_CAP = 1200;
+    function boardForQ() {
+      const cid = state.currentCriterionId || '';
+      const L = [];
+      try {
+        const w = whereInfo(cid);
+        if (w) L.push('Question ' + w.n + ' of ' + w.N + ' ' + '—' + ' ' + w.label + ': ' + String(w.text || '').replace(/\s+/g, ' ').trim().slice(0, 200));
+      } catch (_) {}
+      try { const ask = currentAskText(); if (ask) L.push('The ask on the board now: ' + String(ask).replace(/\s+/g, ' ').trim().slice(0, 220)); } catch (_) {}
+      const plan = planFor(cid);
+      try {
+        const fits = new Set(((state.termsFit || {})[cid] || []).map(x => String(x).toLowerCase()));
+        const terms = termsForBoard(cid) || [];
+        if (terms.length) L.push(('Word board: ' + terms.map(t => t + (fits.has(String(t).toLowerCase()) ? ' (covered)' : '')).join(', ')).slice(0, 320));
+      } catch (_) {}
+      try {
+        const met = new Set(((state.reqMet || {})[cid] || []));
+        const rq = (plan && plan.requirements) || [];
+        if (rq.length) L.push(('Must be in this question: ' + rq.map(r => (r.label || REQ_LABELS[r.kind] || r.kind) + (met.has(r.kind) ? ' (in)' : ' (not in)')).join(', ')).slice(0, 320));
+      } catch (_) {}
+      try {
+        const cs = (state.brief && state.brief.criteria) || [];
+        if (cs.length > 1) L.push('Coverage: ' + cs.map((c, i) => 'Q' + (i + 1) + ' ' + (state.coverage[c.id] || 'none')).join(' · '));
+      } catch (_) {}
+      const head = L.join('\n');
+      const lines = (state.boardItems || []).filter(it => it && it.text && !it.quiet).map(it => {
+        const who = it.fromQ ? 'your note (' + (it.label || 'note') + ')' : it.type === 'question' ? 'asked' : it.type === 'answer' ? 'they wrote' : it.type === 'explain' ? 'you explained' : (it.label || 'note');
+        return who + ': ' + String(it.text).replace(/\s+/g, ' ').trim().slice(0, 140);
+      });
+      const room = Math.max(120, BOARD_FOR_Q_CAP - head.length - 60);
+      let body = lines.join('\n');
+      if (body.length > room) {
+        const kept = []; let used = 0;
+        for (let i = lines.length - 1; i >= 0; i--) { if (used + lines[i].length + 1 > room) break; kept.unshift(lines[i]); used += lines[i].length + 1; }
+        const dropped = lines.length - kept.length;
+        body = (dropped ? '… ' + dropped + ' earlier item' + (dropped === 1 ? '' : 's') + ' not shown …\n' : '') + kept.join('\n');
+      }
+      const out = head + (body ? '\nOn the board now (oldest first, newest last):\n' + body : '\nNothing on the board itself yet.');
+      return out.length > BOARD_FOR_Q_CAP ? out.slice(0, BOARD_FOR_Q_CAP - 1) + '…' : out;
+    }
     function renderBoard() {
       try { renderWhiteboard(); } catch (_) {}
       return renderBoardInner();
@@ -4276,19 +4397,31 @@
       for (let i = items.length - 1; i >= 0; i--) if (items[i].type === 'question') { qi = i; break; }
       // Quiet items (a one-line note that a tool was used) always fold into
       // Earlier — the board never carries help text.
-      const earlier = (qi > 0 ? items.slice(0, qi) : []).concat(items.slice(Math.max(qi, 0)).filter(it => it.quiet && qi >= 0));
-      const current = (qi >= 0 ? items.slice(qi) : items.slice()).filter(it => !it.quiet);
+      const earlier = (qi > 0 ? items.slice(0, qi) : []).concat(items.slice(Math.max(qi, 0)).filter(it => it.quiet && qi >= 0)).filter(it => !it.fromQ);   // Q's notes have their own card
+      const current = (qi >= 0 ? items.slice(qi) : items.slice()).filter(it => !it.quiet && !it.fromQ);
       // No "Part 1 of 4 — AI and working life" line (Sarah, 17 Aug: "get rid
       // of this"). The Q1-Q4 row already says which part she is on, and the
       // part's name is on the brief board.
       const whereHtml = '';
-      const agendaHtml = scaffoldAgendaHtml() + coverHtml(state.currentCriterionId) + expectHtml(state.currentCriterionId) + sourcesBoardHtml() + tabsBoardHtml();   // QUESTIONS first, then TO COVER (Sarah, 17 Aug)
+      // THE BOARD IS NEVER BLANK FURNITURE (Sarah, 19 Aug: "theres still nothing
+      // on the teaching board"). With no plan for this part every card above
+      // returns '', so the board rendered as an empty shell. The question card
+      // stands in — what she is on, its ask, the coverage strip — and no paid
+      // call is ever fired from a renderer.
+      const cidNow = state.currentCriterionId;
+      const partCard = planFor(cidNow) ? '' : partCardHtml(cidNow);
+      const rest = scaffoldAgendaHtml() + coverHtml(cidNow) + expectHtml(cidNow) + qBoardHtml() + sourcesBoardHtml() + tabsBoardHtml();   // QUESTIONS first, then TO COVER (Sarah, 17 Aug)
+      const agendaHtml = partCard + rest;
       const earlierHtml = earlier.length
         ? `<details class="tb-earlier" id="tb-earlier"${state.boardEarlierOpen ? ' open' : ''}><summary>Earlier (${earlier.length})</summary><div class="tb-items">${earlier.map((it) => boardItemHtml(it, items.indexOf(it), true)).join('')}</div></details>`
         : '';
       const currentHtml = `<div class="tb-current"><div class="tb-items">${current.map((it) => boardItemHtml(it, items.indexOf(it), false, it.type === 'question' && !!state.currentStep && it.stepId === state.currentStep.stepId)).join('')}${scaffoldWidgetHtml()}</div></div>`;
       const stripHtml = '';   // the parts list is on the brief board already (Sarah, 17 Aug: "this is already in the brief")
-      teachBody.innerHTML = whereHtml + agendaHtml + worksheetHtml() + earlierHtml + currentHtml + stripHtml;
+      const wsHtml = worksheetHtml();
+      // One quiet line rather than a card with nothing under it. A statement,
+      // never a question she cannot answer from where she is standing.
+      const quietHtml = (!rest && !wsHtml && !earlierHtml) ? '<div class="tb-quiet">Nothing else on the board for this question yet — what you and Q work through lands here.</div>' : '';
+      teachBody.innerHTML = whereHtml + agendaHtml + wsHtml + quietHtml + earlierHtml + currentHtml + stripHtml;
       wireScaffold();
       const fold = document.getElementById('tb-earlier');
       if (fold) fold.addEventListener('toggle', () => { state.boardEarlierOpen = fold.open; if (isDocked()) restackDock(); });
@@ -8701,7 +8834,7 @@
       if (!opts.silent) sayMe(text);   // her line joins the thread (and Q's last line is kept, not wiped); silent = an internal prompt (a pause / Continue), nothing to show as hers
       showChat({ thinking: true });
       try {
-        const d = await api('/writer/chat', { text, partWords: partWordCounts(), stepItems: (() => { try { const si = currentStepInfo(); const st = si ? stepStateOf(si.cid, si.step.id) : null; return st && Array.isArray(st.items) ? st.items.slice(0, 40) : []; } catch (_) { return []; } })(), history: state.chatLog.slice(-11, -1).map(m => ({ role: m.role, text: m.text })), furniture: pageFurniture(), docText: docPlainText().slice(0, 24000), criterionId: state.currentCriterionId || null, stepId: state.currentStep ? state.currentStep.stepId : null, ask: currentAskText() || '', yearGroup: state.yearGroup || '' }, { timeoutMs: 90000 });
+        const d = await api('/writer/chat', { text, partWords: partWordCounts(), stepItems: (() => { try { const si = currentStepInfo(); const st = si ? stepStateOf(si.cid, si.step.id) : null; return st && Array.isArray(st.items) ? st.items.slice(0, 40) : []; } catch (_) { return []; } })(), history: state.chatLog.slice(-11, -1).map(m => ({ role: m.role, text: m.text })), furniture: pageFurniture(), board: boardForQ(), docText: docPlainText().slice(0, 24000), criterionId: state.currentCriterionId || null, stepId: state.currentStep ? state.currentStep.stepId : null, ask: currentAskText() || '', yearGroup: state.yearGroup || '' }, { timeoutMs: 90000 });
         tally('probe', state.currentCriterionId);
         const spans = (Array.isArray(d.highlights) && d.highlights.length ? d.highlights : []).concat(d.highlight ? [d.highlight] : []);
         pushSaid({ role: 'q', text: String(d.reply || '').trim(), highlight: spans.length ? spans : null });
@@ -8719,6 +8852,11 @@
         if (Array.isArray(d.paints) && d.paints.length) addQNotes(d.paints);
         if (Array.isArray(d.tabs) && d.tabs.length) addQTabs(d.tabs);
         if (Array.isArray(d.stickies) && d.stickies.length) addStickies(d.stickies);
+        // HIS OWN NOTES ON THE TEACHING BOARD (19 Aug). Clears first, then the new
+        // notes, so "take that off and put this up" in one turn lands the right way
+        // round. clearQBoardNotes only ever removes items he put there.
+        if (Array.isArray(d.boardClears) && d.boardClears.length) d.boardClears.forEach(c => clearQBoardNotes(c && c.label));
+        if (Array.isArray(d.boardNotes) && d.boardNotes.length) addQBoardNotes(d.boardNotes);
         // His taps — one press sends that answer; only the newest reply's show.
         renderTaps(Array.isArray(d.options) ? d.options : []);
         // Q laid something out (his ```display block) → the whiteboard, like QB2's.
@@ -11711,6 +11849,11 @@
         state.chatLog = Array.isArray(t.chatLog) ? t.chatLog.filter(m => m && (m.role === 'q' || m.role === 'me') && m.text).filter(m => { if (m.role !== 'q') return true; if ('hint' in m || 'section' in m) return false; const norm = String(m.text).replace(/^Welcome back\.\s*/, '').trim(); return norm && !oldAsks.has(norm); }).slice(-40) : [];
         state.docSnapshot = t.probeSnapshot && docPlainText().endsWith(t.probeSnapshot) ? docPlainText() : docPlainText();
         boardFromSteps();
+        // Q's notes on the board survive a refresh. boardItems itself is rebuilt
+        // from the history above, so without this his notes had nowhere to return
+        // from — and the restore returns early in a Mark & fix walk, so this must
+        // sit before that return, not after it.
+        try { for (const b of (Array.isArray(t.qBoardNotes) ? t.qBoardNotes : [])) { const it = appendBoardItem({ type: 'note', label: b && b.label, text: b && b.text, criterionId: (b && b.criterionId) || '' }); if (it) { it.fromQ = true; it.qKind = (b && b.kind) || 'note'; } } } catch (_) {}
         renderBoard();
         renderCoverage();
         // A Mark & fix walk in progress comes back first — that is where she
@@ -11729,6 +11872,11 @@
             state.currentCriterionId = (items[state.editIndex] && items[state.editIndex].criterionId) || state.currentCriterionId;
             coachCard.classList.add('wide');
             showEditItem({ note: 'Welcome back — we were on this sentence.' });
+            // The board was drawn ABOVE, before this branch knew which question
+            // she was on — so it drew with no current part and came out empty,
+            // on every reload, for good (Sarah, 19 Aug: "theres still nothing on
+            // the teaching board"). Draw it again now the part is known.
+            try { renderBoard(); renderCoverage(); } catch (_) {}
             state.restored = true;
             return;
           }
@@ -11776,7 +11924,7 @@
     }, () => {});
     // Test hooks (no data, no secrets): lets the harness exercise the page-side
     // helpers without a paid call. Harmless in production.
-    window.__qwriterTest = { startTour, tourStep, stopTour, maybeOfferTour, paintQNotes, addQNotes, addQTabs, addStickies, renderStickies, snapshotDoc, undoDoc, presentStep, renderBoard, renderWhiteboard, startedAsk, showToolPop, findInDoc, replaceInDoc, appendReference, docPlainText, docBlocksForExport, splitCheck: (t) => endsSentence(t), runEditPass, checkCurrentSentence, showEditItem, state: () => state, currentEditText, partParagraphs, setBrief, storyPointsHtml, renderInlineDots, termsForBoard, setCoach, bandListHtml, showEditItem, openEditPanel, renderEditPanel, edState: () => edProof, edSetProof: (p2) => { edProof = p2; renderEditPanel(); edPaint(); }, sayMe, renderThread, syncWorkArea, showPanel, revealPanel, runTidyPasses, applyTidyItem, mergeWalk, refreshSourceDigests, sourceDigestsHtml, markAndFix, walkItemsFromMark, renderMarkPanel, markStats, gradeWord, notesSections, notesCount, notesCopyText, renderNotesPanel, openNotesPanel, bibSorted, bibCopyText, renderBibPanel, openBibPanel, removeReference, removeReferenceFromDoc, sendTextToPage, jumpToSentence, runAutoCite, appendReference, noteReference, wbTablesFromSrc, tableElementFrom, sendBlockToPage, wbSendText, wbBlocksFromSrc, sendBlocksToPage, sendStickyToPage, blockElement, wbMindmapParse, wbMindmapSvg, wbMindmapHtml, docMindmapElement, wbDiagramHtml, wbDiagramHtmlLegacy, wbFlowParse, wbFlowSvg, flLayout, docDiagramElement };
+    window.__qwriterTest = { startTour, tourStep, stopTour, maybeOfferTour, paintQNotes, addQNotes, addQTabs, addStickies, renderStickies, snapshotDoc, undoDoc, presentStep, renderBoard, renderWhiteboard, boardForQ, qBoardHtml, partCardHtml, addQBoardNotes, clearQBoardNotes, qBoardItems, startedAsk, showToolPop, findInDoc, replaceInDoc, appendReference, docPlainText, docBlocksForExport, splitCheck: (t) => endsSentence(t), runEditPass, checkCurrentSentence, showEditItem, state: () => state, currentEditText, partParagraphs, setBrief, storyPointsHtml, renderInlineDots, termsForBoard, setCoach, bandListHtml, showEditItem, openEditPanel, renderEditPanel, edState: () => edProof, edSetProof: (p2) => { edProof = p2; renderEditPanel(); edPaint(); }, sayMe, renderThread, syncWorkArea, showPanel, revealPanel, runTidyPasses, applyTidyItem, mergeWalk, refreshSourceDigests, sourceDigestsHtml, markAndFix, walkItemsFromMark, renderMarkPanel, markStats, gradeWord, notesSections, notesCount, notesCopyText, renderNotesPanel, openNotesPanel, bibSorted, bibCopyText, renderBibPanel, openBibPanel, removeReference, removeReferenceFromDoc, sendTextToPage, jumpToSentence, runAutoCite, appendReference, noteReference, wbTablesFromSrc, tableElementFrom, sendBlockToPage, wbSendText, wbBlocksFromSrc, sendBlocksToPage, sendStickyToPage, blockElement, wbMindmapParse, wbMindmapSvg, wbMindmapHtml, docMindmapElement, wbDiagramHtml, wbDiagramHtmlLegacy, wbFlowParse, wbFlowSvg, flLayout, docDiagramElement };
 
 
     // (The old per-card drag code lived here — every panel now goes through makePanel above.)
