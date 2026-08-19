@@ -897,7 +897,20 @@ ${plans ? Object.values(plans).map(p => p && p.criterionId ? '[' + p.criterionId
     // 120s cap every small call has. A whole essay against every criterion, with
     // the taught gaps and the ladder, is one long answer (Sarah, 18 Aug, live:
     // "The marking timed out after 120s" on a real assignment). Five minutes.
-    const r = await callAccurate(system, user, { maxTokens: 20000, schema: MARK_SCHEMA, effort: 'medium', timeoutMs: 300_000 });
+    // 19 Aug, the 7HR02 re-mark (4,700 words, CIPD L7): at effort 'medium' the
+    // model THOUGHT for 9,592 of its 10,165 output tokens and then wrote a
+    // hollow answer — perCriterion [], critique [], ladder [], loMarks
+    // [{reason:'placeholder'}] — which the page showed as 'not started ×4'.
+    // Stop reason end_turn, so nothing threw. A whole Level 7 essay against the
+    // published grid needs the room to think AND answer: high effort, 32k, and
+    // a hollow answer is treated as the failure it is (retried once, then said).
+    const markOpts = { maxTokens: 32000, schema: MARK_SCHEMA, timeoutMs: 420_000 };   // the 7HR02 mark took 261s at high effort; the page waits 420s then says 'finishing in the background'
+    let r = await callAccurate(system, user, { ...markOpts, effort: 'high' });
+    if (hollowMark(r)) {
+        console.warn('[writer/mark] hollow answer at high effort (perCriterion ' + ((r && r.perCriterion) || []).length + ', critique ' + ((r && r.critique) || []).length + ') — retrying once at max');
+        r = await callAccurate(system, user, { ...markOpts, effort: 'max' });
+        if (hollowMark(r)) throw new Error('The mark came back incomplete twice (the marker graded nothing per question) — try again in a minute.');
+    }
     // CODE IS TRUTH for the arithmetic: on a per-outcome scheme the unit result
     // follows the published table from the LO marks, whatever label the model
     // wrote. Logged when they differ.
@@ -1469,8 +1482,53 @@ const EDIT_SCHEMA = {
     },
 };
 
+// A mark with an overall but NOTHING per question (and claims to have read
+// answers) is not a mark — it is the model running out of room. Never saved.
+function hollowMark(r) {
+    if (!r || !r.overall) return true;
+    const per = Array.isArray(r.perCriterion) ? r.perCriterion : [];
+    const answered = Number(r.overall.answeredCount || 0);
+    if (!per.length && answered > 0) return true;
+    if ((r.overall.loMarks || []).some(l => /placeholder|tbd|todo/i.test(String((l && l.reason) || '')))) return true;
+    return false;
+}
+// Sentences, the way a reader sees them — NOT cut at every full stop. The old
+// one-line regex shredded academic prose: '(Apple, n.d.)' became 'n.' | 'd.)',
+// 'et al. (2020)', 'e.g. the', 'Fig. 2', 'p. 14', '3.5 per cent', a URL and
+// the initials 'D. M.' all became separate "sentences" — so the marker was
+// handed a CIPD essay in fragments, wrote 'citations are broken up oddly'
+// (7HR02 re-mark, 19 Aug), and a critique's "verbatim sentence" was a shard
+// the page could not find. A stop ends a sentence only when whitespace
+// follows it (so 'www.cipd.org' and '3.5' hold) and the word before it is not
+// an abbreviation, an initial, or a dotted form like n.d. / e.g. / U.K.
+const SENT_ABBR = new Set(['e.g', 'i.e', 'et al', 'al', 'etc', 'cf', 'vs', 'viz', 'n.d', 'p', 'pp', 'no', 'nos', 'vol', 'vols', 'fig', 'figs', 'ed', 'eds', 'ch', 'chap', 'para', 'paras', 'sec', 'approx', 'est', 'dr', 'mr', 'mrs', 'ms', 'prof', 'sr', 'jr', 'st', 'inc', 'ltd', 'co', 'corp', 'plc', 'dept', 'univ', 'u.k', 'u.s', 'a.m', 'p.m', 'jan', 'feb', 'mar', 'apr', 'jun', 'jul', 'aug', 'sep', 'sept', 'oct', 'nov', 'dec', 'rev', 'trans', 'repr', 'op. cit', 'ibid', 'loc. cit']);
 function splitSentences(text) {
-    return String(text || '').replace(/\s+/g, ' ').match(/[^.!?]+[.!?]+["'”’)\]]*|[^.!?]+$/g) || [];
+    const t = String(text || '').replace(/\s+/g, ' ').trim();
+    if (!t) return [];
+    const out = [];
+    let start = 0;
+    const re = /[.!?]+["'”’)\]]*/g;
+    let m;
+    while ((m = re.exec(t)) !== null) {
+        const end = m.index + m[0].length;
+        if (end >= t.length) break;                       // the tail is pushed below
+        if (!/\s/.test(t[end])) continue;                 // 'www.cipd.org', '3.5', 'n.d.)and'
+        if (m[0][0] === '.') {
+            const before = t.slice(start, m.index);
+            const lastWord = ((before.match(/(\S+)$/) || [])[1] || '').replace(/^[("'“‘\[]+/, '');
+            const core = lastWord.toLowerCase().replace(/\.$/, '');
+            if (SENT_ABBR.has(core)) continue;            // 'pp.' 'e.g.' 'et al.' 'Fig.'
+            if (/^[a-z]$/i.test(core)) continue;          // an initial: 'D.' 'M.' / 'p.'
+            if (/^(?:[a-z]\.)+[a-z]$/i.test(core)) continue;  // 'n.d' 'U.K' 'i.e' with the stop as the last dot
+            if (/^\d+$/.test(core) && /^\s*\d/.test(t.slice(end))) continue;  // '3. 5' never happens; 'No. 7' handled above
+        }
+        const piece = t.slice(start, end).trim();
+        if (piece) out.push(piece);
+        start = end;
+    }
+    const rest = t.slice(start).trim();
+    if (rest) out.push(rest);
+    return out;
 }
 // The page's text in two: the BODY (sentences) and the REFERENCE LIST (one
 // entry per non-empty line after a line that is just 'References'). A reference
@@ -2982,6 +3040,7 @@ function ukPolishResponse(value, key, parentKey) {
 }
 
 module.exports = {
+    splitSentences, splitDraftRefs, hollowMark,
     ukPolishResponse, ukText, UK_LINE, PLAIN_QUESTION_RULE, withHouseStyle, plainLabel, capWords, capSentences, parseWeight, termCanon,
     TUTOR_MISSION, WHY_THE_GAME, GAME_RULE, COACH_VOICE, MISSION_BLOCK, withMission, BRICK_LOOP_RULE, TO_THE_POINT, MAX_CRITIQUE,
     toolHelp, checkSentence, matchScore, EDIT_TOOLS, TOOL_SCHEMA, CHECK_SCHEMA, proofread, PROOF_KINDS, chatAnswer, CHAT_SCHEMA, judgeCiteCandidates,

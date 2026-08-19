@@ -70,6 +70,9 @@ async function claudeJSON(systemPrompt, userPrompt, { maxTokens = 4096, model = 
         throw new Error(`Claude upstream ${res.status}: ${errText.slice(0, 200)}`);
     }
     const data = await res.json();
+    // Diagnostics: WRITER_DUMP_DIR=<dir> keeps every raw answer (stop reason,
+    // thinking, text) as a file — the only way to see WHY a mark came back thin.
+    if (process.env.WRITER_DUMP_DIR) { try { const fs = require('fs'), path = require('path'); fs.mkdirSync(process.env.WRITER_DUMP_DIR, { recursive: true }); fs.writeFileSync(path.join(process.env.WRITER_DUMP_DIR, `${skill}-${Date.now()}.json`), JSON.stringify({ model, effort, stop_reason: data.stop_reason, usage: data.usage, content: data.content }, null, 1)); } catch (_) {} }
     logUsage({ skill, provider: 'anthropic', model, data, started });
     if (data.stop_reason === 'refusal') throw new Error('Claude refused the request');
     if (data.stop_reason === 'max_tokens') throw new Error(`Claude response truncated at ${budget} tokens — raise maxTokens`);
