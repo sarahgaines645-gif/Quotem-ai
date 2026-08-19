@@ -1015,12 +1015,38 @@ function draftForMarkPrompt(docText) {
 // The user message of a per-criterion call: the varying half. Which criterion,
 // its own expectations, then the draft. Never in the system prompt — that is
 // what keeps the cached prefix identical for all of them.
-function criterionMarkUser(crit, plans, draft) {
+function criterionMarkUser(crit, plans, draft, words) {
     const plan = plans ? plans[String((crit && crit.id) || '').replace(/\s+/g, '')] : null;
     const exp = expectationsForPrompt(plan);
-    return `THE CRITERION YOU ARE MARKING: [${crit.id}]${crit.label ? ` "${crit.label}" —` : ''} ${crit.text}${crit.weight ? ` (${crit.weight})` : ''}`
+    // SAY THE GRADE IN THE SAME WORDS AS THE REST OF THE MARK (Sarah's law:
+    // never "lower band" to a student marked Pass/Merit/Distinction). Split
+    // across calls, a question can come back with an empty "label" while its
+    // neighbour says "Merit" - her live mark, 19 Aug, read "middle band ·
+    // middle band · Merit". The OVERALL call has already chosen the scheme's
+    // words by the time these run, so they are handed down. USER half only:
+    // the cached system half stays byte-identical across the questions.
+    const vocab = (Array.isArray(words) && words.length)
+        ? `THE GRADE WORDS FOR THIS ASSIGNMENT: ${words.join(' / ')}. "label" for this question MUST be one of them - never a band word, never empty.\n`
+        : '';
+    return vocab
+        + `THE CRITERION YOU ARE MARKING: [${crit.id}]${crit.label ? ` "${crit.label}" —` : ''} ${crit.text}${crit.weight ? ` (${crit.weight})` : ''}`
         + (exp ? '\n' + exp : '')
         + `\n\n${draft}\n\nMark THIS criterion, then its critique — at most three of their sentences.`;
+}
+
+// The grade words in play: the standard's own ladder when we hold one, else
+// what the overall mark actually used (its label, the rung labels, the next
+// one up). Deduped, in order, and only when there are at least two - one word
+// is not a scale and would just push every question onto the same grade.
+function gradeVocabulary(head, scheme) {
+    if (scheme && Array.isArray(scheme.labels) && scheme.labels.length > 1) return scheme.labels.slice();
+    const o = (head && head.overall) || {};
+    const out = [];
+    const add = (x) => { const t = String(x || '').trim(); if (t && !out.some(y => y.toLowerCase() === t.toLowerCase())) out.push(t); };
+    add(o.label);
+    (Array.isArray(o.ladder) ? o.ladder : []).forEach(r => add(r && r.label));
+    add(o.nextLabel);
+    return out.length > 1 ? out : [];
 }
 
 // At most `limit` calls in flight. A brief can have ten or more criteria and
@@ -1105,14 +1131,22 @@ async function markLikeMarker({ brief, essay, docText, gradeScheme, plans, taskT
     // out, and normaliseMark fills it as "nothing addresses this yet" exactly
     // as it always has for a criterion the model skipped.
     const criterionSystem = criterionMarkSystem({ brief, essay, plans, scheme, gradeScheme });
+    const gradeWords = gradeVocabulary(head, scheme);
+    if (gradeWords.length) console.log('[writer/mark] grade words for the questions: ' + gradeWords.join(' / '));
     const t1 = Date.now();
     const markParts = (effort) => inFlight(brief.criteria, MARK_PARALLEL, async (c) => {
         const started = Date.now();
         try {
-            const one = await markCall(criterionSystem, criterionMarkUser(c, plans, draft), { ...small, schema: CRITERION_MARK_SCHEMA, effort });
+            const one = await markCall(criterionSystem, criterionMarkUser(c, plans, draft, gradeWords), { ...small, schema: CRITERION_MARK_SCHEMA, effort });
             if (!one || typeof one !== 'object' || !one.band) throw new Error('no band came back for it');
             const { critique: items, ...entry } = one;
             entry.criterionId = c.id;   // we asked for this criterion; the id is ours, not the model's
+            // Still no word? Map the band onto the scale in code rather than
+            // let the panel fall back to "middle band" beside a "Merit".
+            if (!String(entry.label || '').trim() && gradeWords.length) {
+                const i = { low: 0, mid: Math.floor((gradeWords.length - 1) / 2), top: gradeWords.length - 1 }[entry.band];
+                if (i != null) entry.label = gradeWords[i];
+            }
             return {
                 entry,
                 critique: (Array.isArray(items) ? items : []).slice(0, MAX_PART_CRITIQUE).map(it => ({ ...it, criterionId: c.id })),
