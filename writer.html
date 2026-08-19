@@ -7849,9 +7849,14 @@
     function tourTag(arr, from) { for (let i = from; i < arr.length; i++) if (arr[i]) arr[i].qTour = true; }
 
     const TOUR_STEPS = [
-      { say: 'This is your page. I\'ll drop a paragraph here to play with — it comes off when we\'re done.',
+      // THE PAGE. On the Introduction project (Sarah, 19 Aug: "a pre saved doc
+      // and you click on that to do the demo") a short essay is already here;
+      // on an empty page the tour drops its own paragraph and takes it off
+      // at the end. The highlight and the tab always work on the FIRST
+      // paragraph, whichever that is.
+      { say: 'This is your page. Everything I do is on the page, the whiteboard or the teaching board — and you can undo any of it.',
         run: () => {
-          if (docBody.querySelector('[data-q-demo="1"]')) return;
+          if (docPlainText().trim() || docBody.querySelector('[data-q-demo="1"]')) return;
           snapshotDoc('before the tour\'s demo paragraph');
           const p = document.createElement('div');
           p.setAttribute('data-q-demo', '1'); p.textContent = TOUR_DEMO;
@@ -7860,16 +7865,19 @@
         } },
       { say: 'I can highlight your writing and leave a note — press the dot after it.',
         run: () => {
+          const first = docParagraphTexts()[0] || '';
+          const sent = (first.match(/[^.!?]+[.!?]/) || [first])[0].trim();
+          if (!sent) return;
           state.qNotes = state.qNotes || []; const at = state.qNotes.length;
-          addQNotes([{ text: TOUR_GOOD, note: 'Good — keep it. It says exactly what happens and when.', kind: 'good' }]);
+          addQNotes([{ text: sent, note: 'Good — keep it. It says exactly what happens and when.', kind: 'good' }]);
           tourTag(state.qNotes, at);
         } },
       { say: 'A tab marks a paragraph so we can both jump to it. Press it.',
         run: () => {
-          const pn = docParagraphTexts().findIndex(t => t.indexOf('A bill starts life') === 0) + 1;
+          const pn = docParagraphTexts().length ? 1 : 0;
           if (pn < 1) return;
           state.qTabs = state.qTabs || []; const at = state.qTabs.length;
-          addQTabs([{ paragraph: pn, label: 'how a bill passes', colour: 'blue', side: 'right' }]);
+          addQTabs([{ paragraph: pn, label: 'start here', colour: 'blue', side: 'right' }]);
           tourTag(state.qTabs, at);
         } },
       { say: 'Every label gets a chip on the teaching board — and wherever I mention it. Press the chip and you are straight back at that spot. The same label on several places becomes ◀ ▶, so you can step through them.',
@@ -7885,19 +7893,37 @@
         run: () => showOnWhiteboard('How a bill becomes law', TOUR_LIST) },
       { say: 'Boxes and arrows when a list won\'t do.',
         run: () => showOnWhiteboard('How a bill becomes law', TOUR_DIAGRAM) },
-      { say: 'Put the cursor at the end of a sentence and press Auto cite — real papers and websites only, and the reference list writes itself.',
+      { say: () => state.brief ? 'Put the cursor at the end of any sentence on the page and press Auto cite — real papers and websites, nothing invented, and the reference list writes itself. Try it on the Fisheries Act sentence.' : 'Put the cursor at the end of a sentence and press Auto cite — real papers and websites only, and the reference list writes itself.',
         run: () => { hidePanel('wb'); openEditPanel(); tourPulse(document.querySelector('#edit-body [data-ed-tool="cite"]')); } },   // the board goes away first, or she is pointed at a button she cannot see
-      { say: 'When you\'ve written something, Mark & fix reads the whole page and marks it the way your marker will — a grade per question, and what gets you the next one.',
-        run: () => { hidePanel('edit'); const eb = document.getElementById('btn-edit-strip'); if (eb) eb.setAttribute('aria-expanded', 'false'); tourPulse(document.getElementById('btn-finish')); } },
+      { say: 'Mark & fix reads the whole page and marks it the way your marker will — a grade per question, the overall, and how many fixes to the next grade.',
+        run: () => {
+          hidePanel('edit'); const eb = document.getElementById('btn-edit-strip'); if (eb) eb.setAttribute('aria-expanded', 'false');
+          // The Introduction project carries a real mark — show it (no model
+          // call). Anywhere else, point at the button.
+          if (state.lastMark && state.lastMark.overall) { try { openMarkPanel(); } catch (_) {} setTimeout(() => tourPulse(document.querySelector('#mark-body .mk-block')), 150); }
+          else tourPulse(document.getElementById('btn-finish'));
+        } },
     ];
 
-    function startTour() {
+    // "Show me around" opens the Introduction project (a pre-saved essay with a
+    // brief, a reference and a real mark) and runs the tour there — unless this
+    // IS that project, or the page already has her own work on it (then the
+    // tour runs right here, on her words).
+    async function startTour() {
       if (tour.on) return;
+      if (!state.isDemo && !docPlainText().trim()) {
+        try {
+          tourSay('One moment — opening the Introduction…');
+          const d = await api('/writer/projects/demo', {}, { timeoutMs: 20000 });
+          if (d && d.ok && d.id && d.id !== state.projectId) { try { sessionStorage.setItem('q-tour-start', '1'); } catch (_) {} location.reload(); return; }
+        } catch (e) { /* no demo available — run here */ }
+      }
       tour.on = true; tour.i = 0;
       tour.prevWbDoc = state.wbDoc || null;
       tour.wbWasHidden = !!(panels.wb && panels.wb.el.classList.contains('hidden'));
       tour.edWasHidden = !!(panels.edit && panels.edit.el.classList.contains('hidden'));
       tour.boardWasHidden = !!(panels.teach && panels.teach.el.classList.contains('hidden'));
+      tour.markWasHidden = !!(panels.mark && panels.mark.el.classList.contains('hidden'));
       tourStep();
     }
     function tourStep() {
@@ -7905,7 +7931,8 @@
       const step = TOUR_STEPS[tour.i];
       if (!step) { stopTour(); return; }
       tour.i += 1;
-      tourSay(step.say);
+      try { const pill = document.getElementById('btn-tour'); if (pill) pill.style.display = 'none'; } catch (_) {}   // not while the tour is running
+      tourSay(typeof step.say === 'function' ? step.say() : step.say);
       try { step.run(); } catch (_) {}   // a step that cannot run does not strand her mid-tour
       tourTaps([{ label: 'Next →', onClick: () => tourStep() }, { label: 'Stop the tour', onClick: () => stopTour() }]);
     }
@@ -7926,6 +7953,7 @@
       try { if (tour.edWasHidden) { hidePanel('edit'); const eb = document.getElementById('btn-edit-strip'); if (eb) eb.setAttribute('aria-expanded', 'false'); } else { showPanel('edit'); renderEditPanel(); } } catch (_) {}
       try { if (tour.wbWasHidden) hidePanel('wb'); else { showPanel('wb'); renderWhiteboard(); } } catch (_) {}
       try { if (tour.boardWasHidden) hidePanel('teach'); } catch (_) {}
+      try { if (tour.markWasHidden) hidePanel('mark'); } catch (_) {}
       try { renderStickies(); if (!wbOpen()) wbBody.innerHTML = ''; } catch (_) {}   // a shut board does not keep the demo display behind it
       state.settings.tourSeen = true;
       try { persist({ settings: state.settings }); } catch (_) {}
@@ -10796,6 +10824,7 @@
       applyCoachMode();
       if (t && t.settings && t.settings.coachBrain) state.settings.coachBrain = String(t.settings.coachBrain);
       if (t && t.settings && t.settings.tourSeen) state.settings.tourSeen = true;   // been round the tools once — Q does not offer again
+      state.isDemo = !!(t && t.demo);   // the Introduction project
       applyCoachBrain();
       if (t && t.gradeScheme) { state.gradeScheme = t.gradeScheme; gradeSchemeSelect.value = t.gradeScheme; }
       // A saved "GCSE (9-1)" was the CODE DEFAULT for weeks — every session
@@ -10985,7 +11014,11 @@
       }
     }
     applyCoachMode();
-    loadProjects().then(restoreSession, restoreSession).then(() => { try { maybeOfferTour(); } catch (_) {} }, () => {});
+    loadProjects().then(restoreSession, restoreSession).then(() => {
+      let go = false; try { go = sessionStorage.getItem('q-tour-start') === '1'; sessionStorage.removeItem('q-tour-start'); } catch (_) {}
+      if (go) { try { startTour(); } catch (_) {} return; }
+      try { maybeOfferTour(); } catch (_) {}
+    }, () => {});
     // Test hooks (no data, no secrets): lets the harness exercise the page-side
     // helpers without a paid call. Harmless in production.
     window.__qwriterTest = { startTour, tourStep, stopTour, maybeOfferTour, paintQNotes, addQNotes, addQTabs, addStickies, renderStickies, snapshotDoc, undoDoc, presentStep, renderBoard, renderWhiteboard, startedAsk, showToolPop, findInDoc, replaceInDoc, appendReference, docPlainText, splitCheck: (t) => endsSentence(t), runEditPass, checkCurrentSentence, showEditItem, state: () => state, currentEditText, partParagraphs, setBrief, storyPointsHtml, renderInlineDots, termsForBoard, setCoach, bandListHtml, showEditItem, openEditPanel, renderEditPanel, edState: () => edProof, edSetProof: (p2) => { edProof = p2; renderEditPanel(); edPaint(); }, sayMe, renderThread, syncWorkArea, showPanel, revealPanel, runTidyPasses, applyTidyItem, mergeWalk, refreshSourceDigests, sourceDigestsHtml, markAndFix, walkItemsFromMark, renderMarkPanel, markStats, gradeWord, notesSections, notesCount, notesCopyText, renderNotesPanel, openNotesPanel, bibSorted, bibCopyText, renderBibPanel, openBibPanel, removeReference, removeReferenceFromDoc, sendTextToPage, jumpToSentence, runAutoCite, appendReference, noteReference, wbTablesFromSrc, tableElementFrom, sendBlockToPage, wbSendText, wbBlocksFromSrc, sendBlocksToPage, sendStickyToPage, blockElement, wbMindmapParse, wbMindmapSvg, wbMindmapHtml, docMindmapElement, wbDiagramHtml };

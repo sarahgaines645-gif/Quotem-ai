@@ -1195,6 +1195,30 @@ router.post('/writer/projects', requirePerson, express.json({ limit: '4kb' }), (
         res.json({ ok: true, id, ...projectsView(req.person.id) });
     } catch (e) { projectsErr(res, e, 'Could not start a new assignment'); }
 });
+// POST /writer/projects/demo — "Introduction to the Writer": the pre-saved
+// demo project Q walks a new person round (Sarah, 19 Aug). One per person —
+// opened if it exists, written from plugins/writer-demo.js if not. No model
+// call: the page, the reference and (when the template has one) the mark are
+// all stored. Returns { id, fresh } + the projects view; the page opens it and
+// starts the tour there.
+router.post('/writer/projects/demo', requirePerson, express.json({ limit: '2kb' }), (req, res) => {
+    try {
+        const demo = require('./plugins/writer-demo');
+        const idx = readTutorIndex(req.person.id);
+        let pr = idx.projects.find(p => p && p.demo && !p.archived);
+        let fresh = false;
+        if (!pr) {
+            const id = newProjectId();
+            registerProject(req.person.id, id, { name: demo.DEMO_NAME, demo: true });
+            const scope = tutorScope(req.person.id, id);
+            writeTutor(scope, demo.buildDemoTutor());
+            try { fs.writeFileSync(getDocPath(scope), JSON.stringify({ text: demo.DEMO_TASK, name: 'Introduction to the Writer.md', savedAt: Date.now() })); } catch (e) { console.warn('[writer/demo] doc store failed:', e.message); }
+            pr = { id }; fresh = true;
+        }
+        const idx2 = readTutorIndex(req.person.id); idx2.active = pr.id; writeTutorIndex(req.person.id, idx2);
+        res.json({ ok: true, id: pr.id, fresh, ...projectsView(req.person.id) });
+    } catch (e) { projectsErr(res, e, 'Could not open the introduction'); }
+});
 // POST /writer/projects/open {id} — make it the active one (what the page shows).
 router.post('/writer/projects/open', requirePerson, express.json({ limit: '4kb' }), (req, res) => {
     try {
