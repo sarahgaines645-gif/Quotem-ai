@@ -9880,20 +9880,23 @@
         applyMatch(m.match);   // the marker's honest tally — the score the fix loop climbs from
         applyExpectations(m);
         state.markStartPct = state.match ? state.match.overall : null;
-        appendBoardItem({ type: 'note', label: 'marked', text: 'Marked: ' + bandLine(m) + '. ' + (m.overall.summary || ''), quiet: true });
+        appendBoardItem({ type: 'note', label: 'marked', text: 'Marked: ' + gradeWord(m.overall) + ' - the mark is on the marking card.', quiet: true });   // a RECORD that it happened, not a third copy of the mark (19 Aug)
         // THE MARK IS SAID, NOT JUST SCORED. The grade in her scheme, why it is
         // that grade, and the concrete way to the next one — in the
         // conversation, where it stays while she works through the fixes.
         {
+          // THE MARK LIVES ON THE MARKING CARD (Sarah, 19 Aug: "this is what
+          // happens when you press mark. the marking should all be on the
+          // marking card like they were before"). This block used to repeat the
+          // whole ladder into the chat - and it looked harmless only because a
+          // mark at effort 'medium' came back hollow (empty ladder, no
+          // critique). With a real mark it is four rungs of a wall of text on
+          // the coach card, saying the same thing the panel opened to say.
+          // Q says the grade and the one reason; the panel holds the mark.
           const why = String(m.overall.summary || '').trim();
-          const up = String(m.overall.toNext || '').trim();
           const nl = String(m.overall.nextLabel || '').trim();
-          const rungs = (m.overall.ladder || []).filter(r => r && r.label && (r.needs || []).length);
-          pushSaid({ role: 'q', text: [
-            '**' + gradeWord(m.overall) + '** as it stands.',
-            why,
-            rungs.length ? rungs.map(r => '**To get a ' + r.label + ':**\n' + (r.needs || []).map(n => '- ' + n).join('\n')).join('\n\n') + '\n\nThe ladder is on the marking panel too.'
-              : (up ? (nl ? '**To get a ' + nl + ':**\n\n' + up : '**To take it higher:**\n\n' + up) : ''),
+          pushSaid({ role: 'q', text: ['**' + gradeWord(m.overall) + '** as it stands.', why,
+            (nl ? 'What it takes for a ' + nl + ' is on the marking card - and we start on it now.' : 'The whole mark is on the marking card.'),
           ].filter(Boolean).join('\n\n') });
           renderThread();
         }
