@@ -1660,11 +1660,12 @@ router.post('/writer/chat', requirePerson, express.json({ limit: '1mb' }), write
                     const tm = src.match(/^#{1,3}[ \t]+(.+)$/m);
                     display = { title: tm ? tm[1].trim() : 'Whiteboard', src };
                 }
-                // A whiteboard fence he left in his PROSE (diagram / build / flow) still
-                // belongs on the whiteboard, not as code in the chat (Sarah, 18 Aug:
-                // "11, 12 nothing happened" — they were sitting in the chat as code).
+                // A whiteboard fence he left in his PROSE (diagram / build / flow /
+                // mindmap) still belongs on the whiteboard, not as code in the chat
+                // (Sarah, 18 Aug: "11, 12 nothing happened" — they were sitting in
+                // the chat as code).
                 const stray = [];
-                reply = reply.replace(/```(diagram|flow|build|buildup)[ \t]*\r?\n[\s\S]*?```/g, (blk) => { stray.push(blk); return ''; }).replace(/\n{3,}/g, String.fromCharCode(10) + String.fromCharCode(10)).trim();
+                reply = reply.replace(/```(diagram|flow|build|buildup|mindmap|brainstorm|map)[ \t]*\r?\n[\s\S]*?```/g, (blk) => { stray.push(blk); return ''; }).replace(/\n{3,}/g, String.fromCharCode(10) + String.fromCharCode(10)).trim();
                 if (stray.length) {
                     const extra = stray.join(String.fromCharCode(10) + String.fromCharCode(10));
                     display = display ? { title: display.title, src: display.src + String.fromCharCode(10) + String.fromCharCode(10) + extra } : { title: 'Whiteboard', src: extra };

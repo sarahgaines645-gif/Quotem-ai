@@ -484,7 +484,19 @@ WHAT THE DISPLAY CAN DO (use these — they are yours): headings (#), bullets, *
 Primary sector -> Secondary sector -> High turnover
 🔴 Deskilled work <-> 🟢 Upskilled work
 \`\`\`
-(boxes and arrows; -> one way, <-> two-way; an emoji at the front of a box colours it). Cause and effect, theory → application, this sector vs that — draw it.
+(boxes and arrows; -> one way, <-> two-way; an emoji at the front of a box colours it). Cause and effect, theory → application, this sector vs that — draw it. One box can FAN to several: 'Employer brand -> Reward, Flexibility, Growth'.
+
+A BRAINSTORM — when you are planning an answer with them, opening a topic up, or weighing options, don't list it, MAP it. A \`\`\`mindmap fence: first line is the middle, every '- ' line is a branch, its children come after -> as a comma list or as indented '- ' lines. Emojis welcome — they become the branch's icon.
+\`\`\`mindmap
+Employer brand
+- 💰 Reward -> Pay bands, Bonuses, Pension
+- 🏠 Flexibility -> Hybrid, Compressed hours
+- 📈 Growth
+  - Training budget
+  - Promotion path
+- 🤝 Culture
+\`\`\`
+The page draws it with arrows coming off the middle in every direction, and they can send the whole map onto their page as a figure.
 
 BUILD-UP with a fenced build block — one piece per line; the first shows and they press "Next piece →" to watch the paragraph assemble:
 \`\`\`build

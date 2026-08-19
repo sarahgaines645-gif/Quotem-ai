@@ -1303,6 +1303,8 @@
     .doc-body .q-figure .q-dg-n.ok { border-color: #28a745; } .doc-body .q-figure .q-dg-n.warn { border-color: #e6a817; } .doc-body .q-figure .q-dg-n.bad { border-color: #e0245e; } .doc-body .q-figure .q-dg-n.info { border-color: #3b82c4; } .doc-body .q-figure .q-dg-n.tip { border-color: #7c5cbf; }
     .doc-body .q-figure .q-dg-a { font-size: 1.1em; line-height: 1; }
     .doc-body .q-figure .q-dg-cap { font-size: 0.85em; color: #666; margin-top: 4px; font-style: italic; }
+    .doc-body .q-figure .q-dg-fan { display: inline-flex; flex-direction: column; gap: 6px; }
+    .doc-body .q-figure svg.q-mm { display: block; width: 100%; height: auto; max-height: 440px; margin: 2px 0; }
     .doc-body .student-line { margin: 0; font-style: normal; font-weight: 400; color: var(--text); border-left: 2px solid rgba(233,30,99,0.22); padding-left: 8px; margin-left: -10px; }
 
 
@@ -1760,6 +1762,12 @@
     .wb-dg-n { padding: 8px 12px; border-radius: 12px; box-shadow: var(--neu-raised-xs); background: var(--bg); font-size: 12.5px; font-weight: 600; color: var(--text); overflow-wrap: anywhere; max-width: 100%; border-left: 3px solid transparent; }
     .wb-dg-n.ok { border-left-color: #28a745; } .wb-dg-n.warn { border-left-color: #e6a817; } .wb-dg-n.bad { border-left-color: var(--accent); } .wb-dg-n.info { border-left-color: #3b82c4; } .wb-dg-n.tip { border-left-color: #7c5cbf; }
     .wb-dg-a { color: var(--accent); font-weight: 700; font-size: 16px; line-height: 1; }
+    .wb-dg-fan { display: inline-flex; flex-direction: column; gap: 6px; }
+    /* BRAINSTORM / MIND MAP fence: drawn as an SVG in code, branches off the
+       centre in every direction (Sarah, 19 Aug: "an entire brain storm with
+       icons and arrows coming off any direction he wants"). */
+    .wb-mm-box { margin: 8px 0 14px; }
+    .wb-mm { display: block; width: 100%; height: auto; max-height: 520px; }
     .wb-code { font-family: ui-monospace, Consolas, monospace; font-size: 12px; line-height: 1.5; padding: 10px 12px; border-radius: 12px; box-shadow: var(--neu-raised-xs); background: var(--bg); overflow-x: auto; margin: 6px 0 10px; white-space: pre-wrap; }
     .wb-h { color: var(--accent); font-weight: 800; margin: 14px 0 5px; overflow-wrap: anywhere; }
     .wb-h1 { font-size: 17px; }   /* no faded rule under it (Sarah, 17 Aug: "what is this faded line?") */
@@ -6025,13 +6033,215 @@
           const t = parts[k];
           if (k % 2 === 1) { html += '<span class="wb-dg-a">' + (t === '<->' || t === '↔' ? '↔' : (t === '<-' || t === '←' ? '←' : '→')) + '</span>'; continue; }
           if (!t) continue;
-          const key = Object.keys(WB_CALLOUT).find(x => t.startsWith(x));
-          const body = key ? t.slice(key.length).trim() : t;
-          html += '<span class="wb-dg-n' + (key ? ' ' + WB_CALLOUT[key] : '') + '">' + escHtml(body) + '</span>';
+          const box = (one) => {
+            const key = Object.keys(WB_CALLOUT).find(x => one.startsWith(x));
+            const body = key ? one.slice(key.length).trim() : one;
+            return '<span class="wb-dg-n' + (key ? ' ' + WB_CALLOUT[key] : '') + '">' + escHtml(body) + '</span>';
+          };
+          // A FAN: 'A -> B, C, D' is one box to SEVERAL, stacked after the
+          // arrow. Only a target fans — the source keeps its commas.
+          const fan = k > 0 ? t.split(/\s*,\s*/).map(x => x.trim()).filter(Boolean) : [t];
+          html += fan.length > 1 ? '<span class="wb-dg-fan">' + fan.map(box).join('') + '</span>' : box(t);
         }
         rows.push('<div class="wb-dg-row">' + html + '</div>');
       }
       return '<div class="wb-dg">' + rows.join('') + '</div>';
+    }
+
+    // ══ BRAINSTORM / MIND MAP (Sarah, 19 Aug 2026: "Q should be able to make
+    // an entire brain storm with icons and arrows coming off any direction he
+    // wants"). A ```mindmap fence: the FIRST line is the centre, every '- '
+    // line is a branch, and a branch's children come either after '->' as a
+    // comma list or as indented '- ' lines. A callout emoji colours the whole
+    // limb; any other emoji is the node's icon. Drawn here — an SVG built in
+    // code, no library — as a real spoke map, not a left-to-right chain.
+    const MM_RAILS = ['#28a745', '#e6a817', '#7c5cbf', '#1aa39a', '#3b82c4', '#e0245e'];
+    const MM_TONE = { ok: '#28a745', warn: '#e6a817', bad: '#e0245e', info: '#3b82c4', tip: '#7c5cbf' };
+    const MM_EMOJI_RE = /^((?:[\u{1F000}-\u{1FAFF}\u{2600}-\u{27BF}\u{2B00}-\u{2BFF}]|[\u{FE0F}\u{200D}\u{20E3}])+)\s*/u;
+    const MM_SANS = "'Space Grotesk', sans-serif";
+    const MM_SERIF = "Lora, Georgia, serif";
+    let mmCanvas = null, mmUid = 0;
+    const mmR = v => Math.round(v * 10) / 10;
+    function mmTextW(s, size, weight, fam) {
+      const t = String(s == null ? '' : s); if (!t) return 0;
+      try {
+        if (!mmCanvas) mmCanvas = document.createElement('canvas');
+        const ctx = mmCanvas.getContext('2d');
+        if (ctx) { ctx.font = (weight || 600) + ' ' + size + 'px ' + fam; const w = ctx.measureText(t).width; if (w > 0) return w; }
+      } catch (_) {}
+      return t.length * size * 0.58;                       // no canvas → estimate per character
+    }
+    // A node's words: a callout emoji is its COLOUR (stripped, like the
+    // diagram fence does); any other leading emoji is its icon.
+    function mmSplitIcon(text) {
+      const t = String(text == null ? '' : text).trim();
+      const ck = Object.keys(WB_CALLOUT).find(k => t.startsWith(k));
+      if (ck) return { tone: WB_CALLOUT[ck], icon: '', text: t.slice(ck.length).trim() };
+      const m = t.match(MM_EMOJI_RE);
+      if (m) return { tone: '', icon: m[1].trim(), text: t.slice(m[0].length).trim() };
+      return { tone: '', icon: '', text: t };
+    }
+    // Tolerant on purpose: '*' bullets, '→' or '->', no icons, stray blank
+    // lines, deeper indents. Never throws; nothing to draw → null.
+    function wbMindmapParse(lines) {
+      const raw = Array.isArray(lines) ? lines : String(lines == null ? '' : lines).split('\n');
+      let centre = null; const branches = [];
+      for (const one of raw) {
+        const line = String(one == null ? '' : one).replace(/\t/g, '  ').replace(/\s+$/, '');
+        if (!line.trim()) continue;
+        const ind = line.length - line.replace(/^ +/, '').length;
+        const bm = line.match(/^ *[-*•+]\s+(.*)$/);
+        const body = (bm ? bm[1] : line).trim().replace(/^#{1,6}\s*/, '').trim();
+        if (!body) continue;
+        if (!centre) { centre = mmSplitIcon(body); continue; }
+        const bits = body.split(/\s*(?:-->|->|→|=>|➜)\s*/).map(x => x.trim()).filter(Boolean);
+        const head = bits.shift() || '';
+        const kids = [];
+        bits.forEach(b => b.split(/\s*[,;]\s*/).forEach(c => { if (c.trim()) kids.push(c.trim()); }));
+        if (ind >= 2 && branches.length) {                  // an indented line = a child of the branch above
+          const par = branches[branches.length - 1];
+          [head].concat(kids).forEach(k => { if (k && par.children.length < 8) par.children.push(mmSplitIcon(k)); });
+        } else {
+          if (branches.length >= 12) continue;
+          const n = mmSplitIcon(head); n.children = kids.slice(0, 8).map(mmSplitIcon); branches.push(n);
+        }
+      }
+      if (!centre || !branches.length) return null;
+      return { centre, branches };
+    }
+    // Measure the words, then size the box round them — text never leaves its
+    // box: it wraps to two lines, and past that it is cut with an ellipsis
+    // (the whole label stays in the node's <title>).
+    function mmNode(spec, level, colour, fam) {
+      const size = level === 0 ? 15 : (level === 1 ? 13 : 11.5);
+      const weight = level === 0 ? 700 : (level === 1 ? 600 : 500);
+      const maxW = level === 0 ? 168 : (level === 1 ? 148 : 122);
+      const padX = level === 0 ? 15 : 11, padY = level === 0 ? 11 : 8;
+      const lh = mmR(size * 1.32);
+      const fit = (one) => {
+        let t = String(one);
+        if (mmTextW(t, size, weight, fam) <= maxW) return t;
+        while (t.length > 1 && mmTextW(t + '…', size, weight, fam) > maxW) t = t.slice(0, -1);
+        return t.replace(/\s+$/, '') + '…';
+      };
+      const words = String(spec.text || '').split(/\s+/).filter(Boolean);
+      let lines = []; let cur = '';
+      for (const w of words) { const t = cur ? cur + ' ' + w : w; if (cur && mmTextW(t, size, weight, fam) > maxW) { lines.push(cur); cur = w; } else cur = t; }
+      if (cur) lines.push(cur);
+      if (!lines.length) lines = [''];
+      if (lines.length > 2) lines = [lines[0], lines.slice(1).join(' ')];
+      lines = lines.map(fit);
+      const iconW = spec.icon ? mmTextW(spec.icon, size + 2, 400, fam) + 6 : 0;
+      const tw = lines.reduce((m, l) => Math.max(m, mmTextW(l, size, weight, fam)), 0);
+      return {
+        text: spec.text || '', icon: spec.icon || '', level, colour, size, weight, fam, lines, lh, iconW, padX,
+        w: Math.max(44, Math.ceil(tw + iconW + padX * 2)), h: Math.ceil(lines.length * lh + padY * 2), x: 0, y: 0
+      };
+    }
+    // Where a limb meets a box: the point on the rectangle's edge in that
+    // direction, so an arrow lands on the box, not in the middle of the words.
+    function mmEdgePt(n, dx, dy, pad) {
+      const hw = n.w / 2 + (pad || 0), hh = n.h / 2 + (pad || 0);
+      const ax = Math.abs(dx), ay = Math.abs(dy);
+      let t = Infinity;
+      if (ax > 1e-6) t = Math.min(t, hw / ax);
+      if (ay > 1e-6) t = Math.min(t, hh / ay);
+      if (!isFinite(t)) t = 0;
+      return { x: n.x + dx * t, y: n.y + dy * t };
+    }
+    function wbMindmapSvg(map, opt) {
+      if (!map) return '';
+      const ink = !!(opt && opt.ink);                        // ink = the DOCUMENT figure, not the screen
+      const fam = ink ? MM_SERIF : MM_SANS;
+      let cs = null; try { cs = getComputedStyle(document.documentElement); } catch (_) {}
+      const rd = (name, fb) => { try { const v = cs && cs.getPropertyValue(name); return (v && v.trim()) || fb; } catch (_) { return fb; } };
+      const accent = ink ? '#444444' : rd('--accent', '#e91e63');
+      const textCol = ink ? '#222222' : rd('--text', '#1a1a1a');
+      const bgCol = ink ? 'none' : rd('--bg', '#f3f3f3');
+      const centre = mmNode(map.centre, 0, accent, fam); centre.fixed = true; centre.icon = map.centre.icon || '';
+      if (centre.icon) { const c2 = mmNode(map.centre, 0, accent, fam); centre.w = c2.w; centre.iconW = c2.iconW; }
+      const nodes = [centre]; const edges = [];
+      const N = map.branches.length, step = 360 / N;
+      const bs = map.branches.map((b, i) => mmNode(b, 1, (b.tone && MM_TONE[b.tone]) || MM_RAILS[i % MM_RAILS.length], fam));
+      let maxBW = 0, maxBH = 0; bs.forEach(n => { maxBW = Math.max(maxBW, n.w); maxBH = Math.max(maxBH, n.h); });
+      const SQ = 0.68;                                       // squashed in y: the board is wide, not tall
+      const ring = (maxBW * 0.55 + maxBH * 0.8 + 24) * N / (2 * Math.PI * 0.84);
+      const R1 = Math.max(centre.w / 2 + maxBW / 2 + 56, ring);
+      bs.forEach((n, i) => {
+        const a = (-45 + i * step) * Math.PI / 180;           // start top-right, then all the way round
+        n.x = Math.cos(a) * R1; n.y = Math.sin(a) * R1 * SQ;
+        nodes.push(n); edges.push({ from: centre, to: n, colour: n.colour, bend: (i % 2 ? 1 : -1) });
+        const kids = (map.branches[i].children || []).map(k => mmNode(k, 2, (k.tone && MM_TONE[k.tone]) || n.colour, fam));
+        const K = kids.length; if (!K) return;
+        let maxKW = 0, maxKH = 0; kids.forEach(k => { maxKW = Math.max(maxKW, k.w); maxKH = Math.max(maxKH, k.h); });
+        const span = Math.min(step * 0.82, 76) * Math.PI / 180;   // the children fan inside their branch's wedge
+        const dA = K > 1 ? span / (K - 1) : 0;
+        const R2 = Math.max(R1 + maxBW / 2 + maxKW / 2 + 30, K > 1 ? (maxKH + 14) / (2 * Math.sin(Math.max(dA, 0.14) / 2)) : 0);
+        kids.forEach((k, j) => {
+          const ka = a - (K > 1 ? span / 2 : 0) + j * dA;
+          const r = R2 + (j % 2 ? 24 : 0);
+          k.x = Math.cos(ka) * r; k.y = Math.sin(ka) * r * SQ;
+          nodes.push(k); edges.push({ from: n, to: k, colour: k.colour, bend: (j % 2 ? 0.7 : -0.7) });
+        });
+      });
+      // NOTHING OVERLAPS. Push each clashing pair apart on the shorter axis;
+      // the centre is pinned so the map keeps its shape.
+      for (let it = 0; it < 300; it++) {
+        let moved = false;
+        for (let i = 0; i < nodes.length; i++) for (let j = i + 1; j < nodes.length; j++) {
+          const a = nodes[i], b = nodes[j];
+          let dx = b.x - a.x, dy = b.y - a.y;
+          if (!dx && !dy) { dx = 0.7; dy = 0.7; }
+          const ox = (a.w + b.w) / 2 + 18 - Math.abs(dx), oy = (a.h + b.h) / 2 + 15 - Math.abs(dy);
+          if (ox <= 0 || oy <= 0) continue;
+          moved = true;
+          const wa = a.fixed ? 0 : (b.fixed ? 1 : 0.5), wb = b.fixed ? 0 : (a.fixed ? 1 : 0.5);
+          if (ox < oy) { const s = (dx >= 0 ? 1 : -1) * ox; a.x -= s * wa; b.x += s * wb; }
+          else { const s = (dy >= 0 ? 1 : -1) * oy; a.y -= s * wa; b.y += s * wb; }
+        }
+        if (!moved) break;
+      }
+      let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+      nodes.forEach(n => { minX = Math.min(minX, n.x - n.w / 2); maxX = Math.max(maxX, n.x + n.w / 2); minY = Math.min(minY, n.y - n.h / 2); maxY = Math.max(maxY, n.y + n.h / 2); });
+      const M = 18; minX -= M; minY -= M; maxX += M; maxY += M;
+      const W = Math.max(1, Math.round(maxX - minX)), H = Math.max(1, Math.round(maxY - minY));
+      const uid = 'mm' + (++mmUid);
+      const cols = []; edges.forEach(e => { if (cols.indexOf(e.colour) < 0) cols.push(e.colour); });
+      const defs = '<defs>' + cols.map((c, i) => '<marker id="' + uid + '-a' + i + '" markerWidth="9" markerHeight="8" refX="8.5" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M0,0 L8.5,4 L0,8 Z" fill="' + c + '"/></marker>').join('') + '</defs>';
+      const limbs = edges.map(e => {
+        const a = e.from, b = e.to;
+        const dx = b.x - a.x, dy = b.y - a.y;
+        const p0 = mmEdgePt(a, dx, dy, 2), p1 = mmEdgePt(b, -dx, -dy, 6);
+        const ex = p1.x - p0.x, ey = p1.y - p0.y; const L = Math.hypot(ex, ey) || 1;
+        const k = Math.min(L * 0.13, 34) * (e.bend || 1);
+        const cx = (p0.x + p1.x) / 2 + (-ey / L) * k, cy = (p0.y + p1.y) / 2 + (ex / L) * k;
+        return '<path d="M' + mmR(p0.x) + ',' + mmR(p0.y) + ' Q' + mmR(cx) + ',' + mmR(cy) + ' ' + mmR(p1.x) + ',' + mmR(p1.y) + '"'
+          + ' fill="none" stroke="' + e.colour + '" stroke-width="' + (a.level === 0 ? 2 : 1.4) + '" stroke-linecap="round"'
+          + ' opacity="' + (ink ? 0.8 : 0.9) + '" marker-end="url(#' + uid + '-a' + cols.indexOf(e.colour) + ')"/>';
+      }).join('');
+      const boxes = nodes.map(n => {
+        const x = n.x - n.w / 2, y = n.y - n.h / 2;
+        const rx = n.level === 0 ? 14 : 10;
+        const sw = n.level === 0 ? 2 : (n.level === 1 ? 1.4 : 1);
+        const tx = x + n.padX + n.iconW;
+        const top = n.y - (n.lines.length * n.lh) / 2 + n.lh * 0.78;
+        const words = n.lines.map((l, i) => '<text x="' + mmR(tx) + '" y="' + mmR(top + i * n.lh) + '" fill="' + textCol + '" font-family="' + n.fam + '" font-size="' + n.size + '" font-weight="' + n.weight + '">' + escHtml(l) + '</text>').join('');
+        const ic = n.icon ? '<text x="' + mmR(x + n.padX) + '" y="' + mmR(n.y + n.size * 0.36) + '" font-size="' + (n.size + 2) + '" font-family="' + n.fam + '">' + escHtml(n.icon) + '</text>' : '';
+        return '<g><title>' + escHtml((n.icon ? n.icon + ' ' : '') + n.text) + '</title>'
+          + '<rect x="' + mmR(x) + '" y="' + mmR(y) + '" width="' + mmR(n.w) + '" height="' + mmR(n.h) + '" rx="' + rx + '" fill="' + bgCol + '" stroke="' + n.colour + '" stroke-width="' + sw + '"/>'
+          + (ink ? '' : '<rect x="' + mmR(x) + '" y="' + mmR(y) + '" width="' + mmR(n.w) + '" height="' + mmR(n.h) + '" rx="' + rx + '" fill="' + n.colour + '" opacity="0.07"/>')
+          + ic + words + '</g>';
+      }).join('');
+      return '<svg class="' + (ink ? 'q-mm' : 'wb-mm') + '" viewBox="' + mmR(minX) + ' ' + mmR(minY) + ' ' + W + ' ' + H + '"'
+        + ' preserveAspectRatio="xMidYMid meet" width="100%" role="img"'
+        + ' aria-label="Mind map: ' + escHtml(map.centre.text || 'brainstorm') + '"'
+        + ' style="width:100%;height:auto;max-height:' + (ink ? 440 : 520) + 'px;display:block">'
+        + defs + limbs + boxes + '</svg>';
+    }
+    function wbMindmapHtml(lines) {
+      const map = wbMindmapParse(lines);
+      if (!map) return '';                                  // an empty map draws nothing
+      return '<div class="wb-mm-box">' + wbMindmapSvg(map, null) + '</div>';
     }
     // Build-up: each non-empty line is a piece; the first shows, the rest wait
     // for 'Next piece →' (or 'Show all'). Q's ask, 18 Aug: "show a paragraph
@@ -6147,6 +6357,7 @@
           const lang = (fenceOpen[2] || '').toLowerCase(); const inner = []; let j = i + 1;
           while (j < lines.length && !/^\s*(```|~~~)\s*$/.test(lines[j])) { inner.push(lines[j]); j++; }
           if (lang === 'diagram' || lang === 'flow') out.push(wbDiagramHtml(inner));
+          else if (lang === 'mindmap' || lang === 'brainstorm' || lang === 'map') out.push(wbMindmapHtml(inner));
           else if (lang === 'build' || lang === 'buildup') out.push(wbBuildHtml(inner));
           else out.push('<pre class="wb-code">' + escHtml(inner.join(String.fromCharCode(10))) + '</pre>');
           i = j; continue;
@@ -6351,9 +6562,10 @@
           flushPara(); flushList();
           const lang = (fence[2] || '').toLowerCase(); const inner = []; let j = i + 1;
           while (j < lines.length && !/^\s*(```|~~~)\s*$/.test(lines[j])) { inner.push(lines[j]); j++; }
-          // Ticks choose LINES; a table or a diagram on the same display still
-          // goes (Sarah, 19 Aug: "it only takes the ticks").
-          if (lang === 'diagram' || lang === 'flow') blocks.push({ kind: 'diagram', lines: inner.filter(x => x.trim()) });
+          // Ticks choose LINES; a table, a diagram or a mind map on the same display
+          // still goes (Sarah, 19 Aug: "it only takes the ticks").
+          if (lang === 'mindmap' || lang === 'brainstorm' || lang === 'map') { if (wbMindmapParse(inner)) blocks.push({ kind: 'mindmap', lines: inner.slice() }); }
+          else if (lang === 'diagram' || lang === 'flow') blocks.push({ kind: 'diagram', lines: inner.filter(x => x.trim()) });
           else if (!anyTicked && (lang === 'build' || lang === 'buildup' || !lang)) inner.map(clean).filter(Boolean).forEach(t => blocks.push({ kind: 'text', text: t }));
           i = j; continue;
         }
@@ -6394,12 +6606,25 @@
         parts.forEach((t, k) => {
           if (k % 2 === 1) { const a = document.createElement('span'); a.className = 'q-dg-a'; a.textContent = (t === '<->' || t === '↔') ? '↔' : ((t === '<-' || t === '←') ? '←' : '→'); row.appendChild(a); return; }
           if (!t) return;
-          const key = Object.keys(WB_CALLOUT).find(x => t.startsWith(x));
-          const n = document.createElement('span'); n.className = 'q-dg-n' + (key ? ' ' + WB_CALLOUT[key] : ''); n.textContent = key ? t.slice(key.length).trim() : t; row.appendChild(n);
+          const box = (one) => {
+            const key = Object.keys(WB_CALLOUT).find(x => one.startsWith(x));
+            const n = document.createElement('span'); n.className = 'q-dg-n' + (key ? ' ' + WB_CALLOUT[key] : ''); n.textContent = key ? one.slice(key.length).trim() : one; return n;
+          };
+          const fan = k > 0 ? t.split(/\s*,\s*/).map(x => x.trim()).filter(Boolean) : [t];
+          if (fan.length > 1) { const g = document.createElement('span'); g.className = 'q-dg-fan'; fan.forEach(one => g.appendChild(box(one))); row.appendChild(g); }
+          else row.appendChild(box(t));
         });
         dg.appendChild(row);
       }
       fig.appendChild(dg); return fig;
+    }
+    // The SAME map on her page — in document ink: no fills, no neumorphic
+    // anything, the branch colours as line work and the document's own serif.
+    function docMindmapElement(lines) {
+      const map = wbMindmapParse(lines); if (!map) return null;
+      const fig = document.createElement('div'); fig.className = 'q-figure'; fig.setAttribute('contenteditable', 'false');
+      fig.innerHTML = wbMindmapSvg(map, { ink: true });
+      return fig;
     }
     function listElementFrom(b) {
       const el = document.createElement(b.ordered ? 'ol' : 'ul'); el.className = 'q-list';
@@ -6408,6 +6633,7 @@
     function blockElement(b) {
       if (b.kind === 'table') return tableElementFrom(b);
       if (b.kind === 'diagram') return docDiagramElement(b.lines);
+      if (b.kind === 'mindmap') return docMindmapElement(b.lines) || document.createElement('div');
       if (b.kind === 'list') return listElementFrom(b);
       const d = document.createElement('div'); d.textContent = b.text; return d;
     }
@@ -10717,7 +10943,7 @@
     loadProjects().then(restoreSession, restoreSession).then(() => { try { maybeOfferTour(); } catch (_) {} }, () => {});
     // Test hooks (no data, no secrets): lets the harness exercise the page-side
     // helpers without a paid call. Harmless in production.
-    window.__qwriterTest = { startTour, tourStep, stopTour, maybeOfferTour, paintQNotes, addQNotes, addQTabs, addStickies, renderStickies, snapshotDoc, undoDoc, presentStep, renderBoard, renderWhiteboard, startedAsk, showToolPop, findInDoc, replaceInDoc, appendReference, docPlainText, splitCheck: (t) => endsSentence(t), runEditPass, checkCurrentSentence, showEditItem, state: () => state, currentEditText, partParagraphs, setBrief, storyPointsHtml, renderInlineDots, termsForBoard, setCoach, bandListHtml, showEditItem, openEditPanel, renderEditPanel, edState: () => edProof, edSetProof: (p2) => { edProof = p2; renderEditPanel(); edPaint(); }, sayMe, renderThread, syncWorkArea, showPanel, revealPanel, runTidyPasses, applyTidyItem, mergeWalk, refreshSourceDigests, sourceDigestsHtml, markAndFix, walkItemsFromMark, renderMarkPanel, markStats, gradeWord, notesSections, notesCount, notesCopyText, renderNotesPanel, openNotesPanel, bibSorted, bibCopyText, renderBibPanel, openBibPanel, removeReference, removeReferenceFromDoc, sendTextToPage, jumpToSentence, runAutoCite, appendReference, noteReference, wbTablesFromSrc, tableElementFrom, sendBlockToPage, wbSendText, wbBlocksFromSrc, sendBlocksToPage, sendStickyToPage, blockElement };
+    window.__qwriterTest = { startTour, tourStep, stopTour, maybeOfferTour, paintQNotes, addQNotes, addQTabs, addStickies, renderStickies, snapshotDoc, undoDoc, presentStep, renderBoard, renderWhiteboard, startedAsk, showToolPop, findInDoc, replaceInDoc, appendReference, docPlainText, splitCheck: (t) => endsSentence(t), runEditPass, checkCurrentSentence, showEditItem, state: () => state, currentEditText, partParagraphs, setBrief, storyPointsHtml, renderInlineDots, termsForBoard, setCoach, bandListHtml, showEditItem, openEditPanel, renderEditPanel, edState: () => edProof, edSetProof: (p2) => { edProof = p2; renderEditPanel(); edPaint(); }, sayMe, renderThread, syncWorkArea, showPanel, revealPanel, runTidyPasses, applyTidyItem, mergeWalk, refreshSourceDigests, sourceDigestsHtml, markAndFix, walkItemsFromMark, renderMarkPanel, markStats, gradeWord, notesSections, notesCount, notesCopyText, renderNotesPanel, openNotesPanel, bibSorted, bibCopyText, renderBibPanel, openBibPanel, removeReference, removeReferenceFromDoc, sendTextToPage, jumpToSentence, runAutoCite, appendReference, noteReference, wbTablesFromSrc, tableElementFrom, sendBlockToPage, wbSendText, wbBlocksFromSrc, sendBlocksToPage, sendStickyToPage, blockElement, wbMindmapParse, wbMindmapSvg, wbMindmapHtml, docMindmapElement, wbDiagramHtml };
 
 
     // (The old per-card drag code lived here — every panel now goes through makePanel above.)
