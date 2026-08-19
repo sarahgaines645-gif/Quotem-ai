@@ -245,6 +245,22 @@ async function callFast(systemPrompt, userPrompt, opts = {}) {
     return callQ(systemPrompt, userPrompt, rest);   // callQ applies withHouseStyle itself - wrapping here would say it twice
 }
 
+// ── TEST SEAM (19 Aug 2026) ────────────────────────────────────────────────
+// The mark is now an ORCHESTRATION — an overall call plus one call per
+// criterion, in parallel, off a shared cached prompt. Orchestration is
+// exactly the kind of thing that breaks silently and the kind of thing you
+// cannot afford to verify by spending money on a real 4,700-word mark every
+// time you touch it. tests/writer-mark-split.test.js swaps the model layer
+// out here and proves the wiring — the fan-out, the concurrency ceiling, the
+// byte-identical prompts, the merge, the failure paths — for nothing.
+// NOTHING else in this module goes through this seam; the live path is
+// unchanged when no stub is set.
+let _accurateStub = null;
+function __setAccurateForTests(fn) { _accurateStub = typeof fn === 'function' ? fn : null; }
+function markCall(systemPrompt, userPrompt, opts) {
+    return _accurateStub ? _accurateStub(systemPrompt, userPrompt, opts) : callAccurate(systemPrompt, userPrompt, opts);
+}
+
 async function analyseTask(taskText) {
     const system = `You analyse assignment briefs and writing tasks to extract structure for a writing coach.
 
@@ -837,6 +853,74 @@ const MARK_SCHEMA = {
     },
 };
 
+// ── THE MARK IS SEVERAL SMALL CALLS, NOT ONE ENORMOUS ONE (19 Aug 2026) ────
+// Measured on Sarah's 7HR02 (CIPD Level 7, 4,713 words, four criteria) with
+// the whole mark as ONE call:
+//   effort 'medium', 20,000 cap → the model spent 9,592 of its 10,165 output
+//     tokens THINKING and then wrote a hollow answer (perCriterion [],
+//     critique [], ladder [], loMarks [{reason:'placeholder'}]) — stop reason
+//     end_turn, so nothing threw; a second run hit the cap exactly and threw
+//     'response truncated'.
+//   effort 'high', 32,000 cap → correct and complete, but 26,577 output
+//     tokens in 262 SECONDS (19,231 of them thinking).
+// The input was never the problem: 13,906 tokens came straight from the
+// prompt cache on a repeat run. The bottleneck is OUTPUT — one call writing
+// ~26k tokens — which is also why a longer essay ran past the 420s the page
+// waits and Sarah's live report was 'the markings failing and took forever'.
+//
+// So the mark is now what a marker actually does: read the whole thing once
+// for the grade (ONE overall call), then mark each question (ONE small call
+// per criterion, all in flight together). Each writes 3-5k tokens instead of
+// 26k, and the questions are written at the same time instead of one after
+// another. The route, the job shape and the returned object are unchanged.
+//
+// CACHING — why every per-criterion system prompt is BYTE-IDENTICAL:
+// q-claude.js puts cache_control 'ephemeral' on the SYSTEM block only. Same
+// bytes ⇒ same cache prefix, so the first per-criterion call to land writes
+// the brief + the published standard + the model essay into the cache and
+// every one after it (the retry, and her next mark inside the cache window)
+// reads it at a tenth of the price. That is why the criterion being marked is
+// NEVER named in the system prompt: which criterion, and its expectations, go
+// in the USER message, which is not cached.
+const MARK_PARALLEL = 4;      // a brief can have ten or more criteria; four in flight is fast without being a rate limit
+const MAX_PART_CRITIQUE = 3;  // per criterion — MAX_CRITIQUE still caps the merged list
+
+// The OVERALL half of the mark: everything that is about the whole draft.
+// Field definitions by reference from MARK_SCHEMA — one source of truth.
+const OVERALL_MARK_SCHEMA = {
+    type: 'object', additionalProperties: false,
+    required: ['overall', 'weakestCriterionId'],
+    properties: {
+        overall: MARK_SCHEMA.properties.overall,
+        weakestCriterionId: MARK_SCHEMA.properties.weakestCriterionId,
+    },
+};
+
+// ONE question's mark: exactly one perCriterion entry, plus that question's
+// own critique items. "criterionId" is dropped from both — we asked for a
+// named criterion, so the id is stamped in code and can never come back
+// wrong (the C1…C6 mismatch of 19 Aug cannot happen on this path at all).
+const CRITERION_MARK_SCHEMA = (() => {
+    const entry = MARK_SCHEMA.properties.perCriterion.items;
+    const entryProps = { ...entry.properties };
+    delete entryProps.criterionId;
+    const crit = MARK_SCHEMA.properties.critique.items;
+    const critProps = { ...crit.properties };
+    delete critProps.criterionId;
+    return {
+        type: 'object', additionalProperties: false,
+        required: entry.required.filter(k => k !== 'criterionId').concat(['critique']),
+        properties: {
+            ...entryProps,
+            critique: {
+                type: 'array',
+                description: 'MARK & FIX for THIS criterion only: the student\'s sentences under it that fall short of the brick they should be voicing, in document order. AT MOST 3 — the other criteria are contributing their own at the same time and the student works through the merged list one at a time. Skip sentences that already match; empty if this part is genuinely fine or is not attempted.',
+                items: { type: 'object', additionalProperties: false, required: crit.required.filter(k => k !== 'criterionId'), properties: critProps },
+            },
+        },
+    };
+})();
+
 /** markLikeMarker — the whole draft against the rubric, per criterion. */
 // The grade scheme line for the markers. "as the brief says" (the default,
 // 17 Aug — a Level 7 CIPD brief was being graded "Grade 2" on GCSE 9–1) means:
@@ -846,87 +930,115 @@ function schemeLine(gradeScheme) {
     if (!g || /as the brief says/i.test(g)) return 'Grade scheme: the one the brief itself states (its own band / grade words). If the brief names none, give bands only and leave "label" empty — never invent a grade label from another scheme.';
     return `Grade scheme: ${g}.`;
 }
-async function markLikeMarker({ brief, essay, docText, gradeScheme, plans, taskText }) {
-    if (!brief || !Array.isArray(brief.criteria) || !brief.criteria.length) throw new Error('No brief yet — upload the task first.');
-    if (!String(docText || '').trim()) throw new Error('There is nothing on the page to mark yet.');
-    // THE PUBLISHED STANDARD (18 Aug): when the brief belongs to a scheme we hold
-    // verbatim (CIPD Level 7 for now — plugins/mark-schemes.js), the marker marks
-    // against the awarding body's own grid and arithmetic, not a generic sense
-    // of "Merit". The arithmetic is then re-done in code below: code is truth.
-    const scheme = detectMarkScheme({ brief, gradeScheme, taskText });
-    const system = withMission(`You are the examiner for this assignment (the final marking pass — the one place plain marker language is allowed, still phrased plainly to the student). Mark the student's draft strictly against the brief and its criteria, the way the real marker will. ${scheme ? 'Grade scheme: ' + scheme.name + ' — ' + scheme.labels.join(' / ') + ' (the standard below governs).' : schemeLine(gradeScheme)}
-${scheme ? '\n' + scheme.promptBlock() + '\n' : ''}
+// The half of the marking prompt BOTH calls share, verbatim from the single
+// call these two replace. In one place so the prompts cannot drift apart.
+function markPreamble(scheme, gradeScheme) {
+    return `${scheme ? 'Grade scheme: ' + scheme.name + ' — ' + scheme.labels.join(' / ') + ' (the standard below governs).' : schemeLine(gradeScheme)}
+${scheme ? '\n' + scheme.promptBlock() + '\n' : ''}`;
+}
+// The brief, the model answer and every part's expectations — the big stable
+// block, identical in both prompts and across every per-criterion call, so it
+// is the thing the prompt cache actually holds.
+function markContext(brief, essay, plans) {
+    return `THE BRIEF
+${briefForPrompt(brief)}
+${essay ? '\n' + essayForPrompt(essay).slice(0, 14000) : ''}
+${plans ? Object.values(plans).map(p => p && p.criterionId ? '[' + p.criterionId + '] ' + expectationsForPrompt(p) : '').filter(Boolean).join('\n') : ''}`;
+}
+
+// CALL 1 — the whole draft, once: the grade it would get if handed in as it
+// is, what stays, what is missing, the ladder up, and (where the standard has
+// them) the learning-outcome marks and the total. No per-question marking
+// here; that is call 2..n, running at the same time.
+function overallMarkSystem({ brief, essay, plans, scheme, gradeScheme }) {
+    return withMission(`You are the examiner for this assignment (the final marking pass — the one place plain marker language is allowed, still phrased plainly to the student). Mark the student's draft as a WHOLE, strictly against the brief and its criteria, the way the real marker will. ${markPreamble(scheme, gradeScheme)}
 
 Rules:
-- Every criterion gets a band: top / mid / low / missing (missing = the document does not address it at all).
+- THIS IS THE OVERALL MARK ONLY. Each criterion is being marked by its own pass at the same moment — do not write the per-question marks here. Judge the submission.
+- Everything you say must come from THEIR text.
+- Overall band = what this draft would get if it were handed in as it is (unanswered questions included — that is the truth of a submission), and "answeredCount" says how many criteria are genuinely attempted, so the student can see the overall grade is dragged by what is not written yet rather than by the quality of what is.
+- SAY THE GRADE IN THEIR WORDS, NOT IN BANDS. "label" is the grade the scheme actually uses — Pass / Merit / Distinction, Grade 7, 2:1. A student marked on Pass/Merit/Distinction must never be told "lower band"; they are told "Pass" and what stops it being a Merit.
+- AND SAY THE WHOLE LADDER. "ladder" is EVERY grade above the one you have given, in order to the top of the scheme, and for each rung the concrete things this draft still needs for it (cumulative — a Distinction rung assumes the Merit rung is done). The student reads it as: I am here; to get X I do these; to get Y, these as well. Never a description of what a grade means — always what THIS draft must add, and in which part.
+- AND SAY HOW TO CLIMB. "nextLabel" is the grade immediately above the one you have given; "toNext" is the two or three concrete things that would get THIS draft there — the idea to name, the evidence to find, the part to answer properly, the comparison to make. A student must never be told the grade without being told the way up.
+- "strong" and "missing" name actual things in their draft, six to fourteen words each, no preamble. "summary" is ONE sentence: the single biggest reason this is not the grade above.
+- "weakestCriterionId" is the criterion to send them back to first — use the brief's own id for it, exactly as written above.
+
+${markContext(brief, essay, plans)}`);
+}
+
+// CALLS 2..n — ONE criterion each, all in flight together. BYTE-IDENTICAL for
+// every criterion (see the caching note above): which criterion is being
+// marked is in the user message, never here.
+function criterionMarkSystem({ brief, essay, plans, scheme, gradeScheme }) {
+    return withMission(`You are the examiner for this assignment (the final marking pass — the one place plain marker language is allowed, still phrased plainly to the student). You are marking ONE criterion of it — the one named in the message below — strictly against the brief and its criteria, the way the real marker will. ${markPreamble(scheme, gradeScheme)}
+
+Rules:
+- The criterion named in the message gets a band: top / mid / low / missing (missing = the document does not address it at all). Say nothing about the other criteria — they are being marked at the same moment by the same examiner.
+- THE WHOLE DRAFT IS IN THE MESSAGE, not only the part that looks like this criterion's. Students answer where they like, under any heading or none: judge this criterion on everything in the draft that speaks to it.
 - Evidence must be from THEIR text — quote a phrase.
 - THE MARK TEACHES OR IT IS USELESS. This student has NOT studied the subject — that is the whole reason they are here. Every item of "addNext" gives them: the gap in plain English (starting from what they did write), the idea itself TAUGHT in two or three everyday sentences, the exact instruction (how much to write, where, tied to their own case, with the source), and one model sentence about a DIFFERENT case they can adapt. Marker language with no teaching in it ("needs the deskilling / neo-Taylorism framing named properly") is a failure, however accurate it is.
 - "got" is what they have actually done, in plain English — the mark opens with it. Never flattery, never a mark-scheme phrase.
-- "missingForTop" is the exact gap for THAT criterion — concrete: the model, example, evaluation, comparison, or evidence the top band expects and they have not given. Not "develop further".
+- "missingForTop" is the exact gap for THIS criterion — concrete: the model, example, evaluation, comparison, or evidence the top band expects and they have not given. Not "develop further".
 - "nextQuestion" is the one question a tutor would ask to pull that missing piece out of the student. Never contains the answer. It is worded for a student who has NOT read the brief:
 ${PLAIN_QUESTION_RULE}
 
 ${LEADING_QUESTION_RULE}
-- THE MARK IS PER QUESTION FIRST. Every criterion gets its own grade in their scheme ("label") — that is the mark they act on. A criterion with nothing written for it is band "missing": it is NOT graded, it is "not started", and its "missingForTop" says what it needs to become an answer.
-- Overall band = what this draft would get if it were handed in as it is (unanswered questions included — that is the truth of a submission), and "answeredCount" says how many criteria are genuinely attempted, so the student can see the overall grade is dragged by what is not written yet rather than by the quality of what is.
-- SAY THE GRADE IN THEIR WORDS, NOT IN BANDS. "label" per part and overall is the grade the scheme actually uses — Pass / Merit / Distinction, Grade 7, 2:1. A student marked on Pass/Merit/Distinction must never be told "lower band"; they are told "Pass" and what stops it being a Merit.
-- AND SAY THE WHOLE LADDER. "ladder" is EVERY grade above the one you have given, in order to the top of the scheme, and for each rung the concrete things this draft still needs for it (cumulative — a Distinction rung assumes the Merit rung is done). The student reads it as: I am here; to get X I do these; to get Y, these as well. Never a description of what a grade means — always what THIS draft must add, and in which part.
-- AND SAY HOW TO CLIMB. "nextLabel" is the grade immediately above the one you have given; "toNext" is the two or three concrete things that would get THIS draft there — the idea to name, the evidence to find, the part to answer properly, the comparison to make. A student must never be told the grade without being told the way up.
-- "voicedBrickIds" per criterion: the bricks of the model answer this draft GENUINELY voices (point made in their words with its reason / example). This is the honest tally the student's visible score is rebuilt from — a listed item is not a voiced brick; a claim without its reason is not a voiced brick.
-- EXPECTATIONS per part (below, where a plan exists): report per criterion which expected terms the draft COVERS ("termsUsed" — the idea is on the page doing work; it does not matter whether she used that word, her own wording or a plain-English explanation counts just as much; a bare label with no idea behind it does not) and which requirements it satisfies ("requirementsMet"); in the critique, "needs" = the requirement kinds a sentence is missing.
-- MARK & FIX: "critique" is the sentence-by-sentence fix list the student will work through straight after the mark. Weakest criterion first. For each sentence: "missing" (one plain line, coach voice, what is missing), "fix" (the concrete thing to go and do — find one piece of evidence, name the idea, give the example — never the words themselves), the brick it should be voicing, and the tools that lead them there. Copy each sentence VERBATIM from the numbered draft.
+- THE MARK IS PER QUESTION FIRST. This criterion gets its own grade in their scheme ("label") — that is the mark they act on. A criterion with nothing written for it is band "missing": it is NOT graded, it is "not started", and its "missingForTop" says what it needs to become an answer.
+- SAY THE GRADE IN THEIR WORDS, NOT IN BANDS. "label" is the grade the scheme actually uses — Pass / Merit / Distinction, Grade 7, 2:1 — for what THIS part would earn on its own. A student marked on Pass/Merit/Distinction must never be told "lower band"; they are told "Pass" and what stops it being a Merit.
+- "voicedBrickIds": the bricks of the model answer this draft GENUINELY voices under this criterion (point made in their words with its reason / example). This is the honest tally the student's visible score is rebuilt from — a listed item is not a voiced brick; a claim without its reason is not a voiced brick.
+- EXPECTATIONS (below the criterion, where a plan exists): report which expected terms the draft COVERS ("termsUsed" — the idea is on the page doing work; it does not matter whether she used that word, her own wording or a plain-English explanation counts just as much; a bare label with no idea behind it does not) and which requirements it satisfies ("requirementsMet"); in the critique, "needs" = the requirement kinds a sentence is missing.
+- MARK & FIX: "critique" is this criterion's share of the sentence-by-sentence fix list the student will work through straight after the mark — at most three sentences, the weakest first. For each: "missing" (one plain line, coach voice, what is missing), "fix" (the concrete thing to go and do — find one piece of evidence, name the idea, give the example — never the words themselves), the brick it should be voicing, and the tools that lead them there. Copy each sentence VERBATIM from the numbered draft.
 
-THE BRIEF
-${briefForPrompt(brief)}
-${essay ? '\n' + essayForPrompt(essay).slice(0, 14000) : ''}
-${plans ? Object.values(plans).map(p => p && p.criterionId ? '[' + p.criterionId + '] ' + expectationsForPrompt(p) : '').filter(Boolean).join('\n') : ''}`);
-    // The reference list is NOT sentences. splitSentences collapses newlines and
-    // cuts at every '.', so 'UK Parliament (n.d.) How does a bill become a law?
-    // Available at: https://www.parliament.uk/...' reached the marker as four
-    // numbered fragments and it said 'reference list is broken across several
-    // lines' about a perfectly good reference (the demo mark, 19 Aug). The body
-    // is numbered sentences; the references go after it, one entry per line.
+${markContext(brief, essay, plans)}`);
+}
+
+// The draft, numbered, once — the same string in every call of a mark.
+// The reference list is NOT sentences. splitSentences collapses newlines and
+// cuts at every '.', so 'UK Parliament (n.d.) How does a bill become a law?
+// Available at: https://www.parliament.uk/...' reached the marker as four
+// numbered fragments and it said 'reference list is broken across several
+// lines' about a perfectly good reference (the demo mark, 19 Aug). The body
+// is numbered sentences; the references go after it, one entry per line.
+function draftForMarkPrompt(docText) {
     const { body: draftBody, refs: draftRefs } = splitDraftRefs(docText);
     const sentences = splitSentences(draftBody).map(x => x.trim()).filter(x => x.length > 2).slice(0, 400);
-    const user = `STUDENT'S DRAFT (numbered sentences, in order):\n${sentences.map((x, i) => `${i + 1}. ${x}`).join('\n')}`
-        + (draftRefs.length ? `\n\nREFERENCE LIST (one entry per line — judge it as a list, not as sentences; a single entry that runs long is still one entry):\n${draftRefs.map(x => '- ' + x).join('\n')}` : '')
-        + `\n\nMark it, then the critique.`;
-    // Sarah, 16 Aug, live: "it keeps saying marking failed" — GET
-    // /writer/job/mark 502, over and over, on a long dictated draft.
-    //
-    // The mark is the biggest thing this app asks a model to write, and the
-    // budget has to cover BOTH the thinking and the answer (q-claude.js:39 —
-    // "thinking shares max_tokens with the answer"). The answer echoes each
-    // criticised sentence back VERBATIM, and her sentences are long spoken
-    // ones, so a 25-sentence critique plus medium-effort thinking ran past
-    // 9,000 tokens; q-claude.js:75 then threw "response truncated", the
-    // Together fallback fell over too, and the job came back 502. Nothing was
-    // wrong with her draft — the mark simply could not fit in its own budget.
-    //
-    // So: real headroom, and a critique capped at ten sentences (she works
-    // through them one at a time regardless — a longer list is unreadable AND
-    // the thing that overflows).
-    // The mark is a background job the page polls — it may take longer than the
-    // 120s cap every small call has. A whole essay against every criterion, with
-    // the taught gaps and the ladder, is one long answer (Sarah, 18 Aug, live:
-    // "The marking timed out after 120s" on a real assignment). Five minutes.
-    // 19 Aug, the 7HR02 re-mark (4,700 words, CIPD L7): at effort 'medium' the
-    // model THOUGHT for 9,592 of its 10,165 output tokens and then wrote a
-    // hollow answer — perCriterion [], critique [], ladder [], loMarks
-    // [{reason:'placeholder'}] — which the page showed as 'not started ×4'.
-    // Stop reason end_turn, so nothing threw. A whole Level 7 essay against the
-    // published grid needs the room to think AND answer: high effort, 32k, and
-    // a hollow answer is treated as the failure it is (retried once, then said).
-    const markOpts = { maxTokens: 32000, schema: MARK_SCHEMA, timeoutMs: 420_000 };   // the 7HR02 mark took 261s at high effort; the page waits 420s then says 'finishing in the background'
-    let r = await callAccurate(system, user, { ...markOpts, effort: 'high' });
-    if (hollowMark(r)) {
-        console.warn('[writer/mark] hollow answer at high effort (perCriterion ' + ((r && r.perCriterion) || []).length + ', critique ' + ((r && r.critique) || []).length + ') — retrying once at max');
-        r = await callAccurate(system, user, { ...markOpts, effort: 'max' });
-        if (hollowMark(r)) throw new Error('The mark came back incomplete twice (the marker graded nothing per question) — try again in a minute.');
-    }
-    // CODE IS TRUTH for the arithmetic: on a per-outcome scheme the unit result
-    // follows the published table from the LO marks, whatever label the model
-    // wrote. Logged when they differ.
+    return `STUDENT'S DRAFT (numbered sentences, in order):\n${sentences.map((x, i) => `${i + 1}. ${x}`).join('\n')}`
+        + (draftRefs.length ? `\n\nREFERENCE LIST (one entry per line — judge it as a list, not as sentences; a single entry that runs long is still one entry):\n${draftRefs.map(x => '- ' + x).join('\n')}` : '');
+}
+
+// The user message of a per-criterion call: the varying half. Which criterion,
+// its own expectations, then the draft. Never in the system prompt — that is
+// what keeps the cached prefix identical for all of them.
+function criterionMarkUser(crit, plans, draft) {
+    const plan = plans ? plans[String((crit && crit.id) || '').replace(/\s+/g, '')] : null;
+    const exp = expectationsForPrompt(plan);
+    return `THE CRITERION YOU ARE MARKING: [${crit.id}]${crit.label ? ` "${crit.label}" —` : ''} ${crit.text}${crit.weight ? ` (${crit.weight})` : ''}`
+        + (exp ? '\n' + exp : '')
+        + `\n\n${draft}\n\nMark THIS criterion, then its critique — at most three of their sentences.`;
+}
+
+// At most `limit` calls in flight. A brief can have ten or more criteria and
+// firing all of them at once is how you get rate-limited, not how you get
+// fast. Results come back in the order the items were given, whatever order
+// they finished in, so the critique keeps document order.
+async function inFlight(items, limit, fn) {
+    const out = new Array(items.length);
+    let next = 0;
+    const worker = async () => {
+        for (;;) {
+            const i = next++;
+            if (i >= items.length) return;
+            out[i] = await fn(items[i], i);
+        }
+    };
+    await Promise.all(new Array(Math.max(1, Math.min(limit, items.length))).fill(0).map(worker));
+    return out;
+}
+
+// CODE IS TRUTH for the arithmetic: on a per-outcome scheme the unit result
+// follows the published table from the LO marks, whatever label the model
+// wrote. Logged when they differ. (Lifted unchanged from the single call.)
+function applySchemeArithmetic(r, scheme) {
     try {
         // The model graded every question but skipped the per-outcome marks
         // (Sarah's live mark, 18 Aug: loMarks [] → no LO row, no arithmetic).
@@ -950,6 +1062,82 @@ ${plans ? Object.values(plans).map(p => p && p.criterionId ? '[' + p.criterionId
             }
         }
     } catch (e) { console.warn('[writer/mark] scheme arithmetic: ' + e.message); }
+    return r;
+}
+
+const MARK_INCOMPLETE = 'The mark came back incomplete twice (the marker graded nothing per question) — try again in a minute.';
+
+async function markLikeMarker({ brief, essay, docText, gradeScheme, plans, taskText }) {
+    if (!brief || !Array.isArray(brief.criteria) || !brief.criteria.length) throw new Error('No brief yet — upload the task first.');
+    if (!String(docText || '').trim()) throw new Error('There is nothing on the page to mark yet.');
+    // THE PUBLISHED STANDARD (18 Aug): when the brief belongs to a scheme we hold
+    // verbatim (CIPD Level 7 for now — plugins/mark-schemes.js), the marker marks
+    // against the awarding body's own grid and arithmetic, not a generic sense
+    // of "Merit". The arithmetic is then re-done in code below: code is truth.
+    const scheme = detectMarkScheme({ brief, gradeScheme, taskText });
+    const draft = draftForMarkPrompt(docText);
+    // Small calls, real headroom, and a ceiling well under the 420s the page
+    // waits: 12,000 tokens is three times what a 3-5k answer needs, and 180s
+    // is twice the longest of these seen. Never response_format — the schema
+    // goes through callAccurate's `schema` option (the DeepSeek {} trap).
+    const small = { maxTokens: 12000, timeoutMs: 180_000 };
+    const t0 = Date.now();
+
+    // ── 1. THE OVERALL MARK ────────────────────────────────────────────────
+    const overallSystem = overallMarkSystem({ brief, essay, plans, scheme, gradeScheme });
+    const overallUser = `${draft}\n\nMark the draft as a whole.`;
+    let head = await markCall(overallSystem, overallUser, { ...small, schema: OVERALL_MARK_SCHEMA, effort: 'medium' });
+    if (hollowMark(head)) {
+        console.warn('[writer/mark] the overall mark came back hollow at medium effort — retrying once at high');
+        head = await markCall(overallSystem, overallUser, { ...small, schema: OVERALL_MARK_SCHEMA, effort: 'high' });
+        if (hollowMark(head)) throw new Error(MARK_INCOMPLETE);
+    }
+    const overallMs = Date.now() - t0;
+
+    // ── 2. EVERY QUESTION, AT THE SAME TIME ────────────────────────────────
+    // One criterion falling over does NOT lose the mark: it is logged and left
+    // out, and normaliseMark fills it as "nothing addresses this yet" exactly
+    // as it always has for a criterion the model skipped.
+    const criterionSystem = criterionMarkSystem({ brief, essay, plans, scheme, gradeScheme });
+    const t1 = Date.now();
+    const markParts = (effort) => inFlight(brief.criteria, MARK_PARALLEL, async (c) => {
+        const started = Date.now();
+        try {
+            const one = await markCall(criterionSystem, criterionMarkUser(c, plans, draft), { ...small, schema: CRITERION_MARK_SCHEMA, effort });
+            if (!one || typeof one !== 'object' || !one.band) throw new Error('no band came back for it');
+            const { critique: items, ...entry } = one;
+            entry.criterionId = c.id;   // we asked for this criterion; the id is ours, not the model's
+            return {
+                entry,
+                critique: (Array.isArray(items) ? items : []).slice(0, MAX_PART_CRITIQUE).map(it => ({ ...it, criterionId: c.id })),
+                ms: Date.now() - started,
+            };
+        } catch (e) {
+            console.warn('[writer/mark] criterion ' + c.id + ' failed: ' + e.message);
+            return null;
+        }
+    });
+    let parts = await markParts('medium');
+    if (!parts.some(Boolean)) {
+        console.warn('[writer/mark] every question failed at medium effort — one retry at high');
+        parts = await markParts('high');
+        if (!parts.some(Boolean)) throw new Error(MARK_INCOMPLETE);
+    }
+    const got = parts.filter(Boolean);
+    const secs = (ms) => (ms / 1000).toFixed(0);
+    console.log(`[writer/mark] overall ${secs(overallMs)}s · ${got.length} parts in ${secs(Date.now() - t1)}s (max ${secs(Math.max(0, ...got.map(p => p.ms)))}s) · total ${secs(Date.now() - t0)}s`);
+
+    // ── 3. MERGE into the shape normaliseMark has always been given ────────
+    // The critique is concatenated in the brief's own order and NOT sorted
+    // here: normaliseMark sorts it weakest band first, document order within,
+    // and caps it at MAX_CRITIQUE. Two sorts would fight.
+    const r = {
+        overall: head.overall,
+        perCriterion: got.map(p => p.entry),
+        weakestCriterionId: head.weakestCriterionId,
+        critique: got.flatMap(p => p.critique),
+    };
+    applySchemeArithmetic(r, scheme);
     return normaliseMark(r, brief, essay, plans, scheme);
 }
 
@@ -1499,10 +1687,19 @@ const EDIT_SCHEMA = {
 // answers) is not a mark — it is the model running out of room. Never saved.
 function hollowMark(r) {
     if (!r || !r.overall) return true;
-    const per = Array.isArray(r.perCriterion) ? r.perCriterion : [];
-    const answered = Number(r.overall.answeredCount || 0);
-    if (!per.length && answered > 0) return true;
-    if ((r.overall.loMarks || []).some(l => /placeholder|tbd|todo/i.test(String((l && l.reason) || '')))) return true;
+    const o = r.overall;
+    if ((o.loMarks || []).some(l => /placeholder|tbd|todo/i.test(String((l && l.reason) || '')))) return true;
+    // THE OVERALL CALL ON ITS OWN (19 Aug): the questions have their own calls
+    // now, so a result with no perCriterion key at all is the overall half and
+    // must be judged on its own contents — hollow when none of the things a
+    // mark is made of came back. (An empty perCriterion ARRAY still means what
+    // it always did, below.)
+    if (!Array.isArray(r.perCriterion)) {
+        return !(String(o.summary || '').trim() || (o.strong || []).length || (o.missing || []).length
+            || String(o.toNext || '').trim() || (o.ladder || []).length || (o.loMarks || []).length);
+    }
+    const answered = Number(o.answeredCount || 0);
+    if (!r.perCriterion.length && answered > 0) return true;
     return false;
 }
 // Sentences, the way a reader sees them — NOT cut at every full stop. The old
@@ -3065,6 +3262,7 @@ function ukPolishResponse(value, key, parentKey) {
 
 module.exports = {
     splitSentences, splitDraftRefs, hollowMark,
+    __setAccurateForTests,   // the mark's orchestration is proved without a paid call (19 Aug)
     ukPolishResponse, ukText, UK_LINE, PLAIN_QUESTION_RULE, withHouseStyle, plainLabel, capWords, capSentences, parseWeight, termCanon,
     TUTOR_MISSION, WHY_THE_GAME, GAME_RULE, COACH_VOICE, MISSION_BLOCK, withMission, BRICK_LOOP_RULE, TO_THE_POINT, MAX_CRITIQUE,
     toolHelp, checkSentence, matchScore, EDIT_TOOLS, TOOL_SCHEMA, CHECK_SCHEMA, proofread, PROOF_KINDS, chatAnswer, CHAT_SCHEMA, judgeCiteCandidates,
@@ -3080,5 +3278,5 @@ module.exports = {
     // Phase 3 — the coach with the answer in his head
     probe, markLikeMarker, markPart, digestSource, extractScenario, assembleFromDraft, userFacingCause, normaliseBrief, briefForPrompt,
     writeModelEssay, essayForPrompt, allBrickIds, coverageFromBricks, editPass, splitSentences,
-    BRIEF_SCHEMA, PROBE_SCHEMA, MARK_SCHEMA, ASSEMBLE_SCHEMA, ESSAY_SCHEMA, EDIT_SCHEMA,
+    BRIEF_SCHEMA, PROBE_SCHEMA, MARK_SCHEMA, OVERALL_MARK_SCHEMA, CRITERION_MARK_SCHEMA, ASSEMBLE_SCHEMA, ESSAY_SCHEMA, EDIT_SCHEMA,
 };
