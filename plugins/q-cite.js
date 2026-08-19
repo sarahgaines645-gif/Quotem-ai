@@ -662,15 +662,74 @@ async function verifyMentions(text, { exemptText = '', max = 6, timeoutMs = 9000
     return { checked: results, unverified: results.filter(r => r.found === false), weak: results.filter(r => r.found === true && r.strength === 'weak'), exempt, skipped: Math.max(0, all.length - exempt.length - todo.length) };
 }
 
+// ── WEBSITES (Sarah, 19 Aug: "there should be a list and they should be able
+// to choose between urls etc… apparently auto isn't producing websites") ──
+// A Level 3 law essay is backed by legislation.gov.uk and parliament.uk, not
+// journals. Brave web search (the same key Q's web_search uses), the page's
+// organisation from its domain, the year from the URL / the page date /
+// the snippet (else n.d.), Harvard for a web page built in code. Social
+// media and essay mills never come back as sources.
+const WEB_BLOCK = /(^|\.)(facebook|twitter|x|instagram|tiktok|pinterest|youtube|reddit|quora|linkedin|ukessays|studocu|coursehero|bartleby|gradesfixer|scribd|ivypanda|studymode|essaysauce|lawteacher|lawaspect|markedbyteachers|studentshare|edubirdie|papersowl|123helpme|brainly|chegg|answers|wikihow|slideshare|prezi|amazon|ebay)\.(com|co\.uk|net|org|io|me)$/i;
+const ORG_BY_HOST = [
+    [/(^|\.)legislation\.gov\.uk$/i, 'legislation.gov.uk'], [/(^|\.)parliament\.uk$/i, 'UK Parliament'], [/(^|\.)gov\.uk$/i, 'GOV.UK'], [/(^|\.)gov\.scot$/i, 'Scottish Government'], [/(^|\.)gov\.wales$/i, 'Welsh Government'],
+    [/(^|\.)nhs\.uk$/i, 'NHS'], [/(^|\.)ons\.gov\.uk$/i, 'Office for National Statistics'], [/(^|\.)bbc\.(co\.uk|com)$/i, 'BBC'], [/(^|\.)acas\.org\.uk$/i, 'Acas'], [/(^|\.)cipd\.(org|co\.uk)$/i, 'CIPD'], [/(^|\.)tuc\.org\.uk$/i, 'TUC'],
+    [/(^|\.)judiciary\.uk$/i, 'Courts and Tribunals Judiciary'], [/(^|\.)supremecourt\.uk$/i, 'UK Supreme Court'], [/(^|\.)bailii\.org$/i, 'BAILII'], [/(^|\.)lawsociety\.org\.uk$/i, 'The Law Society'], [/(^|\.)citizensadvice\.org\.uk$/i, 'Citizens Advice'],
+    [/(^|\.)hse\.gov\.uk$/i, 'Health and Safety Executive'], [/(^|\.)equalityhumanrights\.com$/i, 'Equality and Human Rights Commission'], [/(^|\.)who\.int$/i, 'World Health Organization'], [/(^|\.)un\.org$/i, 'United Nations'], [/(^|\.)europa\.eu$/i, 'European Union'],
+    [/(^|\.)britannica\.com$/i, 'Encyclopaedia Britannica'], [/(^|\.)wikipedia\.org$/i, 'Wikipedia'], [/(^|\.)theguardian\.com$/i, 'The Guardian'], [/(^|\.)ft\.com$/i, 'Financial Times'], [/(^|\.)economist\.com$/i, 'The Economist'], [/(^|\.)hbr\.org$/i, 'Harvard Business Review'],
+    [/(^|\.)ox\.ac\.uk$/i, 'University of Oxford'], [/(^|\.)cam\.ac\.uk$/i, 'University of Cambridge'], [/(^|\.)lse\.ac\.uk$/i, 'London School of Economics'], [/(^|\.)open\.ac\.uk$/i, 'The Open University'],
+];
+function orgFromHost(host) {
+    const h = String(host || '').toLowerCase().replace(/^www\./, '');
+    for (const [rx, name] of ORG_BY_HOST) if (rx.test(h)) return name;
+    if (/\.ac\.uk$/.test(h)) { const u = h.replace(/\.ac\.uk$/, '').split('.').pop(); return u.charAt(0).toUpperCase() + u.slice(1) + ' University'; }
+    const core = h.replace(/\.(co\.uk|org\.uk|gov\.uk|ac\.uk|com|org|net|io|uk|edu|info|co)$/i, '').split('.').pop() || h;
+    return core.length <= 4 ? core.toUpperCase() : core.charAt(0).toUpperCase() + core.slice(1);
+}
+function yearFromWeb(r) {
+    const u = String(r.url || ''); const m1 = u.match(/(?:^|[\/\-_])((?:19|20)\d{2})(?:[\/\-_]|$)/); if (m1) return m1[1];
+    const pa = String(r.page_age || r.age || ''); const m2 = pa.match(/(?:19|20)\d{2}/); if (m2) return m2[0];
+    const t = String(r.title || '') + ' ' + String(r.description || ''); const m3 = t.match(/\b((?:19|20)\d{2})\b/); if (m3) return m3[1];
+    return null;
+}
+async function searchWebSources(query, max = 5) {
+    const apiKey = process.env.BRAVE_SEARCH_KEY;
+    if (!apiKey || !query) return [];
+    const url = 'https://api.search.brave.com/res/v1/web/search?q=' + encodeURIComponent(query) + '&count=' + Math.min(20, max * 3) + '&country=gb&search_lang=en';
+    const started = Date.now();
+    try {
+        const res = await fetch(url, { headers: { 'Accept': 'application/json', 'Accept-Encoding': 'gzip', 'X-Subscription-Token': apiKey } });
+        if (!res.ok) { logUsage({ skill: 'cite', provider: 'brave', model: 'web.search', started, kind: 'lookup', success: false, error: 'HTTP ' + res.status, tokensIn: 0, tokensOut: 0 }); return []; }
+        const data = await res.json();
+        logUsage({ skill: 'cite', provider: 'brave', model: 'web.search', started, kind: 'lookup', tokensIn: 0, tokensOut: 0 });
+        const seen = new Set(); const out = [];
+        for (const r of ((data.web && data.web.results) || [])) {
+            let host = ''; try { host = new URL(r.url).hostname.replace(/^www\./, ''); } catch (_) { continue; }
+            if (!host || WEB_BLOCK.test(host) || seen.has(host + '|' + r.url)) continue;
+            seen.add(host + '|' + r.url);
+            const known = ORG_BY_HOST.find(([rx]) => rx.test(host));
+            const org = known ? known[1] : ((r.profile && String(r.profile.name || '').trim()) || (r.meta_url && String(r.meta_url.hostname || '').replace(/^www\./, '')) || orgFromHost(host));
+            const title = String(r.title || '').replace(/\s*[|\-–—]\s*[^|\-–—]{0,40}$/, '').trim() || String(r.title || '');
+            out.push({ id: 'web:' + r.url, title, authors: [{ family: org, given: '' }], year: yearFromWeb(r), type: 'web', url: r.url, host, org,
+                journal: null, publisher: org, volume: null, issue: null, pages: null, doi: null, citedBy: 0, fromUpload: false, sourceName: null, snippet: String(r.description || '').slice(0, 300), index: 'web' });
+            if (out.length >= max) break;
+        }
+        return out;
+    } catch (e) { logUsage({ skill: 'cite', provider: 'brave', model: 'web.search', started, kind: 'lookup', success: false, error: String(e && e.message || e).slice(0, 80), tokensIn: 0, tokensOut: 0 }); return []; }
+}
+
 /**
  * findSources — uploads first, then the indexes. Never invents.
  */
-async function findSources({ claimSentence, subject, level, uploadedSources, max = 5, extractMeta, hint, exclude } = {}) {
+async function findSources({ claimSentence, subject, level, uploadedSources, max = 5, webMax = 5, extractMeta, hint, exclude } = {}) {
     const claim = String(claimSentence || '').replace(/\s+/g, ' ').trim();
-    if (!claim) return { candidates: [], searched: { uploads: 0, openalex: false, crossref: false }, note: 'Put the cursor at the end of the sentence you want to back up.' };
+    if (!claim) return { candidates: [], searched: { uploads: 0, openalex: false, crossref: false, web: false }, note: 'Put the cursor at the end of the sentence you want to back up.' };
     const kw = keywords(claim, 12);
     const query = buildQuery(claim, subject, hint, exclude);
-    const searched = { uploads: 0, openalex: false, crossref: false };
+    const searched = { uploads: 0, openalex: false, crossref: false, web: false };
+    // Websites in parallel with the indexes: the claim's words + her hint, and
+    // the subject (which helps a web engine and swamps an academic one).
+    const webQuery = [hint, query.replace(/"/g, ''), keywords(subject, 3).join(' ')].filter(Boolean).join(' ').trim();
+    const webP = webMax > 0 && webQuery ? searchWebSources(webQuery, webMax).then(list => { searched.web = true; return list; }).catch(() => []) : Promise.resolve([]);
     const ups = await uploadCandidates(uploadedSources, kw, keywords(subject, 6), extractMeta, max);
     searched.uploads = ups.length;
     let pub = [];
@@ -709,7 +768,8 @@ async function findSources({ claimSentence, subject, level, uploadedSources, max
         .map(w => ({ w, field: inField(w) }))
         .sort((a, b) => b.field - a.field)
         .map(x => x.w);
-    const candidates = ups.concat(onTopic.map(finish));
+    const web = await webP;   // the engine matched these words; the judge says how well each backs the sentence
+    const candidates = ups.concat(onTopic.map(finish)).concat(web.map(finish));
     let note = '';
     if (!candidates.length) note = searched.openalex || searched.crossref ? 'I could not find a source I can verify for that sentence — try the References tool, or upload the source you have in mind.' : 'The source index did not answer just now — try again in a moment, or use the References tool.';
     return { candidates, query, searched, note };
@@ -718,6 +778,6 @@ async function findSources({ claimSentence, subject, level, uploadedSources, max
 module.exports = {
     findSources, harvardInText, harvardReference, keywords, buildQuery, splitDisplayName, initials,
     metaFromText, matchUpload, fromOpenAlex, fromCrossref, searchOpenAlex, searchCrossref,
-    findMentions, verifyMentions,
+    findMentions, verifyMentions, searchWebSources, orgFromHost,
     SOURCE_META_SCHEMA, SOURCE_META_PROMPT, deps, _cache: cache,
 };

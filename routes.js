@@ -2028,7 +2028,7 @@ router.post('/writer/cite', requirePerson, express.json({ limit: '32kb' }), asyn
         const sentWords = new Set(sentence.toLowerCase().replace(/[^a-z\s]/g, ' ').split(/\s+/).filter(w => w.length > 4));
         const planTerm = expected.find(term => term.toLowerCase().split(/\s+/).some(w => w.length > 4 && sentWords.has(w))) || expected[0] || '';
         const hint = String(req.body?.hint || '').trim() || planTerm;
-        const out = await qCite.findSources({ claimSentence: sentence, subject: (t.brief && t.brief.subject) || '', level: t.yearGroup || '', uploadedSources: t.sources || [], max: 5, extractMeta, hint,
+        const out = await qCite.findSources({ claimSentence: sentence, subject: (t.brief && t.brief.subject) || '', level: t.yearGroup || '', uploadedSources: t.sources || [], max: 8, webMax: 6, extractMeta, hint,
             // The case study's own name (and the brief's) never go into an
             // academic search — they are fiction to the index.
             exclude: [t.brief && t.brief.scenario && t.brief.scenario.name, ...(t.sources || []).map(x => x && x.digest && x.digest.name)].filter(Boolean) });

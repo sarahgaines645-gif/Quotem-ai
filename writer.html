@@ -435,6 +435,10 @@
     .q-popcard .cite-opt .co-title { display: block; font-weight: 600; font-size: 11px; line-height: 1.35; color: var(--text); }
     .q-popcard .cite-opt .co-meta { display: block; font-size: 10px; color: var(--text-muted); margin-top: 2px; line-height: 1.35; }
     .q-popcard .cite-opt .co-tag { display: inline-block; font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--accent); margin-right: 5px; }
+    .q-popcard .cite-opt .co-url { display: block; font-size: 10px; color: var(--text-muted); margin-top: 1px; overflow-wrap: anywhere; }
+    .q-popcard .cite-grp { font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--accent); margin: 8px 0 5px; }
+    .q-popcard .cite-grp span { color: var(--text-faint); margin-left: 4px; }
+    .q-popcard.cite { max-height: 72vh; }
     .q-popcard .cite-opt .co-snip { display: block; font-size: 10px; color: var(--text-faint); font-style: italic; margin-top: 2px; line-height: 1.35; }
     .q-popcard .cite-opt .co-warn { display: block; font-size: 9px; color: var(--accent); margin-top: 2px; }
     /* what this source would back in her sentence, and how strongly — to choose by (Sarah, 17 Aug) */
@@ -9489,7 +9493,7 @@
     function noteReference(c, { point, criterionId } = {}) {
       const key = referenceKey(c); if (!key) return;
       let r = state.references.find(x => x.key === key);
-      if (!r) { r = { key, inText: c.inText || '', reference: c.reference || '', title: c.title || '', year: c.year || '', fromUpload: !!c.fromUpload, sourceName: c.sourceName || null, at: Date.now(), points: [] }; state.references.push(r); }
+      if (!r) { r = { key, inText: c.inText || '', reference: c.reference || '', title: c.title || '', year: c.year || '', url: c.url || null, fromUpload: !!c.fromUpload, sourceName: c.sourceName || null, at: Date.now(), points: [] }; state.references.push(r); }
       if (!Array.isArray(r.points)) r.points = [];
       const pt = String(point || '').replace(/\s+/g, ' ').trim();
       if (pt && !r.points.some(p => p.text === pt)) r.points.push({ text: pt, criterionId: criterionId || state.currentCriterionId || '', strength: '', why: '', at: Date.now() });
@@ -9570,10 +9574,26 @@
     // Taking a source OFF the list takes it off her page too — the two must
     // never disagree, or she hands in a bibliography with a source she removed.
     // `root` is only there so the harness can drive it without a browser.
-    function removeReferenceFromDoc(formatted, root) {
+    function removeReferenceFromDoc(formatted, root, meta) {
       const host = root || docBody;
       const want = String(formatted || '').trim(); if (!want || !host) return false;
-      const line = Array.from(host.querySelectorAll('div, p')).find(el => (el.textContent || '').trim() === want);
+      // Exact first. Then the same line with drifted spaces / quotes / dashes
+      // (a save-and-restore, a Word paste, an edit). Then the line under the
+      // References heading that carries the source's title and year. Sarah,
+      // 19 Aug: "when you remove a ref its not taking it off the ref page."
+      const norm = s => docNorm(s).toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+      const wantN = norm(want);
+      const lines = Array.from(host.querySelectorAll('div, p, li')).filter(el => !el.querySelector('div, p, li'));   // leaf blocks only
+      let line = lines.find(el => (el.textContent || '').trim() === want)
+        || lines.find(el => norm(el.textContent) === wantN)
+        || lines.find(el => { const n = norm(el.textContent); return n.length > 20 && wantN.length > 20 && (n.startsWith(wantN.slice(0, 60)) || wantN.startsWith(n.slice(0, 60))); });
+      if (!line && meta && (meta.title || meta.url)) {
+        const head = Array.from(host.querySelectorAll('div, p, h2, h3')).find(el => /^references:?$/i.test((el.textContent || '').trim()));
+        const after = []; for (let e = head && head.nextElementSibling; e; e = e.nextElementSibling) after.push(e);
+        const tN = norm(meta.title || '').slice(0, 50), yN = String(meta.year || '');
+        line = after.find(el => { const n = norm(el.textContent); return (tN && n.includes(tN)) || (meta.url && (el.textContent || '').includes(String(meta.url))); }) || null;
+        if (line && yN && !(line.textContent || '').includes(yN) && tN.length < 15) line = null;
+      }
       if (!line) return false;
       line.remove();
       // A References heading with nothing under it is furniture — take that off too.
@@ -9586,7 +9606,8 @@
       const i = (state.references || []).findIndex(r => r.key === key); if (i < 0) return;
       const r = state.references[i];
       state.references.splice(i, 1);
-      removeReferenceFromDoc(r.reference);
+      const gone = removeReferenceFromDoc(r.reference, null, { title: r.title, year: r.year, url: r.url });
+      if (!gone) console.warn('[bib] reference not found on the page to remove:', (r.reference || '').slice(0, 80));
       persist({ references: state.references });
       try { renderRefsList(); } catch (_) {}
       try { renderBoard(); } catch (_) {}
@@ -9651,12 +9672,22 @@
           toolPopEl.querySelector('#cite-refs-tool').addEventListener('click', () => runTool('references', { sentence: sent, targetBrickId: null, criterionId: cid }, '', { anchor }));
           return;
         }
-        const html = '<div class="cite-sent">' + escHtml(sent) + '</div>' + cands.map((c, i) => {
+        // PAPERS and WEBSITES, two lists, the URL on every website (Sarah, 19
+        // Aug: "there should be a list and they should be able to choose
+        // between urls etc"). Order within each: strong first.
+        const RANK = { strong: 0, fair: 1, weak: 2, '': 3 };
+        const idx = cands.map((c, i) => i).sort((a, b) => (RANK[cands[a].strength || ''] - RANK[cands[b].strength || '']) || (a - b));
+        const papers = idx.filter(i => cands[i].type !== 'web'), sites = idx.filter(i => cands[i].type === 'web');
+        const optHtml = (i) => {
+          const c = cands[i];
           const who = (c.authors || []).map(a => a.family).slice(0, 3).join(', ') + ((c.authors || []).length > 3 ? ' et al.' : '');
-          const meta = [who, c.year, c.journal || c.publisher || (c.type === 'book' ? 'book' : '')].filter(Boolean).join(' · ');
+          const meta = [c.type === 'web' ? '' : who, c.year || (c.type === 'web' ? 'n.d.' : ''), c.journal || (c.type === 'web' ? '' : c.publisher) || (c.type === 'book' ? 'book' : '')].filter(Boolean).join(' · ');
           const backs = (c.strength || c.backs) ? '<span class="co-backs">' + (c.strength ? '<span class="co-str ' + escHtml(c.strength) + '">' + escHtml(c.strength) + '</span>' : '') + (c.backs ? 'backs: ' + escHtml(c.backs) : '') + (c.strengthWhy ? ' <span class="co-why">— ' + escHtml(c.strengthWhy) + '</span>' : '') + '</span>' : '';
-          return '<button type="button" class="q-btn cite-opt" data-i="' + i + '">' + (c.fromUpload ? '<span class="co-tag">from your uploads</span>' : '') + '<span class="co-title">' + escHtml(c.title || '') + '</span><span class="co-meta">' + escHtml(meta) + ' — ' + escHtml(c.inText || '') + '</span>' + backs + (c.snippet ? '<span class="co-snip">“' + escHtml(c.snippet.slice(0, 140)) + (c.snippet.length > 140 ? '…' : '') + '”</span>' : '') + ((c.warnings || []).length ? '<span class="co-warn">check: ' + escHtml(c.warnings.join('; ')) + '</span>' : '') + '</button>';
-        }).join('');
+          return '<button type="button" class="q-btn cite-opt" data-i="' + i + '">' + (c.fromUpload ? '<span class="co-tag">from your uploads</span>' : '') + (c.type === 'web' ? '<span class="co-tag">' + escHtml(c.org || c.host || 'website') + '</span>' : '') + '<span class="co-title">' + escHtml(c.title || '') + '</span>' + (c.type === 'web' && c.url ? '<span class="co-url">' + escHtml(String(c.url).replace(/^https?:\/\//, '').slice(0, 70)) + '</span>' : '') + '<span class="co-meta">' + escHtml(meta) + ' — ' + escHtml(c.inText || '') + '</span>' + backs + (c.snippet ? '<span class="co-snip">“' + escHtml(c.snippet.slice(0, 140)) + (c.snippet.length > 140 ? '…' : '') + '”</span>' : '') + ((c.warnings || []).length ? '<span class="co-warn">check: ' + escHtml(c.warnings.join('; ')) + '</span>' : '') + '</button>';
+        };
+        const html = '<div class="cite-sent">' + escHtml(sent) + '</div>'
+          + (papers.length ? '<div class="cite-grp">Papers and books <span>' + papers.length + '</span></div>' + papers.map(optHtml).join('') : '')
+          + (sites.length ? '<div class="cite-grp">Websites <span>' + sites.length + '</span></div>' + sites.map(optHtml).join('') : '');
         // NOTHING STRONG IS NOT A CHOICE OF FIVE (Sarah, 17 Aug: "why do I only
         // have the choice for weak citations"). When the best I found is FAIR
         // or WEAK, say so above the list and offer the real fix — name the idea
@@ -10301,7 +10332,7 @@
     loadProjects().then(restoreSession, restoreSession);
     // Test hooks (no data, no secrets): lets the harness exercise the page-side
     // helpers without a paid call. Harmless in production.
-    window.__qwriterTest = { paintQNotes, addQNotes, addQTabs, addStickies, renderStickies, snapshotDoc, undoDoc, presentStep, renderBoard, renderWhiteboard, startedAsk, showToolPop, findInDoc, replaceInDoc, appendReference, docPlainText, splitCheck: (t) => endsSentence(t), runEditPass, checkCurrentSentence, showEditItem, state: () => state, currentEditText, partParagraphs, setBrief, storyPointsHtml, renderInlineDots, termsForBoard, setCoach, bandListHtml, showEditItem, openEditPanel, renderEditPanel, edState: () => edProof, edSetProof: (p2) => { edProof = p2; renderEditPanel(); edPaint(); }, sayMe, renderThread, syncWorkArea, showPanel, revealPanel, runTidyPasses, applyTidyItem, mergeWalk, refreshSourceDigests, sourceDigestsHtml, markAndFix, walkItemsFromMark, renderMarkPanel, markStats, gradeWord, notesSections, notesCount, notesCopyText, renderNotesPanel, openNotesPanel, bibSorted, bibCopyText, renderBibPanel, openBibPanel, removeReference, removeReferenceFromDoc, sendTextToPage, jumpToSentence };
+    window.__qwriterTest = { paintQNotes, addQNotes, addQTabs, addStickies, renderStickies, snapshotDoc, undoDoc, presentStep, renderBoard, renderWhiteboard, startedAsk, showToolPop, findInDoc, replaceInDoc, appendReference, docPlainText, splitCheck: (t) => endsSentence(t), runEditPass, checkCurrentSentence, showEditItem, state: () => state, currentEditText, partParagraphs, setBrief, storyPointsHtml, renderInlineDots, termsForBoard, setCoach, bandListHtml, showEditItem, openEditPanel, renderEditPanel, edState: () => edProof, edSetProof: (p2) => { edProof = p2; renderEditPanel(); edPaint(); }, sayMe, renderThread, syncWorkArea, showPanel, revealPanel, runTidyPasses, applyTidyItem, mergeWalk, refreshSourceDigests, sourceDigestsHtml, markAndFix, walkItemsFromMark, renderMarkPanel, markStats, gradeWord, notesSections, notesCount, notesCopyText, renderNotesPanel, openNotesPanel, bibSorted, bibCopyText, renderBibPanel, openBibPanel, removeReference, removeReferenceFromDoc, sendTextToPage, jumpToSentence, runAutoCite, appendReference, noteReference };
 
 
     // (The old per-card drag code lived here — every panel now goes through makePanel above.)

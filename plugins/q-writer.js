@@ -2242,18 +2242,20 @@ const CITE_JUDGE_SCHEMA = {
     },
 };
 async function judgeCiteCandidates({ sentence, candidates, brief }) {
-    const list = (Array.isArray(candidates) ? candidates : []).slice(0, 6);
+    // Up to 14 now — 8 papers + 6 websites (Sarah, 19 Aug: "more than 3
+    // choices… a list… urls"). Six was why she saw three after the drops.
+    const list = (Array.isArray(candidates) ? candidates : []).slice(0, 14);
     if (!list.length) return [];
     const system = withHouseStyle(`You are Q, helping a student choose which source to cite behind ONE sentence of their essay. For each candidate say what in their sentence it would back, and how strongly — honestly. A source that is only loosely about the topic is weak, and you say so; a strong claim needs a strong source. Plain words.
 ${brief ? 'THE ASSIGNMENT (context): ' + String(brief.title || '') + ' — ' + String(brief.whatItWants || '').slice(0, 400) : ''}`);
     const user = `THE SENTENCE: "${String(sentence || '').slice(0, 600)}"
 
 CANDIDATES:
-${list.map((c, i) => `${i + 1}. ${c.title || ''} — ${(c.authors || []).map(a => a && (a.family || a.name || '')).filter(Boolean).slice(0, 3).join(', ')} ${c.year || ''}${c.fromUpload ? ' [the student\'s own upload]' : ''}${c.snippet ? `
+${list.map((c, i) => `${i + 1}. ${c.title || ''} — ${(c.authors || []).map(a => a && (a.family || a.name || '')).filter(Boolean).slice(0, 3).join(', ')} ${c.year || ''}${c.fromUpload ? ' [the student\'s own upload]' : ''}${c.type === 'web' ? ' [website: ' + (c.url || '') + ']' : ''}${c.snippet ? `
    says: "${String(c.snippet).slice(0, 260)}"` : ''}`).join('\n')}
 
 Judge each.`;
-    const r = await callAccurate(system, user, { maxTokens: 700, schema: CITE_JUDGE_SCHEMA, effort: 'low' });
+    const r = await callAccurate(system, user, { maxTokens: 2000, schema: CITE_JUDGE_SCHEMA, effort: 'low' });
     const out = [];
     for (const j of (r && Array.isArray(r.judged) ? r.judged : [])) {
         const i = Number(j.i) - 1; if (!(i >= 0 && i < list.length)) continue;
