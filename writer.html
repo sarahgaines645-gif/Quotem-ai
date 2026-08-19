@@ -1141,8 +1141,13 @@
     /* A QUESTION'S CARD: grade, what she has, then the moves that teach. */
     /* the standard's working: LO marks + total; the evidence line on a part */
     .q-lo { display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: baseline; margin: 4px 0 2px; font-size: 12px; color: var(--text); }
+    .q-lo .q-lo-i { font: inherit; color: var(--text); background: var(--bg); border: 0; border-radius: 8px; padding: 4px 9px; cursor: pointer; box-shadow: var(--neu-raised-xs); }
+    .q-lo .q-lo-i:hover { box-shadow: var(--neu-raised-sm); }
+    .q-lo .q-lo-i.on { box-shadow: var(--neu-inset-sm); }
+    .q-lo .q-lo-i.on b { color: var(--accent); }
     .q-lo .q-lo-i b { font-weight: 700; margin-right: 2px; }
-    .q-lo .q-lo-t { color: var(--text-muted); font-size: 11px; margin-left: auto; }
+    .q-lo .q-lo-t { color: var(--text-muted); font-size: 11px; flex: 0 0 100%; margin: 2px 0 0; }
+    .q-lo-why.hidden { display: none; }
     .q-lo-why { font-size: 11px; line-height: 1.45; color: var(--text-muted); margin: 2px 0 6px; }
     .q-lo-why b { color: var(--text); font-weight: 700; margin-right: 4px; }
     .q-band-struct { font-size: 11.5px; line-height: 1.45; color: var(--text); margin: 4px 0 2px; padding-left: 9px; border-left: 3px solid #e6a817; }
@@ -9687,8 +9692,16 @@
       const why = allDerived
         ? '<div>Outcome marks taken from the question grades — the marker did not mark each outcome itself.</div>'
         : lo.filter(x => x.reason).map(x => '<div><b>' + escHtml(x.label) + '</b> ' + escHtml(x.reason) + '</div>').join('');
-      return '<div class="q-lo">' + lo.map(x => '<span class="q-lo-i" title="' + escHtml(x.reason || '') + '"><b>' + escHtml(x.label) + '</b> ' + x.mark + '</span>').join('') + '</div>'
-        + (why ? '<div class="q-lo-why">' + why + '</div>' : '');
+      // Sarah's card law: the DATA is the card. Four outcome reasons stacked
+      // (a real CIPD mark returns a full paragraph each - the 7HR02 re-mark,
+      // 19 Aug) turned the headline into a wall of grey. The marks are the
+      // data - big and pressable; ONE outcome's reason opens under them when
+      // she presses it. Derived marks keep their single muted line, as before.
+      const chips = lo.map((x, i) => '<button type="button" class="q-lo-i" data-mk-lo="' + i + '"><b>' + escHtml(x.label) + '</b> ' + x.mark + '</button>').join('');
+      const reasons = allDerived ? '' : lo.map((x, i) => x.reason
+        ? '<div class="q-lo-why hidden" data-mk-lowhy="' + i + '"><b>' + escHtml(x.label) + ' - ' + x.mark + ' of 4</b>' + escHtml(x.reason) + '</div>' : '').join('');
+      return '<div class="q-lo">' + chips + (reasons ? '<span class="q-lo-t">press an outcome for why</span>' : '') + '</div>'
+        + (allDerived && why ? '<div class="q-lo-why">' + why + '</div>' : reasons);
     }
     function ladderBlock(m) {
       const rungs = (m && m.overall && Array.isArray(m.overall.ladder)) ? m.overall.ladder.filter(r => r && r.label && (r.needs || []).length) : [];
@@ -9992,6 +10005,15 @@
       markBody.querySelectorAll('[data-mk-q]').forEach(el => el.addEventListener('click', () => {
         const card = markBody.querySelector(`[data-mk-qcard="${el.dataset.mkQ}"]`);
         if (card) card.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }));
+      // An outcome chip opens its own reason and closes the others.
+      markBody.querySelectorAll('[data-mk-lo]').forEach(el => el.addEventListener('click', () => {
+        const i = el.dataset.mkLo;
+        const mine = markBody.querySelector('[data-mk-lowhy="' + i + '"]');
+        const open = mine && !mine.classList.contains('hidden');
+        markBody.querySelectorAll('[data-mk-lowhy]').forEach(w => w.classList.add('hidden'));
+        markBody.querySelectorAll('[data-mk-lo]').forEach(b => b.classList.remove('on'));
+        if (mine && !open) { mine.classList.remove('hidden'); el.classList.add('on'); }
       }));
       markBody.querySelectorAll('[data-mk-ladder]').forEach(el => el.addEventListener('click', () => {
         const lad = markBody.querySelector('.q-ladder');
