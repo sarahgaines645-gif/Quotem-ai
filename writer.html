@@ -483,25 +483,35 @@
       font-family: 'Space Grotesk', sans-serif;
     }
     .qdock.hidden { display: none; }
+    /* THE CARDS' RAIL IS THE SAME SPECIES AS THE PAGE'S DIVIDERS (Sarah,
+       20 Aug 2026: "can we do the same for the buttons for your brief,
+       teaching cards... dont change the way they act I just wan the buttons to
+       look the same but where they are now on the left of the doc").
+       Same raise, same lettering, the colour on the lip — turned to face LEFT,
+       because these stand down the left of the page, so the free edge is the
+       left one. Nothing about what they do changed: press one and its card
+       comes back, exactly as before. */
     .qdock-pill {
-      display: flex; align-items: center; gap: 8px; width: 100%; flex-shrink: 0;   /* a list of buttons is one width (Sarah, 20 Aug: "not the same size when they are in a list") */
-      padding: 8px 14px; border: none; border-radius: 20px; cursor: pointer;
+      display: flex; align-items: center; width: 100%; flex-shrink: 0;   /* a list of buttons is one width (Sarah, 20 Aug) */
+      padding: 8px 12px; border: none; border-radius: 10px 4px 4px 10px; cursor: pointer;
       background: var(--bg); box-shadow: var(--neu-raised-sm);
+      border-left: 4px solid var(--tc, #9aa0ad);
       font-family: 'Space Grotesk', sans-serif; text-align: left;
-      transition: box-shadow 0.15s;
+      transition: box-shadow 0.15s, transform 0.15s, color 0.15s;
     }
-    .qdock-pill:hover { box-shadow: var(--neu-raised-xs); }
-    .qdock-pill:active { box-shadow: var(--neu-inset-sm); }   /* the only inset on the page: the moment under her finger */
-    .qdock-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--accent); flex-shrink: 0; }
+    .qdock-pill:hover { box-shadow: var(--neu-raised-xs); transform: translateX(-3px); }
+    .qdock-pill:hover .qdock-name { color: var(--text); }
+    .qdock-pill:active { box-shadow: var(--neu-inset-sm); transform: none; }   /* the only inset on the page: the moment under her finger */
     .qdock-name {
-      font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.07em;
-      color: var(--accent); min-width: 0;
+      font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.07em;
+      color: var(--text-muted); min-width: 0;
       overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
     }
     /* The one action on the rail — quiet, the way a secondary Q button is
        quiet: muted text, same species, never a colour. */
-    .qdock-tidy { margin-top: 2px; padding: 6px 13px; }
-    .qdock-tidy .qdock-name { color: var(--text-muted); font-size: 11px; letter-spacing: 0.05em; }
+    .qdock-tidy { margin-top: 4px; padding: 6px 12px; border-left-color: transparent; border-radius: 10px; }
+    .qdock-tidy:hover { transform: none; }
+    .qdock-tidy .qdock-name { color: var(--text-faint); font-size: 9px; letter-spacing: 0.05em; }
     .qdock-tidy:hover .qdock-name { color: var(--text); }
     /* The card flies to its pill (and back). A ghost, so nothing real
        depends on the animation finishing. */
@@ -3684,6 +3694,10 @@
     // Notes and the bibliography are PAGES of the notebook now (see
     // showDocPage) — they are not cards any more, so they never appear here.
     const DOCK_ORDER = ['brief', 'teach', 'wb', 'mark', 'coach', 'edit', 'video'];
+    // The lip colour, from the same house set as the page's dividers. `brief`
+    // is amber because the Brief PAGE is amber — the same subject, the same
+    // colour, wherever she meets it.
+    const DOCK_TC = { brief: '#e6a817', teach: '#7c5cbf', wb: '#3b82c4', mark: 'var(--accent)', coach: '#28a745', edit: '#9aa0ad', video: '#e6c84a' };
     const dockEl = document.getElementById('qdock');
     const panelIsOpen = (p) => !!p && !p.el.classList.contains('hidden');
     function stowedKeys() { return DOCK_ORDER.filter(k => panelIsOpen(panels[k]) && panels[k].el.classList.contains('stowed')); }
@@ -3700,9 +3714,9 @@
         const b = document.createElement('button');
         b.type = 'button'; b.className = 'qdock-pill'; b.dataset.dock = k;
         b.title = 'Put ' + name.toLowerCase() + ' back on the page';
-        const dot = document.createElement('span'); dot.className = 'qdock-dot';
+        b.style.setProperty('--tc', DOCK_TC[k] || '#9aa0ad');   // the lip IS the marker now — no separate dot
         const nm = document.createElement('span'); nm.className = 'qdock-name'; nm.textContent = name;
-        b.appendChild(dot); b.appendChild(nm); frag.appendChild(b);
+        b.appendChild(nm); frag.appendChild(b);
       });
       // The one action on the rail: close what is still open, or bring the
       // lot back. Sarah, 20 Aug 2026: "we have a tidy button but that needs
