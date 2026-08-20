@@ -19,9 +19,29 @@
 const fs = require('fs');
 const path = require('path');
 
+/* FIND PUPPETEER WHEREVER IT IS.
+   ⚠️ This used to point at one session's scratchpad by absolute path. Those get
+   cleaned up, and when it went so did the ability to see anything — the tool
+   died with "Cannot find module" pointing at a folder that no longer existed.
+   Try the project's own node_modules first (install once with
+   `npm install --no-save puppeteer-core`), then any scratchpad given by env. */
+let puppeteer = null;
+for (const attempt of [
+  () => require('puppeteer-core'),
+  () => require(path.join(process.cwd(), 'node_modules', 'puppeteer-core')),
+  () => require(path.join(process.env.CLAUDE_SCRATCH || '', 'node_modules', 'puppeteer-core')),
+]) {
+  try { puppeteer = attempt(); break; } catch (e) { /* try the next */ }
+}
+if (!puppeteer) {
+  console.error('puppeteer-core not found. From the project root run: npm install --no-save puppeteer-core');
+  process.exit(1);
+}
+
+/* somewhere private to keep the browser profile — never the user's own */
 const SCRATCH = process.env.CLAUDE_SCRATCH
-  || 'C:/Users/sarah/AppData/Local/Temp/claude/c--Users-sarah-OneDrive-Desktop-Quoteapp/cc812035-4f15-475e-a724-2e0885aae43a/scratchpad';
-const puppeteer = require(path.join(SCRATCH, 'node_modules', 'puppeteer-core'));
+  || path.join(require('os').tmpdir(), 'shoot-scratch');
+try { fs.mkdirSync(SCRATCH, { recursive: true }); } catch (e) {}
 
 /* WHICH BROWSER TO DRIVE, best first.
    ⚠️ Puppeteer's OWN cached Chrome is tried BEFORE the installed Edge. Edge is

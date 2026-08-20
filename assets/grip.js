@@ -114,13 +114,38 @@ export function handFrame(bones, side) {
   if (!Tm || Math.abs(Tm.dot(F)) > 0.5) {        // still degenerate: any perpendicular will do
     Tm = Math.abs(F.x) > 0.5 ? new THREE.Vector3(0, 1, 0) : new THREE.Vector3(1, 0, 0);
   }
-  /* out of the palm = the third axis. Sign it by where the thumb actually sits:
-     the thumb root leans to the palm side of the knuckle line. */
-  P = new THREE.Vector3().crossVectors(F, Tm).normalize();
-  P = dominant(P);
-  if (th) {
-    const t = toLocal(wpos(th).sub(handW));
-    if (t.dot(P) < 0) P.multiplyScalar(-1);
+  /* OUT OF THE PALM — decided by EXPERIMENT, not by anatomy.
+   *
+   * ⚠️ The thumb does not tell you which way the palm faces. Signing P from the
+   * thumb's lean worked on Mixamo and came out INVERTED on 3ds Max Biped, so
+   * the fingers closed away from the prop: measured on the Rocketbox teacher,
+   * fingertips finished 10-12cm from a 5cm cup while fully curled — the props
+   * appeared to float beside her hands.
+   *
+   * The invariant that actually holds on every rig: curling a finger the RIGHT
+   * way makes a fist, so the fingertip moves TOWARDS the wrist. Curl it the
+   * wrong way and the finger bends backwards, away. So bend one finger both
+   * ways, keep whichever shortens the tip-to-wrist distance, and take the
+   * direction the tip travelled as the palm. Self-calibrating, and it cannot be
+   * fooled by an unusual skeleton. */
+  P = dominant(new THREE.Vector3().crossVectors(F, Tm).normalize());
+  {
+    const probe = bones[side + 'HandMiddle2'] || bones[side + 'HandIndex2'];
+    const tip = bones[side + 'HandMiddle3'] || bones[side + 'HandIndex3'];
+    if (probe && tip) {
+      const axis = new THREE.Vector3().crossVectors(F, P).normalize();
+      const keep = probe.quaternion.clone();
+      const reach = () => { probe.updateMatrixWorld(true); tip.updateMatrixWorld(true); return wpos(tip).distanceTo(handW); };
+      const open = reach();
+      probe.quaternion.copy(keep).multiply(new THREE.Quaternion().setFromAxisAngle(axis, 0.9));
+      const fwd = reach();
+      probe.quaternion.copy(keep).multiply(new THREE.Quaternion().setFromAxisAngle(axis, -0.9));
+      const back = reach();
+      probe.quaternion.copy(keep); probe.updateMatrixWorld(true);
+      /* the winning direction curls INWARD (shortest reach). If bending the
+         other way is what makes a fist, the palm is the other side. */
+      if (back < fwd && back < open) P.multiplyScalar(-1);
+    }
   }
   const hand_ = Math.sign(P.dot(new THREE.Vector3().crossVectors(F, Tm))) || 1;
   // curl axis: rotating a finger about it carries F towards P
@@ -207,15 +232,23 @@ const _qa = new THREE.Quaternion(), _qb = new THREE.Quaternion();
 function setChainCurl(bones, restQ, side, f, a) {
   const fr = handFrame(bones, side);
   for (let i = 1; i <= 3; i++) {
-    const b = bones[side + 'Hand' + f + i];
-    if (!b || !restQ[key(b)]) continue;
+    /* ⚠️ LOOK THE REST POSE UP BY THE STANDARD NAME, not the bone's own.
+       `bones` and `restQ` are both keyed by OUR names (RightHandIndex2); the
+       bone itself may be called Bip01_R_Finger11 or J_Bip_R_Index2. Keying off
+       `b.name` only ever matched on Mixamo rigs — on every other character the
+       lookup missed, the loop skipped, and NO FINGER EVER MOVED. It reported
+       curl 1.0 the whole time. That is what "the stuff floats next to her arms"
+       was: fingertips measured 10-12cm from a 5cm cup, fully "closed". */
+    const std = side + 'Hand' + f + i;
+    const b = bones[std];
+    if (!b || !restQ[std]) continue;
     if (f === 'Thumb') {
       _qa.setFromAxisAngle(fr.foldAxis, THUMB_FOLD[i - 1] * a);
       if (i === 1) { _qb.setFromAxisAngle(fr.sweepAxis, THUMB_SWEEP * a); _qa.multiply(_qb); }
     } else {
       _qa.setFromAxisAngle(fr.curlAxis, CURL[i - 1] * a);
     }
-    b.quaternion.copy(restQ[key(b)]).multiply(_qa);
+    b.quaternion.copy(restQ[std]).multiply(_qa);
   }
   const root = bones[side + 'Hand' + f + '1'];
   if (root) root.updateMatrixWorld(true);
