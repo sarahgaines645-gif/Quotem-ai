@@ -1536,7 +1536,16 @@
       transition: color 0.15s, box-shadow 0.15s, transform 0.15s;
     }
     .doc-tab:hover { color: var(--text); transform: translateY(-3px); }
-    .doc-tab[aria-expanded="true"], .doc-tab.open { color: var(--text); box-shadow: var(--neu-inset-sm); }
+    /* THE SECTION YOU ARE ON STANDS PROUD (Sarah, 20 Aug 2026: "these shouldnt
+       be indented. The page youre on should be higher then the rest of them if
+       anything"). A divider you have turned to is pulled UP out of the block —
+       it is never pressed in. Its foot is still under the page: it rises 7px
+       out of a 20px tuck, so 13px stays hidden. */
+    .doc-tab[aria-expanded="true"], .doc-tab.open {
+      color: var(--text); transform: translateY(-7px);
+      box-shadow: 0 -5px 13px rgba(0,0,0,0.11);
+    }
+    .doc-tab[aria-expanded="true"]:hover, .doc-tab.open:hover { transform: translateY(-9px); }
     @media (max-width: 700px) {
       .doc-tabs { right: 8px; gap: 3px; margin-bottom: -18px; }
       .doc-tab { padding: 6px 8px 22px; font-size: 9px; letter-spacing: 0.02em; }
