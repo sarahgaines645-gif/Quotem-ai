@@ -26,6 +26,13 @@
 
 const EMAIL_RE = /[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g;
 
+// How much conversation comes back around a search hit. A question and its
+// answer are usually one or two turns apart, so a few either side catches the
+// exchange without dragging half the day in with it.
+const CONTEXT_BEFORE = 3;
+const CONTEXT_AFTER = 4;
+const MAX_THREADS = 5;
+
 // Addresses that are never a useful answer to "who do I contact".
 const JUNK_ADDRESS = /^(no-?reply|do-?not-?reply|donotreply|bounce|mailer-daemon|postmaster|notifications?)@/i;
 
@@ -253,12 +260,37 @@ function readPageHistory(args = {}, personId) {
 
     // Searching beats recency: the thing they are asking about is usually old,
     // which is precisely why it fell out of the window Q gets shown.
+    //
+    // AND A HIT COMES BACK WITH ITS CONVERSATION, not on its own (Sarah, 20 Aug:
+    // "that would show the thread"). Searching "tap" matches the line where she
+    // said the word — which is usually HER question, not his answer, because his
+    // answer talks about aerators and limescale. A lone matching line is a
+    // fragment; he needs the exchange around it to actually know what was said.
+    let threads = null;
     if (search) {
         const words = search.split(/\s+/).filter(w => w.length > 2);
-        rows = rows.filter(m => {
+        const isHit = (m) => {
             const t = String(m.content || '').toLowerCase();
             return t.includes(search) || (words.length > 0 && words.every(w => t.includes(w)));
-        });
+        };
+
+        const hitIdx = [];
+        rows.forEach((m, i) => { if (isHit(m)) hitIdx.push(i); });
+
+        if (hitIdx.length) {
+            // Widen each hit into a window, then merge windows that touch so one
+            // back-and-forth comes back as ONE thread instead of three fragments.
+            const spans = [];
+            for (const i of hitIdx) {
+                const from = Math.max(0, i - CONTEXT_BEFORE);
+                const to = Math.min(rows.length - 1, i + CONTEXT_AFTER);
+                const last = spans[spans.length - 1];
+                if (last && from <= last.to + 1) last.to = Math.max(last.to, to);
+                else spans.push({ from, to });
+            }
+            threads = spans.slice(0, MAX_THREADS).map(s => rows.slice(s.from, s.to + 1));
+        }
+        rows = hitIdx.map(i => rows[i]);
     }
 
     if (!rows.length) {
@@ -272,28 +304,52 @@ function readPageHistory(args = {}, personId) {
         };
     }
 
-    // On a search, the matches themselves matter more than the tail of the list.
-    const picked = search ? rows.slice(0, limit) : rows.slice(-limit);
-
-    const messages = picked.map(m => ({
+    const asLine = (m) => ({
         when: m.timestamp ? String(m.timestamp).slice(0, 16).replace('T', ' ') : null,
         page: m.surface || null,
         who: m.role === 'user' ? 'them' : 'you',
         said: String(m.content || '').slice(0, 1200),
-    }));
+    });
 
-    console.log(`[q-desk] history: ${messages.length} message(s)${page ? ' from ' + page : ' across all pages'}${search ? ' matching "' + search + '"' : ''}`);
+    // A search hands back conversations; a plain read hands back the recent tail.
+    if (search && threads) {
+        const conversations = threads.map(t => ({
+            page: t[0].surface || null,
+            when: t[0].timestamp ? String(t[0].timestamp).slice(0, 16).replace('T', ' ') : null,
+            messages: t.map(asLine),
+        }));
+        const shown = conversations.reduce((n, c) => n + c.messages.length, 0);
+
+        console.log(`[q-desk] history: ${rows.length} hit(s) → ${conversations.length} conversation(s), ${shown} message(s), for "${search}"`);
+
+        return {
+            searched_for: search,
+            page: page || 'all pages',
+            conversations,
+            matches: rows.length,
+            count: shown,
+            pages_that_do_exist: pagesThatExist,
+            instruction_for_q:
+                'You WENT AND LOOKED, and this is what was really said — each conversation shows the exchange around the match, with the page and the date. '
+                + 'Answer from it and say plainly that you found it. If one of these is you saying something you had just denied saying, own it in one line and move on: '
+                + 'you are only ever shown the recent part of a conversation, and you have now been back through the record. '
+                + 'Quote only what is actually written here — do not smooth it into what you think you would have said.',
+        };
+    }
+
+    const messages = rows.slice(-limit).map(asLine);
+
+    console.log(`[q-desk] history: ${messages.length} message(s)${page ? ' from ' + page : ' across all pages'}`);
 
     return {
         page: page || 'all pages',
         searched_for: search || null,
         messages,
         count: messages.length,
-        total_matched: rows.length,
+        total_on_page: rows.length,
         pages_that_do_exist: pagesThatExist,
         instruction_for_q:
             'This is their REAL saved history — each entry says which page and when. Use it to answer and say plainly that you went and looked. '
-            + 'If one of these is you saying something you had just denied saying, own it simply and move on: you were only shown the recent part of the conversation, you have now found it. '
             + 'Quote only what is actually written above.',
     };
 }
