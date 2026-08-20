@@ -10769,10 +10769,44 @@
 
     // ── Assemble (their words, his structure) + download ───────────────────
     const btnDownload = document.getElementById('btn-download');
-    btnDownload.addEventListener('click', () => offerDownload(docPlainText(), (titleEl.value || '').trim() || (state.brief && state.brief.title) || 'My assignment'));
+    // Sarah, 20 Aug 2026: "download needs to be just download. I dont want to
+    // pay to mark every time someone saves to ther device."
+    // It used to hand the press to Q: the coach card was taken over by a menu
+    // whose third option, "Assemble first", fires the paid /writer/assemble
+    // job. Saving a file is not a conversation and it is not a mark — ONE
+    // press, ONE .docx, no model called, nothing billed. Assemble still
+    // exists where it belongs: on the end-of-mark card, chosen on purpose.
+    btnDownload.addEventListener('click', () => saveTheDocx());
+    async function saveTheDocx() {
+      if (btnDownload.disabled) return;
+      const text = docPlainText();
+      const title = (titleEl.value || '').trim() || (state.brief && state.brief.title) || 'My assignment';
+      if (!text.trim()) { setCoach({ msg: 'The page is blank — nothing to download yet.', inputVisible: true }); return; }
+      // The button is the progress, so Q is never interrupted mid-sentence.
+      const was = btnDownload.textContent;
+      btnDownload.disabled = true; btnDownload.textContent = '↓ Saving…';
+      try {
+        const payload = { title, content: text };
+        const blocks = docBlocksForExport();
+        if (Array.isArray(blocks) && blocks.length) payload.blocks = blocks;
+        const d = await api('/writer/download', payload, { timeoutMs: 40000 });
+        const a = document.createElement('a'); a.href = d.url; a.download = d.filename || 'assignment.docx'; a.rel = 'noopener';
+        document.body.appendChild(a); a.click(); a.remove();
+        btnDownload.textContent = '↓ Saved';
+        setTimeout(() => { btnDownload.textContent = was; }, 1800);
+      } catch (e) {
+        // Word would not build — she still leaves with the file, as text, and
+        // is told why. Still no model, still nothing billed.
+        downloadText(title, text);
+        setCoach({ msg: 'Word wouldn\'t build (' + shortCause(e) + ') — I saved it as a text file instead.', inputVisible: true });
+        btnDownload.textContent = was;
+      } finally {
+        btnDownload.disabled = false;
+      }
+    }
 
     async function assembleAndOffer() {
-      if (!state.brief) { offerDownload(docPlainText(), (titleEl.value || '').trim() || 'My assignment'); return; }
+      if (!state.brief) { saveTheDocx(); return; }
       coachCard.classList.add('wide');
       setCoach({ msg: 'Arranging your words under the criteria — nothing added, only ordered…', section: 'ASSEMBLING', thinking: true, inputVisible: false });
       try {
@@ -10799,26 +10833,13 @@
       } catch (e) {
         setCoach({
           msg: 'The assembly failed: ' + shortCause(e), section: 'HICCUP', hint: 'You can still download the page as it is.',
-          actions: [{ label: '↻ Try again', primary: true, onClick: assembleAndOffer }, { label: '↓ Download the page as-is', onClick: () => offerDownload(docPlainText(), (titleEl.value || '').trim() || 'My assignment') }],
+          actions: [{ label: '↻ Try again', primary: true, onClick: assembleAndOffer }, { label: '↓ Download the page as-is', onClick: () => saveTheDocx() }],
           inputVisible: false,
         });
       }
     }
 
-    function offerDownload(text, title) {
-      if (!text.trim()) { setCoach({ msg: 'The page is blank — nothing to download yet.', inputVisible: true }); return; }
-      setCoach({
-        msg: 'Download what is on the page (' + text.trim().split(/\s+/).length + ' words):',
-        section: 'DOWNLOAD',
-        actions: [
-          { label: '↓ Word (.docx)', primary: true, onClick: () => downloadDocx(title, text, docBlocksForExport()) },
-          { label: '↓ Plain text (.txt)', onClick: () => downloadText(title, text) },
-          ...(state.brief ? [{ label: '📄 Assemble first (their words, Q\'s structure)', onClick: assembleAndOffer }] : []),
-        ],
-        inputVisible: true,
-      });
-    }
-    // `blocks` is the page as Word objects (offerDownload only). The Assemble
+    // `blocks` is the page as Word objects (the plain save only). The Assemble
     // path downloads a DIFFERENT string, so it sends content and nothing else.
     async function downloadDocx(title, content, blocks) {
       setCoach({ msg: 'Building the Word file…', thinking: true, inputVisible: false });
