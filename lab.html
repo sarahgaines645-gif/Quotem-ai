@@ -39,29 +39,75 @@
            border:1px solid rgba(0,240,255,.3); border-radius:10px; font:11px/1.5 ui-monospace,Consolas,monospace;
            color:#9ff; white-space:pre; pointer-events:none; }
   </style>
+  <style>
+    .say { display:flex; gap:8px; width:100%; align-items:center; }
+    .say input { flex:1; min-width:0; font:inherit; font-size:14px; padding:10px 14px; border-radius:14px; border:none; outline:none;
+                 background:#0d1019; color:var(--text); box-shadow:inset 0 0 0 1px rgba(255,255,255,.14); }
+    .say input:focus { box-shadow:inset 0 0 0 1px var(--cyan); }
+    .say input::placeholder { color:rgba(242,242,246,.4); }
+    .chips { display:flex; gap:6px; flex-wrap:wrap; justify-content:center; width:100%; }
+    .chip { font-size:11.5px; padding:5px 10px; border-radius:10px; background:#121622; color:var(--muted); cursor:pointer;
+            box-shadow:0 0 0 1px rgba(255,255,255,.08); }
+    .chip:hover { color:var(--text); box-shadow:0 0 0 1px rgba(0,240,255,.5); }
+    #b-mic.live { box-shadow:0 0 0 1px var(--accent), 0 0 16px rgba(255,45,149,.45); }
+    #drop { position:fixed; inset:0; z-index:30; display:none; align-items:center; justify-content:center;
+            background:var(--bg); color:var(--cyan); font-size:22px; font-weight:700; letter-spacing:.04em; }
+    #drop.show { display:flex; }
+    /* the bar is now ONE row and nothing else, so she stays visible */
+    .bar { flex-wrap:nowrap; padding:10px 12px; }
+    #more { position:fixed; left:50%; bottom:78px; transform:translateX(-50%); z-index:10; display:none;
+            width:min(860px,calc(100vw - 20px)); background:rgba(14,16,24,.96); border:1px solid rgba(255,255,255,.1);
+            border-radius:16px; padding:12px 14px; box-shadow:0 24px 60px -18px #000; }
+    #more.open { display:block; }
+  </style>
 </head>
 <body>
   <div id="stage"></div>
   <header>
     <span class="brand">Q<span style="color:var(--accent)">.</span></span>
-    <span class="sub">The lab · she picks it up and pours</span>
+    <span class="sub">The lab · tell her what to do</span>
   </header>
   <pre id="dbg">loading…</pre>
 
+  <!-- ONE SLIM ROW. Everything else lives behind "More", because a bar deep
+       enough to hold six chips and five buttons sits right across the character
+       — Sarah could not see the person she was talking to. -->
   <div class="bar">
-    <button class="b hero" id="b-play">▶ Do it</button>
-    <button class="b" id="b-loop">🔁 Loop: off</button>
-    <select class="b" id="sel-liquid"></select>
-    <button class="b" id="b-coat">🥼 Lab coat: on</button>
-    <button class="b" id="b-slow">🐢 Speed: normal</button>
-    <button class="b" id="b-turn">↻ Turn her</button>
+    <form class="say" id="say-form" autocomplete="off">
+      <input id="say" placeholder="Tell her… e.g. pick up the cup" />
+      <button class="b hero" type="submit" id="b-say">Say it</button>
+      <button class="b" type="button" id="b-mic" title="Speak it">🎤</button>
+      <button class="b" type="button" id="b-more" title="More controls">More ▾</button>
+    </form>
+  </div>
+
+  <!-- the drawer: opens ABOVE the bar, closes again, never permanent furniture -->
+  <div id="more">
+    <div class="chips">
+      <span class="chip" data-say="pick up the cup">pick up the cup</span>
+      <span class="chip" data-say="pick up the test tube">pick up the test tube</span>
+      <span class="chip" data-say="pour it in">pour it in</span>
+      <span class="chip" data-say="show me">show me</span>
+      <span class="chip" data-say="put them down">put them down</span>
+      <span class="chip" data-say="do the whole thing">do the whole thing</span>
+    </div>
+    <div class="chips" style="margin-top:8px">
+      <select class="b" id="sel-char" title="Who"></select>
+      <button class="b" id="b-who" title="Use your own character">👤 New character</button>
+      <input type="file" id="f-char" accept=".glb,.gltf,.fbx,.vrm" style="display:none" />
+      <select class="b" id="sel-liquid"></select>
+      <button class="b" id="b-coat">🥼 Lab coat: off</button>
+      <button class="b" id="b-slow">🐢 Speed: normal</button>
+      <button class="b" id="b-turn">↻ Turn her</button>
+    </div>
     <div class="note" id="note">Drag to look around, wheel to move closer.</div>
   </div>
 
+  <div id="drop">Let go — loading your character</div>
   <div id="boot">
     <div class="spin"></div>
     <div class="big">Loading the lab…</div>
-    <div class="small">A properly rigged character, a bench, and an action written on her bones.</div>
+    <div class="small">A rigged character, a bench, and hands that close on what you tell them to pick up.</div>
   </div>
 
   <script type="importmap">
@@ -70,21 +116,21 @@
   <script type="module">
   import * as THREE from 'three';
   import { GLTFLoader } from '/assets/vendor/GLTFLoader.js';
-  import { planLab, T as TIMES } from '/assets/lab-action.js';
+  import { FBXLoader } from '/assets/vendor/FBXLoader.js';
+  import { LabEngine, parse } from '/assets/lab-commands.js';
   import { LIQUIDS } from '/assets/unicorn-actions.js';
   import { reachHand } from '/assets/ik.js';
-  import { grip, wristFor } from '/assets/grip.js';
+  import { setHandOrientation, curlFingers, closeOn, wristFor, boneMap } from '/assets/grip.js';
+  import { Face } from '/assets/face.js';
+  import { mapRig, missingFrom } from '/assets/rig-map.js';
+  import { TGALoader } from '/assets/vendor/TGALoader.js';
 
   const $ = (id) => document.getElementById(id);
   window.addEventListener('error', (e) => { $('dbg').textContent = 'ERROR: ' + e.message; });
+  const Q = new URLSearchParams(location.search);
+  const FAST = Q.get('fast') === '1';
 
   /* ═════════ THE ROOM ═════════ */
-  /* ?fast=1 — a cheap mode for headless screenshots.
-     Software WebGL renders this scene at about 2 frames a second because of the
-     shadow map and the transmission (real glass) materials. That is fine for a
-     person on a GPU and hopeless for an automated shot: readings come back from
-     frames half a second stale. Fast mode drops both and it runs normally. */
-  const FAST = new URLSearchParams(location.search).get('fast') === '1';
   const renderer = new THREE.WebGLRenderer({ antialias: !FAST });
   renderer.setPixelRatio(Math.min(2, devicePixelRatio || 1));
   renderer.outputColorSpace = THREE.SRGBColorSpace;
@@ -114,8 +160,7 @@
     new THREE.MeshStandardMaterial({ color: 0x171b26, roughness: 0.9, metalness: 0 }));
   floor.receiveShadow = true; scene.add(floor);
 
-  /* ═════════ THE BENCH AND THE GLASSWARE ═════════
-     Everything is built from primitives so every measurement is a number. */
+  /* ═════════ THE BENCH AND THE GLASSWARE ═════════ */
   const BENCH_H = 0.92, BENCH_TOP = BENCH_H + 0.035;
   const bench = new THREE.Group(); scene.add(bench);
   {
@@ -129,18 +174,16 @@
 
   const GLASS = new THREE.MeshPhysicalMaterial({
     color: 0xcfe9ff, transparent: true, opacity: 0.6, roughness: 0.05,
-    metalness: 0, transmission: FAST ? 0 : 0.35, thickness: 0.02, side: THREE.DoubleSide,   // 0.9 made the glass a ghost
+    metalness: 0, transmission: FAST ? 0 : 0.35, thickness: 0.02, side: THREE.DoubleSide,
   });
   const LIP = new THREE.MeshStandardMaterial({ color: 0xeaf6ff, roughness: 0.25, metalness: 0.1 });
 
-  /* the test tube: base at the group's origin, standing up +Y */
   const TUBE_H = 0.20, TUBE_R = 0.016;
   const tube = new THREE.Group();
   {
     const g = new THREE.Mesh(new THREE.CylinderGeometry(TUBE_R, TUBE_R, TUBE_H, 24, 1, true), GLASS);
     g.position.y = TUBE_H / 2; tube.add(g);
-    const base = new THREE.Mesh(new THREE.SphereGeometry(TUBE_R, 20, 12, 0, Math.PI * 2, Math.PI / 2, Math.PI / 2), GLASS);
-    tube.add(base);
+    tube.add(new THREE.Mesh(new THREE.SphereGeometry(TUBE_R, 20, 12, 0, Math.PI * 2, Math.PI / 2, Math.PI / 2), GLASS));
     const lip = new THREE.Mesh(new THREE.TorusGeometry(TUBE_R, 0.0035, 8, 24).rotateX(Math.PI / 2), LIP);
     lip.position.y = TUBE_H; tube.add(lip);
   }
@@ -149,22 +192,14 @@
     new THREE.MeshPhysicalMaterial({ color: 0x6fd6ff, transparent: true, opacity: 0.85, roughness: 0.15, transmission: 0.4 }));
   water.scale.y = 0.0001; water.visible = false;
   tube.add(water);
-  /* HOME POSITIONS — on the bench, INSIDE HER REACH (measured: shoulder to wrist
-     is 0.46m; these are 0.34–0.40m from the shoulder that reaches for them).
-     The tube is on her right (-X) for the right hand; the jug on her left. */
-  const TUBE_HOME = new THREE.Vector3(-0.14, BENCH_TOP, -0.24);
-  const JUG_HOME = new THREE.Vector3(0.24, BENCH_TOP, -0.24);
-  tube.position.copy(TUBE_HOME);
   scene.add(tube);
 
-  /* the jug she pours from: base at origin, lip at (−JUG_R, JUG_H, 0) */
   const JUG_H = 0.15, JUG_R = 0.05;
   const jug = new THREE.Group();
   {
     const body = new THREE.Mesh(new THREE.CylinderGeometry(JUG_R, JUG_R * 0.88, JUG_H, 24, 1, true), GLASS);
     body.position.y = JUG_H / 2; jug.add(body);
-    const bottom = new THREE.Mesh(new THREE.CircleGeometry(JUG_R * 0.88, 24).rotateX(-Math.PI / 2), GLASS);
-    jug.add(bottom);
+    jug.add(new THREE.Mesh(new THREE.CircleGeometry(JUG_R * 0.88, 24).rotateX(-Math.PI / 2), GLASS));
     const lip = new THREE.Mesh(new THREE.TorusGeometry(JUG_R, 0.004, 8, 24).rotateX(Math.PI / 2), LIP);
     lip.position.y = JUG_H; jug.add(lip);
     const inside = new THREE.Mesh(new THREE.CylinderGeometry(JUG_R * 0.9, JUG_R * 0.8, JUG_H * 0.6, 20),
@@ -172,23 +207,144 @@
     inside.position.y = JUG_H * 0.3; jug.add(inside);
     jug.userData.inside = inside;
   }
-  jug.position.copy(JUG_HOME);
   scene.add(jug);
 
-  /* the stream, shown only while pouring */
   const stream = new THREE.Mesh(new THREE.CylinderGeometry(0.004, 0.003, 1, 10),
     new THREE.MeshBasicMaterial({ color: 0x9fe6ff, transparent: true, opacity: 0.8 }));
   stream.visible = false; scene.add(stream);
 
-  /* ═════════ HER ═════════ */
-  const loader = new GLTFLoader();
-  let rig = null, mesh = null, bones = {}, restQ = {}, H = 1.7;
-  let coatParts = [];
+  /* ═════════ HER — any Mixamo-named character ═════════
+     The lab reads only two things off a skeleton: the bone names and the two
+     shoulder positions. Scale, height, prefix — none of it is assumed. Swap the
+     file and everything else follows. */
+  const CHARACTERS = {
+    medic:    { name: 'Lab teacher (Rocketbox)', url: '/assets/models/rocketbox/Medical_Female_01_facial.fbx' },
+    claire:   { name: 'Claire (Mixamo · local only)', url: '/assets/models/claire.fbx' },
+    vrm:      { name: 'VRM sample (local only)', url: '/assets/models/vrm-sample.vrm' },
+    michelle: { name: 'Michelle (three.js)', url: '/assets/models/michelle.glb' },
+    xbot:     { name: 'Xbot (three.js)',     url: '/assets/models/xbot.glb' },
+  };
+  Object.entries(CHARACTERS).forEach(([k, c]) => { const o = document.createElement('option'); o.value = k; o.textContent = c.name; $('sel-char').appendChild(o); });
+  const startChar = CHARACTERS[Q.get('character')] ? Q.get('character') : 'medic';
+  $('sel-char').value = startChar;
+  $('sel-char').addEventListener('change', () => loadCharacter($('sel-char').value));
 
-  /* THE LAB COAT (optional, off by default — primitives read as paint on her).
-     Built along the bones themselves: a bone's CHILD sits at a known position in
-     that bone's own local space, so child.position IS the limb's direction and
-     length, in the right units, whatever the rig. */
+  /* ⚠️ .TGA IS NOT A WEB FORMAT. Microsoft Rocketbox ships its textures as
+     TGA, and without a handler FBXLoader silently substitutes blank placeholder
+     textures — the character loads perfectly and renders as a grey mannequin.
+     Registering the decoder on the manager is the whole fix. */
+  const manager = new THREE.LoadingManager();
+  manager.addHandler(/\.tga$/i, new TGALoader(manager));
+  const loader = new GLTFLoader(manager);
+  let rig = null, mesh = null, bones = {}, restQ = {}, H = 1.7;
+  let hasFingers = true;     // a rig with no finger bones still works — nothing closes, that is all
+  let faceRig = null;        // only when the character HAS a face to move
+  let coatParts = [];
+  let engine = null;
+  let TUBE_HOME = new THREE.Vector3(), JUG_HOME = new THREE.Vector3();
+
+  function loadCharacter(key) {
+    const c = CHARACTERS[key] || CHARACTERS.michelle;
+    $('boot').classList.remove('gone');
+    $('boot').innerHTML = '<div class="spin"></div><div class="big">Loading ' + c.name + '…</div>';
+    const done = (obj, json) => { if (install(obj, c.name, json)) history.replaceState(null, '', '?character=' + key + (FAST ? '&fast=1' : '')); };
+    const failed = (e) => refuse('Could not load ' + c.name, String((e && e.message) || e));
+    // a Mixamo download is FBX; ours are GLB. Both end up in the same install().
+    if (/\.fbx$/i.test(c.url)) new FBXLoader(manager).load(c.url, done, undefined, failed);
+    else loader.load(c.url, (gltf) => done(gltf.scene, gltf.parser && gltf.parser.json), undefined, failed);
+  }
+
+  /* PUT A CHARACTER IN THE LAB — from a file we ship, or one dropped on the
+     page. Any Mixamo-named rig with hands. Nothing about it is assumed: her
+     height sets where she stands, her shoulders set where the props go, her
+     hand bones set how the hands close (grip.js reads the frame). */
+  /* A REFUSED CHARACTER MUST NOT COST HER THE ONE SHE HAD.
+     The candidate is inspected first and only swapped in once it is known to
+     work — so dropping the wrong file says why and leaves the lab exactly as it
+     was, instead of emptying the room and stranding her on an error screen. */
+  function refuse(title, detail) {
+    $('boot').classList.remove('gone');
+    $('boot').innerHTML = '<div class="big">' + title + '</div><div class="small">' + detail + '</div>'
+      + (rig ? '<button class="b" id="b-back2">Back to the lab</button>' : '');
+    const back = $('b-back2');
+    if (back) back.addEventListener('click', () => $('boot').classList.add('gone'));
+    return false;
+  }
+
+  function install(obj, name, json) {
+    // ── inspect the candidate, touching nothing on screen ──
+    let m = null;
+    obj.traverse((o) => { if (o.isSkinnedMesh && !m) m = o; });
+    if (!m) return refuse('No skinned character in ' + name,
+      'That file has no rigged mesh in it — it may be an animation-only file. From Mixamo use the <b>Characters</b> tab, not an animation.');
+
+    /* ⚠️ NOT `m.skeleton.bones` — see grip.js boneMap(). A Mixamo FBX can stack
+       three nodes of the same name and the skeleton lists the innermost, which
+       is a leaf that drives nothing. Take the one nearest the root. */
+    const mapped = mapRig(obj, json);
+    const nb = mapped.bones, nq = mapped.restQ;
+    /* WHAT WE ACTUALLY REQUIRE is an arm on each side. Fingers are a BONUS: a
+       rig without them still reaches, still carries, still pours — the fingers
+       simply do not close. Refusing a character for missing fingers would be
+       turning away a perfectly usable teacher. */
+    const missing = missingFrom(nb);
+    if (missing.length) return refuse(name + ' is not a Mixamo-named rig',
+      'Missing: <b>' + missing.join(', ') + '</b>.<br>Found ' + m.skeleton.bones.length + ' bones named like: '
+      + Object.keys(nb).slice(0, 12).join(', ') + '…<br><br>From Mixamo, download the CHARACTER as <b>FBX Binary</b> in <b>T-pose</b>.');
+
+    // ── it works: now swap ──
+    if (rig) { scene.remove(rig); removeCoat(); }
+    rig = obj; mesh = m; bones = nb; restQ = nq;
+    hasFingers = !!nb.RightHandIndex1;
+    rig.traverse((o) => { if (o.isMesh || o.isSkinnedMesh) { o.castShadow = true; o.frustumCulled = false; } });
+    // a Mixamo FBX comes in centimetres; bring anything to metres by its height
+    rig.updateMatrixWorld(true);
+    let box = new THREE.Box3().setFromObject(rig), size = new THREE.Vector3(); box.getSize(size);
+    if (size.y > 3) { rig.scale.multiplyScalar(1.7 / size.y); rig.updateMatrixWorld(true); box = new THREE.Box3().setFromObject(rig); box.getSize(size); }
+    H = size.y || 1.7;
+    rig.position.y -= box.min.y;
+    rig.position.z = -0.50;
+    rig.rotation.y = 0;
+    scene.add(rig);
+    rig.updateMatrixWorld(true);
+    const sh = shoulders();
+    TUBE_HOME.set(sh.shoulderR.x - 0.04, BENCH_TOP, sh.shoulderR.z + 0.26);
+    JUG_HOME.set(sh.shoulderL.x + 0.14, BENCH_TOP, sh.shoulderL.z + 0.26);
+    engine = new LabEngine({ THREE, TUBE_H, TUBE_R, JUG_H, JUG_R, tubeHome: TUBE_HOME, jugHome: JUG_HOME });
+    faceRig = new Face(rig, bones);
+    $('boot').classList.add('gone');
+    $('dbg').textContent = name + ' — ' + Object.keys(bones).length + ' bones (' + mapped.source + ')'
+      + (hasFingers ? '' : ' (no fingers — she will carry, not grip)')
+      + '\nface: ' + (faceRig.mode === 'blendshapes'
+          ? faceRig.morphCount + ' blendshapes · ' + faceRig.available.join(' ')
+          : faceRig.mode === 'features'
+            ? 'moving her own features — ' + faceRig.report().features.join(' ')
+            : 'NONE — nothing on this character can move')
+      + '\ntell her what to do';
+    $('note').textContent = 'Loaded ' + name + '. Tell her what to do.';
+    return true;
+  }
+
+  /* DROP A CHARACTER ON THE PAGE. A Mixamo download (Characters → Download →
+     FBX Binary, T-pose) goes straight in; so does any .glb. */
+  async function takeFile(file) {
+    if (!file) return;
+    const buf = await file.arrayBuffer();
+    const name = file.name.replace(/\.(fbx|glb|gltf|vrm)$/i, '');
+    try {
+      if (/\.fbx$/i.test(file.name)) {
+        const obj = new FBXLoader(manager).parse(buf, '');
+        install(obj, name);
+      } else {
+        loader.parse(buf, '', (gltf) => install(gltf.scene, name, gltf.parser && gltf.parser.json), (err) => { $('note').textContent = 'Could not read ' + file.name + ' — ' + (err && err.message || err); });
+      }
+    } catch (err) { $('note').textContent = 'Could not read ' + file.name + ' — ' + (err && err.message || err); }
+  }
+  addEventListener('dragover', (e) => { e.preventDefault(); $('drop').classList.add('show'); });
+  addEventListener('dragleave', (e) => { if (e.clientX === 0 && e.clientY === 0) $('drop').classList.remove('show'); });
+  addEventListener('drop', (e) => { e.preventDefault(); $('drop').classList.remove('show'); takeFile(e.dataTransfer.files[0]); });
+
+  /* THE LAB COAT (optional, off by default). Built along the bones themselves. */
   function sleeveAlong(bone, child, rTop, rBot, mat, shrink) {
     if (!bone || !child) return null;
     const v = child.position.clone();
@@ -233,58 +389,71 @@
       bones[k].quaternion.copy(restQ[k]).multiply(_q);
     }
   }
+  const _sR = new THREE.Vector3(), _sL = new THREE.Vector3();
+  function shoulders() {
+    bones.RightArm.updateWorldMatrix(true, false); _sR.setFromMatrixPosition(bones.RightArm.matrixWorld);
+    bones.LeftArm.updateWorldMatrix(true, false); _sL.setFromMatrixPosition(bones.LeftArm.matrixWorld);
+    return { shoulderR: _sR.clone(), shoulderL: _sL.clone() };
+  }
 
-  loader.load('/assets/models/michelle.glb', (gltf) => {
-    rig = gltf.scene;
-    rig.traverse((o) => { if (o.isMesh || o.isSkinnedMesh) { o.castShadow = true; o.frustumCulled = false; if (o.isSkinnedMesh && !mesh) mesh = o; } });
-    const box = new THREE.Box3().setFromObject(rig), size = new THREE.Vector3();
-    box.getSize(size);
-    H = size.y || 1.7;
-    rig.position.y -= box.min.y;
-    rig.position.z = -0.50;                 // close enough to work at the bench
-    rig.rotation.y = 0;                     // she already faces +Z, where the camera is
-    scene.add(rig);
-
-    mesh.skeleton.bones.forEach((b) => {
-      const k = b.name.replace(/^mixamorig:?/, '');
-      bones[k] = b; restQ[k] = b.quaternion.clone();
-    });
-    window.__lab = { THREE, scene, camera, rig, mesh, bones, coatParts, tube, jug, bench, BENCH_H, TUBE_HOME, JUG_HOME,
-      /* SEEK / FREEZE — a screenshot lands on an exact moment, not a wall-clock guess */
-      freeze(target) { playing = true; frozenT = target; return target; },
-      thaw() { frozenT = null; tStart = performance.now() / 1000; return true; },
-      seek(target) { frozenT = null; playing = true; tStart = (performance.now() / 1000) - (target / speed); return target; },
-      view(a, d, h) { camA = a; camDist = d; camH = h; return [a, d, h]; },
-      snap() {
-        const V = THREE.Vector3;
-        const wp = (o) => { o.updateWorldMatrix(true, false); return new V().setFromMatrixPosition(o.matrixWorld).toArray().map(n => +n.toFixed(3)); };
-        const sz = (o) => { const b = new THREE.Box3().setFromObject(o), s = new V(); b.getSize(s); return s.toArray().map(n => +n.toFixed(3)); };
-        return {
-          t: lastT, phase: lastPlan && lastPlan.phase, held: lastPlan && lastPlan.held,
-          rightWrist: wp(bones.RightHand), leftWrist: wp(bones.LeftHand),
-          rightErr: lastIK.right, leftErr: lastIK.left,
-          tube: wp(tube), tubeSize: sz(tube), jug: wp(jug), jugSize: sz(jug), jugTilt: +jug.rotation.z.toFixed(3),
-          head: wp(bones.Head), tubeParent: tube.parent && (tube.parent.name || tube.parent.type),
-          coatParts: coatParts.length, streamOn: stream.visible, waterOn: water.visible, waterH: +water.scale.y.toFixed(3),
-          frames, loopErr,
-        };
-      },
-    };
-    $('boot').classList.add('gone');
-    $('dbg').textContent = 'Michelle — ' + mesh.skeleton.bones.length + ' bones\npress ▶ Do it';
-  }, undefined, (e) => {
-    $('boot').innerHTML = '<div class="big">Could not load her</div><div class="small">' + e + '</div>';
-  });
-
-  /* ═════════ THE ACTION ═════════
-     planLab(t) says where the PROPS are and what each HAND must do to be
-     holding them. Here we: pose the body, solve each arm to its wrist target,
-     turn and close each hand, and put the props exactly where the plan says.
-     Props are NEVER parented to a bone (see grip.js for the 2.6mm tube). */
-  let playing = false, tStart = 0, loop = false, speed = 1, liquid = 'water';
-  let frozenT = null, lastT = 0, lastPlan = null;
+  /* ═════════ DRAWING A PLAN ═════════
+     The engine says where the props are and what each hand is doing. Here we
+     pose the body, solve each arm to its wrist target, turn the hand, and —
+     for a hand that is taking or holding something — CLOSE THE FINGERS ON IT:
+     they stop where they touch the prop (grip.js closeOn), so a 3cm tube gets
+     a tight fist and a 10cm cup an open one, without anyone typing an angle. */
   const lastIK = { right: 0, left: 0 };
+  let lastCurls = {};
+  function draw(plan) {
+    applyPose(plan.pose);
+    const sh = shoulders();
+    [['Right', plan.right, -1, 'tube'], ['Left', plan.left, 1, 'jug']].forEach(([side, h, out, pname]) => {
+      const shoulder = side === 'Right' ? sh.shoulderR : sh.shoulderL;
+      let target = h.wristRest.clone();
+      if (h.prop) {
+        const onProp = wristFor(bones, side, h.grip, h.fingers, h.thumb, h.along, h.off, h.radius);
+        target.lerp(onProp, h.attach);
+      }
+      const pole = shoulder.clone().add(new THREE.Vector3(out * 0.45, -0.5, 0.12));
+      reachHand(bones, side, target, pole);
+      setHandOrientation(bones, side, h.fingers, h.thumb);
+      if (h.prop && (h.closing || h.holding)) {
+        lastCurls[side] = hasFingers ? closeOn(bones, restQ, side, h.grip, h.axis, h.radius, h.curl) : null;
+      } else if (hasFingers) {
+        curlFingers(bones, restQ, side, h.curl);
+      }
+      bones[side + 'Hand'].updateWorldMatrix(true, false);
+      const got = new THREE.Vector3().setFromMatrixPosition(bones[side + 'Hand'].matrixWorld);
+      lastIK[side.toLowerCase()] = +got.distanceTo(target).toFixed(3);
+      lastIK[side + 'W'] = got;
+    });
+    engine.noteWrists(lastIK.RightW, lastIK.LeftW);
 
+    tube.position.copy(plan.tube.pos);
+    jug.position.copy(plan.jug.pos);
+    jug.rotation.set(0, 0, plan.jug.tilt);
+
+    const fill = plan.fill;
+    water.visible = fill > 0.01;
+    const hgt = fill * TUBE_H * 0.8;
+    water.scale.y = Math.max(0.0001, hgt);
+    water.position.y = hgt / 2 + 0.004;
+    const inside = jug.userData.inside;
+    inside.scale.y = Math.max(0.05, 1 - fill * 0.8);
+    inside.position.y = JUG_H * 0.3 * inside.scale.y;
+
+    stream.visible = plan.pouring;
+    if (plan.pouring) {
+      const from = plan.jug.lip, to = plan.tube.mouth.clone(); to.y -= 0.01;
+      const dir = to.clone().sub(from);
+      stream.position.copy(from).add(to).multiplyScalar(0.5);
+      stream.scale.set(1, Math.max(0.01, dir.length()), 1);
+      stream.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir.clone().normalize());
+    }
+  }
+
+  /* ═════════ TELLING HER ═════════ */
+  let speed = 1, liquid = 'water';
   Object.keys(LIQUIDS).forEach((name) => {
     const o = document.createElement('option');
     o.value = name; o.textContent = name;
@@ -299,64 +468,36 @@
     stream.material.color.setHex(c);
   });
 
-  const _sR = new THREE.Vector3(), _sL = new THREE.Vector3();
-  function shoulders() {
-    bones.RightArm.updateWorldMatrix(true, false); _sR.setFromMatrixPosition(bones.RightArm.matrixWorld);
-    bones.LeftArm.updateWorldMatrix(true, false); _sL.setFromMatrixPosition(bones.LeftArm.matrixWorld);
-    return { shoulderR: _sR.clone(), shoulderL: _sL.clone() };
+  const heard = [];
+  function say(text) {
+    if (!engine) return [];
+    const cmds = engine.say(text);
+    heard.unshift((cmds.length ? '✓ ' : '? ') + text);
+    if (heard.length > 4) heard.pop();
+    $('note').textContent = cmds.length ? 'she heard: ' + text : 'she did not understand "' + text + '" — try "pick up the cup", "pour", "put it down", "show me"';
+    return cmds;
   }
+  $('say-form').addEventListener('submit', (e) => { e.preventDefault(); const t = $('say').value.trim(); if (t) { say(t); $('say').value = ''; } });
+  document.querySelectorAll('.chip').forEach((c) => c.addEventListener('click', () => say(c.dataset.say)));
 
-  function runAction(t) {
-    const ctx = Object.assign({ THREE, tubeHome: TUBE_HOME, jugHome: JUG_HOME, TUBE_H, TUBE_R, JUG_H, JUG_R }, shoulders());
-    // the body first (it moves the shoulders), then plan again off the real shoulders
-    applyPose(planLab(t, ctx).pose);
-    Object.assign(ctx, shoulders());
-    const plan = planLab(t, ctx);
-    lastPlan = plan;
-
-    /* ARMS: the wrist target comes FROM the prop and the hand's orientation, so
-       when the fingers close the prop is already in the palm. The elbows break
-       outward and down — which is how arms work. */
-    [['Right', plan.right, -1], ['Left', plan.left, 1]].forEach(([side, h, out]) => {
-      const sh = side === 'Right' ? ctx.shoulderR : ctx.shoulderL;
-      const onProp = wristFor(bones, side, h.grip, h.fingers, h.thumb, h.along, h.off);
-      const target = h.wristRest.clone().lerp(onProp, h.attach);
-      const pole = sh.clone().add(new THREE.Vector3(out * 0.45, -0.5, 0.12));
-      reachHand(bones, side, target, pole);
-      grip(bones, restQ, side, h.fingers, h.thumb, h.curl);
-      bones[side + 'Hand'].updateWorldMatrix(true, false);
-      lastIK[side.toLowerCase()] = +new THREE.Vector3().setFromMatrixPosition(bones[side + 'Hand'].matrixWorld).distanceTo(target).toFixed(3);
+  /* the microphone — the browser's own speech recognition (Edge/Chrome) */
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SR) { $('b-mic').disabled = true; $('b-mic').title = 'No speech recognition in this browser'; }
+  else {
+    let rec = null;
+    $('b-mic').addEventListener('click', () => {
+      if (rec) { rec.stop(); return; }
+      rec = new SR(); rec.lang = 'en-GB'; rec.interimResults = false; rec.maxAlternatives = 1;
+      $('b-mic').classList.add('live'); $('say').placeholder = 'listening…';
+      rec.onresult = (ev) => { const t = ev.results[0][0].transcript; $('say').value = t; say(t); $('say').value = ''; };
+      rec.onerror = (ev) => { $('note').textContent = 'microphone: ' + ev.error; };
+      rec.onend = () => { rec = null; $('b-mic').classList.remove('live'); $('say').placeholder = 'Tell her… e.g. pick up the cup'; };
+      rec.start();
     });
-
-    /* PROPS go exactly where the plan says */
-    tube.position.copy(plan.tube.pos);
-    jug.position.copy(plan.jug.pos);
-    jug.rotation.set(0, 0, plan.jug.tilt);
-
-    // the liquid climbs the tube as it fills; the jug empties
-    const fill = plan.fill;
-    water.visible = fill > 0.01;
-    const hgt = fill * TUBE_H * 0.8;
-    water.scale.y = Math.max(0.0001, hgt);
-    water.position.y = hgt / 2 + 0.004;
-    const inside = jug.userData.inside;
-    inside.scale.y = Math.max(0.05, 1 - fill * 0.8);
-    inside.position.y = JUG_H * 0.3 * inside.scale.y;
-
-    // the stream: from the jug's lip into the mouth of the tube
-    stream.visible = plan.pouring;
-    if (plan.pouring) {
-      const from = plan.jug.lip, to = plan.tube.mouth.clone();
-      to.y -= 0.01;
-      const dir = to.clone().sub(from);
-      stream.position.copy(from).add(to).multiplyScalar(0.5);
-      stream.scale.set(1, Math.max(0.01, dir.length()), 1);
-      stream.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir.clone().normalize());
-    }
-    return plan;
   }
 
   let camA = 0.42, camDist = 1.7, camH = 1.5;
+  const camTarget = new THREE.Vector3(0.0, BENCH_H + 0.30, -0.30);   // what the camera looks at
   {
     const el = renderer.domElement;
     let drag = false, lx = 0, ly = 0;
@@ -376,9 +517,7 @@
   }
   addEventListener('resize', resize); resize();
 
-  /* CATCH WHAT THE LOOP THROWS — an exception inside the animation loop kills
-     it silently and the page LOOKS alive on a frozen frame. */
-  let loopErr = null, frames = 0, tick = 0;
+  let loopErr = null, frames = 0, tick = 0, last = performance.now(), lastPlan = null, frozen = null;
   renderer.setAnimationLoop(() => {
     frames++;
     window.__frames = frames;
@@ -387,44 +526,78 @@
       if (!loopErr) { loopErr = (err && err.stack) || String(err); window.__loopErr = loopErr; $('dbg').textContent = 'LOOP ERROR: ' + loopErr.slice(0, 400); }
     }
   });
-
   function loopBody() {
     const now = performance.now();
-    if (rig) {
-      // idle = the plan at t=0: arms at rest, props at home. Never a T-pose.
-      let t = 0;
-      if (playing) t = frozenT != null ? frozenT : ((now / 1000) - tStart) * speed;
-      lastT = +t.toFixed(2);
-      window.__state = { playing, t: lastT, frozen: frozenT };
-      const plan = runAction(t);
+    let dt = Math.min(0.1, (now - last) / 1000) * speed; last = now;
+    if (frozen != null) dt = 0;
+    if (rig && engine) {
+      const sh = shoulders();
+      const plan = engine.update(dt, sh.shoulderR, sh.shoulderL);
+      lastPlan = plan;
+      draw(plan);
 
-      if (playing && frozenT == null && t >= plan.duration) {
-        if (loop) { tStart = now / 1000; }
-        else { playing = false; $('b-play').textContent = '▶ Do it again'; }
+      /* THE FACE. Blinking runs whatever she is doing — a face that never
+         blinks reads as a mask. The expression follows the work: brows down
+         while pouring (the fiddly bit), pleased when she holds it up for you.
+         A character with no blendshapes simply gets nothing here. */
+      if (faceRig) {
+        const pouring = plan.pouring, showing = plan.phase === 'showing you' || plan.phase === 'there';
+        faceRig.update(dt, {
+          concentrate: pouring ? 1 : 0,
+          smile: showing ? 0.65 : 0.12,
+          brow: showing ? 0.35 : 0,
+        });
+        // her eyes stay on whatever she is holding, else on you
+        const at = plan.tube.held ? plan.tube.mouth : (plan.jug.held ? plan.jug.lip : null);
+        if (at) faceRig.lookAt(at);
+        else faceRig.lookAt(camera.position);
       }
       if (tick++ % 10 === 0) {
-        $('dbg').textContent = (playing ? 'action t=' + t.toFixed(2) + 's of ' + plan.duration + ' — ' + plan.phase : 'ready')
-          + '\nholding: ' + plan.held + '   fill: ' + (plan.fill * 100).toFixed(0) + '%'
-          + '\nliquid: ' + liquid + '\nhand error R ' + lastIK.right + 'm · L ' + lastIK.left + 'm';
+        $('dbg').textContent = (plan.busy ? plan.phase : 'ready — tell her what to do')
+          + '\nholding: ' + (plan.tube.held ? 'tube ' : '') + (plan.jug.held ? 'cup' : '') + (plan.held ? '' : 'nothing') + '   fill: ' + (plan.fill * 100).toFixed(0) + '%'
+          + '\nhand error R ' + lastIK.right + 'm · L ' + lastIK.left + 'm'
+          + (lastCurls.Right ? '\nR fingers ' + JSON.stringify(lastCurls.Right) : '')
+          + (heard.length ? '\n' + heard.join('\n') : '');
       }
     }
     camera.position.set(Math.sin(camA) * camDist, camH, Math.cos(camA) * camDist + 0.05);
-    camera.lookAt(0.0, BENCH_H + 0.30, -0.30);
+    camera.lookAt(camTarget.x, camTarget.y, camTarget.z);
     renderer.render(scene, camera);
   }
 
-  $('b-play').addEventListener('click', () => {
-    frozenT = null;
-    tStart = performance.now() / 1000;
-    playing = true;
-    $('b-play').textContent = '↻ Restart';
+  /* HER OWN CHARACTER, WITHOUT A TERMINAL.
+     Mixamo is free, artist-made, and already uses the bone names everything
+     here is written against — so a download drops straight in with nothing to
+     convert. This panel says exactly which buttons to press, because getting
+     the export options wrong is the only way this goes wrong. */
+  /* ⚠️ DRAG AND DROP IS NOT ENOUGH ON ITS OWN. Dragging a file out of Explorer
+     into an embedded browser (VS Code's, for one) is often silently refused by
+     the OS — the page never sees a drop event and it looks broken. So the file
+     PICKER is the main route and the drop is the shortcut. */
+  $('b-who').addEventListener('click', () => {
+    $('boot').classList.remove('gone');
+    $('boot').innerHTML =
+      '<div class="big">Use your own character</div>'
+      + '<div class="small" style="text-align:left">'
+      + '<b>1.</b> Go to <b>mixamo.com</b> and sign in (free Adobe account).<br>'
+      + '<b>2.</b> <b>Characters</b> tab — pick anyone you like the look of.<br>'
+      + '<b>3.</b> <b>Download</b> → Format <b>FBX Binary (.fbx)</b>, Pose <b>T-pose</b>.<br>'
+      + '<b>4.</b> Press the button below and choose the file.<br><br>'
+      + 'A <b>.glb</b> works too. It needs arm and hand bones with the usual names '
+      + '(every Mixamo character has them) — fingers are a bonus, not a requirement.'
+      + '</div>'
+      + '<button class="b hero" id="b-pick">📂 Choose a character file</button>'
+      + '<button class="b" id="b-back">Back to the lab</button>';
+    $('b-pick').addEventListener('click', () => $('f-char').click());
+    $('b-back').addEventListener('click', () => { if (rig) $('boot').classList.add('gone'); });
   });
-  $('b-loop').addEventListener('click', (e) => {
-    loop = !loop;
-    e.target.classList.toggle('on', loop);
-    e.target.textContent = loop ? '🔁 Loop: on' : '🔁 Loop: off';
+  $('f-char').addEventListener('change', (e) => { if (e.target.files[0]) takeFile(e.target.files[0]); e.target.value = ''; });
+
+  $('b-more').addEventListener('click', (e) => {
+    const open = $('more').classList.toggle('open');
+    e.target.textContent = open ? 'More ▴' : 'More ▾';
   });
-  $('b-coat').textContent = '🥼 Lab coat: off';
+
   $('b-coat').addEventListener('click', (e) => {
     if (coatParts.length) { removeCoat(); e.target.textContent = '🥼 Lab coat: off'; }
     else { makeCoat(); e.target.textContent = '🥼 Lab coat: on'; }
@@ -438,6 +611,39 @@
     speed = speed === 1 ? 0.4 : 1;
     e.target.textContent = speed === 1 ? '🐢 Speed: normal' : '🐢 Speed: slow';
   });
+
+  /* A HANDLE FOR THE HEADLESS BROWSER */
+  window.__lab = {
+    THREE, scene, camera, tube, jug, bench, BENCH_H,
+    get rig() { return rig; }, get bones() { return bones; }, get engine() { return engine; },
+    get face() { return faceRig; },
+    say, parse,
+    step(sec) { /* advance the engine by `sec` seconds in fixed steps, ignoring wall clock */
+      if (!engine) return 0; const sh = shoulders(); let t = 0;
+      while (t < sec) { const d = Math.min(1 / 60, sec - t); const plan = engine.update(d, sh.shoulderR, sh.shoulderL); lastPlan = plan; draw(plan); t += d; }
+      frozen = true; return t;
+    },
+    thaw() { frozen = null; return true; },
+    view(a, d, h) { camA = a; camDist = d; camH = h; return [a, d, h]; },
+    focus(x, y, z) { camTarget.set(x, y, z); return camTarget.toArray(); },
+    headShot() { const h = bones.Head; h.updateWorldMatrix(true, false); const p = new THREE.Vector3().setFromMatrixPosition(h.matrixWorld); camTarget.copy(p); camA = 0; camDist = 0.42; camH = p.y; return p.toArray(); },
+    snap() {
+      const V = THREE.Vector3;
+      const wp = (o) => { o.updateWorldMatrix(true, false); return new V().setFromMatrixPosition(o.matrixWorld).toArray().map(n => +n.toFixed(3)); };
+      const sz = (o) => { const b = new THREE.Box3().setFromObject(o), s = new V(); b.getSize(s); return s.toArray().map(n => +n.toFixed(3)); };
+      return {
+        phase: lastPlan && lastPlan.phase, busy: lastPlan && lastPlan.busy, queue: engine ? engine.queue.length : null,
+        held: { tube: engine && engine.props.tube.held, jug: engine && engine.props.jug.held }, fill: engine && +engine.fill.toFixed(2),
+        rightWrist: bones.RightHand ? wp(bones.RightHand) : null, leftWrist: bones.LeftHand ? wp(bones.LeftHand) : null,
+        rightErr: lastIK.right, leftErr: lastIK.left, curls: lastCurls,
+        tube: wp(tube), tubeSize: sz(tube), jug: wp(jug), jugSize: sz(jug), jugTilt: +jug.rotation.z.toFixed(3),
+        tubeParent: tube.parent && (tube.parent.name || tube.parent.type), streamOn: stream.visible, waterH: +water.scale.y.toFixed(3),
+        frames, loopErr, character: $('sel-char').value,
+      };
+    },
+  };
+
+  loadCharacter(startChar);
   </script>
 </body>
 </html>

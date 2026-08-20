@@ -97,7 +97,7 @@
   import * as THREE from 'three';
   import { GLTFLoader } from '/assets/vendor/GLTFLoader.js';
   import { reachHand } from '/assets/ik.js';
-  import { grip, wristFor } from '/assets/grip.js';
+  import { grip, wristFor, boneMap } from '/assets/grip.js';
 
   const $ = (id) => document.getElementById(id);
   window.addEventListener('error', (e) => { $('dbg').textContent = 'ERROR: ' + e.message; });
@@ -159,8 +159,8 @@
 
   /* where the fist closes on each prop, as a height up the prop */
   const PROP = {
-    tube: { obj: tube, h: TUBE_H, gripUp: 0.40, along: 0.045, off: 0.032, hand: 'right', handleUp: TUBE_H * 0.6 },
-    jug:  { obj: jug,  h: JUG_H,  gripUp: 0.45, along: 0.02,  off: JUG_R + 0.022, hand: 'left', handleUp: JUG_H * 0.55 },
+    tube: { obj: tube, h: TUBE_H, gripUp: 0.40, r: TUBE_R, hand: 'right', handleUp: TUBE_H * 0.6 },
+    jug:  { obj: jug,  h: JUG_H,  gripUp: 0.45, r: JUG_R,  hand: 'left', handleUp: JUG_H * 0.55 },
   };
   /* fingers/thumb directions for a fist round an upright prop in front of the
      body: fingers across the body and a little back, thumb up, knuckles out */
@@ -205,10 +205,13 @@
     rig.position.y -= box.min.y;
     rig.position.z = -0.44;
     scene.add(rig);
-    mesh.skeleton.bones.forEach((b) => {
-      const k = b.name.replace(/^mixamorig:?/, '');
-      bones[k] = b; restQ[k] = b.quaternion.clone();
-    });
+    /* ⚠️ NOT skeleton.bones — see grip.js boneMap(). Some rigs stack several
+       nodes of the same bone name, and the skeleton lists the innermost one,
+       which is a childless leaf that drives nothing. */
+    {
+      const m = boneMap(rig);
+      Object.assign(bones, m.bones); Object.assign(restQ, m.restQ);
+    }
 
     /* Hands start READY — in front of her, above the bench, where you can see
        them — not out in a T-pose. The solver puts the arms there on frame one. */
@@ -244,7 +247,7 @@
         // the hand's disc IS the fist: the prop hangs from it
         const gripPoint = h.position.clone();
         const d = HOLD_DIR[hname];
-        const wrist = wristFor(bones, side, gripPoint, d.f, d.t, P.along, P.off);
+        const wrist = wristFor(bones, side, gripPoint, d.f, d.t, null, null, P.r);
         reachHand(bones, side, wrist, pole);
         grip(bones, restQ, side, d.f, d.t, 1);
         P.obj.position.copy(gripPoint).sub(new THREE.Vector3(0, P.h * P.gripUp, 0));

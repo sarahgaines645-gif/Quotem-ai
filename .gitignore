@@ -37,3 +37,11 @@ build/
 data/logo-cache/
 .local-data/
 .local-data.log
+
+# ⚠️ LOCAL-ONLY CHARACTER FILES — do not redistribute.
+# Mixamo's terms permit USING their characters but not redistributing the raw
+# files, and the pixiv VRM is a sample whose terms we have not checked. Both
+# work fine on Sarah's machine; neither belongs in the repo.
+# (Microsoft Rocketbox IS committed — it is MIT licensed.)
+assets/models/claire.fbx
+assets/models/vrm-sample.vrm
