@@ -560,6 +560,10 @@ const fold = s => String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '
 // with that paper's title attached - "Thistlewood (2019)" matched a study of
 // the sterile insect technique.) Compared on 6-letter stems so her "motivators"
 // meets OpenAlex's "Motivation", which plain containment misses.
+function subjectWords(subject) {
+    return String(subject || '').split(/[^A-Za-z]+/).filter(w => w.length >= 3 && !SUBJ_STOP.has(w.toLowerCase()));
+}
+const SUBJ_STOP = new Set(['and', 'the', 'for', 'with', 'his', 'her', 'its', 'level', 'diploma', 'certificate', 'award', 'unit', 'module', 'assignment', 'course', 'studies', 'study', 'introduction', 'advanced', 'foundation', 'part', 'one', 'two', 'three']);
 function sharesSubject(hay, words) {
     const h = fold(hay);
     if (!h) return false;
@@ -612,7 +616,7 @@ async function crossrefByAuthorYear(surname, year, kw, max) {
         return [];
     }
 }
-async function verifyMention(m, text) {
+async function verifyMention(m, text, subject) {
     const t0 = Date.now();
     try {
         if (m.doi) {
@@ -628,6 +632,7 @@ async function verifyMention(m, text) {
         // — reported as weak, not found, so a common surname cannot launder an
         // invented title.
         const kwList = contextWords(text, m.at, 6).filter(k => fold(k) !== fold(m.surname) && k.length > 3);
+        const subjWords = subjectWords(subject);
         const kw = kwList.join(' ');
         // The topic words are matched against the WORK, not the journal it sat
         // in. With the journal in the haystack, "Herzberg (1959) ... hygiene
@@ -664,7 +669,15 @@ async function verifyMention(m, text) {
             // it as the near miss it is - never hand her its title as if it were
             // the source she meant.
             const about = [weak.title, weak.snippet, (weak.fields || []).join(' ')].filter(Boolean).join(' ');
-            if (sharesSubject(about, kwList)) return pack(weak, 'weak');
+            // A CLASSIC CITED FOR ITS MODEL rarely shares surface words with the
+            // sentence applying it. Sarah's live case, 20 Aug: "Hackman and
+            // Oldham (1976) show automation strips out skill" — the right paper
+            // is "Motivation through the design of work", which says nothing
+            // about automation, so the sentence test threw the correct source
+            // away. The ASSIGNMENT'S subject is the fair yardstick: that paper
+            // sits in Organizational Behavior and Human Resource Management; a
+            // study of the sterile insect technique does not.
+            if (sharesSubject(about, kwList) || sharesSubject(about, subjWords)) return pack(weak, 'weak');
             return { ...m, found: false, ms: Date.now() - t0,
                 nearMiss: { title: weak.title, year: weak.year, authors: (weak.authors || []).map(a => a.family),
                     about: (weak.fields || []).slice(0, 2).join(', ') || null, url: weak.url || (weak.doi ? 'https://doi.org/' + weak.doi : null) } };
@@ -677,7 +690,7 @@ async function verifyMention(m, text) {
  * exemptText: the student's own words (their page, their message, their uploads,
  * the brief) — a source THEY brought is theirs to discuss, not his to have invented.
  */
-async function verifyMentions(text, { exemptText = '', max = 6, timeoutMs = 9000 } = {}) {
+async function verifyMentions(text, { exemptText = '', max = 6, timeoutMs = 9000, subject = '' } = {}) {
     const all = findMentions(text);
     const ex = String(exemptText || '');
     const exFold = fold(ex);
@@ -692,7 +705,7 @@ async function verifyMentions(text, { exemptText = '', max = 6, timeoutMs = 9000
     const todo = all.filter(m => !isExempt(m)).slice(0, max);
     if (!todo.length) return { checked: [], unverified: [], exempt, skipped: Math.max(0, all.length - exempt.length - todo.length) };
     const timer = new Promise(res => setTimeout(() => res('timeout'), timeoutMs));
-    const results = await Promise.race([Promise.all(todo.map(m => verifyMention(m, text))), timer]);
+    const results = await Promise.race([Promise.all(todo.map(m => verifyMention(m, text, subject))), timer]);
     if (results === 'timeout') return { checked: [], unverified: [], exempt, timedOut: true, skipped: todo.length };
     return { checked: results, unverified: results.filter(r => r.found === false), weak: results.filter(r => r.found === true && r.strength === 'weak'), exempt, skipped: Math.max(0, all.length - exempt.length - todo.length) };
 }

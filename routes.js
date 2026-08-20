@@ -1772,7 +1772,7 @@ router.post('/writer/chat', requirePerson, express.json({ limit: '1mb' }), write
                     const exemptText = [text, String(b.docText || ''), stored && stored.text ? stored.text : '', ...((t.sources || []).map(s => (s && (s.text || '')) || '')), toolText].join(String.fromCharCode(10));
                     const toCheck = reply + (display && display.src ? String.fromCharCode(10) + display.src : '');
                     if (qCite.findMentions(toCheck).length) {
-                        const v = await qCite.verifyMentions(toCheck, { exemptText, max: 6, timeoutMs: 9000 });
+                        const v = await qCite.verifyMentions(toCheck, { exemptText, max: 6, timeoutMs: 9000, subject: String((t.brief && (t.brief.subject || t.brief.title)) || '') })   // the assignment is the yardstick for whether a work is on-subject;
                         console.log('[writer/chat] cite guard: checked ' + v.checked.length + ' exempt ' + v.exempt.length + (v.timedOut ? ' TIMED OUT' : '') + (v.skipped ? ' skipped ' + v.skipped : '') + (v.unverified.length ? ' — NOT FOUND: ' + v.unverified.map(u => u.mention).join(' | ') : '') + (v.checked.filter(c => c.found).length ? ' — found: ' + v.checked.filter(c => c.found).map(c => c.mention + ' → ' + (c.title || '').slice(0, 50)).join(' | ') : ''));
                         const NL = String.fromCharCode(10);
                         // SHE MUST BE ABLE TO CHECK IT HERSELF (Sarah, 20 Aug: "my
