@@ -1627,7 +1627,12 @@ ${briefForPrompt(brief)}`);
     // essay existed and nothing would ever write that part. One small top-up
     // call for JUST the missing parts, merged in brief order; if it still
     // comes back empty the job fails visibly (retryable) instead of silently.
-    const missing = brief.criteria.filter(c => !essay.perCriterion.some(p => p.criterionId === c.id));
+    // Same trap: with ids that do not match the brief's, EVERY part read as
+    // missing and this fired a paid top-up call for the whole essay, every
+    // time, for nothing. Resolve before deciding anything is actually absent.
+    const resolveMissing = critIdResolver(brief);
+    const missing = brief.criteria.filter(c => !essay.perCriterion.some((p, i) =>
+        p.criterionId === c.id || resolveMissing(p && p.criterionId, i, essay.perCriterion.length) === c.id));
     if (missing.length) {
         const ids = missing.map(c => c.id);
         const topUp = `${user}\n\nThe model answer above is already written for every part EXCEPT these — write ONLY these parts, with these exact criterionIds, at least one paragraph each: ${ids.join(', ')}.`;
@@ -2161,8 +2166,22 @@ const PLAN_SCHEMA = {
     },
 };
 
-function bricksOfCriterion(essay, criterionId) {
-    const c = essay && Array.isArray(essay.perCriterion) ? essay.perCriterion.find(x => x.criterionId === criterionId) : null;
+// THE HIDDEN ESSAY DOES NOT ALWAYS COME BACK WITH THE BRIEF'S OWN IDS.
+// Sarah's live notebook, 20 Aug 2026: the brief's criteria are C1..C4 and the
+// model answer came back as AC1.2 / AC2.4 / AC3.3 / AC4.3. This did a raw ===,
+// found nothing for C1, and planPart threw "The model answer came back empty
+// for this part - try again." The page retried it for ever: hundreds of
+// [writer/plan] failures in 0.0s, and an error she could not get past.
+// The MARKER was taught to resolve this on 19 Aug (critIdResolver). The
+// PLANNER never was. An exact match still wins; the resolver is the fallback.
+function bricksOfCriterion(essay, criterionId, brief) {
+    const per = essay && Array.isArray(essay.perCriterion) ? essay.perCriterion : [];
+    let c = per.find(x => x.criterionId === criterionId);
+    if (!c && brief) {
+        const resolve = critIdResolver(brief);
+        c = per.find((x, i) => resolve(x && x.criterionId, i, per.length) === criterionId);
+        if (c) console.warn('[writer/plan] essay id "' + (c.criterionId || '') + '" resolved to the brief id "' + criterionId + '"');
+    }
     return c ? c.paragraphs : [];
 }
 
@@ -2174,7 +2193,7 @@ async function planPart({ brief, essay, criterionId, yearGroup, relateAnchor }) 
     if (!brief || !Array.isArray(brief.criteria)) throw new Error('No brief yet — upload the task first.');
     const crit = brief.criteria.find(c => c.id === criterionId);
     if (!crit) throw new Error('That part is not in the brief.');
-    const bricks = bricksOfCriterion(essay, criterionId);
+    const bricks = bricksOfCriterion(essay, criterionId, brief);
     if (!essay) throw new Error('The model answer for this part is not written yet — a moment.');
     // The essay exists but has nothing for this part: say so — "a moment" was
     // a promise nothing kept. This wording is retryable (userFacingCause).
