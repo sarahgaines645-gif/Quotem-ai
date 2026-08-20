@@ -358,14 +358,14 @@ const TOOL_DEFINITIONS = [
         type: 'function',
         function: {
             name: 'read_page_history',
-            description: 'Read back what was actually said on one of their OTHER pages — the writer, life, finance, the email writer, the main chat. You are given a short digest of other pages automatically, but it is truncated; use this when you need the real detail, when they refer to something you can only half see, or when they say "like I said on the other page". Refer to that conversation, do not carry it on here. Quote only what is really in the result.',
+            description: 'SEARCH THEIR REAL SAVED HISTORY — everything they have ever said to you, across every page. **You are only ever shown the most recent part of a conversation, so something you genuinely said can be missing from what is in front of you.** Use this tool BEFORE you ever tell someone you do not remember something, or that a conversation did not happen. If they say "you told me…", "do you remember…", "what did you say about…", "we talked about this earlier" — search for it here first. Pass `search` with the subject (e.g. "kitchen tap") and leave `page` out to look everywhere. Telling someone you never said something you did say is far worse than taking a moment to check.',
             parameters: {
                 type: 'object',
                 properties: {
-                    page:  { type: 'string', description: 'Which page: "chat", "writer", "life", "finance", "email", "thread".' },
-                    limit: { type: 'integer', description: 'How many recent messages (1-60). Default 20.', minimum: 1, maximum: 60 },
+                    search: { type: 'string', description: 'What it was about — e.g. "kitchen tap", "Harrow Health", "the invoice". This is the one to use when they refer to something you cannot see.' },
+                    page:   { type: 'string', description: 'Optional — narrow to one page: "chat", "writer", "life", "finance", "email", "thread". LEAVE IT OUT to search every page, which is usually what you want.' },
+                    limit:  { type: 'integer', description: 'How many messages to return (1-60). Default 20.', minimum: 1, maximum: 60 },
                 },
-                required: ['page'],
             },
         },
     },
@@ -2938,11 +2938,23 @@ const TRIGGERS = {
         /\b(their|his|her|the) (email address|address|number|details)\b/i,
         /\bdo (i|we) have (an? )?(email|address|number) for\b/i,
     ],
-    // "Like I said on the other page."
+    // ANY appeal to a shared past. Deliberately wide: Q only ever sees the most
+    // recent slice of a conversation, so the cost of missing one of these is him
+    // flatly denying something he really said — which is exactly what happened
+    // to Sarah over her kitchen tap on 20 Aug. A needless lookup costs a moment;
+    // calling her a liar about her own conversation costs her trust in him.
     read_page_history: [
+        /\b(do|don'?t) you remember\b/i,
+        /\bremember (when|that|the|our|us)\b/i,
+        /\byou (said|told me|gave me|mentioned|suggested|advised|reckoned)\b/i,
+        /\bwhat (did|do) (you|we) say\b/i,
+        /\bi (asked|told|said to) you\b/i,
+        /\bwe (talked|spoke|discussed|went through)\b/i,
+        /\b(earlier|this morning|this afternoon|last night|yesterday|the other day|before)\b[^.?!]{0,40}\b(said|told|talked|asked|advice|about)\b/i,
+        /\b(said|told|talked|asked|advice|about)\b[^.?!]{0,40}\b(earlier|this morning|this afternoon|last night|yesterday|the other day)\b/i,
+        /\bthat (advice|thing|stuff) you\b/i,
         /\b(other|another|the) (page|chat|conversation|tab)\b/i,
         /\b(as|like) i (said|told you|mentioned)\b/i,
-        /\bwe (talked|spoke) about\b[^.?!]{0,30}\b(earlier|before|yesterday|on the)\b/i,
         /\b(writer|life|finance|email writer) page\b/i,
     ],
     // A brain-dump of several things at once.

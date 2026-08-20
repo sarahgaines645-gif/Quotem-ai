@@ -347,6 +347,13 @@ app.get('/health', (req, res) => {
         ok: true,
         service: 'quotem-ai',
         version: require('../package.json').version,
+        // WHICH COMMIT IS ACTUALLY RUNNING (20 Aug 2026). It was already printed
+        // to the boot log, but the log is only readable from the Railway panel —
+        // so "is my fix live yet?" could not be answered from outside, and after
+        // an outage that is the first question anyone asks. The sister app has
+        // reported this on /api/health for months; this is the same field, and
+        // /health is public, so a check needs no login.
+        commit: (process.env.RAILWAY_GIT_COMMIT_SHA || process.env.RAILWAY_GIT_COMMIT || '').slice(0, 7) || 'unknown',
         togetherKey: !!process.env.TOGETHER_API_KEY,
         node: process.version,
         uptimeSec: Math.round(process.uptime()),

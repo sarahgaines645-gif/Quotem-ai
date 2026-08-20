@@ -220,11 +220,14 @@ function readPageHistory(args = {}, personId) {
         return { error: 'no account', instruction_for_q: "You can't read back their other pages right now. Say so plainly." };
     }
 
+    // `page` is OPTIONAL on purpose (fixed 20 Aug 2026). It used to be required,
+    // which made the tool useless in the exact situation it exists for: Q told
+    // Sarah he had never given her advice about her kitchen tap, she pasted his
+    // own words back, and he could not go and look because he did not know WHICH
+    // page it had been on. Nobody asking "do you remember my tap?" knows that
+    // either. With no page given we search everything.
     const page = String(args.page || '').trim().toLowerCase();
-    if (!page) {
-        return { error: 'no page given', instruction_for_q: 'Ask WHICH page they mean — chat, writer, life, finance, email.' };
-    }
-
+    const search = String(args.search || '').trim().toLowerCase();
     const limit = Math.min(Math.max(parseInt(args.limit, 10) || 20, 1), 60);
 
     let all = [];
@@ -232,38 +235,66 @@ function readPageHistory(args = {}, personId) {
         all = require('../memory').loadMemory(personId) || [];
     } catch (e) {
         console.warn('[q-desk] memory unreadable: ' + e.message);
-        return { error: 'history unreadable', instruction_for_q: "You couldn't read that page's history. Say so — do NOT reconstruct it from memory." };
+        return { error: 'history unreadable', instruction_for_q: "You couldn't read their history. Say so — do NOT reconstruct it from memory." };
     }
 
-    const onPage = all.filter(m => String(m.surface || '').toLowerCase() === page);
+    const pagesThatExist = [...new Set(all.map(m => m.surface).filter(Boolean))];
 
-    if (!onPage.length) {
-        const pages = [...new Set(all.map(m => m.surface).filter(Boolean))];
+    let rows = page
+        ? all.filter(m => String(m.surface || '').toLowerCase() === page)
+        : all;
+
+    if (page && !rows.length) {
         return {
-            page,
-            messages: [],
-            count: 0,
-            pages_that_do_exist: pages,
-            instruction_for_q: `There is no history on a page called "${page}". Tell them, and say which pages you CAN see (in pages_that_do_exist). Do not invent a conversation.`,
+            page, messages: [], count: 0, pages_that_do_exist: pagesThatExist,
+            instruction_for_q: `There is no history on a page called "${page}". Tell them, and say which pages you CAN see. Do not invent a conversation.`,
         };
     }
 
-    const messages = onPage.slice(-limit).map(m => ({
+    // Searching beats recency: the thing they are asking about is usually old,
+    // which is precisely why it fell out of the window Q gets shown.
+    if (search) {
+        const words = search.split(/\s+/).filter(w => w.length > 2);
+        rows = rows.filter(m => {
+            const t = String(m.content || '').toLowerCase();
+            return t.includes(search) || (words.length > 0 && words.every(w => t.includes(w)));
+        });
+    }
+
+    if (!rows.length) {
+        return {
+            page: page || 'all pages',
+            searched_for: search || null,
+            messages: [], count: 0, pages_that_do_exist: pagesThatExist,
+            instruction_for_q: search
+                ? `Nothing in ANY of their saved history mentions "${search}". Say plainly that you have looked and cannot find it — do NOT flatly deny it happened, because history older than the window is trimmed. Ask them roughly when it was, or to paste it.`
+                : 'There is no saved history to read. Say so plainly.',
+        };
+    }
+
+    // On a search, the matches themselves matter more than the tail of the list.
+    const picked = search ? rows.slice(0, limit) : rows.slice(-limit);
+
+    const messages = picked.map(m => ({
         when: m.timestamp ? String(m.timestamp).slice(0, 16).replace('T', ' ') : null,
+        page: m.surface || null,
         who: m.role === 'user' ? 'them' : 'you',
         said: String(m.content || '').slice(0, 1200),
     }));
 
-    console.log(`[q-desk] read ${messages.length} message(s) from the ${page} page`);
+    console.log(`[q-desk] history: ${messages.length} message(s)${page ? ' from ' + page : ' across all pages'}${search ? ' matching "' + search + '"' : ''}`);
 
     return {
-        page,
+        page: page || 'all pages',
+        searched_for: search || null,
         messages,
         count: messages.length,
-        total_on_page: onPage.length,
+        total_matched: rows.length,
+        pages_that_do_exist: pagesThatExist,
         instruction_for_q:
-            'This is the real history from that page. Use it to answer, and say plainly that you looked it up. '
-            + 'Do not carry on that page\'s conversation here — refer to it. Quote only what is actually written above.',
+            'This is their REAL saved history — each entry says which page and when. Use it to answer and say plainly that you went and looked. '
+            + 'If one of these is you saying something you had just denied saying, own it simply and move on: you were only shown the recent part of the conversation, you have now found it. '
+            + 'Quote only what is actually written above.',
     };
 }
 
