@@ -838,6 +838,68 @@
     font-size: 12px;
     color: var(--text-muted);
   }
+
+  /* Shopping results. The picture and the price ARE the answer here, so these
+     get shown rather than left in the tool result — you can't judge a thing to
+     buy from a sentence about it. Cards are RAISED: you read them, you don't
+     type into them. */
+  .shop-strip {
+    display: flex;
+    gap: 10px;
+    overflow-x: auto;
+    padding: 12px 2px 6px;
+    margin-top: 4px;
+    scrollbar-width: none;
+  }
+  .shop-strip::-webkit-scrollbar { display: none; }
+
+  .shop-card {
+    flex: 0 0 132px;
+    background: var(--bg);
+    box-shadow: var(--neu-raised-sm);
+    border-radius: 12px;
+    padding: 10px;
+    text-decoration: none;
+    display: flex;
+    flex-direction: column;
+    gap: 7px;
+  }
+  .shop-card:hover { box-shadow: var(--neu-raised); }
+  .shop-card:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+  .shop-card-img {
+    width: 100%;
+    height: 74px;
+    object-fit: contain;
+    border-radius: 8px;
+    background: var(--bg);
+  }
+
+  .shop-card-price {
+    font-size: 15px;
+    font-weight: 800;
+    color: var(--text);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .shop-card-title {
+    font-size: 11px;
+    line-height: 1.35;
+    color: var(--text);
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    overflow-wrap: anywhere;
+  }
+
+  .shop-card-shop {
+    font-size: 10px;
+    color: var(--text-muted);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
   .tool-call {
     padding: 6px 0;
     border-bottom: 1px solid var(--shadow-dark);
@@ -3038,7 +3100,57 @@ const TOOL_LABELS = {
   create_document:  'made a document',
   remember:         'made a note',
   recall:           'checked his memory',
+  shop_search:      'looked up what it costs',
+  home_status:      'checked the house',
+  home_control:     'changed something in the house',
 };
+
+// A shopping result is one of the few tool results worth SHOWING: the photo and
+// the price are the answer, and no sentence Q writes replaces seeing the thing.
+function renderShopCards(container, result) {
+  const items = (result && result.results) || [];
+  if (!items.length) return;
+
+  const strip = document.createElement('div');
+  strip.className = 'shop-strip';
+
+  items.slice(0, 10).forEach(item => {
+    const card = document.createElement('a');
+    card.className = 'shop-card';
+    card.href = item.link || '#';
+    card.target = '_blank';
+    card.rel = 'noopener noreferrer';
+
+    if (item.image) {
+      const img = document.createElement('img');
+      img.className = 'shop-card-img';
+      img.src = item.image;
+      img.alt = '';
+      img.loading = 'lazy';
+      img.onerror = () => img.remove();
+      card.appendChild(img);
+    }
+
+    const price = document.createElement('div');
+    price.className = 'shop-card-price';
+    price.textContent = (item.price && item.price.display) || '';
+    if (price.textContent) card.appendChild(price);
+
+    const title = document.createElement('div');
+    title.className = 'shop-card-title';
+    title.textContent = item.title || '';
+    card.appendChild(title);
+
+    const shop = document.createElement('div');
+    shop.className = 'shop-card-shop';
+    shop.textContent = item.shop || '';
+    if (shop.textContent) card.appendChild(shop);
+
+    strip.appendChild(card);
+  });
+
+  container.appendChild(strip);
+}
 
 function renderToolCalls(messageEl, toolCalls) {
   // Friendly, non-interactive pill. The raw tool args / JSON results stay
@@ -3070,6 +3182,14 @@ function renderToolCalls(messageEl, toolCalls) {
   wrap.appendChild(pill);
   const content = messageEl.querySelector('.message-content');
   if (content) content.appendChild(wrap);
+
+  // Shopping is the exception to "results stay server-side" — show the goods.
+  if (content) {
+    toolCalls
+      .filter(c => c.name === 'shop_search' && c.result && !c.result.error)
+      .forEach(c => renderShopCards(content, c.result));
+  }
+
   scrollToBottom();
 }
 

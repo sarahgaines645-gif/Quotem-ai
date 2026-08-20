@@ -38,6 +38,9 @@ const qGraphics = require('./q-graphics');
 const qVideo = require('./q-video');
 const qLife = require('./q-life');
 const qTravel = require('./q-travel');
+const qShop   = require('./q-shop');
+const qHome   = require('./q-home');
+const qNext   = require('./q-next');
 
 // ─────────────────────────────────────────────────────────────
 //  TOOL DEFINITIONS — OpenAI function-calling schema
@@ -302,6 +305,94 @@ const TOOL_DEFINITIONS = [
                     heading: { type: 'integer', description: 'Compass direction the camera faces, 0-359 (0=N, 90=E, 180=S, 270=W). Optional — omit to let it auto-face the road.' },
                     pitch: { type: 'integer', description: 'Up/down angle -90..90. 0 = level (default). Use +10..20 to catch a high-mounted sign.' },
                 },
+            },
+        },
+    },
+    {
+        type: 'function',
+        function: {
+            name: 'get_next_action',
+            description: 'Work out the ONE thing the user should do next, out of everything on their plate — overdue tasks, what is due today, what is starting soon in the diary. Use it whenever they ask "what should I do now", "what\'s next", "where do I start", "I don\'t know what to do first", or when they sound stuck, scattered or overwhelmed. Give them the single item it returns and the reason it won. Do NOT turn the answer into a list — a list is the thing that overwhelms them, and one clear next step is the entire point of this tool. You may add at most one short clause of context (e.g. "the other three can wait"). If it says nothing is outstanding, say exactly that and do not invent something to fill the gap.',
+            parameters: {
+                type: 'object',
+                properties: {
+                    include_runners_up: {
+                        type: 'boolean',
+                        description: 'Only set true if the user has ALREADY been given the top item and is now asking what else there is. Default false.',
+                    },
+                },
+            },
+        },
+    },
+    {
+        type: 'function',
+        function: {
+            name: 'home_status',
+            description: 'Look at the user\'s actual house — what is switched on, what door or window is open, how warm a room is, what needs a new battery, what has gone offline. Use this whenever they ask anything about their home: "did I leave the hall light on", "is the back door shut", "how cold is it in there", "is anything still running". Every reading comes from their own hub. Report what it says and nothing more: never state a temperature, a door or an on/off you have not fetched, and never answer a house question from memory. A device reported as unavailable is NOT off — it means the hub cannot see it, and you must say that rather than guessing. If the hub cannot be reached, say so plainly and offer to try again.',
+            parameters: {
+                type: 'object',
+                properties: {
+                    search: {
+                        type: 'string',
+                        description: 'Optional — narrow to devices matching a name or room, e.g. "kitchen", "back door", "thermostat". Leave it out for a whole-house look.',
+                    },
+                    kind: {
+                        type: 'string',
+                        description: 'Optional — narrow to one type of thing: "light", "switch", "sensor", "binary_sensor", "climate", "lock", "camera", "media_player".',
+                    },
+                },
+            },
+        },
+    },
+    {
+        type: 'function',
+        function: {
+            name: 'home_control',
+            description: 'Switch something in the user\'s house on or off, set a thermostat, or run a scene. Use it when they ask you to DO something to the house ("turn the landing light off", "put the heating to 19"). Say what actually happened using what the house reported back afterwards — if it did not change, say so; never claim success you were not told about. If more than one device matches the name you will be asked to choose: put that question to the user rather than picking one. Locks, alarms, garage doors and blinds are deliberately read-only — you can tell the user their state but you cannot operate them, and if asked you should say plainly that this is a safety choice and it has to be done in the app or by hand.',
+            parameters: {
+                type: 'object',
+                properties: {
+                    what: {
+                        type: 'string',
+                        description: 'The device as the user names it, e.g. "kitchen light", "landing lamp", "heating".',
+                    },
+                    action: {
+                        type: 'string',
+                        description: '"on", "off" or "toggle". For a thermostat, use "on" together with temperature.',
+                    },
+                    temperature: {
+                        type: 'number',
+                        description: 'Target temperature in degrees, for a thermostat only.',
+                    },
+                },
+                required: ['what', 'action'],
+            },
+        },
+    },
+    {
+        type: 'function',
+        function: {
+            name: 'shop_search',
+            description: 'Find something a person can actually BUY, right now, with a real price and a link to the page selling it. Use this for anything they need to get hold of — a kettle, school shoes, printer ink, dog food, a birthday present, a replacement part, a drill, a mattress — and whenever they ask what something costs, where to get it, or which shop is cheapest. Prefer this over a plain web search whenever the answer is a thing with a price. You may also name a shop to look inside one specific place. Everything that comes back is copied from the shop listing: never quote a price, a shop or a product that is not in the result, and never fill a gap from memory. Two limits you must pass on, once, in plain words: (1) a price is what the shop\'s page said when the search index last looked, so it can be out of date — the link shows the live page; (2) this is NOT a stock check, it cannot tell anyone whether the item is actually in stock or in their local branch. Results can come back in different currencies, so always quote the currency and never add or compare across currencies without saying so. If nothing is found, say so plainly and offer to try different words or a named shop.',
+            parameters: {
+                type: 'object',
+                properties: {
+                    query: {
+                        type: 'string',
+                        description: 'What they want to buy, as a person would say it — e.g. "black school shoes size 4", "HP 302 printer ink", "18v cordless drill", "1200mm shower screen". Be specific: size, colour, model and capacity all sharpen the result.',
+                    },
+                    shop: {
+                        type: 'string',
+                        description: 'Optional — look inside ONE shop only. A name works ("Argos", "Amazon", "Screwfix", "Tesco", "John Lewis") and so does a domain ("wickes.co.uk"). Use it when the user names a shop, or when you want that shop\'s own range rather than whatever ranks highest.',
+                    },
+                    max_results: {
+                        type: 'integer',
+                        description: 'How many products to return (1-20). Default 8.',
+                        minimum: 1,
+                        maximum: 20,
+                    },
+                },
+                required: ['query'],
             },
         },
     },
@@ -1819,6 +1910,10 @@ async function executeTool(name, argsRaw, personId, personEmail, threadId) {
 
     switch (name) {
         case 'web_search':       return await webSearch(args);
+        case 'shop_search':      return await qShop.searchShop(args, personEmail);
+        case 'get_next_action':  return await qNext.nextAction(args, personEmail);
+        case 'home_status':      return await qHome.homeStatus(args);
+        case 'home_control':     return await qHome.homeControl(args);
         case 'search_images':    return await searchImages(args);
         case 'street_view':      return await streetView(args, personEmail);
         case 'search_hotels':    return await qTravel.searchHotels(args, personEmail);
@@ -2663,6 +2758,52 @@ const ADVOCATE_TOOLS = new Set([
 ]);
 
 const TRIGGERS = {
+    // "What do I do now?" — asked plainly, or asked sideways by someone who is
+    // swamped. The sideways phrasings matter more than the plain ones.
+    get_next_action: [
+        /\bwhat (should|shall|do) i do\b/i,
+        /\bwhat'?s next\b/i,
+        /\bwhere (do|should) i (start|begin)\b/i,
+        /\bwhat (do i|should i) (start|tackle|sort|deal) with\b/i,
+        /\b(i'?m |im |feeling )?(overwhelmed|swamped|drowning|snowed under|all over the place|scattered)\b/i,
+        /\bdon'?t know (where|what) to (start|do|begin)\b/i,
+        /\b(most|more) (urgent|important|pressing)\b/i,
+        /\b(one thing|next thing|next step|first thing)\b/i,
+        /\bhelp me (focus|prioriti[sz]e|get going|start)\b/i,
+    ],
+    // The house. Kept wide because these get asked in passing and half-asleep
+    // ("did I leave the hall light on?"), not in careful sentences.
+    home_status: [
+        /\b(light|lights|lamp|heating|thermostat|radiator|boiler|plug|socket|switch)\b/i,
+        /\b(front|back|patio|garage|shed)\s*(door|gate)\b/i,
+        /\b(door|window|doors|windows)\b.*\b(open|shut|closed|locked|unlocked)\b/i,
+        /\b(is|are|did i|have i|anything)\b.*\b(on|off|open|shut|running|left)\b.*\b(house|home|upstairs|downstairs|kitchen|bedroom|bathroom|hall|landing|living room|lounge)\b/i,
+        /\b(how (warm|cold|hot)|temperature)\b/i,
+        /\b(my|the) (house|home)\b/i,
+        /\b(battery|batteries)\b.*\b(low|need|dead)\b/i,
+    ],
+    home_control: [
+        /\b(turn|switch|put|set|dim)\b[^.?!]{0,30}\b(on|off|up|down|to)\b/i,
+        /\b(turn|switch)\s+(on|off)\b/i,
+        /\b(heating|thermostat)\b[^.?!]{0,20}\b(\d{1,2}|up|down|on|off)\b/i,
+        /\b(lights?|lamp)\b[^.?!]{0,20}\b(on|off)\b/i,
+    ],
+    // Buying something. Trigger-gated rather than always-on so it doesn't ride
+    // on every prompt, but the phrasings are wide because this is one people ask
+    // for in a dozen different ways — "how much is", "where can I get", "need a
+    // new", or just naming a shop.
+    shop_search: [
+        /\b(buy|purchase|order)\b/i,
+        /\bhow much (is|are|would|does|do|was)\b/i,
+        /\b(what|how much) (does|do|would) .{0,40}\bcost\b/i,
+        /\b(price|prices|pricing) (of|for|on)\b/i,
+        /\b(cheapest|best price|good deal|on sale|bargain|value for money)\b/i,
+        /\b(where can i|where do i|where would i|who) (get|buy|find|sells?)\b/i,
+        /\b(need|want|looking for|after) (a|an|some|new)\b[^.?!]{0,40}\b(new|replacement|spare)?\b/i,
+        /\b(shop|shopping|in stock|stockist)\b/i,
+        /\b(amazon|argos|screwfix|toolstation|wickes|b&q|ikea|currys|john lewis|ebay|tesco|asda|sainsbury)\b/i,
+        /\b(run out of|ran out of|need more)\b/i,
+    ],
     send_email: [
         /\bsend (an?|the|this|that|it)?\s*(e-?mail|message)\b/i,
         /\b(e-?mail|send) (it|this|that|them|him|her)\b[^.?!]{0,40}\b(to|at)\b/i,
