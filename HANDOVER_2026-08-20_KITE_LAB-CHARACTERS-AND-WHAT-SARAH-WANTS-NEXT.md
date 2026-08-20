@@ -197,3 +197,61 @@ Every grip number in §3 came from it. It is how you debug a hand without eyes.
    sees it. Still gating, still unanswered since 19 Aug.
 5. Small: two of the teacher's texture maps 404 (the 12MB normal maps, skipped
    deliberately). Harmless; grab them if she looks flat.
+
+---
+
+## 8. STATE AT HANDOVER — read this before touching anything
+
+### My commits this session (all pushed to `main`)
+```
+98c43d0  feat(lab): tell her what to do — and a teacher with a face
+c1afabf  feat(lab): choose your character — 113 Rocketbox avatars, as pictures
+6893aed  fix(grip): she was never closing her fingers on anything but a Mixamo rig
+```
+⚠️ **Another chat was committing WRITER work at the same time** (`b75694f`,
+`95935ef`, `40caaa3`, `215a00e` are not mine). Commit BY PATH —
+`git commit -F msg -- <paths>` — never `git commit -a`.
+
+### Uncommitted in the tree — NOT MINE, leave alone
+`assets/study-fx.js`, `chat.html`, `cost-tracker.js`, `plugins/q-chat.js`,
+`plugins/q-tools.js`, `revise.html` — the writer/revise chat's work in progress.
+
+### Where things run
+- **local `http://localhost:8080/lab` = 200, working.** The server was started
+  this session with `node server/index.js` and is still up. Restart it after any
+  change under `server/` (static pages and `assets/` need no restart).
+- **live `https://www.quotem-ai.co.uk` = 502 on every path.** See §4. Needs
+  Sarah's Railway login to diagnose. The main Quoteapp is unaffected (200).
+
+### Files that are LOCAL ONLY and gitignored — do not commit them
+- `assets/models/claire.fbx` (7.4MB) — Mixamo permits USE but not
+  redistribution.
+- `assets/models/vrm-sample.vrm` (10.8MB) — pixiv sample, terms unchecked.
+Both appear in the `/lab` dropdown labelled "local only" and will simply fail to
+load on the live site. That is deliberate and correct.
+
+### What IS committed
+`assets/models/rocketbox/` — the teacher, 43MB, **MIT licensed** (licence file
+and a README sit beside her). She is the default character. This is also the
+prime suspect for the 502 (§4).
+
+### The offline grip harness — rebuild it, it is worth it
+The scratchpad gets cleaned between sessions, so the harness is gone. To
+rebuild: copy `assets/vendor/three.module.min.js` to `<scratch>/three.mjs` AND
+to `<scratch>/node_modules/three/index.mjs` (with a tiny `package.json`
+declaring `"type":"module"`), copy `assets/{ik,grip,rig-map,face}.js` to
+`<scratch>/live/*.mjs`, plus the vendored FBXLoader and its NURBS/fflate
+siblings. Then load a rig, call `mapRig`, `reachHand`, `setHandOrientation`,
+`closeOn`, and print each fingertip's distance to the prop axis. Every number in
+§3 came from that. Node needs a small DOM shim for FBXLoader — an object with
+`createElement`/`createElementNS` returning a fake element that has
+`addEventListener` and a `getContext`.
+
+### Verified this session, with numbers
+- teacher loads, maps `biped` → 53 bones, 0 missing, hand error **0m**
+- face: **175 blendshapes**, driving 15 controls
+- "pick up the cup" → held, fingers curl 0.83–1.0 round it
+- a SECOND avatar picked from the gallery (Business Female 03) loads textured
+  and takes hold — so the gallery path is proven, not assumed
+- the other 111 are untested; identical folder layout, so they should work
+
