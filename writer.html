@@ -11216,27 +11216,33 @@
       btnFinish.disabled = true;
       let tidy = { quick: [], cut: [], tighten: [], weak: [] };
       try {
-        setCoach({ msg: 'Reading it properly first — spelling, grammar, what to cut, what is weak…', section: 'MARK & FIX', thinking: true, inputVisible: false, step: false });
+        setCoach({ msg: 'Reading it properly first — spelling, grammar, what is weak…', section: 'MARK & FIX', thinking: true, inputVisible: false, step: false });
         tidy = await runTidyPasses(text);
       } catch (_) {}
       state.tidy = tidy; persist({ tidy });
       // Nothing in the way — or an automatic assessment (a draft brought in):
       // straight on to the mark. The reading still fills the marking panel.
       if ((!tidy.cut.length && !tidy.quick.length) || opts.straight) { markRunning = false; return doTheMark(); }
+      // Q DOES NOT ASK HER TO DELETE HER OWN WRITING (Sarah, 20 Aug 2026:
+      // "the coach cant tell me to delete stuff ie the cut tool and give me a
+      // list to aprove"; and 17 Aug: "he shouldnt cut anything he should suggest
+      // what to cut in the marking pannel"). He used to say "I would take out
+      // first" and copy the whole cut list onto the whiteboard — a second
+      // delete-list, with no button on it, telling her what to remove.
+      // Cutting has ONE home: the ✕ list in the marking panel, where every line
+      // has Cut it / Keep it beside it and nothing happens until she presses.
+      // The display carries the spelling and grammar only — those are fixes,
+      // not deletions — and he counts the rest without recommending anything.
       const bits = [];
-      if (tidy.cut.length) bits.push('**' + tidy.cut.length + '** ' + (tidy.cut.length === 1 ? 'line that is not part of the essay' : 'lines that are not part of the essay'));
+      if (tidy.cut.length) bits.push('**' + tidy.cut.length + '** ' + (tidy.cut.length === 1 ? 'line that may not be part of the essay' : 'lines that may not be part of the essay'));
       if (tidy.quick.length) bits.push('**' + tidy.quick.length + '** ' + (tidy.quick.length === 1 ? 'spelling or grammar slip' : 'spelling and grammar slips'));
-      // SAY AND SHOW (Sarah, 17 Aug: "all this should be coming up in the white
-      // board… he needs to be a chat"). The LIST goes on the display; Q says one
-      // line. Nothing is removed for her — the marking panel has a button per line.
-      const cutLines = tidy.cut.map(is => '- **' + String(is.wrong).replace(/\s+/g, ' ').slice(0, 90) + (String(is.wrong).length > 90 ? '…' : '') + '** — ' + (is.why || 'not part of the essay'));
       const slipLines = tidy.quick.slice(0, 12).map(is => '- ' + String(is.wrong || '').slice(0, 40) + ' → **' + String(is.right || '').slice(0, 40) + '**');
-      const wbSrc = '## Before the mark' + (cutLines.length ? '\n\n### ' + tidy.cut.length + (tidy.cut.length === 1 ? ' line' : ' lines') + ' not part of the essay\n' + cutLines.join('\n') : '')
-        + (tidy.quick.length ? '\n\n### ' + tidy.quick.length + ' spelling and grammar' + (tidy.quick.length > 12 ? ' (first 12)' : '') + '\n' + slipLines.join('\n') : '')
-        + '\n\nEach one has a button in the marking panel.';
-      try { showOnWhiteboard('Before the mark', wbSrc); } catch (_) {}
+      if (tidy.quick.length) {
+        const wbSrc = '## Before the mark\n\n### ' + tidy.quick.length + ' spelling and grammar' + (tidy.quick.length > 12 ? ' (first 12)' : '') + '\n' + slipLines.join('\n') + '\n\nEach one has a button in the marking panel.';
+        try { showOnWhiteboard('Before the mark', wbSrc); } catch (_) {}
+      }
       setCoach({
-        msg: bits.join(' and ').replace(/\*\*/g, '') + ' I would take out first — on the whiteboard. Mark it now, or fix those first?',
+        msg: bits.join(' and ').replace(/\*\*/g, '') + '. They are on the marking panel with a button each — your call on every one, I change nothing. Mark it now, or look at those first?',
         hint: '',
         section: '', inputVisible: false, step: false, showNudge: false,
         actions: [
