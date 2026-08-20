@@ -1277,14 +1277,42 @@ async function chat(messages, options = {}) {
             // friendly note (the error bank itself is deliberately untouched).
             const RETRYABLE = new Set([429, 500, 502, 503, 504]);
             const MAX_ATTEMPTS = 4;
+            // ── TOTAL DEADLINE (20 Aug 2026) ────────────────────────────────
+            // Bounding each ATTEMPT was not enough. Four attempts at 120s plus
+            // backoff is up to ~8½ minutes, and the platform proxy in front of
+            // us gives up long before that — it answers the browser itself with
+            // the plain text "upstream error". The browser then calls .json() on
+            // it and the user sees `Unexpected token 'u', "upstream error" is not
+            // valid JSON` after five minutes of nothing. Sarah hit exactly this
+            // at 15:22 on 20 Aug: four 120s timeouts on a big case, then a 300s
+            // client-side failure with that raw parse error.
+            //
+            // So the retries now share ONE budget that expires BEFORE the proxy
+            // does. When it runs out we stop trying and fall through to Q's own
+            // friendly error, which is JSON and which the page can actually read.
+            // Better a clear "I couldn't reach my brain, try again" at 3 minutes
+            // than a parser error at five.
+            const TOTAL_BUDGET_MS = 170_000;
+            const startedAttempts = Date.now();
+            const budgetLeft = () => TOTAL_BUDGET_MS - (Date.now() - startedAttempts);
+
             let response = null;
+            let ranOutOfTime = false;
             for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
+                // Never start an attempt we cannot finish inside the budget.
+                const remaining = budgetLeft();
+                if (remaining < 15_000) {
+                    ranOutOfTime = true;
+                    console.warn(`[q-chat] giving up after ${attempt} attempt(s) — ${Math.round((Date.now() - startedAttempts) / 1000)}s spent, budget gone. Returning the friendly error rather than letting the proxy answer.`);
+                    break;
+                }
                 let status = 0;
                 try {
                     // Bounded per attempt (route audit T1): a hung upstream used to
                     // sit here until Railway's proxy cut the socket → bare 502.
                     // Fresh controller each attempt (an aborted signal can't be reused).
-                    response = await timedFetch(`${Q_CONFIG.baseURL}/chat/completions`, reqInit, { label: 'chat', timeoutMs: 120_000 });
+                    // Capped by whatever is left of the shared budget.
+                    response = await timedFetch(`${Q_CONFIG.baseURL}/chat/completions`, reqInit, { label: 'chat', timeoutMs: Math.min(120_000, remaining) });
                     if (response.ok || !RETRYABLE.has(response.status)) break;
                     status = response.status;
                     // DIAGNOSTIC (31 Jul 2026): headers carry Together's request id
@@ -1300,13 +1328,18 @@ async function chat(messages, options = {}) {
                     // 700ms retry can't outlast it, so back off seconds (2s, 4s, 8s).
                     // 5xx/network blips clear fast, so keep those short.
                     const base = status === 429 ? 2000 * Math.pow(2, attempt) : 700 * (attempt + 1);
-                    await new Promise(r => setTimeout(r, base + Math.floor(Math.random() * 300)));
+                    // Don't sleep past the deadline either — that just burns the
+                    // budget doing nothing.
+                    const wait = Math.min(base + Math.floor(Math.random() * 300), Math.max(0, budgetLeft() - 15_000));
+                    if (wait > 0) await new Promise(r => setTimeout(r, wait));
                 }
             }
 
             if (!response || !response.ok) {
                 const errText = response ? await response.text() : 'network error (no response)';
-                console.warn('[q-chat] upstream failed after retries — HTTP ' + (response ? response.status : 'net') + ' — ' + errText.substring(0, 500));
+                console.warn('[q-chat] upstream failed after retries — HTTP ' + (response ? response.status : 'net')
+                    + (ranOutOfTime ? ' — TOTAL BUDGET SPENT (' + Math.round((Date.now() - startedAttempts) / 1000) + 's)' : '')
+                    + ' — ' + errText.substring(0, 500));
                 // DIAGNOSTIC (31 Jul 2026): one greppable line with the FULL
                 // context of the failing call — who/surface/model/size plus every
                 // header Together sent back. A 402 with £17 on the account needs
