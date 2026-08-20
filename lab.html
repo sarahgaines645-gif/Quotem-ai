@@ -59,6 +59,31 @@
             width:min(860px,calc(100vw - 20px)); background:rgba(14,16,24,.96); border:1px solid rgba(255,255,255,.1);
             border-radius:16px; padding:12px 14px; box-shadow:0 24px 60px -18px #000; }
     #more.open { display:block; }
+    /* the character gallery — pick a face, not a filename */
+    #gal { position:fixed; inset:0; z-index:40; display:none; flex-direction:column; background:var(--bg); }
+    #gal.open { display:flex; }
+    #gal .top { display:flex; align-items:center; gap:10px; padding:14px 18px; border-bottom:1px solid rgba(255,255,255,.1); }
+    #gal .top h2 { font-size:16px; font-weight:700; }
+    #gal .top .sub2 { font-size:11.5px; color:var(--muted); }
+    #gal input.f { flex:1; max-width:280px; font:inherit; font-size:13px; padding:8px 12px; border:none; outline:none;
+                   border-radius:12px; background:#0d1019; color:var(--text); box-shadow:inset 0 0 0 1px rgba(255,255,255,.14); }
+    #grid { flex:1; overflow:auto; padding:16px; display:grid; gap:12px;
+            grid-template-columns:repeat(auto-fill,minmax(165px,1fr)); align-content:start; }
+    /* ⚠️ FIXED HEIGHT, deliberately. Left to size itself, the card collapsed to
+       17px until its picture arrived — and with overflow:hidden that clipped
+       every card to a strip of foreheads with the name cut off entirely. Lazy
+       images make "size to content" a race; this is not. */
+    .card { cursor:pointer; border-radius:14px; overflow:hidden; background:#141824;
+            height:232px; display:flex; flex-direction:column;
+            box-shadow:0 0 0 1px rgba(255,255,255,.1); }
+    .card:hover { box-shadow:0 0 0 1px var(--cyan), 0 10px 30px -12px #000; }
+    /* ⚠️ the previews are 1280x720 LANDSCAPE of a standing figure, so an
+       aspect-ratio alone collapsed the row to a strip of foreheads. An explicit
+       height plus a centred cover crop frames the whole person. */
+    .card img { display:block; width:100%; height:200px; flex:0 0 200px; object-fit:cover;
+                object-position:center 35%; background:#0d1019; }
+    .card .cap { padding:7px 9px; font-size:11.5px; color:var(--muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .card.on { box-shadow:0 0 0 2px var(--cyan); }
   </style>
 </head>
 <body>
@@ -93,7 +118,8 @@
     </div>
     <div class="chips" style="margin-top:8px">
       <select class="b" id="sel-char" title="Who"></select>
-      <button class="b" id="b-who" title="Use your own character">👤 New character</button>
+      <button class="b" id="b-who" title="Choose from 113 avatars">👤 Choose character</button>
+      <button class="b" id="b-file" title="Load a character file of your own">📂 My own file</button>
       <input type="file" id="f-char" accept=".glb,.gltf,.fbx,.vrm" style="display:none" />
       <select class="b" id="sel-liquid"></select>
       <button class="b" id="b-coat">🥼 Lab coat: off</button>
@@ -103,6 +129,15 @@
     <div class="note" id="note">Drag to look around, wheel to move closer.</div>
   </div>
 
+  <div id="gal">
+    <div class="top">
+      <h2>Choose your character</h2>
+      <span class="sub2" id="gal-count"></span>
+      <input class="f" id="gal-find" placeholder="Search… e.g. business, medical, female" />
+      <button class="b" id="gal-close">Close</button>
+    </div>
+    <div id="grid"></div>
+  </div>
   <div id="drop">Let go — loading your character</div>
   <div id="boot">
     <div class="spin"></div>
@@ -124,6 +159,7 @@
   import { Face } from '/assets/face.js';
   import { mapRig, missingFrom } from '/assets/rig-map.js';
   import { TGALoader } from '/assets/vendor/TGALoader.js';
+  import { ROCKETBOX, prettyName, thumbUrl, modelUrl, texturePath } from '/assets/rocketbox-list.js';
 
   const $ = (id) => document.getElementById(id);
   window.addEventListener('error', (e) => { $('dbg').textContent = 'ERROR: ' + e.message; });
@@ -574,7 +610,63 @@
      into an embedded browser (VS Code's, for one) is often silently refused by
      the OS — the page never sees a drop event and it looks broken. So the file
      PICKER is the main route and the drop is the shortcut. */
-  $('b-who').addEventListener('click', () => {
+  /* ═════════ CHOOSING A CHARACTER ═════════
+     113 avatars, shown as PICTURES rather than filenames. The thumbnails come
+     straight from Microsoft's repo — it serves them with CORS open — so nothing
+     is downloaded until she picks one, and then only that one. That is why the
+     app carries a single avatar instead of four gigabytes of them. */
+  let galBuilt = false;
+  function buildGallery() {
+    if (galBuilt) return;
+    galBuilt = true;
+    const grid = $('grid');
+    ROCKETBOX.forEach((a) => {
+      const card = document.createElement('div');
+      card.className = 'card';
+      card.dataset.find = (a.n + ' ' + a.g).toLowerCase();
+      const img = document.createElement('img');
+      img.loading = 'lazy';                    // 113 photos: only fetch what is on screen
+      img.src = thumbUrl(a);
+      img.alt = a.n;
+      img.addEventListener('error', () => { card.style.display = 'none'; });
+      const cap = document.createElement('div');
+      cap.className = 'cap';
+      cap.textContent = prettyName(a.n);
+      card.appendChild(img); card.appendChild(cap);
+      card.addEventListener('click', () => loadRocketbox(a, card));
+      grid.appendChild(card);
+    });
+    $('gal-count').textContent = ROCKETBOX.length + ' avatars · Microsoft Rocketbox (MIT)';
+  }
+  function loadRocketbox(a, card) {
+    document.querySelectorAll('.card.on').forEach((c) => c.classList.remove('on'));
+    if (card) card.classList.add('on');
+    $('gal').classList.remove('open');
+    $('boot').classList.remove('gone');
+    $('boot').innerHTML = '<div class="spin"></div><div class="big">Loading ' + prettyName(a.n) + '…</div>'
+      + '<div class="small">Fetching her from Microsoft — the first one takes a moment.</div>';
+    const l = new FBXLoader(manager);
+    /* ⚠️ the textures live in a SIBLING folder to the .fbx, so the loader has to
+       be told where they are or she arrives as a grey mannequin. */
+    l.setResourcePath(texturePath(a));
+    l.load(modelUrl(a), (obj) => { install(obj, prettyName(a.n)); },
+      undefined, (e) => refuse('Could not load ' + prettyName(a.n), String((e && e.message) || e)));
+  }
+  $('gal-close').addEventListener('click', () => $('gal').classList.remove('open'));
+  $('gal-find').addEventListener('input', (e) => {
+    const q = e.target.value.trim().toLowerCase();
+    let shown = 0;
+    document.querySelectorAll('#grid .card').forEach((c) => {
+      const hit = !q || q.split(/\s+/).every((w) => c.dataset.find.includes(w));
+      c.style.display = hit ? '' : 'none';
+      if (hit) shown++;
+    });
+    $('gal-count').textContent = shown + ' of ' + ROCKETBOX.length + ' · Microsoft Rocketbox (MIT)';
+  });
+
+  $('b-who').addEventListener('click', () => { buildGallery(); $('gal').classList.add('open'); });
+
+  $('b-file').addEventListener('click', () => {
     $('boot').classList.remove('gone');
     $('boot').innerHTML =
       '<div class="big">Use your own character</div>'
