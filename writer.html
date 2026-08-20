@@ -498,7 +498,8 @@
     /* Tidy deals the cards into the two gutters — the same strip the rail tucks
        into. Behind the page is the right look, but a pill you cannot reach is a
        defect, so while the desk is tidied the rail comes back to the front. */
-    body.tidy .qdock { z-index: 130; }
+    body.tidy .qdock, .qdock.at-edge { z-index: 130; }
+    .qdock.at-edge .qdock-pill { border-radius: 10px; padding-right: 13px; }
     /* THE CARDS' RAIL IS THE SAME SPECIES AS THE PAGE'S DIVIDERS (Sarah,
        20 Aug 2026: "can we do the same for the buttons for your brief,
        teaching cards... dont change the way they act I just wan the buttons to
@@ -3724,13 +3725,27 @@
     // The rail's right edge sits just INSIDE the page's left edge, so the page
     // laps over its tail. Measured off the paper itself, so it stays true when
     // Tidy narrows the desk or the window changes.
-    const DOCK_TUCK = 14;
+    const DOCK_TUCK = 14, DOCK_W = 138;
     function placeDock() {
       if (!dockEl) return;
       const paper = document.querySelector('.paper'); if (!paper) return;
       const r = paper.getBoundingClientRect();
-      dockEl.style.right = Math.max(8, Math.round(window.innerWidth - r.left - DOCK_TUCK)) + 'px';
-      dockEl.style.maxWidth = Math.max(120, Math.round(r.left - 8 + DOCK_TUCK)) + 'px';
+      // Tucking needs a gutter deep enough to hold a readable rail. Sarah,
+      // 20 Aug 2026: "coming off the page" — the first version floored the
+      // width at 120px whatever the gutter was, so in a narrow window (her
+      // browser lives inside VS Code) the rail hung off the left of the screen
+      // at L-36. There is no width that is worth being unreachable.
+      const canTuck = r.left >= DOCK_W - DOCK_TUCK + 8;
+      dockEl.classList.toggle('at-edge', !canTuck);
+      if (canTuck) {
+        dockEl.style.left = 'auto';
+        dockEl.style.right = Math.round(window.innerWidth - r.left - DOCK_TUCK) + 'px';
+      } else {
+        // No gutter to hide in: stand at the edge, in front, where she can
+        // still reach every one of them.
+        dockEl.style.right = 'auto';
+        dockEl.style.left = '8px';
+      }
     }
     function renderDock() {
       if (!dockEl) return;
