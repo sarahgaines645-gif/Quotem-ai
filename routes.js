@@ -2132,10 +2132,15 @@ router.post('/writer/cite', requirePerson, express.json({ limit: '32kb' }), asyn
         // What each would back, and how strongly — so she can choose (17 Aug). A failed judgement leaves the list as it was.
         let candidates = out.candidates || [];
         let note = out.note || '';
+        let pickWhy = '';
         if (candidates.length) {
             try {
                 const judged = await qWriter.judgeCiteCandidates({ sentence, candidates, brief: t.brief });
                 candidates = candidates.map((c, i) => judged[i] ? { ...c, backs: judged[i].backs, strength: judged[i].strength, strengthWhy: judged[i].why } : c);
+                // Q's own choice travels with the list, by identity rather than
+                // by index, because the order changes below.
+                if (judged.pick >= 0 && candidates[judged.pick]) { candidates[judged.pick] = { ...candidates[judged.pick], picked: true }; }
+                pickWhy = judged.pickWhy || '';
                 // A SOURCE THAT DOES NOT BACK THE SENTENCE IS NOT AN OPTION.
                 // Sarah, 17 Aug: "I used auto cite for that… why has it provided
                 // me with one citation that is too weak to use?" The judge had
@@ -2143,18 +2148,23 @@ router.post('/writer/cite', requirePerson, express.json({ limit: '32kb' }), asyn
                 // offered it anyway with "press one — it goes in". Offering a
                 // citation the marker will pull apart is worse than offering
                 // nothing, so `none` is dropped here and never reaches her.
-                const dropped = candidates.filter(c => c.strength === 'none');
-                if (dropped.length) {
-                    console.log('[writer/cite] dropped ' + dropped.length + ' off-topic candidate(s): ' + dropped.map(c => (c.title || '').slice(0, 60)).join(' | '));
-                    candidates = candidates.filter(c => c.strength !== 'none');
-                }
-                if (!candidates.length) {
-                    note = 'I found real papers but none of them actually back that sentence — I am not going to hand you a citation a marker would pull apart. Try naming the idea in the sentence more plainly, or use the References tool to add the source you have in mind.';
+                // SHE SEES WHAT HE SAW (Sarah, 20 Aug). Dropping the off-topic
+                // ones silently left her staring at "none of these work" with
+                // nothing to look at — and, on 20 Aug, with Q naming the right
+                // paper in the chat a moment later. They stay, marked unusable,
+                // sorted last, each carrying his reason. Offering is not the
+                // same as recommending: his pick is named, and an unusable one
+                // says in plain words why he would not put his name to it.
+                const unusable = candidates.filter(c => c.strength === 'none');
+                if (unusable.length) console.log('[writer/cite] ' + unusable.length + ' off-topic candidate(s) kept but marked unusable: ' + unusable.map(c => (c.title || '').slice(0, 60)).join(' | '));
+                candidates = candidates.map(c => c.strength === 'none' ? { ...c, unusable: true, picked: false } : c);
+                if (!candidates.some(c => !c.unusable)) {
+                    note = 'None of these actually back that sentence — I would not put my name to any of them, and a marker would pull them apart. They are here so you can see what I found. Try naming the idea in the sentence more plainly, or use the References tool to add the source you have in mind.';
                 }
             } catch (e) { console.warn('[writer/cite] judge failed:', e.message); }
         }
         // Titles / names / references are never "polished" — they are the source's own words.
-        res.json({ ok: true, sentence, candidates, searched: out.searched, note: note ? qWriter.ukText(note) : '' });
+        res.json({ ok: true, sentence, candidates, searched: out.searched, pickWhy: pickWhy ? qWriter.ukText(pickWhy) : '', note: note ? qWriter.ukText(note) : '' });
     } catch (e) {
         writerFail(res, e, '[writer/cite]', 'source search');
     }

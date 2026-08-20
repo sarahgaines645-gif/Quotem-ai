@@ -514,6 +514,15 @@
     .q-popcard .cite-opt .co-str { display: inline-block; font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; margin-right: 6px; color: var(--text-muted); }
     .q-popcard .cite-opt .co-str.strong { color: #2e9e4a; } .q-popcard .cite-opt .co-str.fair { color: #b07f0a; } .q-popcard .cite-opt .co-str.weak { color: var(--accent); }
     .q-popcard .cite-opt .co-why { color: var(--text-muted); }
+    .q-popcard .cite-pick { margin: 8px 0 6px; padding: 9px 11px; border-radius: 12px; box-shadow: var(--neu-raised-xs); background: var(--bg); display: flex; flex-direction: column; gap: 3px; }
+    .q-popcard .cite-pick .cp-l { font-size: 9.5px; font-weight: 700; letter-spacing: 0.09em; text-transform: uppercase; color: var(--accent); }
+    .q-popcard .cite-pick b { font-size: 12.5px; font-weight: 700; color: var(--text); line-height: 1.35; overflow-wrap: anywhere; }
+    .q-popcard .cite-pick .cp-why { font-size: 11px; line-height: 1.45; color: var(--text-muted); }
+    .q-popcard .cite-grp.bad { color: var(--text-muted); }
+    .q-popcard .cite-opt.picked { box-shadow: var(--neu-raised-sm); }
+    .q-popcard .cite-opt.unusable { opacity: 0.72; }
+    .q-popcard .co-tag.pick { color: var(--accent); font-weight: 700; }
+    .q-popcard .co-tag.no { color: var(--text-muted); }
     .q-popcard .cite-sent { font-size: 10px; color: var(--text-muted); font-style: italic; margin-bottom: 6px; line-height: 1.35; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
     .refs-yours { display: flex; flex-direction: column; gap: 4px; margin-bottom: 12px; }
     .refs-yours:empty { display: none; }
@@ -941,7 +950,7 @@
     }
     .word-popup .swap-opt:hover { color: var(--accent); }
     .word-popup .swap-opt .why {
-      font-size: 10px; color: var(--text-faint); font-style: italic;
+      font-size: 10.5px; color: var(--text-muted);
       white-space: nowrap;
     }
     .word-popup .swap-loading {
@@ -11402,18 +11411,31 @@
         // Aug: "there should be a list and they should be able to choose
         // between urls etc"). Order within each: strong first.
         const RANK = { strong: 0, fair: 1, weak: 2, '': 3 };
-        const idx = cands.map((c, i) => i).sort((a, b) => (RANK[cands[a].strength || ''] - RANK[cands[b].strength || '']) || (a - b));
-        const papers = idx.filter(i => cands[i].type !== 'web'), sites = idx.filter(i => cands[i].type === 'web');
+        // HIS PICK LEADS (Sarah, 20 Aug: "he can comment on it at the same time
+        // and say I would choose ..."), then the rest by strength, and the ones
+        // he would not use sit at the bottom under their own heading — visible,
+        // because she asked to see what he saw, but never dressed as an option.
+        const idx = cands.map((c, i) => i)
+          .sort((a, b) => (cands[b].picked ? 1 : 0) - (cands[a].picked ? 1 : 0)
+            || (cands[a].unusable ? 1 : 0) - (cands[b].unusable ? 1 : 0)
+            || (RANK[cands[a].strength || ''] - RANK[cands[b].strength || '']) || (a - b));
+        const usable = idx.filter(i => !cands[i].unusable), notUsable = idx.filter(i => cands[i].unusable);
+        const papers = usable.filter(i => cands[i].type !== 'web'), sites = usable.filter(i => cands[i].type === 'web');
         const optHtml = (i) => {
           const c = cands[i];
           const who = (c.authors || []).map(a => a.family).slice(0, 3).join(', ') + ((c.authors || []).length > 3 ? ' et al.' : '');
           const meta = [c.type === 'web' ? '' : who, c.year || (c.type === 'web' ? 'n.d.' : ''), c.journal || (c.type === 'web' ? '' : c.publisher) || (c.type === 'book' ? 'book' : '')].filter(Boolean).join(' · ');
           const backs = (c.strength || c.backs) ? '<span class="co-backs">' + (c.strength ? '<span class="co-str ' + escHtml(c.strength) + '">' + escHtml(c.strength) + '</span>' : '') + (c.backs ? 'backs: ' + escHtml(c.backs) : '') + (c.strengthWhy ? ' <span class="co-why">— ' + escHtml(c.strengthWhy) + '</span>' : '') + '</span>' : '';
-          return '<button type="button" class="q-btn cite-opt" data-i="' + i + '">' + (c.fromUpload ? '<span class="co-tag">from your uploads</span>' : '') + (c.type === 'web' ? '<span class="co-tag">' + escHtml(c.org || c.host || 'website') + '</span>' : '') + '<span class="co-title">' + escHtml(c.title || '') + '</span>' + (c.type === 'web' && c.url ? '<span class="co-url">' + escHtml(String(c.url).replace(/^https?:\/\//, '').slice(0, 70)) + '</span>' : '') + '<span class="co-meta">' + escHtml(meta) + ' — ' + escHtml(c.inText || '') + '</span>' + backs + (c.snippet ? '<span class="co-snip">“' + escHtml(c.snippet.slice(0, 140)) + (c.snippet.length > 140 ? '…' : '') + '”</span>' : '') + ((c.warnings || []).length ? '<span class="co-warn">check: ' + escHtml(c.warnings.join('; ')) + '</span>' : '') + '</button>';
+          return '<button type="button" class="q-btn cite-opt' + (c.picked ? ' picked' : '') + (c.unusable ? ' unusable' : '') + '" data-i="' + i + '">' + (c.picked ? '<span class="co-tag pick">Q would choose this</span>' : '') + (c.unusable ? '<span class="co-tag no">would not use</span>' : '') + (c.fromUpload ? '<span class="co-tag">from your uploads</span>' : '') + (c.type === 'web' ? '<span class="co-tag">' + escHtml(c.org || c.host || 'website') + '</span>' : '') + '<span class="co-title">' + escHtml(c.title || '') + '</span>' + (c.type === 'web' && c.url ? '<span class="co-url">' + escHtml(String(c.url).replace(/^https?:\/\//, '').slice(0, 70)) + '</span>' : '') + '<span class="co-meta">' + escHtml(meta) + ' — ' + escHtml(c.inText || '') + '</span>' + backs + (c.snippet ? '<span class="co-snip">“' + escHtml(c.snippet.slice(0, 140)) + (c.snippet.length > 140 ? '…' : '') + '”</span>' : '') + ((c.warnings || []).length ? '<span class="co-warn">check: ' + escHtml(c.warnings.join('; ')) + '</span>' : '') + '</button>';
         };
-        const html = '<div class="cite-sent">' + escHtml(sent) + '</div>'
+        const pickI = cands.findIndex(c => c.picked);
+        const pickLine = (pickI >= 0 && d.pickWhy)
+          ? '<div class="cite-pick"><span class="cp-l">Q would choose</span><b>' + escHtml(String(cands[pickI].title || '').slice(0, 80)) + '</b><span class="cp-why">' + escHtml(d.pickWhy) + '</span></div>'
+          : (d.pickWhy ? '<div class="cite-pick none"><span class="cp-l">Q says</span><span class="cp-why">' + escHtml(d.pickWhy) + '</span></div>' : '');
+        const html = '<div class="cite-sent">' + escHtml(sent) + '</div>' + pickLine
           + (papers.length ? '<div class="cite-grp">Papers and books <span>' + papers.length + '</span></div>' + papers.map(optHtml).join('') : '')
-          + (sites.length ? '<div class="cite-grp">Websites <span>' + sites.length + '</span></div>' + sites.map(optHtml).join('') : '');
+          + (sites.length ? '<div class="cite-grp">Websites <span>' + sites.length + '</span></div>' + sites.map(optHtml).join('') : '')
+          + (notUsable.length ? '<div class="cite-grp bad">Q would not use these <span>' + notUsable.length + '</span></div>' + notUsable.map(optHtml).join('') : '');
         // NOTHING STRONG IS NOT A CHOICE OF FIVE (Sarah, 17 Aug: "why do I only
         // have the choice for weak citations"). When the best I found is FAIR
         // or WEAK, say so above the list and offer the real fix — name the idea

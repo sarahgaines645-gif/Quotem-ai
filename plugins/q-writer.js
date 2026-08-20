@@ -2571,8 +2571,14 @@ Answer as Q.`;
 // strongly, honestly — so she can choose.
 const CITE_JUDGE_SCHEMA = {
     type: 'object', additionalProperties: false,
-    required: ['judged'],
+    required: ['judged', 'pick', 'pickWhy'],
     properties: {
+        // HE CHOOSES OUT LOUD (Sarah, 20 Aug: "cant we deliver them to Q when it
+        // shows us the list and then he can comment on it at the same time and
+        // say I would choose ..."). Same call, two more fields - no extra cost,
+        // and she stops having to judge a list of strangers on her own.
+        pick: { type: 'integer', description: 'The candidate number YOU would cite behind this sentence. 0 if you would not use any of them.' },
+        pickWhy: { type: 'string', description: 'Why that one, 6-16 plain words, spoken to the student ("it is the original study and it says exactly this"). If pick is 0, say what is wrong with the whole list and what would find a better one.' },
         judged: { type: 'array', items: { type: 'object', additionalProperties: false, required: ['i', 'backs', 'strength', 'why'], properties: {
             i: { type: 'integer', description: 'The candidate number as listed.' },
             backs: { type: 'string', description: 'What in the student\'s sentence this source would back, 5-12 plain words ("that software now sets the targets", "the link between monitoring and trust").' },
@@ -2601,6 +2607,9 @@ Judge each.`;
         const i = Number(j.i) - 1; if (!(i >= 0 && i < list.length)) continue;
         out[i] = { backs: capWords(String(j.backs || '').trim(), 14), strength: ['strong', 'fair', 'weak', 'none'].includes(j.strength) ? j.strength : '', why: capWords(String(j.why || '').trim(), 12) };
     }
+    const pi = Number(r && r.pick) - 1;
+    out.pick = (pi >= 0 && pi < list.length) ? pi : -1;                 // index into the list, -1 = he would take none of them
+    out.pickWhy = capWords(String((r && r.pickWhy) || '').trim(), 18);
     return out;
 }
 
@@ -3042,23 +3051,49 @@ Return ONLY valid JSON:
     );
 }
 
+const fold = (x) => String(x || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
 async function suggestWordSwaps(word, context, voiceSignature) {
     const voiceHint = voiceSignature
         ? `Student's voice: "${voiceSignature.voiceSummary}". Formality: ${voiceSignature.formalityLevel}.`
         : 'Plain natural language.';
 
-    const system = `You are a vocabulary coach. The student clicked a word to see alternatives. Suggest 3 better words that (a) strengthen the writing and (b) sound like them — not generic AI thesaurus output.
+    // IT HAS TO STILL BE A SENTENCE AFTERWARDS (Sarah, 20 Aug: "if you replaced
+    // that word it wouldnt make sense"). Clicking "having" in "due to having no
+    // choice in when they work" offered scheduled / rostered / planned — all
+    // about shift work, none of them a word that can stand where "having"
+    // stands. The engine was told to suggest better words and never told they
+    // would be SWAPPED IN, so it free-associated on the topic. Now it is told,
+    // it must write the sentence out with the swap made, and a suggestion that
+    // does not survive that is dropped in code below.
+    const system = `You are a vocabulary coach. The student clicked ONE word in their own sentence. Whatever you suggest REPLACES that word exactly where it stands — nothing else in the sentence changes.
+
+THE RULE: read the sentence back with your word in place of theirs. If it is not still a correct English sentence, it is not a suggestion. Same part of speech, same grammatical job, same tense and number. "having" can only become another -ing verb that fits, never a noun or an adjective about the topic.
+Do not suggest a word just because it is about the subject. Better means clearer, more precise or stronger — in that slot.
+If no single word can replace it and still read correctly, return an empty suggestions array. An empty list is a good answer; a broken sentence is not.
 
 ${voiceHint}
 
 Return ONLY valid JSON:
-- suggestions (array of exactly 3 objects): each { word (string), why (string — 4 words max) }`;
+- suggestions (array of 0 to 3 objects): each { word (string), why (string — 4 words max), sentence (string — their sentence written out with your word swapped in, so you can see it reads) }`;
 
-    return await callQ(
+    const ctx = String(context || '').slice(0, 400);
+    const marked = ctx && word ? ctx.replace(new RegExp('(^|\\W)(' + String(word).replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + ')(\\W|$)', 'i'), '$1[[$2]]$3') : ctx;
+    const r = await callQ(
         system,
-        `WORD: "${word}"\n\nCONTEXT:\n"${(context || '').slice(0, 400)}"\n\nSuggest 3 voice-matched alternatives.`,
-        { maxTokens: 300 }
+        `THE WORD THEY CLICKED: "${word}"\n\nTHEIR SENTENCE (the word is marked [[like this]]):\n"${marked}"\n\nGive up to 3 words that can stand exactly where theirs does.`,
+        { maxTokens: 400 }
     );
+    // A suggestion that did not survive its own read-back never reaches her.
+    const kept = (r && Array.isArray(r.suggestions) ? r.suggestions : []).filter(x => {
+        const w = String((x && x.word) || '').trim();
+        if (!w || /\s/.test(w) && w.split(/\s+/).length > 3) return false;
+        const sent = String((x && x.sentence) || '');
+        if (!sent) return true;                                  // no read-back offered: keep, the prompt still steered it
+        return fold(sent).includes(fold(w));                     // it must actually appear in its own rewritten sentence
+    }).slice(0, 3);
+    const dropped = ((r && r.suggestions) || []).length - kept.length;
+    if (dropped > 0) console.log('[writer/words] dropped ' + dropped + ' swap(s) that did not read back for "' + word + '"');
+    return { ...(r || {}), suggestions: kept };
 }
 
 // ─── Harvard References ────────────────────────────────────────────────────
