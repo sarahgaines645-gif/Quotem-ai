@@ -475,14 +475,30 @@
        page's bottom-left corner — where the cog already is.)
        A pill is the minimised head it replaces: raised card, --bg, the
        card's own title in the same pink. Empty dock = nothing rendered. */
+    /* Sarah, 20 Aug 2026: "they need to be behind the doc and have all the
+       text visibla." So the rail is not a free-standing thing in the gutter any
+       more: its RIGHT edge is pinned just inside the page's left edge (placeDock
+       sets it from the paper's own box) and it sits UNDER the page in the stack
+       — z-index 0 against the paper's 1 — so the page covers its tail exactly
+       the way the top sheet covers the feet of the tabs along the top.
+       It grows leftwards from that edge to fit the longest name, so nothing is
+       ever cut off. */
     .qdock {
-      position: fixed; left: 20px; bottom: 66px; z-index: 130;   /* the same left edge as the settings cog it stands on */
-      display: flex; flex-direction: column; align-items: flex-start; gap: 8px;
-      width: max(116px, min(180px, calc((100vw - 800px) / 2 - 16px)));
+      position: fixed; right: 0; bottom: 66px; z-index: 0;
+      display: flex; flex-direction: column; align-items: stretch; gap: 8px;
+      /* Wide enough for the longest single word (WHITEBOARD) and no wider, so a
+         two-word name breaks over two lines instead of stretching the rail
+         (Sarah, 20 Aug: "make them bigger if you have to and put the words on
+         2 lines"). placeDock caps it if the gutter is thinner than this. */
+      width: 138px;
       max-height: calc(100vh - 96px); overflow: visible;   /* never clip a pill: the raise IS the shadow, and a clipped shadow reads as a cut-off card */
       font-family: 'Space Grotesk', sans-serif;
     }
     .qdock.hidden { display: none; }
+    /* Tidy deals the cards into the two gutters — the same strip the rail tucks
+       into. Behind the page is the right look, but a pill you cannot reach is a
+       defect, so while the desk is tidied the rail comes back to the front. */
+    body.tidy .qdock { z-index: 130; }
     /* THE CARDS' RAIL IS THE SAME SPECIES AS THE PAGE'S DIVIDERS (Sarah,
        20 Aug 2026: "can we do the same for the buttons for your brief,
        teaching cards... dont change the way they act I just wan the buttons to
@@ -493,26 +509,27 @@
        comes back, exactly as before. */
     .qdock-pill {
       display: flex; align-items: center; width: 100%; flex-shrink: 0;   /* a list of buttons is one width (Sarah, 20 Aug) */
-      padding: 8px 12px; border: none; border-radius: 10px 4px 4px 10px; cursor: pointer;
+      padding: 10px 24px 10px 13px; border: none; border-radius: 10px 0 0 10px; cursor: pointer;
       background: var(--bg); box-shadow: var(--neu-raised-sm);
       border-left: 4px solid var(--tc, #9aa0ad);
       font-family: 'Space Grotesk', sans-serif; text-align: left;
       transition: box-shadow 0.15s, transform 0.15s, color 0.15s;
     }
     .qdock-pill:hover { box-shadow: var(--neu-raised-xs); transform: translateX(-3px); }
-    .qdock-pill:hover .qdock-name { color: var(--text); }
+    .qdock-pill:hover .qdock-name { color: var(--accent); }
     .qdock-pill:active { box-shadow: var(--neu-inset-sm); transform: none; }   /* the only inset on the page: the moment under her finger */
     .qdock-name {
-      font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.07em;
-      color: var(--text-muted); min-width: 0;
-      overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+      font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em;
+      line-height: 1.25; color: var(--text); min-width: 0;
+      white-space: normal; overflow-wrap: anywhere;   /* black, bigger, and it wraps rather than being cut off */
     }
     /* The one action on the rail — quiet, the way a secondary Q button is
        quiet: muted text, same species, never a colour. */
-    .qdock-tidy { margin-top: 4px; padding: 6px 12px; border-left-color: transparent; border-radius: 10px; }
-    .qdock-tidy:hover { transform: none; }
-    .qdock-tidy .qdock-name { color: var(--text-faint); font-size: 9px; letter-spacing: 0.05em; }
-    .qdock-tidy:hover .qdock-name { color: var(--text); }
+    /* Same button as the rest (Sarah, 20 Aug: "have close all the same size
+       button as the rest") — the only difference is that its lip carries no
+       colour, because it is not one of the cards. */
+    .qdock-tidy { margin-top: 4px; border-left-color: var(--text-faint); }
+    .qdock-tidy .qdock-name { color: var(--text); }
     /* The card flies to its pill (and back). A ghost, so nothing real
        depends on the animation finishing. */
     .qdock-ghost {
@@ -3704,6 +3721,17 @@
     function openPanelKeys() { return DOCK_ORDER.filter(k => panelIsOpen(panels[k]) && !panels[k].el.classList.contains('stowed')); }
     function panelTitle(p) { const t = p.el.querySelector('.panel-title'); return (t && t.textContent.trim()) || p.key; }
     function dockPillRect(key) { const b = dockEl && dockEl.querySelector('[data-dock="' + key + '"]'); return b ? b.getBoundingClientRect() : null; }
+    // The rail's right edge sits just INSIDE the page's left edge, so the page
+    // laps over its tail. Measured off the paper itself, so it stays true when
+    // Tidy narrows the desk or the window changes.
+    const DOCK_TUCK = 14;
+    function placeDock() {
+      if (!dockEl) return;
+      const paper = document.querySelector('.paper'); if (!paper) return;
+      const r = paper.getBoundingClientRect();
+      dockEl.style.right = Math.max(8, Math.round(window.innerWidth - r.left - DOCK_TUCK)) + 'px';
+      dockEl.style.maxWidth = Math.max(120, Math.round(r.left - 8 + DOCK_TUCK)) + 'px';
+    }
     function renderDock() {
       if (!dockEl) return;
       const keys = isDocked() ? [] : stowedKeys();
@@ -3730,6 +3758,7 @@
       tn.textContent = anyOpen ? 'Close all' : 'Bring them back';
       t.appendChild(tn); frag.appendChild(t);
       dockEl.innerHTML = ''; dockEl.appendChild(frag); dockEl.classList.remove('hidden');
+      placeDock();
     }
     function tidyAll() {
       const open = openPanelKeys();
@@ -3761,6 +3790,7 @@
       document.body.classList.remove('tidy');
       document.body.style.paddingTop = '';
       setTidyFlag(false);
+      placeDock();
     }
     function arrangeDesk() {
       if (isDocked()) return;              // ≤700px is the bottom sheet — there are no sides to put anything on
@@ -3822,6 +3852,7 @@
       stack(left, PANEL_M);
       stack(right, Math.max(PANEL_M, vw - PANEL_M - colW));
       setTidyFlag(true);
+      placeDock();      // Tidy moves the page, so the rail moves with it
       saveLayout();
     }
     {
@@ -3881,6 +3912,7 @@
       if (docked) restackDock(); else { document.body.style.paddingBottom = ''; setupCog.style.bottom = ''; }
       renderDock();
       lastDocked = docked;
+      placeDock();
       // A tidied desk is a LAYOUT, not a one-off nudge: re-deal it on resize
       // (and on the phone give the page its width back — there are no sides).
       if (tidyOn()) { if (docked) { document.body.classList.remove('tidy'); document.body.style.paddingTop = ''; } else arrangeDesk(); }
