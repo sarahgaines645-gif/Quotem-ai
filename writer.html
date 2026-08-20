@@ -1465,6 +1465,11 @@
     .doc-body .q-figure .q-dg-fan { display: inline-flex; flex-direction: column; gap: 6px; }
     .doc-body .q-figure svg.q-mm { display: block; width: 100%; height: auto; max-height: 440px; margin: 2px 0; }
     .doc-body .q-figure svg.q-fl { display: block; width: 100%; height: auto; max-height: 460px; margin: 2px 0; }
+    /* A sticky that has been sent lands as a NOTE on her paper — visible as a
+       note, in the paper's own hand, never mistaken for a sentence she wrote
+       (Sarah, 20 Aug: "the sticky notes still dont go on to the page"). It had
+       no styling at all, so a note that DID land looked like nothing. */
+    .doc-body .q-note-line { position: relative; margin: 6px 0; padding-left: 10px; margin-left: -12px; border-left: 3px solid #e6c84a; color: var(--text); font-size: 0.94em; }
     .doc-body .student-line { margin: 0; font-style: normal; font-weight: 400; color: var(--text); border-left: 2px solid rgba(233,30,99,0.22); padding-left: 8px; margin-left: -10px; }
 
 
@@ -1901,13 +1906,26 @@
     .wb-hr { border: none; border-top: 1px solid rgba(0,0,0,0.08); margin: 14px 0; }
     /* STICKY NOTES on the board (Q's ask, 18 Aug): a layer above the display;
        small raised cards with a coloured top edge, dragged where she likes. */
-    .wb-stickies { position: relative; min-height: 80px; margin: 0 18px 0; }   /* one board — no line between the stickies and the rest (Sarah, 19 Aug) */
+    /* Sarah, 20 Aug 2026: "they seem to be on a seperate half of the
+       whiteboard to all the other things on there." They were — the notes had
+       their own reserved strip above the board, so the board was two zones
+       stacked. A sticky note is a note stuck ON the board. This layer now
+       OVERLAYS the board area exactly (JS keeps it on #wb-body), so the notes
+       sit on the same surface as everything else and can be dragged anywhere
+       on it. It stops at her work area, which a note must never cover. */
+    .wb-stickies { position: absolute; left: 14px; right: 14px; pointer-events: none; z-index: 5; }
     .wb-stickies.hidden { display: none; }
-    .wb-sticky { position: absolute; width: 150px; padding: 8px 10px 8px; border-radius: 10px; background: var(--bg); box-shadow: var(--neu-raised-sm); border-top: 4px solid var(--sc, #e6c84a); font-size: 12px; line-height: 1.4; color: var(--text); cursor: grab; user-select: none; -webkit-user-select: none; touch-action: none; overflow-wrap: anywhere; }
+    .wb-sticky { position: absolute; pointer-events: auto; width: 150px; padding: 8px 10px 6px; border-radius: 10px; background: var(--bg); box-shadow: var(--neu-raised-sm); border-top: 4px solid var(--sc, #e6c84a); font-size: 12px; line-height: 1.4; color: var(--text); cursor: grab; user-select: none; -webkit-user-select: none; touch-action: none; overflow-wrap: anywhere; }
     .wb-sticky:active { cursor: grabbing; }
-    .wb-sticky .st-x, .wb-sticky .st-go { position: absolute; top: 3px; border: none; background: transparent; color: var(--text-faint); font-size: 12px; line-height: 1; cursor: pointer; padding: 2px 4px; }
-    .wb-sticky .st-x { right: 4px; } .wb-sticky .st-go { right: 22px; }
-    .wb-sticky .st-x:hover, .wb-sticky .st-go:hover { color: var(--accent); }
+    .wb-sticky .st-x { position: absolute; top: 3px; right: 4px; border: none; background: transparent; color: var(--text-faint); font-size: 12px; line-height: 1; cursor: pointer; padding: 2px 4px; }
+    .wb-sticky .st-x:hover { color: var(--accent); }
+    /* The one thing a note is FOR. It was a 12px arrow squeezed next to the
+       bin, and she never found it (Sarah, 20 Aug: "the sticky notes still dont
+       go on to the page"). It is a button now, with words on it. */
+    .wb-sticky .st-go { display: block; width: 100%; margin-top: 7px; padding: 4px 8px; border: none; border-radius: 9px; background: var(--bg); box-shadow: var(--neu-raised-xs); color: var(--text); font-family: 'Space Grotesk', sans-serif; font-size: 10px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; cursor: pointer; transition: box-shadow 0.15s; }
+    .wb-sticky .st-go:hover { box-shadow: var(--neu-raised-sm); }
+    .wb-sticky .st-go:active { box-shadow: var(--neu-inset-sm); }
+    .wb-sticky .st-text { display: block; padding-right: 14px; }
     /* BUILD-UP fence: the pieces of a paragraph revealed one at a time. */
     .wb-build { margin: 8px 0 12px; }
     .wb-build-step { display: none; padding: 7px 10px; margin: 4px 0; border-radius: 10px; box-shadow: var(--neu-raised-xs); font-size: 13px; line-height: 1.5; color: var(--text); overflow-wrap: anywhere; animation: wbIn 0.35s ease-out; }
@@ -7503,17 +7521,49 @@
       persist({ wbStickies: state.wbStickies });
       showPanel('wb'); revealPanel('wb'); renderStickies();
     }
+    // The note layer OVERLAYS the board exactly — same top, same height as
+    // #wb-body — so the notes are on the same surface as Q's lesson instead of
+    // in a strip of their own, and a note can never be dragged over her work
+    // area or the panel's buttons.
+    let stickyRepack = false;
+    function fitStickyLayer() {
+      const layer = document.getElementById('wb-stickies'), body = document.getElementById('wb-body');
+      if (!layer || !body) return;
+      layer.style.top = body.offsetTop + 'px';
+      layer.style.height = body.offsetHeight + 'px';
+    }
     function renderStickies() {
       const layer = document.getElementById('wb-stickies'); if (!layer) return;
       const live = (state.wbStickies || []).map((s, i) => ({ s, i })).filter(x => x.s && !x.s.done);
       layer.classList.toggle('hidden', !live.length);
-      layer.innerHTML = live.map(({ s, i }) => '<div class="wb-sticky" data-si="' + i + '" style="left:' + (Number(s.x) || 8) + 'px;top:' + (Number(s.y) || 8) + 'px;--sc:' + (STICKY_HEX[s.colour] || '#e6c84a') + '"><button type="button" class="st-go" title="Send to my page">→</button><button type="button" class="st-x" title="Bin it">×</button>' + escHtml(s.text) + '</div>').join('');
-      // PACK the ones she has not moved herself: three columns, each new card
-      // under the last in its column, by measured height — no overlaps
-      // (Sarah, 18 Aug: two stickies stacked on top of each other).
-      { const cols = [8, 8, 8]; const W = 162; let k = 0;
-        layer.querySelectorAll('.wb-sticky').forEach(el => { const st = (state.wbStickies || [])[Number(el.dataset.si)]; if (!st || st.moved) return; const c = k % 3; const y = cols[c]; el.style.left = (8 + c * W) + 'px'; el.style.top = y + 'px'; st.x = 8 + c * W; st.y = y; cols[c] = y + el.offsetHeight + 8; k++; }); }
-      let maxB = 0; layer.querySelectorAll('.wb-sticky').forEach(el => { maxB = Math.max(maxB, el.offsetTop + el.offsetHeight); }); layer.style.minHeight = Math.max(96, maxB + 10) + 'px';
+      const wbBody = document.getElementById('wb-body');
+      if (wbBody && !live.length) wbBody.style.minHeight = '';
+      layer.innerHTML = live.map(({ s, i }) => '<div class="wb-sticky" data-si="' + i + '" style="left:' + (Number(s.x) || 8) + 'px;top:' + (Number(s.y) || 8) + 'px;--sc:' + (STICKY_HEX[s.colour] || '#e6c84a') + '"><button type="button" class="st-x" title="Bin it">×</button><span class="st-text">' + escHtml(s.text) + '</span><button type="button" class="st-go" title="Put this note on your page">→ My page</button></div>').join('');
+      if (!live.length) return;
+      fitStickyLayer();
+      // A board with notes on it is at least tall enough to HOLD one, or the
+      // note hangs off the bottom of the board and over her work area.
+      { let tall = 0; layer.querySelectorAll('.wb-sticky').forEach(el => { tall = Math.max(tall, el.offsetHeight); });
+        if (tall && wbBody && wbBody.offsetHeight < tall + 16) { wbBody.style.minHeight = (tall + 16) + 'px'; fitStickyLayer(); } }
+      // PARK the ones she has not moved herself: a column down the RIGHT edge
+      // of the board, top first, wrapping leftwards when that column is full.
+      // Q's lesson is never covered by a note she did not put there, and no two
+      // notes land on top of each other (Sarah, 18 Aug).
+      const bw = layer.clientWidth, bh = layer.clientHeight;
+      // A shut or stowed board cannot be measured — every note would read as
+      // 0 high and they would all pile on one spot. Park them when it opens.
+      if (!bw || !bh) { stickyRepack = true; return; }
+      stickyRepack = false;
+      const W = 150, G = 8;
+      let col = 0, y = G;
+      layer.querySelectorAll('.wb-sticky').forEach(el => {
+        const st = (state.wbStickies || [])[Number(el.dataset.si)]; if (!st || st.moved) return;
+        const h = el.offsetHeight;
+        if (y > G && y + h > bh - G) { col++; y = G; }
+        const x = Math.max(G, bw - G - (col + 1) * W - col * G);
+        el.style.left = x + 'px'; el.style.top = y + 'px'; st.x = x; st.y = y;
+        y += h + G;
+      });
     }
     // Drag a sticky (pointer events); its place is remembered.
     (function wireStickies() {
@@ -7530,10 +7580,16 @@
         const st = (state.wbStickies || [])[Number(el.dataset.si)]; if (!st) return;
         const d = { id: e.pointerId, sx: e.clientX, sy: e.clientY, x0: Number(st.x) || 8, y0: Number(st.y) || 8 };
         try { el.setPointerCapture(e.pointerId); } catch (_) {}
-        const move = (ev) => { if (ev.pointerId !== d.id) return; const nx = Math.max(0, Math.min(layer.clientWidth - el.offsetWidth, d.x0 + (ev.clientX - d.sx))); const ny = Math.max(0, d.y0 + (ev.clientY - d.sy)); el.style.left = nx + 'px'; el.style.top = ny + 'px'; st.x = nx; st.y = ny; };
+        const move = (ev) => { if (ev.pointerId !== d.id) return; const nx = Math.max(0, Math.min(layer.clientWidth - el.offsetWidth, d.x0 + (ev.clientX - d.sx))); const ny = Math.max(0, Math.min(Math.max(0, layer.clientHeight - el.offsetHeight), d.y0 + (ev.clientY - d.sy))); el.style.left = nx + 'px'; el.style.top = ny + 'px'; st.x = nx; st.y = ny; };
         const up = (ev) => { if (ev.pointerId !== d.id) return; el.removeEventListener('pointermove', move); el.removeEventListener('pointerup', up); el.removeEventListener('pointercancel', up); try { el.releasePointerCapture(d.id); } catch (_) {} const dragged = Math.abs(ev.clientX - d.sx) + Math.abs(ev.clientY - d.sy) > 4; stickyDragged = dragged; if (dragged) { st.moved = true; persist({ wbStickies: state.wbStickies }); renderStickies(); } };
         el.addEventListener('pointermove', move); el.addEventListener('pointerup', up); el.addEventListener('pointercancel', up);
       });
+      // The board changes shape — content grows, she resizes it, Tidy re-deals
+      // the desk, it opens after being shut. The notes follow it.
+      if (window.ResizeObserver) {
+        const body = document.getElementById('wb-body');
+        if (body) new ResizeObserver(() => { fitStickyLayer(); if (stickyRepack) renderStickies(); }).observe(body);
+      }
     })();
     function fencedLineFlags(lines) {
       let inFence = false;
