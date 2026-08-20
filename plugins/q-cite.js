@@ -603,8 +603,8 @@ async function verifyMention(m, text) {
     const t0 = Date.now();
     try {
         if (m.doi) {
-            try { const w = await deps.fetchJson('https://api.openalex.org/works/https://doi.org/' + encodeURIComponent(m.doi)); const r = fromOpenAlex(w); if (r) return { ...m, found: true, strength: 'strong', title: r.title, year: r.year, authors: r.authors.map(a => a.family), ms: Date.now() - t0 }; } catch (_) {}
-            try { const ws = await searchCrossref(m.doi, 1); const r = ws[0]; if (r && String(r.doi || '').toLowerCase() === m.doi.toLowerCase()) return { ...m, found: true, strength: 'strong', title: r.title, year: r.year, authors: r.authors.map(a => a.family), ms: Date.now() - t0 }; } catch (_) {}
+            try { const w = await deps.fetchJson('https://api.openalex.org/works/https://doi.org/' + encodeURIComponent(m.doi)); const r = fromOpenAlex(w); if (r) return { ...m, found: true, strength: 'strong', title: r.title, year: r.year, authors: r.authors.map(a => a.family), doi: r.doi || m.doi, url: r.url || ('https://doi.org/' + m.doi), journal: r.journal || null, type: r.type || null, ms: Date.now() - t0 }; } catch (_) {}
+            try { const ws = await searchCrossref(m.doi, 1); const r = ws[0]; if (r && String(r.doi || '').toLowerCase() === m.doi.toLowerCase()) return { ...m, found: true, strength: 'strong', title: r.title, year: r.year, authors: r.authors.map(a => a.family), doi: r.doi, url: r.url || ('https://doi.org/' + r.doi), journal: r.journal || null, type: r.type || null, ms: Date.now() - t0 }; } catch (_) {}
             return { ...m, found: false, ms: Date.now() - t0 };
         }
         const y = Number(m.year);
@@ -616,8 +616,20 @@ async function verifyMention(m, text) {
         // invented title.
         const kwList = contextWords(text, m.at, 6).filter(k => fold(k) !== fold(m.surname) && k.length > 3);
         const kw = kwList.join(' ');
-        const onTopic = r => { const hay = fold((r.title || '') + ' ' + (r.snippet || '') + ' ' + (r.journal || '')); return !kwList.length || kwList.some(k => hay.includes(fold(k))); };
-        const pack = (hit, strength) => ({ ...m, found: true, strength, title: hit.title, year: hit.year, authors: hit.authors.map(a => a.family), ms: Date.now() - t0 });
+        // The topic words are matched against the WORK, not the journal it sat
+        // in. With the journal in the haystack, "Herzberg (1959) ... hygiene
+        // factors" confidently matched a 1957/58 German influenza paper that
+        // happened to be published in a hygiene journal, and reported it STRONG
+        // (measured, 20 Aug). A journal title says nothing about the work.
+        const onTopic = r => { const hay = fold((r.title || '') + ' ' + (r.snippet || '')); return !kwList.length || kwList.some(k => hay.includes(fold(k))); };
+        // THE LINK COMES BACK TOO (Sarah, 20 Aug: "my sister doesnt trust it and
+        // cant check it"). A title alone cannot be checked; a DOI or a landing
+        // page can be opened in one press. fromOpenAlex/fromCrossref already
+        // carry doi + url - they were simply being dropped here.
+        const pack = (hit, strength) => ({ ...m, found: true, strength, title: hit.title, year: hit.year,
+            authors: hit.authors.map(a => a.family), doi: hit.doi || null,
+            url: hit.url || (hit.doi ? 'https://doi.org/' + hit.doi : null),
+            journal: hit.journal || null, type: hit.type || null, ms: Date.now() - t0 });
         let weak = null;
         // OpenAlex: author + year, topic words; then author + year alone.
         for (const q of [kw, '']) {

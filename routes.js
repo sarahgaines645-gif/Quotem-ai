@@ -1775,9 +1775,22 @@ router.post('/writer/chat', requirePerson, express.json({ limit: '1mb' }), write
                         const v = await qCite.verifyMentions(toCheck, { exemptText, max: 6, timeoutMs: 9000 });
                         console.log('[writer/chat] cite guard: checked ' + v.checked.length + ' exempt ' + v.exempt.length + (v.timedOut ? ' TIMED OUT' : '') + (v.skipped ? ' skipped ' + v.skipped : '') + (v.unverified.length ? ' — NOT FOUND: ' + v.unverified.map(u => u.mention).join(' | ') : '') + (v.checked.filter(c => c.found).length ? ' — found: ' + v.checked.filter(c => c.found).map(c => c.mention + ' → ' + (c.title || '').slice(0, 50)).join(' | ') : ''));
                         const NL = String.fromCharCode(10);
+                        // SHE MUST BE ABLE TO CHECK IT HERSELF (Sarah, 20 Aug: "my
+                        // sister doesnt trust it and cant check it"). A source that
+                        // WAS confirmed now says which work it matched and gives the
+                        // link, so trust is something she verifies in one press
+                        // rather than something she is asked to extend.
+                        const strong = (v.checked || []).filter(c => c && c.found === true && c.strength === 'strong');
+                        if (strong.length) {
+                            reply += NL + NL + '✅ Checked: ' + strong.map(c => '**' + c.mention + '** — ' + String(c.title || '').slice(0, 90) + (c.url ? ' (' + c.url + ')' : '')).join(NL + '✅ Checked: ');
+                        }
                         if (v.unverified.length) {
                             const list = v.unverified.map(u => '**' + u.mention + '**').join(', ');
-                            reply += NL + NL + '⚠️ I could not find ' + list + ' on OpenAlex or CrossRef. Do not put ' + (v.unverified.length === 1 ? 'it' : 'them') + ' on your page until ' + (v.unverified.length === 1 ? 'it has' : 'they have') + ' been checked — press Auto cite on the sentence instead and pick a real one.';
+                            // NOT "it does not exist" — OpenAlex and CrossRef index
+                            // journals well and books patchily, so a real textbook can
+                            // come back missing (Barrow and Mosley 2005 did, measured
+                            // 20 Aug). Say what was actually established: not confirmed.
+                            reply += NL + NL + '⚠️ I could not confirm ' + list + ' on OpenAlex or CrossRef. That does not always mean ' + (v.unverified.length === 1 ? 'it is not real' : 'they are not real') + ' — books and reports are indexed patchily — but I cannot stand behind ' + (v.unverified.length === 1 ? 'it' : 'them') + '. Check ' + (v.unverified.length === 1 ? 'it' : 'them') + ' yourself before ' + (v.unverified.length === 1 ? 'it goes' : 'they go') + ' on your page, or press Auto cite and pick one I can show you.';
                         }
                         if (v.weak && v.weak.length) {
                             reply += NL + NL + '⚠️ ' + v.weak.map(w => '**' + w.mention + '**').join(', ') + ' — there is work by that name and year, but not on this topic that I can see. Check the actual title before you use it.';
