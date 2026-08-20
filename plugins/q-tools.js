@@ -362,7 +362,10 @@ const TOOL_DEFINITIONS = [
             parameters: {
                 type: 'object',
                 properties: {
-                    search: { type: 'string', description: 'What it was about — e.g. "kitchen tap", "Harrow Health", "the invoice". This is the one to use when they refer to something you cannot see.' },
+                    search: { type: 'string', description: 'What it was about — e.g. "kitchen tap", "Harrow Health", "the invoice". Use this when they refer to something you cannot see. A hit comes back with the conversation around it, not just the one line.' },
+                    on:     { type: 'string', description: 'A whole day: "today", "yesterday", or a date like "2026-08-19". Use this when they ask about a WHEN rather than a what — "what did we talk about this morning", "what did I say on Tuesday". Works with or without a search word.' },
+                    from:   { type: 'string', description: 'Start of a window — a date "2026-08-19" or a datetime "2026-08-19T09:00". For "this morning" use from today at T00:00 and to T12:00.' },
+                    to:     { type: 'string', description: 'End of a window — same formats as `from`.' },
                     page:   { type: 'string', description: 'Optional — narrow to one page: "chat", "writer", "life", "finance", "email", "thread". LEAVE IT OUT to search every page, which is usually what you want.' },
                     limit:  { type: 'integer', description: 'How many messages to return (1-60). Default 20.', minimum: 1, maximum: 60 },
                 },

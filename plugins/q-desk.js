@@ -33,6 +33,53 @@ const CONTEXT_BEFORE = 3;
 const CONTEXT_AFTER = 4;
 const MAX_THREADS = 5;
 
+/** Today in the user's local day, not UTC — "today" has to mean today to them. */
+function localDay(offsetDays = 0) {
+    const d = new Date();
+    d.setDate(d.getDate() + offsetDays);
+    try {
+        return new Intl.DateTimeFormat('en-CA', {
+            timeZone: 'Europe/London', year: 'numeric', month: '2-digit', day: '2-digit',
+        }).format(d);
+    } catch (_) {
+        return d.toISOString().slice(0, 10);
+    }
+}
+
+/**
+ * Turn `on` / `from` / `to` into a plain [start, end] pair of ISO strings.
+ * Accepts a date ("2026-08-19"), a datetime ("2026-08-19T09:00"), or the two
+ * words people actually say — "today" and "yesterday". Returns nulls when no
+ * window was asked for, so the caller can skip filtering entirely.
+ */
+function resolveWindow(args = {}) {
+    const asDate = (v) => {
+        // Keep the ORIGINAL case. Lowercasing turned "2026-08-20T09:00" into
+        // "...t09:00", and timestamps are compared as strings, so every window
+        // with a time in it silently matched nothing. Only the keyword check
+        // needs to be case-insensitive.
+        const s = String(v || '').trim();
+        if (!s) return null;
+        const k = s.toLowerCase();
+        if (k === 'today') return localDay(0);
+        if (k === 'yesterday') return localDay(-1);
+        if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s;
+        return null;
+    };
+
+    const on = asDate(args.on);
+    if (on) return { from: on.slice(0, 10) + 'T00:00', to: on.slice(0, 10) + 'T23:59:59', label: on.slice(0, 10) };
+
+    const rawFrom = asDate(args.from);
+    const rawTo = asDate(args.to);
+    if (!rawFrom && !rawTo) return { from: null, to: null, label: null };
+
+    // A bare date means the whole of that day at whichever end it sits.
+    const from = rawFrom ? (rawFrom.length === 10 ? rawFrom + 'T00:00' : rawFrom) : null;
+    const to = rawTo ? (rawTo.length === 10 ? rawTo + 'T23:59:59' : rawTo) : null;
+    return { from, to, label: [from, to].filter(Boolean).map(x => x.replace('T', ' ')).join(' → ') };
+}
+
 // Addresses that are never a useful answer to "who do I contact".
 const JUNK_ADDRESS = /^(no-?reply|do-?not-?reply|donotreply|bounce|mailer-daemon|postmaster|notifications?)@/i;
 
@@ -237,6 +284,13 @@ function readPageHistory(args = {}, personId) {
     const search = String(args.search || '').trim().toLowerCase();
     const limit = Math.min(Math.max(parseInt(args.limit, 10) || 20, 1), 60);
 
+    // WHEN, as well as WHAT (20 Aug 2026 — Sarah asked whether he could search
+    // by date as well as by word). Plenty of what people ask has no keyword in
+    // it at all: "what did we talk about this morning" gives you nothing to
+    // search FOR, only a when. `on` covers a whole day; from/to take a date or
+    // a full datetime, so "this morning" is just from 00:00 to 12:00.
+    const when = resolveWindow(args);
+
     let all = [];
     try {
         all = require('../memory').loadMemory(personId) || [];
@@ -250,6 +304,27 @@ function readPageHistory(args = {}, personId) {
     let rows = page
         ? all.filter(m => String(m.surface || '').toLowerCase() === page)
         : all;
+
+    // Narrow to the asked-for window before anything else, so a search inside a
+    // day searches that day and a bare date returns the day itself.
+    if (when.from || when.to) {
+        rows = rows.filter(m => {
+            const t = String(m.timestamp || '');
+            if (!t) return false;
+            if (when.from && t < when.from) return false;
+            if (when.to && t > when.to) return false;
+            return true;
+        });
+        if (!rows.length) {
+            return {
+                page: page || 'all pages',
+                window: when.label,
+                searched_for: search || null,
+                messages: [], count: 0, pages_that_do_exist: pagesThatExist,
+                instruction_for_q: `Nothing is saved from ${when.label}${page ? ' on the ' + page + ' page' : ''}. Say plainly that you looked and there is nothing recorded for then — do NOT deny the conversation happened, and offer to look on a different day or search for a word instead.`,
+            };
+        }
+    }
 
     if (page && !rows.length) {
         return {
@@ -337,12 +412,16 @@ function readPageHistory(args = {}, personId) {
         };
     }
 
-    const messages = rows.slice(-limit).map(asLine);
+    // A date window with no search word: give the START of that period, not the
+    // end. "What did we talk about this morning" wants the morning from the
+    // beginning; the tail is the bit they can already see.
+    const messages = (when.from || when.to) ? rows.slice(0, limit).map(asLine) : rows.slice(-limit).map(asLine);
 
-    console.log(`[q-desk] history: ${messages.length} message(s)${page ? ' from ' + page : ' across all pages'}`);
+    console.log(`[q-desk] history: ${messages.length} message(s)${page ? ' from ' + page : ' across all pages'}${when.label ? ' within ' + when.label : ''}`);
 
     return {
         page: page || 'all pages',
+        window: when.label,
         searched_for: search || null,
         messages,
         count: messages.length,
