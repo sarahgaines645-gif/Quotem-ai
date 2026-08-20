@@ -9,7 +9,7 @@
   <title>Q — Writing Coach</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Lora:ital,wght@0,400;0,500;0,600;1,400&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Lora:ital,wght@0,400;0,500;0,600;1,400&family=Caveat:wght@400;600&display=swap" rel="stylesheet">
   <script src="/marked.min.js"></script>
   <style>
     :root {
@@ -2794,8 +2794,7 @@
     .qpc .pad-rings i { display: block; width: 9px; height: 30px; border-radius: 5px; background: linear-gradient(90deg, #8f9298, #d7dade 35%, #9ba0a6 70%, #7d8187); box-shadow: 0 2px 3px rgba(0,0,0,0.32); }
     .qpc .pad-sheet {
       position: relative; background: var(--paper); border-radius: 2px 2px 6px 6px; padding: 24px 18px 14px;
-      background-image: repeating-linear-gradient(180deg, transparent 0 29px, rgba(80,70,40,0.14) 29px 30px);
-      background-position: 0 30px;
+      background-image: none;   /* the lines belong to the writing, not the sheet — see .pad-write */
       box-shadow: 0 12px 26px -16px rgba(80,70,40,0.85);
     }
     .qpc .pad-sheet.under-1 { position: absolute; inset: 24px 4px -5px 4px; z-index: 0; background: var(--paper-back); }
@@ -2806,9 +2805,17 @@
        screen. The 30px rule pitch above IS this line height — change one and you
        must change the other, or the words come off the lines. */
     .qpc .pad-write {
-      font-family: 'Lora', Georgia, serif; font-size: 18px; line-height: 30px;
+      /* a note is handwritten. The UI keeps Space Grotesk; this is paper. */
+      font-family: 'Caveat', 'Bradley Hand', 'Segoe Script', cursive;
+      font-size: 26px; line-height: 30px;
       color: #1e1a14;                    /* the ink you START in — the pencil changes it from there on */
       min-height: 390px; outline: none; overflow-wrap: anywhere;
+      /* THE WRITING SITS ON THE LINE. The rule is drawn at the foot of every
+         line box, in the same box as the text, so the words rest on it and the
+         descenders cross it — the way they do on real paper. The 30px here and
+         the 30px below are the same number and must stay that way. */
+      background-image: repeating-linear-gradient(180deg, transparent 0 29px, rgba(80,70,40,0.16) 29px 30px);
+      background-position: 0 -13px;   /* the rule lands just under the baseline, measured, not guessed */
     }
     .qpc .pad-write.is-empty::before {
       content: 'Your own notes. Nothing here goes near the essay.';
