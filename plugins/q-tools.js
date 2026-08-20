@@ -1127,6 +1127,68 @@ const TOOL_DEFINITIONS = [
     {
         type: 'function',
         function: {
+            name: 'edit_task',
+            description: 'CHANGE something about a task that already exists — its category, priority, due date, title, notes, reminder or contact. Use this whenever they want a task altered, and especially when reorganising or recategorising a list. Do NOT make a new task and complete the old one instead: that throws away its notes and sub-steps. Only say a task has been changed if this comes back ok — never report a reorganisation as done when you have only grouped things in your reply.',
+            parameters: {
+                type: 'object',
+                properties: {
+                    id:       { type: 'string', description: 'The task id, from list_tasks.' },
+                    title:    { type: 'string', description: 'New title.' },
+                    due:      { type: 'string', description: 'New due date YYYY-MM-DD, or null to clear it.' },
+                    priority: { type: 'string', enum: ['low', 'med', 'high'], description: 'New priority.' },
+                    category: { type: 'string', description: 'New category slug — this is the one for reorganising a list.' },
+                    notes:    { type: 'string', description: 'New notes (replaces what is there).' },
+                    alertAt:  { type: 'string', description: 'New reminder time, ISO datetime.' },
+                },
+                required: ['id'],
+            },
+        },
+    },
+    {
+        type: 'function',
+        function: {
+            name: 'delete_task',
+            description: 'Remove a task from the list ENTIRELY. Done is not the same as gone — a passed event, a duplicate or something that was never really a job should leave the list, not sit ticked forever. THIS CANNOT BE UNDONE, so only delete what they have actually asked you to delete: if you are working from a list you drew up yourself, read it back and get a yes before you start. When in doubt, complete it instead.',
+            parameters: {
+                type: 'object',
+                properties: { id: { type: 'string', description: 'The task id, from list_tasks.' } },
+                required: ['id'],
+            },
+        },
+    },
+    {
+        type: 'function',
+        function: {
+            name: 'bulk_tasks',
+            description: 'Tick off or delete SEVERAL tasks in one go. Use it when clearing out a long list — passed events, duplicates, things done weeks ago. One at a time is fine for three tasks and punishing for ninety. Deleting is permanent: read the list back to them and get a yes before deleting anything you selected yourself. Confirm with the number afterwards, not the whole list.',
+            parameters: {
+                type: 'object',
+                properties: {
+                    ids:    { type: 'array', items: { type: 'string' }, description: 'Task ids from list_tasks.' },
+                    action: { type: 'string', enum: ['complete', 'delete'], description: '"complete" ticks them off, "delete" removes them permanently.' },
+                },
+                required: ['ids', 'action'],
+            },
+        },
+    },
+    {
+        type: 'function',
+        function: {
+            name: 'merge_tasks',
+            description: 'Fold duplicate tasks into one. "Call CMS" listed twice is one job, and ticking off one of them leaves the other pretending to be work. The task you keep gets the others\' notes and sub-steps folded into it and the earliest due date, then the duplicates are removed — so nothing they were carrying is lost.',
+            parameters: {
+                type: 'object',
+                properties: {
+                    keep_id:   { type: 'string', description: 'The task to keep.' },
+                    merge_ids: { type: 'array', items: { type: 'string' }, description: 'The duplicates to fold in and remove.' },
+                },
+                required: ['keep_id', 'merge_ids'],
+            },
+        },
+    },
+    {
+        type: 'function',
+        function: {
             name: 'complete_task',
             description: 'Tick a task as done. Use this when the user says "I did X", "done with Y", "tick off Z". The id comes from list_tasks.',
             parameters: {
@@ -2059,6 +2121,10 @@ async function executeTool(name, argsRaw, personId, personEmail, threadId) {
         case 'add_task':             return addTaskTool(args, personEmail);
         case 'list_tasks':           return listTasksTool(args, personEmail);
         case 'complete_task':        return completeTaskTool(args, personEmail);
+        case 'edit_task':            return editTaskTool(args, personEmail);
+        case 'delete_task':          return deleteTaskTool(args, personEmail);
+        case 'bulk_tasks':           return bulkTasksTool(args, personEmail);
+        case 'merge_tasks':          return mergeTasksTool(args, personEmail);
         case 'update_life_context':  return updateLifeContextTool(args, personEmail);
         case 'send_email':           return await sendEmailTool(args, personEmail, threadId);
         case 'check_inbox':          return await checkInboxTool(args, personEmail);
@@ -2755,6 +2821,159 @@ function bulkAddTasksTool({ tasks } = {}, personEmail) {
     };
 }
 
+/**
+ * CHANGE an existing task (Q's gap #2, 20 Aug 2026). q-life.updateTask has
+ * always been able to do this — it simply was never handed to Q, so when Sarah
+ * asked him to reorganise her list into categories he could not, and said it
+ * was done when he had only grouped them in the chat. The only workaround was
+ * to make a new task and complete the old one, which silently threw away its
+ * notes and subtasks.
+ */
+function editTaskTool(args = {}, personEmail) {
+    if (!personEmail) return { error: 'Cannot edit a task without a signed-in user.' };
+    const id = String(args.id || '').trim();
+    if (!id) return { error: 'id is required (use list_tasks first)' };
+
+    const patch = {};
+    for (const f of ['title', 'due', 'priority', 'category', 'notes', 'alertAt', 'chase', 'contact', 'subtasks']) {
+        if (f in args && args[f] !== undefined) patch[f] = args[f];
+    }
+    if (!Object.keys(patch).length) {
+        return { error: 'nothing to change', instruction_for_q: 'Ask WHICH field they want changed. Do not guess.' };
+    }
+
+    const updated = qLife.updateTask(id, patch, personEmail);
+    if (!updated) return { error: 'Task not found: ' + id, instruction_for_q: 'That task no longer exists. Say so — do not pretend the change was made.' };
+
+    return {
+        ok: true,
+        task: { id: updated.id, title: updated.title, due: updated.due, priority: updated.priority, category: updated.category },
+        changed: Object.keys(patch),
+        instruction_for_q: 'Changed, for real, on their list. Confirm in one line naming only what actually changed. Never say a task has been changed unless this came back ok.',
+    };
+}
+
+/**
+ * DELETE a task outright (Q's gap #3). "Done" is not the same as "gone" — a
+ * passed event or a duplicate should leave the list, not sit ticked forever.
+ */
+function deleteTaskTool(args = {}, personEmail) {
+    if (!personEmail) return { error: 'Cannot delete a task without a signed-in user.' };
+    const id = String(args.id || '').trim();
+    if (!id) return { error: 'id is required (use list_tasks first)' };
+
+    const before = (qLife.listTasks(personEmail, {}) || []).find(t => t.id === id);
+    if (!before) return { error: 'Task not found: ' + id, instruction_for_q: 'It is already gone. Say so plainly.' };
+
+    qLife.deleteTask(id, personEmail);
+    try { require('./q-followup').clearChaseForTask(personEmail, id); } catch (_) {}
+
+    return {
+        ok: true,
+        deleted: { id, title: before.title },
+        instruction_for_q: `"${before.title}" is deleted and cannot be brought back. Confirm briefly. Only ever delete what they actually asked you to delete — if you are working from a list you proposed, read it back and get a yes first.`,
+    };
+}
+
+/**
+ * BULK complete or delete (Q's gap #6). One at a time is fine for three tasks
+ * and punishing for ninety-six.
+ */
+function bulkTasksTool(args = {}, personEmail) {
+    if (!personEmail) return { error: 'Cannot change tasks without a signed-in user.' };
+    const ids = Array.isArray(args.ids) ? args.ids.map(x => String(x).trim()).filter(Boolean) : [];
+    const action = String(args.action || '').toLowerCase();
+    if (!ids.length) return { error: 'ids (array) is required' };
+    if (!['complete', 'delete'].includes(action)) return { error: 'action must be "complete" or "delete"' };
+
+    const all = qLife.listTasks(personEmail, {}) || [];
+    const done = [], missing = [];
+
+    for (const id of ids.slice(0, 100)) {
+        const t = all.find(x => x.id === id);
+        if (!t) { missing.push(id); continue; }
+        if (action === 'delete') {
+            qLife.deleteTask(id, personEmail);
+            try { require('./q-followup').clearChaseForTask(personEmail, id); } catch (_) {}
+        } else {
+            qLife.updateTask(id, { done: true }, personEmail);
+            try { require('./q-followup').clearChaseForTask(personEmail, id); } catch (_) {}
+        }
+        done.push(t.title);
+    }
+
+    return {
+        ok: true,
+        action,
+        count: done.length,
+        titles: done.slice(0, 20),
+        not_found: missing.length,
+        instruction_for_q:
+            `${done.length} task(s) ${action === 'delete' ? 'deleted — permanently' : 'ticked off'}. Confirm with the NUMBER, not the whole list. `
+            + (missing.length ? `${missing.length} were already gone; say so. ` : '')
+            + 'Deleting is irreversible: never run it on a list you assembled yourself without reading it back and getting a yes first.',
+    };
+}
+
+/**
+ * MERGE duplicates (Q's gap #4). "Call CMS" twice is one job, and completing
+ * one of them leaves the other sitting there pretending to be work.
+ */
+function mergeTasksTool(args = {}, personEmail) {
+    if (!personEmail) return { error: 'Cannot merge tasks without a signed-in user.' };
+    const keepId = String(args.keep_id || '').trim();
+    const mergeIds = (Array.isArray(args.merge_ids) ? args.merge_ids : []).map(x => String(x).trim()).filter(Boolean);
+    if (!keepId || !mergeIds.length) return { error: 'keep_id and merge_ids are both required' };
+
+    const all = qLife.listTasks(personEmail, {}) || [];
+    const keep = all.find(t => t.id === keepId);
+    if (!keep) return { error: 'Task not found: ' + keepId };
+
+    // Fold the others INTO the survivor before removing them, so nothing the
+    // duplicates were carrying is quietly lost.
+    const notes = [keep.notes].filter(Boolean);
+    const subs = [...(keep.subtasks || [])];
+    const seen = new Set(subs.map(s => String(s.text || '').toLowerCase()));
+    let earliestDue = keep.due || null;
+    const folded = [];
+
+    for (const id of mergeIds) {
+        const t = all.find(x => x.id === id);
+        if (!t || t.id === keepId) continue;
+        if (t.notes) notes.push(t.notes);
+        for (const s of (t.subtasks || [])) {
+            const k = String(s.text || '').toLowerCase();
+            if (k && !seen.has(k)) { seen.add(k); subs.push({ text: s.text, done: !!s.done }); }
+        }
+        if (t.due && (!earliestDue || t.due < earliestDue)) earliestDue = t.due;
+        folded.push(t.title);
+    }
+
+    if (!folded.length) return { error: 'nothing to merge', instruction_for_q: 'None of those ids exist any more. Say so.' };
+
+    qLife.updateTask(keepId, {
+        notes: notes.join('\n') || null,
+        subtasks: subs,
+        ...(earliestDue ? { due: earliestDue } : {}),
+    }, personEmail);
+
+    for (const id of mergeIds) {
+        if (id === keepId) continue;
+        qLife.deleteTask(id, personEmail);
+        try { require('./q-followup').clearChaseForTask(personEmail, id); } catch (_) {}
+    }
+
+    return {
+        ok: true,
+        kept: keep.title,
+        folded_in: folded,
+        due: earliestDue,
+        instruction_for_q:
+            `Merged into "${keep.title}" — notes and sub-steps from the duplicates were folded in first, and the earliest due date kept, so nothing was lost. `
+            + 'Confirm in one line.',
+    };
+}
+
 function completeTaskTool({ id } = {}, personEmail) {
     if (!personEmail) return { error: 'Cannot complete a task without a signed-in user.' };
     if (!id) return { error: 'id is required (use list_tasks first)' };
@@ -2876,6 +3095,13 @@ const ALWAYS_ON = new Set([
     // trigger-gated so they don't bloat every prompt — that bloat was hitting
     // Together's token rate limit (429) on big cases.
     'send_email', 'web_search', 'create_document', 'analyze_document',
+    // LOOKING THINGS UP IS ALWAYS IN HIS HAND (20 Aug 2026). ~478 tokens a turn,
+    // and worth every one: he is only ever shown the recent slice of a
+    // conversation, so without this he will flatly deny things he really said —
+    // which is exactly what happened to Sarah over her kitchen tap. A trigger
+    // list can never cover every way a person says "but you told me". The one
+    // failure this prevents costs more than the tokens do.
+    'read_page_history',
     'add_event', 'list_events', 'add_task', 'list_tasks', 'complete_task',
     // Inbox reading (2026-07-01, Sarah): Q checks the user's OWN email, reads a
     // message + its attachments, then files/diarises/replies with the tools above.
@@ -2914,6 +3140,32 @@ const ADVOCATE_TOOLS = new Set([
 ]);
 
 const TRIGGERS = {
+    // Changing, clearing and tidying the list. Gated rather than always-on —
+    // together they are ~780 tokens a turn, and the language for them is concrete
+    // and easy to spot, unlike "do you remember", which is why THAT one is not
+    // gated. Deliberately wide all the same: the whole complaint was Q not having
+    // the tool in his hand at the moment he was asked for it.
+    edit_task: [
+        /\b(change|edit|update|move|switch|set|make)\b[^.?!]{0,40}\b(task|category|categories|priority|due|deadline|title|notes?|reminder)\b/i,
+        /\b(reorgani[sz]e|recategori[sz]e|re-?categori[sz]e|sort|tidy|group|organi[sz]e)\b[^.?!]{0,30}\b(list|tasks?|jobs?)\b/i,
+        /\b(put|move)\b[^.?!]{0,30}\b(under|into|in the)\b[^.?!]{0,20}\b(category|list|group)\b/i,
+        /\bwrong (category|date|priority)\b/i,
+    ],
+    delete_task: [
+        /\b(delete|remove|get rid of|bin|scrap|clear out|take off)\b/i,
+        /\b(dead|old|passed|stale|duplicate) (tasks?|jobs?|ones?)\b/i,
+        /\bshouldn'?t be (on|in) (the|my) list\b/i,
+    ],
+    bulk_tasks: [
+        /\b(all of (them|these|those)|the lot)\b/i,
+        /\b(clear|clean|tidy|sort) (out |up )?(my |the )?(list|tasks)\b/i,
+        /\b(bulk|in one go|at once|all at once)\b/i,
+        /\b(delete|remove|complete|tick off)\b[^.?!]{0,20}\b(them all|all of them|these|those)\b/i,
+    ],
+    merge_tasks: [
+        /\b(merge|combine|duplicates?|same task|twice|repeated)\b/i,
+        /\bthere'?s two\b/i,
+    ],
     // Chasing. Anything left hanging on someone else, and every "remind me if".
     schedule_followup: [
         /\b(chase|follow ?up|nudge|come back to)\b/i,
