@@ -516,18 +516,27 @@
     .qdock-pill {
       display: flex; align-items: center; width: 100%; flex-shrink: 0;   /* a list of buttons is one width (Sarah, 20 Aug) */
       padding: 10px 19px 10px 13px; border: none; border-radius: 10px 0 0 10px; cursor: pointer;   /* the right padding is the bit the page covers */
+      min-height: var(--pill-h, 0px);   /* every tab the same height, even when only the long name wraps */
       background: var(--bg); box-shadow: var(--neu-raised-sm);
       border-left: 4px solid var(--tc, #9aa0ad);
       font-family: 'Space Grotesk', sans-serif; text-align: left;
       transition: box-shadow 0.15s, transform 0.15s, color 0.15s;
     }
+    /* Sarah, 20 Aug 2026: "when the page is squashed the colours disapear and
+       its untidy. the side of the screen should push the colour to the right nd
+       then if the words need to go on two lines they all go on two lines."
+       The lip is on the LEFT, so the screen edge ate it first. Now the edge acts
+       as a wall: the rail is never cut, it is pushed right, and the loss of
+       width is taken by the WORDS wrapping — every tab together, one height,
+       never a ragged mix. */
+    .qdock.wrapped .qdock-name { white-space: normal; overflow-wrap: anywhere; }
     .qdock-pill:hover { box-shadow: var(--neu-raised-xs); transform: translateX(-3px); }
     .qdock-pill:hover .qdock-name { color: var(--accent); }
     .qdock-pill:active { box-shadow: var(--neu-inset-sm); transform: none; }   /* the only inset on the page: the moment under her finger */
     .qdock-name {
       font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em;
       line-height: 1.25; color: var(--text);
-      white-space: nowrap;   /* black, and always on ONE line — the rail is sized to fit it */
+      white-space: nowrap;   /* black, and on ONE line while there is room for it */
     }
     /* The one action on the rail — quiet, the way a secondary Q button is
        quiet: muted text, same species, never a colour. */
@@ -4102,11 +4111,34 @@
       }
       const paper = document.querySelector('.paper'); if (!paper) return;
       const vw = window.innerWidth;
-      const railW = dockEl.offsetWidth || 0;
-      const need = railW + 8 - DOCK_TUCK;                 // page-left the rail needs
+
+      // How wide it wants to be: every name on one line.
+      dockEl.classList.remove('wrapped');
+      dockEl.style.width = 'max-content';
+      dockEl.style.setProperty('--pill-h', '0px');
+      const natural = dockEl.offsetWidth || 0;
+
+      // Ask the page to give up the room for it.
+      const need = natural + 8 - DOCK_TUCK;
       root.style.setProperty('--rail-desk', Math.max(360, Math.min(760, vw - 2 * need)) + 'px');
-      const r = paper.getBoundingClientRect();            // read AFTER the width changed
+
+      // What the screen actually leaves between its edge and the tuck line. If
+      // that is less than the rail wants, the EDGE WINS: the rail is pushed
+      // right and narrowed — never cut off, so the colour on the lip is always
+      // there — and the words wrap to take up the difference.
+      let r = paper.getBoundingClientRect();
+      const avail = Math.round(r.left + DOCK_TUCK);
+      if (avail < natural) { dockEl.classList.add('wrapped'); dockEl.style.width = Math.max(96, avail) + 'px'; }
+      else { dockEl.style.width = natural + 'px'; }
+
+      r = paper.getBoundingClientRect();
       dockEl.style.right = Math.max(0, Math.round(vw - r.left - DOCK_TUCK)) + 'px';
+
+      // One height for all of them, taken from the tallest, so a wrapped name
+      // never leaves the rail ragged.
+      let h = 0;
+      dockEl.querySelectorAll('.qdock-pill').forEach(el => { h = Math.max(h, el.offsetHeight); });
+      dockEl.style.setProperty('--pill-h', h + 'px');
     }
     function renderDock() {
       if (!dockEl) return;
@@ -4192,10 +4224,17 @@
       // Two columns. The writing keeps the middle and stays readable; the
       // columns take what is left, capped so a card is never a sliver.
       const sides = open.filter(k => k !== 'wb');
+      // The rail stands in the gutter too, right against the page. Tidy has to
+      // leave it its strip or the column lands on top of it and the colours
+      // vanish (Sarah, 20 Aug: "when the page is squashed the colours disapear
+      // and its untidy"). It laps the page by DOCK_TUCK, so only the rest of
+      // it needs reserving.
+      const railOn = dockEl && !dockEl.classList.contains('hidden') && dockEl.children.length;
+      const railSpace = railOn ? Math.max(0, dockEl.offsetWidth - DOCK_TUCK) + TIDY_GAP : 0;
       let colW = 0, deskW = 760;
       if (sides.length) {
-        colW = clampNum(Math.floor((vw - Math.min(620, vw * 0.5) - 2 * (TIDY_GAP + PANEL_M)) / 2), TIDY_COL_MIN, TIDY_COL_MAX);
-        deskW = Math.max(360, Math.min(760, vw - 2 * (colW + TIDY_GAP + PANEL_M)));
+        colW = clampNum(Math.floor((vw - Math.min(620, vw * 0.5) - 2 * (TIDY_GAP + PANEL_M + railSpace)) / 2), TIDY_COL_MIN, TIDY_COL_MAX);
+        deskW = Math.max(360, Math.min(760, vw - 2 * (colW + TIDY_GAP + PANEL_M + railSpace)));
         document.body.classList.add('tidy');
         document.documentElement.style.setProperty('--tidy-desk', deskW + 'px');
       } else {
