@@ -3352,16 +3352,32 @@ router.post('/chat', requirePerson, express.json({ limit: '24mb' }),
         const otherEntries = Object.entries(otherSurfaceMap);
         let crossRef = '';
         if (otherEntries.length > 0) {
+            // AN INDEX, NOT THE CONTENTS (20 Aug 2026 — Sarah: "I dont want
+            // hundreds of messages sat in his brain so they need to be in a place
+            // where hed have to search").
+            //
+            // This used to paste the last FIVE messages of EVERY other page into
+            // every single turn, at 300 characters each — a few thousand tokens
+            // of other people's conversations riding along on "what's for tea",
+            // paid for on every message, forever. It existed because it was the
+            // only way Q could know those conversations were there.
+            //
+            // read_page_history replaced that: he can now search the whole record
+            // and get the actual exchange back, on demand. So all he needs riding
+            // along is a contents page — what exists, how big, how recent — and
+            // the knowledge that he can go and read it. Long-term memory belongs
+            // in a drawer he opens, not stapled to his forehead.
             const lines = otherEntries.map(([s, msgs]) => {
-                const recent = msgs.slice(-5).map(m => {
-                    const ts = m.timestamp ? m.timestamp.slice(0, 16).replace('T', ' ') : '?';
-                    const who = m.role === 'user' ? person.name : 'Q';
-                    const text = (m.content || '').slice(0, 300).replace(/\n/g, ' ');
-                    return `  [${ts}] ${who}: ${text}${m.content.length > 300 ? '…' : ''}`;
-                }).join('\n');
-                return `[${s.toUpperCase()} PAGE]\n${recent}`;
-            }).join('\n\n');
-            crossRef = `\n\n--- YOUR OTHER CONVERSATIONS (read-only reference — don't continue these threads here, but you can mention them if relevant) ---\n${lines}\n--- END REFERENCE ---`;
+                const last = msgs[msgs.length - 1];
+                const when = last && last.timestamp ? last.timestamp.slice(0, 16).replace('T', ' ') : 'unknown';
+                return `  · ${s.toUpperCase()} page — ${msgs.length} message${msgs.length === 1 ? '' : 's'}, last ${when}`;
+            }).join('\n');
+            crossRef = `\n\n--- YOUR OTHER CONVERSATIONS WITH THEM (an index, not the contents) ---\n${lines}\n`
+                + `You have ALSO talked to them on the pages above, and everything ever said is kept.\n`
+                + `You are only shown the recent part of THIS page, so something you genuinely said may not be in front of you.\n`
+                + `If they refer to anything you cannot see — "you told me…", "do you remember…", "we talked about…" — use read_page_history\n`
+                + `with a search term and GO AND LOOK before you say you don't remember it. Telling them a conversation never happened,\n`
+                + `when the record says otherwise, is the one mistake here that actually costs their trust.\n--- END ---`;
         }
         // FOLLOW-THROUGH (20 Aug 2026). Anything whose chase-time has passed
         // gets put in front of Q here, so he raises it himself at the top of his
