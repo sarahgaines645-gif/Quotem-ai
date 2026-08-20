@@ -282,7 +282,7 @@
     .workbench .refs-panel { margin: 0; }
 
     .paper {
-      position: relative;
+      position: relative; z-index: 1;   /* the top sheet lies over the divider tabs behind it */
       background: var(--paper);
       border-radius: 4px 0 4px 4px;
       padding: 64px 72px 80px;
@@ -1484,9 +1484,18 @@
        a notebook: raised, rounded at the top only, the colour on the top lip.
        Open = pressed in (inset), never a filled button. They clear the curled
        corner at the right. */
-    .doc-tabs { position: absolute; top: -24px; right: 64px; display: flex; gap: 6px; z-index: 5; }
+    /* Sarah, 20 Aug 2026: "they need to be slightly higher and look like they
+       are sat in between the last page and the top page." A divider does not
+       sit ON the page — it is wedged between the sheets, and the top sheet
+       lies over its foot. So the strip lives OUTSIDE .paper, under it in the
+       stack (z-index 0 against the paper's 1), and is pushed down far enough
+       that its bottom disappears behind the sheet: only the coloured lip and
+       the label stand above. The paper's own shadow falls across it, which is
+       what sells it. */
+    .sheet { position: relative; }
+    .doc-tabs { position: absolute; bottom: 100%; right: 64px; margin-bottom: -20px; display: flex; gap: 6px; z-index: 0; }
     .doc-tab {
-      padding: 6px 14px 8px; border: none; border-radius: 9px 9px 0 0; cursor: pointer;
+      padding: 7px 14px 24px; border: none; border-radius: 9px 9px 0 0; cursor: pointer;
       font-family: 'Space Grotesk', sans-serif; font-size: 10px; font-weight: 700;
       letter-spacing: 0.07em; text-transform: uppercase;
       background: var(--bg); color: var(--text-muted);
@@ -1494,12 +1503,28 @@
       box-shadow: 0 -3px 8px rgba(0,0,0,0.07);
       transition: color 0.15s, box-shadow 0.15s, transform 0.15s;
     }
-    .doc-tab:hover { color: var(--text); transform: translateY(-2px); }
+    .doc-tab:hover { color: var(--text); transform: translateY(-3px); }
     .doc-tab[aria-expanded="true"], .doc-tab.open { color: var(--text); box-shadow: var(--neu-inset-sm); }
     @media (max-width: 700px) {
-      .doc-tabs { right: 8px; gap: 4px; }
-      .doc-tab { padding: 5px 9px 7px; font-size: 9px; letter-spacing: 0.04em; }
+      .doc-tabs { right: 8px; gap: 3px; margin-bottom: -18px; }
+      .doc-tab { padding: 6px 8px 22px; font-size: 9px; letter-spacing: 0.02em; }
     }
+    /* A page of the notebook. It replaces the writing on the paper rather
+       than floating over it — same paper, same margins, different section. */
+    .doc-page { font-family: 'Space Grotesk', sans-serif; font-size: 13px; color: var(--text); min-height: 400px; }
+    .doc-page.hidden { display: none; }
+    .doc-page-h { font-family: 'Lora', Georgia, serif; font-size: 26px; font-weight: 600; margin: 0 0 18px; }
+    .doc-page-h2 { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: var(--accent); margin: 26px 0 10px; }
+    .doc-page-empty { color: var(--text-faint); font-style: italic; }
+    /* The bodies came out of cards: drop the card's scroller and gutters, the
+       page scrolls as a page. */
+    .doc-page .panel-body { overflow: visible; max-height: none; padding: 0; }
+    .doc-page .panel-foot { padding: 16px 0 0; }
+    .doc-page .refs-panel { box-shadow: none; padding: 0; background: transparent; }
+    #page-brief { font-size: 15px; line-height: 1.6; }
+    #page-brief .bp-raw { font-family: 'Lora', Georgia, serif; font-size: 15px; line-height: 1.7; white-space: pre-wrap; overflow-wrap: anywhere; }
+    /* Turned to a section, the writing and its furniture step aside. */
+    .doc-title.hidden, .doc-meta.hidden, .doc-body.hidden, .doc-mic-rail.hidden, .pg-notes.hidden { display: none; }
     .doc-mic-rail { position: absolute; left: 8px; top: 0; bottom: 0; width: 44px; pointer-events: none; z-index: 5; }
     .doc-mic-btn { position: sticky; top: 20px; pointer-events: auto; width: 44px; height: 44px; padding: 0; border-radius: 50%; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px; }
     .doc-mic-btn .dm-l { font-size: 8px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; line-height: 1; }
@@ -2684,6 +2709,20 @@
       </div>
     </div>
 
+    <!-- The top sheet, and the dividers behind it. -->
+    <div class="sheet">
+    <div class="doc-tabs" id="doc-tabs">
+      <button type="button" class="doc-tab" id="tab-writing" style="--tc:var(--accent)"
+        title="Back to what you are writing">Writing</button>
+      <button type="button" class="doc-tab" id="tab-brief" style="--tc:#e6a817"
+        title="Your brief, full size — the same one that is on the small card, big enough to actually read.">Brief</button>
+      <button type="button" class="doc-tab" id="btn-bib" style="--tc:#7c5cbf"
+        title="Every source on your list, in Harvard — what each one backs up, and how strongly.">Bibliography</button>
+      <button type="button" class="doc-tab" id="refs-toggle" aria-expanded="false" style="--tc:#3b82c4"
+        title="Citing — format a source you have into Harvard, or ask Q what this document should be citing.">Citing</button>
+      <button type="button" class="doc-tab" id="btn-notes" style="--tc:#28a745"
+        title="Everything you have noted, part by part — write in it, or send a line across to your page.">Notes</button>
+    </div>
     <div class="paper">
       <div class="curl"></div>
       <!-- DIVIDER TABS, on the top edge of the page (Sarah, 20 Aug 2026, with
@@ -2691,14 +2730,16 @@
            the top of the doc to bibliography, citing ref, notes"). Same three
            things that were buttons on the bar — they read as part of the
            notebook now, not as furniture bolted above it. -->
-      <div class="doc-tabs" id="doc-tabs">
-        <button type="button" class="doc-tab" id="btn-bib" style="--tc:#7c5cbf"
-          title="Every source on your list, in Harvard — what each one backs up, and how strongly.">Bibliography</button>
-        <button type="button" class="doc-tab" id="refs-toggle" aria-expanded="false" style="--tc:#3b82c4"
-          title="Citing — format a source you have into Harvard, or ask Q what this document should be citing.">Citing</button>
-        <button type="button" class="doc-tab" id="btn-notes" style="--tc:#28a745"
-          title="Everything you have noted, part by part — write in it, or send a line across to your page.">Notes</button>
-      </div>
+      <!-- THE PAGES BEHIND THE TABS (Sarah, 20 Aug 2026: "those tabs should
+           open pages that contain those things ie notes and all the cites so
+           they are not on the doc youre writing"). Turning to a tab turns the
+           notebook to that section — the writing is still there, underneath,
+           untouched. Each page holds the REAL thing (the same bodies the cards
+           used), moved in at boot, so there is one of each, not two. -->
+      <div class="doc-page hidden" id="page-brief"></div>
+      <div class="doc-page hidden" id="page-bib"><div class="doc-page-h">Bibliography</div></div>
+      <div class="doc-page hidden" id="page-cite"><div class="doc-page-h">Citing</div></div>
+      <div class="doc-page hidden" id="page-notes"><div class="doc-page-h">Notes</div></div>
       <!-- Talk lives in the margin and follows her down the page. -->
       <div class="doc-mic-rail">
         <button type="button" class="meta-btn doc-mic-btn" id="doc-mic" aria-label="Talk"
@@ -2717,6 +2758,7 @@
         data-placeholder="Start writing here…"
         spellcheck="true"
         autocomplete="off"></div>
+    </div>
     </div>
   </div>
 
@@ -3626,7 +3668,7 @@
         restackQueued = false;
         if (!isDocked()) return;
         let y = PANEL_M;
-        ['coach', 'video', 'teach', 'brief', 'notes', 'bib'].forEach(k => {
+        ['coach', 'video', 'teach', 'brief'].forEach(k => {
           const p = panels[k]; if (!p || p.el.classList.contains('hidden')) return;
           p.el.style.bottom = y + 'px';
           y += p.el.offsetHeight + 6;
@@ -3639,7 +3681,9 @@
     // One rail in the left gutter. Every minimised card is a pill on it, in
     // a fixed order, and pressing a pill brings that card back exactly as it
     // was. Nothing minimised → nothing rendered: no empty furniture.
-    const DOCK_ORDER = ['brief', 'teach', 'wb', 'mark', 'coach', 'edit', 'video', 'notes', 'bib'];
+    // Notes and the bibliography are PAGES of the notebook now (see
+    // showDocPage) — they are not cards any more, so they never appear here.
+    const DOCK_ORDER = ['brief', 'teach', 'wb', 'mark', 'coach', 'edit', 'video'];
     const dockEl = document.getElementById('qdock');
     const panelIsOpen = (p) => !!p && !p.el.classList.contains('hidden');
     function stowedKeys() { return DOCK_ORDER.filter(k => panelIsOpen(panels[k]) && panels[k].el.classList.contains('stowed')); }
@@ -3692,7 +3736,7 @@
     // where they are: on the rail. Press again and the page gets its full
     // width back, cards left where they now stand.
     const TIDY_COL_MIN = 208, TIDY_COL_MAX = 320, TIDY_GAP = 12;
-    const TIDY_LEFT = ['brief', 'teach', 'mark'];     // what she reads from, on the left
+    const TIDY_LEFT = ['brief', 'teach', 'mark'];     // what she reads from, on the left (notes / bib are pages, not cards)
     function tidyOn() { return !!panelLayout.__tidy; }
     function setTidyFlag(on) { panelLayout.__tidy = !!on; saveLayout(); paintTidyBtn(); }
     function paintTidyBtn() {
@@ -8496,7 +8540,7 @@
     function ntGrow(el) { el.style.height = 'auto'; el.style.height = (el.scrollHeight + 2) + 'px'; }
     function renderNotesPanel() {
       const body = document.getElementById('notes-body');
-      if (!body || !notesPanel || notesPanel.el.classList.contains('hidden')) return;
+      if (!body || !onDocPage('notes')) return;   // it is a page now, not a card
       state.wbNotes = state.wbNotes || {};
       const secs = notesSections(state.brief, state.wbNotes);
       body.innerHTML = secs.length ? secs.map(s =>
@@ -10044,10 +10088,7 @@
     const refsSuggestBtn   = document.getElementById('refs-suggest-btn');
     const refsSuggestions  = document.getElementById('refs-suggestions');
 
-    refsToggle.addEventListener('click', () => {
-      refsPanel.classList.toggle('hidden');
-      refsToggle.setAttribute('aria-expanded', refsPanel.classList.contains('hidden') ? 'false' : 'true');
-    });
+    refsToggle.addEventListener('click', () => showDocPage('cite', { toggle: true }));
 
     refsTabs.forEach(tab => {
       tab.addEventListener('click', () => {
@@ -10939,38 +10980,80 @@
       showPanel('mark'); revealPanel('mark'); renderMarkPanel();
     }
     document.getElementById('btn-marks').addEventListener('click', () => openMarkPanel({ toggle: true }));
-    function openNotesPanel({ toggle } = {}) {
-      const isOpen = !notesPanel.el.classList.contains('hidden');
-      if (toggle && isOpen) { hidePanel('notes'); return; }
-      showPanel('notes'); revealPanel('notes'); renderNotesPanel();
-    }
-    function openBibPanel({ toggle } = {}) {
-      const isOpen = !bibPanel.el.classList.contains('hidden');
-      if (toggle && isOpen) { hidePanel('bib'); return; }
-      showPanel('bib'); revealPanel('bib'); renderBibPanel();
-    }
-    document.getElementById('btn-notes').addEventListener('click', () => openNotesPanel({ toggle: true }));
-    document.getElementById('btn-bib').addEventListener('click', () => openBibPanel({ toggle: true }));
-    // A divider tab is pressed in while its panel is on the page — the state
-    // the bar buttons used to carry. One watcher, so it stays true however the
-    // panel was opened or shut (the dock, Close all, Tidy, Q himself).
-    (function paintDocTabs() {
-      const pairs = [['btn-bib', 'bib'], ['btn-notes', 'notes']];
-      const tick = () => {
-        pairs.forEach(([id, key]) => {
-          const b = document.getElementById(id), p = panels[key];
-          if (!b || !p) return;
-          b.classList.toggle('open', !p.el.classList.contains('hidden') && !p.el.classList.contains('stowed'));
-        });
+    // ── THE NOTEBOOK'S SECTIONS ───────────────────────────────────
+    // Sarah, 20 Aug 2026: "those tabs should open pages that contain those
+    // things ie notes and all the cites so they are not on the doc youre
+    // writing" — and "put a big version of the breif on there too so you can
+    // read it properly. dont take away the small one."
+    // A tab turns the notebook to that section. The writing is not covered, it
+    // is turned away from: still there, untouched, one press back.
+    // The bodies are MOVED here from the cards they used to live in, so there
+    // is one bibliography and one set of notes, not two that can disagree. The
+    // small brief card stays exactly as it was — the Brief page shows the same
+    // thing at a size you can read, plus the task in your own words.
+    const DOC_PAGES = { brief: 'page-brief', bib: 'page-bib', cite: 'page-cite', notes: 'page-notes' };
+    let docPage = null;
+    (function buildDocPages() {
+      const move = (srcId, pageId) => {
+        const el = document.getElementById(srcId), pg = document.getElementById(pageId);
+        if (el && pg) { el.classList.remove('hidden'); pg.appendChild(el); }
       };
-      tick();
-      if (window.MutationObserver) {
-        pairs.forEach(([, key]) => {
-          const p = panels[key]; if (!p) return;
-          new MutationObserver(tick).observe(p.el, { attributes: true, attributeFilter: ['class'] });
-        });
-      }
+      move('bib-body', 'page-bib'); move('bib-foot', 'page-bib');
+      move('notes-body', 'page-notes'); move('notes-foot', 'page-notes');
+      move('refs-panel', 'page-cite');
     })();
+    function onDocPage(key) { return docPage === key; }
+    function renderBriefPage() {
+      const pg = document.getElementById('page-brief'); if (!pg) return;
+      const src = document.getElementById('brief-board-body');
+      const head = '<div class="doc-page-h">Your brief</div>';
+      if (!src || !src.innerHTML.trim()) {
+        pg.innerHTML = head + '<div class="doc-page-empty">No task yet — drop your homework in at the top and it lands here, full size.</div>';
+        return;
+      }
+      const raw = String((sourceState && sourceState.text) || '').trim();
+      pg.innerHTML = head + '<div class="bp-brief">' + src.innerHTML + '</div>'
+        + (raw ? '<div class="doc-page-h2">The task, word for word</div><div class="bp-raw"></div>' : '');
+      // Her file's text is TEXT. It never goes in as markup.
+      if (raw) pg.querySelector('.bp-raw').textContent = raw;
+    }
+    function showDocPage(key, opts) {
+      const o = opts || {};
+      let want = key || null;
+      if (o.toggle && docPage === want) want = null;
+      docPage = want;
+      const writing = !docPage;
+      ['doc-title', 'doc-body', 'pg-notes'].forEach(id => {
+        const el = document.getElementById(id); if (el) el.classList.toggle('hidden', !writing);
+      });
+      document.querySelectorAll('.doc-meta, .doc-mic-rail').forEach(el => el.classList.toggle('hidden', !writing));
+      Object.keys(DOC_PAGES).forEach(k => {
+        const el = document.getElementById(DOC_PAGES[k]); if (el) el.classList.toggle('hidden', k !== docPage);
+      });
+      if (docPage === 'bib') renderBibPanel();
+      if (docPage === 'notes') renderNotesPanel();
+      if (docPage === 'brief') renderBriefPage();
+      paintDocTabs();
+      try { window.scrollTo(0, 0); } catch (_) {}
+    }
+    function paintDocTabs() {
+      const map = { 'tab-writing': null, 'tab-brief': 'brief', 'btn-bib': 'bib', 'refs-toggle': 'cite', 'btn-notes': 'notes' };
+      Object.keys(map).forEach(id => {
+        const b = document.getElementById(id); if (!b) return;
+        const on = map[id] === docPage;
+        b.classList.toggle('open', on);
+        if (b.hasAttribute('aria-expanded')) b.setAttribute('aria-expanded', on ? 'true' : 'false');
+      });
+    }
+    // Kept so every existing caller (Q, the tour, the note tools) still works
+    // — they turn to the page now instead of floating a card.
+    function openNotesPanel({ toggle } = {}) { showDocPage('notes', { toggle }); }
+    function openBibPanel({ toggle } = {}) { showDocPage('bib', { toggle }); }
+    document.getElementById('btn-notes').addEventListener('click', () => showDocPage('notes', { toggle: true }));
+    document.getElementById('btn-bib').addEventListener('click', () => showDocPage('bib', { toggle: true }));
+    document.getElementById('tab-writing').addEventListener('click', () => showDocPage(null));
+    document.getElementById('tab-brief').addEventListener('click', () => showDocPage('brief', { toggle: true }));
+    paintDocTabs();
     let mkSweepT = null;
     docBody.addEventListener('input', () => { if (!markPanel.el.classList.contains('hidden')) { clearTimeout(mkSweepT); mkSweepT = setTimeout(() => { try { renderMarkPanel(); } catch (_) {} }, 500); } });
     function endFixPass({ nothing } = {}) {
@@ -11788,7 +11871,7 @@
     function bibCopyText(refs) { return bibSorted(refs).map(r => r.reference).filter(Boolean).join('\n'); }
     function renderBibPanel() {
       const body = document.getElementById('bib-body');
-      if (!body || !bibPanel || bibPanel.el.classList.contains('hidden')) return;
+      if (!body || !onDocPage('bib')) return;   // it is a page now, not a card
       const list = bibSorted(state.references);
       body.innerHTML = list.length ? list.map(r => {
         const pts = (r.points || []);
@@ -12617,7 +12700,7 @@
     }, () => {});
     // Test hooks (no data, no secrets): lets the harness exercise the page-side
     // helpers without a paid call. Harmless in production.
-    window.__qwriterTest = { startTour, tourStep, stopTour, maybeOfferTour, paintQNotes, addQNotes, addQTabs, addStickies, renderStickies, snapshotDoc, undoDoc, presentStep, renderBoard, renderWhiteboard, boardForQ, qBoardHtml, partCardHtml, addQBoardNotes, clearQBoardNotes, qBoardItems, startedAsk, showToolPop, findInDoc, replaceInDoc, appendReference, docPlainText, docBlocksForExport, splitCheck: (t) => endsSentence(t), runEditPass, checkCurrentSentence, showEditItem, state: () => state, currentEditText, partParagraphs, setBrief, storyPointsHtml, renderInlineDots, termsForBoard, setCoach, bandListHtml, showEditItem, openEditPanel, renderEditPanel, edState: () => edProof, edSetProof: (p2) => { edProof = p2; renderEditPanel(); edPaint(); }, sayMe, renderThread, syncWorkArea, showPanel, revealPanel, runTidyPasses, applyTidyItem, mergeWalk, refreshSourceDigests, sourceDigestsHtml, markAndFix, walkItemsFromMark, renderMarkPanel, markStats, gradeWord, notesSections, notesCount, notesCopyText, renderNotesPanel, openNotesPanel, bibSorted, bibCopyText, renderBibPanel, openBibPanel, removeReference, removeReferenceFromDoc, sendTextToPage, renderPageNotes, removePageNote, clampPageNotes, jumpToSentence, runAutoCite, appendReference, noteReference, wbTablesFromSrc, tableElementFrom, sendBlockToPage, wbSendText, wbBlocksFromSrc, sendBlocksToPage, sendStickyToPage, blockElement, wbMindmapParse, wbMindmapSvg, wbMindmapHtml, docMindmapElement, wbDiagramHtml, wbDiagramHtmlLegacy, wbFlowParse, wbFlowSvg, flLayout, docDiagramElement };
+    window.__qwriterTest = { startTour, tourStep, stopTour, maybeOfferTour, paintQNotes, addQNotes, addQTabs, addStickies, renderStickies, snapshotDoc, undoDoc, presentStep, renderBoard, renderWhiteboard, boardForQ, qBoardHtml, partCardHtml, addQBoardNotes, clearQBoardNotes, qBoardItems, startedAsk, showToolPop, findInDoc, replaceInDoc, appendReference, docPlainText, docBlocksForExport, splitCheck: (t) => endsSentence(t), runEditPass, checkCurrentSentence, showEditItem, state: () => state, currentEditText, partParagraphs, setBrief, storyPointsHtml, renderInlineDots, termsForBoard, setCoach, bandListHtml, showEditItem, openEditPanel, renderEditPanel, edState: () => edProof, edSetProof: (p2) => { edProof = p2; renderEditPanel(); edPaint(); }, sayMe, renderThread, syncWorkArea, showPanel, revealPanel, runTidyPasses, applyTidyItem, mergeWalk, refreshSourceDigests, sourceDigestsHtml, markAndFix, walkItemsFromMark, renderMarkPanel, markStats, gradeWord, notesSections, notesCount, notesCopyText, renderNotesPanel, openNotesPanel, bibSorted, bibCopyText, renderBibPanel, openBibPanel, removeReference, removeReferenceFromDoc, sendTextToPage, renderPageNotes, removePageNote, clampPageNotes, showDocPage, docPage: () => docPage, renderBriefPage, jumpToSentence, runAutoCite, appendReference, noteReference, wbTablesFromSrc, tableElementFrom, sendBlockToPage, wbSendText, wbBlocksFromSrc, sendBlocksToPage, sendStickyToPage, blockElement, wbMindmapParse, wbMindmapSvg, wbMindmapHtml, docMindmapElement, wbDiagramHtml, wbDiagramHtmlLegacy, wbFlowParse, wbFlowSvg, flLayout, docDiagramElement };
 
 
     // (The old per-card drag code lived here — every panel now goes through makePanel above.)
