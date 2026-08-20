@@ -2857,6 +2857,10 @@ const TUTOR_KEYS = [
     // so the board came back empty every refresh. `wbWork` is her own writing
     // on the board, keyed by part — it must never be lost.
     'wbDoc', 'wbWork', 'wbStickies',
+    // HER POST-ITS ON THE PAGE (20 Aug) — the note, its colour and the spot on
+    // the paper she left it at. Not part of the document: never marked, never
+    // exported. Without this key they vanished on every refresh.
+    'pageNotes',
     // Q's furniture on her PAGE — his highlights + notes and his paragraph tabs.
     // They lived in page state only, so every refresh wiped them (Q's own bug
     // report, 18 Aug: "tabs disappear on page refresh" — highlights did too).

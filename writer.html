@@ -1465,6 +1465,21 @@
     .doc-body .q-figure .q-dg-fan { display: inline-flex; flex-direction: column; gap: 6px; }
     .doc-body .q-figure svg.q-mm { display: block; width: 100%; height: auto; max-height: 440px; margin: 2px 0; }
     .doc-body .q-figure svg.q-fl { display: block; width: 100%; height: auto; max-height: 460px; margin: 2px 0; }
+    /* A NOTE ON HER PAGE IS THE POST-IT ITSELF (Sarah, 20 Aug 2026: "we want
+       them to look exactly as they are and just sit where you put them and
+       stay"). It used to land as a line of text with a rule down it — which
+       made it part of the essay: counted in her words, read by the marker, in
+       the Word file. A post-it is not part of the essay. It sits ON the paper
+       where she put it, it does not move when she writes, and it goes nowhere
+       near the document. That is why this layer lives OUTSIDE .doc-body. */
+    .pg-notes { position: absolute; inset: 0; pointer-events: none; z-index: 6; }
+    .pg-sticky { position: absolute; pointer-events: auto; width: 150px; padding: 8px 10px 8px; border-radius: 10px; background: var(--bg); box-shadow: var(--neu-raised-sm); border-top: 4px solid var(--sc, #e6c84a); font-family: 'Space Grotesk', sans-serif; font-size: 12px; line-height: 1.4; color: var(--text); cursor: grab; user-select: none; -webkit-user-select: none; touch-action: none; overflow-wrap: anywhere; }
+    .pg-sticky:active { cursor: grabbing; }
+    .pg-sticky .pn-x { position: absolute; top: 3px; right: 4px; border: none; background: transparent; color: var(--text-faint); font-size: 12px; line-height: 1; cursor: pointer; padding: 2px 4px; }
+    .pg-sticky .pn-x:hover { color: var(--accent); }
+    .pg-sticky .pn-text { display: block; padding-right: 14px; }
+    /* Notes sent BEFORE 20 Aug went into the document as this. They stay
+       readable so nobody's page changes under them; nothing new lands as one. */
     /* A sticky that has been sent lands as a NOTE on her paper — visible as a
        note, in the paper's own hand, never mistaken for a sentence she wrote
        (Sarah, 20 Aug: "the sticky notes still dont go on to the page"). It had
@@ -2644,6 +2659,8 @@
 
     <div class="paper">
       <div class="curl"></div>
+      <!-- Her post-its. On the paper, never in the document. -->
+      <div class="pg-notes" id="pg-notes"></div>
       <input type="text" class="doc-title" id="doc-title" placeholder="Untitled document" />
       <div class="doc-meta">
         <span id="meta-words">0 words</span>
@@ -4305,7 +4322,8 @@
       // A NEW ASSIGNMENT DOES NOT INHERIT THE LAST ONE'S NOTES. references was
       // already cleared here; wbNotes / wbDoc / wbWork were not, so until a
       // refresh the previous assignment's notes stayed on screen.
-      state.wbNotes = {}; state.wbDoc = null; state.wbEditing = false; state.wbWork = {}; state.wbStickies = [];
+      state.wbNotes = {}; state.wbDoc = null; state.wbEditing = false; state.wbWork = {}; state.wbStickies = []; state.pageNotes = [];
+      try { renderPageNotes(); } catch (_) {}
       hidePanel('notes'); hidePanel('bib');
       try { renderWhiteboard(); } catch (_) {}
       // The task slot too — otherwise a pasted brief or a link is ignored
@@ -6095,7 +6113,7 @@
       toolPopEl.querySelectorAll('.pc-sw').forEach(b => b.addEventListener('click', () => { colour = b.dataset.sw; toolPopEl.querySelectorAll('.pc-sw').forEach(x => x.classList.toggle('on', x === b)); }));
       const ta = toolPopEl.querySelector('#ps-text'); setTimeout(() => { try { ta.focus(); } catch (_) {} }, 30);
       toolPopEl.querySelector('#ps-save').addEventListener('click', () => { st.text = String(ta.value || '').trim().slice(0, 160) || st.text; st.colour = STICKY_HEX[colour] ? colour : st.colour; hideToolPop(); persist({ wbStickies: state.wbStickies }); renderStickies(); });
-      toolPopEl.querySelector('#ps-go').addEventListener('click', () => { hideToolPop(); const r = sendStickyToPage(String(ta.value || st.text)); if (r === 'sent' || r === 'end') { st.done = true; persist({ wbStickies: state.wbStickies }); renderStickies(); try { wbWorkSay.innerHTML = (r === 'end' ? 'On the end of your page. ' : 'On your page. ') + '<button type="button" class="q-btn quiet" id="wk-undo">↶ Undo</button>'; wbWorkSay.classList.remove('hidden'); const u = document.getElementById('wk-undo'); if (u) u.addEventListener('click', () => { if (undoDoc()) workSay('Put back.'); }); } catch (_) {} } });
+      toolPopEl.querySelector('#ps-go').addEventListener('click', () => { hideToolPop(); const r = sendStickyToPage(String(ta.value || st.text), st.colour); if (r === 'sent') { st.done = true; persist({ wbStickies: state.wbStickies }); renderStickies(); try { const nid = lastPageNoteId; wbWorkSay.innerHTML = 'On your page. <button type="button" class="q-btn quiet" id="wk-undo">↶ Undo</button>'; wbWorkSay.classList.remove('hidden'); const u = document.getElementById('wk-undo'); if (u) u.addEventListener('click', () => { if (removePageNote(nid)) workSay('Taken off.'); }); } catch (_) {} } });
       toolPopEl.querySelector('#ps-bin').addEventListener('click', () => { st.done = true; hideToolPop(); persist({ wbStickies: state.wbStickies }); renderStickies(); });
     }
     document.getElementById('inline-tab-btn').addEventListener('click', () => {
@@ -7571,7 +7589,7 @@
       layer.addEventListener('click', (e) => {
         const el = e.target.closest('.wb-sticky'); if (!el) return; const st = (state.wbStickies || [])[Number(el.dataset.si)]; if (!st) return;
         if (e.target.closest('.st-x')) { st.done = true; persist({ wbStickies: state.wbStickies }); renderStickies(); }
-        else if (e.target.closest('.st-go')) { const r = sendStickyToPage(st.text); if (r === 'sent' || r === 'end') { st.done = true; persist({ wbStickies: state.wbStickies }); renderStickies(); try { wbWorkSay.innerHTML = (r === 'end' ? 'On the end of your page. ' : 'On your page. ') + '<button type="button" class="q-btn quiet" id="wk-undo">↶ Undo</button>'; wbWorkSay.classList.remove('hidden'); const u = document.getElementById('wk-undo'); if (u) u.addEventListener('click', () => { if (undoDoc()) workSay('Put back.'); }); } catch (_) {} } }
+        else if (e.target.closest('.st-go')) { const r = sendStickyToPage(st.text, st.colour); if (r === 'sent') { st.done = true; persist({ wbStickies: state.wbStickies }); renderStickies(); try { const nid = lastPageNoteId; wbWorkSay.innerHTML = 'On your page. <button type="button" class="q-btn quiet" id="wk-undo">↶ Undo</button>'; wbWorkSay.classList.remove('hidden'); const u = document.getElementById('wk-undo'); if (u) u.addEventListener('click', () => { if (removePageNote(nid)) workSay('Taken off.'); }); } catch (_) {} } }
         else if (!stickyDragged) openStickyEditor(st, el);   // press the note → edit the words, pick a colour (Sarah, 18 Aug)
       });
       let stickyDragged = false;
@@ -7950,29 +7968,126 @@
       for (const b of blocks) { res = sendBlockToPage(blockElement(b)); if (res !== 'sent') break; }
       return res;
     }
-    // A sticky → the page: at the caret if she has one; else a line of its own
-    // at the END of her page (a note is harmless there and Undo is one press)
-    // — never a silent nothing (Sarah, 19 Aug: "the sticky notes dont transfer").
-    // A NOTE LANDS AS A NOTE (Sarah, 19 Aug: "make the sticky note go on to the
-    // page like they are supposed to and stay where we put them the post it
-    // notes"). It used to go through sendTextToPage, which inserts AT THE CARET
-    // - so a note sent while the caret sat mid-sentence was spliced into her
-    // writing: "First [Test - can this land on the doc?] line of my essay."
-    // A sticky is a block, like a table or a figure: it goes on its own line
-    // AFTER the block the caret is in, never inside a sentence. No caret at all
-    // - she has been working on the board - and it goes on the end, as before.
-    function sendStickyToPage(text) {
-      const t = String(text || '').trim(); if (!t) return 'empty';
-      const d = document.createElement('div'); d.className = 'q-note-line'; d.textContent = t;
-      const r = sendBlockToPage(d);
-      if (r === 'sent') return 'sent';
-      snapshotDoc('before sticky to page');
-      const end = document.createElement('div'); end.className = 'q-note-line'; end.textContent = t;
-      docBody.appendChild(end);
-      wordEl.textContent = countWords() + ' words'; scheduleAutosave();
-      try { refreshExpectations(); } catch (_) {}
-      return 'end';
+    // ── HER PAGE'S POST-ITS ──────────────────────────────────────
+    // Sarah, 20 Aug 2026: "we want them to look exactly as they are and just
+    // sit where you put them and stay."
+    // A note sent from the board lands as the SAME note — the card, its colour
+    // band — stuck on the paper, and it stays at that spot: it does not reflow
+    // when she writes above it, and it comes back there after a refresh.
+    // It is NOT in .doc-body, which is what makes it a note rather than a
+    // sentence: never in her word count, never read by the marker, never in
+    // the Word file. Before this it went in as a div in the document.
+    const PG_W = 150, PG_M = 8;
+    let lastPageNoteId = '';
+    function pageNotesLayer() { return document.getElementById('pg-notes'); }
+    function renderPageNotes() {
+      const layer = pageNotesLayer(); if (!layer) return;
+      const live = (state.pageNotes || []).map((n, i) => ({ n, i })).filter(x => x.n && !x.n.done);
+      layer.innerHTML = live.map(({ n, i }) => '<div class="pg-sticky" data-pn="' + i + '" style="--sc:' + (STICKY_HEX[n.colour] || '#e6c84a') + '"><button type="button" class="pn-x" title="Take this note off the page">×</button><span class="pn-text">' + escHtml(n.text) + '</span></div>').join('');
+      clampPageNotes();
     }
+    // Keep every note ON the paper: the paper changes width with the desk
+    // (Tidy narrows it) and grows taller as she writes.
+    function clampPageNotes() {
+      const layer = pageNotesLayer(); if (!layer) return;
+      const W = layer.clientWidth, H = layer.clientHeight;
+      layer.querySelectorAll('.pg-sticky').forEach(el => {
+        const n = (state.pageNotes || [])[Number(el.dataset.pn)]; if (!n) return;
+        const x = clampNum(Number(n.x) || 0, PG_M, Math.max(PG_M, W - PG_W - PG_M));
+        const y = clampNum(Number(n.y) || 0, PG_M, Math.max(PG_M, H - el.offsetHeight - PG_M));
+        el.style.left = x + 'px'; el.style.top = y + 'px'; n.x = x; n.y = y;
+      });
+    }
+    // Where a new one lands: level with the line she is on, out in the right
+    // margin, so it never covers the sentence she is writing. No caret — she
+    // has been working on the board — and it goes at the top. Never on top of
+    // a note that is already there.
+    function newNoteSpot() {
+      const layer = pageNotesLayer(); if (!layer) return { x: PG_M, y: PG_M };
+      const x = Math.max(PG_M, layer.clientWidth - PG_W - PG_M);
+      const lr = layer.getBoundingClientRect();
+      let y = PG_M;
+      try {
+        const sel = window.getSelection();
+        if (restoreDocCaret() && sel.rangeCount) {
+          const r = sel.getRangeAt(0).cloneRange(); r.collapse(true);
+          let box = r.getBoundingClientRect();
+          if (!box || (!box.top && !box.height)) { const blk = docBlockOf(r.startContainer); if (blk) box = blk.getBoundingClientRect(); }
+          if (box && (box.top || box.height)) y = Math.max(PG_M, Math.round(box.top - lr.top));
+        }
+      } catch (_) {}
+      return { x, y };
+    }
+    // Once it is on the paper we know how tall it is. If it landed on one that
+    // was already there, drop it under — measured, not guessed at a fixed step,
+    // because a long note is three times the height of a short one.
+    function settleNote(id) {
+      const layer = pageNotesLayer(); if (!layer) return;
+      const list = state.pageNotes || [];
+      const i = list.findIndex(n => n && n.id === id); if (i < 0) return;
+      const me = layer.querySelector('.pg-sticky[data-pn="' + i + '"]'); if (!me) return;
+      const others = Array.from(layer.querySelectorAll('.pg-sticky'))
+        .filter(el => el !== me && Math.abs(el.offsetLeft - me.offsetLeft) < 40)
+        .map(el => ({ top: el.offsetTop, bot: el.offsetTop + el.offsetHeight }))
+        .sort((a, b) => a.top - b.top);
+      const h = me.offsetHeight; let y = me.offsetTop, guard = 0;
+      while (guard++ < 60) {
+        const hit = others.find(b => y < b.bot + PG_M && y + h > b.top - PG_M);
+        if (!hit) break;
+        y = hit.bot + PG_M;
+      }
+      if (y !== me.offsetTop) { list[i].y = y; persist({ pageNotes: state.pageNotes }); renderPageNotes(); }
+    }
+    function sendStickyToPage(text, colour) {
+      const t = String(text || '').trim(); if (!t) return 'empty';
+      state.pageNotes = state.pageNotes || [];
+      const spot = newNoteSpot();
+      const id = 'pn-' + (state.pageNotes.length + 1) + '-' + t.slice(0, 12).replace(/[^\w]+/g, '');
+      state.pageNotes.push({ id, text: t.slice(0, 200), colour: STICKY_HEX[colour] ? colour : 'yellow', x: spot.x, y: spot.y });
+      lastPageNoteId = id;
+      persist({ pageNotes: state.pageNotes });
+      renderPageNotes();
+      settleNote(id);
+      return 'sent';
+    }
+    function removePageNote(id) {
+      const list = state.pageNotes || [];
+      const i = list.findIndex(n => n && n.id === id);
+      if (i < 0) return false;
+      list.splice(i, 1); persist({ pageNotes: state.pageNotes }); renderPageNotes(); return true;
+    }
+    // Drag it anywhere on the paper; the bin takes it off. Where she leaves it
+    // is saved the moment she lets go.
+    (function wirePageNotes() {
+      const layer = pageNotesLayer(); if (!layer) return;
+      layer.addEventListener('click', (e) => {
+        if (!e.target.closest('.pn-x')) return;
+        const el = e.target.closest('.pg-sticky'); if (!el) return;
+        const n = (state.pageNotes || [])[Number(el.dataset.pn)]; if (!n) return;
+        removePageNote(n.id);
+      });
+      layer.addEventListener('pointerdown', (e) => {
+        const el = e.target.closest('.pg-sticky'); if (!el || e.target.closest('button')) return;
+        const n = (state.pageNotes || [])[Number(el.dataset.pn)]; if (!n) return;
+        const d = { id: e.pointerId, sx: e.clientX, sy: e.clientY, x0: Number(n.x) || 0, y0: Number(n.y) || 0 };
+        try { el.setPointerCapture(e.pointerId); } catch (_) {}
+        const move = (ev) => {
+          if (ev.pointerId !== d.id) return;
+          const x = clampNum(d.x0 + (ev.clientX - d.sx), PG_M, Math.max(PG_M, layer.clientWidth - el.offsetWidth - PG_M));
+          const y = clampNum(d.y0 + (ev.clientY - d.sy), PG_M, Math.max(PG_M, layer.clientHeight - el.offsetHeight - PG_M));
+          el.style.left = x + 'px'; el.style.top = y + 'px'; n.x = x; n.y = y;
+        };
+        const up = (ev) => {
+          if (ev.pointerId !== d.id) return;
+          el.removeEventListener('pointermove', move); el.removeEventListener('pointerup', up); el.removeEventListener('pointercancel', up);
+          try { el.releasePointerCapture(d.id); } catch (_) {}
+          persist({ pageNotes: state.pageNotes });
+        };
+        el.addEventListener('pointermove', move); el.addEventListener('pointerup', up); el.addEventListener('pointercancel', up);
+        e.preventDefault();
+      });
+      if (window.ResizeObserver) { const p = document.querySelector('.paper'); if (p) new ResizeObserver(() => clampPageNotes()).observe(p); }
+    })();
     function wbSendText(src) {
       const lines = String(src || '').split('\n');
       const ticked = lines.filter(l => /\[[xX]\]/.test(l));
@@ -12338,6 +12453,9 @@
         state.wbWork = t.wbWork && typeof t.wbWork === 'object' ? t.wbWork : {};
         state.wbStickies = Array.isArray(t.wbStickies) ? t.wbStickies : [];
         try { renderStickies(); } catch (_) {}
+        // Her post-its come back onto the paper, at the spot she left them.
+        state.pageNotes = Array.isArray(t.pageNotes) ? t.pageNotes : [];
+        try { renderPageNotes(); } catch (_) {}
         // Q's highlights + notes and his tabs come back onto the page with her.
         state.qNotes = Array.isArray(t.qNotes) ? t.qNotes : [];
         state.qTabs = Array.isArray(t.qTabs) ? t.qTabs : [];
@@ -12431,7 +12549,7 @@
     }, () => {});
     // Test hooks (no data, no secrets): lets the harness exercise the page-side
     // helpers without a paid call. Harmless in production.
-    window.__qwriterTest = { startTour, tourStep, stopTour, maybeOfferTour, paintQNotes, addQNotes, addQTabs, addStickies, renderStickies, snapshotDoc, undoDoc, presentStep, renderBoard, renderWhiteboard, boardForQ, qBoardHtml, partCardHtml, addQBoardNotes, clearQBoardNotes, qBoardItems, startedAsk, showToolPop, findInDoc, replaceInDoc, appendReference, docPlainText, docBlocksForExport, splitCheck: (t) => endsSentence(t), runEditPass, checkCurrentSentence, showEditItem, state: () => state, currentEditText, partParagraphs, setBrief, storyPointsHtml, renderInlineDots, termsForBoard, setCoach, bandListHtml, showEditItem, openEditPanel, renderEditPanel, edState: () => edProof, edSetProof: (p2) => { edProof = p2; renderEditPanel(); edPaint(); }, sayMe, renderThread, syncWorkArea, showPanel, revealPanel, runTidyPasses, applyTidyItem, mergeWalk, refreshSourceDigests, sourceDigestsHtml, markAndFix, walkItemsFromMark, renderMarkPanel, markStats, gradeWord, notesSections, notesCount, notesCopyText, renderNotesPanel, openNotesPanel, bibSorted, bibCopyText, renderBibPanel, openBibPanel, removeReference, removeReferenceFromDoc, sendTextToPage, jumpToSentence, runAutoCite, appendReference, noteReference, wbTablesFromSrc, tableElementFrom, sendBlockToPage, wbSendText, wbBlocksFromSrc, sendBlocksToPage, sendStickyToPage, blockElement, wbMindmapParse, wbMindmapSvg, wbMindmapHtml, docMindmapElement, wbDiagramHtml, wbDiagramHtmlLegacy, wbFlowParse, wbFlowSvg, flLayout, docDiagramElement };
+    window.__qwriterTest = { startTour, tourStep, stopTour, maybeOfferTour, paintQNotes, addQNotes, addQTabs, addStickies, renderStickies, snapshotDoc, undoDoc, presentStep, renderBoard, renderWhiteboard, boardForQ, qBoardHtml, partCardHtml, addQBoardNotes, clearQBoardNotes, qBoardItems, startedAsk, showToolPop, findInDoc, replaceInDoc, appendReference, docPlainText, docBlocksForExport, splitCheck: (t) => endsSentence(t), runEditPass, checkCurrentSentence, showEditItem, state: () => state, currentEditText, partParagraphs, setBrief, storyPointsHtml, renderInlineDots, termsForBoard, setCoach, bandListHtml, showEditItem, openEditPanel, renderEditPanel, edState: () => edProof, edSetProof: (p2) => { edProof = p2; renderEditPanel(); edPaint(); }, sayMe, renderThread, syncWorkArea, showPanel, revealPanel, runTidyPasses, applyTidyItem, mergeWalk, refreshSourceDigests, sourceDigestsHtml, markAndFix, walkItemsFromMark, renderMarkPanel, markStats, gradeWord, notesSections, notesCount, notesCopyText, renderNotesPanel, openNotesPanel, bibSorted, bibCopyText, renderBibPanel, openBibPanel, removeReference, removeReferenceFromDoc, sendTextToPage, renderPageNotes, removePageNote, clampPageNotes, jumpToSentence, runAutoCite, appendReference, noteReference, wbTablesFromSrc, tableElementFrom, sendBlockToPage, wbSendText, wbBlocksFromSrc, sendBlocksToPage, sendStickyToPage, blockElement, wbMindmapParse, wbMindmapSvg, wbMindmapHtml, docMindmapElement, wbDiagramHtml, wbDiagramHtmlLegacy, wbFlowParse, wbFlowSvg, flLayout, docDiagramElement };
 
 
     // (The old per-card drag code lived here — every panel now goes through makePanel above.)
