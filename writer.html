@@ -2794,21 +2794,28 @@
     .qpc .pad-rings i { display: block; width: 9px; height: 30px; border-radius: 5px; background: linear-gradient(90deg, #8f9298, #d7dade 35%, #9ba0a6 70%, #7d8187); box-shadow: 0 2px 3px rgba(0,0,0,0.32); }
     .qpc .pad-sheet {
       position: relative; background: var(--paper); border-radius: 2px 2px 6px 6px; padding: 24px 18px 14px;
-      background-image: repeating-linear-gradient(180deg, transparent 0 23px, rgba(80,70,40,0.14) 23px 24px);
-      background-position: 0 26px;
+      background-image: repeating-linear-gradient(180deg, transparent 0 29px, rgba(80,70,40,0.14) 29px 30px);
+      background-position: 0 30px;
       box-shadow: 0 12px 26px -16px rgba(80,70,40,0.85);
     }
     .qpc .pad-sheet.under-1 { position: absolute; inset: 24px 4px -5px 4px; z-index: 0; background: var(--paper-back); }
     .qpc .pad-sheet.under-2 { position: absolute; inset: 24px 9px -10px 9px; z-index: -1; background: #e2ddcd; }
     .qpc .pad-sheet.top { z-index: 2; }
+    /* the pad is scaled down with everything else, so its writing has to be set
+       bigger than it looks here to read at all: 18/30 lands at about 13/22 on
+       screen. The 30px rule pitch above IS this line height — change one and you
+       must change the other, or the words come off the lines. */
     .qpc .pad-write {
-      font-family: 'Lora', Georgia, serif; font-size: 14px; line-height: 24px; color: var(--qpc-ink);
-      min-height: 396px; outline: none; overflow-wrap: anywhere;
+      font-family: 'Lora', Georgia, serif; font-size: 18px; line-height: 30px;
+      color: #1e1a14;                    /* the ink you START in — the pencil changes it from there on */
+      min-height: 390px; outline: none; overflow-wrap: anywhere;
     }
-    .qpc .pad-write:empty::before {
+    .qpc .pad-write.is-empty::before {
       content: 'Your own notes. Nothing here goes near the essay.';
       color: rgba(80,70,40,0.42);
     }
+    /* the paper is somewhere to write, not a handle — the pad moves by its strip */
+    .qpc .pad { cursor: text; }
     .qpc .pad-foot {
       display: flex; justify-content: space-between; align-items: center; margin-top: 8px;
       font-family: 'Space Grotesk', sans-serif; font-size: 9px; letter-spacing: 0.06em; color: rgba(80,70,40,0.55);
@@ -13361,6 +13368,9 @@
       var proj = document.getElementById('proj-name');
       return 'qpc-notes:' + ((proj && proj.textContent.trim()) || 'default');
     }
+    var padWrite = null;      /* the one pad, so the pencil can find it */
+    var padRange = null;      /* where the caret was before you reached for a colour */
+
     function buildPad() {
       var box = el('div', 'pad');
       box.innerHTML =
@@ -13373,33 +13383,94 @@
         '</div>';
       var write = box.querySelector('.pad-write');
       var count = box.querySelector('.pad-count');
+      var sheet = box.querySelector('.pad-sheet.top');
+      padWrite = write;
 
-      try { write.textContent = localStorage.getItem(padKey()) || ''; } catch (_) {}
+      /* kept as HTML, not text — otherwise every colour you wrote in is thrown
+         away the moment the page reloads */
+      try {
+        var saved = localStorage.getItem(padKey());
+        if (saved) { write.innerHTML = String(saved).replace(/<script/gi, '&lt;script'); }
+      } catch (_) {}
+
       function recount() {
-        var w = write.textContent.trim().split(/\s+/).filter(Boolean).length;
+        var t = (write.textContent || '').trim();
+        var w = t ? t.split(/\s+/).filter(Boolean).length : 0;
         count.textContent = w + (w === 1 ? ' word' : ' words');
+        write.classList.toggle('is-empty', !t);
       }
       recount();
+
       var saveTimer = null;
       write.addEventListener('input', function () {
         recount();
         clearTimeout(saveTimer);
         saveTimer = setTimeout(function () {
-          try { localStorage.setItem(padKey(), write.textContent); } catch (_) {}
+          try { localStorage.setItem(padKey(), write.innerHTML); } catch (_) {}
         }, 400);
       });
+
       /* the pad owns its own clicks and keys. Without this the page's focus
-         handling takes the caret straight back to the essay and you cannot
-         type on it at all. */
+         handling takes the caret straight back to the essay. */
       ['keydown', 'keyup', 'keypress', 'pointerdown', 'mousedown', 'click', 'dblclick'].forEach(function (ev) {
         write.addEventListener(ev, function (e) { e.stopPropagation(); });
       });
-      box.querySelector('.pad-new').addEventListener('click', function () {
-        write.textContent = ''; recount();
+
+      /* ANYWHERE on the paper puts the caret in the writing — the margins, the
+         ruled lines, the space under the last line. Before this, a click that
+         missed the text landed on the sheet and started a drag instead, which
+         is why typing on it felt like it half worked. */
+      sheet.addEventListener('pointerdown', function (e) {
+        if (e.target.closest('button, .pad-write')) { return; }
+        e.stopPropagation();
+        e.preventDefault();
+        write.focus();
+        try {
+          var r = document.createRange();
+          r.selectNodeContents(write); r.collapse(false);
+          var sel = window.getSelection(); sel.removeAllRanges(); sel.addRange(r);
+        } catch (_) {}
+      });
+
+      /* remember where the caret was, so reaching for a colour does not lose it */
+      document.addEventListener('selectionchange', function () {
+        var sel = window.getSelection();
+        if (!sel || !sel.rangeCount) { return; }
+        var r = sel.getRangeAt(0);
+        if (write.contains(r.commonAncestorContainer)) { padRange = r.cloneRange(); }
+      });
+
+      box.querySelector('.pad-new').addEventListener('click', function (e) {
+        e.stopPropagation();
+        write.innerHTML = ''; padRange = null; recount();
         try { localStorage.removeItem(padKey()); } catch (_) {}
         write.focus();
       });
       return box;
+    }
+
+    /* THE PENCIL WRITES FROM HERE ON — it does not repaint what is already
+       there (Sarah, 20 Aug: "I want to write in one colour and then be able to
+       change colour"). Something selected → that gets the colour. Nothing
+       selected → the colour is what you type next, and everything already on
+       the page keeps the colour it was written in. */
+    function inkThePad(hex) {
+      if (!padWrite || !padWrite.isConnected) { return; }
+      try {
+        padWrite.focus();
+        var sel = window.getSelection();
+        if (padRange) { sel.removeAllRanges(); sel.addRange(padRange); }
+        else {
+          var r = document.createRange();
+          r.selectNodeContents(padWrite); r.collapse(false);
+          sel.removeAllRanges(); sel.addRange(r);
+        }
+        document.execCommand('styleWithCSS', false, true);
+        document.execCommand('foreColor', false, hex);
+        var s2 = window.getSelection();
+        if (s2 && s2.rangeCount) { padRange = s2.getRangeAt(0).cloneRange(); }
+        try { localStorage.setItem(padKey(), padWrite.innerHTML); } catch (_) {}
+      } catch (_) {}
     }
 
     /* ── the fiddle pen — it does nothing, on purpose ─────────────────── */
@@ -13499,6 +13570,7 @@
         });
         document.documentElement.style.setProperty('--qpc-ink', queue[0].ink);
         label.textContent = queue[0].name;
+        if (animate) { inkThePad(queue[0].ink); }   /* only when SHE pushed one, never on first draw */
         if (animate) { tube.classList.remove('rot'); void tube.offsetWidth; tube.classList.add('rot'); }
       }
       draw(false);
@@ -13592,7 +13664,7 @@
          controls. The fiddle pen is excluded: dragging IT is the fiddle. */
       var dx = 0, dy = 0, dragging = false;
       shell.addEventListener('pointerdown', function (e) {
-        if (e.target.closest('button, input, textarea, select, a, [contenteditable], .floatpen')) { return; }
+        if (e.target.closest('button, input, textarea, select, a, [contenteditable], .floatpen, .pad-sheet')) { return; }
         var r = shell.getBoundingClientRect();
         shell.style.right = 'auto';
         shell.style.left = r.left + 'px';
