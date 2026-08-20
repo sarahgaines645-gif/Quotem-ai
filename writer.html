@@ -8989,6 +8989,9 @@
     // only while the board is in step mode — press "+ Notes" while a display
     // is up and the note saved but nothing on screen showed it (17 Aug). This
     // panel always has them: same state.wbNotes, one store, two views, no copy.
+    // The notepad in the pencil case writes here. One reserved key, its own
+    // section, saved to her account with every other note.
+    const PAD_CID = '__pad';
     function notesSections(brief, wbNotes) {
       const cs = (brief && brief.criteria) || [];
       const out = [];
@@ -8997,9 +9000,14 @@
         if (list.length) out.push({ cid: c.id, n: i + 1, label: criterionLabel(c), notes: list });
       });
       Object.keys(wbNotes || {}).forEach(k => {
-        if (k === '' || cs.some(c => c.id === k) || !((wbNotes[k] || []).length)) return;
+        if (k === '' || k === PAD_CID || cs.some(c => c.id === k) || !((wbNotes[k] || []).length)) return;
         out.push({ cid: k, n: 0, label: 'Earlier notes', notes: wbNotes[k] });
       });
+      // The pad on the desk keeps its own shelf, so writing on it can never
+      // overwrite a note made anywhere else (Sarah, 20 Aug: "the notes dont go
+      // in to notes").
+      const pad = (wbNotes && wbNotes[PAD_CID]) || [];
+      if (pad.length) out.push({ cid: PAD_CID, n: 0, label: 'From your notepad', notes: pad });
       const loose = (wbNotes && wbNotes['']) || [];
       if (loose.length) out.push({ cid: '', n: 0, label: 'Not tied to a part', notes: loose });
       return out;
@@ -9012,6 +9020,18 @@
     }
     let ntSaveT = null;
     function ntFlush() { clearTimeout(ntSaveT); ntSaveT = null; persist({ wbNotes: state.wbNotes }); }
+    // The notepad lives outside this closure, so it needs a door. It may only
+    // touch its own shelf, and it saves the way everything else saves.
+    window.__qPadNotes = {
+      read() { return ((state.wbNotes || {})[PAD_CID] || []).slice(); },
+      write(lines) {
+        state.wbNotes = state.wbNotes || {};
+        const clean = (lines || []).map(t => String(t).trim()).filter(Boolean).slice(0, 200);
+        if (clean.length) state.wbNotes[PAD_CID] = clean; else delete state.wbNotes[PAD_CID];
+        persist({ wbNotes: state.wbNotes });
+        try { renderNotesPanel(); } catch (_) {}
+      }
+    };
     function ntGrow(el) { el.style.height = 'auto'; el.style.height = (el.scrollHeight + 2) + 'px'; }
     function renderNotesPanel() {
       const body = document.getElementById('notes-body');
@@ -13398,6 +13418,12 @@
       try {
         var saved = localStorage.getItem(padKey());
         if (saved) { write.innerHTML = String(saved).replace(/<script/gi, '&lt;script'); }
+        else if (window.__qPadNotes) {
+          /* nothing on this machine, but the account has notepad lines — a
+             different computer wrote them. Put them back on the paper. */
+          var back = window.__qPadNotes.read();
+          if (back.length) { write.textContent = back.join(String.fromCharCode(10)); }
+        }
       } catch (_) {}
 
       function recount() {
@@ -13408,14 +13434,27 @@
       }
       recount();
 
+      /* Two homes, on purpose. The paper keeps the LOOK — your colours, your
+         line breaks — on this machine. The Notes page gets the WORDS, saved to
+         your account under "From your notepad", so they are on the Notes page
+         and they follow you to another computer. */
+      function toNotes() {
+        try {
+          if (!window.__qPadNotes) { return; }
+          var lines = (write.innerText || '').split(String.fromCharCode(10));
+          window.__qPadNotes.write(lines);
+        } catch (_) {}
+      }
       var saveTimer = null;
       write.addEventListener('input', function () {
         recount();
         clearTimeout(saveTimer);
         saveTimer = setTimeout(function () {
           try { localStorage.setItem(padKey(), write.innerHTML); } catch (_) {}
-        }, 400);
+          toNotes();
+        }, 700);
       });
+      write.addEventListener('blur', toNotes);   /* leave the pad, it is filed */
 
       /* the pad owns its own clicks and keys. Without this the page's focus
          handling takes the caret straight back to the essay. */
@@ -13455,6 +13494,7 @@
         e.stopPropagation();
         write.innerHTML = ''; padRange = null; recount();
         try { localStorage.removeItem(padKey()); } catch (_) {}
+        try { if (window.__qPadNotes) window.__qPadNotes.write([]); } catch (_) {}
         write.focus();
       });
       return box;
