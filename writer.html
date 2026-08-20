@@ -2709,19 +2709,14 @@
     #qpc-floor { position: fixed; inset: 0; pointer-events: none; z-index: 110; }
     .qpc .out { position: fixed; pointer-events: auto; animation: qpc-pop 0.45s cubic-bezier(.2,.9,.3,1); }
     @keyframes qpc-pop { from { transform: translateY(-22px) scale(0.9); opacity: 0; } to { transform: none; opacity: 1; } }
-    /* you move a thing by picking the thing up — anywhere on it that is not a
-       control it owns. The strip on top just names it and holds the ×. */
-    .qpc .out { cursor: grab; }
+    /* You move a thing by picking the thing up. No strip, no label, no line —
+       the object IS the handle (Sarah, 20 Aug: "loose the line above the tools
+       that say note pad and the line"). The × is the only furniture, and it
+       sits on the thing itself. */
+    .qpc .out { cursor: grab; touch-action: none; }
     .qpc .out.dragging { cursor: grabbing; }
-    .qpc .grip {
-      display: flex; align-items: center; gap: 8px; touch-action: none; padding: 0 2px 6px;
-      font-size: 9px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--text-faint);
-    }
-    .qpc .grip .bars {
-      flex: 1; height: 8px; border-radius: 2px; opacity: 0.42;
-      background: repeating-linear-gradient(180deg, currentColor 0 1px, transparent 1px 4px);
-    }
     .qpc .putaway {
+      position: absolute; top: -7px; right: -7px; z-index: 8;
       width: 20px; height: 20px; flex: none; border: 0; cursor: pointer; border-radius: 50%;
       background: var(--bg); box-shadow: var(--neu-raised-xs); color: var(--text);
       font-family: 'Space Grotesk', sans-serif; font-size: 11px; line-height: 1; padding: 0;
@@ -13429,6 +13424,9 @@
          is why typing on it felt like it half worked. */
       sheet.addEventListener('pointerdown', function (e) {
         if (e.target.closest('button, .pad-write')) { return; }
+        /* the head of the pad — the rings and the paper above the first line —
+           is a handle. Let it through and the pad picks up. */
+        if (e.clientY < write.getBoundingClientRect().top) { return; }
         e.stopPropagation();
         e.preventDefault();
         write.focus();
@@ -13617,13 +13615,11 @@
       items.appendChild(slot);
 
       var shell = el('div', 'out');
-      var grip = el('div', 'grip');
-      grip.innerHTML = '<span>' + thing.label + '</span><span class="bars"></span>';
       var x = el('button', 'putaway', '×');
       x.type = 'button';
       x.setAttribute('aria-label', 'Put the ' + thing.label + ' back in the case');
-      grip.appendChild(x);
-      shell.appendChild(grip);
+      x.title = 'Put the ' + thing.label + ' away';
+      shell.appendChild(x);
 
       var isOut = false;
 
@@ -13671,7 +13667,7 @@
          controls. The fiddle pen is excluded: dragging IT is the fiddle. */
       var dx = 0, dy = 0, dragging = false;
       shell.addEventListener('pointerdown', function (e) {
-        if (e.target.closest('button, input, textarea, select, a, [contenteditable], .floatpen, .pad-sheet')) { return; }
+        if (e.target.closest('button, input, textarea, select, a, [contenteditable], .floatpen')) { return; }
         var r = shell.getBoundingClientRect();
         shell.style.right = 'auto';
         shell.style.left = r.left + 'px';
