@@ -201,6 +201,83 @@
 
     /* ── The desk + paper ───────────────────────────────────────────────── */
     .desk { max-width: 760px; margin: 0 auto; position: relative; }
+    /* Tidy mode narrows the writing only as far as it must to leave the two
+       card columns a readable width — set by arrangeDesk(), never guessed. */
+    body.tidy .desk,
+    body.tidy header { max-width: var(--tidy-desk, 760px); }
+
+    /* ── THE WORKBENCH ─ everything that is NOT writing ───────────────
+       Sarah, 20 Aug 2026: "talk is the only button that needs to be on the
+       writing page", "half the buttons dont need to be there", "the space
+       above the essay is not utalised", "the buttons are messy ie not the
+       same size when they are in a list".
+       So: the paper carries the title, the word count and Talk. Every other
+       control lives up here, in the strip that used to be empty — and a row
+       of buttons is a LIST, so they are all cut to one size. */
+    .workbench { display: flex; flex-direction: column; gap: 8px; margin: 0 0 14px; }
+    .wb-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; min-width: 0; }
+    .wb-row .wb-spacer { flex: 1 1 auto; min-width: 0; }
+    /* One size, decided by the widest label in the group — not by each
+       label's own length. That is what makes a row of buttons read as a set. */
+    .wb-group { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 6px; min-width: 0; }
+    .wb-btn {
+      height: 30px; min-width: 104px; padding: 0 14px;
+      display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+      border: none; border-radius: 15px; cursor: pointer;
+      font-family: 'Space Grotesk', sans-serif; font-size: 11px; font-weight: 600;
+      background: var(--bg); color: var(--text); box-shadow: var(--neu-raised-xs);
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+      transition: box-shadow 0.15s;
+    }
+    .wb-btn:hover { box-shadow: var(--neu-raised-sm); }
+    .wb-btn:active { box-shadow: var(--neu-inset-sm); }
+    .wb-btn:disabled { opacity: 0.5; cursor: default; }
+    .wb-btn.hidden { display: none; }
+    .wb-btn.primary { box-shadow: var(--neu-raised-sm); font-weight: 700; }
+    .wb-btn.primary::before { content: '● '; color: var(--accent); }
+    /* Pressed = inset + accent glyph. Never a filled button. */
+    .wb-btn[aria-pressed="true"], .wb-btn[aria-expanded="true"] { box-shadow: var(--neu-inset-sm); }
+    .wb-btn svg { flex-shrink: 0; }
+
+    /* The sources drop-down — the task, the rest of the brief, the supporting
+       documents and a link, all behind one button (Sarah, 20 Aug: "the add
+       supporting doc and the folder could all be in a drop down"). Before a
+       task is loaded there is no drop-down at all: the drop target itself is
+       the control, because that is the way in. */
+    .srcdrop { position: relative; display: inline-flex; min-width: 0; }
+    .srcdrop-btn { max-width: 340px; justify-content: flex-start; }
+    .srcdrop-btn .srcdrop-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+    .srcdrop-btn .srcdrop-count { color: var(--text-muted); font-weight: 600; }
+    .srcdrop-btn .srcdrop-caret { color: var(--text-muted); font-size: 10px; margin-left: auto; padding-left: 6px; }
+    .srcdrop-menu {
+      position: absolute; top: calc(100% + 8px); left: 0; z-index: 90;
+      width: max(300px, 100%); max-height: 60vh; overflow-y: auto;
+      display: flex; flex-direction: column; gap: 6px;
+      padding: 12px; border-radius: 16px;
+      background: var(--bg); box-shadow: var(--float-shadow);
+    }
+    .srcdrop-menu.hidden { display: none; }
+    .srcdrop-menu .srcdrop-head {
+      font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.07em;
+      color: var(--accent); margin: 4px 0 0;
+    }
+    .srcdrop-menu .srcdrop-head:first-child { margin-top: 0; }
+    /* In a list every row is the same width and the same height. */
+    .srcdrop-menu .source-chip,
+    .srcdrop-menu .source-add { width: 100%; justify-content: flex-start; min-height: 34px; margin: 0; }
+    /* A row in the menu is a button she presses, so it is RAISED and readable
+       — not the faint outline the drop target wears out on the page. */
+    .srcdrop-menu .source-add { box-shadow: var(--neu-raised-xs); border-radius: 12px; color: var(--text-muted); font-weight: 600; }
+    .srcdrop-menu .source-add:hover { box-shadow: var(--neu-raised-sm); color: var(--text); }
+    .srcdrop-menu .source-add:active { box-shadow: var(--neu-inset-sm); }
+    .srcdrop-menu .source-chip .name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+    .srcdrop-menu .srcdrop-rule { height: 1px; background: var(--text-faint); opacity: 0.18; margin: 4px 0; }
+    .workbench .source-slot { margin: 0; min-width: 0; }
+    /* No task yet? The drop target is the way in, so it takes the whole row
+       rather than shoving the layout buttons onto a line of their own. */
+    .workbench .source-slot.wide { flex: 1 1 100%; }
+    .workbench .refs-bar { margin: 0; }
+    .workbench .refs-panel { margin: 0; }
 
     .paper {
       position: relative;
@@ -399,14 +476,13 @@
     .qdock {
       position: fixed; left: 20px; bottom: 66px; z-index: 130;   /* the same left edge as the settings cog it stands on */
       display: flex; flex-direction: column; align-items: flex-start; gap: 8px;
-      width: max-content;
-      max-width: max(116px, min(180px, calc((100vw - 800px) / 2 - 16px)));
+      width: max(116px, min(180px, calc((100vw - 800px) / 2 - 16px)));
       max-height: calc(100vh - 96px); overflow: visible;   /* never clip a pill: the raise IS the shadow, and a clipped shadow reads as a cut-off card */
       font-family: 'Space Grotesk', sans-serif;
     }
     .qdock.hidden { display: none; }
     .qdock-pill {
-      display: flex; align-items: center; gap: 8px; max-width: 100%; flex-shrink: 0;
+      display: flex; align-items: center; gap: 8px; width: 100%; flex-shrink: 0;   /* a list of buttons is one width (Sarah, 20 Aug: "not the same size when they are in a list") */
       padding: 8px 14px; border: none; border-radius: 20px; cursor: pointer;
       background: var(--bg); box-shadow: var(--neu-raised-sm);
       font-family: 'Space Grotesk', sans-serif; text-align: left;
@@ -440,6 +516,9 @@
     /* ≤700px the panels are a bottom sheet already (see the media query
        below) — nothing is stowed there, so there is no rail. */
     @media (max-width: 700px) { .qdock { display: none !important; } }
+    /* No sides to put a card on at this width — the panels are a bottom
+       sheet. A button that cannot do anything does not belong on the bar. */
+    @media (max-width: 700px) { #btn-tidy { display: none; } }
 
     /* ── The coach card ─────────────────────────────────────────────────── */
     .coach-card { width: 236px; }
@@ -2467,41 +2546,51 @@
   </div>
 
   <div class="desk">
-    <div class="paper">
-      <div class="curl"></div>
-      <input type="text" class="doc-title" id="doc-title" placeholder="Untitled document" />
-      <div class="doc-meta">
-        <span id="meta-words">0 words</span>
-        <span id="meta-saved" title="Everything on this page is saved to your account as you type">Not yet saved</span>
-        <span class="meta-spacer"></span>
-        <button type="button" class="meta-btn" id="doc-mic" title="Talk straight onto the page — your words land where the cursor is, so a terminology button drops into the sentence you are saying. Tap again to stop."><svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-1px"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg> Talk</button>
-        <button type="button" class="meta-btn hidden" id="doc-go" title="Press when you want Q to look">● Continue →</button>
-        <button type="button" class="meta-btn" id="btn-download" title="Download what is on the page as a Word file">↓ Download</button>
-        <button type="button" class="meta-btn primary" id="btn-finish" title="Q marks it like the marker, then walks it with you sentence by sentence — highlight, what's missing, the fix, tools, Check it">Mark &amp; fix →</button>
-        <button type="button" class="meta-btn" id="btn-edit-strip" title="Editing — the improvement tools (highlight, then press) and the whole-page passes: Spelling, Grammar, Trim, What's weak" aria-expanded="false">✎ Editing</button>
-        <button type="button" class="meta-btn" id="btn-marks" title="The marking, kept up to date — the bands, the sentences still to fix, the ones you've done. Open it any time; Q stays free to talk.">✓ Marks</button>
-        <button type="button" class="meta-btn" id="btn-notes" title="Everything you have noted, part by part — write in it, or send a line across to your page.">▤ Notes</button>
-        <button type="button" class="meta-btn" id="btn-bib" title="Every source on your list, in Harvard — what each one backs up, and how strongly.">❝ Bibliography</button>
+    <!-- ── THE WORKBENCH ───────────────────────────────────────
+         Sarah, 20 Aug 2026: "the space above the essay is not utalised",
+         "half the buttons dont need to be there", "talk is the only button
+         that needs to be on the writing page". Everything that is not
+         writing now lives in this strip: the task and its documents behind
+         one drop-down, the cards, the two layout controls, and the two
+         actions. Same height, same width, in a row — a list of buttons is a
+         list. -->
+    <div class="workbench" id="workbench">
+      <div class="wb-row">
+        <div class="source-slot" id="source-slot">
+          <button type="button" class="source-add" id="source-add-btn"
+            title="Drop, paste, or click to add your homework / task">
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor"
+              stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/>
+            </svg>
+            <span>Drop your task here — one file or several (the questions + the marking guide) — or paste / click</span>
+          </button>
+          <input type="file" id="source-file-input" style="display:none" multiple />
+        </div>
+        <span class="wb-spacer"></span>
+        <div class="wb-group">
+          <button type="button" class="wb-btn" id="refs-toggle" aria-expanded="false" title="Harvard references — format a source you have, or ask Q what this document should be citing.">❝ Harvard</button>
+          <button type="button" class="wb-btn" id="btn-notes" title="Everything you have noted, part by part — write in it, or send a line across to your page.">▤ Notes</button>
+          <button type="button" class="wb-btn" id="btn-bib" title="Every source on your list, in Harvard — what each one backs up, and how strongly.">≡ Bibliography</button>
+        </div>
       </div>
-      <div class="source-slot" id="source-slot">
-        <button type="button" class="source-add" id="source-add-btn"
-          title="Drop, paste, or click to add your homework / task">
-          <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor"
-            stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/>
-          </svg>
-          <span>Drop your task here — one file or several (the questions + the marking guide) — or paste / click</span>
-        </button>
-        <input type="file" id="source-file-input" style="display:none" multiple />
+      <div class="wb-row">
+        <div class="wb-group">
+          <button type="button" class="wb-btn" id="btn-edit-strip" title="Editing — the improvement tools (highlight, then press) and the whole-page passes: Spelling, Grammar, Trim, What's weak" aria-expanded="false">✎ Editing</button>
+          <button type="button" class="wb-btn" id="btn-marks" title="The marking, kept up to date — the bands, the sentences still to fix, the ones you've done. Open it any time; Q stays free to talk.">✓ Marks</button>
+        </div>
+        <span class="wb-spacer"></span>
+        <div class="wb-group">
+          <button type="button" class="wb-btn" id="btn-tidy" aria-pressed="false" title="Tidy the desk — the whiteboard goes across the top and every other open card stands in a column either side of your writing, so nothing sits on the page. Press again to give the page its full width back.">⊞ Tidy</button>
+          <button type="button" class="wb-btn" id="btn-closeall" title="Put every open card down on the rail. Press again to bring them all back.">✕ Close all</button>
+        </div>
+        <span class="wb-spacer"></span>
+        <button type="button" class="wb-btn hidden" id="doc-go" title="Press when you want Q to look">Continue →</button>
+        <div class="wb-group">
+          <button type="button" class="wb-btn" id="btn-download" title="Download what is on the page as a Word file">↓ Download</button>
+          <button type="button" class="wb-btn primary" id="btn-finish" title="Q marks it like the marker, then walks it with you sentence by sentence — highlight, what's missing, the fix, tools, Check it">Mark &amp; fix →</button>
+        </div>
       </div>
-      <!-- References bar — sits between source and body -->
-      <div class="refs-bar" id="refs-bar">
-        <button type="button" class="refs-toggle" id="refs-toggle">
-          <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
-          Harvard References
-        </button>
-      </div>
-
       <!-- References panel — opens below the button -->
       <div class="refs-panel hidden" id="refs-panel">
         <div class="refs-yours" id="refs-yours"></div>
@@ -2533,7 +2622,17 @@
           <div class="refs-suggestions" id="refs-suggestions"></div>
         </div>
       </div>
+    </div>
 
+    <div class="paper">
+      <div class="curl"></div>
+      <input type="text" class="doc-title" id="doc-title" placeholder="Untitled document" />
+      <div class="doc-meta">
+        <span id="meta-words">0 words</span>
+        <span id="meta-saved" title="Everything on this page is saved to your account as you type">Not yet saved</span>
+        <span class="meta-spacer"></span>
+        <button type="button" class="meta-btn" id="doc-mic" title="Talk straight onto the page — your words land where the cursor is, so a terminology button drops into the sentence you are saying. Tap again to stop."><svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-1px"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg> Talk</button>
+      </div>
       <div class="doc-body" id="doc-body"
         contenteditable="true"
         data-placeholder="Start writing here…"
@@ -3390,6 +3489,14 @@
       renderDock();
       if (going) dockGhost(from, dockPillRect(p.key), panelTitle(p));
       if (back)  dockGhost(back, el.getBoundingClientRect(), panelTitle(p));
+      if (tidyOn()) queueArrange();     // one card fewer (or one more) — deal the columns again
+    }
+    // Coalesced: tidyAll() minimises a whole stack in one go, and that is one
+    // re-deal, not eight.
+    let arrangeQueued = false;
+    function queueArrange() {
+      if (arrangeQueued) return; arrangeQueued = true;
+      requestAnimationFrame(() => { arrangeQueued = false; if (tidyOn() && !isDocked()) arrangeDesk(); });
     }
     // Where she left it and how wide she left it, kept the moment before it
     // goes to the dock. The HEIGHT is deliberately not captured: a saved
@@ -3474,20 +3581,117 @@
         const nm = document.createElement('span'); nm.className = 'qdock-name'; nm.textContent = name;
         b.appendChild(dot); b.appendChild(nm); frag.appendChild(b);
       });
-      // The one action: tidy what is still open, or bring the lot back.
+      // The one action on the rail: close what is still open, or bring the
+      // lot back. Sarah, 20 Aug 2026: "we have a tidy button but that needs
+      // to be close all" — TIDY is now the arrangement (see arrangeDesk),
+      // and this is the plain close.
       const anyOpen = openPanelKeys().length > 0;
       const t = document.createElement('button');
       t.type = 'button'; t.className = 'qdock-pill qdock-tidy'; t.dataset.dockTidy = anyOpen ? 'away' : 'back';
       t.title = anyOpen ? 'Put every open card down here' : 'Put every card back on the page';
       const tn = document.createElement('span'); tn.className = 'qdock-name';
-      tn.textContent = anyOpen ? 'Tidy the rest' : 'Bring them back';
+      tn.textContent = anyOpen ? 'Close all' : 'Bring them back';
       t.appendChild(tn); frag.appendChild(t);
       dockEl.innerHTML = ''; dockEl.appendChild(frag); dockEl.classList.remove('hidden');
     }
     function tidyAll() {
       const open = openPanelKeys();
-      if (open.length) open.forEach(k => setMin(panels[k], true));
+      if (open.length) { open.forEach(k => setMin(panels[k], true)); untidyDesk(); }
       else stowedKeys().forEach(k => setMin(panels[k], false));
+    }
+
+    // ── TIDY ─ the cards go ROUND the writing, not on top of it ──────────
+    // Sarah, 20 Aug 2026: "we need a tidy button that puts your open cards
+    // either side of the writing so you can work and the whiteboard across
+    // the top."
+    // So Tidy is an ARRANGEMENT, not a close. The whiteboard takes a band
+    // across the top of the page (the body is padded down under it, so it
+    // never covers what she is writing); every other OPEN card is dealt into
+    // a column down the left and a column down the right; and the paper is
+    // narrowed — only as far as it must be — so each column has a readable
+    // width instead of a card sitting over her sentence. Minimised cards stay
+    // where they are: on the rail. Press again and the page gets its full
+    // width back, cards left where they now stand.
+    const TIDY_COL_MIN = 208, TIDY_COL_MAX = 320, TIDY_GAP = 12;
+    const TIDY_LEFT = ['brief', 'teach', 'mark'];     // what she reads from, on the left
+    function tidyOn() { return !!panelLayout.__tidy; }
+    function setTidyFlag(on) { panelLayout.__tidy = !!on; saveLayout(); paintTidyBtn(); }
+    function paintTidyBtn() {
+      const b = document.getElementById('btn-tidy');
+      if (b) b.setAttribute('aria-pressed', tidyOn() ? 'true' : 'false');
+    }
+    function untidyDesk() {
+      document.body.classList.remove('tidy');
+      document.body.style.paddingTop = '';
+      setTidyFlag(false);
+    }
+    function arrangeDesk() {
+      if (isDocked()) return;              // ≤700px is the bottom sheet — there are no sides to put anything on
+      const open = openPanelKeys();
+      if (!open.length) { untidyDesk(); return; }
+      const vw = window.innerWidth, vh = window.innerHeight;
+
+      // The whiteboard first: a band across the top, full width.
+      let top0 = PANEL_M;
+      const wb = open.indexOf('wb') >= 0 ? panels.wb : null;
+      if (wb) {
+        const w = Math.max(wb.minW, vw - 2 * PANEL_M);
+        const h = Math.max(wb.minH, Math.round(Math.min(320, vh * 0.30)));
+        wb.el.style.width = w + 'px'; wb.el.style.height = '';
+        wb.el.style.maxHeight = h + 'px';
+        placePanel(wb, PANEL_M, PANEL_M);
+        const l = getL(wb); l.left = PANEL_M; l.top = PANEL_M; l.w = w; l.h = h; l.moved = true;
+        top0 = PANEL_M + wb.el.offsetHeight + TIDY_GAP;
+      }
+      // Nothing on this page is allowed to sit under the band.
+      document.body.style.paddingTop = wb ? (top0 + 4) + 'px' : '';
+
+      // Two columns. The writing keeps the middle and stays readable; the
+      // columns take what is left, capped so a card is never a sliver.
+      const sides = open.filter(k => k !== 'wb');
+      let colW = 0, deskW = 760;
+      if (sides.length) {
+        colW = clampNum(Math.floor((vw - Math.min(620, vw * 0.5) - 2 * (TIDY_GAP + PANEL_M)) / 2), TIDY_COL_MIN, TIDY_COL_MAX);
+        deskW = Math.max(360, Math.min(760, vw - 2 * (colW + TIDY_GAP + PANEL_M)));
+        document.body.classList.add('tidy');
+        document.documentElement.style.setProperty('--tidy-desk', deskW + 'px');
+      } else {
+        document.body.classList.remove('tidy');
+      }
+
+      const left = sides.filter(k => TIDY_LEFT.indexOf(k) >= 0);
+      const right = sides.filter(k => TIDY_LEFT.indexOf(k) < 0);
+      // Even the sides up — a stack of five one side and nothing the other is
+      // not tidy. Cards move from the END of the long side, so the coach card
+      // (first on the right) stays where she expects it.
+      while (right.length - left.length >= 2) left.push(right.pop());
+      while (left.length - right.length >= 2) right.push(left.pop());
+
+      const avail = Math.max(160, vh - top0 - PANEL_M);
+      const stack = (keys, x) => {
+        if (!keys.length) return;
+        const cell = Math.floor((avail - (keys.length - 1) * TIDY_GAP) / keys.length);
+        let y = top0;
+        keys.forEach(k => {
+          const p = panels[k], h = Math.max(p.minH, cell);
+          p.el.style.width = colW + 'px'; p.el.style.height = '';
+          p.el.style.maxHeight = h + 'px';
+          placePanel(p, x, y);
+          const l = getL(p);
+          l.left = x; l.top = y; l.w = colW; l.h = h; l.moved = true;
+          y += p.el.offsetHeight + TIDY_GAP;      // pack by what the card actually needs, never past its cell
+        });
+      };
+      stack(left, PANEL_M);
+      stack(right, Math.max(PANEL_M, vw - PANEL_M - colW));
+      setTidyFlag(true);
+      saveLayout();
+    }
+    {
+      const bt = document.getElementById('btn-tidy');
+      if (bt) bt.addEventListener('click', () => { if (tidyOn()) untidyDesk(); else arrangeDesk(); });
+      const bc = document.getElementById('btn-closeall');
+      if (bc) bc.addEventListener('click', () => tidyAll());
     }
     if (dockEl) dockEl.addEventListener('click', (e) => {
       if (e.target.closest('.qdock-tidy')) { tidyAll(); return; }
@@ -3516,6 +3720,7 @@
       p.el.classList.remove('hidden');
       if (wasHidden || !p.placed) applyLayout(p); else clampPanel(p);
       if (isDocked()) restackDock(); else renderDock();
+      if (wasHidden && tidyOn()) queueArrange();   // a new card joins the column it belongs in
     }
     function hidePanel(key) {
       const p = panels[key]; if (!p) return;
@@ -3539,6 +3744,10 @@
       if (docked) restackDock(); else { document.body.style.paddingBottom = ''; setupCog.style.bottom = ''; }
       renderDock();
       lastDocked = docked;
+      // A tidied desk is a LAYOUT, not a one-off nudge: re-deal it on resize
+      // (and on the phone give the page its width back — there are no sides).
+      if (tidyOn()) { if (docked) { document.body.classList.remove('tidy'); document.body.style.paddingTop = ''; } else arrangeDesk(); }
+      paintTidyBtn();
     }
     window.addEventListener('resize', relayoutAll);
     window.addEventListener('orientationchange', () => setTimeout(relayoutAll, 60));
@@ -3625,13 +3834,13 @@
     window.__qwriterVideo = { openVideo, watchVideoFor, closeVideo };
     window.__qwriterExpect = { insertTermAtCaret: (t) => insertTermAtCaret(t), refresh: () => refreshExpectations() };
     // The coach card is visible from the start; boards appear when the brief lands.
-    loadLayout(); relayoutAll();
+    loadLayout(); relayoutAll(); paintTidyBtn();
     fetch('/whoami', { credentials: 'include' }).then(r => r.json()).then(d => {
       const id = d && d.person && (d.person.id || d.person.email);
       if (id) { panelUser = String(id); loadLayout(); Object.values(panels).forEach(p => { p.placed = false; }); relayoutAll(); }
     }).catch(() => {});
     // Test hook: the harness drives the panels without a mouse.
-    window.__qwriterPanels = { panels, placePanel, setMin, clampPanel, relayoutAll, isDocked, layout: () => panelLayout, renderDock, tidyAll, stowedKeys, openPanelKeys, dockEl };
+    window.__qwriterPanels = { panels, placePanel, setMin, clampPanel, relayoutAll, isDocked, layout: () => panelLayout, renderDock, tidyAll, arrangeDesk, untidyDesk, tidyOn, stowedKeys, openPanelKeys, dockEl };
 
     // ── Coach card rendering ───────────────────────────────────────────────
     // `where` — "Part 2 of 4 — <plain label>" — comes from the current
@@ -9193,6 +9402,7 @@
     let sourceMode = 'brief';   // what the next picked file is: the brief, or a supporting doc
     function renderSourceSlot() {
       sourceSlot.innerHTML = '';
+      sourceSlot.classList.toggle('wide', !sourceState.name);
       if (!sourceState.name) {
         const btn = document.createElement('button');
         btn.type = 'button'; btn.className = 'source-add'; btn.id = 'source-add-btn';
@@ -9211,12 +9421,32 @@
         linkBtn.addEventListener('click', () => renderLinkInput());
         sourceSlot.appendChild(linkBtn);
       } else {
-        const list = document.createElement('div'); list.className = 'source-list';
+        // Sarah, 20 Aug 2026: "the add supporting doc and the folder could
+        // all be in a drop down." Once the task is in, the whole lot — the
+        // brief, its other half, the supporting documents, a link — lives
+        // behind ONE button, and inside it every row is the same width.
+        const wrap = document.createElement('div'); wrap.className = 'srcdrop';
+        const icon = sourceState.imageDataUrl ? '🖼️' : (sourceState.sourceUrl ? '🔗' : '📄');
+        const nSupport = (state.sources || []).length;
+        const btn = document.createElement('button');
+        btn.type = 'button'; btn.className = 'wb-btn srcdrop-btn'; btn.id = 'srcdrop-btn';
+        btn.setAttribute('aria-expanded', 'false');
+        btn.title = 'Your task and everything Q is reading with it';
+        btn.innerHTML = '<span>' + icon + '</span><span class="srcdrop-name"></span>'
+          + (nSupport ? '<span class="srcdrop-count">+' + nSupport + '</span>' : '')
+          + '<span class="srcdrop-caret">▾</span>';
+        btn.querySelector('.srcdrop-name').textContent = sourceState.name;
+        wrap.appendChild(btn);
+
+        const menu = document.createElement('div'); menu.className = 'srcdrop-menu hidden';
+        const head = (t) => { const h = document.createElement('div'); h.className = 'srcdrop-head'; h.textContent = t; menu.appendChild(h); };
+
+        head('Your task');
         const chip = document.createElement('div');
         chip.className = 'source-chip';
-        const icon = sourceState.imageDataUrl ? '🖼️' : (sourceState.sourceUrl ? '🔗' : '📄');
         chip.innerHTML = `<span>${icon}</span><span class="kind">brief</span><span class="name"></span><button class="remove" title="Remove">×</button>`;
         chip.querySelector('.name').textContent = sourceState.name;
+        chip.title = sourceState.name;
         chip.querySelector('.remove').addEventListener('click', () => {
           if (state.brief && !window.confirm('Remove this task? Q will forget the brief and start fresh. Your writing on the page stays.')) return;
           sourceState.name = null; sourceState.text = null; sourceState.imageDataUrl = null; sourceState.sourceUrl = null;
@@ -9225,18 +9455,20 @@
           renderSourceSlot();
           setCoach({ msg: 'Gone. Ready when you are.', inputVisible: true });
         });
-        list.appendChild(chip);
+        menu.appendChild(chip);
         // Supporting documents — case studies, module notes, data. Q reads
         // them into the answer in his head and cites them.
+        if (nSupport) head('Reading with it');
         (state.sources || []).forEach(src => {
           const c = document.createElement('div'); c.className = 'source-chip support';
           c.innerHTML = `<span>📎</span><span class="kind">source</span><span class="name"></span><button class="remove" title="Remove this document">×</button>`;
           c.querySelector('.name').textContent = src.name + (src.chars ? ' · ' + Math.round(src.chars / 1000) + 'k' : '');
           c.title = src.name;
           c.querySelector('.remove').addEventListener('click', () => removeSupportingDoc(src.name));
-          list.appendChild(c);
+          menu.appendChild(c);
         });
         if (state.brief) {
+          const rule = document.createElement('div'); rule.className = 'srcdrop-rule'; menu.appendChild(rule);
           // The other half of the brief — the marking guide to go with the
           // questions, or the questions to go with the guide. Re-reads the
           // brief with both. Distinct from a supporting document, which Q
@@ -9246,19 +9478,44 @@
           more.title = 'The task came as more than one file? Add the other part — the questions, the marking guide, the assessment criteria — and Q re-reads the brief with both.';
           more.innerHTML = '<span>+ Add the rest of the brief</span>';
           more.addEventListener('click', () => { sourceMode = 'brief-more'; sourceFileInput.multiple = true; sourceFileInput.click(); });
-          list.appendChild(more);
+          menu.appendChild(more);
           const add = document.createElement('button');
           add.type = 'button'; add.className = 'source-add';
           add.title = 'Case study, module notes, data, reading — Q reads it into his plan and cites it';
           add.innerHTML = '<span>+ Add a supporting document</span>';
           add.addEventListener('click', () => { sourceMode = 'support'; sourceFileInput.multiple = true; sourceFileInput.click(); });
-          list.appendChild(add);
+          menu.appendChild(add);
+          const lnk = document.createElement('button');
+          lnk.type = 'button'; lnk.className = 'source-add';
+          lnk.title = 'Paste a link — a course page, an online brief, a reading';
+          lnk.innerHTML = '<span>+ Add a link</span>';
+          lnk.addEventListener('click', () => renderLinkInput());
+          menu.appendChild(lnk);
         }
-        sourceSlot.appendChild(list);
+        wrap.appendChild(menu);
+        btn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          const shut = menu.classList.toggle('hidden');
+          btn.setAttribute('aria-expanded', shut ? 'false' : 'true');
+        });
+        sourceSlot.appendChild(wrap);
       }
       sourceSlot.appendChild(sourceFileInput);
     }
     renderSourceSlot();
+    // Click anywhere else, or press Escape: the drop-down shuts.
+    document.addEventListener('click', (e) => {
+      const m = document.querySelector('.srcdrop-menu:not(.hidden)');
+      if (!m || e.target.closest('.srcdrop')) return;
+      m.classList.add('hidden');
+      const b = document.getElementById('srcdrop-btn'); if (b) b.setAttribute('aria-expanded', 'false');
+    });
+    document.addEventListener('keydown', (e) => {
+      if (e.key !== 'Escape') return;
+      const m = document.querySelector('.srcdrop-menu:not(.hidden)'); if (!m) return;
+      m.classList.add('hidden');
+      const b = document.getElementById('srcdrop-btn'); if (b) { b.setAttribute('aria-expanded', 'false'); b.focus(); }
+    });
 
     function renderLinkInput() {
       sourceSlot.innerHTML = '';
@@ -9574,6 +9831,7 @@
 
     refsToggle.addEventListener('click', () => {
       refsPanel.classList.toggle('hidden');
+      refsToggle.setAttribute('aria-expanded', refsPanel.classList.contains('hidden') ? 'false' : 'true');
     });
 
     refsTabs.forEach(tab => {
