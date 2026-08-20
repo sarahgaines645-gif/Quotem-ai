@@ -51,3 +51,33 @@ Use these. Don't author new shadow values — they'll read wrong next to existin
 
 ### 5. Font is Space Grotesk
 Loaded once via `<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap">`. System fallback chain is `-apple-system, BlinkMacSystemFont, sans-serif`. No other fonts.
+
+### 6. NO self-explanatory notes on the page — the interface explains itself
+**Sarah, 20 Aug 2026: "can you please put a note somewhere to tell the agents to
+stop putting self explanatory notes on the pages."**
+
+Do not write a line of text telling the user what the screen in front of them
+obviously does. This, sitting under a date picker and a button marked *Find
+them*, is exactly the thing:
+
+> ~~Set your dates and press **Find them** — the places that work turn pink.~~
+
+The dates are a date field. The button says what it does. The pink is visible
+the moment it happens. Every word of that is the interface describing itself to
+someone who is already looking at it — and it makes the product feel like a
+manual, not a tool.
+
+**Delete it. Don't reword it, don't shrink it, don't make it muted grey.** If a
+control needs a sentence of explanation to be usable, the control is wrong —
+fix the control.
+
+What IS allowed, and only where it earns its place:
+- A **placeholder** inside an empty field showing the shape of the answer
+  (`e.g. 15mm copper pipe`) — that is a worked example, not an instruction.
+- An **empty state** where there is genuinely nothing yet and no other clue what
+  the panel is for ("Nothing here. Tap + to add one.").
+- A **caveat the data itself requires** — where a number came from, or what it
+  cannot tell you. That is honesty, and it is required elsewhere in these rules.
+
+The test: *would a competent stranger work this out in two seconds by looking?*
+If yes, the sentence is furniture. Take it out.
