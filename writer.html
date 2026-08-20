@@ -214,7 +214,9 @@
        So: the paper carries the title, the word count and Talk. Every other
        control lives up here, in the strip that used to be empty — and a row
        of buttons is a LIST, so they are all cut to one size. */
-    .workbench { display: flex; flex-direction: column; gap: 8px; margin: 0 0 14px; }
+    /* The gap under the bar is where the page's divider tabs stand — they sit
+       on the paper's top edge, so the bar must leave them air. */
+    .workbench { display: flex; flex-direction: column; gap: 8px; margin: 0 0 40px; }
     .wb-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; min-width: 0; }
     .wb-row .wb-spacer { flex: 1 1 auto; min-width: 0; }
     /* One size, decided by the widest label in the group — not by each
@@ -1472,6 +1474,35 @@
        the Word file. A post-it is not part of the essay. It sits ON the paper
        where she put it, it does not move when she writes, and it goes nowhere
        near the document. That is why this layer lives OUTSIDE .doc-body. */
+    /* TALK LIVES IN THE MARGIN (Sarah, 20 Aug 2026: "lets put talk in the
+       margin so it follows you down the page. its no good at the top of the
+       page"). The rail runs the whole height of the paper down the margin
+       strip, left of the red rule; the button is STICKY inside it, so it rides
+       down the page with her and is always in reach — instead of being left
+       behind at the top the moment she starts writing. */
+    /* The tabs stand ON the paper's top edge, the way a divider stands out of
+       a notebook: raised, rounded at the top only, the colour on the top lip.
+       Open = pressed in (inset), never a filled button. They clear the curled
+       corner at the right. */
+    .doc-tabs { position: absolute; top: -24px; right: 64px; display: flex; gap: 6px; z-index: 5; }
+    .doc-tab {
+      padding: 6px 14px 8px; border: none; border-radius: 9px 9px 0 0; cursor: pointer;
+      font-family: 'Space Grotesk', sans-serif; font-size: 10px; font-weight: 700;
+      letter-spacing: 0.07em; text-transform: uppercase;
+      background: var(--bg); color: var(--text-muted);
+      border-top: 4px solid var(--tc, #9aa0ad);
+      box-shadow: 0 -3px 8px rgba(0,0,0,0.07);
+      transition: color 0.15s, box-shadow 0.15s, transform 0.15s;
+    }
+    .doc-tab:hover { color: var(--text); transform: translateY(-2px); }
+    .doc-tab[aria-expanded="true"], .doc-tab.open { color: var(--text); box-shadow: var(--neu-inset-sm); }
+    @media (max-width: 700px) {
+      .doc-tabs { right: 8px; gap: 4px; }
+      .doc-tab { padding: 5px 9px 7px; font-size: 9px; letter-spacing: 0.04em; }
+    }
+    .doc-mic-rail { position: absolute; left: 8px; top: 0; bottom: 0; width: 44px; pointer-events: none; z-index: 5; }
+    .doc-mic-btn { position: sticky; top: 20px; pointer-events: auto; width: 44px; height: 44px; padding: 0; border-radius: 50%; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px; }
+    .doc-mic-btn .dm-l { font-size: 8px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; line-height: 1; }
     .pg-notes { position: absolute; inset: 0; pointer-events: none; z-index: 6; }
     .pg-sticky { position: absolute; pointer-events: auto; width: 150px; padding: 8px 10px 8px; border-radius: 10px; background: var(--bg); box-shadow: var(--neu-raised-sm); border-top: 4px solid var(--sc, #e6c84a); font-family: 'Space Grotesk', sans-serif; font-size: 12px; line-height: 1.4; color: var(--text); cursor: grab; user-select: none; -webkit-user-select: none; touch-action: none; overflow-wrap: anywhere; }
     .pg-sticky:active { cursor: grabbing; }
@@ -2388,8 +2419,10 @@
       .qpanel.min { max-width: none; }
     }
     @media (max-width: 600px) {
-      .paper { padding: 48px 28px 64px; min-height: 700px; }
-      .paper::after { left: 22px; }
+      .paper { padding: 48px 28px 64px 56px; min-height: 700px; }
+      .paper::after { left: 46px; }
+      .doc-mic-rail { left: 4px; width: 40px; }
+      .doc-mic-btn { width: 40px; height: 40px; top: 12px; }
       .doc-title { font-size: 22px; }
       .doc-body { font-size: 15px; line-height: 28px; }
       .setup-strip { padding: 14px 16px; }
@@ -2600,12 +2633,6 @@
           </button>
           <input type="file" id="source-file-input" style="display:none" multiple />
         </div>
-        <span class="wb-spacer"></span>
-        <div class="wb-group">
-          <button type="button" class="wb-btn" id="refs-toggle" aria-expanded="false" title="Harvard references — format a source you have, or ask Q what this document should be citing.">❝ Harvard</button>
-          <button type="button" class="wb-btn" id="btn-notes" title="Everything you have noted, part by part — write in it, or send a line across to your page.">▤ Notes</button>
-          <button type="button" class="wb-btn" id="btn-bib" title="Every source on your list, in Harvard — what each one backs up, and how strongly.">≡ Bibliography</button>
-        </div>
       </div>
       <div class="wb-row">
         <div class="wb-group">
@@ -2659,6 +2686,24 @@
 
     <div class="paper">
       <div class="curl"></div>
+      <!-- DIVIDER TABS, on the top edge of the page (Sarah, 20 Aug 2026, with
+           a photo of a notebook's coloured tabs: "can we use tabs like these at
+           the top of the doc to bibliography, citing ref, notes"). Same three
+           things that were buttons on the bar — they read as part of the
+           notebook now, not as furniture bolted above it. -->
+      <div class="doc-tabs" id="doc-tabs">
+        <button type="button" class="doc-tab" id="btn-bib" style="--tc:#7c5cbf"
+          title="Every source on your list, in Harvard — what each one backs up, and how strongly.">Bibliography</button>
+        <button type="button" class="doc-tab" id="refs-toggle" aria-expanded="false" style="--tc:#3b82c4"
+          title="Citing — format a source you have into Harvard, or ask Q what this document should be citing.">Citing</button>
+        <button type="button" class="doc-tab" id="btn-notes" style="--tc:#28a745"
+          title="Everything you have noted, part by part — write in it, or send a line across to your page.">Notes</button>
+      </div>
+      <!-- Talk lives in the margin and follows her down the page. -->
+      <div class="doc-mic-rail">
+        <button type="button" class="meta-btn doc-mic-btn" id="doc-mic" aria-label="Talk"
+          title="Talk straight onto the page — your words land where the cursor is, so a terminology button drops into the sentence you are saying. Tap again to stop."><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg><span class="dm-l">Talk</span></button>
+      </div>
       <!-- Her post-its. On the paper, never in the document. -->
       <div class="pg-notes" id="pg-notes"></div>
       <input type="text" class="doc-title" id="doc-title" placeholder="Untitled document" />
@@ -2666,7 +2711,6 @@
         <span id="meta-words">0 words</span>
         <span id="meta-saved" title="Everything on this page is saved to your account as you type">Not yet saved</span>
         <span class="meta-spacer"></span>
-        <button type="button" class="meta-btn" id="doc-mic" title="Talk straight onto the page — your words land where the cursor is, so a terminology button drops into the sentence you are saying. Tap again to stop."><svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-1px"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg> Talk</button>
       </div>
       <div class="doc-body" id="doc-body"
         contenteditable="true"
@@ -10907,6 +10951,26 @@
     }
     document.getElementById('btn-notes').addEventListener('click', () => openNotesPanel({ toggle: true }));
     document.getElementById('btn-bib').addEventListener('click', () => openBibPanel({ toggle: true }));
+    // A divider tab is pressed in while its panel is on the page — the state
+    // the bar buttons used to carry. One watcher, so it stays true however the
+    // panel was opened or shut (the dock, Close all, Tidy, Q himself).
+    (function paintDocTabs() {
+      const pairs = [['btn-bib', 'bib'], ['btn-notes', 'notes']];
+      const tick = () => {
+        pairs.forEach(([id, key]) => {
+          const b = document.getElementById(id), p = panels[key];
+          if (!b || !p) return;
+          b.classList.toggle('open', !p.el.classList.contains('hidden') && !p.el.classList.contains('stowed'));
+        });
+      };
+      tick();
+      if (window.MutationObserver) {
+        pairs.forEach(([, key]) => {
+          const p = panels[key]; if (!p) return;
+          new MutationObserver(tick).observe(p.el, { attributes: true, attributeFilter: ['class'] });
+        });
+      }
+    })();
     let mkSweepT = null;
     docBody.addEventListener('input', () => { if (!markPanel.el.classList.contains('hidden')) { clearTimeout(mkSweepT); mkSweepT = setTimeout(() => { try { renderMarkPanel(); } catch (_) {} }, 500); } });
     function endFixPass({ nothing } = {}) {
@@ -12081,7 +12145,11 @@
     }
     function stopDocDictation(why) {
       docMic.classList.remove('listening');
-      docMic.textContent = docMic.textContent.replace(/^Listening.*/, '');
+      // This used to be `docMic.textContent = docMic.textContent.replace(...)`,
+      // stripping a "Listening…" prefix that nothing ever wrote. Setting
+      // textContent throws away every child element, so the FIRST time she
+      // stopped talking the mic icon was deleted off the button. Now the button
+      // is an icon in the margin, that would have left a blank circle.
       if (docRec) { try { docRec.stop(); } catch (_) {} docRec = null; }
       setSavedLabel && scheduleAutosave();
       if (why) coachHint.textContent = why;
