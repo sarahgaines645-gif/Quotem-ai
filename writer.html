@@ -2656,6 +2656,10 @@
        they read as coming OUT of it. */
     .qpc .case-items {
       position: absolute; left: 0; right: 0; top: 100%; margin-top: -34px; z-index: -1;
+    /* THIS BOX IS INVISIBLE BUT IT IS THERE: full width, ~350px deep, over
+       the top of the page. Without this it eats every click on the row of
+       tools underneath it. Only the things in it take clicks. */
+    pointer-events: none;
       display: flex; align-items: flex-start; justify-content: center; flex-wrap: nowrap;
       max-width: 1240px; margin-left: auto; margin-right: auto; padding: 0 4px;
     }
