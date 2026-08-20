@@ -381,6 +381,66 @@
     /* The whiteboard's title reads as a heading, no glyph (Sarah, 17 Aug: "this needs to be bigger and loose the icon"). */
     #wb-panel .panel-title, #wb-title { font-size: 15px; letter-spacing: 0.06em; }   /* a minimised panel is still a title — not greyed out (Sarah, 17 Aug) */
 
+    /* ── THE DOCK — where a minimised card goes ──────────────────────────
+       Sarah, 20 Aug 2026: "all the cards that open and close are taking up
+       the whole page. we need to arrange them so they go somewhere when we
+       minimise tham". Minimising used to leave the head floating wherever
+       the card happened to be, so four half-shut cards still sat over her
+       writing. Now the card is STOWED and a pill takes its place in this
+       rail — down the LEFT GUTTER, sitting on the bottom above the settings
+       cog. The gutter is the one strip of page that is never paper (the desk
+       is 760px centred), so the dock can never cover what she is writing:
+       the rail is capped to the gutter's own width, which is 154px at
+       1100px wide and grows from there. (Under ~1030px the gutter is thinner
+       than a readable pill, so the rail holds at 116px and sits over the
+       page's bottom-left corner — where the cog already is.)
+       A pill is the minimised head it replaces: raised card, --bg, the
+       card's own title in the same pink. Empty dock = nothing rendered. */
+    .qdock {
+      position: fixed; left: 20px; bottom: 66px; z-index: 130;   /* the same left edge as the settings cog it stands on */
+      display: flex; flex-direction: column; align-items: flex-start; gap: 8px;
+      width: max-content;
+      max-width: max(116px, min(180px, calc((100vw - 800px) / 2 - 16px)));
+      max-height: calc(100vh - 96px); overflow: visible;   /* never clip a pill: the raise IS the shadow, and a clipped shadow reads as a cut-off card */
+      font-family: 'Space Grotesk', sans-serif;
+    }
+    .qdock.hidden { display: none; }
+    .qdock-pill {
+      display: flex; align-items: center; gap: 8px; max-width: 100%; flex-shrink: 0;
+      padding: 8px 14px; border: none; border-radius: 20px; cursor: pointer;
+      background: var(--bg); box-shadow: var(--neu-raised-sm);
+      font-family: 'Space Grotesk', sans-serif; text-align: left;
+      transition: box-shadow 0.15s;
+    }
+    .qdock-pill:hover { box-shadow: var(--neu-raised-xs); }
+    .qdock-pill:active { box-shadow: var(--neu-inset-sm); }   /* the only inset on the page: the moment under her finger */
+    .qdock-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--accent); flex-shrink: 0; }
+    .qdock-name {
+      font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.07em;
+      color: var(--accent); min-width: 0;
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+    /* The one action on the rail — quiet, the way a secondary Q button is
+       quiet: muted text, same species, never a colour. */
+    .qdock-tidy { margin-top: 2px; padding: 6px 13px; }
+    .qdock-tidy .qdock-name { color: var(--text-muted); font-size: 11px; letter-spacing: 0.05em; }
+    .qdock-tidy:hover .qdock-name { color: var(--text); }
+    /* The card flies to its pill (and back). A ghost, so nothing real
+       depends on the animation finishing. */
+    .qdock-ghost {
+      position: fixed; z-index: 140; pointer-events: none; opacity: 0.92;
+      background: var(--bg); border-radius: 18px; box-shadow: var(--neu-raised-xs);
+      overflow: hidden; padding: 8px 14px;
+      font-family: 'Space Grotesk', sans-serif; font-size: 12px; font-weight: 700;
+      text-transform: uppercase; letter-spacing: 0.07em; color: var(--accent); white-space: nowrap;
+      transition: left 0.22s ease, top 0.22s ease, width 0.22s ease, height 0.22s ease, opacity 0.22s ease;
+    }
+    /* A stowed card is not on the page at all — its pill is. */
+    .qpanel.stowed { display: none; }
+    /* ≤700px the panels are a bottom sheet already (see the media query
+       below) — nothing is stowed there, so there is no rail. */
+    @media (max-width: 700px) { .qdock { display: none !important; } }
+
     /* ── The coach card ─────────────────────────────────────────────────── */
     .coach-card { width: 236px; }
     /* A CHAT SCROLLS, IT DOES NOT GROW (Sarah, 19 Aug: "the chat gets bigger
@@ -2482,6 +2542,8 @@
     </svg>
   </button>
 
+  <!-- The dock: a minimised card lives here, not floating over her writing -->
+  <div class="qdock hidden" id="qdock" role="group" aria-label="Minimised cards"></div>
   <!-- Floating Q coach card — a small window: drag the header, corner grip to resize, − to minimise -->
   <div class="qpanel coach-card" id="coach-card" data-panel="coach">
     <div class="panel-head" id="coach-head">
@@ -3288,7 +3350,7 @@
       p.placed = true;
     }
     function clampPanel(p) {
-      if (isDocked() || p.el.classList.contains('hidden')) return;
+      if (isDocked() || p.el.classList.contains('hidden') || p.el.classList.contains('stowed')) return;   // a stowed card has no box to clamp
       const el = p.el;
       const maxW = window.innerWidth - 2 * PANEL_M, maxH = window.innerHeight - 2 * PANEL_M;
       if (el.style.width && parseFloat(el.style.width) > maxW) el.style.width = maxW + 'px';
@@ -3298,13 +3360,37 @@
         placePanel(p, r.left, r.top);
       }
     }
+    // Minimise means the card GOES somewhere. On a wide screen it is stowed
+    // off the page and a pill takes its place in the dock; restoring puts it
+    // back at the position AND the size it had. Both live in panelLayout —
+    // the same store, no second one. (≤700px is the bottom sheet: unchanged.)
     function setMin(p, on) {
-      p.el.classList.toggle('min', !!on);
+      const docked = isDocked(), el = p.el;
+      const going = !!on && !docked && !el.classList.contains('stowed');
+      const from  = going ? el.getBoundingClientRect() : null;
+      const back  = (!on && !docked && el.classList.contains('stowed')) ? dockPillRect(p.key) : null;
+      if (going) rememberBox(p);
+      el.classList.toggle('min', !!on);
+      if (!docked) el.classList.toggle('stowed', !!on);
       if (p.minBtn) { p.minBtn.textContent = on ? '+' : '−'; p.minBtn.title = on ? 'Restore' : 'Minimise'; }
       const l = getL(p);
-      if (isDocked()) l.dockMin = !!on; else l.min = !!on;
+      if (docked) l.dockMin = !!on; else l.min = !!on;
       saveLayout();
-      if (isDocked()) restackDock(); else clampPanel(p);
+      if (docked) { restackDock(); return; }
+      if (!on) applyLayout(p); else clampPanel(p);
+      renderDock();
+      if (going) dockGhost(from, dockPillRect(p.key), panelTitle(p));
+      if (back)  dockGhost(back, el.getBoundingClientRect(), panelTitle(p));
+    }
+    // Where she left it and how wide she left it, kept the moment before it
+    // goes to the dock. The HEIGHT is deliberately not captured: a saved
+    // height is a ceiling she set with the grip, not a fixed size (17 Aug),
+    // and a card that has never been resized must still shrink to its
+    // content when it comes back.
+    function rememberBox(p) {
+      const r = p.el.getBoundingClientRect(), l = getL(p);
+      if (!r.width || !r.height) return;
+      l.left = Math.round(r.left); l.top = Math.round(r.top); l.w = Math.round(r.width);
     }
     // First show (or no saved position): the default spot for this screen.
     function defaultPlace(p) {
@@ -3317,6 +3403,7 @@
       if (isDocked()) {
         el.style.bottom = ''; el.style.left = ''; el.style.top = ''; el.style.width = ''; el.style.height = ''; el.style.transform = '';
         const dockMin = l.dockMin != null ? l.dockMin : (p.key !== 'coach');
+        el.classList.remove('stowed');   // nothing is stowed on a phone — the sheet stacks instead
         el.classList.toggle('min', dockMin);
         if (p.minBtn) p.minBtn.textContent = dockMin ? '+' : '−';
         p.placed = false;
@@ -3330,6 +3417,7 @@
       if (l.h) { el.style.height = ''; el.style.maxHeight = Math.min(l.h, window.innerHeight - 16) + 'px'; }
       el.classList.toggle('min', !!l.min);
       if (p.minBtn) p.minBtn.textContent = l.min ? '+' : '−';
+      el.classList.toggle('stowed', !!l.min);   // minimised across a reload = still in the dock
       if (l.left != null && l.top != null) placePanel(p, l.left, l.top);
       else defaultPlace(p);
       clampPanel(p);
@@ -3352,17 +3440,78 @@
         setupCog.style.bottom = (y + 4) + 'px';
       });
     }
+    // ── THE DOCK ──────────────────────────────────────────────────────────
+    // One rail in the left gutter. Every minimised card is a pill on it, in
+    // a fixed order, and pressing a pill brings that card back exactly as it
+    // was. Nothing minimised → nothing rendered: no empty furniture.
+    const DOCK_ORDER = ['brief', 'teach', 'wb', 'mark', 'coach', 'edit', 'video', 'notes', 'bib'];
+    const dockEl = document.getElementById('qdock');
+    const panelIsOpen = (p) => !!p && !p.el.classList.contains('hidden');
+    function stowedKeys() { return DOCK_ORDER.filter(k => panelIsOpen(panels[k]) && panels[k].el.classList.contains('stowed')); }
+    function openPanelKeys() { return DOCK_ORDER.filter(k => panelIsOpen(panels[k]) && !panels[k].el.classList.contains('stowed')); }
+    function panelTitle(p) { const t = p.el.querySelector('.panel-title'); return (t && t.textContent.trim()) || p.key; }
+    function dockPillRect(key) { const b = dockEl && dockEl.querySelector('[data-dock="' + key + '"]'); return b ? b.getBoundingClientRect() : null; }
+    function renderDock() {
+      if (!dockEl) return;
+      const keys = isDocked() ? [] : stowedKeys();
+      if (!keys.length) { dockEl.innerHTML = ''; dockEl.classList.add('hidden'); return; }
+      const frag = document.createDocumentFragment();
+      keys.forEach(k => {
+        const p = panels[k], name = panelTitle(p);
+        const b = document.createElement('button');
+        b.type = 'button'; b.className = 'qdock-pill'; b.dataset.dock = k;
+        b.title = 'Put ' + name.toLowerCase() + ' back on the page';
+        const dot = document.createElement('span'); dot.className = 'qdock-dot';
+        const nm = document.createElement('span'); nm.className = 'qdock-name'; nm.textContent = name;
+        b.appendChild(dot); b.appendChild(nm); frag.appendChild(b);
+      });
+      // The one action: tidy what is still open, or bring the lot back.
+      const anyOpen = openPanelKeys().length > 0;
+      const t = document.createElement('button');
+      t.type = 'button'; t.className = 'qdock-pill qdock-tidy'; t.dataset.dockTidy = anyOpen ? 'away' : 'back';
+      t.title = anyOpen ? 'Put every open card down here' : 'Put every card back on the page';
+      const tn = document.createElement('span'); tn.className = 'qdock-name';
+      tn.textContent = anyOpen ? 'Tidy the rest' : 'Bring them back';
+      t.appendChild(tn); frag.appendChild(t);
+      dockEl.innerHTML = ''; dockEl.appendChild(frag); dockEl.classList.remove('hidden');
+    }
+    function tidyAll() {
+      const open = openPanelKeys();
+      if (open.length) open.forEach(k => setMin(panels[k], true));
+      else stowedKeys().forEach(k => setMin(panels[k], false));
+    }
+    if (dockEl) dockEl.addEventListener('click', (e) => {
+      if (e.target.closest('.qdock-tidy')) { tidyAll(); return; }
+      const b = e.target.closest('.qdock-pill'); if (!b || !b.dataset.dock) return;
+      const p = panels[b.dataset.dock]; if (!p) return;
+      setMin(p, false); bringToFront(p);
+    });
+    // The card flies to its pill and back — a ghost box, never the card
+    // itself, so the real geometry is right the instant the press lands.
+    function dockGhost(from, to, label) {
+      if (!from || !to || !from.width || !to.width) return;
+      try { if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) return; } catch (_) {}
+      const g = document.createElement('div');
+      g.className = 'qdock-ghost'; g.textContent = label || '';
+      g.style.left = from.left + 'px'; g.style.top = from.top + 'px'; g.style.width = from.width + 'px'; g.style.height = from.height + 'px';
+      document.body.appendChild(g);
+      requestAnimationFrame(() => {
+        g.style.left = to.left + 'px'; g.style.top = to.top + 'px';
+        g.style.width = to.width + 'px'; g.style.height = to.height + 'px'; g.style.opacity = '0';
+      });
+      setTimeout(() => { try { g.remove(); } catch (_) {} }, 340);
+    }
     function showPanel(key) {
       const p = panels[key]; if (!p) return;
       const wasHidden = p.el.classList.contains('hidden');
       p.el.classList.remove('hidden');
       if (wasHidden || !p.placed) applyLayout(p); else clampPanel(p);
-      if (isDocked()) restackDock();
+      if (isDocked()) restackDock(); else renderDock();
     }
     function hidePanel(key) {
       const p = panels[key]; if (!p) return;
       p.el.classList.add('hidden'); p.placed = false;
-      if (isDocked()) restackDock();
+      if (isDocked()) restackDock(); else renderDock();
     }
     // Restore a minimised panel (e.g. an explanation just landed on it).
     function revealPanel(key) {
@@ -3379,6 +3528,7 @@
         if (docked) applyLayout(p); else { if (!p.placed) applyLayout(p); else clampPanel(p); }
       });
       if (docked) restackDock(); else { document.body.style.paddingBottom = ''; setupCog.style.bottom = ''; }
+      renderDock();
       lastDocked = docked;
     }
     window.addEventListener('resize', relayoutAll);
@@ -3472,7 +3622,7 @@
       if (id) { panelUser = String(id); loadLayout(); Object.values(panels).forEach(p => { p.placed = false; }); relayoutAll(); }
     }).catch(() => {});
     // Test hook: the harness drives the panels without a mouse.
-    window.__qwriterPanels = { panels, placePanel, setMin, clampPanel, relayoutAll, isDocked, layout: () => panelLayout };
+    window.__qwriterPanels = { panels, placePanel, setMin, clampPanel, relayoutAll, isDocked, layout: () => panelLayout, renderDock, tidyAll, stowedKeys, openPanelKeys, dockEl };
 
     // ── Coach card rendering ───────────────────────────────────────────────
     // `where` — "Part 2 of 4 — <plain label>" — comes from the current
