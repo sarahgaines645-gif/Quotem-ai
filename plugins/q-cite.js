@@ -468,11 +468,14 @@ function fromOpenAlex(w) {
         publisher: type !== 'article' ? (src.host_organization_name || src.display_name || null) : null, place: null,
         doi, url: loc.landing_page_url || (doi ? 'https://doi.org/' + doi : null),
         citedBy: Number(w.cited_by_count) || 0, fromUpload: false, sourceName: null, snippet: abstractOf(w), index: 'openalex',
+        // What the work is ABOUT, in OpenAlex's own words - the thing that tells
+        // a real Herzberg from a coincidental one (Sarah, 20 Aug).
+        fields: (w.topics || []).flatMap(t => [t && t.display_name, t && t.subfield && t.subfield.display_name, t && t.field && t.field.display_name, t && t.domain && t.domain.display_name]).filter(Boolean),
     };
 }
 async function searchOpenAlex(query, max) {
     const mailto = process.env.OPENALEX_MAILTO ? '&mailto=' + encodeURIComponent(process.env.OPENALEX_MAILTO) : '';
-    const url = OPENALEX + '?search=' + encodeURIComponent(query) + '&per-page=' + Math.min(25, max * 3) + '&filter=is_retracted:false,type:article|book|book-chapter|report&select=id,display_name,publication_year,authorships,primary_location,doi,type,cited_by_count,biblio,is_retracted,abstract_inverted_index' + mailto;
+    const url = OPENALEX + '?search=' + encodeURIComponent(query) + '&per-page=' + Math.min(25, max * 3) + '&filter=is_retracted:false,type:article|book|book-chapter|report&select=id,display_name,publication_year,authorships,primary_location,doi,type,cited_by_count,biblio,is_retracted,abstract_inverted_index,topics' + mailto;
     const started = Date.now();
     try {
         const d = await deps.fetchJson(url);
@@ -552,6 +555,16 @@ function findMentions(text) {
     return Array.from(out.values());
 }
 const fold = s => String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z]/g, '');
+// IS THIS WORK EVEN ABOUT THE SAME THING? (Sarah, 20 Aug: an invented name that
+// happens to share a surname and a year with a real paper came back as "weak"
+// with that paper's title attached - "Thistlewood (2019)" matched a study of
+// the sterile insect technique.) Compared on 6-letter stems so her "motivators"
+// meets OpenAlex's "Motivation", which plain containment misses.
+function sharesSubject(hay, words) {
+    const h = fold(hay);
+    if (!h) return false;
+    return (words || []).some(w => { const f = fold(w); return f.length > 3 && h.includes(f.slice(0, Math.min(6, f.length))); });
+}
 function contextWords(text, at, n) {
     // The mention's OWN sentence: from the previous sentence end to the next.
     // A window of characters picked up the neighbouring mentions' words and
@@ -574,7 +587,7 @@ async function openAlexByAuthorYear(surname, year, kw, max) {
     const mailto = process.env.OPENALEX_MAILTO ? '&mailto=' + encodeURIComponent(process.env.OPENALEX_MAILTO) : '';
     const y = Number(year);
     const filter = 'is_retracted:false,raw_author_name.search:' + encodeURIComponent(surname) + ',from_publication_date:' + (y - 1) + '-01-01,to_publication_date:' + (y + 1) + '-12-31';
-    const url = OPENALEX + '?filter=' + filter + (kw ? '&search=' + encodeURIComponent(kw) : '') + '&per-page=' + Math.min(25, max) + '&select=id,display_name,publication_year,authorships,primary_location,doi,type,cited_by_count,biblio,is_retracted,abstract_inverted_index' + mailto;
+    const url = OPENALEX + '?filter=' + filter + (kw ? '&search=' + encodeURIComponent(kw) : '') + '&per-page=' + Math.min(25, max) + '&select=id,display_name,publication_year,authorships,primary_location,doi,type,cited_by_count,biblio,is_retracted,abstract_inverted_index,topics' + mailto;
     const started = Date.now();
     try {
         const d = await deps.fetchJson(url);
@@ -645,7 +658,17 @@ async function verifyMention(m, text) {
             if (!weak) weak = cs.find(okRec) || null;
             if (!q) break;
         }
-        if (weak) return pack(weak, 'weak');
+        if (weak) {
+            // Surname + year alone is a coincidence, not a citation. If the work
+            // is not even in the same subject as her sentence, say so and name
+            // it as the near miss it is - never hand her its title as if it were
+            // the source she meant.
+            const about = [weak.title, weak.snippet, (weak.fields || []).join(' ')].filter(Boolean).join(' ');
+            if (sharesSubject(about, kwList)) return pack(weak, 'weak');
+            return { ...m, found: false, ms: Date.now() - t0,
+                nearMiss: { title: weak.title, year: weak.year, authors: (weak.authors || []).map(a => a.family),
+                    about: (weak.fields || []).slice(0, 2).join(', ') || null, url: weak.url || (weak.doi ? 'https://doi.org/' + weak.doi : null) } };
+        }
         return { ...m, found: false, ms: Date.now() - t0 };
     } catch (e) { return { ...m, found: null, error: String(e && e.message || e).slice(0, 80), ms: Date.now() - t0 }; }
 }

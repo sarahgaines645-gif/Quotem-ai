@@ -1791,6 +1791,13 @@ router.post('/writer/chat', requirePerson, express.json({ limit: '1mb' }), write
                             // come back missing (Barrow and Mosley 2005 did, measured
                             // 20 Aug). Say what was actually established: not confirmed.
                             reply += NL + NL + '⚠️ I could not confirm ' + list + ' on OpenAlex or CrossRef. That does not always mean ' + (v.unverified.length === 1 ? 'it is not real' : 'they are not real') + ' — books and reports are indexed patchily — but I cannot stand behind ' + (v.unverified.length === 1 ? 'it' : 'them') + '. Check ' + (v.unverified.length === 1 ? 'it' : 'them') + ' yourself before ' + (v.unverified.length === 1 ? 'it goes' : 'they go') + ' on your page, or press Auto cite and pick one I can show you.';
+                            // The near miss is named as a near miss, never as the
+                            // source: "there IS a paper by that name and year, and
+                            // here is why it is not this one."
+                            for (const u of v.unverified) {
+                                if (!u.nearMiss || !u.nearMiss.title) continue;
+                                reply += NL + '· The only ' + u.year + ' work by ' + u.surname + ' I can see is "' + String(u.nearMiss.title).slice(0, 80) + '"' + (u.nearMiss.about ? ' (' + u.nearMiss.about + ')' : '') + ' — a different subject, so it is not the one you mean.';
+                            }
                         }
                         if (v.weak && v.weak.length) {
                             reply += NL + NL + '⚠️ ' + v.weak.map(w => '**' + w.mention + '**').join(', ') + ' — there is work by that name and year, but not on this topic that I can see. Check the actual title before you use it.';
