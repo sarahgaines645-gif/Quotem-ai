@@ -200,10 +200,13 @@
     .setup-start:active { box-shadow: var(--neu-inset-sm); }
 
     /* ── The desk + paper ───────────────────────────────────────────────── */
-    .desk { max-width: 760px; margin: 0 auto; position: relative; }
+    /* Two things can ask the page to be narrower — Tidy, which wants the
+       gutters for cards, and the card rail, which needs a gutter deep enough to
+       stand in. The page takes whichever is smaller, so neither rule can undo
+       the other. */
+    .desk { max-width: min(760px, var(--tidy-desk, 760px), var(--rail-desk, 760px)); margin: 0 auto; position: relative; }
     /* Tidy mode narrows the writing only as far as it must to leave the two
        card columns a readable width — set by arrangeDesk(), never guessed. */
-    body.tidy .desk,
     body.tidy header { max-width: var(--tidy-desk, 760px); }
 
     /* ── THE WORKBENCH ─ everything that is NOT writing ───────────────
@@ -486,20 +489,21 @@
     .qdock {
       position: fixed; right: 0; bottom: 66px; z-index: 0;
       display: flex; flex-direction: column; align-items: stretch; gap: 8px;
-      /* Wide enough for the longest single word (WHITEBOARD) and no wider, so a
-         two-word name breaks over two lines instead of stretching the rail
-         (Sarah, 20 Aug: "make them bigger if you have to and put the words on
-         2 lines"). placeDock caps it if the gutter is thinner than this. */
-      width: 138px;
+      /* Exactly as wide as the LONGEST name, and no wider (Sarah, 20 Aug:
+         "theres too much space after the words on the tabs when the page is
+         big and when its small one goes on to two lines and the others stay on
+         one"). max-content sizes the rail to its widest child and stretch makes
+         every other one match it: one line each, one width, no dead space, and
+         never a ragged mix of one-line and two-line tabs. */
+      width: max-content;
       max-height: calc(100vh - 96px); overflow: visible;   /* never clip a pill: the raise IS the shadow, and a clipped shadow reads as a cut-off card */
       font-family: 'Space Grotesk', sans-serif;
     }
     .qdock.hidden { display: none; }
-    /* Tidy deals the cards into the two gutters — the same strip the rail tucks
-       into. Behind the page is the right look, but a pill you cannot reach is a
-       defect, so while the desk is tidied the rail comes back to the front. */
-    body.tidy .qdock, .qdock.at-edge { z-index: 130; }
-    .qdock.at-edge .qdock-pill { border-radius: 10px; padding-right: 13px; }
+    /* The rail is NEVER in front. It is a set of dividers behind the page, the
+       same as the tabs along the top — the page laps over their tails. Nothing
+       is allowed to bring them forward: instead the page is made narrow enough
+       that the rail always has a gutter to stand in (see placeDock). */
     /* THE CARDS' RAIL IS THE SAME SPECIES AS THE PAGE'S DIVIDERS (Sarah,
        20 Aug 2026: "can we do the same for the buttons for your brief,
        teaching cards... dont change the way they act I just wan the buttons to
@@ -510,7 +514,7 @@
        comes back, exactly as before. */
     .qdock-pill {
       display: flex; align-items: center; width: 100%; flex-shrink: 0;   /* a list of buttons is one width (Sarah, 20 Aug) */
-      padding: 10px 24px 10px 13px; border: none; border-radius: 10px 0 0 10px; cursor: pointer;
+      padding: 10px 19px 10px 13px; border: none; border-radius: 10px 0 0 10px; cursor: pointer;   /* the right padding is the bit the page covers */
       background: var(--bg); box-shadow: var(--neu-raised-sm);
       border-left: 4px solid var(--tc, #9aa0ad);
       font-family: 'Space Grotesk', sans-serif; text-align: left;
@@ -521,8 +525,8 @@
     .qdock-pill:active { box-shadow: var(--neu-inset-sm); transform: none; }   /* the only inset on the page: the moment under her finger */
     .qdock-name {
       font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em;
-      line-height: 1.25; color: var(--text); min-width: 0;
-      white-space: normal; overflow-wrap: anywhere;   /* black, bigger, and it wraps rather than being cut off */
+      line-height: 1.25; color: var(--text);
+      white-space: nowrap;   /* black, and always on ONE line — the rail is sized to fit it */
     }
     /* The one action on the rail — quiet, the way a secondary Q button is
        quiet: muted text, same species, never a colour. */
@@ -3725,32 +3729,30 @@
     // The rail's right edge sits just INSIDE the page's left edge, so the page
     // laps over its tail. Measured off the paper itself, so it stays true when
     // Tidy narrows the desk or the window changes.
-    const DOCK_TUCK = 14, DOCK_W = 138;
+    const DOCK_TUCK = 14;
+    // The rail stands in the gutter, behind the page. If the gutter is not deep
+    // enough to hold it, the PAGE gives way — exactly as it does for Tidy —
+    // rather than the rail hanging off the screen (which it did, at L-36 in a
+    // narrow window) or coming to the front on top of her writing.
     function placeDock() {
       if (!dockEl) return;
-      const paper = document.querySelector('.paper'); if (!paper) return;
-      const r = paper.getBoundingClientRect();
-      // Tucking needs a gutter deep enough to hold a readable rail. Sarah,
-      // 20 Aug 2026: "coming off the page" — the first version floored the
-      // width at 120px whatever the gutter was, so in a narrow window (her
-      // browser lives inside VS Code) the rail hung off the left of the screen
-      // at L-36. There is no width that is worth being unreachable.
-      const canTuck = r.left >= DOCK_W - DOCK_TUCK + 8;
-      dockEl.classList.toggle('at-edge', !canTuck);
-      if (canTuck) {
-        dockEl.style.left = 'auto';
-        dockEl.style.right = Math.round(window.innerWidth - r.left - DOCK_TUCK) + 'px';
-      } else {
-        // No gutter to hide in: stand at the edge, in front, where she can
-        // still reach every one of them.
-        dockEl.style.right = 'auto';
-        dockEl.style.left = '8px';
+      const root = document.documentElement;
+      if (dockEl.classList.contains('hidden') || !dockEl.children.length) {
+        root.style.setProperty('--rail-desk', '760px');   // nothing on the rail: the page gets its width back
+        return;
       }
+      const paper = document.querySelector('.paper'); if (!paper) return;
+      const vw = window.innerWidth;
+      const railW = dockEl.offsetWidth || 0;
+      const need = railW + 8 - DOCK_TUCK;                 // page-left the rail needs
+      root.style.setProperty('--rail-desk', Math.max(360, Math.min(760, vw - 2 * need)) + 'px');
+      const r = paper.getBoundingClientRect();            // read AFTER the width changed
+      dockEl.style.right = Math.max(0, Math.round(vw - r.left - DOCK_TUCK)) + 'px';
     }
     function renderDock() {
       if (!dockEl) return;
       const keys = isDocked() ? [] : stowedKeys();
-      if (!keys.length) { dockEl.innerHTML = ''; dockEl.classList.add('hidden'); return; }
+      if (!keys.length) { dockEl.innerHTML = ''; dockEl.classList.add('hidden'); placeDock(); return; }   // nothing on the rail: give the page its width back
       const frag = document.createDocumentFragment();
       keys.forEach(k => {
         const p = panels[k], name = panelTitle(p);
