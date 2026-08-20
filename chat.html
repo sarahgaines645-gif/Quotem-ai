@@ -3682,7 +3682,14 @@ if (launcherBtn && launcher) {
       }
       row.classList.toggle('expanded');
     });
-    row.querySelectorAll('[data-act]').forEach(el => {
+    // NB the tick box is deliberately EXCLUDED here. It is a [data-act] too, so
+    // it used to get this generic listener as well — and the first thing that
+    // does is stopPropagation(), which killed the click before it could reach
+    // the .task-head handler above that actually ticks the task off. There is no
+    // 'toggle' branch below either, so the box did nothing at all: you could
+    // click a finished task forever and it stayed open. Leave the tick to the
+    // handler that knows how to do it.
+    row.querySelectorAll('[data-act]:not([data-act="toggle"])').forEach(el => {
       const act = el.dataset.act;
       el.addEventListener('click', async (e) => {
         e.stopPropagation();
