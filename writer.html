@@ -9,7 +9,7 @@
   <title>Q — Writing Coach</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Lora:ital,wght@0,400;0,500;0,600;1,400&family=Caveat:wght@400;600&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Lora:ital,wght@0,400;0,500;0,600;1,400&family=Patrick+Hand&display=swap" rel="stylesheet">
   <script src="/marked.min.js"></script>
   <style>
     :root {
@@ -2700,9 +2700,8 @@
     .qpc .slot.gone { display: none; }
     .qpc .take {
       display: block; padding: 0; background: none; border: 0; cursor: pointer;
-      filter: drop-shadow(0 16px 20px rgba(0,0,0,0.34));
     }
-    .qpc .take:hover { filter: drop-shadow(0 20px 26px rgba(0,0,0,0.46)); }
+    .qpc .take:hover { transform: translateY(2px); }
     .qpc .take:focus-visible { outline: 2px solid var(--text); outline-offset: 6px; border-radius: 6px; }
 
     /* ── out on the desk ─────────────────────────────────────────────────── */
@@ -2784,16 +2783,17 @@
     .qpc .keys button.eq { grid-column: span 2; }
 
     /* ── the notepad — your own notes, in whatever colour the pencil is on ─ */
-    .qpc .pad { position: relative; width: 287px; padding-top: 24px; }
-    .qpc .pad-rings { position: absolute; top: 0; left: 0; right: 0; height: 34px; display: flex; justify-content: space-around; padding: 0 16px; z-index: 5; }
-    .qpc .pad-rings i { display: block; width: 9px; height: 30px; border-radius: 5px; background: linear-gradient(90deg, #8f9298, #d7dade 35%, #9ba0a6 70%, #7d8187); box-shadow: 0 2px 3px rgba(0,0,0,0.32); }
+    .qpc .pad { position: relative; width: 287px; padding-top: 34px; }
+    .qpc .pad-rings { position: absolute; top: 0; left: 0; right: 0; height: 44px; display: flex; justify-content: space-around; padding: 0 16px; z-index: 5; }
+    .qpc .pad-rings i { display: block; width: 11px; height: 40px; border-radius: 5px; background: linear-gradient(90deg, #6f747b 0 16%, #eef1f4 16% 40%, #b7bcc3 40% 68%, #767b82 68% 100%);
+      box-shadow: 0 2px 3px rgba(0,0,0,0.34), inset 0 0 0 0.5px rgba(0,0,0,0.35); }
     .qpc .pad-sheet {
       position: relative; background: var(--paper); border-radius: 2px 2px 6px 6px; padding: 24px 18px 14px;
       background-image: none;   /* the lines belong to the writing, not the sheet — see .pad-write */
       box-shadow: 0 12px 26px -16px rgba(80,70,40,0.85);
     }
-    .qpc .pad-sheet.under-1 { position: absolute; inset: 24px 4px -5px 4px; z-index: 0; background: var(--paper-back); }
-    .qpc .pad-sheet.under-2 { position: absolute; inset: 24px 9px -10px 9px; z-index: -1; background: #e2ddcd; }
+    .qpc .pad-sheet.under-1 { position: absolute; inset: 34px 4px -5px 4px; z-index: 0; background: var(--paper-back); }
+    .qpc .pad-sheet.under-2 { position: absolute; inset: 34px 9px -10px 9px; z-index: -1; background: #e2ddcd; }
     .qpc .pad-sheet.top { z-index: 2; }
     /* the pad is scaled down with everything else, so its writing has to be set
        bigger than it looks here to read at all: 18/30 lands at about 13/22 on
@@ -2801,8 +2801,8 @@
        must change the other, or the words come off the lines. */
     .qpc .pad-write {
       /* a note is handwritten. The UI keeps Space Grotesk; this is paper. */
-      font-family: 'Caveat', 'Bradley Hand', 'Segoe Script', cursive;
-      font-size: 26px; line-height: 30px;
+      font-family: 'Patrick Hand', 'Segoe Print', 'Comic Sans MS', cursive;
+      font-size: 21px; line-height: 30px;
       color: #1e1a14;                    /* the ink you START in — the pencil changes it from there on */
       min-height: 390px; outline: none; overflow-wrap: anywhere;
       /* THE WRITING SITS ON THE LINE. The rule is drawn at the foot of every
@@ -2810,14 +2810,19 @@
          descenders cross it — the way they do on real paper. The 30px here and
          the 30px below are the same number and must stay that way. */
       background-image: repeating-linear-gradient(180deg, transparent 0 29px, rgba(80,70,40,0.16) 29px 30px);
-      background-position: 0 -13px;   /* the rule lands just under the baseline, measured, not guessed */
+      background-position: 0 -12.6px;   /* baseline measured at 14.4 in the 30px line; the rule band is 29→30, so this lands it at 16.4 — 2px under the words */
     }
     .qpc .pad-write.is-empty::before {
       content: 'Your own notes. Nothing here goes near the essay.';
       color: rgba(80,70,40,0.42);
     }
-    /* the paper is somewhere to write, not a handle — the pad moves by its strip */
-    .qpc .pad { cursor: text; }
+    /* THE WHOLE PAD IS THE HANDLE except the bit you write on (Sarah, 20 Aug:
+       "still nearly impossible to find where you can pick it up"). The rings,
+       all four margins and the foot pick it up, and the cursor says so the
+       moment you are over them. */
+    .qpc .pad, .qpc .pad-sheet, .qpc .pad-rings, .qpc .pad-foot { cursor: grab; }
+    .qpc .out.dragging .pad, .qpc .out.dragging .pad-sheet { cursor: grabbing; }
+    .qpc .pad-write { cursor: text; }
     .qpc .pad-foot {
       display: flex; justify-content: space-between; align-items: center; margin-top: 8px;
       font-family: 'Space Grotesk', sans-serif; font-size: 9px; letter-spacing: 0.06em; color: rgba(80,70,40,0.55);
@@ -13424,9 +13429,10 @@
          is why typing on it felt like it half worked. */
       sheet.addEventListener('pointerdown', function (e) {
         if (e.target.closest('button, .pad-write')) { return; }
-        /* the head of the pad — the rings and the paper above the first line —
-           is a handle. Let it through and the pad picks up. */
-        if (e.clientY < write.getBoundingClientRect().top) { return; }
+        /* only a click that lands ON the writing area puts the caret in. The
+           margins, the head and the foot all fall through to the drag. */
+        var wr = write.getBoundingClientRect();
+        if (e.clientY < wr.top || e.clientY > wr.bottom || e.clientX < wr.left || e.clientX > wr.right) { return; }
         e.stopPropagation();
         e.preventDefault();
         write.focus();
