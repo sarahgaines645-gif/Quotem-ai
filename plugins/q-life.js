@@ -380,6 +380,12 @@ function addTask(payload, ownerEmail) {
         subtasks: normalSubtasks(payload?.subtasks),
         alertAt: normalAlertAt(payload?.alertAt),
         alertedAt: null,  // set by alert-scheduler.js when the push fires
+        // The words to chase with when alertAt passes — Q writes these at the
+        // time he makes the promise, because that is when he knows what the job
+        // actually was ("the Harrow Health email still hasn't gone"). Read by
+        // alert-scheduler → q-followup. Anything not listed in this object is
+        // dropped, which is exactly how the chase wording got lost the first time.
+        chase: payload?.chase ? String(payload.chase).trim().slice(0, 400) : null,
         contact: normalContact(payload?.contact),
         done: false,
         doneAt: null,
@@ -402,6 +408,8 @@ function updateTask(id, patch, ownerEmail) {
     if ('due' in patch)      next.due = patch.due === null ? null : (normalDate(patch.due) || cur.due);
     if ('priority' in patch && ['low', 'med', 'high'].includes(patch.priority)) next.priority = patch.priority;
     if ('notes' in patch)    next.notes = patch.notes ? String(patch.notes).trim() : null;
+    // The chase wording, so rescheduling a follow-up can also reword it.
+    if ('chase' in patch)    next.chase = patch.chase ? String(patch.chase).trim().slice(0, 400) : null;
     if ('color' in patch)    next.color = normalColor(patch.color);
     if ('category' in patch) {
         next.category = normalCategory(patch.category);

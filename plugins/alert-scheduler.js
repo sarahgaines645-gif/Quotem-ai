@@ -22,6 +22,7 @@ const fs = require('fs');
 const path = require('path');
 const { userDataPath } = require('./user-data');
 const { pushToUser } = require('./q-push');
+const { addChase } = require('./q-followup');
 
 // Tick interval. 60s is a sensible balance — alerts fire within a minute
 // of their scheduled time, but the I/O cost per tick is small (one read
@@ -94,6 +95,22 @@ async function checkUser(email) {
             sent++;
         } catch (e) {
             console.warn(`[alert-scheduler] push failed for ${email}/${t.id}:`, e.message);
+        }
+
+        // CLOSING THE LOOP (20 Aug 2026). A push pings her phone and then it is
+        // gone — if she was mid-something, that is the end of it and the task
+        // dies in the list. So queue a chase too: the next time she opens a chat,
+        // Q raises it himself instead of waiting to be asked. Deliberately
+        // OUTSIDE the push try/catch — a phone with notifications turned off, or
+        // a dead subscription, must not also cost her the chase.
+        try {
+            addChase(email, {
+                taskId: t.id,
+                title: t.title,
+                message: t.chase || '',
+            });
+        } catch (e) {
+            console.warn(`[alert-scheduler] could not queue chase for ${email}/${t.id}:`, e.message);
         }
     }
     writeTasks(email, tasks);

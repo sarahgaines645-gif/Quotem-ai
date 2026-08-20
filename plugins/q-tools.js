@@ -41,6 +41,8 @@ const qTravel = require('./q-travel');
 const qShop   = require('./q-shop');
 const qHome   = require('./q-home');
 const qNext   = require('./q-next');
+const qDesk   = require('./q-desk');
+const qFollow = require('./q-followup');
 
 // ─────────────────────────────────────────────────────────────
 //  TOOL DEFINITIONS — OpenAI function-calling schema
@@ -305,6 +307,93 @@ const TOOL_DEFINITIONS = [
                     heading: { type: 'integer', description: 'Compass direction the camera faces, 0-359 (0=N, 90=E, 180=S, 270=W). Optional — omit to let it auto-face the road.' },
                     pitch: { type: 'integer', description: 'Up/down angle -90..90. 0 = level (default). Use +10..20 to catch a high-mounted sign.' },
                 },
+            },
+        },
+    },
+    {
+        type: 'function',
+        function: {
+            name: 'schedule_followup',
+            description: 'Promise to CHASE something — set the moment you will come back to it and the words you will chase with. This is the tool that turns a saved task into something that actually gets done: when the moment passes, they get a notification AND you are told about it at the top of your next conversation, so you raise it yourself instead of waiting to be asked. Use it whenever something is left hanging on someone else or on them ("I\'ll ring them tomorrow", "waiting to hear back", "remind me if they haven\'t replied by Friday"), and whenever you draft something that still needs sending. Give a real date and time — never guess one, ask. Tell them plainly that if it is not done by then you WILL bring it up; that promise is the whole point.',
+            parameters: {
+                type: 'object',
+                properties: {
+                    task_id: { type: 'string', description: 'The id of an existing task to attach the chase to, if you know it (from list_tasks or add_task).' },
+                    what:    { type: 'string', description: 'What is being chased, in their words — e.g. "send the Harrow Health email". Used to find an existing task, or to create one if there is none.' },
+                    when:    { type: 'string', description: 'When to chase — ISO datetime, e.g. "2026-08-22T09:00:00". Required. Never invent this; if they have not said, ask.' },
+                    chase:   { type: 'string', description: 'The words to chase with, written to them — e.g. "the Harrow Health email still hasn\'t gone, want me to send it now?". Optional but much better with it.' },
+                },
+                required: ['when'],
+            },
+        },
+    },
+    {
+        type: 'function',
+        function: {
+            name: 'check_drafts',
+            description: 'Find out which emails you have written that are STILL SITTING UNSENT in their outbox. Anything in there has not gone — sending removes it. Use this when they ask whether something was sent, when you are about to write another email to the same people, when picking up an old thread, and whenever you are working out what is outstanding. This is one of the few ways you can find out that your own work did not land, so use it rather than assuming a draft you wrote went out. You cannot send anything yourself without them saying so.',
+            parameters: {
+                type: 'object',
+                properties: {
+                    older_than_days: { type: 'integer', description: 'Only show drafts waiting at least this many days. Optional — omit for all of them.' },
+                },
+            },
+        },
+    },
+    {
+        type: 'function',
+        function: {
+            name: 'find_contact',
+            description: 'Find a REAL email address for a person or an organisation, from their own past drafts, their saved case files and their recent inbox. Use it before writing to anyone whose address you do not already have in front of you — especially when they say something like "contact the person who deals with my X", where you know the organisation but not the human. Every address that comes back was genuinely found somewhere and the result says where. NEVER invent an address, never guess a pattern like firstname.lastname@, and never quietly send to a general enquiries inbox as though it were the right person. If nothing is found, say so and ask them who it should go to.',
+            parameters: {
+                type: 'object',
+                properties: {
+                    who: { type: 'string', description: 'The person, practice, company or organisation — e.g. "Harrow Health", "the surveyor", "Barclays".' },
+                },
+                required: ['who'],
+            },
+        },
+    },
+    {
+        type: 'function',
+        function: {
+            name: 'read_page_history',
+            description: 'Read back what was actually said on one of their OTHER pages — the writer, life, finance, the email writer, the main chat. You are given a short digest of other pages automatically, but it is truncated; use this when you need the real detail, when they refer to something you can only half see, or when they say "like I said on the other page". Refer to that conversation, do not carry it on here. Quote only what is really in the result.',
+            parameters: {
+                type: 'object',
+                properties: {
+                    page:  { type: 'string', description: 'Which page: "chat", "writer", "life", "finance", "email", "thread".' },
+                    limit: { type: 'integer', description: 'How many recent messages (1-60). Default 20.', minimum: 1, maximum: 60 },
+                },
+                required: ['page'],
+            },
+        },
+    },
+    {
+        type: 'function',
+        function: {
+            name: 'bulk_add_tasks',
+            description: 'Save SEVERAL tasks at once, when they have brain-dumped a list in one go ("I need to ring the school, book the MOT, chase that invoice and get milk"). One call instead of one per task. Only save what they actually named — never pad the list out with things you think they ought to do. If just one thing was named, use add_task instead.',
+            parameters: {
+                type: 'object',
+                properties: {
+                    tasks: {
+                        type: 'array',
+                        description: 'The tasks, in the order they said them.',
+                        items: {
+                            type: 'object',
+                            properties: {
+                                title:    { type: 'string', description: 'Short imperative title — "Ring the school".' },
+                                due:      { type: 'string', description: 'Due date YYYY-MM-DD, optional.' },
+                                priority: { type: 'string', enum: ['low', 'med', 'high'], description: 'Optional. Default med.' },
+                                category: { type: 'string', description: 'Category slug, optional.' },
+                                notes:    { type: 'string', description: 'Extra detail, optional.' },
+                            },
+                            required: ['title'],
+                        },
+                    },
+                },
+                required: ['tasks'],
             },
         },
     },
@@ -1022,11 +1111,12 @@ const TOOL_DEFINITIONS = [
         type: 'function',
         function: {
             name: 'list_tasks',
-            description: 'List the user\'s tasks. Optionally filter by status (open or done). Default returns open tasks.',
+            description: 'List the user\'s tasks. Every task comes back with whether it is OVERDUE and by how many days, plus due today / due tomorrow. Lead with the overdue ones — that is the thing they cannot see for themselves. Use filter:"overdue" when they ask what is late or what they have let slip, and filter:"today" for what needs doing today. Do not read the whole list out unless they asked for the whole list; if they sound stuck or overwhelmed, use get_next_action instead and give them one thing.',
             parameters: {
                 type: 'object',
                 properties: {
                     status: { type: 'string', enum: ['open', 'done'], description: 'Filter. Default open.' },
+                    filter: { type: 'string', enum: ['overdue', 'today'], description: '"overdue" = only what is past its due date. "today" = due today plus anything already late. Omit for everything open.' },
                 },
             },
         },
@@ -1912,6 +2002,11 @@ async function executeTool(name, argsRaw, personId, personEmail, threadId) {
         case 'web_search':       return await webSearch(args);
         case 'shop_search':      return await qShop.searchShop(args, personEmail);
         case 'get_next_action':  return await qNext.nextAction(args, personEmail);
+        case 'schedule_followup': return qFollow.scheduleFollowup(args, personEmail);
+        case 'check_drafts':     return qDesk.checkDrafts(args, personEmail);
+        case 'find_contact':     return await qDesk.findContact(args, personEmail);
+        case 'read_page_history': return qDesk.readPageHistory(args, personId);
+        case 'bulk_add_tasks':   return bulkAddTasksTool(args, personEmail);
         case 'home_status':      return await qHome.homeStatus(args);
         case 'home_control':     return await qHome.homeControl(args);
         case 'search_images':    return await searchImages(args);
@@ -2590,15 +2685,70 @@ function addTaskTool({ title, due, priority, notes, category, subtasks, alertAt,
     } catch (e) { return { error: e.message }; }
 }
 
-function listTasksTool({ status } = {}, personEmail) {
+function listTasksTool({ status, filter } = {}, personEmail) {
     if (!personEmail) return { error: 'Cannot list tasks without a signed-in user.' };
     const tasks = qLife.listTasks(personEmail, { status: status || 'open' });
+
+    // OVERDUE (20 Aug 2026 — Q's gap #2). The due dates were always stored and
+    // always returned, but nothing ever worked out what they MEANT, so Q had no
+    // concept of "late" and couldn't lead with it. Compared in her local day,
+    // not UTC: "due today" has to mean today to a person, not to a server.
+    const today = (() => {
+        try {
+            return new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/London', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
+        } catch (_) { return new Date().toISOString().slice(0, 10); }
+    })();
+    const dayDiff = (due) => Math.round((new Date(due + 'T00:00:00Z') - new Date(today + 'T00:00:00Z')) / 86400000);
+
+    let rows = tasks.map(t => {
+        const delta = t.due ? dayDiff(t.due) : null;
+        return {
+            ...t,
+            overdue: delta != null && delta < 0 && !t.done,
+            days_overdue: delta != null && delta < 0 ? Math.abs(delta) : 0,
+            due_today: delta === 0,
+            due_tomorrow: delta === 1,
+        };
+    });
+
+    const want = String(filter || '').toLowerCase();
+    if (want === 'overdue') rows = rows.filter(r => r.overdue);
+    else if (want === 'today') rows = rows.filter(r => r.due_today || r.overdue);
+
+    const overdueCount = rows.filter(r => r.overdue).length;
+
     return {
-        count: tasks.length,
-        tasks,
-        instruction_for_q: tasks.length === 0
-            ? 'No open tasks. Say so plainly.'
-            : 'Summarise the open tasks. Lead with anything overdue or due soon.',
+        count: rows.length,
+        overdue_count: overdueCount,
+        tasks: rows,
+        instruction_for_q: rows.length === 0
+            ? (want ? `Nothing matches "${want}". Say so plainly — do not list the others unless asked.` : 'No open tasks. Say so plainly.')
+            : (overdueCount > 0
+                ? `${overdueCount} of these are OVERDUE — days_overdue says by how long. Lead with the worst one and say how late it is. Do not read the whole list out unless they asked for the whole list.`
+                : 'Summarise the open tasks. Lead with anything due today or tomorrow.'),
+    };
+}
+
+function bulkAddTasksTool({ tasks } = {}, personEmail) {
+    if (!personEmail) return { error: 'Cannot add tasks without a signed-in user.' };
+    if (!Array.isArray(tasks) || !tasks.length) {
+        return { error: 'tasks (array) is required', instruction_for_q: 'Nothing was saved. Ask them to say the list again.' };
+    }
+    // Cap it: a brain-dump is a handful of things. A hundred means something has
+    // gone wrong upstream, and silently writing them all would be worse.
+    const wanted = tasks.slice(0, 25);
+    const { tasks: added } = qLife.addBatch({ tasks: wanted }, personEmail);
+
+    return {
+        ok: true,
+        added: added.map(t => ({ id: t.id, title: t.title, due: t.due || null })),
+        count: added.length,
+        failed: wanted.length - added.length,
+        instruction_for_q:
+            `${added.length} task(s) saved to their list. Confirm in ONE line — say how many and name at most two. `
+            + 'Do not read the whole list back at them; they just said it. '
+            + (wanted.length - added.length > 0 ? 'Some did NOT save — say plainly which count failed. ' : '')
+            + 'If any of them is waiting on someone else, offer to set a chase with schedule_followup.',
     };
 }
 
@@ -2607,6 +2757,9 @@ function completeTaskTool({ id } = {}, personEmail) {
     if (!id) return { error: 'id is required (use list_tasks first)' };
     const updated = qLife.updateTask(id, { done: true }, personEmail);
     if (!updated) return { error: 'Task not found: ' + id };
+    // Done means done — drop any chase still queued for it, so Q can never
+    // come back later nagging about something she has already finished.
+    try { require('./q-followup').clearChaseForTask(personEmail, id); } catch (_) {}
     return {
         ok: true,
         task: updated,
@@ -2758,6 +2911,48 @@ const ADVOCATE_TOOLS = new Set([
 ]);
 
 const TRIGGERS = {
+    // Chasing. Anything left hanging on someone else, and every "remind me if".
+    schedule_followup: [
+        /\b(chase|follow ?up|nudge|come back to)\b/i,
+        /\bremind me (if|when|to)\b/i,
+        /\b(waiting|wait) (to hear|on|for)\b/i,
+        /\b(if|unless) (they|he|she|it|i) (haven'?t|hasn'?t|don'?t|doesn'?t|isn'?t)\b/i,
+        /\b(by|before) (friday|monday|tuesday|wednesday|thursday|saturday|sunday|tomorrow|next week|the end of)\b/i,
+        /\bhaven'?t heard\b/i,
+    ],
+    // "Did that email ever go?"
+    check_drafts: [
+        /\b(draft|drafts|outbox)\b/i,
+        // "did that email ever go", "has the Harrow Health email gone yet",
+        // "was the letter sent" — the thing and the verb can be a long way apart.
+        /\b(did|has|have|was|were|is)\b[^.?!]{0,50}\b(email|e-?mail|draft|letter|reply|message)\b[^.?!]{0,25}\b(send|sent|gone|go|went|out)\b/i,
+        /\b(did|has|have) (i|it|that|we)\b[^.?!]{0,30}\b(send|sent|gone|go|went)\b/i,
+        /\bstill (sitting|waiting|unsent|not sent)\b/i,
+        /\b(unsent|not sent|never sent)\b/i,
+        /\bwhat'?s (outstanding|still to do|hanging)\b/i,
+    ],
+    // "Who do I actually write to?"
+    find_contact: [
+        /\b(contact|email|write to|get hold of|reach|ring)\b[^.?!]{0,40}\b(the |my |about|who|person|people|team|practice|surgery|office|department)\b/i,
+        /\bwho (deals with|handles|looks after|do i (contact|email|ring|speak to))\b/i,
+        /\b(their|his|her|the) (email address|address|number|details)\b/i,
+        /\bdo (i|we) have (an? )?(email|address|number) for\b/i,
+    ],
+    // "Like I said on the other page."
+    read_page_history: [
+        /\b(other|another|the) (page|chat|conversation|tab)\b/i,
+        /\b(as|like) i (said|told you|mentioned)\b/i,
+        /\bwe (talked|spoke) about\b[^.?!]{0,30}\b(earlier|before|yesterday|on the)\b/i,
+        /\b(writer|life|finance|email writer) page\b/i,
+    ],
+    // A brain-dump of several things at once.
+    bulk_add_tasks: [
+        /\b(add|put|stick|chuck|save)\b[^.?!]{0,30}\b(these|those|all of (this|these|that)|the following|a few things|list)\b/i,
+        // Two or more separators = a list, not one job. NB a comma has no word
+        // boundary after it, so `\b,\b` never matches — match the comma bare.
+        /\b(i need to|i'?ve got to|i have to|need to)\b[^.?!]*(,|\band\b)[^.?!]*(,|\band\b)/i,
+        /\b(jobs|things|stuff) (to do|for today|this week)\b/i,
+    ],
     // "What do I do now?" — asked plainly, or asked sideways by someone who is
     // swamped. The sideways phrasings matter more than the plain ones.
     get_next_action: [

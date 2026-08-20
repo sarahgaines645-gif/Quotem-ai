@@ -743,9 +743,15 @@ function buildSystemMessage(mode, personId, surface, personName) {
 // Gemini is a true multimodal model and reliable; the Together vision model
 // (Kimi) was timing out and making Q say he "has no vision". Mirrors the
 // proven call in q-finance.js. Returns the answer text, or '' on miss.
-async function geminiVisionChat(prompt, base64, mimeType) {
+/**
+ * @param {string} prompt
+ * @param {Array<{mime:string,data:string}>} parts - every attached image, in order
+ */
+async function geminiVisionChat(prompt, parts) {
     const key = process.env.GEMINI_API_KEY;
     if (!key) return '';
+    const images = Array.isArray(parts) ? parts : [];
+    if (!images.length) return '';
     const ctrl = new AbortController();
     const timer = setTimeout(() => ctrl.abort(), 60_000);
     const started = Date.now();
@@ -756,7 +762,7 @@ async function geminiVisionChat(prompt, base64, mimeType) {
             body: JSON.stringify({
                 contents: [{ parts: [
                     { text: prompt },
-                    { inline_data: { mime_type: mimeType, data: base64 } },
+                    ...images.map(p => ({ inline_data: { mime_type: p.mime, data: p.data } })),
                 ] }],
                 generationConfig: { temperature: 0.4, maxOutputTokens: 2000 },
             }),
@@ -1149,9 +1155,20 @@ async function chat(messages, options = {}) {
             const userText = (typeof last?.content === 'string' && last.content.trim())
                 ? last.content
                 : 'What can you tell me about this image?';
-            const dm = /^data:([^;]+);base64,(.*)$/.exec(images[0].dataUrl || '');
-            if (dm) {
-                const answer = await geminiVisionChat(`${systemContent}\n\nUser: ${userText}`, dm[2], dm[1]);
+            // ALL of them, not just the first (20 Aug 2026 — Q's gap #3).
+            // This used to read images[0] only, so attaching three pages of a
+            // scanned document meant Q silently answered from page one and never
+            // said the other two existed. Anything that won't parse is dropped
+            // rather than sent as a broken part.
+            const parts = images
+                .map(img => /^data:([^;]+);base64,(.*)$/.exec(img.dataUrl || ''))
+                .filter(Boolean)
+                .map(m => ({ mime: m[1], data: m[2] }));
+            if (parts.length) {
+                const multi = parts.length > 1
+                    ? `\n\n[${parts.length} images are attached, in order. Look at EVERY one of them and answer across all of them — never answer from the first alone, and say if they disagree.]`
+                    : '';
+                const answer = await geminiVisionChat(`${systemContent}${multi}\n\nUser: ${userText}`, parts);
                 if (answer && answer.trim()) {
                     return {
                         reply: cleanModelOutput(answer, 'chat-vision'),

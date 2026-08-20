@@ -3363,9 +3363,22 @@ router.post('/chat', requirePerson, express.json({ limit: '24mb' }),
             }).join('\n\n');
             crossRef = `\n\n--- YOUR OTHER CONVERSATIONS (read-only reference — don't continue these threads here, but you can mention them if relevant) ---\n${lines}\n--- END REFERENCE ---`;
         }
+        // FOLLOW-THROUGH (20 Aug 2026). Anything whose chase-time has passed
+        // gets put in front of Q here, so he raises it himself at the top of his
+        // reply instead of waiting to be asked. Reading them counts as raising
+        // them — see q-followup.js — which is what stops the same unsent email
+        // being brought up forever. Never let this break a chat: if the chase
+        // store is unreadable, Q simply carries on without it.
+        let chaseBlock = '';
+        try {
+            chaseBlock = require('./plugins/q-followup').chaseContextBlock(person.email);
+        } catch (e) {
+            console.warn('[chat] chase block unavailable: ' + e.message);
+        }
+
         history.unshift({
             role: 'system',
-            content: `It is now ${nowStr} (UTC). You're talking to ${person.name}. The history below shows previous turns between you two with their timestamps — note any gaps between sessions and respond as someone who has had time pass, not as if every turn just happened.${crossRef}`,
+            content: `It is now ${nowStr} (UTC). You're talking to ${person.name}. The history below shows previous turns between you two with their timestamps — note any gaps between sessions and respond as someone who has had time pass, not as if every turn just happened.${crossRef}${chaseBlock}`,
         });
         const userMemoryContent = images.length > 0
             ? newMessage + `\n[${person.name} attached ${images.length} image${images.length > 1 ? 's' : ''}]`
