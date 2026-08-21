@@ -487,7 +487,7 @@ section.board { margin-top: 34px; }
         <div class="lm-row hide" id="lm-row">
             <input class="lm-url" id="lm-url" readonly />
             <button class="btn" id="lm-copy" type="button">Copy</button>
-            <input class="lm-url" id="lm-to" placeholder="their email address" />
+            <input class="lm-url" id="lm-to" placeholder="their email addresses, separated by commas" />
             <button class="btn" id="lm-send" type="button">Email it</button>
             <span class="lm-note" id="lm-note"></span>
         </div>
@@ -970,7 +970,7 @@ document.addEventListener('click', e => {
     if (e.target.closest('#lm-send')) {
         const token = $('lm-row').dataset.token;
         const to = $('lm-to').value.trim();
-        if (!token) return;
+        if (!token) { $('lm-note').textContent = 'Make the link first.'; return; }
         if (!to) { $('lm-note').textContent = 'Who to?'; return; }
         $('lm-note').textContent = 'Sending…';
         fetch('/api/linkmail/mine/' + token + '/send', {
@@ -979,7 +979,11 @@ document.addEventListener('click', e => {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ to: to }),
         }).then(r => r.json().then(j => ({ ok: r.ok, j })))
-          .then(({ ok, j }) => { $('lm-note').textContent = ok ? ('Sent to ' + to) : (j.message || 'That did not send.'); })
+          .then(({ ok, j }) => {
+              $('lm-note').textContent = ok
+                  ? 'Sent to ' + (j.to || []).join(', ') + (j.message ? ' — ' + j.message : '')
+                  : (j.message || 'That did not send.');
+          })
           .catch(() => { $('lm-note').textContent = 'That did not send.'; });
         return;
     }
@@ -1287,6 +1291,11 @@ document.addEventListener('click', async (e) => {
             const j = await res.json();
             if (!j.ok) { say(j.message || 'That could not be sent.'); return; }
             $('lm-url').value = j.fullUrl;
+            // "Email it" reads the token off the ROW, not the box. Without this
+            // line it hit `if (!token) return` and did nothing at all — no
+            // error, no mail, nothing. Two sessions sharing one row.
+            $('lm-row').dataset.token = j.token;
+            $('lm-note').textContent = '';
             $('lm-row').classList.remove('hide');
             $('lm-row').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
             loadBoard();

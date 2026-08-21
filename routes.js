@@ -1009,10 +1009,28 @@ router.post('/api/linkmail/mine/:token/send', requirePerson, express.json({ limi
     try {
         const rec = qLinkmail.readLink(req.person.email, req.params.token);
         if (!rec) return res.status(404).json({ error: 'not_found' });
+        // ONE LINK, EVERYONE ON IT. This used to validate only the FIRST
+        // address and hand the whole raw string to the mailer — so "mum@x.com,
+        // deana@y,com" reported success and the second person never heard
+        // about the holiday. Every address is checked, and a bad one is named
+        // rather than swallowed.
         const raw = String((req.body && req.body.to) || '').trim();
-        const first = raw.split(',')[0].trim();
-        if (!first || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(first)) {
-            return res.status(400).json({ error: 'bad_address', message: 'That does not look like an email address.' });
+        const addresses = raw.split(/[,;]/).map(a => a.trim()).filter(Boolean);
+        const RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
+        const bad = addresses.filter(a => !RE.test(a));
+        if (!addresses.length) {
+            return res.status(400).json({ error: 'bad_address', message: 'Who should it go to?' });
+        }
+        if (bad.length) {
+            return res.status(400).json({
+                error: 'bad_address',
+                message: bad.length === 1
+                    ? `"${bad[0]}" does not look like an email address — nothing was sent.`
+                    : `These do not look like email addresses — nothing was sent: ${bad.join(', ')}`,
+            });
+        }
+        if (addresses.length > 20) {
+            return res.status(400).json({ error: 'too_many', message: 'That is more than 20 people. Send it in two goes.' });
         }
         if (!mailerConfigured()) {
             return res.status(503).json({ error: 'mailer_off', message: 'Email is not set up on this deployment — copy the link and send it yourself.' });
@@ -1021,15 +1039,37 @@ router.post('/api/linkmail/mine/:token/send', requirePerson, express.json({ limi
         const subject = String((req.body && req.body.subject) || '').trim()
             || `${rec.senderName} shared "${rec.display.title}" with you`;
         const note = String((req.body && req.body.note) || '').trim() || rec.greeting;
-        await sendMail({
-            to: raw,
+        // ONE MAIL EACH, not one mail addressed to everybody. Handing the
+        // array straight to the mailer puts every address in the same To:
+        // header, so one relative would get another's email address along
+        // with the holiday. This is family, not a mailing list.
+        const mail = {
             subject,
             text: `${note}\n\n${url}\n\nNo sign-in needed — the link is the key.`,
             html: `<p>${linkmailEscapeHtml(note)}</p>`
                 + `<p><a href="${url}">${linkmailEscapeHtml(rec.display.title || 'Open it here')}</a></p>`
-                + `<p style="color:#666;font-size:13px">No sign-in needed — the link is the key.</p>`,
+                + `<p style="color:#666;font-size:13px">No sign-in needed &mdash; the link is the key.</p>`,
+        };
+        const sent = [], failed = [];
+        for (const address of addresses) {
+            try { await sendMail({ to: address, ...mail }); sent.push(address); }
+            catch (err) {
+                console.error('[linkmail] send to ' + address + ' failed:', err.message);
+                failed.push(address);
+            }
+        }
+        // Say what actually happened. Reporting "sent" when two of three
+        // bounced is the kind of small lie that loses somebody their place.
+        if (!sent.length) {
+            return res.status(502).json({
+                error: 'send_failed', to: [], failed,
+                message: 'None of those sent. Copy the link and send it yourself.',
+            });
+        }
+        res.json({
+            ok: true, to: sent, failed, url,
+            message: failed.length ? ('Could not send to ' + failed.join(', ') + '.') : '',
         });
-        res.json({ ok: true, to: raw, url });
     } catch (e) {
         console.error('[linkmail] send failed:', e.message);
         res.status(500).json({ error: 'send_failed', message: e.message });
