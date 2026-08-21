@@ -18,6 +18,7 @@
 <!-- CustomSelect — drop-in replacement for native <select>. Native option
      list can't be CSS-styled; this gives full neumorphic control. -->
 <script src="/cs.js"></script>
+<script src="/q-options.js"></script>
 <style>
   :root {
     --bg: #f3f3f3;
@@ -2372,7 +2373,22 @@ coachInput.addEventListener('keydown', async (e) => {
     });
     const data = await r.json();
     thinking.className = '';
-    thinking.textContent = data.reply || data.error || 'Something went wrong.';
+    // Q ends some replies with an [OPTIONS] block meant to become tap-to-answer
+    // buttons. This page never knew how to read them, so the raw square brackets
+    // landed on screen as words. q-options.js strips them and builds the pills.
+    const parsed = window.QOptions
+      ? window.QOptions.parse(data.reply || data.error || 'Something went wrong.')
+      : { stripped: data.reply || data.error || 'Something went wrong.', options: [] };
+    thinking.textContent = parsed.stripped;
+    if (window.QOptions && parsed.options.length) {
+      window.QOptions.styles();
+      window.QOptions.render(thinking, parsed.options, (answer) => {
+        // The input has no form — it sends on Enter. So put the answer in and
+        // press Enter for her, which reuses the one code path that already works.
+        coachInput.value = answer;
+        coachInput.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+      });
+    }
   } catch {
     thinking.className = '';
     thinking.textContent = 'Could not reach Q.';

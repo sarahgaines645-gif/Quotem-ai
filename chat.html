@@ -1225,17 +1225,28 @@
   .cat-row {
     display: flex; gap: 5px; flex-wrap: wrap;
   }
+  /* Category pills — the folders across the top of the list. Built to match the
+     trade pills on the Quotem dashboard (Sarah, 21 Aug): a proper tappable size
+     with the category's colour as a bar along the top, its icon beside the name,
+     and the whole thing raised. The old ones were 10px text in a 4px box — too
+     small to read and too small to hit on a phone. */
   .cat-pill {
     background: var(--bg);
     border: none; cursor: pointer;
-    padding: 4px 9px 5px; border-radius: 10px;
-    font-size: 10px; font-weight: 800;
+    padding: 8px 14px 9px;
+    border-radius: 14px;
+    font-size: 12.5px; font-weight: 700;
     color: var(--text);
     box-shadow: var(--neu-raised-sm);
-    border-top: 2px solid var(--accent);
+    border-top: 3px solid var(--accent);
     font-family: inherit;
-    letter-spacing: 0.02em;
+    letter-spacing: 0.01em;
+    display: inline-flex; align-items: center; gap: 7px;
+    white-space: nowrap;
+    transition: box-shadow 0.15s ease, color 0.15s ease;
   }
+  .cat-pill .ci { font-size: 13px; line-height: 1; }
+  .cat-pill:hover { color: var(--accent); }
   .cat-pill.on { box-shadow: var(--neu-inset-xs); color: var(--accent); }
   .cat-pill.add {
     color: var(--text-muted);
@@ -3286,7 +3297,6 @@ if (launcherBtn && launcher) {
       <div class="tc-stat" style="border-top-color:#e91e63;"><div class="v" id="stat-open">0</div><div class="l">Open</div></div>
       <div class="tc-stat" style="border-top-color:#f39c12;"><div class="v" id="stat-due">0</div><div class="l">Due 7d</div></div>
       <div class="tc-stat" style="border-top-color:#2ecc71;"><div class="v" id="stat-done">0</div><div class="l">Done</div></div>
-      <div class="tc-stat" style="border-top-color:#a78bfa;"><div class="v" id="stat-cats">0</div><div class="l">Cats</div></div>
     </div>
 
     <!-- View tabs — switch between Tasks list and Calendar without
@@ -3533,27 +3543,50 @@ if (launcherBtn && launcher) {
     $('stat-open').textContent = open;
     $('stat-due').textContent  = due;
     $('stat-done').textContent = done;
-    $('stat-cats').textContent = state.categories.length;
-    $('stat-open').style.color = '#e91e63';
-    $('stat-due').style.color  = '#f39c12';
-    $('stat-done').style.color = '#2ecc71';
-    $('stat-cats').style.color = '#a78bfa';
+    // The NUMBERS stay black (Sarah, 21 Aug). The colour belongs to the little
+    // bar on top of each stat — a coloured figure competes with it and makes
+    // three shouty numbers where the eye only wants to read one.
+    $('stat-open').style.color = 'var(--text)';
+    $('stat-due').style.color  = 'var(--text)';
+    $('stat-done').style.color = 'var(--text)';
   }
 
   // ── Categories ───────────────────────────────────────────────────────
+  // An icon for a category, so the pills read at a glance the way the trade
+  // pills do on the dashboard. Matched on the words people actually use, with a
+  // neutral marker for anything invented — never a wrong icon, which is worse
+  // than none. Categories are user-made, so this can only ever be a good guess.
+  const CAT_ICONS = [
+    [/work|job|trade|site|business/i, '🧰'],
+    [/kid|child|school|nursery|baby/i, '🎒'],
+    [/home|house|diy|garden|repair/i, '🏠'],
+    [/health|doctor|medical|gp|dentist|meds?|appointment/i, '🩺'],
+    [/money|bill|finance|bank|rent|pay|invoice|tax/i, '💷'],
+    [/car|mot|vehicle|van|fuel/i, '🚗'],
+    [/food|shop|grocer|tesco|asda/i, '🛒'],
+    [/pet|dog|cat\b|vet/i, '🐾'],
+    [/admin|paperwork|form|letter|council/i, '📄'],
+    [/travel|holiday|trip|flight/i, '✈️'],
+  ];
+  function catIcon(c) {
+    const hay = ((c && c.name) || '') + ' ' + ((c && c.slug) || '');
+    for (const [re, icon] of CAT_ICONS) if (re.test(hay)) return icon;
+    return '•';
+  }
+
   function renderCategories() {
     const row = $('cat-row');
     row.innerHTML = '';
     const all = document.createElement('button');
     all.className = 'cat-pill' + (state.activeCat === 'all' ? ' on' : '');
-    all.textContent = 'All';
+    all.innerHTML = '<span class="ci">◍</span><span>All</span>';
     all.style.borderTopColor = PINK;
     all.onclick = () => { state.activeCat = 'all'; renderCategories(); renderTasks(); };
     row.appendChild(all);
     state.categories.forEach(c => {
       const p = document.createElement('button');
       p.className = 'cat-pill' + (state.activeCat === c.slug ? ' on' : '');
-      p.textContent = c.name;
+      p.innerHTML = '<span class="ci">' + catIcon(c) + '</span><span>' + escapeHtml(c.name) + '</span>';
       p.style.borderTopColor = c.color || PINK;
       p.onclick = () => { state.activeCat = c.slug; renderCategories(); renderTasks(); };
       row.appendChild(p);
