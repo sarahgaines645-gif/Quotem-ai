@@ -3379,10 +3379,11 @@ if (launcherBtn && launcher) {
 
     <!-- Tasks view: sub-headers + tasks list -->
     <div class="tc-view" id="view-tasks">
-      <!-- Categories. No "Sub-headers" heading above them (Sarah, 21 Aug):
-           a row of labelled folder pills does not need a label telling you it
-           is a row of folders, and the line it used cost a row of pills. -->
+      <!-- Sub-headers (categories). The heading stays — it names one of the two
+           sections in this panel, the way "Tasks" names the other. It is a
+           signpost, not an instruction. -->
       <div>
+        <div class="td-section-title">Sub-headers</div>
         <div class="cat-row" id="cat-row"></div>
       </div>
 
@@ -3665,6 +3666,45 @@ if (launcherBtn && launcher) {
           };
           picker.appendChild(sw);
         });
+
+        // Delete the sub-header itself, from the same menu the colours are in
+        // (Sarah, 21 Aug). Making one was easy and unmaking one was impossible,
+        // so a folder created by mistake was permanent.
+        const del = document.createElement('button');
+        del.type = 'button';
+        del.textContent = 'Delete “' + cat.name + '”';
+        del.style.cssText = 'flex:1 0 100%;margin-top:8px;padding:7px 10px;border:none;border-radius:8px;'
+          + 'background:var(--bg);box-shadow:var(--neu-raised-sm);color:var(--text);font-family:inherit;'
+          + 'font-size:11.5px;font-weight:700;cursor:pointer;text-align:left;';
+        del.onclick = async () => {
+          const inIt = state.tasks.filter(t => t.category === cat.slug);
+          const warn = inIt.length
+            ? `Delete the “${cat.name}” sub-header?\n\n${inIt.length} task${inIt.length === 1 ? '' : 's'} in it will be kept and simply lose their sub-header.`
+            : `Delete the “${cat.name}” sub-header?`;
+          if (!confirm(warn)) return;
+          del.disabled = true;
+          try {
+            // The tasks come FIRST. Deleting the category alone leaves them
+            // pointing at a sub-header that no longer exists, so they vanish
+            // from every filtered view while still being on the list — there,
+            // but unreachable. Losing a folder must never cost her the work.
+            for (const t of inIt) {
+              await api('/life/tasks/' + t.id, { method: 'PATCH', body: JSON.stringify({ category: '' }) });
+              t.category = '';
+            }
+            await api('/life/categories/' + cat.slug, { method: 'DELETE' });
+            state.categories = state.categories.filter(c => c.slug !== cat.slug);
+            if (state.activeCat === cat.slug) state.activeCat = 'all';
+          } catch (err) {
+            alert('Could not delete that sub-header. Nothing has been changed.');
+            del.disabled = false;
+            return;
+          }
+          picker.remove();
+          renderCategories(); renderTasks(); renderStats(); fillCategorySelect();
+        };
+        picker.appendChild(del);
+
         document.body.appendChild(picker);
         setTimeout(() => {
           const close = (ev) => { if (!picker.contains(ev.target)) { picker.remove(); document.removeEventListener('click', close); } };
