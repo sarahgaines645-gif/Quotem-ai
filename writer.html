@@ -281,7 +281,8 @@
     .workbench .source-slot { margin: 0; min-width: 0; }
     /* Say what you have to do. She types into the box, so the box is INSET;
        the button is a button, so it is raised. */
-    .task-ask { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; width: 100%; margin-top: 8px; }
+    .task-ask { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; width: 100%; }
+    .srcdrop-menu .task-ask-in { flex: 1 1 100%; }
     .task-ask-in {
       flex: 1 1 260px; min-width: 0; height: 32px; padding: 0 14px;
       font-family: 'Space Grotesk', sans-serif; font-size: 12px; color: var(--text);
@@ -10254,39 +10255,53 @@
     let sourceMode = 'brief';   // what the next picked file is: the brief, or a supporting doc
     function renderSourceSlot() {
       sourceSlot.innerHTML = '';
-      sourceSlot.classList.toggle('wide', !sourceState.name);
+      sourceSlot.classList.remove('wide');   // one button either way now, never a full row of controls
       if (!sourceState.name) {
+        // ONE WAY IN, NOT THREE (Sarah, 21 Aug 2026: "this can all be in here
+        // together"). A file, a link, or just saying what you have to do were
+        // three separate controls strung across the row. They are one button
+        // now, with all three inside it — the same drop-down the task itself
+        // lives in once it is loaded, so the control never moves or changes
+        // shape. Dropping a file anywhere on the page still works without
+        // opening anything: that handler is on the window, not on this button.
+        const wrap = document.createElement('div'); wrap.className = 'srcdrop';
         const btn = document.createElement('button');
-        btn.type = 'button'; btn.className = 'source-add'; btn.id = 'source-add-btn';
-        btn.title = 'Drop, paste, or click to add your homework / task';
-        btn.innerHTML = '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg><span>Drop your task here — one file or several — or paste text / click</span>';
-        // Sarah, 16 Aug: "it still won't let me upload 2 docs." This line set
-        // multiple=false right before opening the picker, overriding the
-        // attribute on the input — so the picker only ever let her choose one.
-        btn.addEventListener('click', () => { sourceMode = 'brief'; sourceFileInput.multiple = true; sourceFileInput.click(); });
-        sourceSlot.appendChild(btn);
-        // A link, e.g. the course page the assignment lives on
+        btn.type = 'button'; btn.className = 'wb-btn srcdrop-btn'; btn.id = 'srcdrop-btn';
+        btn.setAttribute('aria-expanded', 'false');
+        btn.title = 'Add the thing you have to write — a file, a link, or just say what it is';
+        btn.innerHTML = '<span>＋</span><span class="srcdrop-name">Add your task</span><span class="srcdrop-caret">▾</span>';
+        wrap.appendChild(btn);
+
+        const menu = document.createElement('div'); menu.className = 'srcdrop-menu hidden';
+        const head = (t) => { const h = document.createElement('div'); h.className = 'srcdrop-head'; h.textContent = t; menu.appendChild(h); };
+
+        head('Bring it in');
+        const fileBtn = document.createElement('button');
+        fileBtn.type = 'button'; fileBtn.className = 'source-add'; fileBtn.id = 'source-add-btn';
+        fileBtn.title = 'Drop, paste, or click to add your homework / task';
+        fileBtn.innerHTML = '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg><span>A file — one or several</span>';
+        fileBtn.addEventListener('click', () => { sourceMode = 'brief'; sourceFileInput.multiple = true; sourceFileInput.click(); });
+        menu.appendChild(fileBtn);
+
         const linkBtn = document.createElement('button');
-        linkBtn.type = 'button'; linkBtn.className = 'source-add'; linkBtn.style.marginLeft = '8px';
+        linkBtn.type = 'button'; linkBtn.className = 'source-add';
         linkBtn.title = 'Paste a link to the task — a course page, an online brief';
-        linkBtn.innerHTML = '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg><span>Add a link</span>';
+        linkBtn.innerHTML = '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg><span>A link</span>';
         linkBtn.addEventListener('click', () => renderLinkInput());
-        sourceSlot.appendChild(linkBtn);
-        // NOT EVERYONE HAS A BRIEF (Sarah, 21 Aug 2026: "so you cant create a
-        // doc without a brief. thats not good. some people may want to start
-        // writing without one or just write in to a discription of what to do
-        // ... maybe when theres no brief the breif box has a bit that you can
-        // write the task in ie I need to create a wedding speach").
-        // A wedding speech, a covering letter, a blog — no file to upload and
-        // no marking guide to drop. She says what she has to do in one line and
-        // it goes through the SAME brief pipeline as an uploaded task, so the
-        // coaching, the parts and the marking all work exactly as they do for a
-        // student with a paper brief.
+        menu.appendChild(linkBtn);
+
+        const rule = document.createElement('div'); rule.className = 'srcdrop-rule'; menu.appendChild(rule);
+
+        // NOT EVERYONE HAS A BRIEF (Sarah, 21 Aug 2026: "some people may want to
+        // start writing without one or just write in to a discription of what to
+        // do ie I need to create a wedding speach"). One line goes through the
+        // SAME /writer/brief pipeline as an uploaded task.
+        head('Or just say what it is');
         const ask = document.createElement('div'); ask.className = 'task-ask';
         const askIn = document.createElement('input');
         askIn.type = 'text'; askIn.className = 'task-ask-in'; askIn.id = 'task-ask-in';
         askIn.autocomplete = 'off';
-        askIn.placeholder = '…or just say what you have to do — "I need to write a wedding speech"';
+        askIn.placeholder = '"I need to write a wedding speech"';
         const askGo = document.createElement('button');
         askGo.type = 'button'; askGo.className = 'task-ask-go'; askGo.textContent = 'Start →';
         const askSay = document.createElement('div'); askSay.className = 'task-ask-say hidden';
@@ -10305,7 +10320,16 @@
         askGo.addEventListener('click', start);
         askIn.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); start(); } });
         ask.appendChild(askIn); ask.appendChild(askGo); ask.appendChild(askSay);
-        sourceSlot.appendChild(ask);
+        menu.appendChild(ask);
+
+        wrap.appendChild(menu);
+        btn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          const shut = menu.classList.toggle('hidden');
+          btn.setAttribute('aria-expanded', shut ? 'false' : 'true');
+          if (!shut) setTimeout(() => { try { askIn.focus(); } catch (_) {} }, 0);
+        });
+        sourceSlot.appendChild(wrap);
       } else {
         // Sarah, 20 Aug 2026: "the add supporting doc and the folder could
         // all be in a drop down." Once the task is in, the whole lot — the
