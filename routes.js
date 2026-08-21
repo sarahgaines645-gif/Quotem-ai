@@ -528,6 +528,481 @@ router.post('/api/trips/search', requirePerson, express.json({ limit: '64kb' }),
     }
 });
 
+
+// ─────────────────────────────────────────────────────────────
+//  THE HOLIDAY BOARD — the holidays she actually found, kept
+// ─────────────────────────────────────────────────────────────
+// The climate search answers "where is warm". This is the other half: she
+// screenshots a real listing on somebody's website and it becomes a card with
+// the price, the company, the link and what is good and bad about it — and
+// when the family answer the linkmail, their answers land back on that card.
+//
+// Same lesson as the require above: an optional plugin that fails to load
+// costs you its own routes and nothing else.
+let qTripBoard = null;
+try {
+    qTripBoard = require('./plugins/q-trip-board');
+} catch (err) {
+    console.error('[trips] board not loaded — /api/trips/board/* will answer 503:', err.message);
+}
+const boardUnavailable = (res) => res.status(503).json({
+    ok: false, error: 'trip_board_missing',
+    message: 'The holiday board is not available on this deployment.',
+});
+
+router.get('/api/trips/board', requirePerson, (req, res) => {
+    if (!qTripBoard) return boardUnavailable(res);
+    res.json({ ok: true, holidays: qTripBoard.list(req.person.email) });
+});
+
+// Read a screenshot. This does NOT save anything — she sees what it found and
+// decides. A vision model reading a picture wrong is a normal Tuesday, so the
+// answer is always shown before it becomes a card.
+router.post('/api/trips/board/read', requirePerson, express.json({ limit: '8mb' }), async (req, res) => {
+    if (!qTripBoard) return boardUnavailable(res);
+    try {
+        const out = await qTripBoard.readShot((req.body || {}).image, req.person.email);
+        if (out.error) return res.status(422).json({ ok: false, ...out });
+
+        // The company's logo, fetched by Q's server so the logo host never
+        // learns who is looking at which holiday (plugins/q-logos.js).
+        if (!out.notAListing && out.company) {
+            try {
+                const logo = await qLogos.getLogo({ name: out.companyDomain || out.company });
+                if (logo && logo.url) out.logo = logo.url;
+            } catch (e) { /* a missing logo is not a failed read */ }
+        }
+        res.json({ ok: true, ...out });
+    } catch (err) {
+        console.error('[trips] screenshot read failed:', err.message);
+        res.status(500).json({ ok: false, error: 'read_failed', message: 'That screenshot could not be read.' });
+    }
+});
+
+router.post('/api/trips/board', requirePerson, express.json({ limit: '256kb' }), (req, res) => {
+    if (!qTripBoard) return boardUnavailable(res);
+    try {
+        res.json({ ok: true, holiday: qTripBoard.save(req.body || {}, req.person.email) });
+    } catch (e) {
+        res.status(400).json({ ok: false, error: 'save_failed', message: e.message });
+    }
+});
+
+router.patch('/api/trips/board/:id', requirePerson, express.json({ limit: '256kb' }), (req, res) => {
+    if (!qTripBoard) return boardUnavailable(res);
+    const out = qTripBoard.update(req.params.id, req.body || {}, req.person.email);
+    if (!out) return res.status(404).json({ ok: false, error: 'not_found' });
+    res.json({ ok: true, holiday: out });
+});
+
+router.delete('/api/trips/board/:id', requirePerson, (req, res) => {
+    if (!qTripBoard) return boardUnavailable(res);
+    if (!qTripBoard.remove(req.params.id, req.person.email)) {
+        return res.status(404).json({ ok: false, error: 'not_found' });
+    }
+    res.json({ ok: true });
+});
+
+// Send the board out as a linkmail. The family tick which dates they can do and
+// which holidays they would go on, with no account and no sign-in — the token
+// in the URL is the whole authority (plugins/q-linkmail.js).
+router.post('/api/trips/board/share', requirePerson, express.json({ limit: '64kb' }), (req, res) => {
+    if (!qTripBoard) return boardUnavailable(res);
+    try {
+        const owner = req.person.email;
+        const b = req.body || {};
+        const wanted = Array.isArray(b.ids) && b.ids.length ? new Set(b.ids) : null;
+        const chosen = qTripBoard.list(owner).filter(h => !wanted || wanted.has(h.id));
+        if (!chosen.length) {
+            return res.status(400).json({ ok: false, error: 'nothing_chosen', message: 'Pick at least one holiday to send.' });
+        }
+
+        const money = (h) => (h.price == null ? '' :
+            (h.currency === 'GBP' || !h.currency ? '£' : h.currency + ' ')
+            + h.price.toLocaleString('en-GB')
+            + (h.priceBasis ? ' ' + h.priceBasis : ''));
+
+        const cards = chosen.map(h => ({
+            title: h.title,
+            subtitle: [h.place, h.country].filter(Boolean).join(', '),
+            image: h.image,
+            link: h.link,
+            body: [
+                h.pros.length ? 'Good: ' + h.pros.join('; ') : '',
+                h.cons.length ? 'Not so good: ' + h.cons.join('; ') : '',
+            ].filter(Boolean).join('\n'),
+            facts: [
+                money(h) ? { label: 'Price', value: money(h) } : null,
+                h.dates ? { label: 'Dates', value: h.dates } : null,
+                h.nights ? { label: 'Nights', value: String(h.nights) } : null,
+                h.boardBasis ? { label: 'Board', value: h.boardBasis } : null,
+                h.company ? { label: 'With', value: h.company } : null,
+                h.rating != null ? { label: 'Rating', value: String(h.rating) } : null,
+            ].filter(Boolean),
+        }));
+
+        // The two questions she actually needs answered, plus room to say
+        // anything else. Dates first: it is the one that rules holidays out.
+        const dateWindows = [...new Set(chosen.map(h => h.dates).filter(Boolean))];
+        const questions = [
+            dateWindows.length
+                ? { text: 'Which of these dates could you do?', type: 'dates', options: dateWindows }
+                : { text: 'Which dates could you do?', type: 'text', options: [] },
+            { text: 'Which of these would you go on?', type: 'checklist', options: chosen.map(h => h.title) },
+            { text: 'Anything else we should know?', type: 'text', options: [] },
+        ];
+
+        const made = qLinkmail.createLink(owner, {
+            kind: 'trip',
+            title: b.title || 'Where shall we go?',
+            body: b.body || '',
+            greeting: b.greeting || '',
+            recipientName: b.recipientName || '',
+            expiresHours: b.expiresHours,
+            chatEnabled: b.chatEnabled !== false,
+            cards,
+            questions,
+            senderName: req.person.name || req.person.email,
+            refId: 'trip-board',
+        });
+
+        // Remember which link each holiday went out on, so the answers can be
+        // read back onto that exact card.
+        for (const h of chosen) qTripBoard.update(h.id, { linkmailToken: made.token }, owner);
+
+        res.json({ ok: true, token: made.token, fullUrl: linkmailUrl(req, made.token), sent: chosen.length });
+    } catch (e) {
+        res.status(400).json({ ok: false, error: 'share_failed', message: e.message });
+    }
+});
+
+
+// Mark a trip on the calendar. NOT a second calendar — this writes into the
+// one on /life (plugins/q-life.js), so a holiday shows up next to the dentist
+// and Q's list_events knows about it. Two marks, out and home, because a
+// life event is a single day and a fortnight of solid blocks would bury
+// everything else on the page.
+//
+// It refuses without real dates. The printed "5-12 Oct 2026" off a listing is
+// a suggestion the page puts in two date boxes for her to confirm; a holiday
+// marked on the wrong week is worse than one not marked at all.
+router.post('/api/trips/board/:id/calendar', requirePerson, express.json({ limit: '8kb' }), (req, res) => {
+    if (!qTripBoard) return boardUnavailable(res);
+    const owner = req.person.email;
+    const h = qTripBoard.get(req.params.id, owner);
+    if (!h) return res.status(404).json({ ok: false, error: 'not_found' });
+    if (!h.startDate) {
+        return res.status(400).json({
+            ok: false, error: 'no_start_date',
+            message: 'Set the going-out date on the card first — I will not guess it from the listing.',
+        });
+    }
+
+    try {
+        const where = [h.place, h.country].filter(Boolean).join(', ') || h.title;
+
+        // A "Trips" category so they are one colour on /life, made once.
+        let category = 'trips';
+        try {
+            if (!qLife.listCategories(owner).some(c => c.slug === 'trips')) {
+                qLife.addCategory({ name: 'Trips', color: '#38bdf8' }, owner);
+            }
+        } catch (e) { category = null; }   // a missing category must not lose the trip
+
+        const out = qLife.addEvent({
+            title: `Away — ${where}`,
+            date: h.startDate,
+            location: where,
+            notes: [h.title, h.endDate ? `Back ${h.endDate}` : '', h.company ? `Booked with ${h.company}` : '', h.link]
+                .filter(Boolean).join('\n'),
+            category, source: 'trips',
+        }, owner);
+
+        let back = null;
+        if (h.endDate && h.endDate !== h.startDate) {
+            back = qLife.addEvent({
+                title: `Home — ${where}`,
+                date: h.endDate,
+                location: where,
+                notes: h.title,
+                category, source: 'trips',
+            }, owner);
+        }
+
+        qTripBoard.update(h.id, { calendarEventId: out.id }, owner);
+        res.json({ ok: true, event: out, returnEvent: back });
+    } catch (e) {
+        res.status(400).json({ ok: false, error: 'calendar_failed', message: e.message });
+    }
+});
+
+// Take it off the calendar again. Removes the pair by the id we kept plus any
+// "Home —" event sitting on the return date for the same place.
+router.delete('/api/trips/board/:id/calendar', requirePerson, (req, res) => {
+    if (!qTripBoard) return boardUnavailable(res);
+    const owner = req.person.email;
+    const h = qTripBoard.get(req.params.id, owner);
+    if (!h) return res.status(404).json({ ok: false, error: 'not_found' });
+    let removed = 0;
+    try {
+        if (h.calendarEventId && qLife.deleteEvent(h.calendarEventId, owner)) removed++;
+        if (h.endDate) {
+            const where = [h.place, h.country].filter(Boolean).join(', ') || h.title;
+            for (const e of qLife.listEvents(owner, { from: h.endDate, to: h.endDate }) || []) {
+                if (e.source === 'trips' && e.title === `Home — ${where}`) {
+                    if (qLife.deleteEvent(e.id, owner)) removed++;
+                }
+            }
+        }
+    } catch (e) { /* fall through — the card must still let go of the id */ }
+    qTripBoard.update(h.id, { calendarEventId: '' }, owner);
+    res.json({ ok: true, removed });
+});
+
+// The trips that are actually happening, for the strip at the top of the page.
+router.get('/api/trips/board/calendar', requirePerson, (req, res) => {
+    if (!qTripBoard) return boardUnavailable(res);
+    const today = new Date().toISOString().slice(0, 10);
+    const marked = qTripBoard.list(req.person.email)
+        .filter(h => h.startDate)
+        .map(h => ({
+            id: h.id, title: h.title,
+            where: [h.place, h.country].filter(Boolean).join(', '),
+            startDate: h.startDate, endDate: h.endDate,
+            nights: h.nights, onCalendar: !!h.calendarEventId,
+            past: (h.endDate || h.startDate) < today,
+        }))
+        .sort((a, b) => a.startDate < b.startDate ? -1 : 1);
+    res.json({ ok: true, today, trips: marked });
+});
+
+// What everyone has said back, per holiday. This is what fills the replies box
+// on the card: a name, and what that person actually answered.
+router.get('/api/trips/board/replies', requirePerson, (req, res) => {
+    if (!qTripBoard) return boardUnavailable(res);
+    const owner = req.person.email;
+    const out = {};
+    const tokens = new Set(qTripBoard.list(owner).map(h => h.linkmailToken).filter(Boolean));
+    for (const token of tokens) {
+        const rec = qLinkmail.readLink(owner, token);
+        if (!rec) continue;
+        out[token] = {
+            views: rec.views || 0,
+            lastViewedAt: rec.lastViewedAt || null,
+            answers: (rec.answers || []).map(a => ({
+                who: a.name || '',
+                question: a.question,
+                said: a.summary || '',
+                at: a.at || null,
+            })),
+            // Anything they typed at Q on the link, which is where "Sarah
+            // doesn't like the location" tends to actually get said.
+            said: (rec.chat || []).filter(m => m.role === 'user').slice(-12).map(m => m.content),
+        };
+    }
+    res.json({ ok: true, replies: out });
+});
+
+// ─────────────────────────────────────────────────────────────
+//  LINKMAIL — the public, token-gated share link
+// ─────────────────────────────────────────────────────────────
+// "Quotem linkmail" is a proper noun (Sarah, 20 May 2026). Never rename it to
+// "share link" or "magic link". Same engine as QB2 has in the Quotem app: Q
+// mints a link, the recipient opens it with NO account, reads the cards,
+// answers the questions, and may talk to a Q that knows ONLY what is on that
+// card. The sender reads the answers back on their own page.
+//
+// THE PATH SPLIT IS THE SECURITY. Everything the recipient touches lives under
+// /api/linkmail/open/, and only that prefix is in the public allowlist in
+// server/index.js. The sender's endpoints are under /api/linkmail/mine/ and
+// need a session. Sharing one prefix would have put "list all my links" one
+// typo away from being public.
+const qLinkmail = require('./plugins/q-linkmail');
+
+// The full link, built from the request host the same way the QR routes at the
+// top of this file do it — so it is right whichever address the app is open at.
+function linkmailUrl(req, token) {
+    const host = req.headers.host || 'www.quotem-ai.co.uk';
+    const proto = /^localhost|^127\.|^\[?::1/.test(host) ? 'http' : 'https';
+    return `${proto}://${host}/linkmail/${token}`;
+}
+
+function linkmailEscapeHtml(s) {
+    return String(s == null ? '' : s)
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+
+router.get('/linkmail/:token', (req, res) => {
+    res.sendFile(path.join(__dirname, 'linkmail.html'));
+});
+
+// ── RECIPIENT SIDE — the token is the whole authority ──────────
+router.get('/api/linkmail/open/:token', (req, res) => {
+    const out = qLinkmail.resolvePublic(req.params.token, { countView: true });
+    if (out.error) return res.status(out.error === 'not_found' ? 404 : 410).json(out);
+    res.json(out);
+});
+
+router.post('/api/linkmail/open/:token/answer', express.json({ limit: '32kb' }), (req, res) => {
+    const out = qLinkmail.recordAnswer(req.params.token, req.body || {});
+    if (out.error) {
+        const code = out.error === 'not_found' ? 404 : (out.error === 'no_such_question' ? 400 : 410);
+        return res.status(code).json(out);
+    }
+    res.json(out);
+});
+
+// A public endpoint that calls the model is the obvious way to run up a bill on
+// someone else's account, so a link answers twelve questions a minute and no
+// more. Per token, in memory — a restart forgives, which is the right trade for
+// a limiter whose job is stopping a runaway, not policing people.
+const linkmailChatHits = new Map();
+function linkmailChatAllowed(token) {
+    const now = Date.now();
+    const hits = (linkmailChatHits.get(token) || []).filter(t => now - t < 60000);
+    if (hits.length >= 12) { linkmailChatHits.set(token, hits); return false; }
+    hits.push(now);
+    linkmailChatHits.set(token, hits);
+    if (linkmailChatHits.size > 500) {
+        for (const [k, v] of linkmailChatHits) {
+            if (!v.some(t => now - t < 60000)) linkmailChatHits.delete(k);
+        }
+    }
+    return true;
+}
+
+router.post('/api/linkmail/open/:token/chat', express.json({ limit: '32kb' }), async (req, res) => {
+    try {
+        const ctx = qLinkmail.publicContext(req.params.token);
+        if (!ctx) return res.status(404).json({ reply: null, error: 'not_found' });
+        if (!ctx.chatEnabled) {
+            return res.status(403).json({ reply: null, error: 'chat_disabled', message: 'This link is read-only.' });
+        }
+        const message = String((req.body && req.body.message) || '').slice(0, 2000).trim();
+        if (!message) return res.status(400).json({ reply: null, error: 'empty' });
+        if (!linkmailChatAllowed(req.params.token)) {
+            return res.status(429).json({ reply: null, error: 'too_fast', message: 'One moment — that is a lot of questions at once.' });
+        }
+
+        const who = ctx.recipientName ? ctx.recipientName : 'the person reading this';
+        // systemOverride (q-chat.js) — a public reader must never be given Q's
+        // persona block, his surface prompts, or the account holder's remembered
+        // facts. He knows the snapshot and nothing else.
+        const system = [
+            `You are Q, answering on behalf of ${ctx.senderName}, who has shared this page with ${who}.`,
+            '',
+            'THE ONLY THING YOU KNOW is what is written between the markers below. It is',
+            'exactly what the reader can see on their own screen.',
+            '',
+            '--- WHAT WAS SHARED ---',
+            ctx.title ? ('# ' + ctx.title) : '',
+            ctx.snapshot || '(nothing)',
+            '--- END ---',
+            '',
+            ctx.questions.length
+                ? ('You are also collecting answers to these: ' + ctx.questions.map((q, i) => (i + 1) + '. ' + q).join('   '))
+                : '',
+            '',
+            'RULES, and they are absolute:',
+            `- If the answer is not above, say plainly that you do not know and that ${ctx.senderName} would have to say. NEVER guess a price, a date, a temperature or any other fact.`,
+            `- You know nothing about ${ctx.senderName} beyond what is above — no other work, no other people, no other links.`,
+            '- Do not invent, estimate or round anything that looks like data.',
+            '- Short, warm, plain English. Two or three sentences unless they ask for more.',
+            '- You cannot change this page or send anything anywhere. If they want something changed, tell them to put it in an answer or say it here, and it will be passed on.',
+        ].join('\n');
+
+        const history = (ctx.chat || []).slice(-12).map(m => ({ role: m.role, content: m.content }));
+        const result = await chat([...history, { role: 'user', content: message }], {
+            systemOverride: system,
+            useTools: false,
+        });
+
+        qLinkmail.appendPublicChat(req.params.token, 'user', message);
+        if (result.reply) qLinkmail.appendPublicChat(req.params.token, 'assistant', result.reply);
+        res.json({ reply: result.reply || null, error: result.error || null });
+    } catch (err) {
+        console.error('[linkmail] public chat failed:', err.message);
+        res.status(500).json({ reply: null, error: 'chat_failed' });
+    }
+});
+
+// ── SENDER SIDE — session required ─────────────────────────────
+router.post('/api/linkmail/mine', requirePerson, express.json({ limit: '256kb' }), (req, res) => {
+    try {
+        const b = req.body || {};
+        const made = qLinkmail.createLink(req.person.email, {
+            kind: b.kind,
+            title: b.title,
+            body: b.body,
+            cards: b.cards,
+            questions: b.questions,
+            greeting: b.greeting,
+            recipientName: b.recipientName,
+            expiresHours: b.expiresHours,
+            chatEnabled: b.chatEnabled,
+            snapshot: b.snapshot,
+            refId: b.refId,
+            senderName: req.person.name || req.person.email,
+        });
+        res.json({ token: made.token, url: made.url, fullUrl: linkmailUrl(req, made.token) });
+    } catch (e) {
+        res.status(400).json({ error: e.message });
+    }
+});
+
+router.get('/api/linkmail/mine', requirePerson, (req, res) => {
+    const links = qLinkmail.listLinks(req.person.email)
+        .map(l => Object.assign({}, l, { fullUrl: linkmailUrl(req, l.token) }));
+    res.json({ links });
+});
+
+router.get('/api/linkmail/mine/:token', requirePerson, (req, res) => {
+    const rec = qLinkmail.readLink(req.person.email, req.params.token);
+    if (!rec) return res.status(404).json({ error: 'not_found' });
+    res.json(Object.assign({}, rec, { fullUrl: linkmailUrl(req, rec.token) }));
+});
+
+router.post('/api/linkmail/mine/:token/revoke', requirePerson, (req, res) => {
+    const out = qLinkmail.revokeLink(req.person.email, req.params.token);
+    if (out.error) return res.status(404).json(out);
+    res.json(out);
+});
+
+// Email the link out. The link IS the payload — none of the shared content is
+// repeated in the mail body, so a forwarded email leaks nothing the link did
+// not already carry.
+router.post('/api/linkmail/mine/:token/send', requirePerson, express.json({ limit: '32kb' }), async (req, res) => {
+    try {
+        const rec = qLinkmail.readLink(req.person.email, req.params.token);
+        if (!rec) return res.status(404).json({ error: 'not_found' });
+        const raw = String((req.body && req.body.to) || '').trim();
+        const first = raw.split(',')[0].trim();
+        if (!first || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(first)) {
+            return res.status(400).json({ error: 'bad_address', message: 'That does not look like an email address.' });
+        }
+        if (!mailerConfigured()) {
+            return res.status(503).json({ error: 'mailer_off', message: 'Email is not set up on this deployment — copy the link and send it yourself.' });
+        }
+        const url = linkmailUrl(req, rec.token);
+        const subject = String((req.body && req.body.subject) || '').trim()
+            || `${rec.senderName} shared "${rec.display.title}" with you`;
+        const note = String((req.body && req.body.note) || '').trim() || rec.greeting;
+        await sendMail({
+            to: raw,
+            subject,
+            text: `${note}\n\n${url}\n\nNo sign-in needed — the link is the key.`,
+            html: `<p>${linkmailEscapeHtml(note)}</p>`
+                + `<p><a href="${url}">${linkmailEscapeHtml(rec.display.title || 'Open it here')}</a></p>`
+                + `<p style="color:#666;font-size:13px">No sign-in needed — the link is the key.</p>`,
+        });
+        res.json({ ok: true, to: raw, url });
+    } catch (e) {
+        console.error('[linkmail] send failed:', e.message);
+        res.status(500).json({ error: 'send_failed', message: e.message });
+    }
+});
+
 const qPlotter = require('./plugins/q-dot-plotter');
 
 router.post('/plotter/analyze', requirePerson, express.json({ limit: '24mb' }), async (req, res) => {
