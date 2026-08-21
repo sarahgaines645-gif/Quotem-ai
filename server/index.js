@@ -342,9 +342,20 @@ app.get('/manifest.webmanifest', (req, res) => {
 });
 
 // ── Health check ───────────────────────────────────────────────
+// DID routes.js ACTUALLY MOUNT? Set by the try/catch at the bottom of this file.
+// /health answered ok:true regardless until 21 Aug 2026 — the night one missing
+// plugin stopped every route in routes.js from mounting and the whole app 404'd
+// for ~40 minutes while Railway's healthcheck stayed green. A health check that
+// cannot go red is not a health check.
+let routesMounted = false;
+let routesMountError = null;
+
 app.get('/health', (req, res) => {
+    // The status code stays 200 even when routes are down: railway.toml points
+    // healthcheckPath at /health, and a non-2xx here fails the deploy outright.
+    // The truth goes in the body, where a person or a monitor can read it.
     res.json({
-        ok: true,
+        ok: routesMounted,
         service: 'quotem-ai',
         version: require('../package.json').version,
         // WHICH COMMIT IS ACTUALLY RUNNING (20 Aug 2026). It was already printed
@@ -357,6 +368,8 @@ app.get('/health', (req, res) => {
         togetherKey: !!process.env.TOGETHER_API_KEY,
         node: process.version,
         uptimeSec: Math.round(process.uptime()),
+        routesMounted,
+        ...(routesMountError ? { mountError: routesMountError } : {}),
     });
 });
 
@@ -476,9 +489,11 @@ app.post('/client-log', express.json({ limit: '4kb' }), (req, res) => {
 try {
     const qRouter = require(path.join(ROOT, 'routes.js'));
     app.use('/', qRouter);
+    routesMounted = true;
     console.log('[Q] ✅ Routes mounted (default-auth gate active)');
 } catch (e) {
-    console.error('[Q] ❌ Failed to mount routes.js:', e.message);
+    routesMountError = e.message;
+    console.error('[Q] ❌ Failed to mount routes.js — THE APP IS SERVING NOTHING BUT /health AND /welcome:', e.message);
     console.error(e.stack);
     // Don't crash — let /health still respond so Railway sees us alive
 }

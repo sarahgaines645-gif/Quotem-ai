@@ -482,13 +482,32 @@ router.get('/plotter', (req, res) => {
 // Live prices and reviews are deliberately NOT part of this search — they cost
 // supplier quota, so they are a separate, opt-in call per destination.
 router.get('/trips', (req, res) => {
-    res.sendFile(path.join(__dirname, 'trips.html'));
+    res.sendFile(path.join(__dirname, 'trips.html'), (err) => {
+        if (err && !res.headersSent) res.status(503).send('The trips page is not available on this deployment.');
+    });
 });
 
-const qTrips = require('./plugins/q-trips');
+// ⚠️ 21 Aug 2026 — this require took the ENTIRE APP down for ~40 minutes.
+// `plugins/q-trips.js` was still untracked when routes.js was committed, so the
+// deploy had the routes but not the module. A top-level require that throws is
+// swallowed by the try/catch in server/index.js — which means NOT ONE route in
+// this file mounts. Every page and every API 404s while /health still says fine.
+// A missing optional plugin must cost you that plugin's routes and nothing else.
+let qTrips = null;
+try {
+    qTrips = require('./plugins/q-trips');
+} catch (err) {
+    console.error('[trips] engine not loaded — /trips and /api/trips/* will answer 503:', err.message);
+}
+const tripsUnavailable = (res) => res.status(503).json({
+    ok: false,
+    error: 'trips_engine_missing',
+    message: 'Trip search is not available on this deployment.',
+});
 
 // The airport list the page's "flying from" box is built out of.
 router.get('/api/trips/airports', (req, res) => {
+    if (!qTrips) return tripsUnavailable(res);
     res.json({
         origins: qTrips.origins(),
         regions: [...new Set(qTrips.destinations().map(d => d.region))],
@@ -496,6 +515,7 @@ router.get('/api/trips/airports', (req, res) => {
 });
 
 router.post('/api/trips/search', requirePerson, express.json({ limit: '64kb' }), async (req, res) => {
+    if (!qTrips) return tripsUnavailable(res);
     try {
         const out = await qTrips.searchTrips(req.body || {});
         res.json(out);
