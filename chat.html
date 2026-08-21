@@ -1222,18 +1222,16 @@
 
   /* Category pill row — FeatureTracker style: top-border in the pill's
      own colour, so the row reads as a colour-coded set of buckets. */
-  /* ONE row that scrolls sideways, not a block that wraps (Sarah, 21 Aug: "too
-     big and messy"). Ten categories wrapping at the old size took six lines and
-     swallowed the panel before you reached a single task. A single line stays
-     the same height whether she has three folders or thirty. */
+  /* They ALL have to be visible (Sarah, 21 Aug: "I cant see half of them").
+     Scrolling sideways hid the ones off the right-hand edge — a folder you
+     cannot see is a folder you will not use. So they wrap again, and the pills
+     are small enough that wrapping stays tidy instead of becoming a wall:
+     ten categories land in two or three neat rows. */
   .cat-row {
-    display: flex; gap: 5px;
-    flex-wrap: nowrap;
-    overflow-x: auto;
-    scrollbar-width: none;
-    padding-bottom: 2px;
+    display: flex; gap: 4px;
+    flex-wrap: wrap;
+    align-items: flex-start;
   }
-  .cat-row::-webkit-scrollbar { display: none; }
   /* Category pills — the folders across the top of the list. Built to match the
      trade pills on the Quotem dashboard (Sarah, 21 Aug): a proper tappable size
      with the category's colour as a bar along the top, its icon beside the name,
@@ -1242,20 +1240,26 @@
   .cat-pill {
     background: var(--bg);
     border: none; cursor: pointer;
-    padding: 5px 10px 6px;
-    border-radius: 10px;
-    font-size: 11px; font-weight: 700;
+    padding: 4px 9px 5px;
+    border-radius: 9px;
+    font-size: 10.5px; font-weight: 700;
     color: var(--text);
     box-shadow: var(--neu-raised-sm);
     border-top: 2px solid var(--accent);
     font-family: inherit;
     letter-spacing: 0.01em;
-    display: inline-flex; align-items: center; gap: 5px;
+    display: inline-flex; align-items: center; gap: 4px;
     white-space: nowrap;
     flex: 0 0 auto;
+    max-width: 100%;
     transition: box-shadow 0.15s ease, color 0.15s ease;
   }
-  .cat-pill .ci { font-size: 11px; line-height: 1; }
+  /* A long folder name ("Charlie's Birthday presents") must not stretch a pill
+     across the whole panel and push everything else onto its own line. */
+  .cat-pill > span:last-child {
+    overflow: hidden; text-overflow: ellipsis; max-width: 130px;
+  }
+  .cat-pill .ci { font-size: 10.5px; line-height: 1; flex: 0 0 auto; }
   .cat-pill:hover { color: var(--accent); }
   .cat-pill.on { box-shadow: var(--neu-inset-xs); color: var(--accent); }
   .cat-pill.add {
@@ -3375,9 +3379,10 @@ if (launcherBtn && launcher) {
 
     <!-- Tasks view: sub-headers + tasks list -->
     <div class="tc-view" id="view-tasks">
-      <!-- Sub-headers (categories) -->
+      <!-- Categories. No "Sub-headers" heading above them (Sarah, 21 Aug):
+           a row of labelled folder pills does not need a label telling you it
+           is a row of folders, and the line it used cost a row of pills. -->
       <div>
-        <div class="td-section-title">Sub-headers</div>
         <div class="cat-row" id="cat-row"></div>
       </div>
 
