@@ -279,6 +279,26 @@
     .srcdrop-menu .source-chip .name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
     .srcdrop-menu .srcdrop-rule { height: 1px; background: var(--text-faint); opacity: 0.18; margin: 4px 0; }
     .workbench .source-slot { margin: 0; min-width: 0; }
+    /* Say what you have to do. She types into the box, so the box is INSET;
+       the button is a button, so it is raised. */
+    .task-ask { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; width: 100%; margin-top: 8px; }
+    .task-ask-in {
+      flex: 1 1 260px; min-width: 0; height: 32px; padding: 0 14px;
+      font-family: 'Space Grotesk', sans-serif; font-size: 12px; color: var(--text);
+      background: var(--bg); border: none; border-radius: 16px; outline: none;
+      box-shadow: var(--neu-inset-sm);
+    }
+    .task-ask-in::placeholder { color: var(--text-faint); }
+    .task-ask-go {
+      flex: 0 0 auto; height: 32px; padding: 0 16px; border: none; border-radius: 16px; cursor: pointer;
+      font-family: 'Space Grotesk', sans-serif; font-size: 11px; font-weight: 700;
+      background: var(--bg); color: var(--text); box-shadow: var(--neu-raised-xs);
+      transition: box-shadow 0.15s;
+    }
+    .task-ask-go:hover { box-shadow: var(--neu-raised-sm); }
+    .task-ask-go:active { box-shadow: var(--neu-inset-sm); }
+    .task-ask-say { flex: 1 1 100%; font-size: 11px; color: var(--accent); }
+    .task-ask-say.hidden { display: none; }
     /* No task yet? The drop target is the way in, so it takes the whole row
        rather than shoving the layout buttons onto a line of their own. */
     .workbench .source-slot.wide { flex: 1 1 100%; }
@@ -10174,6 +10194,40 @@
         linkBtn.innerHTML = '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg><span>Add a link</span>';
         linkBtn.addEventListener('click', () => renderLinkInput());
         sourceSlot.appendChild(linkBtn);
+        // NOT EVERYONE HAS A BRIEF (Sarah, 21 Aug 2026: "so you cant create a
+        // doc without a brief. thats not good. some people may want to start
+        // writing without one or just write in to a discription of what to do
+        // ... maybe when theres no brief the breif box has a bit that you can
+        // write the task in ie I need to create a wedding speach").
+        // A wedding speech, a covering letter, a blog — no file to upload and
+        // no marking guide to drop. She says what she has to do in one line and
+        // it goes through the SAME brief pipeline as an uploaded task, so the
+        // coaching, the parts and the marking all work exactly as they do for a
+        // student with a paper brief.
+        const ask = document.createElement('div'); ask.className = 'task-ask';
+        const askIn = document.createElement('input');
+        askIn.type = 'text'; askIn.className = 'task-ask-in'; askIn.id = 'task-ask-in';
+        askIn.autocomplete = 'off';
+        askIn.placeholder = '…or just say what you have to do — "I need to write a wedding speech"';
+        const askGo = document.createElement('button');
+        askGo.type = 'button'; askGo.className = 'task-ask-go'; askGo.textContent = 'Start →';
+        const askSay = document.createElement('div'); askSay.className = 'task-ask-say hidden';
+        const start = () => {
+          const v = (askIn.value || '').trim();
+          if (v.length < 6) {
+            askSay.textContent = 'Tell me a bit more — what is it you have to write?';
+            askSay.classList.remove('hidden'); askIn.focus(); return;
+          }
+          askSay.classList.add('hidden');
+          sourceState.name = 'Your task, in your own words';
+          sourceState.text = v; sourceState.imageDataUrl = null; sourceState.sourceUrl = null;
+          renderSourceSlot();
+          runBrief(v, sourceState.name);
+        };
+        askGo.addEventListener('click', start);
+        askIn.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); start(); } });
+        ask.appendChild(askIn); ask.appendChild(askGo); ask.appendChild(askSay);
+        sourceSlot.appendChild(ask);
       } else {
         // Sarah, 20 Aug 2026: "the add supporting doc and the folder could
         // all be in a drop down." Once the task is in, the whole lot — the
