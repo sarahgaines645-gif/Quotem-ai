@@ -473,6 +473,41 @@ router.get('/plotter', (req, res) => {
     res.sendFile(path.join(__dirname, 'plotter.html'));
 });
 
+// ─────────────────────────────────────────────────────────────
+//  TRIPS — where can we actually go, and when
+// ─────────────────────────────────────────────────────────────
+// The page is a 3D globe plus a shortlist. The engine (plugins/q-trips.js)
+// answers from RECORDED weather for the same week in past years rather than
+// monthly averages, and returns null for anything it could not find out.
+// Live prices and reviews are deliberately NOT part of this search — they cost
+// supplier quota, so they are a separate, opt-in call per destination.
+router.get('/trips', (req, res) => {
+    res.sendFile(path.join(__dirname, 'trips.html'));
+});
+
+const qTrips = require('./plugins/q-trips');
+
+// The airport list the page's "flying from" box is built out of.
+router.get('/api/trips/airports', (req, res) => {
+    res.json({
+        origins: qTrips.origins(),
+        regions: [...new Set(qTrips.destinations().map(d => d.region))],
+    });
+});
+
+router.post('/api/trips/search', requirePerson, express.json({ limit: '64kb' }), async (req, res) => {
+    try {
+        const out = await qTrips.searchTrips(req.body || {});
+        res.json(out);
+    } catch (err) {
+        console.error('[trips] search failed:', err);
+        res.status(500).json({
+            ok: false, error: 'search_failed',
+            message: 'The trip search did not finish. Nothing was filled in from memory — please try again.',
+        });
+    }
+});
+
 const qPlotter = require('./plugins/q-dot-plotter');
 
 router.post('/plotter/analyze', requirePerson, express.json({ limit: '24mb' }), async (req, res) => {
@@ -2865,6 +2900,10 @@ const TUTOR_KEYS = [
     // They lived in page state only, so every refresh wiped them (Q's own bug
     // report, 18 Aug: "tabs disappear on page refresh" — highlights did too).
     'qNotes', 'qTabs',
+    // WHOSE WORDS (21 Aug): every passage Q composed that she put on her page,
+    // so the mark can say which of it is still word for word his. Kept as the
+    // text itself — nothing is written into her document.
+    'qInk',
     // Q's own notes on the TEACHING board (19 Aug) — boardItems itself is rebuilt
     // from the history on restore, so his notes had nowhere to come back from.
     'qBoardNotes',
@@ -4468,6 +4507,85 @@ router.delete('/api/threads/:id/refs/:refId', requirePerson, (req, res) => {
     if (!updated) return res.status(404).json({ error: 'Thread not found' });
     res.json(updated);
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// DOC DROP PARITY (21 Aug 2026) — folders + the notes board.
+// Ported from Quoteapp's Doc Drop (routes/doc-drop.js folder routes and
+// routes/doc-cases.js tab routes). Nothing here replaces an existing route:
+// the flat `notes` list, `refs`, `contacts` and `emails` all keep their own
+// endpoints and keep working exactly as before.
+// ─────────────────────────────────────────────────────────────────────────────
+
+// ── Folders: organise a case's files (personalisable, no AI cost) ────────────
+router.get('/api/threads/:id/folders', requirePerson, (req, res) => {
+    if (!readOwnedThread(req, res)) return;
+    res.json({ folders: qThreads.listFolders(req.params.id, req.person.email), icons: qThreads.FOLDER_ICON_SLUGS });
+});
+
+router.post('/api/threads/:id/folders', requirePerson, express.json({ limit: '8kb' }), (req, res) => {
+    if (!readOwnedThread(req, res)) return;
+    const folder = qThreads.addFolder(req.params.id, req.body || {}, req.person.email);
+    if (!folder) return res.status(400).json({ error: 'A folder needs a name' });
+    res.json({ folder, folders: qThreads.listFolders(req.params.id, req.person.email) });
+});
+
+router.patch('/api/threads/:id/folders/:folderId', requirePerson, express.json({ limit: '8kb' }), (req, res) => {
+    if (!readOwnedThread(req, res)) return;
+    const folder = qThreads.updateFolder(req.params.id, req.params.folderId, req.body || {}, req.person.email);
+    if (!folder) return res.status(404).json({ error: 'Folder not found' });
+    res.json({ folder, folders: qThreads.listFolders(req.params.id, req.person.email) });
+});
+
+// Deleting a folder UNFILES its documents — it never deletes them.
+router.delete('/api/threads/:id/folders/:folderId', requirePerson, (req, res) => {
+    if (!readOwnedThread(req, res)) return;
+    const updated = qThreads.removeFolder(req.params.id, req.params.folderId, req.person.email);
+    if (!updated) return res.status(404).json({ error: 'Folder not found' });
+    res.json({ ok: true, folders: qThreads.listFolders(req.params.id, req.person.email), thread: updated });
+});
+
+// Move a file into a folder (or out of one with folderId: null / '').
+router.patch('/api/threads/:id/files/:filename/folder', requirePerson, express.json({ limit: '4kb' }), (req, res) => {
+    if (!readOwnedThread(req, res)) return;
+    const file = qThreads.setFileFolder(req.params.id, req.params.filename, req.body?.folderId || null, req.person.email);
+    if (!file) return res.status(404).json({ error: 'File not found on this case' });
+    res.json({ file, thread: qThreads.readThread(req.params.id, req.person.email) });
+});
+
+// ── The notes board: tabs, each tab ONE markdown note ────────────────────────
+router.get('/api/threads/:id/tabs', requirePerson, (req, res) => {
+    if (!readOwnedThread(req, res)) return;
+    res.json({ tabs: qThreads.listTabs(req.params.id, req.person.email) });
+});
+
+router.post('/api/threads/:id/tabs', requirePerson, express.json({ limit: '128kb' }), (req, res) => {
+    if (!readOwnedThread(req, res)) return;
+    const tab = qThreads.addTab(req.params.id, req.body || {}, req.person.email);
+    if (!tab) return res.status(400).json({ error: 'A tab needs a name' });
+    res.json({ tab, tabs: qThreads.listTabs(req.params.id, req.person.email) });
+});
+
+router.patch('/api/threads/:id/tabs/:tabId', requirePerson, express.json({ limit: '128kb' }), (req, res) => {
+    if (!readOwnedThread(req, res)) return;
+    const tab = qThreads.updateTab(req.params.id, req.params.tabId, req.body || {}, req.person.email);
+    if (!tab) return res.status(404).json({ error: 'Tab not found' });
+    res.json({ tab, tabs: qThreads.listTabs(req.params.id, req.person.email) });
+});
+
+router.delete('/api/threads/:id/tabs/:tabId', requirePerson, (req, res) => {
+    if (!readOwnedThread(req, res)) return;
+    const updated = qThreads.removeTab(req.params.id, req.params.tabId, req.person.email);
+    if (!updated) return res.status(404).json({ error: 'Tab not found' });
+    res.json({ ok: true, tabs: qThreads.listTabs(req.params.id, req.person.email) });
+});
+
+// Tuck tabs under a collapsible header (group:'' clears it).
+router.patch('/api/threads/:id/tab-group', requirePerson, express.json({ limit: '8kb' }), (req, res) => {
+    if (!readOwnedThread(req, res)) return;
+    const r = qThreads.groupTabs(req.params.id, req.body?.group || '', req.body?.tabs || [], req.person.email);
+    res.json({ ...r, tabs: qThreads.listTabs(req.params.id, req.person.email) });
+});
+
 
 router.get('/api/threads/:id/files/:filename', requirePerson, (req, res) => {
     if (!readOwnedThread(req, res)) return;

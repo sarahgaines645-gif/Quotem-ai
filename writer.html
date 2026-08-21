@@ -2273,6 +2273,9 @@
     ::highlight(q-trim-tight) { background: rgba(230,168,23,0.20); }
     ::highlight(q-weak) { background: rgba(30,136,229,0.14); }
     /* Q's finger on the page while he talks (Sarah, 17 Aug: "can Q highlight what he wants when he's talking to you?") */
+    /* WORDS THAT CAME FROM Q, still sitting in her essay word for word.
+       Amber, underlined — not an error, a thing to put in her own words. */
+    ::highlight(q-ink) { background: rgba(230,168,23,0.22); text-decoration: underline; text-decoration-color: #e6a817; text-decoration-thickness: 2px; text-underline-offset: 3px; }
     ::highlight(q-say) { background: rgba(233,30,99,0.16); text-decoration: underline; text-decoration-color: var(--accent); text-decoration-thickness: 2px; text-underline-offset: 3px; }
     /* Q's SIX highlighters (Sarah, 18 Aug: "how many different colour highlighters
        does Q have for the page?"). One CSS Highlight per colour. */
@@ -6388,9 +6391,10 @@
       try { renderInlineDots(); paintQNotes(); refreshExpectations(); } catch (_) {}
       return true;
     }
-    function sendTextToPage(text) {
+    function sendTextToPage(text, opts) {
       const t = String(text || '').trim(); if (!t) return 'empty';
       if (!restoreDocCaret()) return 'ask';
+      if (!(opts && opts.hers)) recordQInk(t, (opts && opts.from) || 'sent to the page');
       snapshotDoc('before send to page');
       const sel = window.getSelection();
       // NEVER replace a selection: a send goes in at a point, after whatever
@@ -6584,6 +6588,45 @@
       } catch (_) { return [r]; }
       return out.length ? out : [r];
     }
+    // ── WHOSE WORDS ARE THESE? ─────────────────────────────────────
+    // Sarah, 21 Aug 2026: "he will need to do a sweep when marking it to
+    // highlight that they are words that they have taken from ai."
+    // Every time something Q composed goes onto her page — off the whiteboard,
+    // out of the notes, a term, a sentence he put down — the exact words are
+    // written down here. NOTHING is added to her document: no wrapper span, no
+    // attribute, no change to her undo. The sweep simply looks for those words
+    // still sitting on the page, and highlights the ones it finds.
+    // That is the honest test, and it clears itself: the moment she rewrites a
+    // passage in her own words it stops matching, and it stops being flagged.
+    function recordQInk(text, from) {
+      const t = String(text == null ? '' : text).replace(/\s+/g, ' ').trim();
+      if (t.length < 12) return;            // a word or two is not a passage
+      state.qInk = Array.isArray(state.qInk) ? state.qInk : [];
+      const key = t.toLowerCase();
+      if (state.qInk.some(x => x && String(x.text || '').toLowerCase() === key)) return;
+      state.qInk.push({ text: t.slice(0, 600), from: from || '', at: Date.now() });
+      if (state.qInk.length > 200) state.qInk = state.qInk.slice(-200);
+      persist({ qInk: state.qInk });
+    }
+    // What is STILL on the page, word for word. Returns the entries that match.
+    function sweepQInk() {
+      const page = docPlainText().replace(/\s+/g, ' ').toLowerCase();
+      if (!page.trim()) return [];
+      return (state.qInk || []).filter(x => x && x.text && page.indexOf(String(x.text).toLowerCase()) >= 0);
+    }
+    function qInkWordCount(list) {
+      return (list || []).reduce((n, x) => n + String(x.text || '').split(/\s+/).filter(Boolean).length, 0);
+    }
+    function paintQInk(list) {
+      try {
+        if (!(window.CSS && CSS.highlights && window.Highlight)) return;
+        const hits = list || sweepQInk();
+        const rs = [];
+        for (const x of hits) for (const r of edFindRanges(x.text)) rs.push(...splitRangeAroundFurniture(r));
+        if (rs.length) CSS.highlights.set('q-ink', new Highlight(...rs)); else CSS.highlights.delete('q-ink');
+      } catch (_) {}
+    }
+    function clearQInkPaint() { try { if (window.CSS && CSS.highlights) CSS.highlights.delete('q-ink'); } catch (_) {} }
     function paintQNotes() {
       try {
         if (!(window.CSS && CSS.highlights && window.Highlight)) return;
@@ -8424,6 +8467,7 @@
       let n = r.startContainer;
       let block = (n.nodeType === 1 && n !== docBody && DOC_BLOCK_TAGS.has(n.tagName)) ? n : docBlockOf(n);
       while (block && block !== docBody && block.closest && block.closest('table') && block.tagName !== 'TABLE') block = block.closest('table');
+      try { recordQInk(el.textContent || '', 'a block off the whiteboard'); } catch (_) {}
       if (!block || block === docBody) docBody.appendChild(el); else block.insertAdjacentElement('afterend', el);
       const gap = document.createElement('div'); gap.innerHTML = '<br>'; el.insertAdjacentElement('afterend', gap);
       try { const nr = document.createRange(); nr.setStart(gap, 0); nr.collapse(true); sel.removeAllRanges(); sel.addRange(nr); } catch (_) {}
@@ -9096,7 +9140,11 @@
         const row = b.closest('.nt-row'); if (!row) return;
         const ta = row.querySelector('textarea.nt-in'); const say = row.querySelector('.nt-say');
         if (!ta) return;
-        const r = sendTextToPage(ta.value);
+        // HER OWN NOTE IS HERS. Only a note Q wrote is his ink — flagging a
+        // student's own words as AI would be worse than missing some.
+        const norm = String(ta.value || '').replace(/\s+/g, ' ').trim().toLowerCase();
+        const byQ = (state.qWroteNotes || []).some(x => String(x).replace(/\s+/g, ' ').trim().toLowerCase() === norm);
+        const r = sendTextToPage(ta.value, { hers: !byQ, from: 'a note Q wrote' });
         if (r === 'empty') { if (say) say.textContent = 'Write something in it first.'; return; }
         if (r === 'ask') {
           b.textContent = 'Click where it goes →';
@@ -10119,6 +10167,7 @@
       docBody.appendChild(p);
       if (countAsQWords) {
         state.qWordsWritten += text.trim().split(/\s+/).filter(Boolean).length;
+        recordQInk(text, 'a sentence Q put down');
       }
       wordEl.textContent = countWords() + ' words';
       // Move cursor after inserted text
@@ -11483,7 +11532,17 @@
       const empty = !bands && !list && !s.read ? '<div class="mk-empty">Nothing marked yet — press <b>Mark & fix →</b> when a question is written, or finish a step and Q marks that bit.</div>' : '';
       const foot = list ? '<div class="mk-foot">Press a sentence to go to it. A sentence moves to <b>Fixed</b> when you have rewritten it. Q stays on the coach card — ask him anything while this is open.</div>' : '';
       // The mark leads when there is one; the page's numbers otherwise (18 Aug).
-      markBody.innerHTML = (m && m.overall ? bands + stats : stats + bands) + cutList + list + empty + foot;
+      // WORDS FROM Q THAT ARE STILL ON THE PAGE (Sarah, 21 Aug 2026). Not an
+      // accusation and not a punishment — the passages, so she can put them in
+      // her own words before she hands it in. It empties itself as she rewrites.
+      const ink = sweepQInk();
+      const inkList = ink.length ? mkBlock('Still in Q\'s words', '✎', '', ink.map(x =>
+        `<div class="mk-item"><span class="mk-st">✎</span><div><div class="mk-s">${escHtml(x.text.length > 120 ? x.text.slice(0, 119) + '\u2026' : x.text)}</div>`
+        + `${x.from ? `<div class="mk-w">came from ${escHtml(x.from)}</div>` : ''}`
+        + `<div class="mk-acts"><button type="button" class="q-btn quiet" data-ink-go="${escHtml(x.text.slice(0, 120))}">Take me to it</button></div></div></div>`).join('')
+        + `<div class="mk-foot">${qInkWordCount(ink)} words on your page are still exactly as Q wrote them. Say them your way and they come off this list on their own — nothing here is changed for you.</div>`, ink.length) : '';
+      paintQInk(ink);
+      markBody.innerHTML = (m && m.overall ? bands + stats : stats + bands) + inkList + cutList + list + empty + foot;
       // A tile with a number on it opens that list on the page.
       markBody.querySelectorAll('[data-mk-pass]').forEach(el => el.addEventListener('click', () => {
         const kind = el.dataset.mkPass;
@@ -11494,6 +11553,10 @@
         try { renderEditPanel(); edPaint(); openEditPanel(); } catch (_) {}
       }));
       // A grade tile → that question's card; the fixes tile → the ladder.
+      // Take me to it — jump to the passage of Q's that is still on the page.
+      markBody.querySelectorAll('[data-ink-go]').forEach(el => el.addEventListener('click', () => {
+        try { jumpToSentence(el.dataset.inkGo); } catch (_) {}
+      }));
       markBody.querySelectorAll('[data-mk-q]').forEach(el => el.addEventListener('click', () => {
         const card = markBody.querySelector(`[data-mk-qcard="${el.dataset.mkQ}"]`);
         if (card) card.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -13255,7 +13318,7 @@
     }, () => {});
     // Test hooks (no data, no secrets): lets the harness exercise the page-side
     // helpers without a paid call. Harmless in production.
-    window.__qwriterTest = { startTour, tourStep, stopTour, maybeOfferTour, paintQNotes, addQNotes, addQTabs, addStickies, renderStickies, snapshotDoc, undoDoc, presentStep, renderBoard, renderWhiteboard, boardForQ, qBoardHtml, partCardHtml, addQBoardNotes, clearQBoardNotes, qBoardItems, startedAsk, showToolPop, findInDoc, replaceInDoc, appendReference, docPlainText, docBlocksForExport, splitCheck: (t) => endsSentence(t), runEditPass, checkCurrentSentence, showEditItem, state: () => state, currentEditText, partParagraphs, setBrief, storyPointsHtml, renderInlineDots, termsForBoard, setCoach, bandListHtml, showEditItem, openEditPanel, renderEditPanel, edState: () => edProof, edSetProof: (p2) => { edProof = p2; renderEditPanel(); edPaint(); }, sayMe, renderThread, syncWorkArea, showPanel, revealPanel, runTidyPasses, applyTidyItem, mergeWalk, refreshSourceDigests, sourceDigestsHtml, markAndFix, walkItemsFromMark, renderMarkPanel, markStats, gradeWord, notesSections, notesCount, notesCopyText, renderNotesPanel, openNotesPanel, bibSorted, bibCopyText, renderBibPanel, openBibPanel, removeReference, removeReferenceFromDoc, sendTextToPage, renderPageNotes, removePageNote, clampPageNotes, showDocPage, docPage: () => docPage, renderBriefPage, jumpToSentence, runAutoCite, appendReference, noteReference, wbTablesFromSrc, tableElementFrom, sendBlockToPage, wbSendText, wbBlocksFromSrc, sendBlocksToPage, sendStickyToPage, blockElement, wbMindmapParse, wbMindmapSvg, wbMindmapHtml, docMindmapElement, wbDiagramHtml, wbDiagramHtmlLegacy, wbFlowParse, wbFlowSvg, flLayout, docDiagramElement };
+    window.__qwriterTest = { startTour, tourStep, stopTour, maybeOfferTour, paintQNotes, addQNotes, addQTabs, addStickies, renderStickies, snapshotDoc, undoDoc, presentStep, renderBoard, renderWhiteboard, boardForQ, qBoardHtml, partCardHtml, addQBoardNotes, clearQBoardNotes, qBoardItems, startedAsk, showToolPop, findInDoc, replaceInDoc, appendReference, docPlainText, docBlocksForExport, splitCheck: (t) => endsSentence(t), runEditPass, checkCurrentSentence, showEditItem, state: () => state, currentEditText, partParagraphs, setBrief, storyPointsHtml, renderInlineDots, termsForBoard, setCoach, bandListHtml, showEditItem, openEditPanel, renderEditPanel, edState: () => edProof, edSetProof: (p2) => { edProof = p2; renderEditPanel(); edPaint(); }, sayMe, renderThread, syncWorkArea, showPanel, revealPanel, runTidyPasses, applyTidyItem, mergeWalk, refreshSourceDigests, sourceDigestsHtml, markAndFix, walkItemsFromMark, renderMarkPanel, markStats, gradeWord, notesSections, notesCount, notesCopyText, renderNotesPanel, openNotesPanel, bibSorted, bibCopyText, renderBibPanel, openBibPanel, removeReference, removeReferenceFromDoc, sendTextToPage, recordQInk, sweepQInk, paintQInk, qInkWordCount, renderPageNotes, removePageNote, clampPageNotes, showDocPage, docPage: () => docPage, renderBriefPage, jumpToSentence, runAutoCite, appendReference, noteReference, wbTablesFromSrc, tableElementFrom, sendBlockToPage, wbSendText, wbBlocksFromSrc, sendBlocksToPage, sendStickyToPage, blockElement, wbMindmapParse, wbMindmapSvg, wbMindmapHtml, docMindmapElement, wbDiagramHtml, wbDiagramHtmlLegacy, wbFlowParse, wbFlowSvg, flLayout, docDiagramElement };
 
 
     // (The old per-card drag code lived here — every panel now goes through makePanel above.)
