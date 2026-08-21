@@ -4181,7 +4181,7 @@
     function renderDock() {
       if (!dockEl) return;
       const keys = isDocked() ? [] : stowedKeys();
-      if (!keys.length) { dockEl.innerHTML = ''; dockEl.classList.add('hidden'); placeDock(); return; }   // nothing on the rail: give the page its width back
+      if (!keys.length) { dockEl.innerHTML = ''; dockEl.classList.add('hidden'); placeDock(); paintCloseAll(); return; }   // nothing on the rail: give the page its width back
       const frag = document.createDocumentFragment();
       keys.forEach(k => {
         const p = panels[k], name = panelTitle(p);
@@ -4192,19 +4192,22 @@
         const nm = document.createElement('span'); nm.className = 'qdock-name'; nm.textContent = name;
         b.appendChild(nm); frag.appendChild(b);
       });
-      // The one action on the rail: close what is still open, or bring the
-      // lot back. Sarah, 20 Aug 2026: "we have a tidy button but that needs
-      // to be close all" — TIDY is now the arrangement (see arrangeDesk),
-      // and this is the plain close.
-      const anyOpen = openPanelKeys().length > 0;
-      const t = document.createElement('button');
-      t.type = 'button'; t.className = 'qdock-pill qdock-tidy'; t.dataset.dockTidy = anyOpen ? 'away' : 'back';
-      t.title = anyOpen ? 'Put every open card down here' : 'Put every card back on the page';
-      const tn = document.createElement('span'); tn.className = 'qdock-name';
-      tn.textContent = anyOpen ? 'Close all' : 'Bring them back';
-      t.appendChild(tn); frag.appendChild(t);
+      // NO SECOND CLOSE ALL (Sarah, 21 Aug 2026: "this close all shouldnt be
+      // here we already have a button"). The rail carries cards and nothing
+      // else; the one Close all lives on the bar, and it says which way it is
+      // about to go — see paintCloseAll.
       dockEl.innerHTML = ''; dockEl.appendChild(frag); dockEl.classList.remove('hidden');
-      placeDock();
+      placeDock(); paintCloseAll();
+    }
+    // The one Close all. It is a toggle, so it says which way it is about to
+    // go rather than lying half the time.
+    function paintCloseAll() {
+      const b = document.getElementById('btn-closeall'); if (!b) return;
+      const anyOpen = !isDocked() && openPanelKeys().length > 0;
+      const anyDown = !isDocked() && stowedKeys().length > 0;
+      b.textContent = anyOpen ? '✕ Close all' : (anyDown ? '↩ Bring them back' : '✕ Close all');
+      b.title = anyOpen ? 'Put every open card down on the rail' : (anyDown ? 'Put every card back on the page' : 'No cards open');
+      b.disabled = !anyOpen && !anyDown;
     }
     function tidyAll() {
       const open = openPanelKeys();
@@ -4235,8 +4238,13 @@
     function untidyDesk() {
       document.body.classList.remove('tidy');
       document.body.style.paddingTop = '';
+      document.documentElement.style.setProperty('--tidy-desk', '760px');
       setTidyFlag(false);
       placeDock();
+    }
+    function paperBox() {
+      const p = document.querySelector('.paper');
+      return p ? p.getBoundingClientRect() : { left: 0, right: 0, width: 0 };
     }
     function arrangeDesk() {
       if (isDocked()) return;              // ≤700px is the bottom sheet — there are no sides to put anything on
@@ -4256,8 +4264,16 @@
         const l = getL(wb); l.left = PANEL_M; l.top = PANEL_M; l.w = w; l.h = h; l.moved = true;
         top0 = PANEL_M + wb.el.offsetHeight + TIDY_GAP;
       }
-      // Nothing on this page is allowed to sit under the band.
-      document.body.style.paddingTop = wb ? (top0 + 4) + 'px' : '';
+      // TIDY DOES NOT TOUCH THE PAGE ANY MORE (Sarah, 21 Aug 2026: "the tabs
+      // dont stay with the paper when you press tidy" / "it breaks everything").
+      // It used to push the whole document down by the height of the whiteboard
+      // band (264px on her screen) and narrow the desk. Anything else anchored
+      // to the top of the page - and there is more up there now than when this
+      // was written - gets displaced by that, and I cannot see her screen to
+      // check what. Arranging the CARDS is Tidy's job; the page is not Tidy's
+      // to move. The band sits over the top of the viewport and the columns
+      // start under it; her document stays exactly where it was.
+      document.body.style.paddingTop = '';
 
       // Two columns. The writing keeps the middle and stays readable; the
       // columns take what is left, capped so a card is never a sliver.
@@ -4271,13 +4287,14 @@
       const railSpace = railOn ? Math.max(0, dockEl.offsetWidth - DOCK_TUCK) + TIDY_GAP : 0;
       let colW = 0, deskW = 760;
       if (sides.length) {
-        colW = clampNum(Math.floor((vw - Math.min(620, vw * 0.5) - 2 * (TIDY_GAP + PANEL_M + railSpace)) / 2), TIDY_COL_MIN, TIDY_COL_MAX);
-        deskW = Math.max(360, Math.min(760, vw - 2 * (colW + TIDY_GAP + PANEL_M + railSpace)));
+        // The columns take the gutter that is already there. The page is NOT
+        // narrowed to make more: a card sitting a little close is a smaller
+        // problem than a document that jumps every time she presses Tidy.
+        const gutter = Math.max(0, Math.round(paperBox().left) - PANEL_M);
+        colW = clampNum(gutter - TIDY_GAP, TIDY_COL_MIN, TIDY_COL_MAX);
         document.body.classList.add('tidy');
-        document.documentElement.style.setProperty('--tidy-desk', deskW + 'px');
-      } else {
-        document.body.classList.remove('tidy');
       }
+      document.documentElement.style.setProperty('--tidy-desk', '760px');
 
       const left = sides.filter(k => TIDY_LEFT.indexOf(k) >= 0);
       const right = sides.filter(k => TIDY_LEFT.indexOf(k) < 0);
@@ -4315,7 +4332,6 @@
       if (bc) bc.addEventListener('click', () => tidyAll());
     }
     if (dockEl) dockEl.addEventListener('click', (e) => {
-      if (e.target.closest('.qdock-tidy')) { tidyAll(); return; }
       const b = e.target.closest('.qdock-pill'); if (!b || !b.dataset.dock) return;
       const p = panels[b.dataset.dock]; if (!p) return;
       setMin(p, false); bringToFront(p);
