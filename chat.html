@@ -1222,9 +1222,18 @@
 
   /* Category pill row — FeatureTracker style: top-border in the pill's
      own colour, so the row reads as a colour-coded set of buckets. */
+  /* ONE row that scrolls sideways, not a block that wraps (Sarah, 21 Aug: "too
+     big and messy"). Ten categories wrapping at the old size took six lines and
+     swallowed the panel before you reached a single task. A single line stays
+     the same height whether she has three folders or thirty. */
   .cat-row {
-    display: flex; gap: 5px; flex-wrap: wrap;
+    display: flex; gap: 5px;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    scrollbar-width: none;
+    padding-bottom: 2px;
   }
+  .cat-row::-webkit-scrollbar { display: none; }
   /* Category pills — the folders across the top of the list. Built to match the
      trade pills on the Quotem dashboard (Sarah, 21 Aug): a proper tappable size
      with the category's colour as a bar along the top, its icon beside the name,
@@ -1233,19 +1242,20 @@
   .cat-pill {
     background: var(--bg);
     border: none; cursor: pointer;
-    padding: 8px 14px 9px;
-    border-radius: 14px;
-    font-size: 12.5px; font-weight: 700;
+    padding: 5px 10px 6px;
+    border-radius: 10px;
+    font-size: 11px; font-weight: 700;
     color: var(--text);
     box-shadow: var(--neu-raised-sm);
-    border-top: 3px solid var(--accent);
+    border-top: 2px solid var(--accent);
     font-family: inherit;
     letter-spacing: 0.01em;
-    display: inline-flex; align-items: center; gap: 7px;
+    display: inline-flex; align-items: center; gap: 5px;
     white-space: nowrap;
+    flex: 0 0 auto;
     transition: box-shadow 0.15s ease, color 0.15s ease;
   }
-  .cat-pill .ci { font-size: 13px; line-height: 1; }
+  .cat-pill .ci { font-size: 11px; line-height: 1; }
   .cat-pill:hover { color: var(--accent); }
   .cat-pill.on { box-shadow: var(--neu-inset-xs); color: var(--accent); }
   .cat-pill.add {
@@ -3568,10 +3578,12 @@ if (launcherBtn && launcher) {
     [/admin|paperwork|form|letter|council/i, '📄'],
     [/travel|holiday|trip|flight/i, '✈️'],
   ];
+  // No icon rather than a filler one. A bullet in front of "Amazon" and
+  // "Charlie's Birthday presents" was just noise pretending to be an icon.
   function catIcon(c) {
     const hay = ((c && c.name) || '') + ' ' + ((c && c.slug) || '');
     for (const [re, icon] of CAT_ICONS) if (re.test(hay)) return icon;
-    return '•';
+    return '';
   }
 
   function renderCategories() {
@@ -3586,7 +3598,8 @@ if (launcherBtn && launcher) {
     state.categories.forEach(c => {
       const p = document.createElement('button');
       p.className = 'cat-pill' + (state.activeCat === c.slug ? ' on' : '');
-      p.innerHTML = '<span class="ci">' + catIcon(c) + '</span><span>' + escapeHtml(c.name) + '</span>';
+      const ic = catIcon(c);
+      p.innerHTML = (ic ? '<span class="ci">' + ic + '</span>' : '') + '<span>' + escapeHtml(c.name) + '</span>';
       p.style.borderTopColor = c.color || PINK;
       p.onclick = () => { state.activeCat = c.slug; renderCategories(); renderTasks(); };
       row.appendChild(p);
