@@ -469,6 +469,14 @@ router.get('/finance', (req, res) => {
 // Q's plotter — PDF AcroForm field parser. Reads the real field structure from
 // a PDF (no vision needed). Client-side PDF.js does the parsing and rendering;
 // this route just serves the page.
+// The glass cuboid — the one dark surface in Q. Static page, no engine behind
+// it, so nothing here can fail to load and take the router with it.
+router.get('/cuboid', (req, res) => {
+    res.sendFile(path.join(__dirname, 'cuboid.html'), (err) => {
+        if (err && !res.headersSent) res.status(503).send('That page is not available on this deployment.');
+    });
+});
+
 router.get('/plotter', (req, res) => {
     res.sendFile(path.join(__dirname, 'plotter.html'));
 });
@@ -545,6 +553,7 @@ try {
 } catch (err) {
     console.error('[trips] board not loaded — /api/trips/board/* will answer 503:', err.message);
 }
+const qPeople = require('./plugins/q-people');
 const boardUnavailable = (res) => res.status(503).json({
     ok: false, error: 'trip_board_missing',
     message: 'The holiday board is not available on this deployment.',
@@ -612,9 +621,16 @@ router.delete('/api/trips/board/:id', requirePerson, (req, res) => {
     res.json({ ok: true });
 });
 
-// Send the board out as a linkmail. The family tick which dates they can do and
-// which holidays they would go on, with no account and no sign-in — the token
-// in the URL is the whole authority (plugins/q-linkmail.js).
+// Send the board out. ONE LINK PER PERSON, each addressed to them by name.
+//
+// Sarah, 21 Aug: "they all have different links that will connect to their
+// names". A single link everyone shares works right up until two people are
+// called Sam, somebody leaves the name box empty, or a name gets spelled three
+// ways over a fortnight — and then she is guessing who can actually do which
+// week. A link that was minted FOR someone cannot be got wrong: q-linkmail's
+// recordAnswer takes the name off the link and ignores anything typed.
+//
+// Nobody needs an account. The token in the URL is the whole authority.
 router.post('/api/trips/board/share', requirePerson, express.json({ limit: '64kb' }), (req, res) => {
     if (!qTripBoard) return boardUnavailable(res);
     try {
@@ -624,6 +640,18 @@ router.post('/api/trips/board/share', requirePerson, express.json({ limit: '64kb
         const chosen = qTripBoard.list(owner).filter(h => !wanted || wanted.has(h.id));
         if (!chosen.length) {
             return res.status(400).json({ ok: false, error: 'nothing_chosen', message: 'Pick at least one holiday to send.' });
+        }
+
+        // Who it goes to. Either people already on her list, or names typed in
+        // this once. A person with no name is not a person to send to.
+        let people = [];
+        if (Array.isArray(b.people) && b.people.length) {
+            people = b.people
+                .map(p => ({ name: String((p && p.name) || '').trim(), email: String((p && p.email) || '').trim() }))
+                .filter(p => p.name);
+        } else if (Array.isArray(b.personIds) && b.personIds.length) {
+            people = b.personIds.map(id => qPeople.get(id, owner)).filter(Boolean)
+                .map(p => ({ id: p.id, name: p.name, email: p.email }));
         }
 
         const money = (h) => (h.price == null ? '' :
@@ -650,7 +678,7 @@ router.post('/api/trips/board/share', requirePerson, express.json({ limit: '64kb
             ].filter(Boolean),
         }));
 
-        // The two questions she actually needs answered, plus room to say
+        // The two questions that actually decide a holiday, plus room to say
         // anything else. Dates first: it is the one that rules holidays out.
         const dateWindows = [...new Set(chosen.map(h => h.dates).filter(Boolean))];
         const questions = [
@@ -661,151 +689,105 @@ router.post('/api/trips/board/share', requirePerson, express.json({ limit: '64kb
             { text: 'Anything else we should know?', type: 'text', options: [] },
         ];
 
-        const made = qLinkmail.createLink(owner, {
+        const base = {
             kind: 'trip',
             title: b.title || 'Where shall we go?',
             body: b.body || '',
             greeting: b.greeting || '',
-            recipientName: b.recipientName || '',
             expiresHours: b.expiresHours,
             chatEnabled: b.chatEnabled !== false,
             cards,
             questions,
             senderName: req.person.name || req.person.email,
             refId: 'trip-board',
+        };
+
+        // No people named: one open link, as before. Whoever opens it types
+        // their own name, and that still works — it is just less certain.
+        const targets = people.length ? people : [{ name: '', email: '' }];
+        const links = targets.map(p => {
+            const made = qLinkmail.createLink(owner, { ...base, recipientName: p.name });
+            return {
+                personId: p.id || null,
+                name: p.name,
+                email: p.email || '',
+                token: made.token,
+                fullUrl: linkmailUrl(req, made.token),
+            };
         });
 
-        // Remember which link each holiday went out on, so the answers can be
-        // read back onto that exact card.
-        for (const h of chosen) qTripBoard.update(h.id, { linkmailToken: made.token }, owner);
+        // Every holiday remembers ALL the links it went out on, so an answer
+        // from any of them can be read back onto the card.
+        for (const h of chosen) {
+            const tokens = [...new Set([...(h.linkmailTokens || []), ...links.map(l => l.token)])];
+            qTripBoard.update(h.id, { linkmailTokens: tokens, linkmailToken: tokens[tokens.length - 1] }, owner);
+        }
 
-        res.json({ ok: true, token: made.token, fullUrl: linkmailUrl(req, made.token), sent: chosen.length });
+        res.json({ ok: true, links, sent: chosen.length, people: links.length });
     } catch (e) {
         res.status(400).json({ ok: false, error: 'share_failed', message: e.message });
     }
 });
 
+// Who she sends things to, and who lives with her. The same list feeds the
+// per-person checklists.
+router.get('/api/people', requirePerson, (req, res) => {
+    res.json({ ok: true, people: qPeople.list(req.person.email) });
+});
 
-// Mark a trip on the calendar. NOT a second calendar — this writes into the
-// one on /life (plugins/q-life.js), so a holiday shows up next to the dentist
-// and Q's list_events knows about it. Two marks, out and home, because a
-// life event is a single day and a fortnight of solid blocks would bury
-// everything else on the page.
+router.post('/api/people', requirePerson, express.json({ limit: '16kb' }), (req, res) => {
+    try { res.json({ ok: true, person: qPeople.add(req.body || {}, req.person.email) }); }
+    catch (e) { res.status(400).json({ ok: false, message: e.message }); }
+});
+
+router.patch('/api/people/:id', requirePerson, express.json({ limit: '16kb' }), (req, res) => {
+    const out = qPeople.update(req.params.id, req.body || {}, req.person.email);
+    if (!out) return res.status(404).json({ ok: false, error: 'not_found' });
+    res.json({ ok: true, person: out });
+});
+
+router.delete('/api/people/:id', requirePerson, (req, res) => {
+    if (!qPeople.remove(req.params.id, req.person.email)) {
+        return res.status(404).json({ ok: false, error: 'not_found' });
+    }
+    res.json({ ok: true });
+});
+
+// What everyone has said back. Each person has their OWN link, so an answer
+// arrives already attached to a name — nothing is attributed by guesswork.
 //
-// It refuses without real dates. The printed "5-12 Oct 2026" off a listing is
-// a suggestion the page puts in two date boxes for her to confirm; a holiday
-// marked on the wrong week is worse than one not marked at all.
-router.post('/api/trips/board/:id/calendar', requirePerson, express.json({ limit: '8kb' }), (req, res) => {
-    if (!qTripBoard) return boardUnavailable(res);
-    const owner = req.person.email;
-    const h = qTripBoard.get(req.params.id, owner);
-    if (!h) return res.status(404).json({ ok: false, error: 'not_found' });
-    if (!h.startDate) {
-        return res.status(400).json({
-            ok: false, error: 'no_start_date',
-            message: 'Set the going-out date on the card first — I will not guess it from the listing.',
-        });
-    }
-
-    try {
-        const where = [h.place, h.country].filter(Boolean).join(', ') || h.title;
-
-        // A "Trips" category so they are one colour on /life, made once.
-        let category = 'trips';
-        try {
-            if (!qLife.listCategories(owner).some(c => c.slug === 'trips')) {
-                qLife.addCategory({ name: 'Trips', color: '#38bdf8' }, owner);
-            }
-        } catch (e) { category = null; }   // a missing category must not lose the trip
-
-        const out = qLife.addEvent({
-            title: `Away — ${where}`,
-            date: h.startDate,
-            location: where,
-            notes: [h.title, h.endDate ? `Back ${h.endDate}` : '', h.company ? `Booked with ${h.company}` : '', h.link]
-                .filter(Boolean).join('\n'),
-            category, source: 'trips',
-        }, owner);
-
-        let back = null;
-        if (h.endDate && h.endDate !== h.startDate) {
-            back = qLife.addEvent({
-                title: `Home — ${where}`,
-                date: h.endDate,
-                location: where,
-                notes: h.title,
-                category, source: 'trips',
-            }, owner);
-        }
-
-        qTripBoard.update(h.id, { calendarEventId: out.id }, owner);
-        res.json({ ok: true, event: out, returnEvent: back });
-    } catch (e) {
-        res.status(400).json({ ok: false, error: 'calendar_failed', message: e.message });
-    }
-});
-
-// Take it off the calendar again. Removes the pair by the id we kept plus any
-// "Home —" event sitting on the return date for the same place.
-router.delete('/api/trips/board/:id/calendar', requirePerson, (req, res) => {
-    if (!qTripBoard) return boardUnavailable(res);
-    const owner = req.person.email;
-    const h = qTripBoard.get(req.params.id, owner);
-    if (!h) return res.status(404).json({ ok: false, error: 'not_found' });
-    let removed = 0;
-    try {
-        if (h.calendarEventId && qLife.deleteEvent(h.calendarEventId, owner)) removed++;
-        if (h.endDate) {
-            const where = [h.place, h.country].filter(Boolean).join(', ') || h.title;
-            for (const e of qLife.listEvents(owner, { from: h.endDate, to: h.endDate }) || []) {
-                if (e.source === 'trips' && e.title === `Home — ${where}`) {
-                    if (qLife.deleteEvent(e.id, owner)) removed++;
-                }
-            }
-        }
-    } catch (e) { /* fall through — the card must still let go of the id */ }
-    qTripBoard.update(h.id, { calendarEventId: '' }, owner);
-    res.json({ ok: true, removed });
-});
-
-// The trips that are actually happening, for the strip at the top of the page.
-router.get('/api/trips/board/calendar', requirePerson, (req, res) => {
-    if (!qTripBoard) return boardUnavailable(res);
-    const today = new Date().toISOString().slice(0, 10);
-    const marked = qTripBoard.list(req.person.email)
-        .filter(h => h.startDate)
-        .map(h => ({
-            id: h.id, title: h.title,
-            where: [h.place, h.country].filter(Boolean).join(', '),
-            startDate: h.startDate, endDate: h.endDate,
-            nights: h.nights, onCalendar: !!h.calendarEventId,
-            past: (h.endDate || h.startDate) < today,
-        }))
-        .sort((a, b) => a.startDate < b.startDate ? -1 : 1);
-    res.json({ ok: true, today, trips: marked });
-});
-
-// What everyone has said back, per holiday. This is what fills the replies box
-// on the card: a name, and what that person actually answered.
+// The silence matters as much as the answers: a person who has not opened
+// their link yet is the reason a decision is still waiting, and that is
+// invisible unless it is said out loud. So everyone who was sent a link
+// appears here, answered or not.
 router.get('/api/trips/board/replies', requirePerson, (req, res) => {
     if (!qTripBoard) return boardUnavailable(res);
     const owner = req.person.email;
     const out = {};
-    const tokens = new Set(qTripBoard.list(owner).map(h => h.linkmailToken).filter(Boolean));
+    const tokens = new Set();
+    for (const h of qTripBoard.list(owner)) {
+        for (const t of (h.linkmailTokens || [])) tokens.add(t);
+        if (h.linkmailToken) tokens.add(h.linkmailToken);
+    }
     for (const token of tokens) {
         const rec = qLinkmail.readLink(owner, token);
         if (!rec) continue;
         out[token] = {
+            who: rec.recipientName || '',
+            // Answering is proof of opening. Counting only page views showed
+            // "not opened yet" directly above that person's own answer.
+            opened: (rec.views || 0) > 0 || !!(rec.answers && rec.answers.length),
             views: rec.views || 0,
             lastViewedAt: rec.lastViewedAt || null,
+            revoked: !!rec.revoked,
             answers: (rec.answers || []).map(a => ({
-                who: a.name || '',
+                who: a.name || rec.recipientName || '',
                 question: a.question,
                 said: a.summary || '',
                 at: a.at || null,
             })),
-            // Anything they typed at Q on the link, which is where "Sarah
-            // doesn't like the location" tends to actually get said.
+            // Anything they typed at Q on the link, which is where "I don't
+            // like the location" actually tends to get said.
             said: (rec.chat || []).filter(m => m.role === 'user').slice(-12).map(m => m.content),
         };
     }

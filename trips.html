@@ -198,6 +198,33 @@ section.results { margin-top: 26px; }
    including every box she types into: CLAUDE.md, "NO INDENTS. NONE." The
    drop zone reads as a slab lying on the page waiting to be loaded, not a
    hole cut in it. */
+/* ── who it goes to ───────────────────────────────────────
+   Everything raised, including the boxes she types names into. */
+.who-row { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+.person {
+    display: inline-flex; align-items: center; gap: 8px;
+    background: #f3f3f3; border-radius: 11px; padding: 8px 11px;
+    box-shadow: 5px 5px 12px #ababab, -4px -4px 9px #ffffff;
+    font-size: 13px; cursor: pointer;
+}
+.person input[type=checkbox] { accent-color: #e91e63; width: 15px; height: 15px; cursor: pointer; }
+.person .nm { font-weight: 600; }
+.person .em { font-size: 11px; color: rgba(0,0,0,0.42); }
+.person .x { border: 0; background: none; cursor: pointer; font-size: 15px; line-height: 1;
+             color: rgba(0,0,0,0.3); padding: 0 2px; }
+.person .x:hover { color: #e91e63; }
+.person.add { gap: 6px; }
+.person.add input {
+    border: 0; outline: 0; background: #f3f3f3; font-family: inherit; font-size: 12.5px;
+    padding: 6px 9px; border-radius: 9px; width: 108px;
+    box-shadow: 4px 4px 9px #ababab, -3px -3px 7px #ffffff;
+}
+.lm-links { display: flex; flex-direction: column; gap: 8px; margin-bottom: 14px; }
+.lm-links.hide { display: none; }
+.one-link { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.one-link .nm { font-size: 13px; font-weight: 600; min-width: 68px; }
+.hol .say .waiting { color: rgba(0,0,0,0.4); font-style: normal; }
+
 section.board { margin-top: 34px; }
 .board-head { display: flex; align-items: baseline; justify-content: space-between; gap: 14px; flex-wrap: wrap; margin-bottom: 14px; }
 .board-head h2 { font-size: 19px; font-weight: 600; margin: 0; color: rgba(0,0,0,0.75); }
@@ -506,6 +533,9 @@ section.board { margin-top: 34px; }
         </div>
 
         <div class="diary hide" id="diary"></div>
+
+        <div class="who-row" id="who-row"></div>
+        <div class="lm-links hide" id="lm-links"></div>
 
         <div class="drop" id="drop">
             <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>
@@ -1066,8 +1096,13 @@ function drawBoard() {
     }
 
     $('board-cards').innerHTML = board.map(h => {
-        const r = h.linkmailToken ? replies[h.linkmailToken] : null;
-        const said = r ? r.answers.filter(a => a.said) : [];
+        // A holiday can have gone out on several links — one per person.
+        const mine = (h.linkmailTokens && h.linkmailTokens.length
+            ? h.linkmailTokens : (h.linkmailToken ? [h.linkmailToken] : []))
+            .map(t => replies[t]).filter(Boolean);
+        const said = mine.flatMap(x => x.answers).filter(a => a.said);
+        const waiting = mine.filter(x => x.who && !x.answers.length).map(x => x.who);
+        const r = { said: mine.flatMap(x => x.said) };
         const initial = (h.company || h.title || '?').trim().charAt(0).toUpperCase();
         return `
         <article class="hol" data-id="${esc(h.id)}">
@@ -1093,6 +1128,7 @@ function drawBoard() {
           ${h.pros.length ? `<ul class="pc-list">${h.pros.map(p => `<li>${esc(p)}</li>`).join('')}</ul>` : ''}
           ${h.cons.length ? `<ul class="pc-list bad">${h.cons.map(p => `<li>${esc(p)}</li>`).join('')}</ul>` : ''}
 
+          ${waiting.length ? `<div class="said"><div class="say waiting">Waiting on ${esc(waiting.join(', '))}</div></div>` : ''}
           ${said.length ? `<div class="said">${said.map(a => `
              <div class="say"><b>${esc(a.who || 'They')}</b>: ${esc(a.said)}
                <span class="q">${esc(a.question)}</span></div>`).join('')}</div>` : ''}
@@ -1284,20 +1320,24 @@ document.addEventListener('click', async (e) => {
     if (e.target.id === 'send-board') {
         e.target.disabled = true;
         try {
+            const picked = chosenPeople();
             const res = await fetch('/api/trips/board/share', {
                 method: 'POST', headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ title: 'Where shall we go?' }),
+                body: JSON.stringify({
+                    title: 'Where shall we go?',
+                    // One link each, addressed to them. With nobody ticked it
+                    // falls back to a single open link, which still works.
+                    people: picked.map(p => ({ name: p.name, email: p.email })),
+                }),
             });
             const j = await res.json();
             if (!j.ok) { say(j.message || 'That could not be sent.'); return; }
-            $('lm-url').value = j.fullUrl;
+            drawLinks(j.links || []);
+            $('lm-url').value = (j.links && j.links[0] && j.links[0].fullUrl) || '';
             // "Email it" reads the token off the ROW, not the box. Without this
             // line it hit `if (!token) return` and did nothing at all — no
             // error, no mail, nothing. Two sessions sharing one row.
-            $('lm-row').dataset.token = j.token;
-            $('lm-note').textContent = '';
-            $('lm-row').classList.remove('hide');
-            $('lm-row').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+            $('lm-links').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
             loadBoard();
         } finally { e.target.disabled = false; }
     }
@@ -1316,7 +1356,115 @@ document.addEventListener('change', async (e) => {
     loadBoard();
 });
 
+
+/* ── WHO IT GOES TO ─────────────────────────────────────────
+   Everyone gets their OWN link, addressed to them. A shared link where each
+   person types their name falls over the moment two of them are called Sam,
+   or somebody leaves the box empty — and then the answers cannot be trusted
+   to belong to anybody. A link minted for a person carries their name with
+   it, and q-linkmail takes the name off the link, not off the request. */
+let people = [];
+
+async function loadPeople() {
+    try {
+        const j = await (await fetch('/api/people')).json();
+        people = j.people || [];
+    } catch { people = []; }
+    drawPeople();
+}
+
+function drawPeople() {
+    const row = $('who-row');
+    row.innerHTML = people.map(p => `
+        <label class="person">
+          <input type="checkbox" data-person="${esc(p.id)}" ${p.email ? 'checked' : ''} />
+          <span class="nm">${esc(p.name)}</span>
+          <span class="em">${esc(p.email || 'no email — copy their link')}</span>
+          <button class="x" data-drop-person="${esc(p.id)}" title="Take ${esc(p.name)} off the list">&times;</button>
+        </label>`).join('')
+        + `<form class="person add" id="add-person">
+             <input id="np-name" placeholder="name" maxlength="60" />
+             <input id="np-email" placeholder="email (optional)" maxlength="120" />
+             <button class="mini" type="submit">Add</button>
+           </form>`;
+}
+
+function chosenPeople() {
+    return [...document.querySelectorAll('[data-person]:checked')]
+        .map(el => people.find(p => p.id === el.dataset.person))
+        .filter(Boolean);
+}
+
+/* Everyone's link, so the ones with no email address can still be handed on. */
+function drawLinks(links) {
+    $('lm-links').innerHTML = links.map(l => `
+        <div class="one-link">
+          <span class="nm">${esc(l.name || 'Anyone with the link')}</span>
+          <input class="lm-url" readonly value="${esc(l.fullUrl)}" />
+          <button class="mini" data-copy-link="${esc(l.fullUrl)}">Copy</button>
+          ${l.email ? `<button class="mini" data-mail-link="${esc(l.token)}" data-to="${esc(l.email)}">Email ${esc(l.name)}</button>` : ''}
+          <span class="lm-note" data-note-for="${esc(l.token)}"></span>
+        </div>`).join('');
+    $('lm-links').classList.remove('hide');
+}
+
+
+/* Adding someone, taking them off, and getting each person their own link. */
+document.addEventListener('submit', async (e) => {
+    if (e.target.id !== 'add-person') return;
+    e.preventDefault();
+    const name = $('np-name').value.trim();
+    if (!name) return;
+    const res = await fetch('/api/people', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, email: $('np-email').value.trim() }),
+    });
+    const j = await res.json();
+    if (!j.ok) { say(j.message || 'That person could not be added.'); return; }
+    await loadPeople();
+});
+
+document.addEventListener('click', async (e) => {
+    const off = e.target.closest('[data-drop-person]');
+    if (off) {
+        e.preventDefault();
+        await fetch('/api/people/' + off.dataset.dropPerson, { method: 'DELETE' });
+        loadPeople();
+        return;
+    }
+
+    const copy = e.target.closest('[data-copy-link]');
+    if (copy) {
+        const url = copy.dataset.copyLink;
+        if (navigator.clipboard) navigator.clipboard.writeText(url).catch(() => {});
+        copy.textContent = 'Copied';
+        setTimeout(() => { copy.textContent = 'Copy'; }, 1600);
+        return;
+    }
+
+    const mail = e.target.closest('[data-mail-link]');
+    if (mail) {
+        const token = mail.dataset.mailLink;
+        const note = document.querySelector(`[data-note-for="${token}"]`);
+        mail.disabled = true;
+        if (note) note.textContent = 'Sending…';
+        try {
+            const res = await fetch('/api/linkmail/mine/' + token + '/send', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ to: mail.dataset.to }),
+            });
+            const j = await res.json();
+            if (note) note.textContent = res.ok
+                ? 'Sent to ' + (j.to || []).join(', ')
+                : (j.message || 'That did not send.');
+        } catch {
+            if (note) note.textContent = 'That did not send.';
+        } finally { mail.disabled = false; }
+    }
+});
+
 loadBoard();
+loadPeople();
 </script>
 </body>
 </html>

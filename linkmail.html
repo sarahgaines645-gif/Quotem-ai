@@ -1,0 +1,639 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+<link rel="apple-touch-icon" sizes="180x180" href="/favicon-180.png" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Shared with you</title>
+<!--
+  LINKMAIL — the recipient's page.
+
+  NO /q-auth.js ON THIS PAGE, deliberately. The reader has no account and the
+  token in the URL is the whole authority; loading the auth script would bounce
+  a perfectly valid recipient to the sign-in overlay. For the same reason this
+  page uses no other script from the app (marked.min.js is behind the gate), so
+  the small markdown renderer and the slider maths are inline below.
+-->
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet" />
+<style>
+    * { box-sizing: border-box; }
+    html, body {
+        margin: 0; padding: 0;
+        background: #f3f3f3;
+        font-family: 'Space Grotesk', system-ui, sans-serif;
+        color: #1a1a1a;
+        min-height: 100vh;
+    }
+    /* NO INDENTS. NONE. Every surface on this page is raised — including the
+       boxes you type into. (Sarah, 17 Aug 2026.) The only inset in the file is
+       a button's :active, the moment under your finger. */
+    .wrap { max-width: 760px; margin: 0 auto; padding: 28px 18px 90px; }
+
+    header.page { display: flex; align-items: baseline; gap: 10px; margin-bottom: 22px; }
+    .logo { font-size: 26px; font-weight: 700; letter-spacing: -0.5px; }
+    .dot { color: #e91e63; }
+    .from { font-size: 13px; color: rgba(0,0,0,0.5); margin-left: auto; text-align: right; }
+
+    .card {
+        background: #f3f3f3;
+        box-shadow: 8px 8px 20px #ababab, -6px -6px 16px #ffffff;
+        border-radius: 18px;
+        padding: 22px;
+        margin-bottom: 18px;
+    }
+    .card.sm { box-shadow: 5px 5px 13px #ababab, -4px -4px 10px #ffffff; border-radius: 14px; padding: 16px 18px; }
+
+    h1.title { font-size: 26px; margin: 0 0 10px; line-height: 1.25; }
+    .greeting { font-size: 15px; color: rgba(0,0,0,0.62); line-height: 1.55; margin: 0; }
+
+    /* The shared body. Reading matter, so it is a raised card, never sunken. */
+    .body-copy { font-size: 15.5px; line-height: 1.62; overflow-wrap: anywhere; }
+    .body-copy h2 { font-size: 19px; margin: 20px 0 8px; }
+    .body-copy h3 { font-size: 16px; margin: 16px 0 6px; }
+    .body-copy p { margin: 0 0 12px; }
+    .body-copy ul { margin: 0 0 12px; padding-left: 20px; }
+    .body-copy li { margin-bottom: 5px; }
+    .body-copy strong { font-weight: 600; }
+    .body-copy :first-child { margin-top: 0; }
+
+    /* POSTCARDS — a destination, a document, whatever was shared. */
+    .cards { display: grid; gap: 16px; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); margin-bottom: 18px; }
+    .pc {
+        background: #f3f3f3;
+        box-shadow: 8px 8px 20px #ababab, -6px -6px 16px #ffffff;
+        border-radius: 18px; overflow: hidden;
+        display: flex; flex-direction: column;
+    }
+    .pc-photo { width: 100%; aspect-ratio: 3 / 2; object-fit: cover; display: block; background: #ececec; }
+    .pc-in { padding: 16px 18px 18px; }
+    .pc h3 { margin: 0 0 2px; font-size: 17px; font-weight: 600; }
+    .pc .sub { font-size: 12.5px; color: rgba(0,0,0,0.5); margin-bottom: 12px; }
+    .facts { display: flex; flex-wrap: wrap; gap: 14px 20px; margin-bottom: 10px; }
+    .fact .v { font-size: 17px; font-weight: 700; line-height: 1.1; }
+    .fact .l { font-size: 11px; color: rgba(0,0,0,0.45); text-transform: uppercase; letter-spacing: 0.4px; }
+    .pc .why { font-size: 13.5px; line-height: 1.5; color: rgba(0,0,0,0.66); overflow-wrap: anywhere; }
+    .pc a.more { font-size: 13px; color: #1a1a1a; text-decoration: none; display: inline-block; margin-top: 10px; }
+    .pc a.more:hover { color: #e91e63; }
+
+    /* QUESTIONS */
+    .q-text { font-size: 16px; font-weight: 600; margin: 0 0 14px; line-height: 1.4; }
+    .opts { display: flex; flex-wrap: wrap; gap: 10px; }
+    button.opt, button.act {
+        font-family: inherit; font-size: 14px; color: #1a1a1a;
+        background: #f3f3f3; border: none; cursor: pointer;
+        padding: 11px 18px; border-radius: 12px;
+        box-shadow: 5px 5px 13px #ababab, -4px -4px 10px #ffffff;
+        transition: box-shadow .12s ease, color .12s ease;
+    }
+    button.opt:hover, button.act:hover { color: #e91e63; }
+    button.opt:active, button.act:active { box-shadow: inset 3px 3px 8px #ababab, inset -2px -2px 6px #ffffff; }
+    /* Chosen shows as a dot and bold text — never by sinking the button. */
+    button.opt.on { font-weight: 700; }
+    button.opt.on::before {
+        content: ''; display: inline-block; width: 7px; height: 7px; border-radius: 50%;
+        background: #e91e63; margin-right: 9px; vertical-align: middle;
+    }
+    /* A typing field is a raised card with a caret in it. */
+    textarea.field, input.field {
+        width: 100%; font-family: inherit; font-size: 15px; color: #1a1a1a;
+        background: #f3f3f3; border: none; outline: none;
+        padding: 14px 16px; border-radius: 14px;
+        box-shadow: 5px 5px 13px #ababab, -4px -4px 10px #ffffff;
+        resize: vertical;
+    }
+    textarea.field { min-height: 92px; line-height: 1.5; }
+    .row { display: flex; gap: 10px; align-items: center; margin-top: 12px; flex-wrap: wrap; }
+    input.field.who { max-width: 220px; }
+    .saved { font-size: 13px; color: rgba(0,0,0,0.5); }
+    .saved b { color: #1a1a1a; font-weight: 600; }
+    .saved::before {
+        content: ''; display: inline-block; width: 7px; height: 7px; border-radius: 50%;
+        background: #e91e63; margin-right: 8px; vertical-align: middle;
+    }
+
+    /* SLIDER */
+    .sl-val { font-size: 28px; font-weight: 700; line-height: 1; margin-bottom: 4px; }
+    input[type=range] {
+        -webkit-appearance: none; appearance: none;
+        width: 100%; height: 30px; background: transparent; outline: none; margin: 6px 0 0;
+    }
+    input[type=range]::-webkit-slider-runnable-track {
+        height: 10px; border-radius: 6px; background: #f3f3f3;
+        box-shadow: 4px 4px 10px #ababab, -3px -3px 8px #ffffff;
+    }
+    input[type=range]::-moz-range-track {
+        height: 10px; border-radius: 6px; background: #f3f3f3;
+        box-shadow: 4px 4px 10px #ababab, -3px -3px 8px #ffffff;
+    }
+    input[type=range]::-webkit-slider-thumb {
+        -webkit-appearance: none; appearance: none;
+        width: 26px; height: 26px; border-radius: 50%; margin-top: -8px;
+        background: #f3f3f3; border: none; cursor: grab;
+        box-shadow: 4px 4px 10px #ababab, -3px -3px 8px #ffffff;
+    }
+    input[type=range]::-moz-range-thumb {
+        width: 26px; height: 26px; border-radius: 50%;
+        background: #f3f3f3; border: none; cursor: grab;
+        box-shadow: 4px 4px 10px #ababab, -3px -3px 8px #ffffff;
+    }
+    .ticks { position: relative; height: 22px; margin-top: 2px; }
+    .tick { position: absolute; transform: translateX(-50%); font-size: 10.5px; color: rgba(0,0,0,0.5); white-space: nowrap; }
+    .tick::before {
+        content: ''; display: block; width: 6px; height: 6px; border-radius: 50%;
+        background: #e91e63; margin: 0 auto 3px;
+    }
+    .outs { display: flex; flex-wrap: wrap; gap: 12px 22px; margin-top: 14px; }
+    .out .v { font-size: 19px; font-weight: 700; line-height: 1.1; }
+    .out .v.neg { color: #c62828; }
+    .out .l { font-size: 11px; color: rgba(0,0,0,0.45); text-transform: uppercase; letter-spacing: 0.4px; }
+    .inputs { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 14px; }
+    .in-wrap { display: flex; flex-direction: column; gap: 5px; }
+    .in-wrap label { font-size: 11px; color: rgba(0,0,0,0.45); text-transform: uppercase; letter-spacing: 0.4px; }
+    input.num {
+        width: 120px; font-family: inherit; font-size: 15px; font-weight: 600; color: #1a1a1a;
+        background: #f3f3f3; border: none; outline: none;
+        padding: 10px 12px; border-radius: 12px;
+        box-shadow: 5px 5px 13px #ababab, -4px -4px 10px #ffffff;
+    }
+
+    /* Q ON THE LINK */
+    .chat-log { display: flex; flex-direction: column; gap: 12px; margin-bottom: 14px; }
+    .msg { max-width: 88%; font-size: 14.5px; line-height: 1.55; padding: 13px 16px; border-radius: 14px;
+           background: #f3f3f3; box-shadow: 5px 5px 13px #ababab, -4px -4px 10px #ffffff; overflow-wrap: anywhere; }
+    .msg.me { align-self: flex-end; }
+    .msg.q { align-self: flex-start; }
+    .msg .who { font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.5px; color: rgba(0,0,0,0.4); margin-bottom: 5px; }
+    .msg.q .who { color: #e91e63; }
+
+    .state { text-align: center; padding: 60px 20px; }
+    .state h1 { font-size: 22px; margin: 0 0 8px; }
+    .state p { color: rgba(0,0,0,0.55); margin: 0; font-size: 15px; }
+    .foot { text-align: center; font-size: 12px; color: rgba(0,0,0,0.38); margin-top: 26px; }
+    @media (max-width: 560px) {
+        .wrap { padding: 20px 14px 70px; }
+        h1.title { font-size: 22px; }
+        .cards { grid-template-columns: 1fr; }
+    }
+</style>
+</head>
+<body>
+<div class="wrap" id="wrap">
+    <div class="state"><p>Opening…</p></div>
+</div>
+
+<script>
+(function () {
+    'use strict';
+    var TOKEN = (location.pathname.split('/').filter(Boolean)[1] || '').trim();
+    var wrap = document.getElementById('wrap');
+    var DATA = null;
+    var answered = {};        // questionIndex -> summary
+    var senderName = '';
+
+    // ── helpers ────────────────────────────────────────────────
+    function esc(s) {
+        return String(s == null ? '' : s)
+            .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+    }
+    function el(html) { var d = document.createElement('div'); d.innerHTML = html; return d.firstElementChild; }
+
+    // Small markdown renderer — headings, bold, bullets, paragraphs. Everything
+    // is escaped first, so nothing in a shared body can inject markup.
+    function md(src) {
+        var lines = String(src || '').replace(/\r/g, '').split('\n');
+        var out = [], list = null;
+        function closeList() { if (list) { out.push('<ul>' + list.join('') + '</ul>'); list = null; } }
+        for (var i = 0; i < lines.length; i++) {
+            var ln = lines[i];
+            var t = ln.trim();
+            if (!t) { closeList(); continue; }
+            var inline = esc(t)
+                .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
+                .replace(/(^|\s)\*([^*\s][^*]*)\*/g, '$1<em>$2</em>');
+            if (/^###\s+/.test(t)) { closeList(); out.push('<h3>' + inline.replace(/^###\s+/, '') + '</h3>'); continue; }
+            if (/^##\s+/.test(t))  { closeList(); out.push('<h2>' + inline.replace(/^##\s+/, '') + '</h2>'); continue; }
+            if (/^#\s+/.test(t))   { closeList(); out.push('<h2>' + inline.replace(/^#\s+/, '') + '</h2>'); continue; }
+            if (/^[-*]\s+/.test(t)) { list = list || []; list.push('<li>' + inline.replace(/^[-*]\s+/, '') + '</li>'); continue; }
+            closeList();
+            out.push('<p>' + inline + '</p>');
+        }
+        closeList();
+        return out.join('');
+    }
+
+    // Arithmetic over + - * / % ( ) with named variables. A hand-written parser
+    // because this page is PUBLIC: eval() or new Function() on a formula that
+    // arrived over the wire is not something to ship to someone's family.
+    function evalExpr(expr, vars) {
+        var s = String(expr || ''), i = 0;
+        function ws() { while (i < s.length && /\s/.test(s[i])) i++; }
+        function parseExpr() {
+            var v = parseTerm();
+            for (;;) {
+                ws();
+                var c = s[i];
+                if (c === '+') { i++; v += parseTerm(); }
+                else if (c === '-') { i++; v -= parseTerm(); }
+                else return v;
+            }
+        }
+        function parseTerm() {
+            var v = parseUnary();
+            for (;;) {
+                ws();
+                var c = s[i];
+                if (c === '*') { i++; v *= parseUnary(); }
+                else if (c === '/') { i++; var d = parseUnary(); v = d === 0 ? NaN : v / d; }
+                else if (c === '%') { i++; var m = parseUnary(); v = m === 0 ? NaN : v % m; }
+                else return v;
+            }
+        }
+        function parseUnary() {
+            ws();
+            if (s[i] === '-') { i++; return -parseUnary(); }
+            if (s[i] === '+') { i++; return parseUnary(); }
+            return parseAtom();
+        }
+        function parseAtom() {
+            ws();
+            if (s[i] === '(') {
+                i++;
+                var v = parseExpr();
+                ws();
+                if (s[i] === ')') i++;
+                return v;
+            }
+            var start = i;
+            while (i < s.length && /[0-9.]/.test(s[i])) i++;
+            if (i > start) return parseFloat(s.slice(start, i));
+            start = i;
+            while (i < s.length && /[A-Za-z0-9_]/.test(s[i])) i++;
+            if (i > start) {
+                var name = s.slice(start, i);
+                var val = vars[name];
+                return typeof val === 'number' && isFinite(val) ? val : NaN;
+            }
+            i++;                       // unknown character — skip it, do not hang
+            return NaN;
+        }
+        var r = parseExpr();
+        return (typeof r === 'number' && isFinite(r)) ? r : null;
+    }
+
+    function fmtNum(n) {
+        if (n == null) return '—';
+        var r = Math.round(n * 100) / 100;
+        return String(r).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+    }
+    function fmtOut(o, n) {
+        if (n == null) return '—';
+        return (o.prefix || '') + fmtNum(n) + (o.unit || '');
+    }
+
+    // ── network ────────────────────────────────────────────────
+    function api(path, opts) {
+        return fetch('/api/linkmail/open/' + TOKEN + path, opts).then(function (r) {
+            return r.json().then(function (j) { return { ok: r.ok, status: r.status, body: j }; });
+        });
+    }
+
+    function saveAnswer(qi, summary, value) {
+        answered[qi] = summary;
+        return api('/answer', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ questionIndex: qi, summary: summary, value: value, name: readerName() }),
+        });
+    }
+
+    function readerName() {
+        var live = document.getElementById('who');
+        if (live && live.value.trim()) return live.value.trim();
+        try { return localStorage.getItem('linkmail-name-' + TOKEN) || ''; } catch (e) { return ''; }
+    }
+    function setReaderName(n) {
+        try { localStorage.setItem('linkmail-name-' + TOKEN, n); } catch (e) {}
+    }
+
+    // ── render ─────────────────────────────────────────────────
+    function stateScreen(title, note) {
+        wrap.innerHTML = '<div class="state"><h1>' + esc(title) + '</h1><p>' + esc(note) + '</p></div>';
+    }
+
+    function render(d) {
+        DATA = d;
+        senderName = d.senderName || 'Someone';
+        (d.answers || []).forEach(function (a) { answered[a.questionIndex] = a.summary; });
+
+        var h = '';
+        h += '<header class="page"><span class="logo">Q<span class="dot">.</span></span>'
+           + '<span class="from">from ' + esc(senderName) + '</span></header>';
+
+        h += '<div class="card">'
+           + '<h1 class="title">' + esc(d.display.title || 'Shared with you') + '</h1>'
+           + (d.greeting ? '<p class="greeting">' + esc(d.greeting) + '</p>' : '')
+           + (d.recipientName ? '<p class="greeting">Hello ' + esc(d.recipientName) + '.</p>' : '')
+           // A link minted FOR somebody already knows who they are, so it does
+           // not ask. The box only appears on a link that was sent to nobody
+           // in particular — and then it has to ask, or the answers come back
+           // unattributed.
+           + ((d.questions && d.questions.length && !d.recipientName)
+               ? '<div class="row"><input class="field who" id="who" maxlength="60" placeholder="your name" value="'
+                 + esc(readerName()) + '" /></div>'
+               : '')
+           + '</div>';
+
+        if (d.display.body && d.display.body.trim()) {
+            h += '<div class="card body-copy">' + md(d.display.body) + '</div>';
+        }
+
+        if (d.cards && d.cards.length) {
+            h += '<div class="cards">';
+            d.cards.forEach(function (c) {
+                h += '<div class="pc">';
+                if (c.image) h += '<img class="pc-photo" src="' + esc(c.image) + '" alt="" loading="lazy" onerror="this.remove()" />';
+                h += '<div class="pc-in">';
+                h += '<h3>' + esc(c.title) + '</h3>';
+                if (c.subtitle) h += '<div class="sub">' + esc(c.subtitle) + '</div>';
+                if (c.facts && c.facts.length) {
+                    h += '<div class="facts">';
+                    c.facts.forEach(function (f) {
+                        h += '<div class="fact"><div class="v">' + esc(f.value) + '</div><div class="l">' + esc(f.label) + '</div></div>';
+                    });
+                    h += '</div>';
+                }
+                if (c.body) h += '<div class="why">' + esc(c.body) + '</div>';
+                if (c.link) h += '<a class="more" href="' + esc(c.link) + '" target="_blank" rel="noopener noreferrer">Have a look →</a>';
+                h += '</div></div>';
+            });
+            h += '</div>';
+        }
+
+        (d.questions || []).forEach(function (q, i) {
+            h += '<div class="card q" data-qi="' + i + '"><div class="q-text">' + esc(q.text) + '</div>'
+               + '<div class="q-body"></div>'
+               + '<div class="q-saved"></div></div>';
+        });
+
+        if (d.chatEnabled) {
+            h += '<div class="card"><div class="chat-log" id="chat-log"></div>'
+               + '<textarea class="field" id="chat-in" rows="2" placeholder="Ask about anything on this page"></textarea>'
+               + '<div class="row"><button class="act" id="chat-send">Ask</button>'
+               + '<span class="saved" id="chat-note" style="display:none"></span></div></div>';
+        }
+
+        h += '<div class="foot">Quotem linkmail'
+           + (d.expiresAt ? ' · open until ' + new Date(d.expiresAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'long' }) : '')
+           + '</div>';
+
+        wrap.innerHTML = h;
+
+        (d.questions || []).forEach(function (q, i) {
+            var card = wrap.querySelector('.card.q[data-qi="' + i + '"]');
+            buildQuestion(card, q, i);
+            paintSaved(card, i);
+        });
+
+        var who = document.getElementById('who');
+        if (who) {
+            who.oninput = function () { setReaderName(who.value.trim()); };
+        }
+
+        if (d.chatEnabled) wireChat(d);
+    }
+
+    function paintSaved(card, qi) {
+        var slot = card.querySelector('.q-saved');
+        if (!slot) return;
+        slot.innerHTML = answered[qi]
+            ? '<div class="row"><span class="saved">Sent to ' + esc(senderName) + ': <b>' + esc(answered[qi]) + '</b></span></div>'
+            : '';
+    }
+
+    function buildQuestion(card, q, qi) {
+        var body = card.querySelector('.q-body');
+
+        if (q.type === 'buttons') {
+            var opts = (q.options && q.options.length) ? q.options : ['Yes', 'No', 'Not sure'];
+            var box = el('<div class="opts"></div>');
+            opts.forEach(function (o) {
+                var b = el('<button class="opt" type="button">' + esc(o) + '</button>');
+                if (answered[qi] === o) b.classList.add('on');
+                b.onclick = function () {
+                    box.querySelectorAll('button.opt').forEach(function (x) { x.classList.remove('on'); });
+                    b.classList.add('on');
+                    saveAnswer(qi, o, o).then(function () { paintSaved(card, qi); });
+                };
+                box.appendChild(b);
+            });
+            body.appendChild(box);
+            return;
+        }
+
+        if (q.type === 'checklist' || q.type === 'dates') {
+            var chosen = {};
+            if (answered[qi]) String(answered[qi]).split(', ').forEach(function (v) { chosen[v] = true; });
+            var cbox = el('<div class="opts"></div>');
+            (q.options || []).forEach(function (o) {
+                var b = el('<button class="opt" type="button">' + esc(o) + '</button>');
+                if (chosen[o]) b.classList.add('on');
+                b.onclick = function () {
+                    if (chosen[o]) { delete chosen[o]; b.classList.remove('on'); }
+                    else { chosen[o] = true; b.classList.add('on'); }
+                    var picked = (q.options || []).filter(function (x) { return chosen[x]; });
+                    var extra = card.querySelector('.other-in');
+                    var txt = extra && extra.value.trim() ? picked.concat(['also: ' + extra.value.trim()]) : picked;
+                    saveAnswer(qi, txt.join(', '), picked).then(function () { paintSaved(card, qi); });
+                };
+                cbox.appendChild(b);
+            });
+            body.appendChild(cbox);
+            if (q.type === 'dates') {
+                var other = el('<div class="row"><input class="field other-in" placeholder="another date that works" /></div>');
+                body.appendChild(other);
+                var inp = other.querySelector('input');
+                inp.onchange = function () {
+                    var picked = (q.options || []).filter(function (x) { return chosen[x]; });
+                    var txt = inp.value.trim() ? picked.concat(['also: ' + inp.value.trim()]) : picked;
+                    saveAnswer(qi, txt.join(', '), picked).then(function () { paintSaved(card, qi); });
+                };
+            }
+            return;
+        }
+
+        if (q.type === 'text') {
+            var ta = el('<textarea class="field" placeholder="Your answer"></textarea>');
+            if (answered[qi]) ta.value = answered[qi];
+            var row = el('<div class="row"><button class="act" type="button">Send it</button></div>');
+            body.appendChild(ta);
+            body.appendChild(row);
+            row.querySelector('button').onclick = function () {
+                var v = ta.value.trim();
+                if (!v) return;
+                saveAnswer(qi, v, v).then(function () { paintSaved(card, qi); });
+            };
+            return;
+        }
+
+        if (q.type === 'slider' && q.slider) {
+            buildSlider(body, card, q, qi);
+        }
+    }
+
+    function buildSlider(body, card, q, qi) {
+        var sp = q.slider;
+        var head = el('<div><div class="sl-val"></div></div>');
+        var range = el('<input type="range" min="' + sp.min + '" max="' + sp.max + '" step="' + sp.step + '" value="' + sp.default + '" />');
+        var ticks = el('<div class="ticks"></div>');
+        var outs = el('<div class="outs"></div>');
+        var inbox = el('<div class="inputs"></div>');
+
+        (sp.inputs || []).forEach(function (inp) {
+            var w = el('<div class="in-wrap"><label>' + esc(inp.label) + '</label>'
+                + '<input class="num" type="number" value="' + inp.default + '" data-name="' + esc(inp.name) + '" /></div>');
+            inbox.appendChild(w);
+        });
+
+        (sp.markers || []).forEach(function (m) {
+            var pct = (m.value - sp.min) / ((sp.max - sp.min) || 1) * 100;
+            var t = el('<div class="tick" style="left:' + Math.max(0, Math.min(100, pct)) + '%">' + esc(m.label) + '</div>');
+            if (m.color) t.style.color = m.color;
+            ticks.appendChild(t);
+        });
+
+        body.appendChild(head);
+        body.appendChild(range);
+        body.appendChild(ticks);
+        if ((sp.inputs || []).length) body.appendChild(inbox);
+        body.appendChild(outs);
+        var row = el('<div class="row"><button class="act" type="button">Send it</button></div>');
+        body.appendChild(row);
+
+        function vars() {
+            var v = {};
+            Object.keys(sp.constants || {}).forEach(function (k) { v[k] = sp.constants[k]; });
+            inbox.querySelectorAll('input.num').forEach(function (n) {
+                var val = parseFloat(n.value);
+                v[n.getAttribute('data-name')] = isFinite(val) ? val : 0;
+            });
+            v.x = parseFloat(range.value);
+            return v;
+        }
+
+        function paint() {
+            var v = vars();
+            head.querySelector('.sl-val').textContent = (sp.prefix || '') + fmtNum(v.x) + (sp.unit || '');
+            var h = '';
+            (sp.outputs || []).forEach(function (o) {
+                var n = evalExpr(o.expr, v);
+                h += '<div class="out"><div class="v' + (n != null && n < 0 ? ' neg' : '') + '">'
+                   + esc(fmtOut(o, n)) + '</div><div class="l">' + esc(o.label) + '</div></div>';
+            });
+            (sp.markers || []).forEach(function (m) {
+                (m.outputs || []).forEach(function (o) {
+                    var mv = {}; Object.keys(v).forEach(function (k) { mv[k] = v[k]; });
+                    mv.m = m.value; mv.x = m.value;
+                    var n = evalExpr(o.expr, mv);
+                    h += '<div class="out"><div class="v' + (n != null && n < 0 ? ' neg' : '') + '">'
+                       + esc(fmtOut(o, n)) + '</div><div class="l">' + esc(m.label + ' · ' + o.label) + '</div></div>';
+                });
+            });
+            if (sp.points) {
+                var p = evalExpr(sp.points.expr, v);
+                h += '<div class="out"><div class="v">' + esc(p == null ? '—' : fmtNum(p) + (sp.points.unit || ''))
+                   + (sp.points.max != null ? ' <span style="font-size:12px;color:rgba(0,0,0,0.42)">/ ' + esc(String(sp.points.max)) + '</span>' : '')
+                   + '</div><div class="l">' + esc(sp.points.label) + '</div></div>';
+            }
+            outs.innerHTML = h;
+        }
+
+        function summary() {
+            var v = vars();
+            var bits = [(sp.label ? sp.label + ': ' : '') + (sp.prefix || '') + fmtNum(v.x) + (sp.unit || '')];
+            (sp.inputs || []).forEach(function (inp) {
+                bits.push(inp.label + ' ' + (inp.prefix || '') + fmtNum(v[inp.name]) + (inp.unit || ''));
+            });
+            (sp.outputs || []).forEach(function (o) { bits.push(o.label + ' ' + fmtOut(o, evalExpr(o.expr, v))); });
+            if (sp.points) {
+                var p = evalExpr(sp.points.expr, v);
+                bits.push(sp.points.label + ' ' + (p == null ? '—' : fmtNum(p)) + (sp.points.max != null ? '/' + sp.points.max : ''));
+            }
+            return bits.join(' · ');
+        }
+
+        range.oninput = paint;
+        inbox.querySelectorAll('input.num').forEach(function (n) { n.oninput = paint; });
+        row.querySelector('button').onclick = function () {
+            saveAnswer(qi, summary(), parseFloat(range.value)).then(function () { paintSaved(card, qi); });
+        };
+        paint();
+    }
+
+    function wireChat(d) {
+        var log = document.getElementById('chat-log');
+        var input = document.getElementById('chat-in');
+        var send = document.getElementById('chat-send');
+        var note = document.getElementById('chat-note');
+
+        function add(role, text) {
+            var m = el('<div class="msg ' + (role === 'user' ? 'me' : 'q') + '">'
+                + '<div class="who">' + (role === 'user' ? 'You' : 'Q') + '</div>'
+                + '<div class="t"></div></div>');
+            m.querySelector('.t').textContent = text;
+            log.appendChild(m);
+            m.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        }
+
+        (d.chat || []).forEach(function (m) { add(m.role, m.content); });
+
+        var busy = false;
+        function ask() {
+            var text = input.value.trim();
+            if (!text || busy) return;
+            busy = true;
+            input.value = '';
+            add('user', text);
+            note.style.display = '';
+            note.textContent = 'Q is reading…';
+            api('/chat', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ message: text }),
+            }).then(function (r) {
+                busy = false;
+                note.style.display = 'none';
+                if (r.body && r.body.reply) return add('assistant', r.body.reply);
+                add('assistant', (r.body && r.body.message)
+                    || 'That did not go through. Try again in a moment.');
+            }).catch(function () {
+                busy = false;
+                note.style.display = 'none';
+                add('assistant', 'That did not go through. Try again in a moment.');
+            });
+        }
+        send.onclick = ask;
+        input.addEventListener('keydown', function (e) {
+            if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); ask(); }
+        });
+    }
+
+    // ── go ─────────────────────────────────────────────────────
+    if (!/^[a-f0-9]{32}$/.test(TOKEN)) {
+        stateScreen('This link is not right', 'Check the whole address was copied — they are long.');
+        return;
+    }
+    api('', {}).then(function (r) {
+        if (r.ok && r.body && !r.body.error) return render(r.body);
+        var e = r.body && r.body.error;
+        if (e === 'expired') return stateScreen('This link has closed', 'Ask whoever sent it for a new one.');
+        if (e === 'revoked') return stateScreen('This link was withdrawn', 'Ask whoever sent it for a new one.');
+        stateScreen('Nothing here', 'This link does not exist. Check the whole address was copied.');
+    }).catch(function () {
+        stateScreen('Could not open it', 'Check your connection and try again.');
+    });
+})();
+</script>
+</body>
+</html>

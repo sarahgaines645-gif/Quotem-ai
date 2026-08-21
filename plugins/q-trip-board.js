@@ -170,8 +170,13 @@ function normalise(h, existing) {
         foundAt: prev.foundAt || S(h.foundAt, 40) || now,
         updatedAt: now,
 
-        // Set when this holiday goes out on a linkmail, so the replies can be
-        // read back onto this exact card.
+        // EVERY link this holiday has gone out on. It is a list because each
+        // person gets their OWN link — one shared link cannot tell you who
+        // answered, and that was the whole point of the change.
+        linkmailTokens: Array.isArray(h.linkmailTokens)
+            ? [...new Set(h.linkmailTokens.map(t => S(t, 64)).filter(Boolean))].slice(0, 40)
+            : (prev.linkmailTokens || (prev.linkmailToken ? [prev.linkmailToken] : [])),
+        // Kept so a card saved before the change still resolves its replies.
         linkmailToken: S(h.linkmailToken, 64) || prev.linkmailToken || '',
     };
 }
