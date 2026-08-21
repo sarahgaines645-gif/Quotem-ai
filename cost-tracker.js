@@ -62,11 +62,23 @@ const PRICE_USD_PER_MTOK = {
     'deepseek-ai/DeepSeek-V4-Pro':       { in: 1.74, out: 3.48 },   // "Input $1.74 ($0.20 cached) | output $3.48"
     'zai-org/GLM-5.2':                   { in: 1.40, out: 4.40 },   // "Input $1.40 ($0.26 cached) | output $4.40"
     'Qwen/Qwen3.5-9B':                   { in: 0.17, out: 0.25 },   // "Input $0.17 | output $0.25"
-    // Kimi K2.5: NOT listed on together.ai/pricing and the model page
-    // (together.ai/models/kimi-k2-5) says "not available on Together's
-    // Serverless API" as of 2026-08-15. Third-party trackers quote a figure
-    // but that is not the provider's page → unpriced until Together lists it.
+    // ⚠️ `moonshotai/Kimi-K2.5` was RETIRED by Together (gone from /v1/models,
+    // checked 2026-08-21). It stays here, unpriced, only so an old log line
+    // referring to it still resolves. Nothing should be calling it.
     'moonshotai/Kimi-K2.5':              { in: null, out: null },
+    // The rows below come from Together's OWN API — GET /v1/models returns a
+    // `pricing` object per model — read 2026-08-21. That is the provider's own
+    // figure, not a third-party tracker, and it is available for models the
+    // pricing PAGE never listed (which is why K2.5 sat unpriced for a week).
+    // Re-read it with:
+    //   curl -s https://api.together.xyz/v1/models -H "Authorization: Bearer $TOGETHER_API_KEY"
+    'moonshotai/Kimi-K2.5-fp4':          { in: 0.50, out: 2.80 },   // the vision model
+    'moonshotai/Kimi-K2.6':              { in: 1.20, out: 4.50 },
+    'moonshotai/Kimi-K3':                { in: 3.00, out: 15.00 },
+    'Qwen/Qwen3-VL-8B-Instruct':         { in: 0.18, out: 0.68 },
+    'Qwen/Qwen3-VL-32B-Instruct':        { in: 0.50, out: 1.50 },
+    'Qwen/Qwen2.5-VL-72B-Instruct':      { in: 1.95, out: 8.00 },
+    'google/gemma-4-31B-it':             { in: 0.39, out: 0.97 },
     // Together embeddings — https://docs.together.ai/docs/serverless-models (read 2026-08-15)
     'intfloat/multilingual-e5-large-instruct': { in: 0.02, out: 0 },
 
@@ -122,6 +134,9 @@ const warnedUnpriced = new Set();
  * rate (usd/gbp are 0 AND the entry is flagged `unpriced` in the log).
  */
 function computeCost({ model, tokensIn = 0, tokensOut = 0, cacheRead = 0, cacheWrite = 0, imageTokensIn = 0, durationMs = 0, kind = 'tokens' }) {
+    // Free lookups (YouTube Data API within quota, OpenAlex, CrossRef): a
+    // verified rate of zero — counted for volume, never "unpriced".
+    if (kind === 'youtube' || kind === 'lookup') return { usd: 0, gbp: 0, priced: true };
     if (kind === 'hf-space') {
         const hours = (durationMs || 0) / 3_600_000;
         const gbp = hours * HF_SPACE_GPU_GBP_PER_HOUR;

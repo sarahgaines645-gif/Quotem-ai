@@ -23,9 +23,30 @@ const Q_CONFIG = {
   // switch the call to a vision-capable model on the same Together key.
   // Kimi K2.5 (Moonshot AI) — strong on OCR / document reading / structured
   // image understanding. Open-weights, sovereignty-compatible.
+  //
+  // ⚠️ 21 Aug 2026 — `moonshotai/Kimi-K2.5` HAS BEEN RETIRED by Together and is
+  // no longer among the models this key can reach (checked against
+  // GET /v1/models: 279 models, no plain K2.5; K2.5-fp4, K2.6 and K3 remain).
+  // That id silently took out FIVE features at once, because every one of them
+  // reads this single setting: the form filler, /life's letter-and-photo
+  // intake, analyze_document (Q's eyes in chat), the dot plotter, and the trip
+  // board's screenshot reader. Sarah spotted it — "I think kimi has been
+  // retired" — before anything else did.
+  //
+  // Moved to the fp4 serving variant of the SAME model, deliberately: every
+  // prompt in those five plugins was written and tuned against K2.5, so this
+  // is the change that alters behaviour least. If its reading quality turns
+  // out to be worse, Qwen/Qwen3-VL-32B-Instruct is a purpose-built vision
+  // model at a lower output price — but that needs its prompts re-checked.
+  //
+  // Previous: moonshotai/Kimi-K2.5 (retired from Together, Aug 2026)
   // Previous: Qwen/Qwen3.6-Plus (Apr 2026)
   // Previous: Qwen2.5-VL-72B-Instruct (retired from Together, Apr 2026)
-  visionModel: 'moonshotai/Kimi-K2.5',
+  //
+  // WHEN THIS BREAKS AGAIN — and a retirement will happen again — the check is
+  // free and takes one command:
+  //   curl -s https://api.together.xyz/v1/models -H "Authorization: Bearer $TOGETHER_API_KEY"
+  visionModel: process.env.Q_VISION_MODEL || 'moonshotai/Kimi-K2.5-fp4',
   // Utility tasks (extraction etc.). V4-Flash was removed by Together 2026-06-09;
   // using V4-Pro as fallback until a replacement fast model is confirmed available.
   fastModel: 'deepseek-ai/DeepSeek-V4-Pro',
