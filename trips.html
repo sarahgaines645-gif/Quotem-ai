@@ -69,12 +69,10 @@ a.back:hover { color: #1a1a1a; }
 .btn svg { width: 17px; height: 17px; }
 
 /* ── the map ─────────────────────────────────────────────
-   The ground is RAISED. Not a silhouette with a shadow behind it — an
-   actual lit surface: the coastline is softened into a height map, light
-   is thrown across it from the north-west (the same direction every card
-   on this page is lit from), and the far side of every coast falls into
-   shade. The land face sits a few levels lighter than the sea, because
-   that is what a surface tilted up towards the light does.
+   The ground is RAISED, and modelled — it should look like it was pressed
+   out of clay. The land is exactly the same colour as the sea; the only
+   thing that makes it visible is that it stands out of it, lit from the
+   north-west like every card on this page. See the #relief filter.
 
    The whole effect lives in the #relief filter below. Its lengths are in
    viewBox units, so scaleRelief() rescales them whenever the map zooms —
@@ -82,13 +80,15 @@ a.back:hover { color: #1a1a1a; }
 .map-card { margin-top: 14px; padding: 12px; }
 .frame {
     position: relative; border-radius: 14px; overflow: hidden;
-    background: #ebebeb;                       /* the sea, a touch below the land */
+    background: #ececec;                       /* the sea. The land is the SAME
+                                                  colour: it is visible only because
+                                                  it is raised out of it. */
     height: 300px;                             /* the map is a glance, not the page */
 }
 #map { display: block; width: 100%; height: 100%; touch-action: none; }
 @media (max-width: 760px) { .frame { height: 220px; } }
 
-#land { fill: #f6f6f6; }
+#land { fill: #ececec; }
 .hit { fill: transparent; cursor: pointer; }
 .case-body { fill: #e91e63; }
 .case-trim { fill: #ffffff; }
@@ -266,57 +266,69 @@ section.results { margin-top: 26px; }
                     </radialGradient>
                     <clipPath id="landclip"><path id="landclip-path" d="" /></clipPath>
 
-                    <!-- THE RAISE. Read top to bottom: the land is lifted off the sea,
-                         its coast is softened into a slope, that slope is lit, and the
-                         lit and shaded edges are laid back over the face. -->
-                    <filter id="relief" x="-6%" y="-8%" width="112%" height="116%"
+                    <!-- THE GROUND, MODELLED IN CLAY.
+                         Sarah, 21 Aug: "I just wanted a raised map that looked
+                         like it was made of clay." The first attempt lit the
+                         coastline and got cut paper: a hard white rim, a dark
+                         line down the other side, a flat face. What makes a
+                         thing read as modelled rather than stamped is the
+                         opposite of a crisp edge —
+
+                           a THICK soft shoulder, so the coast rolls over
+                           instead of stopping,
+                           a dome across the whole landmass, not a rim round it,
+                           the SAME material as the sea it sits in, and
+                           no sliver anywhere: you cannot model a 1mm spit of
+                           land in clay, so thin things get fatter and rounder.
+
+                         Every length here is in SCREEN PIXELS, converted to map
+                         units by scaleRelief(). -->
+                    <filter id="relief" x="-8%" y="-10%" width="116%" height="120%"
                             color-interpolation-filters="sRGB">
-                        <feDropShadow id="fx-lift" dx="5" dy="6" stdDeviation="7"
-                                      flood-color="#ababab" flood-opacity="0.95" result="lift" />
+                        <!-- fatten and round the coast: no slivers in clay -->
+                        <feMorphology id="fx-fat" in="SourceAlpha" operator="dilate"
+                                      radius="0.8" result="fat" />
+                        <!-- the shoulder. This is the whole difference between
+                             clay and cut paper: it is WIDE. -->
+                        <feGaussianBlur id="fx-roll" in="fat" stdDeviation="7" result="soft" />
+                        <!-- ...and a firm silhouette to paint inside, so the
+                             shoulder lights the edge without bleeding into the sea -->
+                        <feComponentTransfer in="soft" result="body">
+                            <feFuncA type="linear" slope="14" intercept="-5" />
+                        </feComponentTransfer>
 
-                        <!-- the coast, blurred: a slope for the light to fall down -->
-                        <feGaussianBlur id="fx-bump" in="SourceAlpha" stdDeviation="5" result="bump" />
+                        <!-- the shadow it casts on the water -->
+                        <feOffset id="fx-cast" in="body" dx="7" dy="9" result="castRaw" />
+                        <feGaussianBlur id="fx-castblur" in="castRaw" stdDeviation="9" result="castSoft" />
+                        <feColorMatrix in="castSoft" type="matrix" result="cast"
+                            values="0 0 0 0 0.64  0 0 0 0 0.64  0 0 0 0 0.64  0 0 0 0.85 0" />
 
-                        <!-- the face of the land, tilted up towards the light -->
-                        <feDiffuseLighting id="fx-dif" in="bump" surfaceScale="22"
-                                           diffuseConstant="1" lighting-color="#ffffff" result="difRaw">
-                            <feDistantLight azimuth="315" elevation="44" />
+                        <!-- the dome: light falling across the whole mass, floored
+                             so the far side darkens to a grey and never to black -->
+                        <feDiffuseLighting id="fx-dome" in="soft" surfaceScale="15"
+                                           diffuseConstant="1" lighting-color="#ffffff" result="domeRaw">
+                            <feDistantLight azimuth="315" elevation="40" />
                         </feDiffuseLighting>
-                        <feComponentTransfer in="difRaw" result="difFlat">
-                            <feFuncR type="linear" slope="0.14" intercept="0.94" />
-                            <feFuncG type="linear" slope="0.14" intercept="0.94" />
-                            <feFuncB type="linear" slope="0.14" intercept="0.94" />
+                        <feComponentTransfer in="domeRaw" result="domeTone">
+                            <feFuncR type="linear" slope="0.30" intercept="0.74" />
+                            <feFuncG type="linear" slope="0.30" intercept="0.74" />
+                            <feFuncB type="linear" slope="0.30" intercept="0.74" />
                         </feComponentTransfer>
-                        <feComposite in="difFlat" in2="SourceGraphic" operator="in" result="plateau" />
+                        <feComposite in="domeTone" in2="body" operator="in" result="dome" />
 
-                        <!-- the lit edge. The gamma curve is what keeps the middle of a
-                             continent flat: a level surface catches a little of every
-                             specular light, and left alone that veils the whole landmass. -->
-                        <feSpecularLighting id="fx-hi" in="bump" surfaceScale="22" specularConstant="1"
-                                            specularExponent="11" lighting-color="#ffffff" result="hiRaw">
-                            <feDistantLight azimuth="315" elevation="44" />
+                        <!-- a broad low sheen where the clay turns towards the
+                             light. The exponent is LOW on purpose: a high one
+                             gives a tight hot rim, which is what read as a sticker. -->
+                        <feSpecularLighting id="fx-sheen" in="soft" surfaceScale="15"
+                                            specularConstant="0.5" specularExponent="4"
+                                            lighting-color="#ffffff" result="sheenRaw">
+                            <feDistantLight azimuth="315" elevation="40" />
                         </feSpecularLighting>
-                        <feComponentTransfer in="hiRaw" result="hiG">
-                            <feFuncA type="gamma" amplitude="1" exponent="3" offset="0" />
-                        </feComponentTransfer>
-                        <feComposite in="hiG" in2="SourceAlpha" operator="in" result="hi" />
-
-                        <!-- the shaded edge: the same light from the opposite side,
-                             repainted grey so it never falls to black -->
-                        <feSpecularLighting id="fx-lo" in="bump" surfaceScale="22" specularConstant="1"
-                                            specularExponent="11" lighting-color="#ffffff" result="loRaw">
-                            <feDistantLight azimuth="135" elevation="44" />
-                        </feSpecularLighting>
-                        <feComponentTransfer in="loRaw" result="loG">
-                            <feFuncA type="gamma" amplitude="1" exponent="3" offset="0" />
-                        </feComponentTransfer>
-                        <feColorMatrix in="loG" type="matrix" result="loC"
-                            values="0 0 0 0 0.60  0 0 0 0 0.60  0 0 0 0 0.60  0 0 0 1 0" />
-                        <feComposite in="loC" in2="SourceAlpha" operator="in" result="lo" />
+                        <feComposite in="sheenRaw" in2="body" operator="in" result="sheen" />
 
                         <feMerge>
-                            <feMergeNode in="lift" /><feMergeNode in="plateau" />
-                            <feMergeNode in="lo" /><feMergeNode in="hi" />
+                            <feMergeNode in="cast" /><feMergeNode in="dome" />
+                            <feMergeNode in="sheen" />
                         </feMerge>
                     </filter>
 
@@ -391,16 +403,16 @@ function unitsPerPx() {
     return w ? view.w / w : view.w / 1000;
 }
 
-/* The relief, in screen pixels. These are the numbers the look was tuned at. */
-const RELIEF = { dx: 2.5, dy: 3, blur: 3.5, bump: 2.5, surface: 11 };
+/* The clay, in screen pixels. These are the numbers it was tuned at. */
+const RELIEF = { fat: 0.4, roll: 3.6, surface: 7.8, castX: 3.6, castY: 4.6, castBlur: 4.6 };
 function scaleRelief() {
     const u = unitsPerPx();
-    const lift = $('fx-lift');
-    lift.setAttribute('dx', (RELIEF.dx * u).toFixed(3));
-    lift.setAttribute('dy', (RELIEF.dy * u).toFixed(3));
-    lift.setAttribute('stdDeviation', (RELIEF.blur * u).toFixed(3));
-    $('fx-bump').setAttribute('stdDeviation', (RELIEF.bump * u).toFixed(3));
-    for (const id of ['fx-dif', 'fx-hi', 'fx-lo'])
+    $('fx-fat').setAttribute('radius', (RELIEF.fat * u).toFixed(3));
+    $('fx-roll').setAttribute('stdDeviation', (RELIEF.roll * u).toFixed(3));
+    $('fx-cast').setAttribute('dx', (RELIEF.castX * u).toFixed(3));
+    $('fx-cast').setAttribute('dy', (RELIEF.castY * u).toFixed(3));
+    $('fx-castblur').setAttribute('stdDeviation', (RELIEF.castBlur * u).toFixed(3));
+    for (const id of ['fx-dome', 'fx-sheen'])
         $(id).setAttribute('surfaceScale', (RELIEF.surface * u).toFixed(3));
 }
 
