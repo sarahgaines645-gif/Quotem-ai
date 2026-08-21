@@ -1,0 +1,695 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+<link rel="apple-touch-icon" sizes="180x180" href="/favicon-180.png" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Trips</title>
+<script src="/q-auth.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet" />
+<style>
+* { box-sizing: border-box; }
+html, body {
+    margin: 0; padding: 0;
+    background: #f3f3f3;
+    font-family: 'Space Grotesk', system-ui, -apple-system, sans-serif;
+    color: #1a1a1a;
+    min-height: 100vh;
+}
+/* Top padding is deliberately tight. The title is not the product — the map and
+   the controls have to be on the first screen without scrolling. */
+.wrap { max-width: 1080px; margin: 0 auto; padding: 20px 20px 90px; }
+
+header.page { display: flex; align-items: center; gap: 16px; margin-bottom: 16px; }
+.logo { font-size: 28px; font-weight: 700; line-height: 1; }
+.dot { color: #e91e63; }
+h1.heading { font-size: 24px; font-weight: 600; margin: 0; line-height: 1; }
+header.page .spacer { flex: 1; }
+a.back {
+    font-size: 14px; color: rgba(0,0,0,0.55); text-decoration: none;
+    padding: 9px 15px; background: #f3f3f3; border-radius: 12px;
+    box-shadow: 4px 4px 10px #ababab, -3px -3px 8px #ffffff;
+}
+a.back:hover { color: #1a1a1a; }
+
+/* ── the brief ───────────────────────────────────────────
+   NOTHING on this page is indented. Everything raises. Depth comes from
+   things standing off the surface, never from wells cut into it.
+   One tight row, because controls are not the point of the page. */
+.panel {
+    background: #f3f3f3; border-radius: 18px; padding: 14px;
+    box-shadow: 7px 7px 16px #ababab, -5px -5px 13px #ffffff;
+}
+.brief { display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-end; }
+.field { flex: 1 1 120px; min-width: 0; }
+.field.go { flex: 0 0 auto; }
+.field label {
+    display: block; font-size: 10px; font-weight: 600; letter-spacing: .07em;
+    text-transform: uppercase; color: rgba(0,0,0,0.42); margin-bottom: 5px;
+}
+.field input, .field select {
+    width: 100%; border: 0; outline: 0; background: #f3f3f3;
+    font-family: inherit; font-size: 14px; font-weight: 500; color: #1a1a1a;
+    padding: 9px 12px; border-radius: 11px;
+    box-shadow: 4px 4px 10px #ababab, -3px -3px 8px #ffffff;
+    -webkit-appearance: none; appearance: none;
+}
+.field select { cursor: pointer; }
+.field input:focus, .field select:focus { box-shadow: 6px 6px 14px #a3a3a3, -4px -4px 10px #ffffff; }
+.btn {
+    border: 0; cursor: pointer; font-family: inherit; font-size: 15px; font-weight: 600;
+    color: #1a1a1a; background: #f3f3f3; padding: 10px 18px; border-radius: 11px;
+    box-shadow: 5px 5px 13px #ababab, -4px -4px 10px #ffffff;
+    display: inline-flex; align-items: center; gap: 9px; justify-content: center; white-space: nowrap;
+}
+.btn:hover { color: #e91e63; }
+.btn:active { box-shadow: 2px 2px 6px #ababab, -2px -2px 5px #ffffff; }
+.btn[disabled] { opacity: .55; cursor: default; }
+.btn svg { width: 17px; height: 17px; }
+
+/* ── the map ─────────────────────────────────────────────
+   The ground is RAISED. Not a silhouette with a shadow behind it — an
+   actual lit surface: the coastline is softened into a height map, light
+   is thrown across it from the north-west (the same direction every card
+   on this page is lit from), and the far side of every coast falls into
+   shade. The land face sits a few levels lighter than the sea, because
+   that is what a surface tilted up towards the light does.
+
+   The whole effect lives in the #relief filter below. Its lengths are in
+   viewBox units, so scaleRelief() rescales them whenever the map zooms —
+   without that, zooming in melts the coast into whipped cream. */
+.map-card { margin-top: 14px; padding: 12px; }
+.frame {
+    position: relative; border-radius: 14px; overflow: hidden;
+    background: #ebebeb;                       /* the sea, a touch below the land */
+    height: 300px;                             /* the map is a glance, not the page */
+}
+#map { display: block; width: 100%; height: 100%; touch-action: none; }
+@media (max-width: 760px) { .frame { height: 220px; } }
+
+#land { fill: #f6f6f6; }
+.hit { fill: transparent; cursor: pointer; }
+.case-body { fill: #e91e63; }
+.case-trim { fill: #ffffff; }
+.place { fill: #e91e63; }
+.origin-dot { fill: #1a1a1a; }
+.origin-ring { fill: none; stroke: #1a1a1a; stroke-width: 2; opacity: .28; }
+
+.map-tip {
+    position: absolute; pointer-events: none; opacity: 0; transition: opacity .12s;
+    background: #f3f3f3; border-radius: 12px; padding: 11px 14px;
+    box-shadow: 6px 6px 16px #9d9d9d, -5px -5px 12px #ffffff;
+    font-size: 13px; line-height: 1.45; white-space: nowrap; z-index: 4;
+}
+.map-tip b { display: block; font-size: 14px; font-weight: 700; margin-bottom: 3px; }
+.map-tip .m { color: rgba(0,0,0,0.55); }
+.map-tip .pink { color: #e91e63; font-weight: 600; }
+
+.legend { display: flex; flex-wrap: wrap; gap: 8px 22px; margin-top: 14px; font-size: 13px; color: rgba(0,0,0,0.55); }
+.legend span { display: inline-flex; align-items: center; gap: 8px; }
+.pip { width: 11px; height: 11px; border-radius: 50%; flex: none; }
+.pip.on { background: #e91e63; }
+.pip.off { background: #d4d4d4; }
+.pip.case { width: 14px; height: 11px; border-radius: 2px; background: #e91e63; position: relative; }
+.pip.case::after { content: ""; position: absolute; left: 4px; top: -4px; width: 6px; height: 4px;
+                   border: 1.5px solid #e91e63; border-bottom: 0; border-radius: 3px 3px 0 0; }
+
+/* ── results ─────────────────────────────────────────────── */
+section.results { margin-top: 26px; }
+.results-head { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; flex-wrap: wrap; margin-bottom: 14px; }
+.results-head h2 { font-size: 19px; font-weight: 600; margin: 0; color: rgba(0,0,0,0.75); }
+.results-head .count { font-size: 13px; color: rgba(0,0,0,0.45); }
+
+/* ── the destinations, as postcards ──────────────────────
+   A raised card of the same material as the page. The photo sits on it like
+   a print, with a paper margin round it and its own lift, and a stamp in the
+   corner carries its place in the running order. Everything raises.
+
+   Small on purpose: these are a shortlist to scan, so more of them fit on a
+   screen at once than read like a brochure page. */
+.cards { display: grid; gap: 14px; grid-template-columns: repeat(auto-fill, minmax(198px, 1fr)); }
+.trip {
+    background: #f3f3f3; border-radius: 12px; padding: 8px;
+    box-shadow: 6px 6px 14px #ababab, -5px -5px 11px #ffffff;
+    display: flex; flex-direction: column; gap: 7px; transition: box-shadow .16s;
+}
+.trip.pick { box-shadow: 9px 9px 20px #a6a6a6, -7px -7px 15px #ffffff; }
+.trip.lit  { box-shadow: 11px 11px 24px #9e9e9e, -8px -8px 17px #ffffff; }
+
+.pc { position: relative; }
+.trip .shot {
+    position: relative; aspect-ratio: 2 / 1; border-radius: 6px; overflow: hidden;
+    background: #e9e9e9; border: 3px solid #fbfbfb;      /* the print's paper margin */
+    box-shadow: 3px 3px 8px #b4b4b4, -2px -2px 6px #ffffff;
+}
+.trip .shot img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.trip .noshot { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+                font-size: 11px; color: rgba(0,0,0,0.35); text-align: center; padding: 6px; }
+.stamp {
+    position: absolute; top: -6px; right: -6px; width: 24px; height: 28px; border-radius: 3px;
+    background: #f3f3f3; box-shadow: 3px 3px 8px #a8a8a8, -2px -2px 6px #ffffff;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 12px; font-weight: 700; color: #e91e63;
+}
+.stamp::before { content: ""; position: absolute; inset: 2px; border-radius: 2px;
+                 border: 1px dotted rgba(0,0,0,0.17); }
+.trip .body { display: flex; flex-direction: column; gap: 7px; flex: 1; }
+.trip h3 { margin: 0; font-size: 15px; font-weight: 600; line-height: 1.2; overflow-wrap: anywhere; }
+.trip h3 small { display: block; font-size: 10.5px; font-weight: 400; color: rgba(0,0,0,0.45); margin-top: 2px; }
+.stats { display: grid; grid-template-columns: repeat(2, 1fr); gap: 4px; }
+.stat { background: #f3f3f3; border-radius: 8px; padding: 4px 6px;
+        box-shadow: 3px 3px 7px #ababab, -2px -2px 5px #ffffff; }
+.stat .k { font-size: 8px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: rgba(0,0,0,0.42); }
+.stat .v { font-size: 13px; font-weight: 600; margin-top: 0; overflow-wrap: anywhere; }
+.stat .v.absent { color: rgba(0,0,0,0.3); font-weight: 400; font-size: 12px; }
+.reliability { display: flex; align-items: center; gap: 7px; font-size: 11px; color: rgba(0,0,0,0.6); }
+.bar { flex: 1; height: 5px; border-radius: 3px; background: #ededed; overflow: hidden;
+       box-shadow: 2px 2px 4px #bdbdbd, -1px -1px 3px #ffffff; }
+.bar i { display: block; height: 100%; border-radius: 3px; background: #e91e63; }
+.trip .why { font-size: 10.5px; color: rgba(0,0,0,0.45); line-height: 1.45; margin: 0; }
+.trip .foot { margin-top: auto; display: flex; gap: 6px; flex-wrap: wrap; }
+.mini { border: 0; cursor: pointer; font-family: inherit; font-size: 11px; font-weight: 600;
+        color: #1a1a1a; background: #f3f3f3; padding: 6px 10px; border-radius: 8px;
+        box-shadow: 3px 3px 8px #ababab, -2px -2px 6px #ffffff; }
+.mini:hover { color: #e91e63; }
+.mini:active { box-shadow: 2px 2px 5px #ababab, -2px -2px 4px #ffffff; }
+.mini[disabled] { opacity: .5; cursor: default; }
+
+.msg { margin-top: 16px; padding: 14px 16px; border-radius: 13px; font-size: 14px; line-height: 1.6;
+       background: #f3f3f3; box-shadow: 5px 5px 13px #ababab, -4px -4px 10px #ffffff;
+       color: rgba(0,0,0,0.65); }
+.msg.hide { display: none; }
+.footnote { margin-top: 38px; font-size: 12.5px; color: rgba(0,0,0,0.45); line-height: 1.7; max-width: 72ch; }
+.footnote b { color: rgba(0,0,0,0.6); font-weight: 600; }
+
+.spin { width: 15px; height: 15px; border-radius: 50%; border: 2px solid rgba(0,0,0,.15);
+        border-top-color: #e91e63; animation: sp .7s linear infinite; }
+@keyframes sp { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .spin { animation: none; } }
+
+@media (max-width: 700px) {
+    header.page { flex-wrap: wrap; gap: 10px; }
+    h1.heading { font-size: 21px; }
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+    <header class="page">
+        <div class="logo">Q<span class="dot">.</span></div>
+        <h1 class="heading">Trips</h1>
+        <div class="spacer"></div>
+        <a href="/chat" class="back">&larr; Back to chat</a>
+    </header>
+
+    <div class="panel">
+        <div class="brief">
+            <div class="field">
+                <label for="f-origin">Flying from</label>
+                <select id="f-origin"></select>
+            </div>
+            <div class="field">
+                <label for="f-date">Going out</label>
+                <input type="date" id="f-date" />
+            </div>
+            <div class="field">
+                <label for="f-nights">Nights</label>
+                <input type="number" id="f-nights" value="7" min="1" max="28" />
+            </div>
+            <div class="field">
+                <label for="f-temp">Warmer than</label>
+                <select id="f-temp">
+                    <option value="">any</option>
+                    <option value="20">20&deg;C</option>
+                    <option value="22">22&deg;C</option>
+                    <option value="25" selected>25&deg;C</option>
+                    <option value="28">28&deg;C</option>
+                    <option value="30">30&deg;C</option>
+                </select>
+            </div>
+            <div class="field">
+                <label for="f-flight">Flight under</label>
+                <select id="f-flight">
+                    <option value="">any</option>
+                    <option value="2">2 hours</option>
+                    <option value="3">3 hours</option>
+                    <option value="4" selected>4 hours</option>
+                    <option value="5">5 hours</option>
+                    <option value="8">8 hours</option>
+                    <option value="12">12 hours</option>
+                </select>
+            </div>
+            <div class="field">
+                <label>&nbsp;</label>
+                <button class="btn" id="go">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><line x1="16.5" y1="16.5" x2="21" y2="21"/></svg>
+                    Find them
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <div class="panel map-card">
+        <div class="frame" id="frame">
+            <svg id="map" viewBox="0 0 2000 756" preserveAspectRatio="xMidYMid meet"
+                 role="img" aria-labelledby="map-title map-desc">
+                <title id="map-title">Where you can go</title>
+                <desc id="map-desc">A world map. Places warm enough and close enough are coloured
+                    pink, and the best five carry a suitcase. Every figure is also in the list below.</desc>
+                <defs>
+                    <radialGradient id="hot">
+                        <stop offset="0"    stop-color="#e91e63" stop-opacity="0.62" />
+                        <stop offset="0.55" stop-color="#e91e63" stop-opacity="0.34" />
+                        <stop offset="1"    stop-color="#e91e63" stop-opacity="0" />
+                    </radialGradient>
+                    <clipPath id="landclip"><path id="landclip-path" d="" /></clipPath>
+
+                    <!-- THE RAISE. Read top to bottom: the land is lifted off the sea,
+                         its coast is softened into a slope, that slope is lit, and the
+                         lit and shaded edges are laid back over the face. -->
+                    <filter id="relief" x="-6%" y="-8%" width="112%" height="116%"
+                            color-interpolation-filters="sRGB">
+                        <feDropShadow id="fx-lift" dx="5" dy="6" stdDeviation="7"
+                                      flood-color="#ababab" flood-opacity="0.95" result="lift" />
+
+                        <!-- the coast, blurred: a slope for the light to fall down -->
+                        <feGaussianBlur id="fx-bump" in="SourceAlpha" stdDeviation="5" result="bump" />
+
+                        <!-- the face of the land, tilted up towards the light -->
+                        <feDiffuseLighting id="fx-dif" in="bump" surfaceScale="22"
+                                           diffuseConstant="1" lighting-color="#ffffff" result="difRaw">
+                            <feDistantLight azimuth="315" elevation="44" />
+                        </feDiffuseLighting>
+                        <feComponentTransfer in="difRaw" result="difFlat">
+                            <feFuncR type="linear" slope="0.14" intercept="0.94" />
+                            <feFuncG type="linear" slope="0.14" intercept="0.94" />
+                            <feFuncB type="linear" slope="0.14" intercept="0.94" />
+                        </feComponentTransfer>
+                        <feComposite in="difFlat" in2="SourceGraphic" operator="in" result="plateau" />
+
+                        <!-- the lit edge. The gamma curve is what keeps the middle of a
+                             continent flat: a level surface catches a little of every
+                             specular light, and left alone that veils the whole landmass. -->
+                        <feSpecularLighting id="fx-hi" in="bump" surfaceScale="22" specularConstant="1"
+                                            specularExponent="11" lighting-color="#ffffff" result="hiRaw">
+                            <feDistantLight azimuth="315" elevation="44" />
+                        </feSpecularLighting>
+                        <feComponentTransfer in="hiRaw" result="hiG">
+                            <feFuncA type="gamma" amplitude="1" exponent="3" offset="0" />
+                        </feComponentTransfer>
+                        <feComposite in="hiG" in2="SourceAlpha" operator="in" result="hi" />
+
+                        <!-- the shaded edge: the same light from the opposite side,
+                             repainted grey so it never falls to black -->
+                        <feSpecularLighting id="fx-lo" in="bump" surfaceScale="22" specularConstant="1"
+                                            specularExponent="11" lighting-color="#ffffff" result="loRaw">
+                            <feDistantLight azimuth="135" elevation="44" />
+                        </feSpecularLighting>
+                        <feComponentTransfer in="loRaw" result="loG">
+                            <feFuncA type="gamma" amplitude="1" exponent="3" offset="0" />
+                        </feComponentTransfer>
+                        <feColorMatrix in="loG" type="matrix" result="loC"
+                            values="0 0 0 0 0.60  0 0 0 0 0.60  0 0 0 0 0.60  0 0 0 1 0" />
+                        <feComposite in="loC" in2="SourceAlpha" operator="in" result="lo" />
+
+                        <feMerge>
+                            <feMergeNode in="lift" /><feMergeNode in="plateau" />
+                            <feMergeNode in="lo" /><feMergeNode in="hi" />
+                        </feMerge>
+                    </filter>
+
+                    <symbol id="suitcase" viewBox="0 0 28 24">
+                        <path class="case-body" d="M4 7h20a2 2 0 0 1 2 2v11a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V9a2 2 0 0 1 2-2z"/>
+                        <path class="case-trim" d="M2 13h24v2.4H2z"/>
+                        <path class="case-body" d="M10 2h8a2 2 0 0 1 2 2v3h-2.6V4.6h-6.8V7H8V4a2 2 0 0 1 2-2z"/>
+                    </symbol>
+                </defs>
+                <path id="land" d="" fill-rule="nonzero" filter="url(#relief)" />
+                <g id="hot-layer" clip-path="url(#landclip)"></g>
+                <g id="marks"></g>
+                <g id="hits"></g>
+            </svg>
+            <div class="map-tip" id="map-tip"></div>
+        </div>
+        <div class="legend">
+            <span><i class="pip on"></i> Warm enough and in reach</span>
+            <span><i class="pip case"></i> The five best</span>
+            <span><i class="pip off"></i> Too far, or not warm enough</span>
+        </div>
+    </div>
+
+    <div class="msg hide" id="msg"></div>
+
+    <section class="results" id="results" hidden>
+        <div class="results-head">
+            <h2 id="results-title">Where you can go</h2>
+            <span class="count" id="results-count"></span>
+        </div>
+        <div class="cards" id="cards"></div>
+    </section>
+
+    <p class="footnote" id="method"></p>
+
+</div>
+
+<script>
+/* ══════════════════════════════════════════════════════════════
+   THE MAP
+
+   Flat, and deliberately not WebGL. The raise comes from the same pair
+   of shadows every card on this page uses — white up and left, grey
+   down and right — applied to the land silhouette as an SVG drop-shadow.
+   The coast lifts off a white sea the way a card lifts off the page,
+   and it costs a laptop almost nothing.
+
+   The pink is drawn at each destination's real coordinates and clipped
+   to the land, so the colour lands ON the place and stops at the coast.
+   A better score spreads further.
+   ══════════════════════════════════════════════════════════════ */
+
+const $ = id => document.getElementById(id);
+const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c =>
+    ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+const MAP = { W: 2000, H: 756, top: 80, bottom: -56 };   // overwritten by the data file
+const svg = $('map'), frame = $('frame'), tipEl = $('map-tip');
+
+function project(lon, lat) {
+    return [(lon + 180) / 360 * MAP.W, (MAP.top - lat) / (MAP.top - MAP.bottom) * MAP.H];
+}
+
+/* EVERYTHING ON THIS MAP IS SIZED IN SCREEN PIXELS, NOT MAP UNITS.
+   A length written in viewBox units means a different number of pixels at
+   every zoom AND at every window width — the same 5-unit blur that is a
+   crisp coastline on a laptop is invisible on a phone and turns to soup
+   zoomed into the Mediterranean. So: pick the size you want on screen, and
+   ask how many map units that currently is. */
+function unitsPerPx() {
+    const w = frame.getBoundingClientRect().width;
+    return w ? view.w / w : view.w / 1000;
+}
+
+/* The relief, in screen pixels. These are the numbers the look was tuned at. */
+const RELIEF = { dx: 2.5, dy: 3, blur: 3.5, bump: 2.5, surface: 11 };
+function scaleRelief() {
+    const u = unitsPerPx();
+    const lift = $('fx-lift');
+    lift.setAttribute('dx', (RELIEF.dx * u).toFixed(3));
+    lift.setAttribute('dy', (RELIEF.dy * u).toFixed(3));
+    lift.setAttribute('stdDeviation', (RELIEF.blur * u).toFixed(3));
+    $('fx-bump').setAttribute('stdDeviation', (RELIEF.bump * u).toFixed(3));
+    for (const id of ['fx-dif', 'fx-hi', 'fx-lo'])
+        $(id).setAttribute('surfaceScale', (RELIEF.surface * u).toFixed(3));
+}
+
+let projReady = false, pending = null;
+fetch('/assets/map-countries.json').then(r => r.json()).then(m => {
+    MAP.W = m.W; MAP.H = m.H; MAP.top = m.LAT_TOP; MAP.bottom = m.LAT_BOT;
+    setView(worldView());
+    $('land').setAttribute('d', m.land);
+    $('landclip-path').setAttribute('d', m.land);
+    projReady = true;
+    if (pending) { drawPlaces(pending.list, pending.origin); pending = null; }
+}).catch(e => console.warn('[trips] map shapes unavailable:', e.message));
+
+let refit;
+window.addEventListener('resize', () => {
+    clearTimeout(refit);
+    refit = setTimeout(() => {
+        if (!projReady) return;
+        if (lastFit) fitTo(lastFit); else { setView(worldView()); placeMarks(); }
+    }, 160);
+});
+
+/* ── the view: settle on whatever was found ─────────────────
+   The relief is expensive to redraw, so the zoom lands in one step rather
+   than being animated across sixty frames of it. */
+let view = { x: 0, y: 0, w: 2000, h: 756 };
+
+function setView(v) {
+    view = v;
+    svg.setAttribute('viewBox', `${v.x.toFixed(1)} ${v.y.toFixed(1)} ${v.w.toFixed(1)} ${v.h.toFixed(1)}`);
+    scaleRelief();
+}
+/* The frame is much wider than the world is tall, so a box shaped like the
+   world letterboxes inside it and shows a lot of empty ocean. Shape the view
+   like the frame instead, and the places found fill the space. */
+function frameRatio() {
+    const r = frame.getBoundingClientRect();
+    return (r.width && r.height) ? r.width / r.height : MAP.W / MAP.H;
+}
+function worldView() {
+    const ratio = frameRatio();
+    let w = MAP.W, h = w / ratio;
+    if (h > MAP.H) { h = MAP.H; w = h * ratio; }
+    return { x: (MAP.W - w) / 2, y: (MAP.H - h) / 2, w, h };
+}
+
+let lastFit = null;
+function fitTo(points) {
+    if (!points.length) return;
+    lastFit = points;
+    let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+    for (const p of points) {
+        const [x, y] = project(p.lon, p.lat);
+        x0 = Math.min(x0, x); x1 = Math.max(x1, x);
+        y0 = Math.min(y0, y); y1 = Math.max(y1, y);
+    }
+    /* Breathing room, not a border. The frame is wide and short, so the
+       height is what ends up choosing the zoom — pad it least. */
+    const padX = Math.max(60, (x1 - x0) * 0.28), padY = Math.max(26, (y1 - y0) * 0.22);
+    x0 -= padX; x1 += padX; y0 -= padY; y1 += padY;
+    const ratio = frameRatio();
+    let w = x1 - x0, h = y1 - y0;
+    if (w / h < ratio) w = h * ratio; else h = w / ratio;
+    /* The shapes are drawn from 50m Natural Earth. Past about six times in,
+       even that goes polygonal, so the fit stops there. */
+    w = Math.min(Math.max(w, MAP.W / 6), MAP.W); h = w / ratio;
+    if (h > MAP.H) { h = MAP.H; w = h * ratio; }
+    let cx = (x0 + x1) / 2, cy = (y0 + y1) / 2;
+    cx = Math.max(w / 2, Math.min(MAP.W - w / 2, cx));
+    cy = Math.max(h / 2, Math.min(MAP.H - h / 2, cy));
+    setView({ x: cx - w / 2, y: cy - h / 2, w, h });
+    placeMarks();
+}
+
+/* ── drawing ──────────────────────────────────────────────── */
+let marksData = [], originPt = null;
+
+function drawPlaces(list, origin) {
+    if (!projReady) { pending = { list, origin }; return; }
+    if (origin) originPt = origin;
+    marksData = list;
+    const hits = list.filter(d => d.pass);
+    fitTo(hits.length ? hits.concat(originPt ? [originPt] : []) : [{ lon: 0, lat: 25 }]);
+}
+
+/* The marks, also in screen pixels. A suitcase is a suitcase whether you are
+   looking at the whole world on a laptop or the Aegean on a phone. */
+const MARK = { case: [17.5, 15], dot: 3.2, ring: 5, origin: 2.2, hit: 11,
+               warm: [4.6, 5.6] };
+function placeMarks() {
+    if (!projReady) return;
+    const u = unitsPerPx();
+    const passing = marksData.filter(d => d.pass).sort((a, b) => b.score - a.score);
+
+    /* the ground warmed under each place — clipped to the coast, so the
+       colour lands on the land and stops at the sea */
+    $('hot-layer').innerHTML = passing.map(d => {
+        const [x, y] = project(d.lon, d.lat);
+        const r = (MARK.warm[0] + MARK.warm[1] * (d.score || 0)) * u;
+        return `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${r.toFixed(1)}" fill="url(#hot)" />`;
+    }).join('');
+
+    let out = '';
+    if (originPt) {
+        const [ox, oy] = project(originPt.lon, originPt.lat);
+        out += `<circle class="origin-ring" cx="${ox.toFixed(1)}" cy="${oy.toFixed(1)}" r="${(MARK.ring * u).toFixed(1)}" />`
+             + `<circle class="origin-dot"  cx="${ox.toFixed(1)}" cy="${oy.toFixed(1)}" r="${(MARK.origin * u).toFixed(1)}" />`;
+    }
+    /* Everything that made it gets a mark; the best five carry a case. */
+    for (const d of passing.slice(5)) {
+        const [x, y] = project(d.lon, d.lat);
+        out += `<circle class="place" cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${(MARK.dot * u).toFixed(1)}" />`;
+    }
+    const cw = MARK.case[0] * u, ch = MARK.case[1] * u;
+    for (const d of passing.slice(0, 5)) {
+        const [x, y] = project(d.lon, d.lat);
+        out += `<use href="#suitcase" x="${(x - cw / 2).toFixed(1)}" y="${(y - ch).toFixed(1)}" width="${cw.toFixed(1)}" height="${ch.toFixed(1)}" />`;
+    }
+    $('marks').innerHTML = out;
+
+    /* A finger is bigger than a suitcase, so what you point at is bigger too. */
+    $('hits').innerHTML = marksData.map((d, i) => {
+        const [x, y] = project(d.lon, d.lat);
+        return `<circle class="hit" data-i="${i}" cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${(MARK.hit * u).toFixed(1)}" />`;
+    }).join('');
+}
+
+/* ── hover ────────────────────────────────────────────────── */
+svg.addEventListener('pointerover', e => {
+    const t = e.target.closest('.hit'); if (!t) return;
+    const d = marksData[+t.dataset.i]; if (!d) return;
+    tipEl.innerHTML = `<b>${esc(d.label)}</b>`
+        + `<span class="m">${d.pass
+            ? `<span class="pink">${d.high}&deg;C</span> typical high &middot; ${d.rel}% of days over your bar`
+            : `${d.high != null ? d.high + '&deg;C &mdash; ' : ''}${esc(d.reason || 'not a match')}`}</span><br>`
+        + `<span class="m">${esc(d.flight)}${d.sea != null ? ` &middot; ${d.sea}&deg;C sea` : ''}</span>`;
+    tipEl.style.opacity = '1';
+    const r = frame.getBoundingClientRect(), b = t.getBoundingClientRect();
+    const tw = tipEl.offsetWidth, th = tipEl.offsetHeight;
+    let x = b.left - r.left + b.width / 2 - tw / 2;
+    let y = b.top - r.top - th - 10;
+    if (y < 4) y = b.bottom - r.top + 10;
+    tipEl.style.left = Math.max(4, Math.min(x, r.width - tw - 4)) + 'px';
+    tipEl.style.top = y + 'px';
+    highlightCard(d.iata);
+});
+svg.addEventListener('pointerout', e => {
+    if (e.target.closest('.hit')) { tipEl.style.opacity = '0'; highlightCard(null); }
+});
+function highlightCard(iata) {
+    document.querySelectorAll('.trip').forEach(el =>
+        el.classList.toggle('lit', !!iata && el.dataset.iata === iata));
+}
+
+/* ══════════════════════════════════════════════════════════════
+   THE SEARCH
+   ══════════════════════════════════════════════════════════════ */
+let current = [];
+
+/* The list arrives over the network, and pressing Find them before it lands
+   used to send an empty airport and come back with "that departure airport is
+   not in the list" — which is true, and useless. There is always an airport
+   in the box now; the full list replaces it when it arrives. */
+function loadOrigins() {
+    $('f-origin').innerHTML = '<option value="LGW">London LGW</option>';
+    return fetch('/api/trips/airports')
+        .then(r => r.json())
+        .then(j => {
+            const origins = j.origins || [];
+            if (!origins.length) return;
+            const keep = $('f-origin').value;
+            $('f-origin').innerHTML = origins.map(o =>
+                `<option value="${o.iata}">${esc(o.city)} ${o.iata}</option>`).join('');
+            $('f-origin').value = origins.some(o => o.iata === keep) ? keep : 'LGW';
+        })
+        .catch(() => { /* the fallback is already in the box */ });
+}
+function defaultDate() {
+    $('f-date').value = new Date(Date.now() + 45 * 86400000).toISOString().slice(0, 10);
+}
+function say(text) {
+    const m = $('msg');
+    if (!text) { m.classList.add('hide'); return; }
+    m.textContent = text; m.classList.remove('hide');
+}
+
+async function search() {
+    const body = {
+        origin: $('f-origin').value,
+        departDate: $('f-date').value,
+        nights: +$('f-nights').value || 7,
+        minTempC: $('f-temp').value ? +$('f-temp').value : null,
+        maxFlightH: $('f-flight').value ? +$('f-flight').value : null,
+        limit: 12,
+    };
+    if (!body.departDate) return say('Pick a date to go out on.');
+
+    const btn = $('go');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spin"></span> Checking&hellip;';
+    say('');
+    try {
+        const res = await fetch('/api/trips/search', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body),
+        });
+        const j = await res.json();
+        if (!j.ok) { say(j.message || 'That search did not work.'); return; }
+        render(j);
+    } catch {
+        say('Could not reach the trip service just now. Nothing was made up to fill the gap — try again in a moment.');
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><line x1="16.5" y1="16.5" x2="21" y2="21"/></svg> Find them';
+    }
+}
+
+function render(j) {
+    current = j.results || [];
+
+    drawPlaces((j.globe || []).map(g => ({
+        iata: g.iata, lat: g.lat, lon: g.lon, label: g.label,
+        pass: g.pass, score: g.score, high: g.high, rel: g.rel,
+        flight: g.flight, sea: g.sea, reason: g.reason,
+    })), j.origin ? { lon: j.origin.lon, lat: j.origin.lat } : null);
+
+    const R = $('results');
+    if (!current.length) {
+        R.hidden = true;
+        say(j.note || 'Nothing on the list clears that bar within that flying time. Try a lower temperature or a longer flight.');
+        return;
+    }
+    R.hidden = false;
+    $('results-count').textContent = `${j.total_matching} matched · showing the top ${current.length}`;
+
+    /* "Enfidha - Hammamet International Airport" wrapped to two lines and
+       shunted that card's figures a row below its neighbours'. The word adds
+       nothing next to an airport's name. */
+    const shortAirport = a => String(a || '')
+        .replace(/\s+International\s+Airport$/i, '')
+        .replace(/\s+Airport$/i, '');
+
+    $('cards').innerHTML = current.map((d, i) => {
+        const c = d.climate;
+        const shot = d.photo
+            ? `<img src="${esc(d.photo.url)}" alt="${esc(d.city)}" loading="lazy" />`
+            : `<div class="noshot">no photo for ${esc(d.city)}</div>`;
+        return `
+        <article class="trip ${i < 3 ? 'pick' : ''}" data-iata="${d.iata}">
+          <div class="pc"><div class="shot">${shot}</div><span class="stamp">${i + 1}</span></div>
+          <div class="body">
+            <h3>${esc(d.city)}<small>${esc(d.country)} &middot; ${esc(shortAirport(d.airport))}</small></h3>
+            <div class="stats">
+              <div class="stat"><div class="k">Typical high</div><div class="v">${c.avg_high_c}&deg;C</div></div>
+              <div class="stat"><div class="k">Sea</div>
+                <div class="v ${d.sea_c == null ? 'absent' : ''}">${d.sea_c == null ? 'inland' : d.sea_c + '&deg;C'}</div></div>
+              <div class="stat"><div class="k">Flight</div><div class="v">${esc(d.flight.label.replace('about ', ''))}</div></div>
+              <div class="stat"><div class="k">Wet days</div>
+                <div class="v ${c.wet_days_pct == null ? 'absent' : ''}">${c.wet_days_pct == null ? 'unknown' : c.wet_days_pct + '%'}</div></div>
+            </div>
+            ${c.pct_days_over_bar != null ? `
+            <div class="reliability">
+              <span>${c.pct_days_over_bar}% warm enough</span>
+              <span class="bar"><i style="width:${c.pct_days_over_bar}%"></i></span>
+            </div>` : ''}
+            <p class="why">${c.coolest_high_c}&ndash;${c.warmest_c}&deg;C over ${c.days_sampled} recorded days</p>
+            <div class="foot"><button class="mini" data-price="${d.iata}">Live prices</button></div>
+          </div>
+        </article>`;
+    }).join('');
+
+    $('method').innerHTML =
+        `<b>Where these numbers come from.</b> Temperature and sea are recorded daily observations for the
+         same ${j.nights}-night window in each of the last six years, measured at the town rather than the
+         airport &mdash; an airport can sit far enough inland to read several degrees hotter than the beach.
+         Flight times are estimated from distance, fitted to ten verified schedules and accurate to about
+         ${esc(String(current[0]?.flight?.accuracy_minutes ?? 9))} minutes; they are not a timetable.
+         Prices and reviews are a separate live lookup and are never shown until they have actually been
+         fetched. Photos come from Wikivoyage and Wikimedia Commons, and a place with no photo shows none.`;
+}
+
+document.addEventListener('click', e => {
+    const b = e.target.closest('[data-price]');
+    if (b) { b.disabled = true; b.textContent = 'Live prices coming next'; }
+});
+
+$('go').addEventListener('click', search);
+loadOrigins();
+defaultDate();
+</script>
+</body>
+</html>

@@ -1,0 +1,1418 @@
+{
+ "_source": "Airport names, cities, countries and coordinates from the OpenFlights airports dataset (openflights.org/data). Regions are an editorial grouping.",
+ "_built": "2026-08-20",
+ "origins": [
+  {
+   "iata": "LGW",
+   "name": "London Gatwick Airport",
+   "city": "London",
+   "country": "United Kingdom",
+   "lat": 51.1481,
+   "lon": -0.1903
+  },
+  {
+   "iata": "LHR",
+   "name": "London Heathrow Airport",
+   "city": "London",
+   "country": "United Kingdom",
+   "lat": 51.4706,
+   "lon": -0.4619
+  },
+  {
+   "iata": "LTN",
+   "name": "London Luton Airport",
+   "city": "London",
+   "country": "United Kingdom",
+   "lat": 51.8747,
+   "lon": -0.3683
+  },
+  {
+   "iata": "STN",
+   "name": "London Stansted Airport",
+   "city": "London",
+   "country": "United Kingdom",
+   "lat": 51.885,
+   "lon": 0.235
+  },
+  {
+   "iata": "LCY",
+   "name": "London City Airport",
+   "city": "London",
+   "country": "United Kingdom",
+   "lat": 51.5053,
+   "lon": 0.0553
+  },
+  {
+   "iata": "SEN",
+   "name": "Southend Airport",
+   "city": "Southend",
+   "country": "United Kingdom",
+   "lat": 51.5714,
+   "lon": 0.6956
+  },
+  {
+   "iata": "MAN",
+   "name": "Manchester Airport",
+   "city": "Manchester",
+   "country": "United Kingdom",
+   "lat": 53.3537,
+   "lon": -2.275
+  },
+  {
+   "iata": "LPL",
+   "name": "Liverpool John Lennon Airport",
+   "city": "Liverpool",
+   "country": "United Kingdom",
+   "lat": 53.3336,
+   "lon": -2.8497
+  },
+  {
+   "iata": "LBA",
+   "name": "Leeds Bradford Airport",
+   "city": "Leeds",
+   "country": "United Kingdom",
+   "lat": 53.8659,
+   "lon": -1.6606
+  },
+  {
+   "iata": "NCL",
+   "name": "Newcastle Airport",
+   "city": "Newcastle",
+   "country": "United Kingdom",
+   "lat": 55.0375,
+   "lon": -1.6917
+  },
+  {
+   "iata": "EDI",
+   "name": "Edinburgh Airport",
+   "city": "Edinburgh",
+   "country": "United Kingdom",
+   "lat": 55.95,
+   "lon": -3.3725
+  },
+  {
+   "iata": "GLA",
+   "name": "Glasgow International Airport",
+   "city": "Glasgow",
+   "country": "United Kingdom",
+   "lat": 55.8719,
+   "lon": -4.4331
+  },
+  {
+   "iata": "ABZ",
+   "name": "Aberdeen Dyce Airport",
+   "city": "Aberdeen",
+   "country": "United Kingdom",
+   "lat": 57.2019,
+   "lon": -2.1978
+  },
+  {
+   "iata": "BHX",
+   "name": "Birmingham International Airport",
+   "city": "Birmingham",
+   "country": "United Kingdom",
+   "lat": 52.4539,
+   "lon": -1.748
+  },
+  {
+   "iata": "EMA",
+   "name": "East Midlands Airport",
+   "city": "East Midlands",
+   "country": "United Kingdom",
+   "lat": 52.8311,
+   "lon": -1.3281
+  },
+  {
+   "iata": "BRS",
+   "name": "Bristol Airport",
+   "city": "Bristol",
+   "country": "United Kingdom",
+   "lat": 51.3827,
+   "lon": -2.7191
+  },
+  {
+   "iata": "CWL",
+   "name": "Cardiff International Airport",
+   "city": "Cardiff",
+   "country": "United Kingdom",
+   "lat": 51.3967,
+   "lon": -3.3433
+  },
+  {
+   "iata": "BFS",
+   "name": "Belfast International Airport",
+   "city": "Belfast",
+   "country": "United Kingdom",
+   "lat": 54.6575,
+   "lon": -6.2158
+  },
+  {
+   "iata": "BHD",
+   "name": "George Best Belfast City Airport",
+   "city": "Belfast",
+   "country": "United Kingdom",
+   "lat": 54.6181,
+   "lon": -5.8725
+  },
+  {
+   "iata": "NQY",
+   "name": "Newquay Cornwall Airport",
+   "city": "Newquai",
+   "country": "United Kingdom",
+   "lat": 50.4406,
+   "lon": -4.9954
+  },
+  {
+   "iata": "EXT",
+   "name": "Exeter International Airport",
+   "city": "Exeter",
+   "country": "United Kingdom",
+   "lat": 50.7344,
+   "lon": -3.4139
+  },
+  {
+   "iata": "SOU",
+   "name": "Southampton Airport",
+   "city": "Southampton",
+   "country": "United Kingdom",
+   "lat": 50.9503,
+   "lon": -1.3568
+  },
+  {
+   "iata": "JER",
+   "name": "Jersey Airport",
+   "city": "Jersey",
+   "country": "Jersey",
+   "lat": 49.2079,
+   "lon": -2.1955
+  },
+  {
+   "iata": "GCI",
+   "name": "Guernsey Airport",
+   "city": "Guernsey",
+   "country": "Guernsey",
+   "lat": 49.435,
+   "lon": -2.602
+  },
+  {
+   "iata": "IOM",
+   "name": "Isle of Man Airport",
+   "city": "Isle Of Man",
+   "country": "Isle of Man",
+   "lat": 54.0833,
+   "lon": -4.6239
+  }
+ ],
+ "destinations": [
+  {
+   "iata": "TFS",
+   "region": "Canaries & Atlantic",
+   "city": "Tenerife",
+   "country": "Spain",
+   "airport": "Tenerife South Airport",
+   "lat": 28.0445,
+   "lon": -16.5725,
+   "tz": "Atlantic/Canary"
+  },
+  {
+   "iata": "LPA",
+   "region": "Canaries & Atlantic",
+   "city": "Gran Canaria",
+   "country": "Spain",
+   "airport": "Gran Canaria Airport",
+   "lat": 27.9319,
+   "lon": -15.3866,
+   "tz": "Atlantic/Canary"
+  },
+  {
+   "iata": "ACE",
+   "region": "Canaries & Atlantic",
+   "city": "Arrecife",
+   "country": "Spain",
+   "airport": "Lanzarote Airport",
+   "lat": 28.9455,
+   "lon": -13.6052,
+   "tz": "Atlantic/Canary"
+  },
+  {
+   "iata": "FUE",
+   "region": "Canaries & Atlantic",
+   "city": "Fuerteventura",
+   "country": "Spain",
+   "airport": "Fuerteventura Airport",
+   "lat": 28.4527,
+   "lon": -13.8638,
+   "tz": "Atlantic/Canary"
+  },
+  {
+   "iata": "SPC",
+   "region": "Canaries & Atlantic",
+   "city": "Santa Cruz De La Palma",
+   "country": "Spain",
+   "airport": "La Palma Airport",
+   "lat": 28.6265,
+   "lon": -17.7556,
+   "tz": "Atlantic/Canary"
+  },
+  {
+   "iata": "FNC",
+   "region": "Canaries & Atlantic",
+   "city": "Funchal",
+   "country": "Portugal",
+   "airport": "Madeira Airport",
+   "lat": 32.6979,
+   "lon": -16.7745,
+   "tz": "Europe/Lisbon"
+  },
+  {
+   "iata": "PDL",
+   "region": "Canaries & Atlantic",
+   "city": "Ponta Delgada",
+   "country": "Portugal",
+   "airport": "João Paulo II Airport",
+   "lat": 37.7412,
+   "lon": -25.6979,
+   "tz": "Atlantic/Azores"
+  },
+  {
+   "iata": "AGP",
+   "region": "Spain & Balearics",
+   "city": "Malaga",
+   "country": "Spain",
+   "airport": "Málaga Airport",
+   "lat": 36.6749,
+   "lon": -4.4991,
+   "tz": "Europe/Madrid"
+  },
+  {
+   "iata": "ALC",
+   "region": "Spain & Balearics",
+   "city": "Alicante",
+   "country": "Spain",
+   "airport": "Alicante International Airport",
+   "lat": 38.2822,
+   "lon": -0.5582,
+   "tz": "Europe/Madrid"
+  },
+  {
+   "iata": "IBZ",
+   "region": "Spain & Balearics",
+   "city": "Ibiza",
+   "country": "Spain",
+   "airport": "Ibiza Airport",
+   "lat": 38.8729,
+   "lon": 1.3731,
+   "tz": "Europe/Madrid"
+  },
+  {
+   "iata": "PMI",
+   "region": "Spain & Balearics",
+   "city": "Palma de Mallorca",
+   "country": "Spain",
+   "airport": "Palma De Mallorca Airport",
+   "lat": 39.5517,
+   "lon": 2.7388,
+   "tz": "Europe/Madrid"
+  },
+  {
+   "iata": "MAH",
+   "region": "Spain & Balearics",
+   "city": "Menorca",
+   "country": "Spain",
+   "airport": "Menorca Airport",
+   "lat": 39.8626,
+   "lon": 4.2186,
+   "tz": "Europe/Madrid"
+  },
+  {
+   "iata": "BCN",
+   "region": "Spain & Balearics",
+   "city": "Barcelona",
+   "country": "Spain",
+   "airport": "Barcelona International Airport",
+   "lat": 41.2971,
+   "lon": 2.0785,
+   "tz": "Europe/Madrid"
+  },
+  {
+   "iata": "VLC",
+   "region": "Spain & Balearics",
+   "city": "Valencia",
+   "country": "Spain",
+   "airport": "Valencia Airport",
+   "lat": 39.4893,
+   "lon": -0.4816,
+   "tz": "Europe/Madrid"
+  },
+  {
+   "iata": "MAD",
+   "region": "Spain & Balearics",
+   "city": "Madrid",
+   "country": "Spain",
+   "airport": "Adolfo Suárez Madrid–Barajas Airport",
+   "lat": 40.4719,
+   "lon": -3.5626,
+   "tz": "Europe/Madrid"
+  },
+  {
+   "iata": "SVQ",
+   "region": "Spain & Balearics",
+   "city": "Sevilla",
+   "country": "Spain",
+   "airport": "Sevilla Airport",
+   "lat": 37.418,
+   "lon": -5.8931,
+   "tz": "Europe/Madrid"
+  },
+  {
+   "iata": "LEI",
+   "region": "Spain & Balearics",
+   "city": "Almeria",
+   "country": "Spain",
+   "airport": "Almería International Airport",
+   "lat": 36.8439,
+   "lon": -2.3701,
+   "tz": "Europe/Madrid"
+  },
+  {
+   "iata": "FAO",
+   "region": "Portugal",
+   "city": "Faro",
+   "country": "Portugal",
+   "airport": "Faro Airport",
+   "lat": 37.0144,
+   "lon": -7.9659,
+   "tz": "Europe/Lisbon"
+  },
+  {
+   "iata": "LIS",
+   "region": "Portugal",
+   "city": "Lisbon",
+   "country": "Portugal",
+   "airport": "Humberto Delgado Airport (Lisbon Portela Airport)",
+   "lat": 38.7813,
+   "lon": -9.1359,
+   "tz": "Europe/Lisbon"
+  },
+  {
+   "iata": "OPO",
+   "region": "Portugal",
+   "city": "Porto",
+   "country": "Portugal",
+   "airport": "Francisco de Sá Carneiro Airport",
+   "lat": 41.2481,
+   "lon": -8.6814,
+   "tz": "Europe/Lisbon"
+  },
+  {
+   "iata": "CTA",
+   "region": "Italy",
+   "city": "Catania",
+   "country": "Italy",
+   "airport": "Catania-Fontanarossa Airport",
+   "lat": 37.4668,
+   "lon": 15.0664,
+   "tz": "Europe/Rome"
+  },
+  {
+   "iata": "PMO",
+   "region": "Italy",
+   "city": "Palermo",
+   "country": "Italy",
+   "airport": "Falcone–Borsellino Airport",
+   "lat": 38.176,
+   "lon": 13.091,
+   "tz": "Europe/Rome"
+  },
+  {
+   "iata": "CAG",
+   "region": "Italy",
+   "city": "Cagliari",
+   "country": "Italy",
+   "airport": "Cagliari Elmas Airport",
+   "lat": 39.2515,
+   "lon": 9.0543,
+   "tz": "Europe/Rome"
+  },
+  {
+   "iata": "OLB",
+   "region": "Italy",
+   "city": "Olbia",
+   "country": "Italy",
+   "airport": "Olbia Costa Smeralda Airport",
+   "lat": 40.8987,
+   "lon": 9.5176,
+   "tz": "Europe/Rome"
+  },
+  {
+   "iata": "NAP",
+   "region": "Italy",
+   "city": "Naples",
+   "country": "Italy",
+   "airport": "Naples International Airport",
+   "lat": 40.886,
+   "lon": 14.2908,
+   "tz": "Europe/Rome"
+  },
+  {
+   "iata": "BRI",
+   "region": "Italy",
+   "city": "Bari",
+   "country": "Italy",
+   "airport": "Bari Karol Wojtyła Airport",
+   "lat": 41.1389,
+   "lon": 16.7606,
+   "tz": "Europe/Rome"
+  },
+  {
+   "iata": "FCO",
+   "region": "Italy",
+   "city": "Rome",
+   "country": "Italy",
+   "airport": "Leonardo da Vinci–Fiumicino Airport",
+   "lat": 41.8003,
+   "lon": 12.2389,
+   "tz": "Europe/Rome"
+  },
+  {
+   "iata": "MXP",
+   "region": "Italy",
+   "city": "Milano",
+   "country": "Italy",
+   "airport": "Malpensa International Airport",
+   "lat": 45.6306,
+   "lon": 8.7281,
+   "tz": "Europe/Rome"
+  },
+  {
+   "iata": "VCE",
+   "region": "Italy",
+   "city": "Venice",
+   "country": "Italy",
+   "airport": "Venice Marco Polo Airport",
+   "lat": 45.5053,
+   "lon": 12.3519,
+   "tz": "Europe/Rome"
+  },
+  {
+   "iata": "FLR",
+   "region": "Italy",
+   "city": "Florence",
+   "country": "Italy",
+   "airport": "Peretola Airport",
+   "lat": 43.81,
+   "lon": 11.2051,
+   "tz": "Europe/Rome"
+  },
+  {
+   "iata": "RHO",
+   "region": "Greece & Cyprus",
+   "city": "Rhodos",
+   "country": "Greece",
+   "airport": "Diagoras Airport",
+   "lat": 36.4054,
+   "lon": 28.0862,
+   "tz": "Europe/Athens"
+  },
+  {
+   "iata": "HER",
+   "region": "Greece & Cyprus",
+   "city": "Heraklion",
+   "country": "Greece",
+   "airport": "Heraklion International Nikos Kazantzakis Airport",
+   "lat": 35.3397,
+   "lon": 25.1803,
+   "tz": "Europe/Athens"
+  },
+  {
+   "iata": "CHQ",
+   "region": "Greece & Cyprus",
+   "city": "Chania",
+   "country": "Greece",
+   "airport": "Chania International Airport",
+   "lat": 35.5317,
+   "lon": 24.1497,
+   "tz": "Europe/Athens"
+  },
+  {
+   "iata": "KGS",
+   "region": "Greece & Cyprus",
+   "city": "Kos",
+   "country": "Greece",
+   "airport": "Kos Airport",
+   "lat": 36.7933,
+   "lon": 27.0917,
+   "tz": "Europe/Athens"
+  },
+  {
+   "iata": "CFU",
+   "region": "Greece & Cyprus",
+   "city": "Kerkyra/corfu",
+   "country": "Greece",
+   "airport": "Ioannis Kapodistrias International Airport",
+   "lat": 39.6019,
+   "lon": 19.9117,
+   "tz": "Europe/Athens"
+  },
+  {
+   "iata": "ZTH",
+   "region": "Greece & Cyprus",
+   "city": "Zakynthos",
+   "country": "Greece",
+   "airport": "Zakynthos International Airport Dionysios Solomos",
+   "lat": 37.7509,
+   "lon": 20.8843,
+   "tz": "Europe/Athens"
+  },
+  {
+   "iata": "JMK",
+   "region": "Greece & Cyprus",
+   "city": "Mykonos",
+   "country": "Greece",
+   "airport": "Mikonos Airport",
+   "lat": 37.4351,
+   "lon": 25.3481,
+   "tz": "Europe/Athens"
+  },
+  {
+   "iata": "JTR",
+   "region": "Greece & Cyprus",
+   "city": "Thira",
+   "country": "Greece",
+   "airport": "Santorini Airport",
+   "lat": 36.3992,
+   "lon": 25.4793,
+   "tz": "Europe/Athens"
+  },
+  {
+   "iata": "ATH",
+   "region": "Greece & Cyprus",
+   "city": "Athens",
+   "country": "Greece",
+   "airport": "Eleftherios Venizelos International Airport",
+   "lat": 37.9364,
+   "lon": 23.9445,
+   "tz": "Europe/Athens"
+  },
+  {
+   "iata": "SKG",
+   "region": "Greece & Cyprus",
+   "city": "Thessaloniki",
+   "country": "Greece",
+   "airport": "Thessaloniki Macedonia International Airport",
+   "lat": 40.5197,
+   "lon": 22.9709,
+   "tz": "Europe/Athens"
+  },
+  {
+   "iata": "LCA",
+   "region": "Greece & Cyprus",
+   "city": "Larnaca",
+   "country": "Cyprus",
+   "airport": "Larnaca International Airport",
+   "lat": 34.8751,
+   "lon": 33.6249,
+   "tz": "Asia/Nicosia"
+  },
+  {
+   "iata": "PFO",
+   "region": "Greece & Cyprus",
+   "city": "Paphos",
+   "country": "Cyprus",
+   "airport": "Paphos International Airport",
+   "lat": 34.718,
+   "lon": 32.4857,
+   "tz": "Asia/Nicosia"
+  },
+  {
+   "iata": "AYT",
+   "region": "Turkey",
+   "city": "Antalya",
+   "country": "Turkey",
+   "airport": "Antalya International Airport",
+   "lat": 36.8987,
+   "lon": 30.8005,
+   "tz": "Europe/Istanbul"
+  },
+  {
+   "iata": "DLM",
+   "region": "Turkey",
+   "city": "Dalaman",
+   "country": "Turkey",
+   "airport": "Dalaman International Airport",
+   "lat": 36.7131,
+   "lon": 28.7925,
+   "tz": "Europe/Istanbul"
+  },
+  {
+   "iata": "BJV",
+   "region": "Turkey",
+   "city": "Bodrum",
+   "country": "Turkey",
+   "airport": "Milas Bodrum International Airport",
+   "lat": 37.2506,
+   "lon": 27.6643,
+   "tz": "Europe/Istanbul"
+  },
+  {
+   "iata": "ADB",
+   "region": "Turkey",
+   "city": "Izmir",
+   "country": "Turkey",
+   "airport": "Adnan Menderes International Airport",
+   "lat": 38.2924,
+   "lon": 27.157,
+   "tz": "Europe/Istanbul"
+  },
+  {
+   "iata": "IST",
+   "region": "Turkey",
+   "city": "Istanbul",
+   "country": "Turkey",
+   "airport": "Istanbul Airport",
+   "lat": 41.2753,
+   "lon": 28.7519,
+   "tz": "\\N"
+  },
+  {
+   "iata": "NBE",
+   "region": "North Africa",
+   "city": "Enfidha",
+   "country": "Tunisia",
+   "airport": "Enfidha - Hammamet International Airport",
+   "lat": 36.0758,
+   "lon": 10.4386,
+   "tz": "Africa/Tunis"
+  },
+  {
+   "iata": "DJE",
+   "region": "North Africa",
+   "city": "Djerba",
+   "country": "Tunisia",
+   "airport": "Djerba Zarzis International Airport",
+   "lat": 33.875,
+   "lon": 10.7755,
+   "tz": "Africa/Tunis"
+  },
+  {
+   "iata": "TUN",
+   "region": "North Africa",
+   "city": "Tunis",
+   "country": "Tunisia",
+   "airport": "Tunis Carthage International Airport",
+   "lat": 36.851,
+   "lon": 10.2272,
+   "tz": "Africa/Tunis"
+  },
+  {
+   "iata": "MIR",
+   "region": "North Africa",
+   "city": "Monastir",
+   "country": "Tunisia",
+   "airport": "Monastir Habib Bourguiba International Airport",
+   "lat": 35.7581,
+   "lon": 10.7547,
+   "tz": "Africa/Tunis"
+  },
+  {
+   "iata": "RAK",
+   "region": "North Africa",
+   "city": "Marrakech",
+   "country": "Morocco",
+   "airport": "Menara Airport",
+   "lat": 31.6069,
+   "lon": -8.0363,
+   "tz": "Africa/Casablanca"
+  },
+  {
+   "iata": "AGA",
+   "region": "North Africa",
+   "city": "Agadir",
+   "country": "Morocco",
+   "airport": "Al Massira Airport",
+   "lat": 30.325,
+   "lon": -9.4131,
+   "tz": "Africa/Casablanca"
+  },
+  {
+   "iata": "CMN",
+   "region": "North Africa",
+   "city": "Casablanca",
+   "country": "Morocco",
+   "airport": "Mohammed V International Airport",
+   "lat": 33.3675,
+   "lon": -7.59,
+   "tz": "Africa/Casablanca"
+  },
+  {
+   "iata": "SSH",
+   "region": "North Africa",
+   "city": "Sharm El Sheikh",
+   "country": "Egypt",
+   "airport": "Sharm El Sheikh International Airport",
+   "lat": 27.9773,
+   "lon": 34.395,
+   "tz": "Africa/Cairo"
+  },
+  {
+   "iata": "HRG",
+   "region": "North Africa",
+   "city": "Hurghada",
+   "country": "Egypt",
+   "airport": "Hurghada International Airport",
+   "lat": 27.1783,
+   "lon": 33.7994,
+   "tz": "Africa/Cairo"
+  },
+  {
+   "iata": "RMF",
+   "region": "North Africa",
+   "city": "Marsa Alam",
+   "country": "Egypt",
+   "airport": "Marsa Alam International Airport",
+   "lat": 25.5571,
+   "lon": 34.5837,
+   "tz": "Africa/Cairo"
+  },
+  {
+   "iata": "TLV",
+   "region": "Middle East",
+   "city": "Tel-aviv",
+   "country": "Israel",
+   "airport": "Ben Gurion International Airport",
+   "lat": 32.0114,
+   "lon": 34.8867,
+   "tz": "Asia/Jerusalem"
+  },
+  {
+   "iata": "DXB",
+   "region": "Middle East",
+   "city": "Dubai",
+   "country": "United Arab Emirates",
+   "airport": "Dubai International Airport",
+   "lat": 25.2528,
+   "lon": 55.3644,
+   "tz": "Asia/Dubai"
+  },
+  {
+   "iata": "AUH",
+   "region": "Middle East",
+   "city": "Abu Dhabi",
+   "country": "United Arab Emirates",
+   "airport": "Abu Dhabi International Airport",
+   "lat": 24.433,
+   "lon": 54.6511,
+   "tz": "Asia/Dubai"
+  },
+  {
+   "iata": "DOH",
+   "region": "Middle East",
+   "city": "Doha",
+   "country": "Qatar",
+   "airport": "Hamad International Airport",
+   "lat": 25.2731,
+   "lon": 51.6081,
+   "tz": "\\N"
+  },
+  {
+   "iata": "MCT",
+   "region": "Middle East",
+   "city": "Muscat",
+   "country": "Oman",
+   "airport": "Muscat International Airport",
+   "lat": 23.5933,
+   "lon": 58.2844,
+   "tz": "Asia/Muscat"
+  },
+  {
+   "iata": "CDG",
+   "region": "Europe cities",
+   "city": "Paris",
+   "country": "France",
+   "airport": "Charles de Gaulle International Airport",
+   "lat": 49.0128,
+   "lon": 2.55,
+   "tz": "Europe/Paris"
+  },
+  {
+   "iata": "AMS",
+   "region": "Europe cities",
+   "city": "Amsterdam",
+   "country": "Netherlands",
+   "airport": "Amsterdam Airport Schiphol",
+   "lat": 52.3086,
+   "lon": 4.7639,
+   "tz": "Europe/Amsterdam"
+  },
+  {
+   "iata": "PRG",
+   "region": "Europe cities",
+   "city": "Prague",
+   "country": "Czech Republic",
+   "airport": "Václav Havel Airport Prague",
+   "lat": 50.1008,
+   "lon": 14.26,
+   "tz": "Europe/Prague"
+  },
+  {
+   "iata": "BUD",
+   "region": "Europe cities",
+   "city": "Budapest",
+   "country": "Hungary",
+   "airport": "Budapest Liszt Ferenc International Airport",
+   "lat": 47.4298,
+   "lon": 19.2611,
+   "tz": "Europe/Budapest"
+  },
+  {
+   "iata": "VIE",
+   "region": "Europe cities",
+   "city": "Vienna",
+   "country": "Austria",
+   "airport": "Vienna International Airport",
+   "lat": 48.1103,
+   "lon": 16.5697,
+   "tz": "Europe/Vienna"
+  },
+  {
+   "iata": "KRK",
+   "region": "Europe cities",
+   "city": "Krakow",
+   "country": "Poland",
+   "airport": "Kraków John Paul II International Airport",
+   "lat": 50.0777,
+   "lon": 19.7848,
+   "tz": "Europe/Warsaw"
+  },
+  {
+   "iata": "DUB",
+   "region": "Europe cities",
+   "city": "Dublin",
+   "country": "Ireland",
+   "airport": "Dublin Airport",
+   "lat": 53.4213,
+   "lon": -6.2701,
+   "tz": "Europe/Dublin"
+  },
+  {
+   "iata": "EDI",
+   "region": "Europe cities",
+   "city": "Edinburgh",
+   "country": "United Kingdom",
+   "airport": "Edinburgh Airport",
+   "lat": 55.95,
+   "lon": -3.3725,
+   "tz": "Europe/London"
+  },
+  {
+   "iata": "CPH",
+   "region": "Europe cities",
+   "city": "Copenhagen",
+   "country": "Denmark",
+   "airport": "Copenhagen Kastrup Airport",
+   "lat": 55.6179,
+   "lon": 12.656,
+   "tz": "Europe/Copenhagen"
+  },
+  {
+   "iata": "ARN",
+   "region": "Europe cities",
+   "city": "Stockholm",
+   "country": "Sweden",
+   "airport": "Stockholm-Arlanda Airport",
+   "lat": 59.6519,
+   "lon": 17.9186,
+   "tz": "Europe/Stockholm"
+  },
+  {
+   "iata": "OSL",
+   "region": "Europe cities",
+   "city": "Oslo",
+   "country": "Norway",
+   "airport": "Oslo Lufthavn",
+   "lat": 60.121,
+   "lon": 11.0502,
+   "tz": "Europe/Oslo"
+  },
+  {
+   "iata": "HEL",
+   "region": "Europe cities",
+   "city": "Helsinki",
+   "country": "Finland",
+   "airport": "Helsinki Vantaa Airport",
+   "lat": 60.3172,
+   "lon": 24.9633,
+   "tz": "Europe/Helsinki"
+  },
+  {
+   "iata": "ZRH",
+   "region": "Europe cities",
+   "city": "Zurich",
+   "country": "Switzerland",
+   "airport": "Zürich Airport",
+   "lat": 47.4647,
+   "lon": 8.5492,
+   "tz": "Europe/Zurich"
+  },
+  {
+   "iata": "LJU",
+   "region": "Europe cities",
+   "city": "Ljubljana",
+   "country": "Slovenia",
+   "airport": "Ljubljana Jože Pučnik Airport",
+   "lat": 46.2237,
+   "lon": 14.4576,
+   "tz": "Europe/Ljubljana"
+  },
+  {
+   "iata": "SPU",
+   "region": "Europe cities",
+   "city": "Split",
+   "country": "Croatia",
+   "airport": "Split Airport",
+   "lat": 43.5389,
+   "lon": 16.298,
+   "tz": "Europe/Zagreb"
+  },
+  {
+   "iata": "DBV",
+   "region": "Europe cities",
+   "city": "Dubrovnik",
+   "country": "Croatia",
+   "airport": "Dubrovnik Airport",
+   "lat": 42.5614,
+   "lon": 18.2682,
+   "tz": "Europe/Zagreb"
+  },
+  {
+   "iata": "SID",
+   "region": "Cape Verde",
+   "city": "Amilcar Cabral",
+   "country": "Cape Verde",
+   "airport": "Amílcar Cabral International Airport",
+   "lat": 16.7414,
+   "lon": -22.9494,
+   "tz": "Atlantic/Cape_Verde"
+  },
+  {
+   "iata": "BVC",
+   "region": "Cape Verde",
+   "city": "Boa Vista",
+   "country": "Cape Verde",
+   "airport": "Rabil Airport",
+   "lat": 16.1365,
+   "lon": -22.8889,
+   "tz": "Atlantic/Cape_Verde"
+  },
+  {
+   "iata": "MBJ",
+   "region": "Caribbean & Mexico",
+   "city": "Montego Bay",
+   "country": "Jamaica",
+   "airport": "Sangster International Airport",
+   "lat": 18.5037,
+   "lon": -77.9134,
+   "tz": "America/Jamaica"
+  },
+  {
+   "iata": "PUJ",
+   "region": "Caribbean & Mexico",
+   "city": "Punta Cana",
+   "country": "Dominican Republic",
+   "airport": "Punta Cana International Airport",
+   "lat": 18.5674,
+   "lon": -68.3634,
+   "tz": "America/Santo_Domingo"
+  },
+  {
+   "iata": "BGI",
+   "region": "Caribbean & Mexico",
+   "city": "Bridgetown",
+   "country": "Barbados",
+   "airport": "Sir Grantley Adams International Airport",
+   "lat": 13.0746,
+   "lon": -59.4925,
+   "tz": "America/Barbados"
+  },
+  {
+   "iata": "ANU",
+   "region": "Caribbean & Mexico",
+   "city": "Antigua",
+   "country": "Antigua and Barbuda",
+   "airport": "V.C. Bird International Airport",
+   "lat": 17.1367,
+   "lon": -61.7927,
+   "tz": "America/Antigua"
+  },
+  {
+   "iata": "UVF",
+   "region": "Caribbean & Mexico",
+   "city": "Hewandorra",
+   "country": "Saint Lucia",
+   "airport": "Hewanorra International Airport",
+   "lat": 13.7332,
+   "lon": -60.9526,
+   "tz": "America/St_Lucia"
+  },
+  {
+   "iata": "CUN",
+   "region": "Caribbean & Mexico",
+   "city": "Cancun",
+   "country": "Mexico",
+   "airport": "Cancún International Airport",
+   "lat": 21.0365,
+   "lon": -86.8771,
+   "tz": "America/Cancun"
+  },
+  {
+   "iata": "NAS",
+   "region": "Caribbean & Mexico",
+   "city": "Nassau",
+   "country": "Bahamas",
+   "airport": "Lynden Pindling International Airport",
+   "lat": 25.039,
+   "lon": -77.4662,
+   "tz": "America/Nassau"
+  },
+  {
+   "iata": "HAV",
+   "region": "Caribbean & Mexico",
+   "city": "Havana",
+   "country": "Cuba",
+   "airport": "José Martí International Airport",
+   "lat": 22.9892,
+   "lon": -82.4091,
+   "tz": "America/Havana"
+  },
+  {
+   "iata": "SXM",
+   "region": "Caribbean & Mexico",
+   "city": "Philipsburg",
+   "country": "Netherlands Antilles",
+   "airport": "Princess Juliana International Airport",
+   "lat": 18.041,
+   "lon": -63.1089,
+   "tz": "America/Curacao"
+  },
+  {
+   "iata": "AUA",
+   "region": "Caribbean & Mexico",
+   "city": "Oranjestad",
+   "country": "Aruba",
+   "airport": "Queen Beatrix International Airport",
+   "lat": 12.5014,
+   "lon": -70.0152,
+   "tz": "America/Aruba"
+  },
+  {
+   "iata": "MLE",
+   "region": "Indian Ocean",
+   "city": "Male",
+   "country": "Maldives",
+   "airport": "Malé International Airport",
+   "lat": 4.1918,
+   "lon": 73.5291,
+   "tz": "Indian/Maldives"
+  },
+  {
+   "iata": "MRU",
+   "region": "Indian Ocean",
+   "city": "Plaisance",
+   "country": "Mauritius",
+   "airport": "Sir Seewoosagur Ramgoolam International Airport",
+   "lat": -20.4302,
+   "lon": 57.6836,
+   "tz": "Indian/Mauritius"
+  },
+  {
+   "iata": "SEZ",
+   "region": "Indian Ocean",
+   "city": "Mahe",
+   "country": "Seychelles",
+   "airport": "Seychelles International Airport",
+   "lat": -4.6743,
+   "lon": 55.5218,
+   "tz": "Indian/Mahe"
+  },
+  {
+   "iata": "CMB",
+   "region": "Indian Ocean",
+   "city": "Colombo",
+   "country": "Sri Lanka",
+   "airport": "Bandaranaike International Colombo Airport",
+   "lat": 7.1808,
+   "lon": 79.8841,
+   "tz": "Asia/Colombo"
+  },
+  {
+   "iata": "BKK",
+   "region": "Asia",
+   "city": "Bangkok",
+   "country": "Thailand",
+   "airport": "Suvarnabhumi Airport",
+   "lat": 13.6811,
+   "lon": 100.747,
+   "tz": "Asia/Bangkok"
+  },
+  {
+   "iata": "HKT",
+   "region": "Asia",
+   "city": "Phuket",
+   "country": "Thailand",
+   "airport": "Phuket International Airport",
+   "lat": 8.1132,
+   "lon": 98.3169,
+   "tz": "Asia/Bangkok"
+  },
+  {
+   "iata": "DPS",
+   "region": "Asia",
+   "city": "Denpasar",
+   "country": "Indonesia",
+   "airport": "Ngurah Rai (Bali) International Airport",
+   "lat": -8.7482,
+   "lon": 115.167,
+   "tz": "Asia/Makassar"
+  },
+  {
+   "iata": "SIN",
+   "region": "Asia",
+   "city": "Singapore",
+   "country": "Singapore",
+   "airport": "Singapore Changi Airport",
+   "lat": 1.3502,
+   "lon": 103.994,
+   "tz": "Asia/Singapore"
+  },
+  {
+   "iata": "KUL",
+   "region": "Asia",
+   "city": "Kuala Lumpur",
+   "country": "Malaysia",
+   "airport": "Kuala Lumpur International Airport",
+   "lat": 2.7456,
+   "lon": 101.71,
+   "tz": "Asia/Kuala_Lumpur"
+  },
+  {
+   "iata": "HAN",
+   "region": "Asia",
+   "city": "Hanoi",
+   "country": "Vietnam",
+   "airport": "Noi Bai International Airport",
+   "lat": 21.2212,
+   "lon": 105.807,
+   "tz": "Asia/Saigon"
+  },
+  {
+   "iata": "SGN",
+   "region": "Asia",
+   "city": "Ho Chi Minh City",
+   "country": "Vietnam",
+   "airport": "Tan Son Nhat International Airport",
+   "lat": 10.8188,
+   "lon": 106.652,
+   "tz": "Asia/Saigon"
+  },
+  {
+   "iata": "HKG",
+   "region": "Asia",
+   "city": "Hong Kong",
+   "country": "Hong Kong",
+   "airport": "Hong Kong International Airport",
+   "lat": 22.3089,
+   "lon": 113.915,
+   "tz": "Asia/Hong_Kong"
+  },
+  {
+   "iata": "NRT",
+   "region": "Asia",
+   "city": "Tokyo",
+   "country": "Japan",
+   "airport": "Narita International Airport",
+   "lat": 35.7647,
+   "lon": 140.386,
+   "tz": "Asia/Tokyo"
+  },
+  {
+   "iata": "ICN",
+   "region": "Asia",
+   "city": "Seoul",
+   "country": "South Korea",
+   "airport": "Incheon International Airport",
+   "lat": 37.4691,
+   "lon": 126.451,
+   "tz": "Asia/Seoul"
+  },
+  {
+   "iata": "MCO",
+   "region": "Americas",
+   "city": "Orlando",
+   "country": "United States",
+   "airport": "Orlando International Airport",
+   "lat": 28.4294,
+   "lon": -81.309,
+   "tz": "America/New_York"
+  },
+  {
+   "iata": "MIA",
+   "region": "Americas",
+   "city": "Miami",
+   "country": "United States",
+   "airport": "Miami International Airport",
+   "lat": 25.7932,
+   "lon": -80.2906,
+   "tz": "America/New_York"
+  },
+  {
+   "iata": "LAS",
+   "region": "Americas",
+   "city": "Las Vegas",
+   "country": "United States",
+   "airport": "McCarran International Airport",
+   "lat": 36.0801,
+   "lon": -115.152,
+   "tz": "America/Los_Angeles"
+  },
+  {
+   "iata": "LAX",
+   "region": "Americas",
+   "city": "Los Angeles",
+   "country": "United States",
+   "airport": "Los Angeles International Airport",
+   "lat": 33.9425,
+   "lon": -118.408,
+   "tz": "America/Los_Angeles"
+  },
+  {
+   "iata": "JFK",
+   "region": "Americas",
+   "city": "New York",
+   "country": "United States",
+   "airport": "John F Kennedy International Airport",
+   "lat": 40.6398,
+   "lon": -73.7789,
+   "tz": "America/New_York"
+  },
+  {
+   "iata": "SFO",
+   "region": "Americas",
+   "city": "San Francisco",
+   "country": "United States",
+   "airport": "San Francisco International Airport",
+   "lat": 37.619,
+   "lon": -122.375,
+   "tz": "America/Los_Angeles"
+  },
+  {
+   "iata": "YYZ",
+   "region": "Americas",
+   "city": "Toronto",
+   "country": "Canada",
+   "airport": "Lester B. Pearson International Airport",
+   "lat": 43.6772,
+   "lon": -79.6306,
+   "tz": "America/Toronto"
+  },
+  {
+   "iata": "YVR",
+   "region": "Americas",
+   "city": "Vancouver",
+   "country": "Canada",
+   "airport": "Vancouver International Airport",
+   "lat": 49.1939,
+   "lon": -123.184,
+   "tz": "America/Vancouver"
+  },
+  {
+   "iata": "CPT",
+   "region": "Africa & Indian Ocean",
+   "city": "Cape Town",
+   "country": "South Africa",
+   "airport": "Cape Town International Airport",
+   "lat": -33.9648,
+   "lon": 18.6017,
+   "tz": "Africa/Johannesburg"
+  },
+  {
+   "iata": "JNB",
+   "region": "Africa & Indian Ocean",
+   "city": "Johannesburg",
+   "country": "South Africa",
+   "airport": "OR Tambo International Airport",
+   "lat": -26.1392,
+   "lon": 28.246,
+   "tz": "Africa/Johannesburg"
+  },
+  {
+   "iata": "MBA",
+   "region": "Africa & Indian Ocean",
+   "city": "Mombasa",
+   "country": "Kenya",
+   "airport": "Mombasa Moi International Airport",
+   "lat": -4.0348,
+   "lon": 39.5942,
+   "tz": "Africa/Nairobi"
+  },
+  {
+   "iata": "ZNZ",
+   "region": "Africa & Indian Ocean",
+   "city": "Zanzibar",
+   "country": "Tanzania",
+   "airport": "Abeid Amani Karume International Airport",
+   "lat": -6.222,
+   "lon": 39.2249,
+   "tz": "Africa/Dar_es_Salaam"
+  },
+  {
+   "iata": "HRE",
+   "region": "Africa & Indian Ocean",
+   "city": "Harare",
+   "country": "Zimbabwe",
+   "airport": "Robert Gabriel Mugabe International Airport",
+   "lat": -17.9318,
+   "lon": 31.0928,
+   "tz": "Africa/Harare"
+  },
+  {
+   "iata": "NBO",
+   "region": "Africa & Indian Ocean",
+   "city": "Nairobi",
+   "country": "Kenya",
+   "airport": "Jomo Kenyatta International Airport",
+   "lat": -1.3192,
+   "lon": 36.9278,
+   "tz": "Africa/Nairobi"
+  },
+  {
+   "iata": "SYD",
+   "region": "Oceania",
+   "city": "Sydney",
+   "country": "Australia",
+   "airport": "Sydney Kingsford Smith International Airport",
+   "lat": -33.9461,
+   "lon": 151.177,
+   "tz": "Australia/Sydney"
+  },
+  {
+   "iata": "MEL",
+   "region": "Oceania",
+   "city": "Melbourne",
+   "country": "Australia",
+   "airport": "Melbourne International Airport",
+   "lat": -37.6733,
+   "lon": 144.843,
+   "tz": "Australia/Hobart"
+  },
+  {
+   "iata": "AKL",
+   "region": "Oceania",
+   "city": "Auckland",
+   "country": "New Zealand",
+   "airport": "Auckland International Airport",
+   "lat": -37.0081,
+   "lon": 174.792,
+   "tz": "Pacific/Auckland"
+  }
+ ]
+}
