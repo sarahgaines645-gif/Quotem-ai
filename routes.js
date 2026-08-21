@@ -1855,7 +1855,9 @@ router.post('/writer/chat', requirePerson, express.json({ limit: '1mb' }), write
                 // His notes ON THE TEACHING BOARD, and his own clutter coming back off it.
                 const boardNotes = (Array.isArray(q.toolCalls) ? q.toolCalls : []).filter(c => c && c.name === 'board_note' && c.result && c.result.onBoard).map(c => ({ text: c.result.text, label: c.result.label, kind: c.result.kind }));
                 const boardClears = (Array.isArray(q.toolCalls) ? q.toolCalls : []).filter(c => c && c.name === 'board_clear' && c.result && c.result.cleared).map(c => ({ label: c.result.label || '' }));
-                out = { reply, display, options, paints, tabs, stickies, boardNotes, boardClears, board: null, next: '', highlights: [], answersStep: false, via: 'q', brain, cost: turnCost };
+                // Lines he has written into THEIR notes (21 Aug).
+                const writtenNotes = (Array.isArray(q.toolCalls) ? q.toolCalls : []).filter(c => c && c.name === 'write_note' && c.result && c.result.noted).map(c => ({ text: c.result.text, part: c.result.part || '' }));
+                out = { reply, display, options, paints, tabs, stickies, writtenNotes, boardNotes, boardClears, board: null, next: '', highlights: [], answersStep: false, via: 'q', brain, cost: turnCost };
                 if (qpid) { try { appendMessage(qpid, 'user', text, QSURF); appendMessage(qpid, 'assistant', String(q.reply), QSURF); } catch (_) {} }   // a '[page] …' turn is the page speaking for her (a pause / Continue) — kept, so he remembers what she wrote
             }
         } catch (e) { console.warn('[writer/chat] Q unavailable, falling back: ' + e.message); }
@@ -2904,6 +2906,9 @@ const TUTOR_KEYS = [
     // so the mark can say which of it is still word for word his. Kept as the
     // text itself — nothing is written into her document.
     'qInk',
+    // Which notes HE wrote (21 Aug) — so a note she typed herself is never
+    // mistaken for his when the mark sweeps for AI words.
+    'qWroteNotes',
     // Q's own notes on the TEACHING board (19 Aug) — boardItems itself is rebuilt
     // from the history on restore, so his notes had nowhere to come back from.
     'qBoardNotes',

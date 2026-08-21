@@ -9097,6 +9097,34 @@
       }
     };
     function ntGrow(el) { el.style.height = 'auto'; el.style.height = (el.scrollHeight + 2) + 'px'; }
+    // A LINE Q HAS WRITTEN INTO HER NOTES (Sarah, 21 Aug 2026: "make sure Q can
+    // write on to notes and transref on the page"). It is filed under the part
+    // she is on, it sits in the Notes page beside her own, and the "→ My page"
+    // button she already has puts it into the essay.
+    // We also remember that HE wrote it. That is the whole point: when the mark
+    // sweeps for words taken from AI, a note she typed herself is hers and is
+    // never flagged, and one of his that she pasted in IS.
+    function addQWrittenNotes(list) {
+      if (!Array.isArray(list) || !list.length) return;
+      state.wbNotes = state.wbNotes || {};
+      state.qWroteNotes = Array.isArray(state.qWroteNotes) ? state.qWroteNotes : [];
+      let added = 0;
+      for (const n of list) {
+        const text = String((n && n.text) || '').replace(/\s+/g, ' ').trim().slice(0, 300);
+        if (!text) continue;
+        const cid = String((n && n.part) || '').trim() || state.currentCriterionId || '';
+        const bucket = state.wbNotes[cid] = Array.isArray(state.wbNotes[cid]) ? state.wbNotes[cid] : [];
+        if (bucket.some(x => String(x).replace(/\s+/g, ' ').trim() === text)) continue;   // he repeats himself; the note does not
+        bucket.push(text);
+        state.qWroteNotes.push(text);
+        added++;
+      }
+      if (!added) return;
+      if (state.qWroteNotes.length > 300) state.qWroteNotes = state.qWroteNotes.slice(-300);
+      persist({ wbNotes: state.wbNotes, qWroteNotes: state.qWroteNotes });
+      try { renderNotesPanel(); } catch (_) {}
+      try { paintDocTabs(); } catch (_) {}
+    }
     function renderNotesPanel() {
       const body = document.getElementById('notes-body');
       if (!body || !onDocPage('notes')) return;   // it is a page now, not a card
@@ -10042,6 +10070,7 @@
         if (Array.isArray(d.paints) && d.paints.length) addQNotes(d.paints);
         if (Array.isArray(d.tabs) && d.tabs.length) addQTabs(d.tabs);
         if (Array.isArray(d.stickies) && d.stickies.length) addStickies(d.stickies);
+        if (Array.isArray(d.writtenNotes) && d.writtenNotes.length) addQWrittenNotes(d.writtenNotes);
         // HIS OWN NOTES ON THE TEACHING BOARD (19 Aug). Clears first, then the new
         // notes, so "take that off and put this up" in one turn lands the right way
         // round. clearQBoardNotes only ever removes items he put there.
@@ -13223,6 +13252,8 @@
         state.wbStickies = Array.isArray(t.wbStickies) ? t.wbStickies : [];
         try { renderStickies(); } catch (_) {}
         // Her post-its come back onto the paper, at the spot she left them.
+        state.qInk = Array.isArray(t.qInk) ? t.qInk : [];
+        state.qWroteNotes = Array.isArray(t.qWroteNotes) ? t.qWroteNotes : [];
         state.pageNotes = Array.isArray(t.pageNotes) ? t.pageNotes : [];
         try { renderPageNotes(); } catch (_) {}
         // Q's highlights + notes and his tabs come back onto the page with her.
@@ -13318,7 +13349,7 @@
     }, () => {});
     // Test hooks (no data, no secrets): lets the harness exercise the page-side
     // helpers without a paid call. Harmless in production.
-    window.__qwriterTest = { startTour, tourStep, stopTour, maybeOfferTour, paintQNotes, addQNotes, addQTabs, addStickies, renderStickies, snapshotDoc, undoDoc, presentStep, renderBoard, renderWhiteboard, boardForQ, qBoardHtml, partCardHtml, addQBoardNotes, clearQBoardNotes, qBoardItems, startedAsk, showToolPop, findInDoc, replaceInDoc, appendReference, docPlainText, docBlocksForExport, splitCheck: (t) => endsSentence(t), runEditPass, checkCurrentSentence, showEditItem, state: () => state, currentEditText, partParagraphs, setBrief, storyPointsHtml, renderInlineDots, termsForBoard, setCoach, bandListHtml, showEditItem, openEditPanel, renderEditPanel, edState: () => edProof, edSetProof: (p2) => { edProof = p2; renderEditPanel(); edPaint(); }, sayMe, renderThread, syncWorkArea, showPanel, revealPanel, runTidyPasses, applyTidyItem, mergeWalk, refreshSourceDigests, sourceDigestsHtml, markAndFix, walkItemsFromMark, renderMarkPanel, markStats, gradeWord, notesSections, notesCount, notesCopyText, renderNotesPanel, openNotesPanel, bibSorted, bibCopyText, renderBibPanel, openBibPanel, removeReference, removeReferenceFromDoc, sendTextToPage, recordQInk, sweepQInk, paintQInk, qInkWordCount, renderPageNotes, removePageNote, clampPageNotes, showDocPage, docPage: () => docPage, renderBriefPage, jumpToSentence, runAutoCite, appendReference, noteReference, wbTablesFromSrc, tableElementFrom, sendBlockToPage, wbSendText, wbBlocksFromSrc, sendBlocksToPage, sendStickyToPage, blockElement, wbMindmapParse, wbMindmapSvg, wbMindmapHtml, docMindmapElement, wbDiagramHtml, wbDiagramHtmlLegacy, wbFlowParse, wbFlowSvg, flLayout, docDiagramElement };
+    window.__qwriterTest = { startTour, tourStep, stopTour, maybeOfferTour, paintQNotes, addQNotes, addQTabs, addStickies, renderStickies, snapshotDoc, undoDoc, presentStep, renderBoard, renderWhiteboard, boardForQ, qBoardHtml, partCardHtml, addQBoardNotes, clearQBoardNotes, qBoardItems, startedAsk, showToolPop, findInDoc, replaceInDoc, appendReference, docPlainText, docBlocksForExport, splitCheck: (t) => endsSentence(t), runEditPass, checkCurrentSentence, showEditItem, state: () => state, currentEditText, partParagraphs, setBrief, storyPointsHtml, renderInlineDots, termsForBoard, setCoach, bandListHtml, showEditItem, openEditPanel, renderEditPanel, edState: () => edProof, edSetProof: (p2) => { edProof = p2; renderEditPanel(); edPaint(); }, sayMe, renderThread, syncWorkArea, showPanel, revealPanel, runTidyPasses, applyTidyItem, mergeWalk, refreshSourceDigests, sourceDigestsHtml, markAndFix, walkItemsFromMark, renderMarkPanel, markStats, gradeWord, notesSections, notesCount, notesCopyText, renderNotesPanel, openNotesPanel, bibSorted, bibCopyText, renderBibPanel, openBibPanel, removeReference, removeReferenceFromDoc, sendTextToPage, recordQInk, sweepQInk, paintQInk, qInkWordCount, addQWrittenNotes, renderPageNotes, removePageNote, clampPageNotes, showDocPage, docPage: () => docPage, renderBriefPage, jumpToSentence, runAutoCite, appendReference, noteReference, wbTablesFromSrc, tableElementFrom, sendBlockToPage, wbSendText, wbBlocksFromSrc, sendBlocksToPage, sendStickyToPage, blockElement, wbMindmapParse, wbMindmapSvg, wbMindmapHtml, docMindmapElement, wbDiagramHtml, wbDiagramHtmlLegacy, wbFlowParse, wbFlowSvg, flLayout, docDiagramElement };
 
 
     // (The old per-card drag code lived here — every panel now goes through makePanel above.)

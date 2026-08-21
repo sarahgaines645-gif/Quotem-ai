@@ -119,6 +119,21 @@ const TOOL_DEFINITIONS = [
     {
         type: 'function',
         function: {
+            name: 'write_note',
+            description: 'Write a line into the student\'s NOTES — the Notes page of their notebook, kept per question, which they can send onto their page whenever they want. Use it when you have given them something worth writing down and keeping: a definition the marker wants, a figure from the case, the shape of an argument they are about to make. It is THEIRS to use or ignore — you are not writing their essay, you are handing them the note you would have written on a napkin. One line. Never a sentence built to be pasted straight in as their answer, and never a copy of what you just said.',
+            parameters: {
+                type: 'object',
+                properties: {
+                    text: { type: 'string', description: 'The note, one line, plain.' },
+                    part: { type: 'string', description: 'Optional; the criterionId it belongs to. Leave out for the part they are on.' },
+                },
+                required: ['text'],
+            },
+        },
+    },
+    {
+        type: 'function',
+        function: {
             name: 'board_note',
             description: 'Put a short note on the TEACHING BOARD — the worksheet beside the student\'s page that holds what they must remember for the question they are on. Not the whiteboard (that is the display and stick_note): the board is what they keep. Use it when something is worth keeping past this reply — a rule they keep breaking, a definition the marker wants, the one thing left to do on this question. One line, plain, in their words. Never repeat what is already on the board, on the whiteboard, or in your reply.',
             parameters: {
@@ -2043,6 +2058,16 @@ async function executeTool(name, argsRaw, personId, personEmail, threadId) {
         const label = String(args.label || '').replace(/\s+/g, ' ').trim().slice(0, 24) || (kind === 'todo' ? 'to do' : kind === 'question' ? 'think about' : 'note');
         return { ok: true, onBoard: true, text, label, kind };
     }
+    // A LINE IN THEIR NOTES (Sarah, 21 Aug 2026: "make sure Q can write on to
+    // notes and transref on the page"). Nothing to do here — the page files it
+    // under the part and remembers that HE wrote it, which is what lets the
+    // mark tell his words from hers.
+    if (name === 'write_note') {
+        const text = String(args.text || '').replace(/\s+/g, ' ').trim().slice(0, 300);
+        if (!text) return { error: 'The note needs some text.' };
+        const part = String(args.part || '').trim().slice(0, 24);
+        return { ok: true, noted: true, text, part };
+    }
     if (name === 'board_clear') {
         return { ok: true, cleared: true, label: String(args.label || '').replace(/\s+/g, ' ').trim().slice(0, 24) };
     }
@@ -3077,7 +3102,7 @@ function recallTutor(personId) {
 // trigger-gated on the STUDENT's words ("calculate", digits + operator) — but
 // it is Q who needs to compute when he teaches the working (Sarah, 19 Aug:
 // "he will need tables and maths tools too for those subjects").
-const WRITER_TOOLS = new Set(['check_reference', 'highlight_passage', 'tab_paragraph', 'stick_note', 'board_note', 'board_clear', 'calculator', 'current_datetime']);
+const WRITER_TOOLS = new Set(['check_reference', 'highlight_passage', 'tab_paragraph', 'stick_note', 'write_note', 'board_note', 'board_clear', 'calculator', 'current_datetime']);
 const ALWAYS_ON = new Set([
     // Memory is core to every chat surface — Q should silently save and
     // recall facts without ceremony.
