@@ -564,6 +564,15 @@ router.post('/api/trips/board/read', requirePerson, express.json({ limit: '8mb' 
         const out = await qTripBoard.readShot((req.body || {}).image, req.person.email);
         if (out.error) return res.status(422).json({ ok: false, ...out });
 
+        // What the printed dates probably mean. A SUGGESTION for the two date
+        // boxes on the card and nothing more — suggestDates() returns null the
+        // moment it is not certain, and nothing reaches her calendar off it.
+        if (!out.notAListing) {
+            const guess = qTripBoard.suggestDates(out.dates, out.nights);
+            out.startDate = guess ? guess.start : null;
+            out.endDate = guess ? guess.end : null;
+        }
+
         // The company's logo, fetched by Q's server so the logo host never
         // learns who is looking at which holiday (plugins/q-logos.js).
         if (!out.notAListing && out.company) {
@@ -817,7 +826,21 @@ router.get('/api/trips/board/replies', requirePerson, (req, res) => {
 // server/index.js. The sender's endpoints are under /api/linkmail/mine/ and
 // need a session. Sharing one prefix would have put "list all my links" one
 // typo away from being public.
-const qLinkmail = require('./plugins/q-linkmail');
+// Guarded for the same reason the trips engine above is: while a plugin file
+// is still untracked, ANY chat that commits routes.js ships a require of a
+// module the deploy does not have — and an unguarded one takes down every route
+// in this file, not just its own. That happened tonight (4436b60). It does not
+// get to happen twice.
+let qLinkmail = null;
+try {
+    qLinkmail = require('./plugins/q-linkmail');
+} catch (err) {
+    console.error('[linkmail] engine not loaded — /linkmail/* will answer 503:', err.message);
+}
+const linkmailUnavailable = (res) => res.status(503).json({
+    ok: false, error: 'linkmail_engine_missing',
+    message: 'Linkmail is not available on this deployment.',
+});
 
 // The full link, built from the request host the same way the QR routes at the
 // top of this file do it — so it is right whichever address the app is open at.
@@ -834,17 +857,21 @@ function linkmailEscapeHtml(s) {
 }
 
 router.get('/linkmail/:token', (req, res) => {
-    res.sendFile(path.join(__dirname, 'linkmail.html'));
+    res.sendFile(path.join(__dirname, 'linkmail.html'), (err) => {
+        if (err && !res.headersSent) res.status(503).send('This page is not available on this deployment.');
+    });
 });
 
 // ── RECIPIENT SIDE — the token is the whole authority ──────────
 router.get('/api/linkmail/open/:token', (req, res) => {
+    if (!qLinkmail) return linkmailUnavailable(res);
     const out = qLinkmail.resolvePublic(req.params.token, { countView: true });
     if (out.error) return res.status(out.error === 'not_found' ? 404 : 410).json(out);
     res.json(out);
 });
 
 router.post('/api/linkmail/open/:token/answer', express.json({ limit: '32kb' }), (req, res) => {
+    if (!qLinkmail) return linkmailUnavailable(res);
     const out = qLinkmail.recordAnswer(req.params.token, req.body || {});
     if (out.error) {
         const code = out.error === 'not_found' ? 404 : (out.error === 'no_such_question' ? 400 : 410);
@@ -873,6 +900,7 @@ function linkmailChatAllowed(token) {
 }
 
 router.post('/api/linkmail/open/:token/chat', express.json({ limit: '32kb' }), async (req, res) => {
+    if (!qLinkmail) return linkmailUnavailable(res);
     try {
         const ctx = qLinkmail.publicContext(req.params.token);
         if (!ctx) return res.status(404).json({ reply: null, error: 'not_found' });
@@ -929,6 +957,7 @@ router.post('/api/linkmail/open/:token/chat', express.json({ limit: '32kb' }), a
 
 // ── SENDER SIDE — session required ─────────────────────────────
 router.post('/api/linkmail/mine', requirePerson, express.json({ limit: '256kb' }), (req, res) => {
+    if (!qLinkmail) return linkmailUnavailable(res);
     try {
         const b = req.body || {};
         const made = qLinkmail.createLink(req.person.email, {
@@ -952,18 +981,21 @@ router.post('/api/linkmail/mine', requirePerson, express.json({ limit: '256kb' }
 });
 
 router.get('/api/linkmail/mine', requirePerson, (req, res) => {
+    if (!qLinkmail) return linkmailUnavailable(res);
     const links = qLinkmail.listLinks(req.person.email)
         .map(l => Object.assign({}, l, { fullUrl: linkmailUrl(req, l.token) }));
     res.json({ links });
 });
 
 router.get('/api/linkmail/mine/:token', requirePerson, (req, res) => {
+    if (!qLinkmail) return linkmailUnavailable(res);
     const rec = qLinkmail.readLink(req.person.email, req.params.token);
     if (!rec) return res.status(404).json({ error: 'not_found' });
     res.json(Object.assign({}, rec, { fullUrl: linkmailUrl(req, rec.token) }));
 });
 
 router.post('/api/linkmail/mine/:token/revoke', requirePerson, (req, res) => {
+    if (!qLinkmail) return linkmailUnavailable(res);
     const out = qLinkmail.revokeLink(req.person.email, req.params.token);
     if (out.error) return res.status(404).json(out);
     res.json(out);
@@ -973,6 +1005,7 @@ router.post('/api/linkmail/mine/:token/revoke', requirePerson, (req, res) => {
 // repeated in the mail body, so a forwarded email leaks nothing the link did
 // not already carry.
 router.post('/api/linkmail/mine/:token/send', requirePerson, express.json({ limit: '32kb' }), async (req, res) => {
+    if (!qLinkmail) return linkmailUnavailable(res);
     try {
         const rec = qLinkmail.readLink(req.person.email, req.params.token);
         if (!rec) return res.status(404).json({ error: 'not_found' });
