@@ -70,6 +70,16 @@
   /* The handoff asks for this explicitly: freeze the motion, keep the
      composition. A storm inside a spinning cube is exactly what someone with
      vestibular trouble has switched motion off to avoid. */
+  /* Snow had no keyframe of its own — it borrowed rainFall, and the rain
+     detector finds drops by looking for "rainFall" in the style, so it hid
+     every flake the moment the weather was not rain. Its own animation, and
+     the collision cannot happen again. */
+  @keyframes snowFall { 0% { transform: translateY(-30px); opacity: 0; } 8% { opacity: .95; } 88% { opacity: .95; } 100% { transform: translateY(300px); opacity: 0; } }
+  @keyframes snowDrift { 0%, 100% { transform: translateX(-7px); } 50% { transform: translateX(7px); } }
+  @keyframes twistSpin { 0% { transform: rotateY(0deg); } 100% { transform: rotateY(360deg); } }
+  @keyframes twistSway { 0%, 100% { transform: translateX(-9px) rotate(-2.5deg); } 50% { transform: translateX(9px) rotate(2.5deg); } }
+  @keyframes twistDebris { 0% { transform: rotate(0deg) translateX(var(--r, 40px)) rotate(0deg); } 100% { transform: rotate(360deg) translateX(var(--r, 40px)) rotate(-360deg); } }
+
   @media (prefers-reduced-motion: reduce) {
     [data-cuboid-stage] *,
     [data-cuboid-stage] {
@@ -558,8 +568,8 @@
   // The design shipped a permanent storm. It is a setting now, and it is
   // SHARED: the flower side reads it, which is how watering works — rain, then
   // sun, and it grows.
-  var WEATHER = ['clear', 'sun', 'rain', 'storm', 'snow'];
-  var WEATHER_NAME = { clear: 'clear', sun: 'sun', rain: 'rain', storm: 'storm', snow: 'snow' };
+  var WEATHER = ['clear', 'sun', 'rain', 'storm', 'twister', 'snow'];
+  var WEATHER_NAME = { clear: 'clear', sun: 'sun', rain: 'rain', storm: 'storm', twister: 'twister', snow: 'snow' };
 
   function weatherNow() {
     try { return localStorage.getItem('q-cube-weather') || 'storm'; } catch (e) { return 'storm'; }
@@ -580,6 +590,9 @@
     var drops = [], bolts = [];
     if (!cube) return { drops: drops, bolts: bolts };
     Array.prototype.forEach.call(cube.querySelectorAll('div'), function (d) {
+      // Never claim anything the weather engine itself made — that is exactly
+      // how the snow came to be switched off by the rain.
+      if (d.closest('[data-weather]')) return;
       var s = d.getAttribute('style') || '';
       if (s.indexOf('rainFall') >= 0) drops.push(d);
       else if (s.indexOf('boltStrike') >= 0 || s.indexOf('lightning') >= 0) bolts.push(d);
@@ -587,7 +600,7 @@
     return { drops: drops, bolts: bolts };
   }
 
-  var sunEl = null, snowEl = null;
+  var sunEl = null, snowEl = null, twistEl = null;
   function applyWeather() {
     var w = weatherNow();
     var p = weatherParts();
@@ -615,20 +628,97 @@
     if (!snowEl) {
       snowEl = document.createElement('div');
       snowEl.setAttribute('data-weather', 'snow');
-      snowEl.style.cssText = 'position:absolute;inset:0;transform:translateZ(40px);pointer-events:none;';
+      snowEl.style.cssText = 'position:absolute;inset:0;pointer-events:none;transform-style:preserve-3d;';
       var flakes = '';
-      for (var i = 0; i < 22; i++) {
-        var x = Math.round((i * 37) % 96) + 2, dur = (3.4 + (i % 5) * 0.8).toFixed(1), del = ((i % 7) * 0.5).toFixed(1);
+      for (var i = 0; i < 34; i++) {
+        // Two layers of depth so it falls THROUGH the cube rather than on one plane.
+        var z = (i % 3 === 0) ? 90 : (i % 3 === 1) ? 10 : -70;
+        var x = Math.round((i * 29) % 94) + 3;
+        var dur = (4.6 + (i % 6) * 0.9).toFixed(1), del = ((i % 9) * 0.6).toFixed(1);
         var sz = 2 + (i % 3);
         flakes += '<div style="position:absolute;left:' + x + '%;top:0;width:' + sz + 'px;height:' + sz + 'px;'
-          + 'border-radius:50%;background:rgba(255,255,255,.9);box-shadow:0 0 6px rgba(200,235,255,.9);'
-          + 'animation:rainFall ' + dur + 's linear infinite ' + del + 's;"></div>';
+          + 'transform:translateZ(' + z + 'px);animation:snowFall ' + dur + 's linear infinite ' + del + 's;">'
+          + '<div style="width:100%;height:100%;border-radius:50%;background:rgba(255,255,255,.95);'
+          + 'box-shadow:0 0 7px rgba(210,240,255,.95);animation:snowDrift ' + (2.2 + (i % 4) * 0.7).toFixed(1) + 's ease-in-out infinite;"></div></div>';
       }
       snowEl.innerHTML = flakes;
       cube.appendChild(snowEl);
     }
     snowEl.style.display = (w === 'snow') ? '' : 'none';
+
+    // ── THE TWISTER ──
+    if (!twistEl) {
+      twistEl = document.createElement('div');
+      twistEl.setAttribute('data-weather', 'twister');
+      twistEl.style.cssText = 'position:absolute;left:50%;top:0;width:170px;height:300px;margin-left:-85px;'
+        + 'pointer-events:none;transform-style:preserve-3d;animation:twistSway 4.2s ease-in-out infinite;';
+      var funnel = '';
+      // A funnel is rings that get smaller and spin faster toward the ground.
+      for (var t = 0; t < 9; t++) {
+        var wpc = 100 - t * 9;                       // narrowing
+        var top = 8 + t * 10.5;
+        var spin = (1.5 - t * 0.12).toFixed(2);
+        funnel += '<div style="position:absolute;left:' + ((100 - wpc) / 2) + '%;top:' + top + '%;width:' + wpc + '%;height:' + (13 - t * 0.6) + '%;'
+          + 'border-radius:50%;background:radial-gradient(ellipse at 50% 50%,rgba(190,225,255,.05),rgba(150,195,245,.30) 62%,rgba(120,170,230,.06) 82%,transparent 92%);'
+          + 'box-shadow:inset 0 0 14px rgba(200,230,255,.30);animation:twistSpin ' + spin + 's linear infinite;"></div>';
+      }
+      // debris caught in it
+      for (var q = 0; q < 10; q++) {
+        var r = 16 + (q % 5) * 11, sp = (0.7 + (q % 4) * 0.25).toFixed(2), ty = 18 + q * 7;
+        funnel += '<div style="position:absolute;left:50%;top:' + ty + '%;width:3px;height:3px;margin-left:-1.5px;'
+          + '--r:' + r + 'px;border-radius:50%;background:rgba(220,240,255,.75);box-shadow:0 0 6px rgba(180,220,255,.8);'
+          + 'animation:twistDebris ' + sp + 's linear infinite;"></div>';
+      }
+      twistEl.innerHTML = funnel;
+      cube.appendChild(twistEl);
+    }
+    twistEl.style.display = (w === 'twister') ? '' : 'none';
+    // A twister brings its rain with it.
+    if (w === 'twister') p.drops.forEach(function (d) { d.style.display = ''; });
+
+    applySettle();
   }
+
+  // ── SNOW SETTLING ON THE FLOOR ──────────────────────────────────
+  // Sarah, 22 Aug: "let some of the snow build up on the inside of the cube.
+  // this will make the flowers act like they would if it was real. a sped up
+  // process." So it piles up while it snows, and MELTS in the sun — which is
+  // what waters the flower, exactly as thawing snow does.
+  var settleEl = null;
+  function snowDepth() {
+    var v = parseFloat(localStorage.getItem('q-cube-snow') || '0');
+    return isFinite(v) ? Math.max(0, Math.min(1, v)) : 0;
+  }
+  function setSnowDepth(v) {
+    v = Math.max(0, Math.min(1, v));
+    try { localStorage.setItem('q-cube-snow', String(v)); } catch (e) {}
+    applySettle();
+    document.dispatchEvent(new CustomEvent('cube:snow', { detail: { depth: v } }));
+  }
+  function applySettle() {
+    var cube = document.getElementById('cuboid-os');
+    if (!cube) return;
+    if (!settleEl) {
+      settleEl = document.createElement('div');
+      settleEl.setAttribute('data-weather', 'settle');
+      cube.appendChild(settleEl);
+    }
+    var d = snowDepth();
+    var lift = 150 - d * 30;           // the surface rises as it piles up
+    settleEl.style.cssText = 'position:absolute;inset:0;pointer-events:none;'
+      + 'transform:rotateX(-90deg) translateZ(' + lift + 'px);'
+      + 'border-radius:4px;opacity:' + (d > 0.02 ? 1 : 0) + ';transition:opacity .5s;'
+      + 'background:radial-gradient(ellipse at 50% 40%,rgba(255,255,255,' + (0.30 + d * 0.5).toFixed(2) + '),'
+      + 'rgba(226,242,255,' + (0.16 + d * 0.4).toFixed(2) + ') 62%,rgba(200,225,250,.10) 88%);'
+      + 'box-shadow:0 0 26px rgba(200,235,255,' + (0.20 + d * 0.35).toFixed(2) + ');';
+  }
+
+  // Sped up on purpose — a season in a minute, not a winter.
+  setInterval(function () {
+    var w = weatherNow();
+    if (w === 'snow') { var d = snowDepth(); if (d < 1) setSnowDepth(d + 0.02); }
+    else if (w === 'sun') { var s = snowDepth(); if (s > 0) setSnowDepth(s - 0.03); }
+  }, 700);
 
   // ── YOUR FINGER, ON A FACE AT ANY ANGLE ─────────────────────────
   // You turn the cube where you want it and then play on it — so a touch has to
@@ -754,6 +844,189 @@
       }
       cv.addEventListener('pointerup', stop);
       cv.addEventListener('pointercancel', stop);
+    }
+  };
+
+
+  // ── THE GARDEN ──────────────────────────────────────────────────
+  // Sarah, 22 Aug: "a flower that starts as a seed and you water it and watch
+  // it grow every time you change the weather to rain and then sun ... plant
+  // the seeds (lots of different ones and say what they are)".
+  //
+  // It works the way it works outside, sped up: RAIN wets the ground, and it is
+  // the SUN AFTER the rain that makes it grow. Snow does neither while it lies —
+  // the plant sits dormant — but when the sun melts it, that meltwater counts,
+  // which is exactly what thawing snow does in a real garden.
+  var FLOWERS = [
+    { id: 'sunflower', name: 'Sunflower',  petal: '#ffd23f', mid: '#6b4423', shape: 'round',  petals: 14, tall: 1.15 },
+    { id: 'poppy',     name: 'Poppy',      petal: '#ff3b30', mid: '#241a12', shape: 'round',  petals: 5,  tall: 0.95 },
+    { id: 'bluebell',  name: 'Bluebell',   petal: '#5b6ee8', mid: '#3a46a8', shape: 'bell',   petals: 5,  tall: 0.9 },
+    { id: 'daffodil',  name: 'Daffodil',   petal: '#ffe066', mid: '#ff9f1c', shape: 'trumpet',petals: 6,  tall: 1.0 },
+    { id: 'tulip',     name: 'Tulip',      petal: '#ff5d8f', mid: '#c9184a', shape: 'cup',    petals: 6,  tall: 1.0 },
+    { id: 'lavender',  name: 'Lavender',   petal: '#b388ff', mid: '#7c4dff', shape: 'spike',  petals: 9,  tall: 1.1 },
+    { id: 'cornflower',name: 'Cornflower', petal: '#4d7cfe', mid: '#26418f', shape: 'round',  petals: 8,  tall: 0.95 },
+    { id: 'marigold',  name: 'Marigold',   petal: '#ff8c1a', mid: '#a63d00', shape: 'round',  petals: 12, tall: 0.85 },
+    { id: 'snowdrop',  name: 'Snowdrop',   petal: '#f2f7ff', mid: '#9fd0a8', shape: 'bell',   petals: 3,  tall: 0.75 },
+    { id: 'foxglove',  name: 'Foxglove',   petal: '#d183e8', mid: '#8e44ad', shape: 'spike',  petals: 7,  tall: 1.25 },
+    { id: 'daisy',     name: 'Daisy',      petal: '#ffffff', mid: '#ffd23f', shape: 'round',  petals: 12, tall: 0.7 },
+    { id: 'rose',      name: 'Rose',       petal: '#e01e5a', mid: '#8b0d33', shape: 'cup',    petals: 8,  tall: 0.95 }
+  ];
+  var STAGE_NAME = ['a seed', 'sprouting', 'growing', 'in bud', 'in flower', 'in full bloom'];
+
+  function gardenKey(face) { return 'q-cube-garden-' + face; }
+  function gardenRead(face) {
+    try { return JSON.parse(localStorage.getItem(gardenKey(face)) || 'null') || { seed: null, stage: 0, wet: false }; }
+    catch (e) { return { seed: null, stage: 0, wet: false }; }
+  }
+  function gardenWrite(face, g) {
+    try { localStorage.setItem(gardenKey(face), JSON.stringify(g)); } catch (e) {}
+  }
+
+  // The drawing. One set of parts, shaped by the flower — so twelve seeds look
+  // like twelve different plants without twelve drawings.
+  function plantSvg(g) {
+    var f = null;
+    for (var i = 0; i < FLOWERS.length; i++) if (FLOWERS[i].id === g.seed) f = FLOWERS[i];
+    var s = g.stage;
+    var soil = '<rect x="0" y="232" width="300" height="68" fill="rgba(58,40,28,.55)"/>'
+             + '<rect x="0" y="228" width="300" height="7" rx="3" fill="rgba(92,66,44,.75)"/>';
+    if (!f) return '<svg viewBox="0 0 300 300" width="100%" height="100%">' + soil + '</svg>';
+
+    var H = 150 * f.tall;
+    var grow = [0, 0.10, 0.34, 0.62, 0.88, 1][s];
+    var top = 232 - H * grow;
+    var parts = soil;
+
+    if (s === 0) {
+      parts += '<ellipse cx="150" cy="242" rx="7" ry="5" fill="#8d6e4f" stroke="rgba(0,0,0,.3)"/>';
+    } else {
+      parts += '<path d="M150 232 Q ' + (150 + (s % 2 ? 9 : -9)) + ' ' + ((232 + top) / 2) + ' 150 ' + top + '" '
+             + 'stroke="#4caf50" stroke-width="' + (2 + s * 0.7).toFixed(1) + '" fill="none" stroke-linecap="round"/>';
+      if (s >= 2) {
+        parts += '<path d="M150 ' + (top + H * grow * 0.45) + ' q -34 -12 -40 -34 q 30 2 40 34 z" fill="#66bb6a"/>';
+      }
+      if (s >= 3) {
+        parts += '<path d="M150 ' + (top + H * grow * 0.28) + ' q 34 -12 40 -34 q -30 2 -40 34 z" fill="#4caf50"/>';
+      }
+    }
+
+    if (s === 3) {                                  // bud
+      parts += '<ellipse cx="150" cy="' + (top - 6) + '" rx="9" ry="14" fill="' + f.mid + '" opacity=".9"/>'
+             + '<ellipse cx="150" cy="' + (top - 10) + '" rx="6" ry="9" fill="' + f.petal + '" opacity=".55"/>';
+    } else if (s >= 4) {                            // open
+      var R = (s === 5) ? 34 : 26;
+      var head = '';
+      if (f.shape === 'spike') {
+        for (var k = 0; k < f.petals; k++) {
+          var yy = top - 4 - k * 9, ww = 13 - k * 0.8;
+          head += '<ellipse cx="' + (150 + (k % 2 ? 6 : -6)) + '" cy="' + yy + '" rx="' + ww + '" ry="5.5" fill="' + f.petal + '" opacity="' + (0.95 - k * 0.05).toFixed(2) + '"/>';
+        }
+      } else if (f.shape === 'bell') {
+        for (var b = 0; b < f.petals; b++) {
+          var bx = 150 + (b - (f.petals - 1) / 2) * 15;
+          head += '<path d="M' + bx + ' ' + (top - 2) + ' q -9 16 0 22 q 9 -6 0 -22 z" fill="' + f.petal + '"/>'
+                + '<ellipse cx="' + bx + '" cy="' + (top - 2) + '" rx="9" ry="4" fill="' + f.mid + '" opacity=".85"/>';
+        }
+      } else if (f.shape === 'cup' || f.shape === 'trumpet') {
+        head += '<path d="M' + (150 - R * 0.7) + ' ' + (top - 2) + ' q ' + (R * 0.7) + ' ' + (R * 1.1) + ' ' + (R * 1.4) + ' 0 q -' + (R * 0.55) + ' -' + (R * 0.85) + ' -' + (R * 1.4) + ' 0 z" fill="' + f.petal + '"/>';
+        if (f.shape === 'trumpet') head += '<ellipse cx="150" cy="' + (top + 4) + '" rx="' + (R * 0.42) + '" ry="' + (R * 0.5) + '" fill="' + f.mid + '"/>';
+      } else {
+        for (var p = 0; p < f.petals; p++) {
+          var a = (p / f.petals) * Math.PI * 2;
+          head += '<ellipse cx="' + (150 + Math.cos(a) * R * 0.62).toFixed(1) + '" cy="' + (top + Math.sin(a) * R * 0.62).toFixed(1) + '" '
+                + 'rx="' + (R * 0.42).toFixed(1) + '" ry="' + (R * 0.24).toFixed(1) + '" fill="' + f.petal + '" '
+                + 'transform="rotate(' + (a * 180 / Math.PI).toFixed(1) + ' ' + (150 + Math.cos(a) * R * 0.62).toFixed(1) + ' ' + (top + Math.sin(a) * R * 0.62).toFixed(1) + ')"/>';
+        }
+        head += '<circle cx="150" cy="' + top + '" r="' + (R * 0.3).toFixed(1) + '" fill="' + f.mid + '"/>';
+      }
+      parts += head;
+    }
+    return '<svg viewBox="0 0 300 300" width="100%" height="100%">' + parts + '</svg>';
+  }
+
+  PANELS.garden = {
+    name: 'garden',
+    mount: function (el, face) {
+      el.innerHTML = '';
+      var wrap = document.createElement('div');
+      wrap.style.cssText = 'position:absolute;inset:0;display:flex;flex-direction:column;';
+      el.appendChild(wrap);
+
+      var art = document.createElement('div');
+      art.style.cssText = 'position:absolute;inset:0;';
+      wrap.appendChild(art);
+
+      var head = document.createElement('div');
+      head.style.cssText = 'position:absolute;left:0;right:0;top:0;padding:10px 12px;font-family:\'IBM Plex Mono\',monospace;'
+        + 'font-size:9px;letter-spacing:.14em;color:rgba(220,245,255,.9);text-shadow:0 0 10px rgba(120,220,255,.6);';
+      wrap.appendChild(head);
+
+      var seeds = document.createElement('div');
+      seeds.style.cssText = 'position:absolute;left:0;right:0;bottom:0;display:flex;flex-wrap:wrap;gap:3px;justify-content:center;padding:6px 6px 7px;';
+      wrap.appendChild(seeds);
+
+      function paint() {
+        var g = gardenRead(face);
+        art.innerHTML = plantSvg(g);
+        var f = null;
+        for (var i = 0; i < FLOWERS.length; i++) if (FLOWERS[i].id === g.seed) f = FLOWERS[i];
+        var need = g.wet ? 'needs sun' : 'needs rain';
+        if (g.stage >= 5) need = 'done';
+        head.innerHTML = f
+          ? ('<b style="letter-spacing:.06em">' + f.name.toUpperCase() + '</b> &middot; ' + STAGE_NAME[g.stage]
+             + '<span style="float:right;color:rgba(190,235,255,.65)">' + need + '</span>')
+          : 'PICK A SEED';
+        seeds.innerHTML = FLOWERS.map(function (x) {
+          var on = (g.seed === x.id);
+          return '<button data-seed="' + x.id + '" title="' + x.name + '" style="font-family:inherit;font-size:6.5px;letter-spacing:.04em;'
+            + 'border:none;cursor:pointer;border-radius:4px;padding:2px 4px;color:' + (on ? '#0b0f18' : 'rgba(230,245,255,.85)') + ';'
+            + 'background:' + (on ? x.petal : 'rgba(255,255,255,.10)') + ';box-shadow:0 0 6px ' + (on ? x.petal : 'transparent') + ';">'
+            + x.name + '</button>';
+        }).join('');
+      }
+
+      seeds.addEventListener('pointerdown', function (e) { e.stopPropagation(); });
+      seeds.addEventListener('click', function (e) {
+        var b = e.target.closest('[data-seed]');
+        if (!b) return;
+        e.stopPropagation();
+        // Planting a different seed starts that plant off. Nothing else is lost —
+        // each side keeps its own garden.
+        gardenWrite(face, { seed: b.getAttribute('data-seed'), stage: 0, wet: false });
+        paint();
+      });
+
+      function onWeather() {
+        var g = gardenRead(face);
+        if (!g.seed || g.stage >= 5) return;
+        var w = weatherNow();
+        // Rain — and a twister brings its rain with it — wets the ground.
+        if (w === 'rain' || w === 'storm' || w === 'twister') {
+          if (!g.wet) { g.wet = true; gardenWrite(face, g); paint(); }
+          return;
+        }
+        // Sun on wet ground is what actually makes it grow.
+        if (w === 'sun' && g.wet) {
+          g.stage = Math.min(5, g.stage + 1);
+          g.wet = false;
+          gardenWrite(face, g);
+          paint();
+        }
+      }
+      // Melting snow is water too — the sun takes the pile down and the plant
+      // drinks it, which is why a snowy week still counts.
+      function onSnow(e) {
+        var g = gardenRead(face);
+        if (!g.seed || g.stage >= 5) return;
+        if (weatherNow() === 'sun' && e.detail && e.detail.depth > 0 && !g.wet) {
+          g.wet = true; gardenWrite(face, g); paint();
+        }
+      }
+      document.addEventListener('cube:weather', onWeather);
+      document.addEventListener('cube:snow', onSnow);
+
+      paint();
+      onWeather();
     }
   };
 
