@@ -478,13 +478,17 @@ router.get('/finance', (req, res) => {
 // Q's plotter — PDF AcroForm field parser. Reads the real field structure from
 // a PDF (no vision needed). Client-side PDF.js does the parsing and rendering;
 // this route just serves the page.
-// The glass cuboid — the one dark surface in Q. Static page, no engine behind
+// The glass cube — the one dark surface in Q. Static page, no engine behind
 // it, so nothing here can fail to load and take the router with it.
-router.get('/cuboid', (req, res) => {
-    res.sendFile(path.join(__dirname, 'cuboid.html'), (err) => {
+router.get('/cube', (req, res) => {
+    res.sendFile(path.join(__dirname, 'cube.html'), (err) => {
         if (err && !res.headersSent) res.status(503).send('That page is not available on this deployment.');
     });
 });
+
+// It was /cuboid for a day. Keep the old address working rather than leaving
+// a dead link in anyone's history.
+router.get('/cuboid', (req, res) => res.redirect(301, '/cube'));
 
 router.get('/plotter', (req, res) => {
     res.sendFile(path.join(__dirname, 'plotter.html'));

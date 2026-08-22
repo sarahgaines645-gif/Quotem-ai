@@ -1,0 +1,384 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Times tables</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="/q-auth.js"></script>
+<link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+<link rel="apple-touch-icon" sizes="180x180" href="/favicon-180.png" />
+<style>
+  * { box-sizing: border-box; }
+  html, body { margin: 0; min-height: 100vh; background: #0a0d16; font-family: 'IBM Plex Mono', monospace; color: #e8ecf4; }
+  .page { min-height: 100vh; display: flex; flex-direction: column; align-items: center; padding: 26px 18px 50px; gap: 20px; }
+  header.q { width: 100%; max-width: 700px; display: flex; align-items: baseline; gap: 9px; font-family: 'Space Grotesk', -apple-system, sans-serif; }
+  header.q .logo { font-size: 26px; font-weight: 700; letter-spacing: -0.6px; color: #f2f5fa; }
+  header.q .logo .dot { color: #e91e63; }
+  header.q .name { font-size: 13px; color: rgba(232,236,244,0.42); }
+  header.q a.back { margin-left: auto; font-size: 13px; text-decoration: none; color: rgba(232,236,244,0.55); padding: 9px 14px; border-radius: 11px; background: rgba(255,255,255,0.04); box-shadow: inset 0 1px 0 rgba(255,255,255,0.10), 0 2px 10px rgba(0,0,0,0.4); font-family: 'Space Grotesk', -apple-system, sans-serif; }
+  header.q a.back:hover { color: #f2f5fa; }
+  /* The stage is a fixed 640px and cannot reflow — 3D faces spill if you make
+     them fluid — so on a narrow screen it scales. Same as /cuboid. */
+  .scaler { transform-origin: top center; }
+  /* Dragging the cube must not select the numbers written on it. */
+  #stage { user-select: none; -webkit-user-select: none; -webkit-tap-highlight-color: transparent; }
+  input { font-family: inherit; }
+  input::placeholder { color: rgba(150,190,225,.4); }
+</style>
+</head>
+<body>
+
+<!--
+  TIMES-TABLE CUBOID
+  A large glass cuboid; type "3 x 5" (or press the mic and say it) and that many
+  miniature glass cuboids drop in — 3 across, 5 deep — onto its floor, one every
+  150ms, with a running total lighting up along the RIGHT-HAND SIDE as each row
+  of 3 completes. Drag the stage to turn the cube and count from any angle.
+
+  Construction notes
+  - Big cuboid: six translucent faces, backdrop-filter + inset box-shadows.
+  - Little cuboids: same recipe at 26px, all six faces, lit from upper-left-front
+    (top brightest -> front -> left -> right -> back/bottom darkest).
+  - IMPORTANT: never animate `opacity` on a preserve-3d element — the browser
+    flattens it to a single plane and the cubes render as flat cards. Use
+    `visibility` + `transform` only. Same reason every face sets
+    backface-visibility: hidden.
+  - Voice uses webkitSpeechRecognition (Chromium + mic permission). The typed
+    input is the reliable path and the fallback.
+
+  No build step, no dependencies. IBM Plex Mono via Google Fonts.
+-->
+
+<div class="page">
+  <header class="q">
+    <span class="logo">Q<span class="dot">.</span></span>
+    <span class="name">Times tables</span>
+    <a class="back" href="/revise">← revision</a>
+  </header>
+  <div class="scaler">
+  <div id="stage" style="position: relative; width: 640px; height: 700px; border-radius: 20px; background: radial-gradient(120% 100% at 50% 0%, #1a1430 0%, #0b0f1e 56%, #05070c 100%); display: flex; align-items: center; justify-content: center; box-shadow: 0 34px 70px rgba(20,28,48,.55); overflow: hidden; perspective: 1500px; perspective-origin: 50% 42%; cursor: grab; touch-action: none;">
+
+    <div style="position: absolute; width: 300px; height: 300px; left: 20px; top: 380px; border-radius: 50%; background: radial-gradient(circle, rgba(70,220,255,.4), transparent 68%); filter: blur(22px);"></div>
+    <div style="position: absolute; width: 260px; height: 260px; right: 10px; top: 40px; border-radius: 50%; background: radial-gradient(circle, rgba(255,120,215,.36), transparent 68%); filter: blur(24px);"></div>
+    <div style="position: absolute; width: 220px; height: 220px; right: 170px; bottom: 10px; border-radius: 50%; background: radial-gradient(circle, rgba(160,255,140,.28), transparent 68%); filter: blur(22px);"></div>
+
+    <div style="position: absolute; left: 50%; top: 50%; width: 360px; height: 120px; margin: 122px 0 0 -180px; background: radial-gradient(ellipse at center, rgba(170,235,255,.4) 0%, rgba(255,150,235,.16) 42%, transparent 74%); filter: blur(20px); pointer-events: none;"></div>
+
+    <div id="cube" style="width: 360px; height: 360px; position: relative; transform-style: preserve-3d; transform: rotateX(-16deg) rotateY(-28deg);">
+
+      <div style="position: absolute; inset: 0; transform: translateZ(180px); border-radius: 4px; backdrop-filter: saturate(1.6) brightness(1.06); background: linear-gradient(96deg, rgba(150,225,255,.3) 0%, rgba(255,255,255,.02) 28%, rgba(255,255,255,.02) 72%, rgba(150,225,255,.24) 100%); box-shadow: inset 0 0 0 1px rgba(150,225,255,.55), inset 0 1px 0 rgba(255,255,255,.55), inset 4px 0 20px rgba(150,225,255,.3), 0 0 90px rgba(150,220,255,.3);"></div>
+      <div style="position: absolute; inset: 0; transform: translateZ(181px); border-radius: 4px; background: linear-gradient(178deg, rgba(225,248,255,.34) 0%, rgba(215,245,255,.1) 8%, transparent 24%, transparent 90%, rgba(200,240,255,.14) 100%);"></div>
+      <div style="position: absolute; left: 0; top: 0; width: 104px; height: 104px; transform: translateZ(181.4px); background: radial-gradient(circle at 12% 12%, rgba(235,252,255,.6) 0%, rgba(235,252,255,.2) 28%, transparent 62%);"></div>
+      <div style="position: absolute; inset: 0; transform: translateZ(-180px) rotateY(180deg); border-radius: 4px; backdrop-filter: saturate(1.6); background: linear-gradient(96deg, rgba(185,150,255,.3) 0%, rgba(255,255,255,.02) 28%, rgba(255,255,255,.02) 72%, rgba(185,150,255,.24) 100%); box-shadow: inset 0 0 0 1px rgba(185,150,255,.55), inset 0 1px 0 rgba(255,255,255,.55);"></div>
+      <div style="position: absolute; inset: 0; transform: rotateY(-90deg) translateZ(180px); border-radius: 4px; backdrop-filter: saturate(1.6); background: linear-gradient(96deg, rgba(70,220,255,.3) 0%, rgba(255,255,255,.02) 28%, rgba(255,255,255,.02) 72%, rgba(70,220,255,.24) 100%); box-shadow: inset 0 0 0 1px rgba(70,220,255,.55), inset 0 1px 0 rgba(255,255,255,.55), inset 4px 0 20px rgba(70,220,255,.3);"></div>
+      <div style="position: absolute; inset: 0; transform: rotateY(90deg) translateZ(180px); border-radius: 4px; backdrop-filter: saturate(1.6); background: linear-gradient(96deg, rgba(255,120,215,.3) 0%, rgba(255,255,255,.02) 28%, rgba(255,255,255,.02) 72%, rgba(255,120,215,.24) 100%); box-shadow: inset 0 0 0 1px rgba(255,120,215,.55), inset 0 1px 0 rgba(255,255,255,.55), inset 4px 0 20px rgba(255,120,215,.3);"></div>
+      <div style="position: absolute; inset: 0; transform: rotateX(90deg) translateZ(180px); border-radius: 4px; backdrop-filter: saturate(1.6); background: linear-gradient(96deg, rgba(160,255,140,.26) 0%, rgba(255,255,255,.02) 28%, rgba(255,255,255,.02) 72%, rgba(160,255,140,.2) 100%); box-shadow: inset 0 0 0 1px rgba(160,255,140,.5), inset 0 1px 0 rgba(255,255,255,.5);"></div>
+      <div style="position: absolute; inset: 0; transform: rotateX(-90deg) translateZ(180px); border-radius: 4px; backdrop-filter: saturate(1.6); background: linear-gradient(96deg, rgba(255,205,110,.3) 0%, rgba(255,255,255,.02) 28%, rgba(255,255,255,.02) 72%, rgba(255,205,110,.24) 100%); box-shadow: inset 0 0 0 1px rgba(255,205,110,.55), inset 0 1px 0 rgba(255,255,255,.55);"></div>
+
+      <div style="position: absolute; left: 0; right: 0; top: 34px; display: flex; flex-direction: column; align-items: center; gap: 14px; transform: translateZ(60px); backface-visibility: hidden; pointer-events: none;">
+        <div id="eq" style="display: flex; align-items: baseline; gap: 11px; font-size: 38px; font-weight: 500;"></div>
+        <div id="caption" style="font-size: 11px; letter-spacing: .12em; color: rgba(190,235,255,.7); text-shadow: 0 0 12px rgba(120,220,255,.6);"></div>
+      </div>
+
+      <div id="slab" style="position: absolute; left: 50%; top: 58%; width: 0; height: 0; transform-style: preserve-3d;"></div>
+    </div>
+
+    <div style="position: absolute; left: 0; right: 0; bottom: 0; display: flex; flex-direction: column; align-items: center; gap: 12px; padding: 0 24px 22px;">
+      <div id="status" style="font-size: 11.5px; letter-spacing: .06em; min-height: 16px; color: rgba(180,225,255,.8); text-shadow: 0 0 12px rgba(110,200,255,.5);">type a sum, or press the mic</div>
+      <div style="display: flex; align-items: center; gap: 10px;">
+        <input id="sum" type="text" inputmode="text" autocomplete="off" placeholder="3 x 5" style="width: 132px; height: 44px; text-align: center; border: none; outline: none; border-radius: 12px; font-size: 17px; letter-spacing: .06em; color: rgba(225,248,255,1); background: rgba(150,225,255,.1); box-shadow: inset 0 0 0 1px rgba(150,225,255,.45), 0 0 18px rgba(120,215,255,.18);">
+        <button id="go" type="button" style="height: 44px; padding: 0 18px; border: none; cursor: pointer; border-radius: 12px; font-size: 11.5px; letter-spacing: .14em; color: rgba(160,255,140,1); background: rgba(160,255,140,.12); box-shadow: inset 0 0 0 1px rgba(160,255,140,.5), 0 0 16px rgba(160,255,140,.2);">BUILD</button>
+        <button class="op" data-op="times" type="button" title="times" style="height: 44px; min-width: 44px; padding: 0 12px; border: none; cursor: pointer; border-radius: 12px; font-family: inherit; font-size: 17px; color: rgba(255,205,110,1); background: rgba(255,205,110,.12); box-shadow: inset 0 0 0 1px rgba(255,205,110,.45);">×</button>
+        <button class="op" data-op="square" type="button" title="squared" style="height: 44px; min-width: 44px; padding: 0 12px; border: none; cursor: pointer; border-radius: 12px; font-family: inherit; font-size: 15px; color: rgba(70,220,255,1); background: rgba(70,220,255,.12); box-shadow: inset 0 0 0 1px rgba(70,220,255,.45);">x²</button>
+        <button class="op" data-op="cube" type="button" title="cubed" style="height: 44px; min-width: 44px; padding: 0 12px; border: none; cursor: pointer; border-radius: 12px; font-family: inherit; font-size: 15px; color: rgba(185,150,255,1); background: rgba(185,150,255,.12); box-shadow: inset 0 0 0 1px rgba(185,150,255,.45);">x³</button>
+        <button class="op" data-op="sqrt" type="button" title="square root" style="height: 44px; min-width: 44px; padding: 0 12px; border: none; cursor: pointer; border-radius: 12px; font-family: inherit; font-size: 19px; color: rgba(160,255,140,1); background: rgba(160,255,140,.12); box-shadow: inset 0 0 0 1px rgba(160,255,140,.45);">√</button>
+        <button class="op" data-op="cbrt" type="button" title="cube root" style="height: 44px; min-width: 44px; padding: 0 12px; border: none; cursor: pointer; border-radius: 12px; font-family: inherit; font-size: 19px; color: rgba(255,120,215,1); background: rgba(255,120,215,.12); box-shadow: inset 0 0 0 1px rgba(255,120,215,.45);">∛</button>
+        <button id="mic" type="button" style="display: inline-flex; align-items: center; gap: 9px; height: 44px; padding: 0 18px; border: none; cursor: pointer; border-radius: 12px; color: rgba(190,235,255,1); background: rgba(150,225,255,.12); box-shadow: inset 0 0 0 1px rgba(150,225,255,.5), 0 0 18px rgba(120,215,255,.25);">
+          <span style="display: inline-flex; width: 13px; height: 20px; border-radius: 999px; box-shadow: inset 0 0 0 2px currentColor;"></span>
+          <span id="micLabel" style="font-size: 12.5px; letter-spacing: .14em;">SPEAK</span>
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// Fit the fixed 640px stage to a narrow screen rather than reflowing it.
+(function () {
+  var scaler = document.querySelector('.scaler');
+  function fit() {
+    if (!scaler) return;
+    var s = Math.min(1, (document.documentElement.clientWidth - 32) / 640);
+    scaler.style.transform = s < 1 ? 'scale(' + s + ')' : '';
+    scaler.style.height = s < 1 ? (760 * s) + 'px' : '';
+  }
+  fit();
+  window.addEventListener('resize', fit);
+})();
+
+// The input cycles through what it accepts. Sarah asked "how do I do a 2
+// squared sum?" — it already worked; nothing on screen said so.
+(function () {
+  var box = document.getElementById('sum');
+  var EXAMPLES = ['3 x 5', '5 squared', '4 cubed', 'square root of 25', 'cube root of 125', '2 squared'];
+  var i = 0;
+  setInterval(function () {
+    if (document.activeElement === box || box.value) return;   // never fight the typist
+    i = (i + 1) % EXAMPLES.length;
+    box.setAttribute('placeholder', EXAMPLES[i]);
+  }, 2600);
+})();
+
+(function () {
+  var HUES = ['70,220,255','255,120,215','160,255,140','255,205,110','185,150,255','120,255,225','255,150,150','130,200,255','255,175,120','150,255,190','215,160,255','120,220,255'];
+  var S = 26, CELL = 30, DROP = 150;
+  var slab = document.getElementById('slab'), eq = document.getElementById('eq'), cap = document.getElementById('caption'), status = document.getElementById('status');
+  // a across, b deep, c HIGH. The download only ever built one layer, so a
+  // square was as far as it went; height is what makes a cube a cube.
+  var a = 3, b = 5, c = 1, mode = 'times', root = 0, timer = null;
+  // 216 little cuboids is 1,700-odd faces, each with its own backdrop-filter.
+  // That is where a phone starts to struggle, so the edge stops at 6.
+  var MAX_EDGE = 6;
+
+  function span(txt, hue, size) {
+    return '<span style="font-size:' + size + 'px;color:rgba(' + hue + ',1);text-shadow:0 0 14px rgba(' + hue + ',1),0 0 40px rgba(' + hue + ',.6)">' + txt + '</span>';
+  }
+
+  // one miniature cuboid: six faces, lit from upper-left-front
+  function mini(h) {
+    var rim = 'inset 0 0 0 1px rgba(' + h + ',.95)', bf = 'backface-visibility:hidden;';
+    return '<div style="position:absolute;inset:0;height:26px;transform:rotateX(90deg) translateZ(13px);background:linear-gradient(150deg,rgba(255,255,255,.72),rgba(' + h + ',.6));box-shadow:' + rim + ',inset 0 0 12px rgba(255,255,255,.55),0 0 16px rgba(' + h + ',.45);' + bf + '"></div>'
+      + '<div style="position:absolute;inset:0;transform:translateZ(13px);background:linear-gradient(168deg,rgba(' + h + ',.5),rgba(' + h + ',.32) 42%,rgba(' + h + ',.42));box-shadow:' + rim + ',inset 0 1px 0 rgba(255,255,255,.75),inset 0 0 14px rgba(' + h + ',.28);' + bf + '"></div>'
+      + '<div style="position:absolute;inset:0;transform:translateZ(13.6px);background:linear-gradient(160deg,rgba(255,255,255,.48),rgba(255,255,255,.12) 12%,transparent 34%,transparent 90%,rgba(255,255,255,.14));' + bf + '"></div>'
+      + '<div style="position:absolute;left:0;top:0;width:12px;height:9px;transform:translateZ(13.9px);background:radial-gradient(circle at 16% 16%,rgba(255,255,255,.85),rgba(255,255,255,.26) 32%,transparent 66%);' + bf + '"></div>'
+      + '<div style="position:absolute;inset:0;width:26px;transform:rotateY(-90deg) translateZ(13px);background:linear-gradient(160deg,rgba(' + h + ',.46),rgba(' + h + ',.28));box-shadow:' + rim + ',inset 0 1px 0 rgba(255,255,255,.5);' + bf + '"></div>'
+      + '<div style="position:absolute;inset:0;width:26px;transform:rotateY(90deg) translateZ(13px);background:linear-gradient(160deg,rgba(' + h + ',.2),rgba(16,22,38,.36));box-shadow:' + rim + ';' + bf + '"></div>'
+      + '<div style="position:absolute;inset:0;transform:translateZ(-13px) rotateY(180deg);background:linear-gradient(168deg,rgba(' + h + ',.18),rgba(16,22,38,.32));box-shadow:' + rim + ';' + bf + '"></div>'
+      + '<div style="position:absolute;inset:0;height:26px;transform:rotateX(-90deg) translateZ(13px);background:linear-gradient(150deg,rgba(14,20,36,.52),rgba(' + h + ',.18));box-shadow:' + rim + ';' + bf + '"></div>';
+  }
+
+  function build() {
+    if (timer) clearInterval(timer);
+    var spanX = a * CELL - 4, spanZ = b * CELL - 4, html = '', i, x, y, z, h;
+    var perLayer = a * b, total = perLayer * c;
+    // The drop was a flat 150ms a cube — 32 seconds for a 5-cube. This aims at
+    // six seconds however big the build is, with a floor so a small one is not
+    // a blur. MEASURED on desktop it actually lands at: 15 cubes 2.7s, 64 cubes
+    // 9.7s, 125 cubes 10.7s, 216 cubes 10.0s — the interval is starved by the
+    // compositing, so the big ones settle around ten seconds rather than six.
+    // That reads well (it is a build-up you watch); the arithmetic below is
+    // left as the intent, not as a promise. A phone will be slower again.
+    var drop = Math.max(28, Math.min(DROP, Math.round(6000 / total)));
+
+    for (y = 0; y < c; y++) {
+      for (z = 0; z < b; z++) {
+        h = HUES[(y * b + z) % HUES.length];
+        for (x = 0; x < a; x++) {
+          i = (y * perLayer) + (z * a) + x;
+          html += '<div class="blk" data-i="' + i + '" style="position:absolute;width:' + S + 'px;height:' + S + 'px;margin:' + (-S / 2) + 'px 0 0 ' + (-S / 2) + 'px;transform-style:preserve-3d;visibility:hidden;'
+          + 'transition:transform .42s cubic-bezier(.3,1.5,.5,1);'
+            + 'transition:transform .42s cubic-bezier(.3,1.5,.5,1);'
+            + 'transform:translate3d(' + (x * CELL - spanX / 2) + 'px,-300px,' + ((b - 1 - z) * CELL - spanZ / 2) + 'px)"'
+            + ' data-to="translate3d(' + (x * CELL - spanX / 2) + 'px,' + ((c - 1 - y) * CELL) + 'px,' + ((b - 1 - z) * CELL - spanZ / 2) + 'px)">'
+            + '<div style="position:absolute;inset:0;transform-style:preserve-3d">' + mini(h) + '</div></div>';
+        }
+        // The running total, stood up on the right-hand side. On a flat build
+        // it counts the rows; on a solid one only the top row of each layer
+        // carries one, or the numbers stack on top of each other.
+        var isLast = (z === b - 1);
+        if (c === 1 || isLast) {
+          var runTo = (c === 1) ? ((z + 1) * a) : ((y + 1) * perLayer);
+          // A COLUMN, not a scatter: every tally at the SAME depth (the front
+          // edge of the build) and evenly spaced, so it reads straight on. At
+          // each row's own depth they bunched into a diagonal you had to tilt
+          // the cube to read.
+          var steps = (c === 1) ? b : c;
+          var idx = (c === 1) ? z : y;
+          var STEP = 30;
+          var yPos = -S / 2 - ((steps - 1) / 2 - idx) * STEP * -1;
+          html += '<div class="tally" data-step="' + (c === 1 ? (z + 1) : ((y + 1) * b)) + '" style="position:absolute;margin-left:' + (spanX / 2 + 30) + 'px;'
+            + 'transform:translate3d(0,' + (-S / 2 + ((steps - 1 - idx) - (steps - 1) / 2) * STEP) + 'px,' + (spanZ / 2) + 'px);'
+            + 'font-size:' + TALLY + 'px;line-height:1;white-space:nowrap;backface-visibility:hidden;opacity:0;transition:opacity .3s;'
+            + 'color:rgba(' + h + ',.95);text-shadow:0 0 14px rgba(' + h + ',1),0 0 40px rgba(' + h + ',.6)">' + runTo + '</div>';
+        }
+      }
+    }
+    slab.innerHTML = html;
+
+    cap.textContent = caption();
+    render(0);
+
+    var blks = slab.querySelectorAll('.blk'), tallies = slab.querySelectorAll('.tally'), n = 0;
+    timer = setInterval(function () {
+      var el = blks[n];
+      el.style.visibility = 'visible';
+      // next frame, so the transition runs
+      requestAnimationFrame(function () { el.style.transform = el.getAttribute('data-to'); });
+      n++;
+      render(n);
+      // light the tally whose row (or layer) has just been finished
+      var rowsDone = n / a;
+      for (var t = 0; t < tallies.length; t++) {
+        if (parseInt(tallies[t].getAttribute('data-step'), 10) <= rowsDone) tallies[t].style.opacity = 1;
+      }
+      if (n >= total) clearInterval(timer);
+    }, drop);
+  }
+
+  function caption() {
+    if (mode === 'sqrt') return a + ' each way — that is the square root';
+    if (mode === 'cbrt') return a + ' each way — that is the cube root';
+    if (mode === 'square') return a + ' rows of ' + a;
+    if (mode === 'cube') return c + ' layers of ' + (a * b);
+    return b + (b === 1 ? ' row of ' : ' rows of ') + a;
+  }
+
+  var BIG = 38, OP = 24, TALLY = 19;
+  function sup(txt, hue) {
+    return '<span style="font-size:22px;vertical-align:super;color:rgba(' + hue + ',1);text-shadow:0 0 14px rgba(' + hue + ',1)">' + txt + '</span>';
+  }
+  function render(landed) {
+    var CY = '70,220,255', AM = '255,205,110', PK = '255,120,215', VI = '185,150,255', GR = '160,255,140';
+    if (mode === 'square') {
+      eq.innerHTML = span(a, CY, BIG) + sup('2', AM) + span('=', VI, OP) + span(landed, GR, BIG);
+    } else if (mode === 'cube') {
+      eq.innerHTML = span(a, CY, BIG) + sup('3', AM) + span('=', VI, OP) + span(landed, GR, BIG);
+    } else if (mode === 'sqrt') {
+      // The answer is the SIDE, so it only reads once the shape is whole.
+      eq.innerHTML = span('√', AM, BIG) + span(root, CY, BIG) + span('=', VI, OP)
+        + span(landed === root ? a : '?', GR, BIG);
+    } else if (mode === 'cbrt') {
+      eq.innerHTML = span('∛', AM, BIG) + span(root, CY, BIG) + span('=', VI, OP)
+        + span(landed === root ? a : '?', GR, BIG);
+    } else {
+      eq.innerHTML = span(a, CY, BIG) + span('×', AM, OP) + span(b, PK, BIG)
+        + span('=', VI, OP) + span(landed, GR, BIG);
+    }
+  }
+
+  var WORDS = { one:1, two:2, three:3, four:4, five:5, six:6, seven:7, eight:8, nine:9, ten:10, eleven:11, twelve:12, to:2, too:2, for:4, ate:8, won:1, free:3, tree:3, fife:5, sex:6, nein:9 };
+  // What was asked for. Written to survive being SPOKEN as well as typed:
+  // "square root of twenty five", "five cubed", "root 49", "3 times 5".
+  function parse(text) {
+    var raw = String(text).toLowerCase();
+    var sq = /(square\s*root|sq\s*rt|sqrt|√)/.test(raw);
+    var cb = /(cube\s*root|cbrt|∛)/.test(raw);
+    var squared = !sq && !cb && /(squared|\^\s*2|²)/.test(raw);
+    var cubed = !sq && !cb && /(cubed|\^\s*3|³)/.test(raw);
+    // A bare "root 49" means the square one.
+    if (!sq && !cb && /\broot\b/.test(raw)) sq = true;
+
+    var toks = raw.replace(/[^a-z0-9]+/g, ' ').trim().split(' '), nums = [];
+    toks.forEach(function (t) {
+      var n = /^\d+$/.test(t) ? parseInt(t, 10) : WORDS[t];
+      if (n) nums.push(n);
+    });
+    // "squared" and "cubed" put a 2 or a 3 in the word stream; ignore it.
+    if (squared || cubed) nums = nums.filter(function (n, i) { return !(i > 0 && (n === 2 || n === 3)); });
+    if (!nums.length) return null;
+
+    if (sq || cb) {
+      var target = nums[0];
+      var side = Math.round(cb ? Math.cbrt(target) : Math.sqrt(target));
+      var exact = (cb ? side * side * side : side * side) === target;
+      if (!exact) return { error: target + ' is not a ' + (cb ? 'cube' : 'square') + ' number — nothing fits exactly' };
+      if (side > MAX_EDGE) return { error: 'that one is too big to build — try up to ' + (cb ? MAX_EDGE * MAX_EDGE * MAX_EDGE : MAX_EDGE * MAX_EDGE) };
+      return { mode: cb ? 'cbrt' : 'sqrt', a: side, b: side, c: cb ? side : 1, root: target };
+    }
+    if (squared || cubed) {
+      var n0 = Math.min(cubed ? MAX_EDGE : 12, nums[0]);
+      return { mode: cubed ? 'cube' : 'square', a: n0, b: n0, c: cubed ? n0 : 1 };
+    }
+    if (nums.length < 2) return null;
+    return { mode: 'times', a: Math.min(12, nums[0]), b: Math.min(12, nums[1]), c: 1 };
+  }
+
+  function apply(text, note) {
+    var p = parse(text);
+    if (!p) { status.textContent = note ? note + ' — say or type a sum' : 'try 3 x 5, 5 squared, or the square root of 25'; return; }
+    if (p.error) { status.textContent = p.error; return; }
+    mode = p.mode; a = p.a; b = p.b; c = p.c; root = p.root || 0;
+    status.textContent = note || describe();
+    build();
+  }
+
+  function describe() {
+    if (mode === 'sqrt') return 'how many each way makes ' + root + '?';
+    if (mode === 'cbrt') return 'how many each way, every way, makes ' + root + '?';
+    if (mode === 'square') return a + ' across, ' + a + ' deep';
+    if (mode === 'cube') return a + ' across, ' + a + ' deep, ' + a + ' high';
+    return a + ' across, ' + b + ' deep';
+  }
+
+  // Put the number in, then press the operation — a calculator, not a spelling
+  // test. Whatever is in the box is reused, so you can try 25 with √ and then
+  // with x² without retyping it.
+  var PHRASE = {
+    times:  function (ns) { return (ns[0] || 3) + ' x ' + (ns[1] || 5); },
+    square: function (ns) { return (ns[0] || 5) + ' squared'; },
+    cube:   function (ns) { return (ns[0] || 4) + ' cubed'; },
+    sqrt:   function (ns) { return 'square root of ' + (ns[0] || 25); },
+    cbrt:   function (ns) { return 'cube root of ' + (ns[0] || 125); }
+  };
+  Array.prototype.forEach.call(document.querySelectorAll('.op'), function (btn) {
+    btn.onclick = function () {
+      var box = document.getElementById('sum');
+      var ns = String(box.value).toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim().split(' ')
+        .map(function (t) { return /^\d+$/.test(t) ? parseInt(t, 10) : WORDS[t]; })
+        .filter(function (n) { return !!n; });
+      var phrase = PHRASE[btn.getAttribute('data-op')](ns);
+      box.value = phrase;
+      apply(phrase);
+    };
+  });
+
+  document.getElementById('go').onclick = function () { apply(document.getElementById('sum').value); };
+  document.getElementById('sum').addEventListener('keydown', function (e) { if (e.key === 'Enter') apply(this.value); });
+
+  // voice
+  var SR = window.SpeechRecognition || window.webkitSpeechRecognition, rec = null;
+  var micBtn = document.getElementById('mic'), micLabel = document.getElementById('micLabel');
+  micBtn.onclick = function () {
+    if (!SR) { status.textContent = 'voice not supported here — type the sum'; return; }
+    if (rec) { rec.stop(); return; }
+    rec = new SR();
+    rec.lang = 'en-GB'; rec.interimResults = false; rec.maxAlternatives = 3;
+    rec.onstart = function () { micLabel.textContent = 'LISTENING'; micBtn.style.color = 'rgba(255,150,150,1)'; micBtn.style.background = 'rgba(255,120,120,.22)'; status.textContent = 'listening — say “three times five”'; };
+    rec.onend = function () { rec = null; micLabel.textContent = 'SPEAK'; micBtn.style.color = 'rgba(190,235,255,1)'; micBtn.style.background = 'rgba(150,225,255,.12)'; };
+    rec.onerror = function (e) { status.textContent = e.error === 'not-allowed' ? 'mic blocked — allow access, or type it' : 'didn’t catch that'; };
+    rec.onresult = function (e) {
+      for (var i = 0; i < e.results[0].length; i++) {
+        var said = e.results[0][i].transcript;
+        if (parse(said)) { document.getElementById('sum').value = said.trim(); apply(said, 'heard “' + said.trim() + '”'); return; }
+      }
+      status.textContent = 'didn’t catch two numbers — try again';
+    };
+    rec.start();
+  };
+
+  // drag to turn
+  (function () {
+    var stage = document.getElementById('stage'), cube = document.getElementById('cube');
+    var rx = -16, ry = -28, down = false, px = 0, py = 0;
+    stage.addEventListener('pointerdown', function (e) {
+      if (e.target.closest('input,button')) return;
+      down = true; px = e.clientX; py = e.clientY; stage.style.cursor = 'grabbing'; stage.setPointerCapture(e.pointerId);
+    });
+    stage.addEventListener('pointermove', function (e) {
+      if (!down) return;
+      ry += (e.clientX - px) * 0.4; rx -= (e.clientY - py) * 0.3;
+      rx = Math.max(-80, Math.min(80, rx));
+      px = e.clientX; py = e.clientY;
+      cube.style.transform = 'rotateX(' + rx + 'deg) rotateY(' + ry + 'deg)';
+    });
+    stage.addEventListener('pointerup', function () { down = false; stage.style.cursor = 'grab'; });
+  })();
+
+  build();
+})();
+</script>
+
+</div>
+</body>
+</html>

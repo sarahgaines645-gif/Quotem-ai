@@ -390,6 +390,11 @@ const PUBLIC_PATHS = new Set([
     '/manifest.webmanifest',
     '/sw.js',                // service worker must be public — browser fetches it pre-auth
     '/trace-widget.js', '/looking-glass-widget.js',
+    // The cube and the times-table cube. Same reason as the benches below:
+    // no account, so a child can be handed the link and just play. Both read
+    // the tasks/diary endpoints, which stay behind the gate — signed out they
+    // simply come back empty rather than leaking anything.
+    '/cube', '/cuboid', '/revise/maths',
     '/unicorn', '/unicorn3d', '/rig', '/dance', '/disco', '/lab', '/studio',   // the dancing-unicorn test benches. No user data, no
                                 // AI calls, no writes — just a page that plays a model.
                                 // Public so Sarah can open them without a session and
