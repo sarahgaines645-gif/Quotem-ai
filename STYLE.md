@@ -28,10 +28,27 @@ It does NOT go on:
 - Card borders or fills
 - Large text blocks
 
-### 3. Inputs are INSET, buttons are RAISED
-Anything that receives user content (text inputs, textareas, code blocks, "stat" boxes) → `box-shadow: var(--neu-inset-sm)`.
-Anything that's a clickable surface (buttons, cards, pills) → `box-shadow: var(--neu-raised-sm)` or `var(--neu-raised)`.
-Active/pressed state inverts to inset.
+### 3. ⚠️ NO INDENTS. NONE. Everything is RAISED.
+**This rule used to say "inputs are INSET, buttons are RAISED". That is DEAD.**
+Sarah has now said it more times than any other rule — 17 Aug: *"there should be
+a clear rule somewhere that says no indents"*; 21 Aug: *"we dont indent we
+raise"*. `CLAUDE.md` in this repo carries the full version and it is the one
+that wins. This file was still telling agents the opposite, which is why her
+inputs kept getting sunk.
+
+- Every surface = **raised** (`--neu-raised-sm` / `--neu-raised`) on `var(--bg)`.
+- A field she types into is a **raised card with a caret in it**, not a well.
+- Selected / current / active is shown with the **accent on an icon or dot**, or
+  bold text — never by sinking the thing.
+- The only `--neu-inset` left anywhere is a button's `:active`, the momentary
+  press under her finger. It is gone the instant she lets go.
+
+### 3b. Nothing appears on hover
+No boxes, no half-visible outlines, no tooltip cards. Sarah, 17 Aug: *"I don't
+want all these half invisible boxes to appear as I move the cursor over it."*
+An existing element may change state on hover — a card can lift. Nothing new
+may materialise. If a mark on a map needs explaining, the explanation belongs
+somewhere permanent, and pointing at the mark should light that place up.
 
 ### 4. Theme tokens are canonical — don't invent shadows
 Every page declares the same `:root` block:
