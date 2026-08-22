@@ -510,8 +510,17 @@
   };
 
   function faceChoice() {
-    try { return JSON.parse(localStorage.getItem('q-cube-faces') || '{}'); }
-    catch (e) { return {}; }
+    var c;
+    try { c = JSON.parse(localStorage.getItem('q-cube-faces') || '{}'); }
+    catch (e) { c = {}; }
+    // Anyone who already had the drawing on the front had it covering the
+    // clock. Move it to the back rather than quietly dropping it.
+    if (c.front === 'draw') {
+      c.front = 'designed';
+      if (!c.back || c.back === 'designed') c.back = 'draw';
+      try { localStorage.setItem('q-cube-faces', JSON.stringify(c)); } catch (e) {}
+    }
+    return c;
   }
   function setFace(face, panelId) {
     var c = faceChoice();
@@ -530,11 +539,19 @@
   }
   function paintAllFaces() { CUBE_FACES.forEach(paintFace); }
 
+  // Which panels a given side may carry. The front is where the clock reads
+  // through the glass, so the drawing is not offered there — it would hide the
+  // very thing the cube is for.
+  var NOT_ON = { front: ['draw'] };
+  function panelsFor(face) {
+    var block = NOT_ON[face] || [];
+    return Object.keys(PANELS).filter(function (id) { return block.indexOf(id) < 0; });
+  }
+
   function paintPicker() {
     var box = document.getElementById('face-picker');
     if (!box) return;
     var chosen = faceChoice();
-    var ids = Object.keys(PANELS);
     var w = weatherNow();
     box.innerHTML = '<div class="fp-row"><span class="fp-face">Weather</span>'
       + WEATHER.map(function (id) {
@@ -542,7 +559,7 @@
         }).join('')
       + '</div>' + CUBE_FACES.map(function (f) {
       return '<div class="fp-row"><span class="fp-face">' + FACE_NAME[f] + '</span>'
-        + ids.map(function (id) {
+        + panelsFor(f).map(function (id) {
             var on = (chosen[f] || 'designed') === id;
             return '<button class="fp-opt' + (on ? ' on' : '') + '" data-pick-face="' + f + '" data-panel="' + id + '">'
               + PANELS[id].name + '</button>';
@@ -873,11 +890,24 @@
   ];
   var STAGE_NAME = ['a seed', 'sprouting', 'growing', 'in bud', 'in flower', 'in full bloom'];
 
+  var BED = 3;              // how many can go in at once
+  var PER_STAGE = 2;        // Sarah, 22 Aug: "it needs to grow slower ... like
+                            // half that time". Two waterings a stage, not one.
   function gardenKey(face) { return 'q-cube-garden-' + face; }
   function gardenRead(face) {
-    try { return JSON.parse(localStorage.getItem(gardenKey(face)) || 'null') || { seed: null, stage: 0, wet: false }; }
-    catch (e) { return { seed: null, stage: 0, wet: false }; }
+    var g;
+    try { g = JSON.parse(localStorage.getItem(gardenKey(face)) || 'null'); } catch (e) { g = null; }
+    if (!g) return { plants: [], wet: false };
+    // A garden saved when only one plant could go in is carried over rather
+    // than thrown away.
+    if (!g.plants) {
+      return g.seed
+        ? { plants: [{ seed: g.seed, water: (g.stage || 0) * PER_STAGE }], wet: !!g.wet }
+        : { plants: [], wet: !!g.wet };
+    }
+    return g;
   }
+  function stageOf(p) { return Math.min(5, Math.floor((p.water || 0) / PER_STAGE)); }
   function gardenWrite(face, g) {
     try { localStorage.setItem(gardenKey(face), JSON.stringify(g)); } catch (e) {}
   }
@@ -885,63 +915,74 @@
   // The drawing. One set of parts, shaped by the flower — so twelve seeds look
   // like twelve different plants without twelve drawings.
   function plantSvg(g) {
-    var f = null;
-    for (var i = 0; i < FLOWERS.length; i++) if (FLOWERS[i].id === g.seed) f = FLOWERS[i];
-    var s = g.stage;
     var soil = '<rect x="0" y="232" width="300" height="68" fill="rgba(58,40,28,.55)"/>'
              + '<rect x="0" y="228" width="300" height="7" rx="3" fill="rgba(92,66,44,.75)"/>';
-    if (!f) return '<svg viewBox="0 0 300 300" width="100%" height="100%">' + soil + '</svg>';
+    var body = '';
+    (g.plants || []).forEach(function (p, i) {
+      body += onePlant(p, [78, 150, 222][i] || 150, 0.78);
+    });
+    return '<svg viewBox="0 0 300 300" width="100%" height="100%">' + soil + body + '</svg>';
+  }
 
-    var H = 150 * f.tall;
+  function onePlant(g, cx, scale) {
+    var f = null;
+    for (var i = 0; i < FLOWERS.length; i++) if (FLOWERS[i].id === g.seed) f = FLOWERS[i];
+    if (!f) return '';
+    var s = stageOf(g);
+
+    var H = 150 * f.tall * scale;
     var grow = [0, 0.10, 0.34, 0.62, 0.88, 1][s];
     var top = 232 - H * grow;
-    var parts = soil;
+    // NOT soil — the ground is drawn once by plantSvg now. Referring to it
+    // here threw on every draw and silently killed the repaint.
+    var parts = '';
 
+    var L = 26 * scale;                       // leaf reach
     if (s === 0) {
-      parts += '<ellipse cx="150" cy="242" rx="7" ry="5" fill="#8d6e4f" stroke="rgba(0,0,0,.3)"/>';
+      parts += '<ellipse cx="' + cx + '" cy="242" rx="' + (7 * scale).toFixed(1) + '" ry="' + (5 * scale).toFixed(1) + '" fill="#8d6e4f" stroke="rgba(0,0,0,.3)"/>';
     } else {
-      parts += '<path d="M150 232 Q ' + (150 + (s % 2 ? 9 : -9)) + ' ' + ((232 + top) / 2) + ' 150 ' + top + '" '
-             + 'stroke="#4caf50" stroke-width="' + (2 + s * 0.7).toFixed(1) + '" fill="none" stroke-linecap="round"/>';
+      parts += '<path d="M' + cx + ' 232 Q ' + (cx + (s % 2 ? 7 : -7)) + ' ' + ((232 + top) / 2) + ' ' + cx + ' ' + top + '" '
+             + 'stroke="#4caf50" stroke-width="' + (1.8 + s * 0.55).toFixed(1) + '" fill="none" stroke-linecap="round"/>';
       if (s >= 2) {
-        parts += '<path d="M150 ' + (top + H * grow * 0.45) + ' q -34 -12 -40 -34 q 30 2 40 34 z" fill="#66bb6a"/>';
+        parts += '<path d="M' + cx + ' ' + (top + H * grow * 0.45) + ' q -' + L + ' -9 -' + (L * 1.2).toFixed(0) + ' -26 q ' + (L * 0.9).toFixed(0) + ' 2 ' + (L * 1.2).toFixed(0) + ' 26 z" fill="#66bb6a"/>';
       }
       if (s >= 3) {
-        parts += '<path d="M150 ' + (top + H * grow * 0.28) + ' q 34 -12 40 -34 q -30 2 -40 34 z" fill="#4caf50"/>';
+        parts += '<path d="M' + cx + ' ' + (top + H * grow * 0.28) + ' q ' + L + ' -9 ' + (L * 1.2).toFixed(0) + ' -26 q -' + (L * 0.9).toFixed(0) + ' 2 -' + (L * 1.2).toFixed(0) + ' 26 z" fill="#4caf50"/>';
       }
     }
 
     if (s === 3) {                                  // bud
-      parts += '<ellipse cx="150" cy="' + (top - 6) + '" rx="9" ry="14" fill="' + f.mid + '" opacity=".9"/>'
-             + '<ellipse cx="150" cy="' + (top - 10) + '" rx="6" ry="9" fill="' + f.petal + '" opacity=".55"/>';
+      parts += '<ellipse cx="' + cx + '" cy="' + (top - 5) + '" rx="' + (9 * scale).toFixed(1) + '" ry="' + (14 * scale).toFixed(1) + '" fill="' + f.mid + '" opacity=".9"/>'
+             + '<ellipse cx="' + cx + '" cy="' + (top - 8) + '" rx="' + (6 * scale).toFixed(1) + '" ry="' + (9 * scale).toFixed(1) + '" fill="' + f.petal + '" opacity=".55"/>';
     } else if (s >= 4) {                            // open
-      var R = (s === 5) ? 34 : 26;
+      var R = ((s === 5) ? 34 : 26) * scale;
       var head = '';
       if (f.shape === 'spike') {
         for (var k = 0; k < f.petals; k++) {
-          var yy = top - 4 - k * 9, ww = 13 - k * 0.8;
-          head += '<ellipse cx="' + (150 + (k % 2 ? 6 : -6)) + '" cy="' + yy + '" rx="' + ww + '" ry="5.5" fill="' + f.petal + '" opacity="' + (0.95 - k * 0.05).toFixed(2) + '"/>';
+          var yy = top - 3 - k * 8 * scale, ww = (13 - k * 0.8) * scale;
+          head += '<ellipse cx="' + (cx + (k % 2 ? 5 : -5)) + '" cy="' + yy.toFixed(1) + '" rx="' + ww.toFixed(1) + '" ry="' + (5.5 * scale).toFixed(1) + '" fill="' + f.petal + '" opacity="' + (0.95 - k * 0.05).toFixed(2) + '"/>';
         }
       } else if (f.shape === 'bell') {
         for (var b = 0; b < f.petals; b++) {
-          var bx = 150 + (b - (f.petals - 1) / 2) * 15;
-          head += '<path d="M' + bx + ' ' + (top - 2) + ' q -9 16 0 22 q 9 -6 0 -22 z" fill="' + f.petal + '"/>'
-                + '<ellipse cx="' + bx + '" cy="' + (top - 2) + '" rx="9" ry="4" fill="' + f.mid + '" opacity=".85"/>';
+          var bx = cx + (b - (f.petals - 1) / 2) * 13 * scale;
+          head += '<path d="M' + bx.toFixed(1) + ' ' + (top - 2) + ' q -' + (9 * scale).toFixed(1) + ' ' + (16 * scale).toFixed(1) + ' 0 ' + (22 * scale).toFixed(1) + ' q ' + (9 * scale).toFixed(1) + ' -' + (6 * scale).toFixed(1) + ' 0 -' + (22 * scale).toFixed(1) + ' z" fill="' + f.petal + '"/>'
+                + '<ellipse cx="' + bx.toFixed(1) + '" cy="' + (top - 2) + '" rx="' + (9 * scale).toFixed(1) + '" ry="' + (4 * scale).toFixed(1) + '" fill="' + f.mid + '" opacity=".85"/>';
         }
       } else if (f.shape === 'cup' || f.shape === 'trumpet') {
-        head += '<path d="M' + (150 - R * 0.7) + ' ' + (top - 2) + ' q ' + (R * 0.7) + ' ' + (R * 1.1) + ' ' + (R * 1.4) + ' 0 q -' + (R * 0.55) + ' -' + (R * 0.85) + ' -' + (R * 1.4) + ' 0 z" fill="' + f.petal + '"/>';
-        if (f.shape === 'trumpet') head += '<ellipse cx="150" cy="' + (top + 4) + '" rx="' + (R * 0.42) + '" ry="' + (R * 0.5) + '" fill="' + f.mid + '"/>';
+        head += '<path d="M' + (cx - R * 0.7).toFixed(1) + ' ' + (top - 2) + ' q ' + (R * 0.7).toFixed(1) + ' ' + (R * 1.1).toFixed(1) + ' ' + (R * 1.4).toFixed(1) + ' 0 q -' + (R * 0.55).toFixed(1) + ' -' + (R * 0.85).toFixed(1) + ' -' + (R * 1.4).toFixed(1) + ' 0 z" fill="' + f.petal + '"/>';
+        if (f.shape === 'trumpet') head += '<ellipse cx="' + cx + '" cy="' + (top + 4) + '" rx="' + (R * 0.42).toFixed(1) + '" ry="' + (R * 0.5).toFixed(1) + '" fill="' + f.mid + '"/>';
       } else {
         for (var p = 0; p < f.petals; p++) {
           var a = (p / f.petals) * Math.PI * 2;
-          head += '<ellipse cx="' + (150 + Math.cos(a) * R * 0.62).toFixed(1) + '" cy="' + (top + Math.sin(a) * R * 0.62).toFixed(1) + '" '
-                + 'rx="' + (R * 0.42).toFixed(1) + '" ry="' + (R * 0.24).toFixed(1) + '" fill="' + f.petal + '" '
-                + 'transform="rotate(' + (a * 180 / Math.PI).toFixed(1) + ' ' + (150 + Math.cos(a) * R * 0.62).toFixed(1) + ' ' + (top + Math.sin(a) * R * 0.62).toFixed(1) + ')"/>';
+          var px = (cx + Math.cos(a) * R * 0.62).toFixed(1), py = (top + Math.sin(a) * R * 0.62).toFixed(1);
+          head += '<ellipse cx="' + px + '" cy="' + py + '" rx="' + (R * 0.42).toFixed(1) + '" ry="' + (R * 0.24).toFixed(1) + '" fill="' + f.petal + '" '
+                + 'transform="rotate(' + (a * 180 / Math.PI).toFixed(1) + ' ' + px + ' ' + py + ')"/>';
         }
-        head += '<circle cx="150" cy="' + top + '" r="' + (R * 0.3).toFixed(1) + '" fill="' + f.mid + '"/>';
+        head += '<circle cx="' + cx + '" cy="' + top + '" r="' + (R * 0.3).toFixed(1) + '" fill="' + f.mid + '"/>';
       }
       parts += head;
     }
-    return '<svg viewBox="0 0 300 300" width="100%" height="100%">' + parts + '</svg>';
+    return parts;
   }
 
   PANELS.garden = {
@@ -968,46 +1009,76 @@
       function paint() {
         var g = gardenRead(face);
         art.innerHTML = plantSvg(g);
-        var f = null;
-        for (var i = 0; i < FLOWERS.length; i++) if (FLOWERS[i].id === g.seed) f = FLOWERS[i];
-        var need = g.wet ? 'needs sun' : 'needs rain';
-        if (g.stage >= 5) need = 'done';
-        head.innerHTML = f
-          ? ('<b style="letter-spacing:.06em">' + f.name.toUpperCase() + '</b> &middot; ' + STAGE_NAME[g.stage]
+
+        var planted = g.plants || [];
+        var names = planted.map(function (p) {
+          var f = null;
+          for (var i = 0; i < FLOWERS.length; i++) if (FLOWERS[i].id === p.seed) f = FLOWERS[i];
+          return f ? (f.name + ' ' + STAGE_NAME[stageOf(p)]) : '';
+        }).filter(Boolean);
+
+        var allDone = planted.length && planted.every(function (p) { return stageOf(p) >= 5; });
+        var need = allDone ? 'done' : (g.wet ? 'needs sun' : 'needs rain');
+
+        head.innerHTML = planted.length
+          ? ('<b style="letter-spacing:.05em">' + names.join(' &middot; ') + '</b>'
              + '<span style="float:right;color:rgba(190,235,255,.65)">' + need + '</span>')
-          : 'PICK A SEED';
+          : ('PICK A SEED<span style="float:right;color:rgba(190,235,255,.5)">room for ' + BED + '</span>');
+
+        var chosen = {};
+        planted.forEach(function (p) { chosen[p.seed] = true; });
+        var full = planted.length >= BED;
         seeds.innerHTML = FLOWERS.map(function (x) {
-          var on = (g.seed === x.id);
+          var on = !!chosen[x.id];
           return '<button data-seed="' + x.id + '" title="' + x.name + '" style="font-family:inherit;font-size:6.5px;letter-spacing:.04em;'
-            + 'border:none;cursor:pointer;border-radius:4px;padding:2px 4px;color:' + (on ? '#0b0f18' : 'rgba(230,245,255,.85)') + ';'
+            + 'border:none;cursor:' + (full && !on ? 'default' : 'pointer') + ';border-radius:4px;padding:2px 4px;'
+            + 'opacity:' + (full && !on ? '.35' : '1') + ';color:' + (on ? '#0b0f18' : 'rgba(230,245,255,.85)') + ';'
             + 'background:' + (on ? x.petal : 'rgba(255,255,255,.10)') + ';box-shadow:0 0 6px ' + (on ? x.petal : 'transparent') + ';">'
             + x.name + '</button>';
-        }).join('');
+        }).join('')
+        + (planted.length ? '<button data-dig style="font-family:inherit;font-size:6.5px;letter-spacing:.08em;border:none;cursor:pointer;'
+            + 'border-radius:4px;padding:2px 5px;color:rgba(255,190,190,.9);background:rgba(255,120,120,.14);">DIG UP</button>' : '');
       }
 
       seeds.addEventListener('pointerdown', function (e) { e.stopPropagation(); });
       seeds.addEventListener('click', function (e) {
+        e.stopPropagation();
+        var g = gardenRead(face);
+        if (e.target.closest('[data-dig]')) {
+          gardenWrite(face, { plants: [], wet: false });
+          paint();
+          return;
+        }
         var b = e.target.closest('[data-seed]');
         if (!b) return;
-        e.stopPropagation();
-        // Planting a different seed starts that plant off. Nothing else is lost —
-        // each side keeps its own garden.
-        gardenWrite(face, { seed: b.getAttribute('data-seed'), stage: 0, wet: false });
+        var id = b.getAttribute('data-seed');
+        g.plants = g.plants || [];
+        // Tapping one already in the ground takes it out again; otherwise it
+        // goes in the next free space, up to BED of them.
+        var at = -1;
+        for (var i = 0; i < g.plants.length; i++) if (g.plants[i].seed === id) at = i;
+        if (at >= 0) g.plants.splice(at, 1);
+        else if (g.plants.length < BED) g.plants.push({ seed: id, water: 0 });
+        gardenWrite(face, g);
         paint();
       });
 
       function onWeather() {
         var g = gardenRead(face);
-        if (!g.seed || g.stage >= 5) return;
+        if (!g.plants || !g.plants.length) return;
         var w = weatherNow();
         // Rain — and a twister brings its rain with it — wets the ground.
         if (w === 'rain' || w === 'storm' || w === 'twister') {
           if (!g.wet) { g.wet = true; gardenWrite(face, g); paint(); }
           return;
         }
-        // Sun on wet ground is what actually makes it grow.
+        // Sun on wet ground is what actually makes them grow. Everything in the
+        // bed drinks the same rain, and it takes PER_STAGE waterings to move a
+        // plant on a stage.
         if (w === 'sun' && g.wet) {
-          g.stage = Math.min(5, g.stage + 1);
+          g.plants.forEach(function (p) {
+            if (stageOf(p) < 5) p.water = (p.water || 0) + 1;
+          });
           g.wet = false;
           gardenWrite(face, g);
           paint();
@@ -1017,7 +1088,7 @@
       // drinks it, which is why a snowy week still counts.
       function onSnow(e) {
         var g = gardenRead(face);
-        if (!g.seed || g.stage >= 5) return;
+        if (!g.plants || !g.plants.length) return;
         if (weatherNow() === 'sun' && e.detail && e.detail.depth > 0 && !g.wet) {
           g.wet = true; gardenWrite(face, g); paint();
         }
