@@ -87,6 +87,20 @@
     }
   }
 
+  /* The weather and the size live on the page under the cube — reachable
+     without opening anything. */
+  #cube-controls { display: flex; gap: 14px; flex-wrap: wrap; align-items: center; justify-content: center;
+                   width: min(820px, calc(100% - 32px)); margin: 0 auto; }
+  #weather-bar, #zoom-bar { display: flex; gap: 7px; flex-wrap: wrap; justify-content: center; }
+  .wx { font-family: inherit; font-size: 12.5px; cursor: pointer; border: none;
+        color: rgba(232,236,244,0.72); background: rgba(255,255,255,0.05);
+        padding: 9px 14px; border-radius: 11px; min-width: 40px;
+        box-shadow: inset 0 1px 0 rgba(255,255,255,0.08); }
+  .wx:hover { color: #fff; }
+  .wx.on { color: #fff; box-shadow: inset 0 1px 0 rgba(255,255,255,0.18), 0 4px 14px rgba(0,0,0,0.4); }
+  .wx.on::before { content: ''; display: inline-block; width: 6px; height: 6px; border-radius: 50%;
+                   background: #e91e63; margin-right: 8px; vertical-align: middle; }
+
   /* Choosing what goes on each side. In the page, not floating over it —
      nothing here dims or covers the cube. */
   #face-panel { display: none; width: min(820px, calc(100% - 32px)); margin: 0 auto; }
@@ -122,6 +136,14 @@
     <a class="back" href="/tools" style="margin-left:10px;">← tools</a>
   </header>
 
+  <div id="cube-controls">
+    <div id="weather-bar"></div>
+    <div id="zoom-bar">
+      <button class="wx" data-zoom="out" type="button" aria-label="smaller">&minus;</button>
+      <button class="wx" data-zoom="reset" type="button"><span id="zoom-now">100%</span></button>
+      <button class="wx" data-zoom="in" type="button" aria-label="bigger">+</button>
+    </div>
+  </div>
   <div id="face-panel"><div id="face-picker"></div></div>
   <div class="scaler">
       <div style="position: relative; width: 560px; height: 620px; border-radius: 20px; background: radial-gradient(120% 100% at 50% 0%, #171d2c 0%, #0b0f18 58%, #05070c 100%); display: flex; align-items: center; justify-content: center; box-shadow: 0 34px 70px rgba(20,28,48,.55); overflow: hidden; perspective: 1500px; perspective-origin: 50% 46%; cursor: grab; touch-action: none; user-select: none; -webkit-user-select: none; -webkit-tap-highlight-color: transparent;" data-cuboid-stage="1">
@@ -548,16 +570,23 @@
     return Object.keys(PANELS).filter(function (id) { return block.indexOf(id) < 0; });
   }
 
+  // The weather sits on the page, under the cube, where you can reach it
+  // without opening anything (Sarah, 22 Aug: "put the weather buttons on the
+  // background instead of inside the dropdown").
+  function paintWeather() {
+    var box = document.getElementById('weather-bar');
+    if (!box) return;
+    var w = weatherNow();
+    box.innerHTML = WEATHER.map(function (id) {
+      return '<button class="wx' + (w === id ? ' on' : '') + '" data-weather="' + id + '">' + WEATHER_NAME[id] + '</button>';
+    }).join('');
+  }
+
   function paintPicker() {
     var box = document.getElementById('face-picker');
     if (!box) return;
     var chosen = faceChoice();
-    var w = weatherNow();
-    box.innerHTML = '<div class="fp-row"><span class="fp-face">Weather</span>'
-      + WEATHER.map(function (id) {
-          return '<button class="fp-opt' + (w === id ? ' on' : '') + '" data-weather="' + id + '">' + WEATHER_NAME[id] + '</button>';
-        }).join('')
-      + '</div>' + CUBE_FACES.map(function (f) {
+    box.innerHTML = CUBE_FACES.map(function (f) {
       return '<div class="fp-row"><span class="fp-face">' + FACE_NAME[f] + '</span>'
         + panelsFor(f).map(function (id) {
             var on = (chosen[f] || 'designed') === id;
@@ -569,8 +598,9 @@
   }
 
   document.addEventListener('click', function (e) {
+    var wb = e.target.closest ? e.target.closest('[data-weather]') : null;
+    if (wb && wb.tagName === 'BUTTON') { setWeather(wb.getAttribute('data-weather')); return; }
     var b = e.target.closest ? e.target.closest('.fp-opt') : null;
-    if (b && b.getAttribute('data-weather')) { setWeather(b.getAttribute('data-weather')); return; }
     if (b) { setFace(b.getAttribute('data-pick-face'), b.getAttribute('data-panel')); return; }
     var t = e.target.closest ? e.target.closest('#face-toggle') : null;
     if (t) {
@@ -595,6 +625,7 @@
     if (WEATHER.indexOf(w) < 0) return;
     try { localStorage.setItem('q-cube-weather', w); } catch (e) {}
     applyWeather();
+    paintWeather();
     paintPicker();
     // Everything that cares — the flower, for one — listens for this.
     document.dispatchEvent(new CustomEvent('cube:weather', { detail: { weather: w } }));
@@ -886,7 +917,10 @@
     { id: 'snowdrop',  name: 'Snowdrop',   petal: '#f2f7ff', mid: '#9fd0a8', shape: 'bell',   petals: 3,  tall: 0.75 },
     { id: 'foxglove',  name: 'Foxglove',   petal: '#d183e8', mid: '#8e44ad', shape: 'spike',  petals: 7,  tall: 1.25 },
     { id: 'daisy',     name: 'Daisy',      petal: '#ffffff', mid: '#ffd23f', shape: 'round',  petals: 12, tall: 0.7 },
-    { id: 'rose',      name: 'Rose',       petal: '#e01e5a', mid: '#8b0d33', shape: 'cup',    petals: 8,  tall: 0.95 }
+    { id: 'rose',      name: 'Rose',       petal: '#e01e5a', mid: '#8b0d33', shape: 'cup',    petals: 8,  tall: 0.95 },
+    // A hydrangea is not one flower but a head of many little ones, so it gets
+    // its own shape rather than being forced into a petal ring.
+    { id: 'hydrangea', name: 'Hydrangea',  petal: '#7aa8ff', mid: '#4f7fe0', shape: 'pom',    petals: 16, tall: 0.9 }
   ];
   var STAGE_NAME = ['a seed', 'sprouting', 'growing', 'in bud', 'in flower', 'in full bloom'];
 
@@ -971,6 +1005,27 @@
       } else if (f.shape === 'cup' || f.shape === 'trumpet') {
         head += '<path d="M' + (cx - R * 0.7).toFixed(1) + ' ' + (top - 2) + ' q ' + (R * 0.7).toFixed(1) + ' ' + (R * 1.1).toFixed(1) + ' ' + (R * 1.4).toFixed(1) + ' 0 q -' + (R * 0.55).toFixed(1) + ' -' + (R * 0.85).toFixed(1) + ' -' + (R * 1.4).toFixed(1) + ' 0 z" fill="' + f.petal + '"/>';
         if (f.shape === 'trumpet') head += '<ellipse cx="' + cx + '" cy="' + (top + 4) + '" rx="' + (R * 0.42).toFixed(1) + '" ry="' + (R * 0.5).toFixed(1) + '" fill="' + f.mid + '"/>';
+      } else if (f.shape === 'pom') {
+        // A dense head of small florets — three rings plus a fill, each floret
+        // a little four-petal cross so it reads as many flowers, not spots.
+        var rings = [[0, 1], [7, 0.42], [12, 0.72], [16, 1.0]];
+        for (var ri = 0; ri < rings.length; ri++) {
+          var n = (ri === 0) ? 1 : Math.round(f.petals * rings[ri][1] / 2);
+          for (var fi = 0; fi < n; fi++) {
+            var ang = (fi / Math.max(1, n)) * Math.PI * 2 + ri;
+            var rr = rings[ri][0] * scale;
+            var fx = cx + Math.cos(ang) * rr, fy = top + Math.sin(ang) * rr * 0.86;
+            var fr = 4.6 * scale;
+            var tint = (ri % 2) ? f.petal : f.mid;
+            head += '<g opacity="' + (0.92 - ri * 0.05).toFixed(2) + '">'
+              + '<circle cx="' + (fx - fr * 0.55).toFixed(1) + '" cy="' + fy.toFixed(1) + '" r="' + fr.toFixed(1) + '" fill="' + tint + '"/>'
+              + '<circle cx="' + (fx + fr * 0.55).toFixed(1) + '" cy="' + fy.toFixed(1) + '" r="' + fr.toFixed(1) + '" fill="' + tint + '"/>'
+              + '<circle cx="' + fx.toFixed(1) + '" cy="' + (fy - fr * 0.55).toFixed(1) + '" r="' + fr.toFixed(1) + '" fill="' + tint + '"/>'
+              + '<circle cx="' + fx.toFixed(1) + '" cy="' + (fy + fr * 0.55).toFixed(1) + '" r="' + fr.toFixed(1) + '" fill="' + tint + '"/>'
+              + '<circle cx="' + fx.toFixed(1) + '" cy="' + fy.toFixed(1) + '" r="' + (fr * 0.42).toFixed(1) + '" fill="rgba(255,255,255,.75)"/>'
+              + '</g>';
+          }
+        }
       } else {
         for (var p = 0; p < f.petals; p++) {
           var a = (p / f.petals) * Math.PI * 2;
@@ -1108,19 +1163,42 @@
 
   paintAllFaces();
   paintPicker();
+  paintWeather();
   applyWeather();
 
   // The stage cannot reflow (fixed 560px, and 3D faces spill if you make them
-  // fluid), so on a narrow screen it is scaled to fit instead.
+  // fluid), so it is SCALED — to fit a narrow screen, and to whatever size you
+  // have asked for (Sarah, 22 Aug: "allow the user to be able to make the cube
+  // bigger so they can see it better").
   var scaler = document.querySelector('.scaler');
+  function zoomNow() {
+    var z = parseFloat(localStorage.getItem('q-cube-zoom') || '1');
+    return isFinite(z) ? Math.max(0.7, Math.min(2, z)) : 1;
+  }
+  function setZoom(z) {
+    z = Math.max(0.7, Math.min(2, Math.round(z * 20) / 20));
+    try { localStorage.setItem('q-cube-zoom', String(z)); } catch (e) {}
+    fit();
+    var pct = document.getElementById('zoom-now');
+    if (pct) pct.textContent = Math.round(z * 100) + '%';
+  }
   function fit() {
     if (!scaler) return;
     var avail = document.documentElement.clientWidth - 36;
-    var s = Math.min(1, avail / 560);
-    scaler.style.setProperty('--s', s);
-    scaler.style.transform = s < 1 ? 'scale(' + s + ')' : '';
-    scaler.style.height = s < 1 ? (620 * s) + 'px' : '';
+    var s = Math.min(1, avail / 560) * zoomNow();
+    scaler.style.transform = 'scale(' + s + ')';
+    // The scaled box still has to take up its real room on the page, or the
+    // controls end up underneath a cube that has grown over them.
+    scaler.style.height = (620 * s) + 'px';
+    scaler.style.width = '560px';
   }
+  document.addEventListener('click', function (e) {
+    var z = e.target.closest ? e.target.closest('[data-zoom]') : null;
+    if (!z) return;
+    var d = z.getAttribute('data-zoom');
+    setZoom(d === 'reset' ? 1 : zoomNow() + (d === 'in' ? 0.15 : -0.15));
+  });
+  setZoom(zoomNow());
   fit();
   window.addEventListener('resize', fit);
 })();
