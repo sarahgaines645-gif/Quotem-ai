@@ -401,6 +401,15 @@ router.get('/writer', (req, res) => {
 
 // Revision — one exam-style question at a time, marked strictly, U→A ladder.
 // Claude-backed (q-revision via q-claude) with Q as fallback.
+// Times tables — the glass cuboid you type a sum into. Sits under /revise
+// because that is where it is reached from, and it is the same dark treatment
+// as /cuboid: no grid.
+router.get('/revise/maths', (req, res) => {
+    res.sendFile(path.join(__dirname, 'maths.html'), (err) => {
+        if (err && !res.headersSent) res.status(503).send('That page is not available on this deployment.');
+    });
+});
+
 router.get('/revise', (req, res) => {
     res.sendFile(path.join(__dirname, 'revise.html'));
 });
@@ -751,6 +760,105 @@ router.delete('/api/people/:id', requirePerson, (req, res) => {
         return res.status(404).json({ ok: false, error: 'not_found' });
     }
     res.json({ ok: true });
+});
+
+// Mark a trip on the calendar. NOT a second calendar — this writes into the
+// one on /life (plugins/q-life.js), so a holiday shows up next to the dentist
+// and Q's list_events knows about it. Two marks, out and home, because a
+// life event is a single day and a fortnight of solid blocks would bury
+// everything else on the page.
+//
+// It refuses without real dates. The printed "5-12 Oct 2026" off a listing is
+// a suggestion the page puts in two date boxes for her to confirm; a holiday
+// marked on the wrong week is worse than one not marked at all.
+router.post('/api/trips/board/:id/calendar', requirePerson, express.json({ limit: '8kb' }), (req, res) => {
+    if (!qTripBoard) return boardUnavailable(res);
+    const owner = req.person.email;
+    const h = qTripBoard.get(req.params.id, owner);
+    if (!h) return res.status(404).json({ ok: false, error: 'not_found' });
+    if (!h.startDate) {
+        return res.status(400).json({
+            ok: false, error: 'no_start_date',
+            message: 'Set the going-out date on the card first — I will not guess it from the listing.',
+        });
+    }
+
+    try {
+        const where = [h.place, h.country].filter(Boolean).join(', ') || h.title;
+
+        // A "Trips" category so they are one colour on /life, made once.
+        let category = 'trips';
+        try {
+            if (!qLife.listCategories(owner).some(c => c.slug === 'trips')) {
+                qLife.addCategory({ name: 'Trips', color: '#38bdf8' }, owner);
+            }
+        } catch (e) { category = null; }   // a missing category must not lose the trip
+
+        const out = qLife.addEvent({
+            title: `Away — ${where}`,
+            date: h.startDate,
+            location: where,
+            notes: [h.title, h.endDate ? `Back ${h.endDate}` : '', h.company ? `Booked with ${h.company}` : '', h.link]
+                .filter(Boolean).join('\n'),
+            category, source: 'trips',
+        }, owner);
+
+        let back = null;
+        if (h.endDate && h.endDate !== h.startDate) {
+            back = qLife.addEvent({
+                title: `Home — ${where}`,
+                date: h.endDate,
+                location: where,
+                notes: h.title,
+                category, source: 'trips',
+            }, owner);
+        }
+
+        qTripBoard.update(h.id, { calendarEventId: out.id }, owner);
+        res.json({ ok: true, event: out, returnEvent: back });
+    } catch (e) {
+        res.status(400).json({ ok: false, error: 'calendar_failed', message: e.message });
+    }
+});
+
+// Take it off the calendar again. Removes the pair by the id we kept plus any
+// "Home —" event sitting on the return date for the same place.
+router.delete('/api/trips/board/:id/calendar', requirePerson, (req, res) => {
+    if (!qTripBoard) return boardUnavailable(res);
+    const owner = req.person.email;
+    const h = qTripBoard.get(req.params.id, owner);
+    if (!h) return res.status(404).json({ ok: false, error: 'not_found' });
+    let removed = 0;
+    try {
+        if (h.calendarEventId && qLife.deleteEvent(h.calendarEventId, owner)) removed++;
+        if (h.endDate) {
+            const where = [h.place, h.country].filter(Boolean).join(', ') || h.title;
+            for (const e of qLife.listEvents(owner, { from: h.endDate, to: h.endDate }) || []) {
+                if (e.source === 'trips' && e.title === `Home — ${where}`) {
+                    if (qLife.deleteEvent(e.id, owner)) removed++;
+                }
+            }
+        }
+    } catch (e) { /* fall through — the card must still let go of the id */ }
+    qTripBoard.update(h.id, { calendarEventId: '' }, owner);
+    res.json({ ok: true, removed });
+});
+
+// The trips that are actually happening, for the strip at the top of the page.
+router.get('/api/trips/board/calendar', requirePerson, (req, res) => {
+    if (!qTripBoard) return boardUnavailable(res);
+    const today = new Date().toISOString().slice(0, 10);
+    const marked = qTripBoard.list(req.person.email)
+        .filter(h => h.startDate)
+        .map(h => ({
+            id: h.id, title: h.title,
+            where: [h.place, h.country].filter(Boolean).join(', '),
+            startDate: h.startDate, endDate: h.endDate,
+            nights: h.nights, onCalendar: !!h.calendarEventId,
+            past: (h.endDate || h.startDate) < today,
+        }))
+        .sort((a, b) => a.startDate < b.startDate ? -1 : 1);
+    res.json({ ok: true, today, trips: marked });
 });
 
 // What everyone has said back. Each person has their OWN link, so an answer
