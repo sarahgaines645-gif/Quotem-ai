@@ -412,6 +412,13 @@ const PUBLIC_PREFIXES = [
     '/doc-drop/',
     '/api/doc-drop/by-token/',
     '/api/doc-drop/upload/',
+    // LINKMAIL — the recipient has no account and never will; the 128-bit token
+    // in the URL is the whole authority, exactly like the doc-drop scan above.
+    // ONLY these two prefixes are public. The sender's own endpoints live under
+    // /api/linkmail/mine/ precisely so that "list all my links" can never be
+    // reached by widening a prefix here.
+    '/linkmail/',
+    '/api/linkmail/open/',
 ];
 function isPublicPath(p) {
     if (PUBLIC_PATHS.has(p)) return true;

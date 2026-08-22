@@ -43,12 +43,136 @@ const qHome   = require('./q-home');
 const qNext   = require('./q-next');
 const qDesk   = require('./q-desk');
 const qFollow = require('./q-followup');
+const qLinkmail = require('./q-linkmail');
+const { getPersonByEmail } = require('../people');
 
 // ─────────────────────────────────────────────────────────────
 //  TOOL DEFINITIONS — OpenAI function-calling schema
 // ─────────────────────────────────────────────────────────────
 
 const TOOL_DEFINITIONS = [
+    // ── LINKMAIL (Sarah, 21 Aug 2026: "I need link mail in Quotem ai for Q,
+    //    for trips and for threads"). Same feature QB2 has in the Quotem app. ──
+    {
+        type: 'function',
+        function: {
+            name: 'create_linkmail',
+            description: 'Make a QUOTEM LINKMAIL — a private web page you can send to someone who has NO account and never needs one. They open the link, read what you put on it, tap their answers, and can ask you questions there; the answers come straight back to the user. Use it whenever something has to go OUT to a person who is not in the app: family picking a holiday, a customer approving a job, a landlord answering questions about a property, a friend choosing dates. It is the right tool any time you catch yourself saying "email them and ask" — build the page and let them tap instead. Put the FACTS on it: cards carry a photo and the figures (temperature, price, distance), the body carries the explanation, the questions carry what you need back. IMPORTANT: this only MAKES the link. It does not send anything. Give the user the link, and offer to email it if they say who to.',
+            parameters: {
+                type: 'object',
+                properties: {
+                    title: { type: 'string', description: 'What it is, in a few words, as the recipient will read it at the top of the page. e.g. "Where shall we go in September?"' },
+                    body: { type: 'string', description: 'The explanation, in markdown. ## headings, - bullets and **bold** work. Keep it short — the cards and the questions do most of the work. Optional if you are sending cards.' },
+                    kind: { type: 'string', enum: ['note', 'trip', 'thread'], description: 'What this link is about: a trip being planned, a case/thread, or anything else (note). Default note.' },
+                    cards: {
+                        type: 'array',
+                        description: 'Postcards — one per thing they are choosing between or looking at. This is where the pictures and the numbers go.',
+                        items: {
+                            type: 'object',
+                            properties: {
+                                title: { type: 'string', description: 'The name of the thing. e.g. "Lanzarote".' },
+                                subtitle: { type: 'string', description: 'One short line under it. e.g. "4h05 from Gatwick".' },
+                                image: { type: 'string', description: 'A photo URL, http(s) only. Leave it out rather than guessing one — a broken picture is worse than none.' },
+                                facts: {
+                                    type: 'array',
+                                    description: 'The figures, shown big and bold. Two to four is right.',
+                                    items: {
+                                        type: 'object',
+                                        properties: {
+                                            label: { type: 'string', description: 'e.g. "Sea"' },
+                                            value: { type: 'string', description: 'e.g. "21°C" — include the unit.' },
+                                        },
+                                        required: ['label', 'value'],
+                                    },
+                                },
+                                body: { type: 'string', description: 'A sentence or two on why it is on the list.' },
+                                link: { type: 'string', description: 'Somewhere to read more, http(s) only. Optional.' },
+                            },
+                            required: ['title'],
+                        },
+                    },
+                    questions: {
+                        type: 'array',
+                        description: 'What you need back from them. Each one is a block they answer with a tap. Ask few — three good questions beat eight.',
+                        items: {
+                            type: 'object',
+                            properties: {
+                                text: { type: 'string', description: 'The question, as you would say it out loud.' },
+                                type: {
+                                    type: 'string',
+                                    enum: ['buttons', 'checklist', 'text', 'slider', 'dates'],
+                                    description: 'buttons = pick ONE of your options. checklist = tick ANY number. dates = tick which date windows suit, plus a box for another. text = they write it. slider = drag a number and watch the effect of it change live.',
+                                },
+                                options: { type: 'array', items: { type: 'string' }, description: 'The options for buttons / checklist / dates. For dates use plain windows like "14-21 Sep".' },
+                                slider: {
+                                    type: 'object',
+                                    description: 'Slider questions only. The live model: they drag x, and the outputs recompute in front of them.',
+                                    properties: {
+                                        min: { type: 'number' }, max: { type: 'number' }, step: { type: 'number' },
+                                        default: { type: 'number' },
+                                        label: { type: 'string', description: 'What the number is. e.g. "Per person".' },
+                                        prefix: { type: 'string', description: 'e.g. "£"' },
+                                        unit: { type: 'string', description: 'e.g. "/night"' },
+                                        constants: { type: 'object', description: 'Named numbers your formulas use, e.g. { people: 7 }.' },
+                                        outputs: {
+                                            type: 'array',
+                                            description: 'Rows that recompute as they slide. expr is plain arithmetic over x and your constants — "x * people". No functions, no words.',
+                                            items: {
+                                                type: 'object',
+                                                properties: {
+                                                    label: { type: 'string' }, expr: { type: 'string' },
+                                                    prefix: { type: 'string' }, unit: { type: 'string' },
+                                                },
+                                                required: ['label', 'expr'],
+                                            },
+                                        },
+                                        markers: {
+                                            type: 'array',
+                                            description: 'Pins on the track — the asking price, the average, your suggestion.',
+                                            items: {
+                                                type: 'object',
+                                                properties: { value: { type: 'number' }, label: { type: 'string' } },
+                                                required: ['value', 'label'],
+                                            },
+                                        },
+                                    },
+                                },
+                            },
+                            required: ['text'],
+                        },
+                    },
+                    recipientName: { type: 'string', description: 'Who it is for, if you know — it goes in the greeting.' },
+                    greeting: { type: 'string', description: 'The line under the title. Leave it out and a plain one is written for you.' },
+                    expiresDays: { type: 'number', description: 'How many days the link stays open. Default 14, most 90.' },
+                    chatEnabled: { type: 'boolean', description: 'Whether they can ask you questions on the page. Default true. Set false for something that should just be read.' },
+                },
+                required: ['title'],
+            },
+        },
+    },
+    {
+        type: 'function',
+        function: {
+            name: 'check_linkmail',
+            description: 'Read back what came in on a linkmail you sent — who opened it, what they ticked, what they typed, and anything they said to you on the page. Use it whenever the user asks whether anyone has replied, before you chase someone, and before you make a decision that depends on what people said. Do not guess at answers: look.',
+            parameters: {
+                type: 'object',
+                properties: {
+                    token: { type: 'string', description: 'The link token, if you have it. Leave it out for the most recent one.' },
+                    title: { type: 'string', description: 'Part of the title instead, if that is easier — "the holiday one".' },
+                },
+            },
+        },
+    },
+    {
+        type: 'function',
+        function: {
+            name: 'list_linkmail',
+            description: 'List the linkmails this user has out — what each one is, whether it has been opened, how many answers are in, and when it closes. Use it when they ask what is outstanding or which links are live.',
+            parameters: { type: 'object', properties: {} },
+        },
+    },
+
     // ── WRITER COACH tools (Q as the student's tutor on /writer; Sarah, 18 Aug:
     //    "can you give Q these tools" — the three Q himself asked for). ────────
     {
@@ -2109,6 +2233,9 @@ async function executeTool(name, argsRaw, personId, personEmail, threadId) {
         case 'build_email_qr':   return await emailQrTool(args, personEmail);
         case 'build_link_qr':    return await linkQrTool(args, personEmail);
         case 'add_file_to_thread': return await addFileToThread(args, personEmail);
+        case 'create_linkmail':  return createLinkmailTool(args, personEmail);
+        case 'check_linkmail':   return checkLinkmailTool(args, personEmail);
+        case 'list_linkmail':    return listLinkmailTool(personEmail);
         case 'calculator':       return calculator(args);
         case 'current_datetime': return currentDatetime(args);
         case 'analyze_document': return await analyzeDocument(args);
@@ -3089,6 +3216,106 @@ function recallTutor(personId) {
     }
 }
 
+// ─────────────────────────────────────────────────────────────
+//  LINKMAIL — Q makes the page, the recipient taps, the answers come back
+// ─────────────────────────────────────────────────────────────
+
+function linkmailSenderName(personEmail) {
+    try {
+        const p = getPersonByEmail(personEmail);
+        const n = p && (p.name || p.username);
+        if (n) return String(n);
+    } catch (e) { /* fall through to the address */ }
+    return String(personEmail || '').split('@')[0] || 'Your contact';
+}
+
+function createLinkmailTool(args, personEmail) {
+    if (!personEmail) {
+        return { error: 'A linkmail has to belong to an account, and there is no signed-in user on this turn.' };
+    }
+    try {
+        const days = Number(args.expiresDays);
+        const made = qLinkmail.createLink(personEmail, {
+            kind: args.kind,
+            title: args.title,
+            body: args.body,
+            cards: args.cards,
+            questions: args.questions,
+            greeting: args.greeting,
+            recipientName: args.recipientName,
+            chatEnabled: args.chatEnabled,
+            expiresHours: (Number.isFinite(days) && days > 0) ? Math.round(days * 24) : undefined,
+            senderName: linkmailSenderName(personEmail),
+        });
+        const rec = made.record;
+        return {
+            ok: true,
+            token: made.token,
+            url: made.url,
+            title: rec.display.title,
+            cards: rec.cards.length,
+            questions: rec.questions.length,
+            expiresAt: rec.expiresAt,
+            // The chat page reads this and paints it on Q's display — the link,
+            // the QR, and what is on the page — so the user can see what their
+            // family will see before they send it anywhere.
+            display: {
+                kind: 'linkmail',
+                token: made.token,
+                url: made.url,
+                title: rec.display.title,
+                body: rec.display.body,
+                cardTitles: rec.cards.map(c => c.title),
+                questionTexts: rec.questions.map(q => q.text),
+                expiresAt: rec.expiresAt,
+            },
+            // Say this out loud. The single worst failure here is Q telling
+            // someone their family have been emailed when nothing was sent.
+            note: 'The page is made and the link is live. NOTHING HAS BEEN SENT. Give them the link, or ask who to email it to.',
+        };
+    } catch (e) {
+        return { error: e.message };
+    }
+}
+
+function checkLinkmailTool(args, personEmail) {
+    if (!personEmail) return { error: 'No signed-in user on this turn.' };
+    const links = qLinkmail.listLinks(personEmail);
+    if (!links.length) return { count: 0, message: 'There are no linkmails yet.' };
+
+    let token = String((args && args.token) || '').trim();
+    if (!token) {
+        const wanted = String((args && args.title) || '').trim().toLowerCase();
+        const match = wanted
+            ? links.find(l => String(l.title || '').toLowerCase().includes(wanted))
+            : null;
+        token = (match || links[0]).token;
+    }
+    const summary = qLinkmail.repliesSummary(personEmail, token);
+    if (!summary) return { error: 'No linkmail of theirs has that token.' };
+    return { token, url: '/linkmail/' + token, summary };
+}
+
+function listLinkmailTool(personEmail) {
+    if (!personEmail) return { error: 'No signed-in user on this turn.' };
+    const links = qLinkmail.listLinks(personEmail);
+    return {
+        count: links.length,
+        links: links.map(l => ({
+            token: l.token,
+            title: l.title,
+            kind: l.kind,
+            to: l.recipientName || null,
+            opened: l.views,
+            answers: l.answerCount + '/' + l.questionCount,
+            messages: l.replyCount,
+            closes: l.expiresAt,
+            state: l.revoked ? 'withdrawn' : (l.expired ? 'closed' : 'open'),
+            url: l.url,
+        })),
+    };
+}
+
 // Pick the tools Q is allowed to call THIS turn. Persona alone wasn't enough
 // to stop Q from running web_search uninvited (250 calls in two days from
 // silent searches). The structural fix: only put web_search (and other
@@ -3165,6 +3392,41 @@ const ADVOCATE_TOOLS = new Set([
 ]);
 
 const TRIGGERS = {
+    // ── LINKMAIL. A tool with no entry here is silently never offered to Q
+    //    (NIGHTJAR, 20 Aug) — these were written against real phrasings and
+    //    regression-tested, not guessed at.
+    create_linkmail: [
+        /\blink ?mail\b/i,
+        /\b(send|share|show|get)\b[^.?!]{0,40}\b(to|with|out to)\b[^.?!]{0,30}\b(mum|mom|dad|family|them|him|her|everyone|the kids|landlord|tenant|customer|client|neighbours?|the others)\b/i,
+        /\b(send|share)\b[^.?!]{0,12}\b(it|this|that|these|the case|the list|the lot)\b\s*(to|out|over|with|round)?\b/i,
+        /\b(make|build|create|set up|put together|knock up)\b[^.?!]{0,30}\b(a |an )?(page|link|form|poll|vote|sign-?up)\b/i,
+        /\bso (they|she|he|everyone|the family|people|mum|dad) can\b/i,
+        /\b(let|get)\b[^.?!]{0,25}\b(them|him|her|everyone|people|the family)\b[^.?!]{0,30}\b(tick|pick|choose|vote|confirm|answer|reply|say|fill)\b/i,
+        /\b(tick|pick|choose|vote on|confirm)\b[^.?!]{0,30}\b(dates?|days?|weeks?|places?|options?|which ones?)\b/i,
+        /\b(ask)\b[^.?!]{0,25}\b(them|him|her|everyone|the family|the landlord|the customer)\b[^.?!]{0,35}\b(questions?|to confirm|to choose|to pick|whether|if they)\b/i,
+        /\bwithout (them |him |her )?(having to )?(sign|log) ?(in|up)\b/i,
+        /\bno account\b/i,
+        // "I want everyone to vote on where we go" — a vote IS this tool.
+        /\b(vote|voting|poll)\b/i,
+    ],
+    check_linkmail: [
+        /\blink ?mail\b/i,
+        /\b(has|have|did)\b[^.?!]{0,25}\b(anyone|anybody|they|she|he|mum|dad|the family)\b[^.?!]{0,25}\b(replied|answered|responded|got back|come back|said|ticked|picked|chosen|voted)\b/i,
+        /\b(any|what)\b[^.?!]{0,15}\b(replies|answers|responses)\b/i,
+        /\bheard (back|anything)\b/i,
+        // A NAME is how people actually ask this — "has mum opened it",
+        // "did Charlie open the link". Requiring a pronoun missed every one.
+        /\b(has|have|did)\b[^.?!]{0,25}\b(anyone|anybody|they|she|he|mum|mom|dad|everyone|the family|[A-Z][a-z]+)\b[^.?!]{0,20}\b(open|opened|seen|looked at|read)\b[^.?!]{0,20}\b(it|the link|the page|that)\b/i,
+        /\bwhat did (they|she|he|everyone|mum|dad) (say|pick|choose|tick|vote)\b/i,
+        /\bwho'?s (replied|answered|responded|ticked)\b/i,
+    ],
+    list_linkmail: [
+        /\blink ?mails?\b/i,
+        /\b(what|which|any)\b[^.?!]{0,25}\b(links?|pages?)\b[^.?!]{0,30}\b(out|open|live|sent|going|waiting|outstanding)\b/i,
+        /\b(links?|pages?)\b[^.?!]{0,20}\bhave i (got|sent)\b/i,
+        /\bstill waiting on\b/i,
+    ],
+
     // Changing, clearing and tidying the list. Gated rather than always-on —
     // together they are ~780 tokens a turn, and the language for them is concrete
     // and easy to spot, unlike "do you remember", which is why THAT one is not

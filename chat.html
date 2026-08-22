@@ -1227,10 +1227,16 @@
      cannot see is a folder you will not use. So they wrap again, and the pills
      are small enough that wrapping stays tidy instead of becoming a wall:
      ten categories land in two or three neat rows. */
+  /* A ROW OF PILLS IS A LIST, SO IT IS ONE SIZE (Sarah, 21 Aug: "these still
+     look messy. they are not lined up"). Wrapping flex sized every pill to its
+     own text, so the right-hand edge was ragged and no two rows agreed. A grid
+     of equal columns lines them up both ways — down the columns and across the
+     rows — however many there are and however long the names get. */
   .cat-row {
-    display: flex; gap: 4px;
-    flex-wrap: wrap;
-    align-items: flex-start;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(102px, 1fr));
+    gap: 6px;
+    align-items: stretch;
   }
   /* Category pills — the folders across the top of the list. Built to match the
      trade pills on the Quotem dashboard (Sarah, 21 Aug): a proper tappable size
@@ -1248,24 +1254,109 @@
     border-top: 2px solid var(--accent);
     font-family: inherit;
     letter-spacing: 0.01em;
-    display: inline-flex; align-items: center; gap: 4px;
+    display: flex; align-items: center; gap: 5px;
     white-space: nowrap;
-    flex: 0 0 auto;
-    max-width: 100%;
+    width: 100%;
+    min-height: 27px;
+    text-align: left;
     transition: box-shadow 0.15s ease, color 0.15s ease;
   }
-  /* A long folder name ("Charlie's Birthday presents") must not stretch a pill
-     across the whole panel and push everything else onto its own line. */
+  /* A long folder name ("Charlie's Birthday presents") takes the width of its
+     column and no more — the grid keeps every pill the same size, so a long
+     name truncates instead of shoving the row about. */
   .cat-pill > span:last-child {
-    overflow: hidden; text-overflow: ellipsis; max-width: 130px;
+    overflow: hidden; text-overflow: ellipsis; min-width: 0; flex: 1 1 auto;
   }
-  .cat-pill .ci { font-size: 10.5px; line-height: 1; flex: 0 0 auto; }
+  /* The icon slot is a FIXED width and is always rendered, even when a folder
+     has no icon — otherwise "Amazon" and "Personal" start their text 13px left
+     of "Work" and "Kids" and the column reads as crooked. */
+  .cat-pill .ci { font-size: 10.5px; line-height: 1; flex: 0 0 13px; width: 13px; text-align: center; }
   .cat-pill:hover { color: var(--accent); }
-  .cat-pill.on { box-shadow: var(--neu-inset-xs); color: var(--accent); }
+  /* NOT INSET. "Selected = pressed in" is the habit from every other design
+     system and it is wrong here (CLAUDE.md, 17 Aug). The one you are on stands
+     further OUT than the rest and wears the accent. */
+  .cat-pill.on { box-shadow: var(--neu-raised); color: var(--accent); }
   .cat-pill.add {
     color: var(--text-muted);
     border-top-color: rgba(0,0,0,0.12);
     font-weight: 600;
+  }
+
+  /* ── Q'S DISPLAY ────────────────────────────────────────────
+     The surface Q puts things ON, the way QB2 has a canvas beside its chat
+     (Sarah, 21 Aug: "get the display screen for Q ... so he can use it like
+     QB2"). It is a sibling of .chat-card in the body column, so the chat card
+     keeps every one of its own carefully-tuned height rules — the display just
+     takes some of the room above it and the chat shrinks to suit.
+     Hidden until Q actually puts something on it: an empty canvas taking up a
+     third of the screen would be furniture. */
+  .q-display {
+    display: none;
+    flex: 0 1 auto;
+    width: min(820px, calc(100% - 32px));
+    margin: 0 auto 14px;
+    max-height: 40vh;
+    overflow: auto;
+    background: var(--bg);
+    border-radius: 18px;
+    box-shadow: var(--neu-raised);
+    padding: 20px 22px 22px;
+  }
+  .q-display.on { display: block; }
+  .qd-head {
+    display: flex; align-items: baseline; gap: 10px;
+    margin-bottom: 14px;
+  }
+  .qd-title { font-size: 18px; font-weight: 700; line-height: 1.25; }
+  .qd-kind {
+    font-size: 10px; font-weight: 700; letter-spacing: 0.6px; text-transform: uppercase;
+    color: var(--accent);
+  }
+  .qd-close {
+    margin-left: auto; background: var(--bg); border: none; cursor: pointer;
+    font-family: inherit; font-size: 12px; color: var(--text-muted);
+    padding: 6px 12px; border-radius: 10px; box-shadow: var(--neu-raised-sm);
+  }
+  .qd-close:hover { color: var(--accent); }
+  .qd-close:active { box-shadow: var(--neu-inset-xs); }
+  .qd-body { font-size: 14.5px; line-height: 1.6; overflow-wrap: anywhere; }
+  .qd-body h2 { font-size: 16px; margin: 16px 0 6px; }
+  .qd-body h3 { font-size: 14.5px; margin: 12px 0 4px; }
+  .qd-body p { margin: 0 0 10px; }
+  .qd-body ul { margin: 0 0 10px; padding-left: 18px; }
+  .qd-body :first-child { margin-top: 0; }
+  /* The link row — the thing she actually has to get out of here. */
+  .qd-link {
+    display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+    margin-top: 16px;
+  }
+  .qd-url {
+    flex: 1 1 260px; min-width: 0;
+    font-size: 12.5px; font-family: inherit; color: var(--text);
+    background: var(--bg); border: none; outline: none;
+    padding: 11px 14px; border-radius: 12px;
+    box-shadow: var(--neu-raised-sm);
+    text-overflow: ellipsis;
+  }
+  .qd-btn {
+    background: var(--bg); border: none; cursor: pointer;
+    font-family: inherit; font-size: 13px; font-weight: 600; color: var(--text);
+    padding: 11px 16px; border-radius: 12px;
+    box-shadow: var(--neu-raised-sm);
+  }
+  .qd-btn:hover { color: var(--accent); }
+  .qd-btn:active { box-shadow: var(--neu-inset-xs); }
+  .qd-qr { width: 108px; height: 108px; border-radius: 12px; box-shadow: var(--neu-raised-sm); padding: 7px; background: var(--bg); }
+  .qd-cols { display: flex; gap: 18px; flex-wrap: wrap; margin-top: 14px; }
+  .qd-list { flex: 1 1 220px; min-width: 0; }
+  .qd-list .l {
+    font-size: 10px; font-weight: 700; letter-spacing: 0.6px; text-transform: uppercase;
+    color: var(--text-muted); margin-bottom: 6px;
+  }
+  .qd-list ol, .qd-list ul { margin: 0; padding-left: 18px; font-size: 13.5px; line-height: 1.65; }
+  .qd-note { font-size: 12px; color: var(--text-muted); margin-top: 12px; }
+  @media (max-width: 720px) {
+    .q-display { max-height: 46vh; width: 100%; border-radius: 0; margin-bottom: 0; }
   }
 
   /* Task row — top-border in the category colour (FeatureTracker idiom) */
@@ -1651,6 +1742,9 @@
     .then(d => { if (d && d.isAdmin) { const b = document.getElementById('admin-btn'); if (b) b.style.display = ''; } })
     .catch(() => {});
 </script>
+
+<!-- Q's display. Empty and hidden until he puts something on it. -->
+<div class="q-display" id="q-display" aria-live="polite"></div>
 
 <!-- The chat card — messages + composer on one raised surface that sits on
      the page. The header above stays out on the page. -->
@@ -2929,6 +3023,12 @@ async function send() {
       const msgEl = renderMessage('q', data.reply);
       if (Array.isArray(data.toolCalls) && data.toolCalls.length > 0) {
         renderToolCalls(msgEl, data.toolCalls);
+        // Anything Q wanted ON the display. Last one wins — the display shows
+        // the thing he just made, not a pile of everything he has ever made.
+        const shown = data.toolCalls
+          .map(c => c.result && c.result.display)
+          .filter(Boolean);
+        if (shown.length) showOnDisplay(shown[shown.length - 1]);
         // If Q added/changed a task or event, surface it live in the drawer.
         if (data.toolCalls.some(c => /task|event/i.test(c.name || '')) && typeof window.qLifeChanged === 'function') {
           window.qLifeChanged();
@@ -3142,6 +3242,9 @@ function renderVerifier(messageEl, verifier) {
 
 // Map raw tool names to plain-English actions a customer can read.
 const TOOL_LABELS = {
+  create_linkmail:  'built a linkmail',
+  check_linkmail:   'checked who has replied',
+  list_linkmail:    'checked the links he has out',
   web_search:       'searched the web',
   calculator:       'did some maths',
   current_datetime: 'checked the date',
@@ -3240,6 +3343,141 @@ function renderToolCalls(messageEl, toolCalls) {
   }
 
   scrollToBottom();
+}
+
+// ── Q'S DISPLAY ───────────────────────────────────────────────
+// Q puts a thing on the display by returning a `display` object from a tool.
+// Today the only kind is 'linkmail'; the switch is here so the next one (a
+// document, a quote, a trip) is an added case, not a rewrite.
+function showOnDisplay(doc) {
+  const el = document.getElementById('q-display');
+  if (!el || !doc) return;
+  if (doc.kind === 'linkmail') return renderLinkmailOnDisplay(el, doc);
+}
+
+function clearDisplay() {
+  const el = document.getElementById('q-display');
+  if (!el) return;
+  el.className = 'q-display';
+  el.innerHTML = '';
+}
+
+function displayShell(el, kind, title, inner) {
+  el.className = 'q-display on';
+  el.innerHTML =
+    '<div class="qd-head"><span class="qd-kind">' + escapeHtml(kind) + '</span>'
+    + '<span class="qd-title">' + escapeHtml(title) + '</span>'
+    + '<button class="qd-close" type="button">Close</button></div>'
+    + '<div class="qd-body"></div>';
+  el.querySelector('.qd-close').onclick = clearDisplay;
+  el.querySelector('.qd-body').innerHTML = inner;
+  el.scrollTop = 0;
+}
+
+function renderLinkmailOnDisplay(el, d) {
+  // The whole point of the display is that she can SEE what her family will
+  // see, and get the link out, without leaving the chat.
+  const host = location.hostname.toLowerCase();
+  const origin = /(^|\.)quotem-ai\.co\.uk$/.test(host) ? 'https://www.quotem-ai.co.uk' : location.origin;
+  const url = origin + (d.url || ('/linkmail/' + d.token));
+
+  let inner = '';
+  if (d.body && d.body.trim()) inner += '<div>' + miniMarkdown(d.body) + '</div>';
+
+  const cards = Array.isArray(d.cardTitles) ? d.cardTitles : [];
+  const qs = Array.isArray(d.questionTexts) ? d.questionTexts : [];
+  if (cards.length || qs.length) {
+    inner += '<div class="qd-cols">';
+    if (cards.length) {
+      inner += '<div class="qd-list"><div class="l">On the page</div><ul>'
+        + cards.map(c => '<li>' + escapeHtml(c) + '</li>').join('') + '</ul></div>';
+    }
+    if (qs.length) {
+      inner += '<div class="qd-list"><div class="l">What it asks them</div><ol>'
+        + qs.map(q => '<li>' + escapeHtml(q) + '</li>').join('') + '</ol></div>';
+    }
+    inner += '</div>';
+  }
+
+  inner += '<div class="qd-link">'
+    + '<input class="qd-url" id="qd-url" readonly value="' + escapeHtml(url) + '" />'
+    + '<button class="qd-btn" id="qd-copy" type="button">Copy</button>'
+    + '<button class="qd-btn" id="qd-open" type="button">Open it</button>'
+    + '<img class="qd-qr" id="qd-qr" alt="" />'
+    + '</div>'
+    + '<div class="qd-link"><input class="qd-url" id="qd-to" placeholder="their email address" />'
+    + '<button class="qd-btn" id="qd-send" type="button">Send it</button>'
+    + '<span class="qd-note" id="qd-sent"></span></div>';
+
+  if (d.expiresAt) {
+    inner += '<div class="qd-note">Open until '
+      + escapeHtml(new Date(d.expiresAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' }))
+      + '.</div>';
+  }
+
+  displayShell(el, 'Linkmail', d.title || 'Shared page', inner);
+
+  if (typeof qrcode === 'function') {
+    try {
+      const qr = qrcode(0, 'M');
+      qr.addData(url);
+      qr.make();
+      document.getElementById('qd-qr').src = qr.createDataURL(4, 1);
+    } catch (e) { const q = document.getElementById('qd-qr'); if (q) q.remove(); }
+  } else {
+    const q = document.getElementById('qd-qr'); if (q) q.remove();
+  }
+
+  document.getElementById('qd-copy').onclick = function () {
+    const inp = document.getElementById('qd-url');
+    inp.select();
+    const done = () => { this.textContent = 'Copied'; setTimeout(() => { this.textContent = 'Copy'; }, 1600); };
+    if (navigator.clipboard) navigator.clipboard.writeText(inp.value).then(done, () => { document.execCommand('copy'); done(); });
+    else { document.execCommand('copy'); done(); }
+  };
+  document.getElementById('qd-open').onclick = function () {
+    window.open(url, '_blank', 'noopener');
+  };
+  document.getElementById('qd-send').onclick = function () {
+    const to = document.getElementById('qd-to').value.trim();
+    const note = document.getElementById('qd-sent');
+    if (!to) { note.textContent = 'Who to?'; return; }
+    this.disabled = true;
+    note.textContent = 'Sending…';
+    fetch('/api/linkmail/mine/' + d.token + '/send', {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ to: to }),
+    }).then(r => r.json().then(j => ({ ok: r.ok, j })))
+      .then(({ ok, j }) => {
+        this.disabled = false;
+        note.textContent = ok ? ('Sent to ' + to) : (j && j.message ? j.message : 'That did not send.');
+      })
+      .catch(() => { this.disabled = false; note.textContent = 'That did not send.'; });
+  };
+}
+
+// Just enough markdown for the display — headings, bullets, bold. Everything is
+// escaped first, so nothing Q writes can inject markup into her page.
+function miniMarkdown(srcText) {
+  const lines = String(srcText || '').replace(/\r/g, '').split('\n');
+  const out = [];
+  let list = null;
+  const closeList = () => { if (list) { out.push('<ul>' + list.join('') + '</ul>'); list = null; } };
+  for (const raw of lines) {
+    const t = raw.trim();
+    if (!t) { closeList(); continue; }
+    const inline = escapeHtml(t).replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+    if (/^###\s+/.test(t)) { closeList(); out.push('<h3>' + inline.replace(/^###\s+/, '') + '</h3>'); continue; }
+    if (/^##\s+/.test(t)) { closeList(); out.push('<h2>' + inline.replace(/^##\s+/, '') + '</h2>'); continue; }
+    if (/^#\s+/.test(t)) { closeList(); out.push('<h2>' + inline.replace(/^#\s+/, '') + '</h2>'); continue; }
+    if (/^[-*]\s+/.test(t)) { list = list || []; list.push('<li>' + inline.replace(/^[-*]\s+/, '') + '</li>'); continue; }
+    closeList();
+    out.push('<p>' + inline + '</p>');
+  }
+  closeList();
+  return out.join('');
 }
 
 function renderTyping() {
@@ -3605,7 +3843,9 @@ if (launcherBtn && launcher) {
       const p = document.createElement('button');
       p.className = 'cat-pill' + (state.activeCat === c.slug ? ' on' : '');
       const ic = catIcon(c);
-      p.innerHTML = (ic ? '<span class="ci">' + ic + '</span>' : '') + '<span>' + escapeHtml(c.name) + '</span>';
+      // The icon span is ALWAYS rendered — empty when the folder has no icon —
+      // so every label in a column starts at the same x. See .cat-pill .ci.
+      p.innerHTML = '<span class="ci">' + (ic || '') + '</span><span>' + escapeHtml(c.name) + '</span>';
       p.style.borderTopColor = c.color || PINK;
       p.onclick = () => { state.activeCat = c.slug; renderCategories(); renderTasks(); };
       row.appendChild(p);
@@ -3622,7 +3862,7 @@ if (launcherBtn && launcher) {
       const inp = document.createElement('input');
       inp.type = 'text'; inp.maxLength = 40; inp.placeholder = 'Sub-header name…';
       inp.className = 'cat-new-input';
-      inp.style.cssText = 'background:var(--bg);border:none;box-shadow:var(--neu-inset-xs);border-radius:10px;padding:4px 9px;font-size:10px;font-weight:700;color:var(--text);font-family:inherit;outline:none;width:120px;';
+      inp.style.cssText = 'background:var(--bg);border:none;box-shadow:var(--neu-raised-sm);border-radius:10px;padding:5px 9px;font-size:10px;font-weight:700;color:var(--text);font-family:inherit;outline:none;width:100%;min-height:27px;box-sizing:border-box;';
       let done = false;
       const commit = async () => {
         if (done) return; done = true;

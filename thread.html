@@ -82,6 +82,41 @@
   .email-card.expanded .email-body { display: block; }
   .email-body .subject { font-weight: 700; margin-bottom: 8px; }
 
+  /* ── Share this case ─────────────────────────────────────── */
+  .sh-pick { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 8px; margin-bottom: 14px; }
+  .sh-item {
+    display: flex; align-items: center; gap: 8px;
+    background: var(--bg); border: none; cursor: pointer; text-align: left;
+    font-family: inherit; font-size: 12.5px; color: var(--text);
+    padding: 10px 12px; border-radius: 11px;
+    box-shadow: var(--neu-raised-sm);
+    min-height: 40px;
+  }
+  .sh-item:hover { color: #e91e63; }
+  .sh-item:active { box-shadow: var(--neu-inset-xs); }
+  .sh-item .tick { flex: 0 0 9px; width: 9px; height: 9px; border-radius: 50%; background: transparent; box-shadow: inset 0 0 0 1.5px rgba(0,0,0,0.22); }
+  .sh-item.on .tick { background: #e91e63; box-shadow: none; }
+  .sh-item.on { font-weight: 600; }
+  .sh-item .t { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .sh-lab { display: block; font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-muted); margin-bottom: 6px; }
+  .sh-field {
+    width: 100%; font-family: inherit; font-size: 13.5px; color: var(--text);
+    background: var(--bg); border: none; outline: none;
+    padding: 11px 14px; border-radius: 12px;
+    box-shadow: var(--neu-raised-sm); resize: vertical;
+  }
+  .sh-inline { flex: 1 1 200px; min-width: 0; }
+  .sh-row { display: flex; gap: 9px; flex-wrap: wrap; align-items: center; margin-top: 12px; }
+  .sh-row.hide { display: none; }
+  .sh-btn {
+    background: var(--bg); border: none; cursor: pointer;
+    font-family: inherit; font-size: 13px; font-weight: 600; color: var(--text);
+    padding: 11px 16px; border-radius: 12px; box-shadow: var(--neu-raised-sm);
+  }
+  .sh-btn:hover { color: #e91e63; }
+  .sh-btn:active { box-shadow: var(--neu-inset-xs); }
+  .sh-note { font-size: 12.5px; color: var(--text-muted); }
+
   /* Notes (case summary, research, free-form) */
   .notes-list { display: flex; flex-direction: column; gap: 10px; }
   .note-card {
@@ -166,7 +201,7 @@
   .ae-row select { cursor: pointer; }
   .add-email-form textarea { width: 100%; min-height: 100px; border: none; outline: none; resize: vertical; font-family: inherit; font-size: 13px; color: var(--text); background: var(--bg); padding: 10px 14px; border-radius: 10px; box-shadow: var(--neu-inset-xs); line-height: 1.55; }
   .ae-controls { display: flex; gap: 8px; margin-top: 8px; }
-  .ae-btn { border: none; cursor: pointer; background: var(--accent); color: white; font-family: inherit; font-size: 13px; font-weight: 700; padding: 8px 18px; border-radius: 10px; box-shadow: var(--neu-raised-sm); }
+  .ae-btn { /* neumorphic — never a solid accent fill */ border: none; cursor: pointer; background: var(--bg); color: var(--text); font-family: inherit; font-size: 13px; font-weight: 700; padding: 8px 18px; border-radius: 10px; box-shadow: var(--neu-raised-sm); }
   .ae-btn.secondary { background: var(--bg); color: var(--text-muted); }
   .ae-btn:hover:not(:disabled) { opacity: 0.9; }
 
@@ -219,7 +254,7 @@
   .verify-typing-line { font-size: 12px; color: var(--text-faint); font-style: italic; padding: 0 4px; }
   .verify-input-row { display: flex; gap: 8px; padding: 10px 14px; flex-shrink: 0; border-top: 1px solid var(--shadow-dark); }
   .verify-input { flex: 1; border: none; outline: none; font-family: inherit; font-size: 13px; background: var(--bg); box-shadow: var(--neu-inset-sm); border-radius: 10px; padding: 8px 12px; resize: none; color: var(--text); min-height: 36px; max-height: 80px; }
-  .verify-go { border: none; cursor: pointer; background: var(--accent); color: white; font-family: inherit; font-size: 13px; font-weight: 700; padding: 8px 14px; border-radius: 10px; flex-shrink: 0; align-self: flex-end; }
+  .verify-go { /* neumorphic — never a solid accent fill */ border: none; cursor: pointer; background: var(--bg); color: var(--text); font-family: inherit; font-size: 13px; font-weight: 700; padding: 8px 14px; border-radius: 10px; box-shadow: var(--neu-raised-sm); flex-shrink: 0; align-self: flex-end; }
   .chat-checks { margin: -4px 0 14px 56px; padding: 10px 14px; border-radius: 12px; background: var(--bg); box-shadow: var(--neu-inset-sm); font-size: 13px; color: var(--text-muted); }
   .chat-checks-head { font-weight: 600; color: var(--text); margin-bottom: 6px; }
   .chat-check { padding: 4px 0; line-height: 1.45; }
@@ -239,7 +274,7 @@
   .chat-mic.processing { box-shadow: var(--neu-inset-sm); opacity: 0.55; cursor: default; }
   @keyframes chatMicPulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
   .chat-voice-status { font-size: 12px; color: var(--text-muted); font-style: italic; }
-  .chat-send { border: none; cursor: pointer; background: var(--accent); color: white; font-family: inherit; font-size: 14px; font-weight: 700; padding: 12px 22px; border-radius: 12px; box-shadow: var(--neu-raised-sm); flex-shrink: 0; }
+  .chat-send { /* neumorphic — never a solid accent fill */ border: none; cursor: pointer; background: var(--bg); color: var(--text); font-family: inherit; font-size: 14px; font-weight: 700; padding: 12px 22px; border-radius: 12px; box-shadow: var(--neu-raised-sm); flex-shrink: 0; }
   .chat-send:hover:not(:disabled) { opacity: 0.9; }
   .chat-send:disabled { opacity: 0.5; cursor: not-allowed; }
   .chat-toggles { display: flex; gap: 8px; align-items: center; margin-top: 8px; }
@@ -271,7 +306,7 @@
     box-shadow: var(--neu-raised-sm); color: var(--text);
     transition: color 0.15s;
   }
-  .draft-btn.send  { background: var(--accent); color: white; }
+  .draft-btn.send  { /* neumorphic — never a solid accent fill */ color: var(--text); box-shadow: var(--neu-raised-sm); font-weight: 700; }
   .draft-btn.send:hover { opacity: 0.9; }
   .draft-btn.skip:hover, .draft-btn.save:hover { color: var(--accent); }
   .draft-btn:disabled { opacity: 0.4; cursor: default; }
@@ -360,7 +395,7 @@
     border-radius: 11px; box-shadow: var(--neu-raised-sm);
     background: var(--bg); color: var(--text);
   }
-  .forms-btn.primary { background: var(--accent); color: white; box-shadow: var(--neu-raised-sm); }
+  .forms-btn.primary { /* neumorphic — never a solid accent fill */ background: var(--bg); color: var(--text); font-weight: 700; box-shadow: var(--neu-raised-sm); }
   .forms-btn:hover:not(:disabled) { opacity: 0.88; }
   .forms-btn:disabled { opacity: 0.45; cursor: not-allowed; }
   .forms-status { font-size: 12px; color: var(--text-muted); margin-top: 8px; font-style: italic; }
@@ -443,6 +478,419 @@
   .remind-option:hover { color: var(--accent); }
   .remind-cancel { background: transparent; border: none; cursor: pointer; font-family: inherit; font-size: 12px; color: var(--text-muted); margin-top: 4px; }
   .remind-cancel:hover { color: var(--text); }
+  /* ── MONOCHROME CONTROL ICONS ────────────────────────────────────────────
+     Colour emoji (yellow folder, blue speaker, blue envelope) never belonged
+     on a monochrome pink-accent page. Every control now carries the same line
+     icon at the same size, and the button lays it out beside its label. */
+  /* Control icons wear the same raised well as every other icon, so the
+     buttons match the folder pills and the file rows. */
+  .ci { width: 16px; height: 16px; flex-shrink: 0; display: block; }
+  .priority-btn > .ci, .note-save-btn > .ci, .chat-deep > .ci,
+  #kickoff-btn > .ci, #delete-thread-btn > .ci, .forms-btn > .ci {
+    width: 26px; height: 26px; padding: 5px; box-sizing: border-box;
+    background: var(--bg); box-shadow: var(--neu-raised-sm); border-radius: 7px;
+  }
+  .priority-btn > .ci { color: #d97706; }
+  #chat-forms > .ci { color: #7c3aed; }
+  .note-save-btn > .ci { color: #0891b2; }
+  #ob-send-btn > .ci { color: #16a34a; }
+  #ob-read-btn > .ci { color: #2563eb; }
+  #ob-save-btn > .ci { color: #d97706; }
+  #ob-attach-btn > .ci, #ff-attach-email > .ci { color: var(--text-muted); }
+  #ob-thread-files-btn > .ci { color: #ca8a04; }
+  .chat-deep > .ci { color: #7c3aed; }
+  #kickoff-btn > .ci { color: var(--accent); }
+  #delete-thread-btn > .ci { color: #b91c1c; }
+  .priority-btn.on > .ci, .chat-deep.on > .ci { box-shadow: var(--neu-inset-xs); }
+  .priority-btn, .note-save-btn, .chat-deep, .forms-btn, #kickoff-btn, #delete-thread-btn {
+    display: inline-flex; align-items: center; gap: 7px; line-height: 1;
+  }
+  #kickoff-btn { justify-content: center; text-align: left; }
+  .priority-btn .ci, .note-save-btn .ci, .chat-deep .ci { color: var(--text-muted); }
+  .priority-btn.on .ci, .chat-deep.on .ci { color: var(--accent); }
+  #delete-thread-btn .ci { color: var(--text-faint); }
+  #kickoff-btn .ci { color: var(--accent); }
+  /* ── ONE ICON SIZE, ONE PILL HEIGHT ──────────────────────────────────────
+     Every icon on this page is the same glyph size in the same box, and every
+     pill is the same height whether or not it carries an icon. Appended last
+     so it settles the earlier per-context sizes. */
+  /* WELL SIZES, NOT GLYPH SIZES. The well is the box; the glyph sits inside it
+     with breathing room, or the raised square has nothing to show. One well
+     size per context, one glyph size throughout. */
+  .gw, .doc-type-well {
+    width: 30px !important; height: 30px !important;
+    flex-shrink: 0;
+    display: inline-flex !important; align-items: center; justify-content: center;
+  }
+  .gw svg, .doc-type-well svg {
+    width: 16px !important; height: 16px !important;
+    display: block; stroke-width: 1.9;
+  }
+  .zone-head .gw { width: 30px !important; height: 30px !important; }
+  .fpill .gw { width: 22px !important; height: 22px !important; }
+  .fpill .gw svg { width: 14px !important; height: 14px !important; }
+  .q-dock-bar .gw { width: 24px !important; height: 24px !important; }
+  .q-dock-bar .gw svg { width: 14px !important; height: 14px !important; }
+  /* Pills grow a little to seat a 22px well without squashing it */
+  .fpill { height: 34px; }
+
+  /* Pills: identical box, icon or no icon */
+  .fpill, .bpill {
+    height: 30px; padding: 0 11px; box-sizing: border-box;
+    display: inline-flex; align-items: center; gap: 6px;
+    line-height: 1; white-space: nowrap;
+  }
+  .fpill-count, .bpill-count { line-height: 1; }
+
+  /* The icon-picker grid: one square, one glyph size */
+  .icon-pick { width: 30px !important; height: 30px !important; padding: 0; }
+  .icon-pick svg { width: 16px !important; height: 16px !important; stroke-width: 1.9; }
+
+  /* Row actions line up at one height too, so a file row reads as a single band */
+  .zone .file-card .file-actions a,
+  .zone .file-card .file-actions button,
+  .file-folder-pick {
+    height: 28px; box-sizing: border-box;
+    display: inline-flex; align-items: center; justify-content: center;
+    padding: 0 10px; line-height: 1;
+  }
+  /* ── RAISED COLOURED WELLS ───────────────────────────────────────────────
+     Every icon on the page sits in the SAME raised neumorphic well and keeps
+     its own colour. The well is a clean raised square — var(--bg) with
+     --neu-raised-sm — not the washed gradient tint that read as "dusted".
+     One size everywhere, whether the icon came from the folder set, a file
+     row, a zone header or a button. */
+  .gw, .doc-type-well, .ci-well {
+    background: var(--bg);
+    box-shadow: var(--neu-raised-sm);
+    border-radius: 8px;
+    width: 30px; height: 30px;
+    flex-shrink: 0;
+    display: inline-flex; align-items: center; justify-content: center;
+  }
+  .gw svg, .doc-type-well svg, .ci-well svg {
+    width: 16px; height: 16px; display: block; stroke-width: 1.9;
+  }
+  /* Pills carry a slightly smaller well so the pill stays 30px tall */
+  .fpill .gw { width: 22px; height: 22px; border-radius: 7px; }
+  .fpill .gw svg { width: 14px; height: 14px; }
+  .fpill.on .gw { box-shadow: var(--neu-inset-xs); }
+  /* Zone headers + dock keep the well too, so nothing is the odd one out */
+  .zone-head .gw { width: 28px; height: 28px; }
+  .q-dock-bar .gw { width: 24px; height: 24px; border-radius: 7px; }
+  .q-dock-bar .gw svg { width: 14px; height: 14px; }
+
+  /* The row already has ONE type icon — hide the emoji glyph carried over from
+     the old file card, which rendered a second icon underneath it. */
+  .zone .file-card .file-icon { display: none !important; }
+
+  /* Icon picker + colour swatches */
+  .icon-pick { box-shadow: var(--neu-raised-sm); color: var(--text-muted); }
+  .icon-pick.on { box-shadow: var(--neu-inset-xs); color: var(--accent); }
+
+  /* ══════════════════════════════════════════════════════════════════════════
+     CONSISTENCY PASS (21 Aug 2026) — Sarah: "the threads page doesnt all match.
+     the corospondance should be like the files and folders … the files are not
+     the same width as on doc drop … [the dock] is not right at all."
+
+     Two jobs:
+       1. Every section becomes the SAME zone card, and every row inside a zone
+          is the SAME Doc Drop row — one width, one padding, one radius.
+       2. Q's dock rebuilt: it was inheriting .chat-card's 3px accent bar and
+          22px padding, its thread collapsed to nothing when empty, and the
+          composer clipped a two-line placeholder.
+     Appended last so it wins on the cascade without editing the originals.
+     ══════════════════════════════════════════════════════════════════════════ */
+
+  /* ── ONE row, used by files, emails and outbox drafts alike.
+     Matches Doc Drop exactly: 9px gap, 9px/11px padding, 10px radius, --neu-sm.
+     This is the "same width" fix — every row now starts and ends on the same
+     line as the folder pills above it. ─────────────────────────────────────── */
+  .zone .file-card,
+  .zone .email-card {
+    display: flex; flex-wrap: wrap; align-items: center; gap: 9px;
+    padding: 9px 11px; border-radius: 10px;
+    box-shadow: var(--neu-raised-sm); background: var(--bg);
+    width: 100%; box-sizing: border-box; margin: 0;
+  }
+  .files-list, .email-list { gap: 6px; }
+  .zone .file-card > .file-head,
+  .zone .email-card > .email-head { flex: 1; min-width: 0; gap: 9px; }
+  /* Expanded body drops to its own full-width line rather than squashing the row */
+  .zone .file-card > .file-body,
+  .zone .email-card > .email-body { flex-basis: 100%; width: 100%; }
+  /* The old emoji glyph is redundant now every row carries a type-icon well */
+  .zone .file-card .doc-type-well ~ .file-head .file-icon { display: none; }
+  .file-name, .email-title { font-weight: 700; }
+
+  /* Folder picker sits inline on the row, never wrapping to its own line */
+  .file-folder-pick { max-width: 96px; align-self: center; margin: 0; }
+
+  /* Drop zone — same width and radius as the rows it sits under */
+  .zone .upload-drop {
+    width: 100%; box-sizing: border-box; border-radius: 10px;
+    padding: 16px; margin-top: 6px; font-size: 12.5px;
+  }
+
+  /* Note box + outbox compose: same inner width as every other zone child */
+  .zone .note-input, .zone .ob-compose-card, .zone .add-email-card {
+    width: 100%; box-sizing: border-box; margin: 0; border-radius: 10px;
+  }
+  .zone .ob-compose-card { padding: 12px 13px; box-shadow: var(--neu-raised-sm); border-left: none; }
+  .zone .add-email-card { box-shadow: var(--neu-raised-sm); }
+  .zone .ob-field { width: 100%; box-sizing: border-box; }
+
+  /* A zone's own section-label is redundant — the zone header names it */
+  .zone > .section-label { display: none; }
+
+  /* ── Q'S DOCK — rebuilt ──────────────────────────────────────────────────
+     It was inheriting .chat-card wholesale. Everything below is scoped to
+     #q-dock so the chat keeps its normal look if it ever renders inline. */
+  #q-dock .chat-card {
+    border-top: none;                 /* the heavy pink bar — gone */
+    padding: 10px 12px 12px;          /* was 20px 22px 22px */
+    margin-top: 0;
+    border-radius: 0;
+    box-shadow: none;
+  }
+  /* The thread must hold its own height, or an empty case leaves a dead gap */
+  #q-dock .chat-thread {
+    min-height: 96px;
+    max-height: min(42vh, 380px);
+    gap: 10px;
+    padding: 2px 0 8px;
+    margin-bottom: 8px;
+  }
+  #q-dock .chat-bubble { font-size: 13px; padding: 9px 12px; border-radius: 12px; max-width: 88%; }
+  #q-dock .chat-avatar { width: 24px; height: 24px; font-size: 11px; }
+  #q-dock .chat-msg { gap: 8px; }
+
+  /* Composer: a two-line placeholder must fit, and the textarea never shows
+     its own scrollbar furniture inside a 400px dock. */
+  #q-dock .chat-input-row { gap: 7px; align-items: stretch; }
+  #q-dock .chat-input-row textarea {
+    min-height: 58px; max-height: 110px; padding: 9px 12px;
+    font-size: 13px; line-height: 1.45; border-radius: 10px;
+    scrollbar-width: none; -ms-overflow-style: none;
+  }
+  #q-dock .chat-input-row textarea::-webkit-scrollbar { width: 0; height: 0; display: none; }
+  #q-dock .chat-mic { width: 38px; height: 58px; border-radius: 10px; }
+  #q-dock .chat-mic svg { width: 17px; height: 17px; }
+  #q-dock .chat-send { padding: 0 16px; font-size: 13px; border-radius: 10px; min-height: 58px; }
+
+  /* Toggle row, scaled to the dock */
+  #q-dock .chat-toggles { gap: 6px; margin-top: 7px; flex-wrap: wrap; }
+  #q-dock .chat-deep { font-size: 11.5px; padding: 5px 10px; border-radius: 8px; }
+  #q-dock .chat-toggle-sm { width: 24px; height: 24px; font-size: 10px; border-radius: 7px; }
+  #q-dock .chat-typing { font-size: 11.5px; }
+
+  /* Kickoff: a normal button in the dock, not a full-width slab */
+  #q-dock #kickoff-btn {
+    font-size: 12.5px !important;
+    padding: 9px 12px !important;
+    border-radius: 10px !important;
+    margin-bottom: 10px !important;
+    line-height: 1.35 !important;
+  }
+
+  /* Header bar: hairline, not a 3px accent slab */
+  .q-dock-bar { padding: 9px 12px; border-bottom: 1px solid var(--border-subtle, rgba(0,0,0,0.07)); }
+  .q-dock-title { font-size: 11.5px; }
+
+  /* ── The dock is a NEUMORPHIC FLOATING FRAME ─────────────────────────────
+     Sarah: "this needs to render on a neomorphic floating frame." It was
+     reading as a flat panel with a hard edge — `overflow:hidden` clipped the
+     inner highlight, so the raised shadow never formed a frame.
+     A neumorphic surface needs BOTH shadows to read as raised: the dark cast
+     (#ababab) and the light cast (#ffffff) opposite it. It also has to sit on
+     the page background, not on white. */
+  #q-dock {
+    width: 384px;
+    background: var(--bg);
+    border-radius: 20px;
+    padding: 6px;                      /* the frame itself, so the corners read */
+    overflow: visible;                 /* was hidden — it flattened the edge */
+    box-shadow:
+      12px 12px 32px #ababab,
+      -10px -10px 24px #ffffff,
+      inset 0 1px 0 rgba(255,255,255,0.6);
+  }
+  /* The inner surface sits INSIDE the frame with its own gentle lift */
+  #q-dock .chat-card {
+    border-radius: 15px;
+    background: var(--bg);
+  }
+  #q-dock .q-dock-bar { border-radius: 15px 15px 0 0; }
+  #q-dock.min .q-dock-bar { border-radius: 15px; border-bottom: none; }
+  /* Lift a touch while being dragged, so it reads as picked up */
+  #q-dock:active { box-shadow: 16px 16px 40px #a2a2a2, -12px -12px 28px #ffffff, inset 0 1px 0 rgba(255,255,255,0.6); }
+
+  /* Inline (narrow screens) it is part of the page, so drop the float framing */
+  @media (max-width: 780px) {
+    #q-dock { box-shadow: var(--neu-raised); border-radius: 16px; padding: 4px; }
+  }
+
+  /* ══════════════════════════════════════════════════════════════════════════
+     DOC DROP LAYOUT (21 Aug 2026) — the Quoteapp Doc Drop case layout, in
+     quotem-ai's colours. Ported from client/src/components/DocCases.jsx.
+     Nothing below replaces an existing rule; these are additive classes.
+
+     The Doc Drop order is: case card → notes BOARD → files zone (folders) →
+     everything else, with Q floating over it all in a draggable dock.
+     ══════════════════════════════════════════════════════════════════════════ */
+
+  /* ── Zone card: the raised control-room card Doc Drop uses for each block.
+     RAISED, never inset — content you READ sits proud (house rule). ───────── */
+  .zone {
+    background: var(--bg); border-radius: 14px; padding: 12px 14px;
+    box-shadow: var(--neu-raised); margin-bottom: 12px;
+  }
+  .zone-head { display: flex; align-items: center; gap: 9px; }
+  .zone-head-btn {
+    display: flex; align-items: center; gap: 9px; flex: 1; min-width: 0;
+    background: none; border: none; padding: 0; cursor: pointer;
+    font-family: inherit; text-align: left; color: var(--text);
+  }
+  .zone-title { font-size: 13px; font-weight: 800; letter-spacing: -0.01em; }
+  .zone-sub { font-size: 11px; color: var(--text-muted); }
+  .zone-chev { font-size: 10px; color: var(--text-faint); transition: transform 0.15s; }
+  .zone.closed .zone-chev { transform: rotate(-90deg); }
+  .zone.closed .zone-body { display: none; }
+  .zone-body { margin-top: 12px; }
+
+  /* Gradient icon well — the same `.gw` look Doc Drop, the property page and
+     the jobsite cards use. A tint of the glyph colour over the page bg, raised.
+     NEVER a solid-colour chip (house style law). */
+  .gw {
+    display: inline-flex; align-items: center; justify-content: center;
+    flex-shrink: 0; box-shadow: var(--neu-raised-sm);
+  }
+
+  /* ── Notes BOARD — tabs, each tab one markdown note ────────────────────── */
+  .board-pills { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+  .bpill {
+    font-size: 11px; font-weight: 700; padding: 6px 11px; border-radius: 9px;
+    background: var(--bg); border: none; cursor: pointer; font-family: inherit;
+    color: var(--text-muted); box-shadow: var(--neu-raised-sm);
+    max-width: 170px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    display: inline-flex; align-items: center; gap: 5px;
+  }
+  .bpill:hover { color: var(--text); }
+  .bpill.on { box-shadow: var(--neu-inset-xs); color: var(--accent); }
+  .bpill-count { font-weight: 800; color: var(--accent); }
+
+  .board-note {
+    margin-top: 12px; padding: 12px 14px; border-radius: 12px;
+    background: var(--bg); box-shadow: var(--neu-raised-sm);
+    font-size: 14px; line-height: 1.65; color: var(--text);
+  }
+  .board-note h1, .board-note h2, .board-note h3 {
+    font-size: 14px; font-weight: 700; color: var(--accent);
+    margin: 12px 0 4px; letter-spacing: -0.01em;
+  }
+  .board-note h1:first-child, .board-note h2:first-child, .board-note h3:first-child { margin-top: 0; }
+  .board-note p { margin: 0 0 8px; }
+  .board-note ul, .board-note ol { margin: 4px 0 8px 22px; }
+  .board-note li { margin-bottom: 3px; }
+  .board-note code { font-family: monospace; font-size: 13px; background: var(--accent-soft); padding: 1px 5px; border-radius: 4px; }
+  .board-note table { border-collapse: collapse; width: 100%; margin: 8px 0; font-size: 13px; }
+  .board-note th, .board-note td { border: 1px solid var(--shadow-dark); padding: 6px 9px; text-align: left; }
+  .board-note th { font-weight: 700; color: var(--accent); }
+  .board-note hr { border: 0; border-top: 1px solid var(--shadow-dark); margin: 10px 0; }
+  .board-empty { font-size: 12.5px; color: var(--text-muted); font-style: italic; }
+  .board-edit {
+    width: 100%; min-height: 220px; border: none; outline: none; resize: vertical;
+    font-family: inherit; font-size: 13.5px; line-height: 1.6; color: var(--text);
+    background: var(--bg); box-shadow: var(--neu-inset); border-radius: 10px; padding: 12px 14px;
+  }
+  /* Tickable checkbox rows inside a board note (Doc Drop parity) */
+  .bcheck { display: flex; align-items: flex-start; gap: 9px; margin: 4px 0; }
+  .bcheck-box {
+    width: 20px; height: 20px; flex-shrink: 0; border-radius: 6px; margin-top: 1px;
+    background: var(--bg); box-shadow: var(--neu-raised-sm); border: none;
+    cursor: pointer; padding: 0; color: #16a34a; font-size: 13px; font-weight: 900;
+    display: flex; align-items: center; justify-content: center; line-height: 1;
+  }
+  .bcheck-box.on { box-shadow: var(--neu-inset-xs); }
+  .bcheck-text { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+  .bcheck.done .bcheck-text { color: var(--text-muted); text-decoration: line-through; }
+
+  .mini-input {
+    border: none; outline: none; font-family: inherit; font-size: 12px;
+    background: var(--bg); box-shadow: var(--neu-inset-xs); border-radius: 9px;
+    padding: 7px 11px; color: var(--text);
+  }
+  .link-btn {
+    background: none; border: none; cursor: pointer; font-family: inherit;
+    font-size: 11px; font-weight: 700; color: var(--text-muted); padding: 0;
+  }
+  .link-btn:hover { color: var(--text); }
+  .link-btn.danger { color: var(--accent); }
+
+  /* ── Folder pills in the files zone ────────────────────────────────────── */
+  .folder-bar { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-bottom: 10px; }
+  .fpill {
+    font-size: 11px; font-weight: 700; padding: 6px 10px; border-radius: 9px;
+    background: var(--bg); border: none; cursor: pointer; font-family: inherit;
+    color: var(--text-muted); box-shadow: var(--neu-raised-sm);
+    display: inline-flex; align-items: center; gap: 6px; white-space: nowrap;
+  }
+  .fpill:hover { color: var(--text); }
+  .fpill.on { box-shadow: var(--neu-inset-xs); color: var(--text); }
+  .fpill-count { font-weight: 800; color: var(--accent); }
+  .fpill .gw { width: 20px; height: 20px; border-radius: 6px; }
+  .fpill .gw svg { width: 12px; height: 12px; }
+
+  .folder-editor { margin: 10px 0; padding: 12px 14px; border-radius: 12px; background: var(--bg); box-shadow: var(--neu-inset-sm); }
+  .swatches { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 8px; }
+  .swatch { width: 26px; height: 26px; border-radius: 8px; border: none; cursor: pointer; box-shadow: var(--neu-raised-sm); }
+  .swatch.on { box-shadow: var(--neu-inset-xs); }
+  .icon-picks { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 8px; }
+  .icon-pick {
+    width: 30px; height: 30px; border-radius: 8px; border: none; cursor: pointer;
+    background: var(--bg); box-shadow: var(--neu-raised-sm); color: var(--text-muted);
+    display: inline-flex; align-items: center; justify-content: center; padding: 0;
+  }
+  .icon-pick.on { box-shadow: var(--neu-inset-xs); color: var(--accent); }
+  .icon-pick svg { width: 15px; height: 15px; }
+
+  /* File cards get a type icon well + a folder picker (Doc Drop parity) */
+  .file-folder-pick {
+    border: none; outline: none; font-family: inherit; font-size: 10.5px;
+    background: var(--bg); box-shadow: var(--neu-raised-sm); border-radius: 8px;
+    padding: 5px 6px; color: var(--text-muted); cursor: pointer; max-width: 110px; flex-shrink: 0;
+  }
+  .doc-type-well { width: 30px; height: 30px; border-radius: 9px; }
+  .doc-type-well svg { width: 16px; height: 16px; }
+
+  /* ── Q's floating dock — Doc Drop's draggable, minimisable chat ─────────── */
+  #q-dock {
+    position: fixed; z-index: 300; width: 400px; max-width: calc(100vw - 24px);
+    background: var(--bg); border-radius: 16px; box-shadow: var(--neu-raised);
+    display: flex; flex-direction: column; overflow: hidden;
+  }
+  #q-dock.min .chat-card { display: none; }
+  #q-dock .chat-card { box-shadow: none; border-radius: 0; margin: 0; padding: 12px 14px 14px; }
+  #q-dock .chat-thread { max-height: min(46vh, 420px); overflow-y: auto; }
+  .q-dock-bar {
+    display: flex; align-items: center; gap: 9px; padding: 10px 12px;
+    cursor: grab; user-select: none; touch-action: none;
+    border-bottom: 1px solid var(--shadow-dark);
+  }
+  #q-dock.min .q-dock-bar { border-bottom: none; }
+  .q-dock-bar:active { cursor: grabbing; }
+  .q-dock-title { font-size: 12px; font-weight: 800; letter-spacing: -0.01em; flex: 1; }
+  .q-dock-btn {
+    background: none; border: none; cursor: pointer; padding: 3px 6px;
+    color: var(--text-muted); font-size: 13px; font-family: inherit; line-height: 1;
+  }
+  .q-dock-btn:hover { color: var(--text); }
+  /* On a narrow screen the dock stops floating and sits in the flow, so it can
+     never cover the page on a Surface / phone. */
+  @media (max-width: 780px) {
+    #q-dock { position: static; width: auto; max-width: none; margin: 12px 0 0; }
+    .q-dock-bar { cursor: default; }
+  }
 </style>
 </head>
 <body>
@@ -450,8 +898,9 @@
 
   <header>
     <span class="logo-mark"><span class="q">Q</span><span class="dot"></span></span>
-    <button id="priority-btn" class="priority-btn" title="Mark as priority">☆ Priority</button>
-    <button id="chat-forms" class="priority-btn" type="button" title="Open the Forms panel — fill and download GOV.UK forms for this case">📋 Forms</button>
+    <button id="priority-btn" class="priority-btn" title="Mark as priority"><svg class="ci" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 2.6 5.6 6 .8-4.4 4.2 1.1 6-5.3-3-5.3 3 1.1-6L3.4 9.4l6-.8Z"/></svg><span>Priority</span></button>
+    <button id="chat-forms" class="priority-btn" type="button" title="Open the Forms panel — fill and download GOV.UK forms for this case"><svg class="ci" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="2" width="8" height="4" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><path d="M9 12h6M9 16h4"/></svg><span>Forms</span></button>
+    <button id="share-case" class="priority-btn" type="button" title="Send this case to someone who has no account"><svg class="ci" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5h16v14H4z"/><path d="M4 8l8 5 8-5"/></svg><span>Share</span></button>
     <a href="/threads" class="header-back">← all threads</a>
   </header>
 
@@ -463,11 +912,80 @@
     <textarea class="summary-input" id="summary-input" rows="1" placeholder="One-line summary…"></textarea>
   </div>
 
+  <!-- ── SHARE THIS CASE — a Quotem linkmail.
+       A case holds things that must not go out by accident, so nothing is on
+       the page until it is ticked. The summary starts ticked because it is the
+       one thing a share is always for; everything else starts off. ── -->
+  <div class="zone closed" id="share-zone">
+    <div class="zone-head">
+      <button class="zone-head-btn" type="button" onclick="this.closest('.zone').classList.toggle('closed')">
+        <span class="gw" style="width:24px;height:24px;color:#e91e63;">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:15px;height:15px;"><path d="M4 5h16v14H4z"/><path d="M4 8l8 5 8-5"/></svg>
+        </span>
+        <span style="flex:1;min-width:0;">
+          <span class="zone-title" style="display:block;">Share this case</span>
+          <span class="zone-sub" id="share-sub"></span>
+        </span>
+        <span class="zone-chev">▼</span>
+      </button>
+    </div>
+    <div class="zone-body">
+      <div class="sh-pick" id="sh-pick"></div>
+      <div class="sh-ask">
+        <label class="sh-lab" for="sh-questions">What you need back — one question a line</label>
+        <textarea id="sh-questions" class="sh-field" rows="3" placeholder="Can you confirm the date you moved in?&#10;Do you still have the tenancy agreement?"></textarea>
+      </div>
+      <div class="sh-row">
+        <input class="sh-field sh-inline" id="sh-name" placeholder="who it is for" />
+        <button class="sh-btn" id="sh-make" type="button">Make the link</button>
+      </div>
+      <div class="sh-row hide" id="sh-out">
+        <input class="sh-field sh-inline" id="sh-url" readonly />
+        <button class="sh-btn" id="sh-copy" type="button">Copy</button>
+        <input class="sh-field sh-inline" id="sh-to" placeholder="their email address" />
+        <button class="sh-btn" id="sh-email" type="button">Email it</button>
+        <span class="sh-note" id="sh-note"></span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Notes BOARD (Doc Drop parity) — tabs, each tab one markdown note.
+       The flat "Case notes" list below is untouched and still renders. ── -->
+  <div class="zone" id="board-zone">
+    <div class="zone-head">
+      <button class="zone-head-btn" type="button" onclick="this.closest('.zone').classList.toggle('closed')">
+        <span class="gw" style="width:24px;height:24px;color:#e91e63;">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:15px;height:15px;"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1"/><path d="M9 12h6M9 16h4"/></svg>
+        </span>
+        <span style="flex:1;min-width:0;">
+          <span class="zone-title" style="display:block;">Case notes board</span>
+          <span class="zone-sub"></span>
+        </span>
+        <span class="zone-chev">▼</span>
+      </button>
+    </div>
+    <div class="zone-body"></div>
+  </div>
+
   <div class="section-label" id="notes-label" style="display:none;">📋 Case notes</div>
   <div id="notes-list" class="notes-list"></div>
 
-  <div class="section-label">📨 Correspondence</div>
-  <div id="email-list" class="email-list"></div>
+  <!-- ── Correspondence zone — same card as the board and the files ── -->
+  <div class="zone" id="correspondence-zone">
+    <div class="zone-head">
+      <button class="zone-head-btn" type="button" onclick="this.closest('.zone').classList.toggle('closed')">
+        <span class="gw" style="width:24px;height:24px;color:#e91e63;">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:15px;height:15px;"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></svg>
+        </span>
+        <span style="flex:1;min-width:0;">
+          <span class="zone-title" style="display:block;">Correspondence</span>
+          <span class="zone-sub"></span>
+        </span>
+        <span class="zone-chev">▼</span>
+      </button>
+    </div>
+    <div class="zone-body">
+      <div id="email-list" class="email-list"></div>
 
   <div class="add-email-card collapsed" id="add-email-card">
     <div class="add-email-toggle" id="add-email-toggle">＋ Add an email to this thread</div>
@@ -497,28 +1015,75 @@
       </div>
     </div>
   </div>
+    </div>
+  </div><!-- /#correspondence-zone -->
 
   <div class="photo-lightbox" id="photo-lightbox">
     <button class="photo-lightbox-close" id="photo-lightbox-close">✕</button>
     <img id="photo-lightbox-img" src="" alt="">
   </div>
 
-  <div class="section-label">📎 Files &amp; evidence</div>
-  <div class="photo-grid" id="photo-grid"></div>
-  <div class="files-list" id="files-list"></div>
-  <div class="upload-drop" id="upload-drop">
-    <input type="file" id="file-input" multiple>
-    Drop files here or click to upload — photos, PDFs, screenshots, anything
-    <div class="upload-status" id="upload-status"></div>
+  <!-- ── Files zone (Doc Drop parity) — the same photo grid and file list as
+       before, now inside a folder-organised zone card. ── -->
+  <div class="zone" id="files-zone">
+    <div class="zone-head">
+      <button class="zone-head-btn" type="button" onclick="this.closest('.zone').classList.toggle('closed')">
+        <span class="gw" style="width:24px;height:24px;color:#0891b2;">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:15px;height:15px;"><path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13c0 1.1.9 2 2 2Z"/></svg>
+        </span>
+        <span style="flex:1;min-width:0;">
+          <span class="zone-title" style="display:block;">Files &amp; evidence</span>
+          <span class="zone-sub"></span>
+        </span>
+        <span class="zone-chev">▼</span>
+      </button>
+    </div>
+    <div class="zone-body">
+      <div class="folder-bar" id="folder-bar"></div>
+      <div class="folder-editor" id="folder-editor" style="display:none;"></div>
+      <div class="photo-grid" id="photo-grid"></div>
+      <div class="files-list" id="files-list"></div>
+      <div class="upload-drop" id="upload-drop">
+        <input type="file" id="file-input" multiple>
+        Drop files here or click to upload — photos, PDFs, screenshots, anything
+        <div class="upload-status" id="upload-status"></div>
+      </div>
+    </div>
   </div>
+  <!-- ── Add a note zone ── -->
+  <div class="zone" id="note-zone">
+    <div class="zone-head">
+      <button class="zone-head-btn" type="button" onclick="this.closest('.zone').classList.toggle('closed')">
+        <span class="gw" style="width:24px;height:24px;color:#7c3aed;">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:15px;height:15px;"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/><path d="M14 2v6h6"/><path d="M8 13h6M8 17h4"/></svg>
+        </span>
+        <span style="flex:1;min-width:0;">
+          <span class="zone-title" style="display:block;">Add a note</span>
+          <span class="zone-sub"></span>
+        </span>
+        <span class="zone-chev">▼</span>
+      </button>
+    </div>
+    <div class="zone-body">
   <div class="note-input" id="note-input-wrap">
     <textarea id="note-input" placeholder="Or paste / type a note here — phone-call notes, a thought, a quote, scrappy lines. It lands on the case timeline and Q reads it. (Ctrl+Enter to save)"></textarea>
-    <button id="note-save-btn" class="note-save-btn" type="button">💾 Save note</button>
+    <button id="note-save-btn" class="note-save-btn" type="button"><svg class="ci" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2Z"/><path d="M17 21v-8H7v8M7 3v5h8"/></svg><span>Save note</span></button>
   </div>
+    </div>
+  </div><!-- /#note-zone -->
 
-  <div class="section-label">💬 Q on the case</div>
+  <!-- ── Q's dock (Doc Drop parity) — the same chat, now floating and
+       draggable. Below 780px it drops back into the page flow. ── -->
+  <div id="q-dock">
+    <div class="q-dock-bar">
+      <span class="gw" style="width:22px;height:22px;color:#e91e63;">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:13px;height:13px;"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2Z"/></svg>
+      </span>
+      <span class="q-dock-title">Q on the case</span>
+      <button class="q-dock-btn" id="q-dock-min" type="button" title="Minimise Q">—</button>
+    </div>
   <div class="chat-card">
-    <button id="kickoff-btn" style="display:none; width: 100%; border: none; cursor: pointer; background: var(--accent); color: white; font-family: inherit; font-size: 15px; font-weight: 700; padding: 14px 18px; border-radius: 12px; box-shadow: var(--neu-raised-sm); margin-bottom: 14px; letter-spacing: -0.01em;">🪄 Q, take this case — I'm done adding things</button>
+    <button id="kickoff-btn" style="display:none; width: 100%; border: none; cursor: pointer; background: var(--bg); color: var(--text); font-family: inherit; font-size: 15px; font-weight: 700; padding: 14px 18px; border-radius: 12px; box-shadow: var(--neu-raised-sm); margin-bottom: 14px; letter-spacing: -0.01em;"><svg class="ci" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="m15 4 5 5L9 20H4v-5Z"/><path d="m13.5 5.5 5 5"/><path d="M4 4h.01M20 15h.01M7 2h.01"/></svg><span>Q, take this case — I'm done adding things</span></button>
     <div class="chat-thread" id="chat-thread"></div>
     <div class="chat-typing" id="chat-typing">Q is thinking…</div>
     <div class="chat-input-row">
@@ -529,15 +1094,30 @@
       <button class="chat-send" id="chat-send">Send</button>
     </div>
     <div class="chat-toggles">
-      <button class="chat-deep" id="chat-deep" type="button" title="Deep think — Q reasons at maximum. Slower, sharper.">🧠 Deep</button>
+      <button class="chat-deep" id="chat-deep" type="button" title="Deep think — Q reasons at maximum. Slower, sharper."><svg class="ci" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M9.5 3A2.5 2.5 0 0 1 12 5.5v13a2.5 2.5 0 0 1-4.96.44A2.5 2.5 0 0 1 4 16.5a2.5 2.5 0 0 1 .5-4.9A2.5 2.5 0 0 1 5 6.6 2.5 2.5 0 0 1 9.5 3Z"/><path d="M14.5 3A2.5 2.5 0 0 0 12 5.5v13a2.5 2.5 0 0 0 4.96.44A2.5 2.5 0 0 0 20 16.5a2.5 2.5 0 0 0-.5-4.9A2.5 2.5 0 0 0 19 6.6 2.5 2.5 0 0 0 14.5 3Z"/></svg><span>Deep</span></button>
       <button class="chat-toggle-sm" id="chat-verify" type="button" title="Verify — press, then click the message you want Q to check">✓</button>
       <button class="chat-toggle-sm" id="chat-glm" type="button" title="Engine — this thread runs on GLM-5.2 (deep reasoning) by default. Press to force V4 Pro instead.">V4</button>
       <span class="chat-voice-status" id="chat-voice-status"></span>
     </div>
   </div>
+  </div><!-- /#q-dock -->
 
-  <div class="section-label">📤 Outbox — emails ready to send</div>
-  <div id="outbox-list" style="margin-bottom: 12px;"></div>
+  <!-- ── Outbox zone ── -->
+  <div class="zone" id="outbox-zone">
+    <div class="zone-head">
+      <button class="zone-head-btn" type="button" onclick="this.closest('.zone').classList.toggle('closed')">
+        <span class="gw" style="width:24px;height:24px;color:#0891b2;">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:15px;height:15px;"><path d="M22 2 11 13"/><path d="M22 2 15 22l-4-9-9-4Z"/></svg>
+        </span>
+        <span style="flex:1;min-width:0;">
+          <span class="zone-title" style="display:block;">Outbox</span>
+          <span class="zone-sub"></span>
+        </span>
+        <span class="zone-chev">▼</span>
+      </button>
+    </div>
+    <div class="zone-body">
+      <div id="outbox-list" style="margin-bottom: 10px;"></div>
   <div id="ob-compose" class="ob-compose-card">
     <input type="text" id="ob-to" class="ob-field" placeholder="To">
     <input type="text" id="ob-subject" class="ob-field" placeholder="Subject">
@@ -545,19 +1125,21 @@
     <div id="ob-attach-pills" style="display:flex;flex-wrap:wrap;gap:6px;"></div>
     <input type="file" id="ob-attach-input" multiple style="display:none">
     <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;position:relative;">
-      <button id="ob-attach-btn" class="note-save-btn" type="button">📎 Attach</button>
-      <button id="ob-thread-files-btn" class="note-save-btn" type="button">📁 From thread</button>
+      <button id="ob-attach-btn" class="note-save-btn" type="button"><svg class="ci" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M21.4 11.05 12.2 20.3a5.5 5.5 0 0 1-7.8-7.8l9.2-9.2a3.7 3.7 0 0 1 5.2 5.2l-9.2 9.2a1.8 1.8 0 0 1-2.6-2.6l8.5-8.5"/></svg><span>Attach</span></button>
+      <button id="ob-thread-files-btn" class="note-save-btn" type="button"><svg class="ci" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13c0 1.1.9 2 2 2Z"/></svg><span>From thread</span></button>
       <div id="ob-thread-files-picker" style="display:none;position:absolute;top:calc(100% + 6px);left:0;z-index:50;background:var(--bg);box-shadow:var(--neu-raised);border-radius:12px;padding:10px 14px;min-width:220px;max-width:320px;max-height:240px;overflow-y:auto;"></div>
-      <button id="ob-read-btn" class="note-save-btn" type="button" title="Read the email aloud in a formal voice">🔊 Read</button>
-      <button id="ob-save-btn" class="note-save-btn" type="button">🕒 Save to outbox</button>
-      <button id="ob-send-btn" class="note-save-btn" type="button">📤 Send now</button>
+      <button id="ob-read-btn" class="note-save-btn" type="button" title="Read the email aloud in a formal voice"><svg class="ci" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M11 5 6 9H2v6h4l5 4V5Z"/><path d="M15.5 8.5a5 5 0 0 1 0 7M18.5 5.5a9 9 0 0 1 0 13"/></svg><span>Read</span></button>
+      <button id="ob-save-btn" class="note-save-btn" type="button"><svg class="ci" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg><span>Save to outbox</span></button>
+      <button id="ob-send-btn" class="note-save-btn" type="button"><svg class="ci" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2 11 13"/><path d="M22 2 15 22l-4-9-9-4Z"/></svg><span>Send now</span></button>
       <span id="outbox-status" style="font-size:12px;color:var(--text-muted);"></span>
     </div>
   </div>
+    </div>
+  </div><!-- /#outbox-zone -->
 
   <!-- Delete thread — at the bottom, well away from normal workflow -->
   <div style="margin-top:48px;padding-top:16px;border-top:1px solid var(--border-subtle);text-align:center;">
-    <button id="delete-thread-btn" style="background:transparent;border:1px solid var(--text-faint);cursor:pointer;font-family:inherit;font-size:12px;color:var(--text-faint);padding:6px 14px;border-radius:8px;">🗑 Delete this thread</button>
+    <button id="delete-thread-btn" style="background:transparent;border:1px solid var(--text-faint);cursor:pointer;font-family:inherit;font-size:12px;color:var(--text-faint);padding:6px 14px;border-radius:8px;"><svg class="ci" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M10 11v6M14 11v6"/></svg><span>Delete this thread</span></button>
   </div>
 
   <!-- Delete confirmation modal -->
@@ -608,7 +1190,7 @@
           <button class="forms-btn primary" id="ff-fill">Q, fill from case</button>
           <button class="forms-btn" id="ff-download">⬇ Editable (Acrobat)</button>
           <button class="forms-btn" id="ff-download-flat">⬇ Flat (Word / print)</button>
-          <button class="forms-btn" id="ff-attach-email">📎 Attach to email</button>
+          <button class="forms-btn" id="ff-attach-email"><svg class="ci" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M21.4 11.05 12.2 20.3a5.5 5.5 0 0 1-7.8-7.8l9.2-9.2a3.7 3.7 0 0 1 5.2 5.2l-9.2 9.2a1.8 1.8 0 0 1-2.6-2.6l8.5-8.5"/></svg><span>Attach to email</span></button>
         </div>
         <div class="ff-questions" id="ff-questions"></div>
         <div class="ff-coach">
@@ -663,7 +1245,7 @@ function savePins(s) { localStorage.setItem(PINS_KEY, JSON.stringify([...s])); }
 const $priorityBtn = document.getElementById('priority-btn');
 function refreshPriorityBtn() {
   const on = getPins().has(threadId);
-  $priorityBtn.textContent = on ? '★ Priority' : '☆ Priority';
+  $priorityBtn.innerHTML = (on ? `<svg class="ci" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="1.9" stroke-linejoin="round"><path d="m12 3 2.6 5.6 6 .8-4.4 4.2 1.1 6-5.3-3-5.3 3 1.1-6L3.4 9.4l6-.8Z"/></svg>` : `<svg class="ci" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 2.6 5.6 6 .8-4.4 4.2 1.1 6-5.3-3-5.3 3 1.1-6L3.4 9.4l6-.8Z"/></svg>`) + '<span>Priority</span>';
   $priorityBtn.classList.toggle('on', on);
 }
 $priorityBtn.addEventListener('click', () => {
@@ -740,7 +1322,7 @@ async function saveCaseNote(content) {
     });
     if (!res.ok) {
       const e = await res.json().catch(() => ({}));
-      alert(e.error || 'Could not save note');
+      qToast(e.error || 'Could not save note');
       return;
     }
     const updated = await res.json();
@@ -750,7 +1332,7 @@ async function saveCaseNote(content) {
     $noteInput.style.height = 'auto';
     pingQOnUpdate('a note');
   } catch (err) {
-    alert('Could not save note: ' + (err.message || 'unknown error'));
+    qToast('Could not save note: ' + (err.message || 'unknown error'));
   } finally {
     $noteSaveBtn.disabled = false;
   }
@@ -808,6 +1390,57 @@ document.getElementById('upload-drop').addEventListener('paste', (e) => {
   e.preventDefault();
   saveCaseNote(text);
 });
+
+// ── Non-blocking dialogs ────────────────────────────────────────────────────
+// window.alert / confirm / prompt all throw "not supported" in VS Code's
+// built-in browser (where Sarah runs the app), so anything built on them
+// silently did nothing. qToast replaces alert; qConfirm turns the button the
+// user just pressed into a two-press confirm and resolves true/false.
+function qToast(msg, tone) {
+  let host = document.getElementById('q-toast');
+  if (!host) {
+    host = document.createElement('div');
+    host.id = 'q-toast';
+    host.style.cssText = 'position:fixed;left:50%;bottom:26px;transform:translateX(-50%);z-index:900;' +
+      'background:var(--bg);box-shadow:var(--neu-raised);border-radius:12px;padding:11px 18px;' +
+      'font-family:inherit;font-size:13px;font-weight:600;max-width:min(560px,92vw);text-align:center;' +
+      'display:none;line-height:1.45;';
+    document.body.appendChild(host);
+  }
+  host.textContent = String(msg == null ? '' : msg);
+  host.style.color = tone === 'ok' ? 'var(--text)' : 'var(--accent)';
+  host.style.display = 'block';
+  clearTimeout(host._t);
+  host._t = setTimeout(() => { host.style.display = 'none'; }, 4200);
+}
+
+function qConfirm(btn, label) {
+  return new Promise((resolve) => {
+    if (!btn || !btn.parentNode) { resolve(false); return; }   // no button to arm → never silently delete
+    if (btn._armed) return;                                     // already waiting on this button
+    const originalHtml = btn.innerHTML;
+    const originalTitle = btn.title || '';
+    let done = false;
+    const restore = () => {
+      if (done) return;
+      done = true;
+      btn._armed = false;
+      clearTimeout(btn._armTimer);
+      btn.innerHTML = originalHtml;
+      btn.title = originalTitle;
+      btn.removeEventListener('click', onYes, true);
+      document.removeEventListener('click', onAway, true);
+    };
+    const onYes = (e) => { e.preventDefault(); e.stopPropagation(); restore(); resolve(true); };
+    const onAway = (e) => { if (e.target !== btn && !btn.contains(e.target)) { restore(); resolve(false); } };
+    btn._armed = true;
+    btn.innerHTML = 'Sure?';
+    btn.title = label || 'Press again to confirm';
+    btn.addEventListener('click', onYes, true);
+    setTimeout(() => document.addEventListener('click', onAway, true), 0);
+    btn._armTimer = setTimeout(() => { restore(); resolve(false); }, 5000);
+  });
+}
 
 function escapeHtml(s) {
   return String(s == null ? '' : s)
@@ -941,7 +1574,7 @@ function renderEmails() {
     });
     card.querySelector('.del-email').addEventListener('click', async (ev) => {
       ev.stopPropagation();
-      if (!confirm('Delete this entry?')) return;
+      if (!(await qConfirm(ev.currentTarget, 'Delete this entry?'))) return;
       const r = await fetch(`/api/threads/${threadId}/emails/${e.id}`, { method: 'DELETE' });
       if (r.ok) { thread = await r.json(); renderEmails(); }
     });
@@ -1015,6 +1648,7 @@ function renderFiles() {
     const url = '/api/threads/' + threadId + '/files/' + encodeURIComponent(f.filename);
     const thumb = document.createElement('div');
     thumb.className = 'photo-thumb';
+    thumb.dataset.filename = f.filename;   // folder filter hooks on this
     thumb.innerHTML = `
       <img src="${url}" alt="${escapeHtml(f.filename)}" loading="lazy">
       <span class="photo-thumb-name">${escapeHtml(f.filename)}</span>
@@ -1025,7 +1659,7 @@ function renderFiles() {
     thumb.querySelector('img').addEventListener('click', () => openLightbox(url));
     thumb.querySelector('.photo-thumb-del').addEventListener('click', async (ev) => {
       ev.stopPropagation();
-      if (!confirm('Delete ' + f.filename + '?')) return;
+      if (!(await qConfirm(ev.currentTarget, 'Delete ' + f.filename + '?'))) return;
       const r = await fetch(url, { method: 'DELETE' });
       if (r.ok) { thread = await r.json(); renderFiles(); refreshCaseFiles(); }
     });
@@ -1036,6 +1670,7 @@ function renderFiles() {
   for (const f of others) {
     const card = document.createElement('div');
     card.className = 'file-card';
+    card.dataset.filename = f.filename;   // folder filter + type icon hook on this
     const url = '/api/threads/' + threadId + '/files/' + encodeURIComponent(f.filename);
     const icon = (
       f.mimeType?.includes('pdf')   ? '📄' :
@@ -1077,12 +1712,12 @@ function renderFiles() {
         if (!r.ok) throw new Error('HTTP ' + r.status);
         const { text, filename } = await r.json();
         showFileTextModal(filename, text);
-      } catch(e) { alert('Could not read file: ' + e.message); }
+      } catch(e) { qToast('Could not read file: ' + e.message); }
       finally { btn.disabled = false; btn.textContent = 'Open'; }
     });
     card.querySelector('.del-file').addEventListener('click', async (ev) => {
       ev.stopPropagation();
-      if (!confirm('Delete ' + f.filename + '?')) return;
+      if (!(await qConfirm(ev.currentTarget, 'Delete ' + f.filename + '?'))) return;
       const r = await fetch(url, { method: 'DELETE' });
       if (r.ok) { thread = await r.json(); renderFiles(); refreshCaseFiles(); }
     });
@@ -1398,7 +2033,7 @@ $delConfirm.addEventListener('click', async () => {
   } catch (e) {
     $delConfirm.disabled = false;
     $delConfirm.textContent = 'Yes, delete';
-    alert('Could not delete: ' + e.message);
+    qToast('Could not delete: ' + e.message);
   }
 });
 
@@ -1523,6 +2158,7 @@ async function loadThread() {
   renderChat();
   refreshKickoffButton();
   document.dispatchEvent(new CustomEvent('thread:loaded'));
+  buildSharePicker();
 }
 
 // Show the "Q, take this case" button whenever Q hasn't spoken yet — even on a
@@ -1600,6 +2236,144 @@ function setStatus(value) {
   $statusBtn.dataset.value = value;
   $statusBtn.textContent = value.charAt(0).toUpperCase() + value.slice(1);
   $statusBtn.classList.toggle('on', value === 'open');
+}
+
+/* ── SHARE THIS CASE — build a Quotem linkmail from the ticked parts ───────
+   Nothing about a case leaves the server unless it has been ticked here. The
+   summary is ticked to begin with because that is what a share is always for;
+   notes, board tabs and file names all start OFF.
+   DOCUMENTS THEMSELVES ARE NOT SENT — only their names, and only if ticked. A
+   linkmail is a page, not a file transfer; putting a case's PDFs behind a
+   public token is a decision for Sarah, not a side effect of a Share button. */
+const shareChosen = new Set();
+
+function shareParts() {
+  if (!thread) return [];
+  const parts = [];
+  if (thread.summary && thread.summary.trim()) {
+    parts.push({ id: 'summary', label: 'Summary: ' + thread.summary.trim().slice(0, 60), text: thread.summary.trim() });
+  }
+  (thread.boardTabs || []).forEach(t => {
+    if (!t || !(t.body || '').trim()) return;
+    parts.push({ id: 'tab:' + t.id, label: t.title || 'Note', text: '## ' + (t.title || 'Note') + '\n\n' + t.body });
+  });
+  (thread.notes || []).forEach(n => {
+    if (!n || !(n.content || '').trim()) return;
+    const first = n.content.trim().split('\n')[0].slice(0, 60);
+    parts.push({ id: 'note:' + n.id, label: first, text: n.content.trim() });
+  });
+  const files = (thread.files || []).filter(f => f && f.filename);
+  if (files.length) {
+    parts.push({
+      id: 'filelist',
+      label: files.length + ' document' + (files.length === 1 ? '' : 's') + ' — names only',
+      text: '## Documents on this case\n\n' + files.map(f => '- ' + f.filename).join('\n')
+            + '\n\n(The documents themselves are not on this page.)',
+    });
+  }
+  return parts;
+}
+
+function buildSharePicker() {
+  const box = document.getElementById('sh-pick');
+  if (!box) return;
+  const parts = shareParts();
+  shareChosen.clear();
+  if (parts.length && parts[0].id === 'summary') shareChosen.add('summary');
+  box.innerHTML = parts.map(p =>
+    '<button class="sh-item' + (shareChosen.has(p.id) ? ' on' : '') + '" type="button" data-part="'
+    + p.id.replace(/"/g, '&quot;') + '"><span class="tick"></span><span class="t">'
+    + p.label.replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' })[c]) + '</span></button>'
+  ).join('') || '<span class="sh-note">Nothing on this case to share yet.</span>';
+  paintShareSub();
+}
+
+function paintShareSub() {
+  const sub = document.getElementById('share-sub');
+  if (sub) sub.textContent = shareChosen.size ? (shareChosen.size + ' ticked') : '';
+}
+
+document.addEventListener('click', e => {
+  const item = e.target.closest('.sh-item');
+  if (item) {
+    const id = item.dataset.part;
+    if (shareChosen.has(id)) { shareChosen.delete(id); item.classList.remove('on'); }
+    else { shareChosen.add(id); item.classList.add('on'); }
+    paintShareSub();
+    return;
+  }
+  if (e.target.closest('#share-case')) {
+    const z = document.getElementById('share-zone');
+    if (z) { z.classList.remove('closed'); z.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); }
+    return;
+  }
+  if (e.target.closest('#sh-copy')) {
+    const inp = document.getElementById('sh-url');
+    inp.select();
+    if (navigator.clipboard) navigator.clipboard.writeText(inp.value).catch(() => document.execCommand('copy'));
+    else document.execCommand('copy');
+    document.getElementById('sh-note').textContent = 'Copied.';
+    return;
+  }
+  if (e.target.closest('#sh-email')) {
+    const row = document.getElementById('sh-out');
+    const to = document.getElementById('sh-to').value.trim();
+    const note = document.getElementById('sh-note');
+    if (!row.dataset.token) return;
+    if (!to) { note.textContent = 'Who to?'; return; }
+    note.textContent = 'Sending…';
+    fetch('/api/linkmail/mine/' + row.dataset.token + '/send', {
+      method: 'POST', credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ to: to }),
+    }).then(r => r.json().then(j => ({ ok: r.ok, j })))
+      .then(({ ok, j }) => { note.textContent = ok ? ('Sent to ' + to) : (j.message || 'That did not send.'); })
+      .catch(() => { note.textContent = 'That did not send.'; });
+    return;
+  }
+  if (e.target.closest('#sh-make')) makeCaseLinkmail();
+});
+
+async function makeCaseLinkmail() {
+  const btn = document.getElementById('sh-make');
+  const note = document.getElementById('sh-note');
+  const parts = shareParts().filter(p => shareChosen.has(p.id));
+  if (!parts.length) { document.getElementById('share-sub').textContent = 'tick something first'; return; }
+
+  const questions = document.getElementById('sh-questions').value
+    .split('\n').map(s => s.trim()).filter(Boolean).slice(0, 10)
+    .map(text => ({ text, type: 'text' }));
+
+  btn.disabled = true;
+  const was = btn.textContent;
+  btn.textContent = 'Making the page…';
+  try {
+    const res = await fetch('/api/linkmail/mine', {
+      method: 'POST', credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        kind: 'thread',
+        refId: thread.id,
+        title: (document.getElementById('title-input').value || thread.title || 'This case').trim(),
+        body: parts.map(p => p.text).join('\n\n'),
+        questions,
+        recipientName: document.getElementById('sh-name').value.trim(),
+        expiresHours: 24 * 30,
+      }),
+    });
+    const j = await res.json();
+    if (!res.ok) throw new Error(j.error || 'could not make the link');
+    const row = document.getElementById('sh-out');
+    row.classList.remove('hide');
+    row.dataset.token = j.token;
+    document.getElementById('sh-url').value = j.fullUrl || (location.origin + j.url);
+    note.textContent = '';
+  } catch (err) {
+    note.textContent = 'That did not save: ' + err.message;
+  } finally {
+    btn.disabled = false;
+    btn.textContent = was;
+  }
 }
 
 // Title / summary autosave on blur
@@ -1703,7 +2477,7 @@ $aeCancel.addEventListener('click', () => {
 })();
 $aeSave.addEventListener('click', async () => {
   const body = document.getElementById('ae-body').value.trim();
-  if (!body) { alert('Paste the email body first.'); return; }
+  if (!body) { qToast('Paste the email body first.'); return; }
   $aeSave.disabled = true;
   try {
     const res = await fetch('/api/threads/' + threadId + '/emails', {
@@ -1726,7 +2500,7 @@ $aeSave.addEventListener('click', async () => {
     ['ae-from','ae-to','ae-date','ae-subject','ae-body'].forEach(id => document.getElementById(id).value = '');
     pingQOnUpdate('a new email');
   } catch (e) {
-    alert('Could not add email: ' + e.message);
+    qToast('Could not add email: ' + e.message);
   } finally {
     $aeSave.disabled = false;
   }
@@ -1810,7 +2584,7 @@ $chatInput.addEventListener('input', () => {
 
   async function start() {
     if (!navigator.mediaDevices || !window.MediaRecorder) {
-      alert('This browser does not support microphone recording.');
+      qToast('This browser does not support microphone recording.');
       return;
     }
     try {
@@ -1825,7 +2599,7 @@ $chatInput.addEventListener('input', () => {
     } catch (e) {
       $mic.classList.remove('listening');
       setStatus('');
-      alert('Microphone unavailable: ' + e.message);
+      qToast('Microphone unavailable: ' + e.message);
     }
   }
 
@@ -2823,7 +3597,7 @@ loadThread();
   async function readEmailAloud(text, btn) {
     if (btn._ttsAudio) {
       btn._ttsAudio.pause(); URL.revokeObjectURL(btn._ttsUrl || '');
-      btn._ttsAudio = null; btn.textContent = '🔊 Read'; return;
+      btn._ttsAudio = null; btn.innerHTML = `<svg class="ci" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M11 5 6 9H2v6h4l5 4V5Z"/><path d="M15.5 8.5a5 5 0 0 1 0 7M18.5 5.5a9 9 0 0 1 0 13"/></svg>` + '<span>Read</span>'; return;
     }
     if (!text.trim()) { flash('Nothing to read yet'); return; }
     btn.textContent = '⏳'; btn.disabled = true;
@@ -2975,6 +3749,613 @@ loadThread();
   };
   load();
   window._obLoad = load;
+})();
+
+// ══════════════════════════════════════════════════════════════════════════════
+// DOC DROP PARITY (21 Aug 2026) — the notes BOARD, file FOLDERS, document type
+// icons, and Q's floating dock. Ported from Quoteapp's Doc Drop
+// (client/src/components/DocCases.jsx) into quotem-ai's colours.
+//
+// Deliberately self-contained: this module hooks the existing `thread:loaded`
+// event and touches no existing function, so every behaviour that was on this
+// page before — emails, outbox, forms, verify, mic, lightbox, kickoff, drafts —
+// is untouched and still runs exactly as it did.
+//
+// ⚠️ NO window.prompt / confirm / alert ANYWHERE in here. They throw
+// "not supported" in VS Code's built-in browser, which is where Sarah runs the
+// app — it silently ate EmailWriter's template save once already. Every naming
+// step is an on-page input; every destructive step is a two-press inline
+// confirm; every error is an inline message line.
+// ══════════════════════════════════════════════════════════════════════════════
+(function () {
+  'use strict';
+
+  const esc = (s) => String(s == null ? '' : s)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+
+  // ── Icon vocabulary. Mirrored server-side in q-threads.js FOLDER_ICON_SLUGS
+  //    and in the set_folder_style tool. Keep the three in sync. ─────────────
+  const P = (d) => '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' + d + '</svg>';
+  const ICONS = {
+    folder:       P('<path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13c0 1.1.9 2 2 2Z"/>'),
+    bills:        P('<path d="M4 2v20l2-1 2 1 2-1 2 1 2-1 2 1 2-1 2 1V2l-2 1-2-1-2 1-2-1-2 1-2-1-2 1Z"/><path d="M8 7h8M8 11h8M8 15h5"/>'),
+    council:      P('<path d="M3 21h18M5 21V10l7-5 7 5v11"/><path d="M9 21v-6h6v6"/>'),
+    contract:     P('<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/><path d="M14 2v6h6"/><path d="M8 17c1.5-2 3-2 4 0s2.5 2 4 0"/>'),
+    certificates: P('<path d="M20 13c0 5-3.5 7.5-8 9-4.5-1.5-8-4-8-9V6l8-3 8 3Z"/><path d="m9 12 2 2 4-4"/>'),
+    photos:       P('<rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-4.6-4.6a2 2 0 0 0-2.8 0L3 21"/>'),
+    letters:      P('<rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/>'),
+    bank:         P('<path d="M19 5c-1.5 0-2.8 1.4-3 2-3.5-1.5-11-.3-11 5 0 1.8 0 3 2 4.5V20h4v-2h3v2h4v-4c1-.5 1.7-1 2-2h2v-4h-2c0-1-.5-1.5-1-2V5Z"/><path d="M2 9v1c0 1.1.9 2 2 2h1"/><circle cx="16" cy="10" r="1"/>'),
+    keys:         P('<circle cx="7.5" cy="15.5" r="5.5"/><path d="m21 2-9.6 9.6M15.5 7.5l3 3L22 7l-3-3"/>'),
+    tools:        P('<path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76Z"/>'),
+    insurance:    P('<path d="M22 12a10.06 10.06 0 0 0-20 0Z"/><path d="M12 12v8a2 2 0 0 0 4 0"/><path d="M12 2v1"/>'),
+    legal:        P('<path d="m16 16 3-8 3 8c-.87.65-1.92 1-3 1s-2.13-.35-3-1Z"/><path d="m2 16 3-8 3 8c-.87.65-1.92 1-3 1s-2.13-.35-3-1Z"/><path d="M7 21h10M12 3v18M3 7h2c2 0 5-1 7-2 2 1 5 2 7 2h2"/>'),
+    id:           P('<rect x="2" y="5" width="20" height="14" rx="2"/><circle cx="9" cy="12" r="2.5"/><path d="M15 10h4M15 14h4"/>'),
+    inventory:    P('<rect x="8" y="2" width="8" height="4" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><path d="m9 14 2 2 4-4"/>'),
+    licence:      P('<path d="m3.85 8.62 3.1-1.79.9-3.47a2 2 0 0 1 3.34-.9l2.4 2.4 3.47-.9a2 2 0 0 1 2.45 2.45l-.9 3.47 2.4 2.4a2 2 0 0 1-.9 3.34l-3.47.9-1.79 3.1a2 2 0 0 1-3.46 0l-1.79-3.1-3.47-.9a2 2 0 0 1-.9-3.34l2.4-2.4-.9-3.47Z"/><path d="m9 12 2 2 4-4"/>'),
+    deposit:      P('<rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>'),
+    meters:       P('<path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z"/><path d="M12 2a10 10 0 0 0-10 10c0 2.4.85 4.6 2.26 6.32M12 2a10 10 0 0 1 10 10c0 2.4-.85 4.6-2.26 6.32"/><path d="m14.5 9.5 3-3"/>'),
+    plans:        P('<path d="M21.3 8.7 8.7 21.3a1 1 0 0 1-1.4 0l-4.6-4.6a1 1 0 0 1 0-1.4L15.3 2.7a1 1 0 0 1 1.4 0l4.6 4.6a1 1 0 0 1 0 1.4Z"/><path d="m7.5 10.5 2 2M10.5 7.5l2 2M13.5 4.5l2 2M4.5 13.5l2 2"/>'),
+    rent:         P('<rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M3 15h18M9 3v18M15 3v18"/>'),
+    money:        P('<rect x="2" y="6" width="20" height="12" rx="2"/><circle cx="12" cy="12" r="2.5"/><path d="M6 12h.01M18 12h.01"/>'),
+  };
+  const FOLDER_COLORS = ['#e91e63', '#2563eb', '#0891b2', '#16a34a', '#d97706', '#7c3aed', '#64748b', '#b91c1c'];
+
+  // Document TYPE icon from the file name — deterministic, client-side, zero AI
+  // cost. Same rules and the same tie-break order as Doc Drop's DOC_TYPE_RULES.
+  const DOC_RULES = [
+    [/(\bcert|certificate|epc\b|eicr\b|\bpat\b|safety|smoke|alarm)/i,                      'certificates', '#16a34a'],
+    [/(insur|\bpolicy\b)/i,                                                                'insurance',    '#0d9488'],
+    [/(licen[cs]e|\bhmo\b|permit)/i,                                                       'licence',      '#ca8a04'],
+    [/(council|\btax\b)/i,                                                                 'council',      '#7c3aed'],
+    [/(court|legal|solicitor|section\s*(?:8|21)|eviction|summons|\bclaim\b|tribunal|\bpcn\b|penalty|appeal)/i, 'legal', '#b91c1c'],
+    [/(deposit|\bdps\b|\btds\b|mydeposits)/i,                                              'deposit',      '#9333ea'],
+    [/(right.?to.?rent|passport|\bvisa\b|\bid\b|identity|driving.?licen)/i,                 'id',           '#0369a1'],
+    [/(inventory|check.?in|check.?out|inspection)/i,                                        'inventory',    '#65a30d'],
+    [/(tenanc|contract|agreement|\bast\b|\blease\b|guarantor)/i,                            'contract',     '#2563eb'],
+    [/(mortgage|\bloan\b|payslip)/i,                                                        'money',        '#475569'],
+    [/(meter|\breading\b)/i,                                                                'meters',       '#0284c7'],
+    [/(floor.?plan|drawing|blueprint|survey)/i,                                             'plans',        '#6d28d9'],
+    [/(repair|maintenance|\bquote\b|estimate|\bworks?\b)/i,                                 'tools',        '#ea580c'],
+    [/(\brent\b|ledger|spreadsheet|\.xlsx?\b|\.csv\b)/i,                                    'rent',         '#15803d'],
+    [/(\bbill|invoice|utility|energy|water|\bgas\b|electric)/i,                              'bills',        '#d97706'],
+    [/(statement|\bbank\b)/i,                                                                'bank',         '#0891b2'],
+    [/(\bkeys?\b|\bfob\b)/i,                                                                 'keys',         '#a16207'],
+    [/(\.jpe?g\b|\.png\b|photo)/i,                                                           'photos',       '#db2777'],
+    [/(letter|notice|\bemail\b)/i,                                                           'letters',      '#64748b'],
+  ];
+  function docTypeOf(name) {
+    const n = String(name || '');
+    for (const r of DOC_RULES) if (r[0].test(n)) return { slug: r[1], color: r[2] };
+    return { slug: 'folder', color: '#64748b' };
+  }
+  // The gradient well Doc Drop uses everywhere — a tint of the glyph colour over
+  // the page background. Never a solid fill.
+  // RAISED COLOURED WELLS. The glyph carries its colour; the raised well is
+  // painted by CSS (var(--bg) + --neu-raised-sm). Deliberately NOT the washed
+  // gradient tint that read as "dusted" — a clean raised square instead.
+  function wellStyle(color) {
+    const c = color || 'var(--text-muted)';
+    return 'color:' + c + ';';
+  }
+  function iconHtml(slug, color, cls) {
+    return '<span class="gw ' + (cls || '') + '" style="' + wellStyle(color) + '">' + (ICONS[slug] || ICONS.folder) + '</span>';
+  }
+
+  const api = async (url, opts) => {
+    const r = await fetch(url, opts);
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(d.error || ('Request failed (' + r.status + ')'));
+    return d;
+  };
+  const tid = () => (typeof threadId !== 'undefined' ? threadId : null);
+  const md = (s) => (window.marked ? marked.parse(String(s || '')) : esc(s));
+
+  // Inline message line — replaces alert(), which VS Code's browser blocks.
+  function say(hostId, text, tone) {
+    const host = document.getElementById(hostId);
+    if (!host) return;
+    host.textContent = text || '';
+    host.style.color = tone === 'bad' ? 'var(--accent)' : 'var(--text-muted)';
+    if (text) setTimeout(() => { if (host.textContent === text) host.textContent = ''; }, 4000);
+  }
+
+  // ════════════════════════════════════════════════════════════════════════════
+  // THE NOTES BOARD
+  // ════════════════════════════════════════════════════════════════════════════
+  const Board = (function () {
+    let tabs = [], activeId = null, openGroups = {}, editing = false;
+    // Inline UI state — replaces prompt()/confirm().
+    let naming = null;      // 'tab' | 'rename' | 'group'
+    let namingVal = '';
+    let confirmDel = false;
+
+    const el = () => document.getElementById('board-zone');
+
+    async function load() {
+      if (!tid()) return;
+      try { tabs = (await api('/api/threads/' + tid() + '/tabs')).tabs || []; }
+      catch (e) { tabs = []; }
+      if (activeId && !tabs.some(t => t.id === activeId)) activeId = null;
+      if (!activeId && tabs.length) activeId = tabs[0].id;
+      render();
+    }
+
+    function groupsOf() {
+      const g = [];
+      for (const t of tabs) { const k = (t.group || '').trim(); if (k && g.indexOf(k) === -1) g.push(k); }
+      return g;
+    }
+
+    function render() {
+      const root = el();
+      if (!root) return;
+      const body = root.querySelector('.zone-body');
+      const sub = root.querySelector('.zone-sub');
+      if (sub) sub.textContent = tabs.length ? (tabs.length + (tabs.length === 1 ? ' note' : ' notes')) : 'nothing yet';
+
+      const ungrouped = tabs.filter(t => !(t.group || '').trim());
+      const groups = groupsOf();
+      let pills = '';
+      for (const t of ungrouped) {
+        pills += '<button class="bpill' + (t.id === activeId ? ' on' : '') + '" data-tab="' + esc(t.id) + '" title="' + esc(t.title) + '">' + esc(t.title) + '</button>';
+      }
+      for (const g of groups) {
+        const members = tabs.filter(t => (t.group || '').trim() === g);
+        const open = !!openGroups[g] || members.some(m => m.id === activeId);
+        pills += '<button class="bpill' + (open ? ' on' : '') + '" data-group="' + esc(g) + '" title="' + esc(g) + '">' +
+          (open ? '⌄ ' : '› ') + esc(g) + ' <span class="bpill-count">' + members.length + '</span></button>';
+        if (open) {
+          for (const t of members) {
+            pills += '<button class="bpill' + (t.id === activeId ? ' on' : '') + '" data-tab="' + esc(t.id) + '" style="margin-left:4px;" title="' + esc(t.title) + '">' + esc(t.title) + '</button>';
+          }
+        }
+      }
+      pills += '<button class="bpill" data-name="tab" title="Add a note tab">+ Tab</button>';
+
+      // Inline naming row — an on-page field, never prompt().
+      let namingRow = '';
+      if (naming) {
+        const label = naming === 'tab' ? 'Name the new tab' : naming === 'rename' ? 'Rename this tab' : 'Header to file it under';
+        const cta = naming === 'tab' ? 'Add tab' : naming === 'rename' ? 'Rename' : 'File it';
+        namingRow = '<div style="display:flex;gap:8px;align-items:center;margin-top:10px;flex-wrap:wrap;">' +
+          '<input class="mini-input" id="board-name-box" placeholder="' + label + '…" value="' + esc(namingVal) + '" style="flex:1;min-width:160px;">' +
+          '<button class="link-btn" data-name-ok="1" style="color:var(--accent);">' + cta + '</button>' +
+          '<button class="link-btn" data-name-cancel="1">Cancel</button></div>';
+      }
+
+      const active = tabs.find(t => t.id === activeId);
+      let noteHtml = '';
+      if (!tabs.length) {
+        noteHtml = '<div class="board-note"><div class="board-empty">Q writes the case notes here as things land — or press <b>+ Tab</b> and write your own.</div></div>';
+      } else if (active) {
+        if (editing) {
+          noteHtml = '<div class="board-note"><textarea class="board-edit" id="board-edit-box">' + esc(active.body || '') + '</textarea>' +
+            '<div style="display:flex;gap:12px;align-items:center;margin-top:10px;">' +
+            '<button class="link-btn" data-save="1" style="color:var(--accent);">✓ Save</button>' +
+            '<button class="link-btn" data-cancel="1">Cancel</button></div></div>';
+        } else {
+          noteHtml = '<div class="board-note" id="board-note-body">' +
+            ((active.body || '').trim() ? renderNoteBody(active.body) : '<div class="board-empty">Empty — press Edit and write, or ask Q to fill it in.</div>') +
+            '</div>';
+        }
+      }
+
+      let toolbar = '';
+      if (active && !editing) {
+        toolbar = '<div style="display:flex;gap:12px;align-items:center;margin-top:10px;flex-wrap:wrap;">' +
+          '<button class="link-btn" data-edit="1">Edit</button>' +
+          '<button class="link-btn" data-name="rename">Rename</button>' +
+          '<button class="link-btn" data-name="group">' + ((active.group || '').trim() ? 'Remove from “' + esc(active.group) + '”' : 'Group') + '</button>' +
+          (confirmDel
+            ? '<button class="link-btn danger" data-del-yes="1">Yes, delete “' + esc(active.title) + '”</button><button class="link-btn" data-del-no="1">Keep it</button>'
+            : '<button class="link-btn danger" data-del="1">Delete tab</button>') +
+          '<span id="board-msg" style="font-size:11px;color:var(--text-muted);"></span>' +
+          '</div>';
+      } else {
+        toolbar = '<div style="margin-top:8px;"><span id="board-msg" style="font-size:11px;color:var(--text-muted);"></span></div>';
+      }
+
+      body.innerHTML = '<div class="board-pills">' + pills + '</div>' + namingRow + noteHtml + toolbar;
+      wire(body);
+      if (naming) { const b = document.getElementById('board-name-box'); if (b) { b.focus(); b.select(); } }
+    }
+
+    // Markdown, plus Doc Drop's tickable `- [ ]` / `- [x]` checkbox rows.
+    function renderNoteBody(src) {
+      const lines = String(src || '').split('\n');
+      let out = '', buf = [];
+      const flush = () => { if (buf.length) { out += md(buf.join('\n')); buf = []; } };
+      lines.forEach((line, i) => {
+        const m = line.match(/^\s*(?:[-*]\s+)?\[([ xX])\]\s*(.*)$/);
+        if (m) {
+          flush();
+          const done = m[1].toLowerCase() === 'x';
+          const text = m[2].replace(/^[✅☑✓✔\s]+/, '');
+          out += '<div class="bcheck' + (done ? ' done' : '') + '">' +
+            '<button class="bcheck-box' + (done ? ' on' : '') + '" data-line="' + i + '" title="' + (done ? 'Mark not done' : 'Mark done') + '">' + (done ? '✓' : '') + '</button>' +
+            '<span class="bcheck-text">' + md(text).replace(/^<p>|<\/p>\s*$/g, '') + '</span></div>';
+        } else buf.push(line);
+      });
+      flush();
+      return out;
+    }
+
+    async function commitName() {
+      const box = document.getElementById('board-name-box');
+      const val = box ? (box.value || '').trim() : '';
+      const mode = naming;
+      const active = tabs.find(t => t.id === activeId);
+      try {
+        if (mode === 'tab') {
+          if (!val) return say('board-msg', 'Give the tab a name.', 'bad');
+          const d = await api('/api/threads/' + tid() + '/tabs', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ title: val }),
+          });
+          tabs = d.tabs || []; activeId = d.tab ? d.tab.id : activeId; editing = false;
+        } else if (mode === 'rename') {
+          if (!active || !val) return say('board-msg', 'Give the tab a name.', 'bad');
+          const d = await api('/api/threads/' + tid() + '/tabs/' + active.id, {
+            method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ title: val }),
+          });
+          tabs = d.tabs || [];
+        } else if (mode === 'group') {
+          if (!active) return;
+          const d = await api('/api/threads/' + tid() + '/tab-group', {
+            method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ group: val, tabs: [active.title] }),
+          });
+          tabs = d.tabs || []; if (val) openGroups[val] = true;
+        }
+        naming = null; namingVal = ''; render();
+      } catch (e) { say('board-msg', e.message, 'bad'); }
+    }
+
+    function wire(body) {
+      body.querySelectorAll('[data-tab]').forEach(b => b.onclick = () => { activeId = b.dataset.tab; editing = false; naming = null; confirmDel = false; render(); });
+      body.querySelectorAll('[data-group]').forEach(b => b.onclick = () => { const g = b.dataset.group; openGroups[g] = !openGroups[g]; render(); });
+
+      body.querySelectorAll('[data-name]').forEach(b => b.onclick = () => {
+        const mode = b.dataset.name;
+        const active = tabs.find(t => t.id === activeId);
+        // "Remove from <header>" is a direct action, not a naming step.
+        if (mode === 'group' && active && (active.group || '').trim()) {
+          api('/api/threads/' + tid() + '/tab-group', {
+            method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ group: '', tabs: [active.title] }),
+          }).then(d => { tabs = d.tabs || []; render(); }).catch(e => say('board-msg', e.message, 'bad'));
+          return;
+        }
+        naming = mode;
+        namingVal = mode === 'rename' && active ? active.title : '';
+        confirmDel = false;
+        render();
+      });
+
+      const ok = body.querySelector('[data-name-ok]');
+      if (ok) ok.onclick = commitName;
+      const cancelName = body.querySelector('[data-name-cancel]');
+      if (cancelName) cancelName.onclick = () => { naming = null; namingVal = ''; render(); };
+      const nameBox = document.getElementById('board-name-box');
+      if (nameBox) nameBox.onkeydown = (e) => {
+        if (e.key === 'Enter') { e.preventDefault(); commitName(); }
+        if (e.key === 'Escape') { naming = null; namingVal = ''; render(); }
+      };
+
+      const editBtn = body.querySelector('[data-edit]');
+      if (editBtn) editBtn.onclick = () => { editing = true; confirmDel = false; render(); setTimeout(() => { const b = document.getElementById('board-edit-box'); if (b) b.focus(); }, 0); };
+
+      const cancelBtn = body.querySelector('[data-cancel]');
+      if (cancelBtn) cancelBtn.onclick = () => { editing = false; render(); };
+
+      const saveBtn = body.querySelector('[data-save]');
+      if (saveBtn) saveBtn.onclick = async () => {
+        const box = document.getElementById('board-edit-box');
+        if (!box) return;
+        try {
+          const d = await api('/api/threads/' + tid() + '/tabs/' + activeId, {
+            method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ body: box.value }),
+          });
+          tabs = d.tabs || []; editing = false; render();
+        } catch (e) { say('board-msg', e.message, 'bad'); }
+      };
+
+      const delBtn = body.querySelector('[data-del]');
+      if (delBtn) delBtn.onclick = () => { confirmDel = true; render(); };
+      const delNo = body.querySelector('[data-del-no]');
+      if (delNo) delNo.onclick = () => { confirmDel = false; render(); };
+      const delYes = body.querySelector('[data-del-yes]');
+      if (delYes) delYes.onclick = async () => {
+        try {
+          const d = await api('/api/threads/' + tid() + '/tabs/' + activeId, { method: 'DELETE' });
+          tabs = d.tabs || []; activeId = tabs.length ? tabs[0].id : null;
+          editing = false; confirmDel = false; render();
+        } catch (e) { say('board-msg', e.message, 'bad'); }
+      };
+
+      // Tick a checkbox → rewrite that line in the note and save.
+      body.querySelectorAll('.bcheck-box').forEach(b => b.onclick = async () => {
+        const active = tabs.find(t => t.id === activeId); if (!active) return;
+        const i = Number(b.dataset.line);
+        const lines = String(active.body || '').split('\n');
+        const m = lines[i] && lines[i].match(/^(\s*(?:[-*]\s+)?\[)([ xX])(\].*)$/);
+        if (!m) return;
+        lines[i] = m[1] + (m[2].toLowerCase() === 'x' ? ' ' : 'x') + m[3];
+        const next = lines.join('\n');
+        active.body = next;                       // optimistic
+        render();
+        try {
+          const d = await api('/api/threads/' + tid() + '/tabs/' + active.id, {
+            method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ body: next }),
+          });
+          tabs = d.tabs || tabs;
+        } catch (e) { /* keep the optimistic tick; the next load reconciles */ }
+      });
+    }
+
+    return { load: load, reload: load };
+  })();
+
+  // ════════════════════════════════════════════════════════════════════════════
+  // FILE FOLDERS — organise the case's files, by hand, no AI cost
+  // ════════════════════════════════════════════════════════════════════════════
+  const Folders = (function () {
+    let folders = [], active = 'all', editing = null, confirmDel = false;
+
+    async function load() {
+      if (!tid()) return;
+      try { folders = (await api('/api/threads/' + tid() + '/folders')).folders || []; }
+      catch (e) { folders = []; }
+      render();
+    }
+
+    const filesOf = () => (typeof thread !== 'undefined' && thread && Array.isArray(thread.files)) ? thread.files : [];
+    const countOf = (key) => {
+      const files = filesOf();
+      if (key === 'all') return files.length;
+      if (key === 'unfiled') return files.filter(f => !f.folderId).length;
+      return files.filter(f => f.folderId === key).length;
+    };
+
+    function render() {
+      const bar = document.getElementById('folder-bar');
+      if (!bar) return;
+      let html = '<button class="fpill' + (active === 'all' ? ' on' : '') + '" data-f="all">All <span class="fpill-count">' + countOf('all') + '</span></button>';
+      for (const f of folders) {
+        html += '<button class="fpill' + (active === f.id ? ' on' : '') + '" data-f="' + esc(f.id) + '" title="Click to open · double-click to edit">' +
+          iconHtml(f.icon || 'folder', f.color || '') + esc(f.title) +
+          ' <span class="fpill-count">' + countOf(f.id) + '</span></button>';
+      }
+      html += '<button class="fpill' + (active === 'unfiled' ? ' on' : '') + '" data-f="unfiled">Unfiled <span class="fpill-count">' + countOf('unfiled') + '</span></button>';
+      html += '<button class="fpill" data-new-folder="1">+ Folder</button>';
+      html += '<span id="folder-msg" style="font-size:11px;color:var(--text-muted);margin-left:4px;"></span>';
+      bar.innerHTML = html;
+
+      bar.querySelectorAll('[data-f]').forEach(b => {
+        b.onclick = () => { active = b.dataset.f; render(); };
+        b.ondblclick = () => { const f = folders.find(x => x.id === b.dataset.f); if (f) openEditor(f); };
+      });
+      const nf = bar.querySelector('[data-new-folder]');
+      if (nf) nf.onclick = () => openEditor(null);
+
+      renderEditor();
+      applyFilter();
+      decorate();
+    }
+
+    function openEditor(f) {
+      editing = f ? { id: f.id, title: f.title, color: f.color || '', icon: f.icon || '' } : { id: null, title: '', color: '', icon: '' };
+      confirmDel = false;
+      renderEditor();
+    }
+
+    function renderEditor() {
+      const host = document.getElementById('folder-editor');
+      if (!host) return;
+      if (!editing) { host.innerHTML = ''; host.style.display = 'none'; return; }
+      host.style.display = 'block';
+      let html = '<input class="mini-input" id="fe-title" placeholder="Folder name" style="width:100%;box-sizing:border-box;" value="' + esc(editing.title) + '">';
+      html += '<div class="swatches">';
+      for (const c of FOLDER_COLORS) {
+        html += '<button class="swatch' + (editing.color === c ? ' on' : '') + '" data-c="' + c + '" title="' + c + '" style="background:' + c + ';"></button>';
+      }
+      html += '</div><div class="icon-picks">';
+      for (const slug of Object.keys(ICONS)) {
+        const on = editing.icon === slug || (!editing.icon && slug === 'folder');
+        html += '<button class="icon-pick' + (on ? ' on' : '') + '" data-i="' + slug + '" title="' + slug + '">' + ICONS[slug] + '</button>';
+      }
+      html += '</div><div style="display:flex;gap:12px;align-items:center;margin-top:12px;flex-wrap:wrap;">' +
+        '<button class="link-btn" data-save="1" style="color:var(--accent);">' + (editing.id ? '✓ Save' : '+ Create folder') + '</button>' +
+        '<button class="link-btn" data-cancel="1">Cancel</button>';
+      if (editing.id) {
+        html += confirmDel
+          ? '<button class="link-btn danger" data-del-yes="1">Yes, delete the folder</button><button class="link-btn" data-del-no="1">Keep it</button><span style="font-size:10.5px;color:var(--text-faint);">the files inside move to Unfiled — they are never deleted</span>'
+          : '<button class="link-btn danger" data-del="1">Delete folder</button>';
+      }
+      html += '<span id="fe-msg" style="font-size:11px;color:var(--text-muted);"></span></div>';
+      host.innerHTML = html;
+
+      host.querySelectorAll('[data-c]').forEach(b => b.onclick = () => { editing.color = editing.color === b.dataset.c ? '' : b.dataset.c; syncTitle(); renderEditor(); });
+      host.querySelectorAll('[data-i]').forEach(b => b.onclick = () => { editing.icon = b.dataset.i === 'folder' ? '' : b.dataset.i; syncTitle(); renderEditor(); });
+      host.querySelector('[data-cancel]').onclick = () => { editing = null; renderEditor(); };
+      host.querySelector('[data-save]').onclick = save;
+      const box = document.getElementById('fe-title');
+      if (box) box.onkeydown = (e) => { if (e.key === 'Enter') { e.preventDefault(); save(); } if (e.key === 'Escape') { editing = null; renderEditor(); } };
+
+      const del = host.querySelector('[data-del]');
+      if (del) del.onclick = () => { syncTitle(); confirmDel = true; renderEditor(); };
+      const delNo = host.querySelector('[data-del-no]');
+      if (delNo) delNo.onclick = () => { confirmDel = false; renderEditor(); };
+      const delYes = host.querySelector('[data-del-yes]');
+      if (delYes) delYes.onclick = async () => {
+        try {
+          const d = await api('/api/threads/' + tid() + '/folders/' + editing.id, { method: 'DELETE' });
+          folders = d.folders || [];
+          if (active === editing.id) active = 'all';
+          if (d.thread && typeof thread !== 'undefined') thread = d.thread;
+          editing = null; confirmDel = false; render();
+        } catch (e) { say('fe-msg', e.message, 'bad'); }
+      };
+    }
+
+    // Keep the typed name while the editor re-renders on a colour/icon press.
+    function syncTitle() {
+      const box = document.getElementById('fe-title');
+      if (box && editing) editing.title = box.value;
+    }
+
+    async function save() {
+      syncTitle();
+      const title = (editing.title || '').trim();
+      if (!title) return say('fe-msg', 'Give the folder a name.', 'bad');
+      try {
+        const payload = { title: title, color: editing.color, icon: editing.icon };
+        const d = editing.id
+          ? await api('/api/threads/' + tid() + '/folders/' + editing.id, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
+          : await api('/api/threads/' + tid() + '/folders', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+        folders = d.folders || []; editing = null; render();
+      } catch (e) { say('fe-msg', e.message, 'bad'); }
+    }
+
+    // Show only the active folder's files. Cards are stamped with
+    // data-filename by renderFiles, so this needs no knowledge of their markup.
+    function applyFilter() {
+      const byName = {};
+      for (const f of filesOf()) byName[f.filename] = f;
+      document.querySelectorAll('#files-list [data-filename], #photo-grid [data-filename]').forEach(node => {
+        const f = byName[node.dataset.filename];
+        const show = active === 'all'
+          || (active === 'unfiled' && (!f || !f.folderId))
+          || (f && f.folderId === active);
+        node.style.display = show ? '' : 'none';
+      });
+    }
+
+    // Add the type-icon well and a folder picker to each file card.
+    function decorate() {
+      const byName = {};
+      for (const f of filesOf()) byName[f.filename] = f;
+      document.querySelectorAll('#files-list [data-filename]').forEach(card => {
+        const f = byName[card.dataset.filename];
+        if (!f) return;
+        if (!card.querySelector('.doc-type-well')) {
+          const t = docTypeOf(f.filename);
+          const well = document.createElement('span');
+          well.className = 'gw doc-type-well';
+          well.setAttribute('style', wellStyle(t.color));
+          well.innerHTML = ICONS[t.slug] || ICONS.folder;
+          well.title = t.slug;
+          card.insertBefore(well, card.firstChild);
+        }
+        if (!card.querySelector('.file-folder-pick')) {
+          const sel = document.createElement('select');
+          sel.className = 'file-folder-pick';
+          sel.title = 'Move this file into a folder';
+          const opts = ['<option value="">Unfiled</option>'];
+          for (const fd of folders) {
+            opts.push('<option value="' + esc(fd.id) + '"' + (f.folderId === fd.id ? ' selected' : '') + '>' + esc(fd.title) + '</option>');
+          }
+          sel.innerHTML = opts.join('');
+          sel.onclick = (e) => e.stopPropagation();
+          sel.onchange = async (e) => {
+            e.stopPropagation();
+            try {
+              const d = await api('/api/threads/' + tid() + '/files/' + encodeURIComponent(f.filename) + '/folder', {
+                method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ folderId: sel.value || null }),
+              });
+              if (d.thread && typeof thread !== 'undefined') thread = d.thread;
+              f.folderId = sel.value || undefined;
+              render();
+            } catch (err) { say('folder-msg', err.message, 'bad'); }
+          };
+          // Sit the picker inline, just before Open/Delete — appending it to the
+          // card pushed it onto its own line and broke the row width.
+          const acts = card.querySelector('.file-actions');
+          if (acts && acts.parentNode) acts.parentNode.insertBefore(sel, acts);
+          else card.appendChild(sel);
+        }
+      });
+    }
+
+    return { load: load, reload: load };
+  })();
+
+  // ════════════════════════════════════════════════════════════════════════════
+  // Q'S FLOATING DOCK — Doc Drop's draggable, minimisable chat panel
+  // ════════════════════════════════════════════════════════════════════════════
+  (function dock() {
+    const POS_KEY = 'q-dock-pos';
+    const MIN_KEY = 'q-dock-min';
+    const d = document.getElementById('q-dock');
+    if (!d) return;
+    const bar = d.querySelector('.q-dock-bar');
+    if (!bar) return;
+
+    const floating = () => window.matchMedia('(min-width: 781px)').matches;
+
+    function place(x, y) {
+      const w = d.offsetWidth || 400, h = d.offsetHeight || 200;
+      const maxX = Math.max(8, window.innerWidth - w - 8);
+      const maxY = Math.max(8, window.innerHeight - h - 8);
+      const cx = Math.min(Math.max(8, x), maxX);
+      const cy = Math.min(Math.max(8, y), maxY);
+      d.style.left = cx + 'px'; d.style.top = cy + 'px';
+      d.style.right = 'auto'; d.style.bottom = 'auto';
+      try { localStorage.setItem(POS_KEY, JSON.stringify({ x: cx, y: cy })); } catch (e) {}
+    }
+
+    function restore() {
+      if (!floating()) { d.style.left = ''; d.style.top = ''; return; }
+      let p = null;
+      try { p = JSON.parse(localStorage.getItem(POS_KEY) || 'null'); } catch (e) {}
+      if (p && typeof p.x === 'number') place(p.x, p.y);
+      else place(window.innerWidth - (d.offsetWidth || 400) - 20, Math.max(20, window.innerHeight - (d.offsetHeight || 460) - 20));
+    }
+
+    let drag = null;
+    bar.addEventListener('pointerdown', (e) => {
+      if (!floating()) return;
+      if (e.target.closest && e.target.closest('.q-dock-btn')) return;
+      drag = { dx: e.clientX - d.offsetLeft, dy: e.clientY - d.offsetTop };
+      try { bar.setPointerCapture(e.pointerId); } catch (err) {}
+    });
+    bar.addEventListener('pointermove', (e) => { if (drag) place(e.clientX - drag.dx, e.clientY - drag.dy); });
+    bar.addEventListener('pointerup', () => { drag = null; });
+    bar.addEventListener('pointercancel', () => { drag = null; });
+
+    const minBtn = document.getElementById('q-dock-min');
+    function setMin(on) {
+      d.classList.toggle('min', on);
+      if (minBtn) { minBtn.textContent = on ? '▢' : '—'; minBtn.title = on ? 'Open Q' : 'Minimise Q'; }
+      try { localStorage.setItem(MIN_KEY, on ? '1' : '0'); } catch (e) {}
+      if (floating()) restore();
+    }
+    if (minBtn) minBtn.onclick = () => setMin(!d.classList.contains('min'));
+    try { if (localStorage.getItem(MIN_KEY) === '1') setMin(true); } catch (e) {}
+
+    window.addEventListener('resize', restore);
+    setTimeout(restore, 0);
+  })();
+
+  // ── Wire into the page's own load cycle. `thread:loaded` already fires at the
+  //    end of loadThread(), so nothing existing needed changing. ─────────────
+  document.addEventListener('thread:loaded', () => {
+    Board.reload();
+    Folders.reload();
+  });
+
+  // Q writes to the board and files documents during a turn. sendMessage()
+  // calls loadThread() when it finishes, which re-fires thread:loaded — this is
+  // the manual hook for anything that doesn't.
+  window.qBoardReload = () => { Board.reload(); Folders.reload(); };
+
+  // Expose the type-icon vocabulary so other panels can use the same rules.
+  window.qDocTypeOf = docTypeOf;
 })();
 </script>
 </body>
